@@ -91,7 +91,7 @@ const ApiDocs = () => {
     <div className="min-h-screen bg-background">
       <PageHeader
         title="API Reference"
-        description="Documentação completa da API dispatchOne"
+        description="Documentação completa da API Qualify"
       />
 
       <div className="flex gap-8 px-6 py-8 max-w-[1400px] mx-auto">
@@ -114,7 +114,7 @@ const ApiDocs = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-muted-foreground">
-                  Bem-vindo à documentação da API <strong className="text-foreground">dispatchOne</strong>. 
+                  Bem-vindo à documentação da API <strong className="text-foreground">Qualify</strong>. 
                   Esta API permite integrar funcionalidades de WhatsApp diretamente em suas aplicações.
                 </p>
 

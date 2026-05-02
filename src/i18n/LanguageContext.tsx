@@ -23,12 +23,12 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<Language>(() => {
-    const saved = localStorage.getItem("dispatchone-language");
+    const saved = localStorage.getItem("Qualify-language");
     return (saved as Language) || "en";
   });
 
   useEffect(() => {
-    localStorage.setItem("dispatchone-language", language);
+    localStorage.setItem("Qualify-language", language);
   }, [language]);
 
   const setLanguage = useCallback((lang: Language) => {

@@ -73,7 +73,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
       <aside className="w-64 border-r bg-card flex flex-col">
         <div className="h-14 border-b flex items-center gap-2 px-4">
           <Shield className="h-5 w-5 text-destructive" />
-          <span className="font-semibold tracking-tight">DispatchOne Admin</span>
+          <span className="font-semibold tracking-tight">Qualify Admin</span>
         </div>
 
         <nav className="flex-1 overflow-y-auto p-3 space-y-1">

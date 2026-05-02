@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
       company_id,
       payment_id: payment.id,
       amount,
-      description: `Recarga DispatchOne - ${company?.name || ''}`,
+      description: `Recarga Qualify - ${company?.name || ''}`,
       payer_email: userEmail,
       payer_name: (profile as any)?.full_name || userEmail,
     };

@@ -225,7 +225,7 @@ export function AppearanceTab({ state, onChange }: Props) {
             </Label>
             <Label className="flex items-center gap-2 cursor-pointer text-sm font-normal">
               <Checkbox checked={state.hideBranding} onCheckedChange={(c) => update("hideBranding", !!c)} />
-              Ocultar branding DispatchOne
+              Ocultar branding Qualify
             </Label>
           </div>
         </Card>

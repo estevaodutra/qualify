@@ -27,7 +27,7 @@ export default function CustomDomainCard() {
     try {
       const res = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=CNAME`);
       const json = await res.json();
-      const ok = Array.isArray(json.Answer) && json.Answer.some((a: any) => String(a.data || "").includes("custom.dispatchone.com"));
+      const ok = Array.isArray(json.Answer) && json.Answer.some((a: any) => String(a.data || "").includes("custom.Qualify.com"));
       await upsert.mutateAsync({
         custom_domain: domain,
         custom_domain_status: ok ? "verified" : "error",
@@ -49,7 +49,7 @@ export default function CustomDomainCard() {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="text-sm text-muted-foreground">
-          Domínio atual: <code className="bg-muted px-1.5 py-0.5 rounded text-xs">dispatchone.lovable.app/agendar/...</code>
+          Domínio atual: <code className="bg-muted px-1.5 py-0.5 rounded text-xs">Qualify.lovable.app/agendar/...</code>
         </div>
         <div className="space-y-2">
           <div className="flex items-center gap-2">
@@ -62,7 +62,7 @@ export default function CustomDomainCard() {
           <div className="font-medium text-foreground">Configuração DNS</div>
           <div>Tipo: <code>CNAME</code></div>
           <div>Nome: o subdomínio escolhido (ex: <code>agenda</code>)</div>
-          <div>Valor: <code>custom.dispatchone.com</code></div>
+          <div>Valor: <code>custom.Qualify.com</code></div>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={verify} disabled={!domain || verifying}>{verifying ? "Verificando…" : "Verificar DNS"}</Button>

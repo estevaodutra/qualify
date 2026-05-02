@@ -14,7 +14,7 @@ export default function BrandingCard() {
         <div className="flex items-start gap-3">
           <Checkbox id="hide-branding" checked={hide} onCheckedChange={(v) => upsert.mutate({ hide_branding: !!v })} />
           <div>
-            <Label htmlFor="hide-branding" className="cursor-pointer">Remover "Powered by DispatchOne" das páginas</Label>
+            <Label htmlFor="hide-branding" className="cursor-pointer">Remover "Powered by Qualify" das páginas</Label>
             <p className="text-xs text-muted-foreground mt-0.5">Disponível apenas no plano Pro</p>
           </div>
         </div>

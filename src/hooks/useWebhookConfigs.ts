@@ -132,7 +132,7 @@ export function useWebhookConfigs() {
       const payload = {
         action: "test.connection",
         test: {
-          message: "Test connection from dispatchOne",
+          message: "Test connection from Qualify",
           timestamp: new Date().toISOString(),
         },
       };

@@ -1,4 +1,4 @@
-# DispatchOne
+# Qualify
 
 WhatsApp and call center automation platform with campaign management, operators, and automatic dialing.
 
@@ -6,7 +6,7 @@ WhatsApp and call center automation platform with campaign management, operators
 
 ## What is it?
 
-DispatchOne centralizes outbound contact operations (calls and WhatsApp) on a single platform, connecting leads, campaigns, channels, and operators with automatic queuing, intelligent retry, and cost-per-action analytics.
+Qualify centralizes outbound contact operations (calls and WhatsApp) on a single platform, connecting leads, campaigns, channels, and operators with automatic queuing, intelligent retry, and cost-per-action analytics.
 
 ---
 
@@ -14,7 +14,7 @@ DispatchOne centralizes outbound contact operations (calls and WhatsApp) on a si
 
 Outbound contact operations depend on constant manual coordination: manual dialing, follow-up via reminders, fragmented data across tools, and the inability to measure the real cost per conversion. Scaling requires hiring managers, not just operators.
 
-DispatchOne eliminates manual coordination. The system automatically distributes work, performs retries without intervention, and centralizes operational metrics.
+Qualify eliminates manual coordination. The system automatically distributes work, performs retries without intervention, and centralizes operational metrics.
 
 ---
 

@@ -121,7 +121,7 @@ export default function Auth() {
             <MessageSquare className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <CardTitle className="text-2xl font-bold">DispatchOne</CardTitle>
+            <CardTitle className="text-2xl font-bold">Qualify</CardTitle>
             <CardDescription>
               Plataforma de disparo de mensagens
             </CardDescription>

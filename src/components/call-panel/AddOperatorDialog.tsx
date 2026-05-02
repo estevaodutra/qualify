@@ -43,7 +43,7 @@ export function AddOperatorDialog({ open, onOpenChange }: AddOperatorDialogProps
         toast({
           title: "Erro",
           description: data.error === "user_not_found"
-            ? "Usuário não encontrado. O operador precisa criar uma conta no DispatchOne primeiro."
+            ? "Usuário não encontrado. O operador precisa criar uma conta no Qualify primeiro."
             : data.error === "already_member"
               ? "Este usuário já faz parte da companhia."
               : data.error,
@@ -83,7 +83,7 @@ export function AddOperatorDialog({ open, onOpenChange }: AddOperatorDialogProps
             Adicionar Operador
           </DialogTitle>
           <DialogDescription>
-            Busque pelo email do operador. Ele precisa ter uma conta no DispatchOne.
+            Busque pelo email do operador. Ele precisa ter uma conta no Qualify.
           </DialogDescription>
         </DialogHeader>
 

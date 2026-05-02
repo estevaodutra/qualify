@@ -238,7 +238,7 @@ export function buildTestPayload(): TestPayload {
   return {
     action: "test.connection",
     test: {
-      message: "Test connection from dispatchOne",
+      message: "Test connection from Qualify",
       timestamp: new Date().toISOString(),
     },
   };

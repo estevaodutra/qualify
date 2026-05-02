@@ -101,7 +101,7 @@ export default function MembersPage() {
             <CardTitle>Adicionar membro</CardTitle>
           </div>
           <CardDescription>
-            O usuário precisa já ter uma conta no DispatchOne.
+            O usuário precisa já ter uma conta no Qualify.
           </CardDescription>
         </CardHeader>
         <CardContent>

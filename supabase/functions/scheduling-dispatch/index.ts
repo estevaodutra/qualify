@@ -11,7 +11,7 @@ const corsHeaders = {
 };
 
 const AGENDA_WEBHOOK_URL = "https://n8n-n8n.nuwfic.easypanel.host/webhook/agenda";
-const PUBLIC_APP_URL = "https://dispatchone.lovable.app";
+const PUBLIC_APP_URL = "https://Qualify.lovable.app";
 
 type OpInput = {
   appointment_id: string;
