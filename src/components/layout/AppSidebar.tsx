@@ -130,14 +130,14 @@ export function AppSidebar() {
         "border-b border-sidebar-border py-3 space-y-2",
         isCollapsed ? "px-2" : "px-4"
       )}>
-        <div className={cn("flex items-center gap-2", isCollapsed && "justify-center")}>
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <Zap className="h-4 w-4 text-primary-foreground" />
-          </div>
-          {!isCollapsed && (
-            <div className="flex items-baseline gap-0.5">
-              <span className="text-lg font-semibold text-sidebar-foreground">Dispatch</span>
-              <span className="text-lg font-semibold text-primary">One</span>
+        <div className={cn("flex items-center", isCollapsed ? "justify-center" : "gap-2")}>
+          {isCollapsed ? (
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-transparent">
+              <img src="/logo-light.png" alt="Qualify" className="h-6 w-6 object-contain" />
+            </div>
+          ) : (
+            <div className="flex items-center h-8">
+              <img src="/logo-light.png" alt="Qualify" className="h-7 object-contain" />
             </div>
           )}
         </div>

@@ -117,12 +117,13 @@ export default function Auth() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/30 px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center space-y-4">
-          <div className="mx-auto w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
-            <MessageSquare className="h-6 w-6 text-primary" />
+          <div className="mx-auto flex items-center justify-center h-20 w-auto">
+            {/* Dark mode shows light logo, light mode shows dark logo by default */}
+            <img src="/logo-dark.png" alt="Qualify" className="h-full object-contain dark:hidden" />
+            <img src="/logo-light.png" alt="Qualify" className="h-full object-contain hidden dark:block" />
           </div>
           <div>
-            <CardTitle className="text-2xl font-bold">Qualify</CardTitle>
-            <CardDescription>
+            <CardDescription className="text-base mt-2">
               Plataforma de disparo de mensagens
             </CardDescription>
           </div>
