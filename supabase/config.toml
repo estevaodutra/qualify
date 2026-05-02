@@ -1,0 +1,106 @@
+project_id = "btvzspqcnzcslkdtddwl"
+
+[functions.generate-api-key]
+verify_jwt = false
+
+[functions.validate-api-key]
+verify_jwt = false
+
+[functions.instance-find]
+verify_jwt = false
+
+[functions.instances]
+verify_jwt = false
+
+[functions.instance-status]
+verify_jwt = false
+
+[functions.process-scheduled-messages]
+verify_jwt = false
+
+[functions.execute-message]
+verify_jwt = false
+
+[functions.handle-poll-response]
+verify_jwt = false
+
+[functions.webhook-inbound]
+verify_jwt = false
+
+[functions.reclassify-events]
+verify_jwt = false
+
+[functions.phone-validation]
+verify_jwt = false
+
+[functions.trigger-sequence]
+verify_jwt = false
+
+[functions.cleanup-webhook-events]
+verify_jwt = false
+
+[functions.message-content]
+verify_jwt = false
+
+[functions.cleanup-logs]
+verify_jwt = false
+
+[functions.call-dial]
+verify_jwt = false
+
+[functions.reschedule-failed-calls]
+verify_jwt = false
+
+[functions.leads-api]
+verify_jwt = false
+
+[functions.call-queue-api]
+verify_jwt = false
+
+[functions.execute-dispatch-sequence]
+verify_jwt = false
+
+[functions.webhook-proxy]
+verify_jwt = false
+
+[functions.company-add-member]
+verify_jwt = false
+
+[functions.queue-processor]
+verify_jwt = false
+
+[functions.call-status]
+verify_jwt = false
+
+[functions.execute-call-action]
+verify_jwt = false
+
+[functions.pirate-process-join]
+verify_jwt = false
+
+[functions.group-execution-processor]
+verify_jwt = false
+
+[functions.sync-group-members]
+verify_jwt = false
+
+[functions.refresh-instance-status]
+verify_jwt = false
+
+[functions.scheduling-dispatch]
+verify_jwt = false
+
+[functions.scheduling-reminders]
+verify_jwt = false
+
+[functions.scheduling-webhook-fire]
+verify_jwt = false
+
+[functions.create-pix-payment]
+verify_jwt = false
+
+[functions.webhook-payment-confirmation]
+verify_jwt = false
+
+[functions.wallet-debit-ura]
+verify_jwt = false

@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS idx_group_members_campaign_lid ON group_members(group_campaign_id, lid) WHERE lid IS NOT NULL;

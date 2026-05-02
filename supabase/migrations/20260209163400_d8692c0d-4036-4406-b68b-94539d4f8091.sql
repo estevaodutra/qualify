@@ -1,0 +1,1 @@
+ALTER TABLE call_campaign_operators DROP CONSTRAINT call_campaign_operators_campaign_id_user_id_key;

@@ -1,0 +1,1 @@
+ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS custom_message TEXT;

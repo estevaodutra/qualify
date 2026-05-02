@@ -1,0 +1,1 @@
+ALTER TABLE public.instances ADD COLUMN instance_function text NOT NULL DEFAULT 'dispatcher';

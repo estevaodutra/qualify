@@ -1,0 +1,1 @@
+ALTER TABLE public.call_queue ADD COLUMN IF NOT EXISTS call_log_id UUID REFERENCES public.call_logs(id) ON DELETE SET NULL;

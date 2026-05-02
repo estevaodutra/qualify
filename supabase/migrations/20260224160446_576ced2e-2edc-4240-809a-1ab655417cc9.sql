@@ -1,0 +1,1 @@
+ALTER TABLE public.call_scripts ADD CONSTRAINT call_scripts_campaign_id_unique UNIQUE (campaign_id);

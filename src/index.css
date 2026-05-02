@@ -1,0 +1,276 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* DispatchOne Design System
+   - Aesthetic: modern, utilitarian, minimal
+   - Mood: controlled power — every pixel feels intentional
+   - Base: graphite black / carbon gray
+   - Accent: electric blue / cyan
+   - All colors MUST be HSL
+*/
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@layer base {
+  :root {
+    /* Base colors */
+    --background: 0 0% 98%;
+    --foreground: 220 15% 10%;
+
+    /* Card surfaces */
+    --card: 0 0% 100%;
+    --card-foreground: 220 15% 10%;
+
+    /* Popover surfaces */
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 15% 10%;
+
+    /* Primary - Electric Blue/Cyan */
+    --primary: 199 89% 48%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary - Carbon Gray */
+    --secondary: 220 10% 94%;
+    --secondary-foreground: 220 15% 25%;
+
+    /* Muted - Subtle backgrounds */
+    --muted: 220 10% 96%;
+    --muted-foreground: 220 10% 45%;
+
+    /* Accent - Electric Blue tint */
+    --accent: 199 89% 95%;
+    --accent-foreground: 199 89% 35%;
+
+    /* Destructive - Error Red */
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Status Colors */
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 10%;
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+    --error: 0 72% 51%;
+    --error-foreground: 0 0% 100%;
+
+    /* Borders */
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 199 89% 48%;
+
+    /* Border radius */
+    --radius: 0.5rem;
+
+    /* Sidebar */
+    --sidebar-background: 220 15% 8%;
+    --sidebar-foreground: 220 10% 75%;
+    --sidebar-primary: 199 89% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 15% 15%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 220 15% 18%;
+    --sidebar-ring: 199 89% 48%;
+
+    /* Chart colors */
+    --chart-1: 199 89% 48%;
+    --chart-2: 142 71% 45%;
+    --chart-3: 38 92% 50%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 0 72% 51%;
+  }
+
+  .dark {
+    /* Base colors - Graphite/Carbon */
+    --background: 220 15% 6%;
+    --foreground: 220 10% 92%;
+
+    /* Card surfaces */
+    --card: 220 15% 9%;
+    --card-foreground: 220 10% 92%;
+
+    /* Popover surfaces */
+    --popover: 220 15% 9%;
+    --popover-foreground: 220 10% 92%;
+
+    /* Primary - Electric Blue/Cyan */
+    --primary: 199 89% 48%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary - Carbon Gray */
+    --secondary: 220 15% 15%;
+    --secondary-foreground: 220 10% 80%;
+
+    /* Muted */
+    --muted: 220 15% 12%;
+    --muted-foreground: 220 10% 55%;
+
+    /* Accent */
+    --accent: 199 89% 15%;
+    --accent-foreground: 199 89% 70%;
+
+    /* Destructive */
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Status Colors */
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 10%;
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+    --error: 0 62% 50%;
+    --error-foreground: 0 0% 100%;
+
+    /* Borders */
+    --border: 220 15% 18%;
+    --input: 220 15% 18%;
+    --ring: 199 89% 48%;
+
+    /* Sidebar */
+    --sidebar-background: 220 15% 5%;
+    --sidebar-foreground: 220 10% 70%;
+    --sidebar-primary: 199 89% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 15% 12%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 220 15% 15%;
+    --sidebar-ring: 199 89% 48%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+
+  /* Monospace for metrics and data */
+  .font-mono {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+
+  /* Typography scale */
+  h1 {
+    @apply text-2xl font-semibold tracking-tight;
+  }
+
+  h2 {
+    @apply text-xl font-semibold tracking-tight;
+  }
+
+  h3 {
+    @apply text-lg font-semibold;
+  }
+
+  h4 {
+    @apply text-base font-semibold;
+  }
+}
+
+@layer components {
+  /* Status indicator dot */
+  .status-dot {
+    @apply w-2 h-2 rounded-full;
+  }
+
+  .status-dot-active {
+    @apply bg-success;
+  }
+
+  .status-dot-warning {
+    @apply bg-warning;
+  }
+
+  .status-dot-error {
+    @apply bg-error;
+  }
+
+  .status-dot-inactive {
+    @apply bg-muted-foreground;
+  }
+
+  /* Skeleton loader shimmer */
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 25%,
+      hsl(var(--muted-foreground) / 0.1) 50%,
+      hsl(var(--muted)) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s linear infinite;
+  }
+
+  /* Card elevation system */
+  .elevation-sm {
+    box-shadow: 0 1px 2px hsl(220 15% 10% / 0.05);
+  }
+
+  .elevation-md {
+    box-shadow: 0 4px 6px -1px hsl(220 15% 10% / 0.1), 0 2px 4px -2px hsl(220 15% 10% / 0.1);
+  }
+
+  .elevation-lg {
+    box-shadow: 0 10px 15px -3px hsl(220 15% 10% / 0.1), 0 4px 6px -4px hsl(220 15% 10% / 0.1);
+  }
+
+  /* Interactive hover lift */
+  .hover-lift {
+    @apply transition-transform duration-200 ease-out;
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-1px);
+  }
+
+  /* Pressed state */
+  .pressed {
+    box-shadow: inset 0 1px 2px hsl(220 15% 10% / 0.1);
+  }
+
+  /* Grid pattern background */
+  .grid-pattern {
+    background-image: linear-gradient(hsl(var(--border) / 0.5) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--border) / 0.5) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+}
+
+@layer utilities {
+  /* Label styling */
+  .label-uppercase {
+    @apply text-xs font-medium uppercase tracking-wider text-muted-foreground;
+  }
+
+  /* Metric text */
+  .metric-value {
+    @apply font-mono text-2xl font-semibold tabular-nums;
+  }
+
+  .metric-label {
+    @apply text-sm text-muted-foreground;
+  }
+
+  /* Tight line height for headings */
+  .leading-tight-custom {
+    line-height: 1.15;
+  }
+}

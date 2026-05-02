@@ -1,0 +1,1 @@
+ALTER TABLE public.group_execution_lists ADD COLUMN name text NOT NULL DEFAULT 'Lista de Execução';
