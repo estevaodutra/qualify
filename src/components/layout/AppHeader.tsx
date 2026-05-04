@@ -1,4 +1,4 @@
-import { Bell, Search, User, LogOut, Settings, UserCircle } from "lucide-react";
+import { Bell, Search, LogOut, Settings, UserCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -8,7 +8,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useLanguage } from "@/i18n";
 import { useAuth } from "@/contexts/AuthContext";
@@ -37,77 +36,108 @@ export function AppHeader() {
       });
     }
 
-    // Always navigate to auth — state was cleared in finally block
     navigate("/auth");
   };
 
   const userEmail = user?.email || "Usuário";
   const userName = user?.user_metadata?.full_name || userEmail.split("@")[0];
+  const initials = userName.slice(0, 2).toUpperCase();
 
   return (
-    <header className="sticky top-0 z-40 flex h-14 items-center gap-4 border-b bg-background/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <SidebarTrigger className="md:hidden" />
+    <header className="sticky top-0 z-40 w-full border-b border-border/50 bg-background/80 backdrop-blur-xl">
+      <div className="flex h-[60px] items-center justify-between px-6 gap-4">
 
-      {/* Search */}
-      <div className="hidden flex-1 md:flex">
-        <div className="relative w-full max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder={t("header.search")}
-            className="h-9 pl-9 bg-muted/50 border-transparent focus:border-input"
-          />
-        </div>
-      </div>
+        {/* Left */}
+        <div className="flex items-center gap-4 flex-1">
+          <SidebarTrigger className="h-9 w-9 shrink-0 rounded-xl text-muted-foreground hover:bg-accent hover:text-foreground transition-colors" />
 
-      {/* Right actions */}
-      <div className="flex items-center gap-2 ml-auto">
-        {/* System status indicator */}
-        <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-success/10 text-success text-xs font-medium">
-          <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse-subtle" />
-          {t("header.allSystemsOperational")}
+          <div className="relative group hidden md:flex items-center w-72">
+            <Search className="absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/50 group-focus-within:text-primary transition-colors duration-200 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Pesquisar..."
+              className="h-9 w-full rounded-xl border border-border/60 bg-muted/40
+                         pl-10 pr-4 text-[13px] font-medium text-foreground
+                         placeholder:text-muted-foreground/40
+                         focus:bg-background focus:border-primary/40 focus:ring-2 focus:ring-primary/10
+                         outline-none transition-all duration-200"
+            />
+          </div>
         </div>
 
-        {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-4 w-4" />
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-error text-[10px] font-medium text-error-foreground">
-            3
-          </span>
-        </Button>
+        {/* Right */}
+        <div className="flex items-center gap-3">
+          {/* Status pill */}
+          <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/8 border border-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_6px_rgba(16,185,129,0.6)]" />
+            <span className="text-[10px] font-black tracking-[0.15em] uppercase">Sistemas OK</span>
+          </div>
 
-        {/* User menu */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="rounded-full">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
-                <User className="h-4 w-4 text-primary" />
-              </div>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>
-              <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium">{userName}</p>
-                <p className="text-xs text-muted-foreground">{userEmail}</p>
-              </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => navigate("/settings")}>
-              <UserCircle className="mr-2 h-4 w-4" />
-              {t("header.profile")}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate("/settings")}>
-              <Settings className="mr-2 h-4 w-4" />
-              {t("header.accountSettings")}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleSignOut} className="text-error">
-              <LogOut className="mr-2 h-4 w-4" />
-              {t("header.signOut")}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          {/* Notifications */}
+          <button className="relative h-9 w-9 flex items-center justify-center rounded-xl border border-border/50 bg-muted/30 text-muted-foreground hover:bg-accent hover:text-foreground hover:border-border transition-all duration-200">
+            <Bell className="h-4 w-4" />
+            <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-primary border-2 border-background" />
+          </button>
+
+          {/* User menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                className="h-9 rounded-xl px-2 gap-2.5 hover:bg-accent transition-all active:scale-95 group"
+              >
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg gradient-primary text-white text-xs font-bold shadow-sm glow-sm transition-transform duration-200 group-hover:scale-105">
+                  {initials}
+                </div>
+                <div className="hidden lg:flex flex-col items-start leading-none">
+                  <span className="text-[13px] font-semibold text-foreground">{userName}</span>
+                  <span className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest mt-0.5">Admin</span>
+                </div>
+              </Button>
+            </DropdownMenuTrigger>
+
+            <DropdownMenuContent align="end" className="w-60 rounded-2xl shadow-elevation-lg border-border/50 bg-background/95 backdrop-blur-xl p-2">
+              <DropdownMenuLabel className="px-3 py-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl gradient-primary text-white text-sm font-bold shrink-0 glow-sm">
+                    {initials}
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <p className="text-[13px] font-semibold text-foreground truncate">{userName}</p>
+                    <p className="text-[11px] text-muted-foreground/60 truncate">{userEmail}</p>
+                  </div>
+                </div>
+              </DropdownMenuLabel>
+
+              <DropdownMenuSeparator className="bg-border/50 my-1" />
+
+              <DropdownMenuItem
+                onClick={() => navigate("/settings")}
+                className="rounded-xl gap-3 px-3 py-2.5 text-[13px] font-medium cursor-pointer"
+              >
+                <UserCircle className="h-4 w-4 text-muted-foreground" />
+                {t("header.profile")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => navigate("/settings")}
+                className="rounded-xl gap-3 px-3 py-2.5 text-[13px] font-medium cursor-pointer"
+              >
+                <Settings className="h-4 w-4 text-muted-foreground" />
+                {t("header.accountSettings")}
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator className="bg-border/50 my-1" />
+
+              <DropdownMenuItem
+                onClick={handleSignOut}
+                className="rounded-xl gap-3 px-3 py-2.5 text-[13px] font-bold text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer"
+              >
+                <LogOut className="h-4 w-4" />
+                {t("header.signOut")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
     </header>
   );

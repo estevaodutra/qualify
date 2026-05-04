@@ -1112,7 +1112,7 @@ export default function CallPanel() {
                       qe.isPriority && "bg-amber-500/5",
                       qe.status === "in_call" && "bg-blue-500/5"
                     )}>
-                      <TableCell className="font-mono text-xs text-muted-foreground py-2">
+                      <TableCell className={cn("font-mono text-xs text-muted-foreground py-2", idx === 0 && "border-l-2 border-[#8A3CFF]/40")}>
                         {icon && <span className="mr-1">{icon}</span>}
                         {(currentPage - 1) * itemsPerPage + idx + 1}
                       </TableCell>

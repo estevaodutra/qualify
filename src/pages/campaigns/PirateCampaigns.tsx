@@ -58,30 +58,36 @@ export default function PirateCampaigns() {
   }, [campaigns]);
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <CampaignBreadcrumb channel="whatsapp" type="Pirata" />
-
-      <div>
-        <h1 className="text-2xl font-bold">Campanhas Pirata</h1>
-        <p className="text-muted-foreground">Monitore grupos do WhatsApp e capture leads automaticamente</p>
+    <div className="space-y-8 animate-fade-in pb-10">
+      <div className="flex flex-col gap-4">
+        <CampaignBreadcrumb channel="whatsapp" type="Pirata" />
+        
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight gradient-text">Operação Pirata</h1>
+            <p className="text-sm font-medium text-muted-foreground/60">Monitore grupos estrategicamente e capture leads de forma automatizada e inteligente.</p>
+          </div>
+        </div>
       </div>
 
-      {selectedCampaign ? (
-        <PirateCampaignDetails
-          campaign={selectedCampaign}
-          onBack={() => setSelectedCampaign(null)}
-          onUpdate={handleUpdate}
-        />
-      ) : (
-        <PirateCampaignList
-          campaigns={campaigns}
-          isLoading={isLoading}
-          onSelect={setSelectedCampaign}
-          onDelete={handleDelete}
-          onStatusChange={handleStatusChange}
-          onCreateNew={() => setShowCreateDialog(true)}
-        />
-      )}
+      <div className="animate-fade-in stagger-1">
+        {selectedCampaign ? (
+          <PirateCampaignDetails
+            campaign={selectedCampaign}
+            onBack={() => setSelectedCampaign(null)}
+            onUpdate={handleUpdate}
+          />
+        ) : (
+          <PirateCampaignList
+            campaigns={campaigns}
+            isLoading={isLoading}
+            onSelect={setSelectedCampaign}
+            onDelete={handleDelete}
+            onStatusChange={handleStatusChange}
+            onCreateNew={() => setShowCreateDialog(true)}
+          />
+        )}
+      </div>
 
       <CreatePirateCampaignDialog
         open={showCreateDialog}

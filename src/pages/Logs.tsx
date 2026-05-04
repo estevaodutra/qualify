@@ -192,7 +192,7 @@ export default function Logs() {
       key: "sentAt",
       header: "Timestamp",
       render: (log: SequenceLog) => (
-        <span className="text-sm text-muted-foreground">
+        <span className="font-['JetBrains_Mono'] text-xs text-muted-foreground">
           {format(new Date(log.sentAt), "dd/MM HH:mm:ss")}
         </span>
       ),
@@ -243,7 +243,7 @@ export default function Logs() {
     {
       key: "timestamp",
       header: "Timestamp",
-      render: (log: ApiLog) => <span className="font-mono text-xs">{log.timestamp}</span>,
+      render: (log: ApiLog) => <span className="font-['JetBrains_Mono'] text-xs text-muted-foreground">{log.timestamp}</span>,
     },
     {
       key: "method",

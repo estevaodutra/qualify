@@ -18,17 +18,17 @@ const variantConfig = {
   },
   warning: {
     icon: AlertTriangle,
-    containerClass: "bg-warning/10 border-warning/30 text-warning-foreground",
+    containerClass: "bg-warning/10 border-warning/30 border-l-4 border-l-[#FFB432] text-warning-foreground",
     iconClass: "text-warning",
   },
   error: {
     icon: AlertCircle,
-    containerClass: "bg-error/10 border-error/30 text-error",
+    containerClass: "bg-error/10 border-error/30 border-l-4 border-l-[#FF7A7A] text-error",
     iconClass: "text-error",
   },
   success: {
     icon: CheckCircle,
-    containerClass: "bg-success/10 border-success/30 text-success",
+    containerClass: "bg-success/10 border-success/30 border-l-4 border-l-[#22DD4F] text-success",
     iconClass: "text-success",
   },
 };

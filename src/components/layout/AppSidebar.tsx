@@ -93,7 +93,7 @@ export function AppSidebar() {
     { title: t("nav.logs") || "Logs", url: "/logs", icon: FileText },
   ];
 
-  const campaignSubItems: Record<string, Array<{ title: string; url: string; icon: typeof SendHorizontal; comingSoon?: boolean }>> = {
+  const campaignSubItems: Record<string, Array<{ title: string; url: string; icon: any; comingSoon?: boolean }>> = {
     whatsapp: [
       { title: "Disparos", url: "/campaigns/whatsapp/despacho", icon: SendHorizontal },
       { title: "Grupos", url: "/campaigns/whatsapp/grupos", icon: Users },
@@ -116,83 +116,99 @@ export function AppSidebar() {
   ];
 
   const navLinkClasses = cn(
-    "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-colors",
-    "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+    "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sidebar-foreground/80 transition-all duration-200",
+    "hover:bg-sidebar-accent hover:text-sidebar-foreground",
     isCollapsed && "justify-center px-0"
   );
 
-  return (
-    <Sidebar
+  const activeClasses = "bg-sidebar-accent text-sidebar-primary font-semibold sidebar-active-item shadow-sm";
+
+  return <Sidebar
       collapsible="icon"
-      className="border-r border-sidebar-border bg-sidebar"
+      className="border-r border-white/5 bg-zinc-950/80 backdrop-blur-2xl"
     >
       <SidebarHeader className={cn(
-        "border-b border-sidebar-border py-3 space-y-2",
-        isCollapsed ? "px-2" : "px-4"
+        "py-8 space-y-6",
+        isCollapsed ? "px-2" : "px-6"
       )}>
-        <div className={cn("flex items-center", isCollapsed ? "justify-center" : "gap-2")}>
-          {isCollapsed ? (
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-transparent">
-              <img src="/logo-light.png" alt="Qualify" className="h-6 w-6 object-contain" />
-            </div>
-          ) : (
-            <div className="flex items-center h-8">
-              <img src="/logo-light.png" alt="Qualify" className="h-7 object-contain" />
+        <div className={cn("flex items-center", isCollapsed ? "justify-center" : "gap-4")}>
+          <div className="flex items-center justify-center shrink-0">
+             <img 
+               src="/logo-fundo-transparente-branco.png" 
+               alt="Qualify Logo" 
+               className={cn(
+                 "transition-all duration-500",
+                 isCollapsed ? "h-8 w-8" : "h-10 w-auto"
+               )} 
+             />
+          </div>
+          {!isCollapsed && (
+            <div className="flex flex-col">
+              <span className="text-lg font-black tracking-tighter text-white uppercase leading-none">Qualify</span>
+              <span className="text-[10px] font-bold text-primary tracking-widest uppercase mt-1">Intelligence</span>
             </div>
           )}
         </div>
+        
         {!isCollapsed && companies.length > 0 && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2 w-full rounded-md border border-sidebar-border bg-sidebar px-2.5 py-1.5 text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors">
-                <Building2 className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                <span className="truncate flex-1 text-left font-medium">
-                  {activeCompany?.name || "Selecionar"}
-                </span>
-                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground rotate-90" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56">
-              {companies.map((company) => (
-                <DropdownMenuItem
-                  key={company.id}
-                  onClick={() => setActiveCompany(company.id)}
-                  className="flex items-center gap-2"
-                >
-                  {company.id === activeCompany?.id ? (
-                    <Check className="h-3.5 w-3.5 text-primary" />
-                  ) : (
-                    <div className="h-3.5 w-3.5" />
-                  )}
-                  <span className="truncate">{company.name}</span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="pt-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-3 w-full rounded-2xl border border-white/5 bg-white/5 px-4 py-3 text-xs text-white/70 hover:bg-white/10 transition-all duration-300">
+                  <div className="h-6 w-6 rounded-xl bg-primary/20 flex items-center justify-center">
+                    <Building2 className="h-3.5 w-3.5 text-primary" />
+                  </div>
+                  <span className="truncate flex-1 text-left font-bold tracking-tight">
+                    {activeCompany?.name || "Selecionar"}
+                  </span>
+                  <ChevronRight className="h-4 w-4 text-white/20 rotate-90" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64 rounded-2xl shadow-2xl border-white/10 bg-zinc-900/95 backdrop-blur-3xl p-2">
+                <DropdownMenuLabel className="text-[10px] uppercase tracking-[0.2em] text-white/30 font-black px-4 py-3">Organizações</DropdownMenuLabel>
+                {companies.map((company) => (
+                  <DropdownMenuItem
+                    key={company.id}
+                    onClick={() => setActiveCompany(company.id)}
+                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-white/70 focus:bg-primary/20 focus:text-white cursor-pointer transition-colors"
+                  >
+                    <div className={cn("h-2 w-2 rounded-full", company.id === activeCompany?.id ? "bg-primary glow-primary" : "bg-white/10")} />
+                    <span className="truncate text-sm font-bold">{company.name}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         )}
       </SidebarHeader>
 
-      <SidebarContent className={cn("py-4", isCollapsed ? "px-1" : "px-2")}>
-        <SidebarGroup>
+      <SidebarContent className={cn("py-4", isCollapsed ? "px-1" : "px-4")}>
+        <SidebarGroup className="pb-6">
+          {!isCollapsed && (
+            <div className="px-4 pb-3 text-[10px] font-black uppercase tracking-[0.25em] text-white/20">Principal</div>
+          )}
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu className="gap-2">
               {mainNavItems.map((item) => (
                 <SidebarMenuItem key={item.url}>
-                  <SidebarMenuButton asChild tooltip={item.title}>
+                  <SidebarMenuButton asChild tooltip={item.title} className="h-auto p-0">
                     <NavLink
                       to={item.url}
                       end={item.url === "/"}
-                      className={navLinkClasses}
-                      activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+                      className={cn(
+                        "flex items-center gap-3.5 rounded-2xl px-4 py-3 text-white/50 transition-all duration-300 hover:bg-white/5 hover:text-white",
+                        isCollapsed && "justify-center px-0"
+                      )}
+                      activeClassName="sidebar-item-active"
                     >
-                      <item.icon className="h-4 w-4 flex-shrink-0" />
-                      {!isCollapsed && <span>{item.title}</span>}
+                      <item.icon className="h-5 w-5 flex-shrink-0" />
+                      {!isCollapsed && <span className="text-sm font-bold tracking-tight">{item.title}</span>}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
 
-              {/* Campaigns - collapsed: popover, expanded: collapsible */}
+              {/* Campaigns */}
               {isCollapsed ? (
                 <SidebarMenuItem>
                   <Popover>
@@ -200,40 +216,30 @@ export function AppSidebar() {
                       <SidebarMenuButton
                         tooltip={t("nav.campaigns")}
                         className={cn(
-                          "flex items-center rounded-lg py-2 text-sidebar-foreground transition-colors w-full justify-center px-0",
-                          "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                          isCampaignsRoute && "bg-sidebar-accent text-sidebar-primary font-medium"
+                          navLinkClasses,
+                          isCampaignsRoute && activeClasses
                         )}
                       >
-                        <Megaphone className="h-4 w-4 flex-shrink-0" />
+                        <Megaphone className="h-[18px] w-[18px] flex-shrink-0" />
                       </SidebarMenuButton>
                     </PopoverTrigger>
-                    <PopoverContent side="right" align="start" className="w-48 p-1">
-                      <div className="flex items-center gap-2 px-2 py-1.5 text-xs font-medium text-muted-foreground">
-                        <MessageSquare className="h-3 w-3" />
+                    <PopoverContent side="right" align="start" className="w-52 p-1.5 rounded-xl shadow-2xl border-sidebar-border bg-sidebar-accent/95 backdrop-blur-xl">
+                      <div className="flex items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground/30">
                         WhatsApp
                       </div>
                       {campaignSubItems.whatsapp.map((item) => (
                         <NavLink
                           key={item.url}
                           to={item.url}
-                          className={cn(
-                            "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-popover-foreground transition-colors",
-                            "hover:bg-accent hover:text-accent-foreground",
-                            item.comingSoon && "opacity-50"
-                          )}
-                          activeClassName="bg-accent text-accent-foreground font-medium"
+                          className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-sidebar-foreground/80 hover:bg-sidebar-primary/10 hover:text-sidebar-foreground transition-all"
+                          activeClassName="bg-sidebar-primary/20 text-sidebar-foreground font-semibold"
                         >
-                          <item.icon className="h-3.5 w-3.5" />
+                          <item.icon className="h-4 w-4" />
                           <span>{item.title}</span>
-                          {item.comingSoon && (
-                            <span className="ml-auto text-[10px] text-muted-foreground">Em breve</span>
-                          )}
                         </NavLink>
                       ))}
-                      <Separator className="my-1" />
-                      <div className="flex items-center gap-2 px-2 py-1.5 text-xs font-medium text-muted-foreground">
-                        <Phone className="h-3 w-3" />
+                      <Separator className="my-1.5 bg-sidebar-border/50" />
+                      <div className="flex items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground/30">
                         Telefonia
                       </div>
                       {campaignSubItems.telefonia.map((item) => (
@@ -241,17 +247,14 @@ export function AppSidebar() {
                           key={item.url}
                           to={item.url}
                           className={cn(
-                            "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-popover-foreground transition-colors",
-                            "hover:bg-accent hover:text-accent-foreground",
-                            item.comingSoon && "opacity-50"
+                            "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-sidebar-foreground/80 hover:bg-sidebar-primary/10 hover:text-sidebar-foreground transition-all",
+                            item.comingSoon && "opacity-40"
                           )}
-                          activeClassName="bg-accent text-accent-foreground font-medium"
+                          activeClassName="bg-sidebar-primary/20 text-sidebar-foreground font-semibold"
                         >
-                          <item.icon className="h-3.5 w-3.5" />
+                          <item.icon className="h-4 w-4" />
                           <span>{item.title}</span>
-                          {item.comingSoon && (
-                            <span className="ml-auto text-[10px] text-muted-foreground">Em breve</span>
-                          )}
+                          {item.comingSoon && <span className="ml-auto text-[8px] badge-coming-soon">BREVE</span>}
                         </NavLink>
                       ))}
                     </PopoverContent>
@@ -267,79 +270,48 @@ export function AppSidebar() {
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton
                         tooltip={t("nav.campaigns")}
-                        className={cn(
-                          "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-colors w-full",
-                          "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                          isCampaignsRoute && "bg-sidebar-accent text-sidebar-primary font-medium"
-                        )}
+                        className={cn(navLinkClasses, isCampaignsRoute && !campaignsOpen && activeClasses)}
                       >
-                        <Megaphone className="h-4 w-4 flex-shrink-0" />
-                        <span className="flex-1">{t("nav.campaigns")}</span>
+                        <Megaphone className="h-[18px] w-[18px] flex-shrink-0" />
+                        <span className="flex-1 text-sm">{t("nav.campaigns")}</span>
                         <ChevronRight
                           className={cn(
-                            "h-4 w-4 transition-transform duration-200",
+                            "h-3.5 w-3.5 transition-transform duration-300 text-sidebar-foreground/30",
                             campaignsOpen && "rotate-90"
                           )}
                         />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <SidebarMenuSub>
-                        <SidebarMenuSubItem>
-                          <div className="flex items-center gap-2 px-2 py-1.5 text-xs font-medium text-muted-foreground">
-                            <MessageSquare className="h-3 w-3" />
-                            WhatsApp
-                          </div>
-                        </SidebarMenuSubItem>
+                    <CollapsibleContent className="animate-fade-in pl-3 pr-1 pt-1">
+                      <div className="space-y-1 border-l-2 border-sidebar-border/40 ml-5 pl-2 my-1">
+                        <div className="flex items-center gap-2 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.1em] text-sidebar-foreground/25">WhatsApp</div>
                         {campaignSubItems.whatsapp.map((item) => (
-                          <SidebarMenuSubItem key={item.url}>
-                            <SidebarMenuSubButton asChild>
-                              <NavLink
-                                to={item.url}
-                                className={cn(
-                                  "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-sidebar-foreground transition-colors",
-                                  "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                                  item.comingSoon && "opacity-50"
-                                )}
-                                activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
-                              >
-                                <item.icon className="h-3.5 w-3.5" />
-                                <span>{item.title}</span>
-                                {item.comingSoon && (
-                                  <span className="ml-auto text-[10px] text-muted-foreground">Em breve</span>
-                                )}
-                              </NavLink>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
+                          <NavLink
+                            key={item.url}
+                            to={item.url}
+                            className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all"
+                            activeClassName="text-sidebar-primary font-bold"
+                          >
+                            <item.icon className="h-3.5 w-3.5" />
+                            <span>{item.title}</span>
+                          </NavLink>
                         ))}
-                        <SidebarMenuSubItem>
-                          <div className="flex items-center gap-2 px-2 py-1.5 text-xs font-medium text-muted-foreground mt-2">
-                            <Phone className="h-3 w-3" />
-                            Telefonia
-                          </div>
-                        </SidebarMenuSubItem>
+                        <div className="flex items-center gap-2 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.1em] text-sidebar-foreground/25 mt-2">Telefonia</div>
                         {campaignSubItems.telefonia.map((item) => (
-                          <SidebarMenuSubItem key={item.url}>
-                            <SidebarMenuSubButton asChild>
-                              <NavLink
-                                to={item.url}
-                                className={cn(
-                                  "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-sidebar-foreground transition-colors",
-                                  "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                                  item.comingSoon && "opacity-50"
-                                )}
-                                activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
-                              >
-                                <item.icon className="h-3.5 w-3.5" />
-                                <span>{item.title}</span>
-                                {item.comingSoon && (
-                                  <span className="ml-auto text-[10px] text-muted-foreground">Em breve</span>
-                                )}
-                              </NavLink>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
+                          <NavLink
+                            key={item.url}
+                            to={item.url}
+                            className={cn(
+                              "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all",
+                              item.comingSoon && "opacity-40"
+                            )}
+                            activeClassName="text-sidebar-primary font-bold"
+                          >
+                            <item.icon className="h-3.5 w-3.5" />
+                            <span>{item.title}</span>
+                          </NavLink>
                         ))}
-                      </SidebarMenuSub>
+                      </div>
                     </CollapsibleContent>
                   </SidebarMenuItem>
                 </Collapsible>
@@ -348,7 +320,10 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup>
+        <SidebarGroup className="pb-4">
+          {!isCollapsed && (
+            <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-sidebar-foreground/30">Finanças</div>
+          )}
           <SidebarGroupContent>
             <SidebarMenu>
               {isCollapsed ? (
@@ -357,28 +332,21 @@ export function AppSidebar() {
                     <PopoverTrigger asChild>
                       <SidebarMenuButton
                         tooltip="Carteira"
-                        className={cn(
-                          "flex items-center rounded-lg py-2 text-sidebar-foreground transition-colors w-full justify-center px-0",
-                          "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                          isWalletRoute && "bg-sidebar-accent text-sidebar-primary font-medium"
-                        )}
+                        className={cn(navLinkClasses, isWalletRoute && activeClasses)}
                       >
-                        <Wallet className="h-4 w-4 flex-shrink-0" />
+                        <Wallet className="h-[18px] w-[18px] flex-shrink-0" />
                       </SidebarMenuButton>
                     </PopoverTrigger>
-                    <PopoverContent side="right" align="start" className="w-52 p-1">
+                    <PopoverContent side="right" align="start" className="w-52 p-1.5 rounded-xl shadow-2xl border-sidebar-border bg-sidebar-accent/95 backdrop-blur-xl">
                       {walletSubItems.map((item) => (
                         <NavLink
                           key={item.url}
                           to={item.url}
                           end={item.end}
-                          className={cn(
-                            "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-popover-foreground transition-colors",
-                            "hover:bg-accent hover:text-accent-foreground"
-                          )}
-                          activeClassName="bg-accent text-accent-foreground font-medium"
+                          className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-sidebar-foreground/80 hover:bg-sidebar-primary/10 hover:text-sidebar-foreground transition-all"
+                          activeClassName="bg-sidebar-primary/20 text-sidebar-foreground font-semibold"
                         >
-                          <item.icon className="h-3.5 w-3.5" />
+                          <item.icon className="h-4 w-4" />
                           <span>{item.title}</span>
                         </NavLink>
                       ))}
@@ -395,43 +363,28 @@ export function AppSidebar() {
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton
                         tooltip="Carteira"
-                        className={cn(
-                          "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-colors w-full",
-                          "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                          isWalletRoute && "bg-sidebar-accent text-sidebar-primary font-medium"
-                        )}
+                        className={cn(navLinkClasses, isWalletRoute && !walletOpen && activeClasses)}
                       >
-                        <Wallet className="h-4 w-4 flex-shrink-0" />
-                        <span className="flex-1">Carteira</span>
-                        <ChevronRight
-                          className={cn(
-                            "h-4 w-4 transition-transform duration-200",
-                            walletOpen && "rotate-90"
-                          )}
-                        />
+                        <Wallet className="h-[18px] w-[18px] flex-shrink-0" />
+                        <span className="flex-1 text-sm">Carteira</span>
+                        <ChevronRight className={cn("h-3.5 w-3.5 transition-transform duration-300 text-sidebar-foreground/30", walletOpen && "rotate-90")} />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <SidebarMenuSub>
+                    <CollapsibleContent className="animate-fade-in pl-3 pr-1 pt-1">
+                      <div className="space-y-1 border-l-2 border-sidebar-border/40 ml-5 pl-2 my-1">
                         {walletSubItems.map((item) => (
-                          <SidebarMenuSubItem key={item.url}>
-                            <SidebarMenuSubButton asChild>
-                              <NavLink
-                                to={item.url}
-                                end={item.end}
-                                className={cn(
-                                  "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-sidebar-foreground transition-colors",
-                                  "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                                )}
-                                activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
-                              >
-                                <item.icon className="h-3.5 w-3.5" />
-                                <span>{item.title}</span>
-                              </NavLink>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
+                          <NavLink
+                            key={item.url}
+                            to={item.url}
+                            end={item.end}
+                            className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all"
+                            activeClassName="text-sidebar-primary font-bold"
+                          >
+                            <item.icon className="h-3.5 w-3.5" />
+                            <span>{item.title}</span>
+                          </NavLink>
                         ))}
-                      </SidebarMenuSub>
+                      </div>
                     </CollapsibleContent>
                   </SidebarMenuItem>
                 </Collapsible>
@@ -440,22 +393,24 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <Separator className="mx-auto w-4/5 my-2" />
+        <Separator className="mx-5 my-4 bg-sidebar-border/30" />
 
-
-        <SidebarGroup className="pt-2">
+        <SidebarGroup>
+          {!isCollapsed && (
+            <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-sidebar-foreground/30">Sistema</div>
+          )}
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu className="gap-1">
               {systemNavItems.map((item) => (
                 <SidebarMenuItem key={item.url}>
-                  <SidebarMenuButton asChild tooltip={item.title}>
+                  <SidebarMenuButton asChild tooltip={item.title} className="h-auto p-0">
                     <NavLink
                       to={item.url}
                       className={navLinkClasses}
-                      activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+                      activeClassName={activeClasses}
                     >
-                      <item.icon className="h-4 w-4 flex-shrink-0" />
-                      {!isCollapsed && <span>{item.title}</span>}
+                      <item.icon className="h-[17px] w-[17px] flex-shrink-0" />
+                      {!isCollapsed && <span className="text-[13px]">{item.title}</span>}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -465,12 +420,11 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border p-2">
-        <SidebarTrigger className="w-full justify-center text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
-          <ChevronLeft className={cn("h-4 w-4 transition-transform", isCollapsed && "rotate-180")} />
-          {!isCollapsed && <span className="ml-2 text-sm">{t("nav.collapse")}</span>}
+      <SidebarFooter className="p-3 border-t border-sidebar-border/50">
+        <SidebarTrigger className="w-full h-10 rounded-xl justify-center text-sidebar-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all duration-300">
+          <ChevronLeft className={cn("h-4 w-4 transition-transform duration-500", isCollapsed && "rotate-180")} />
+          {!isCollapsed && <span className="ml-2 text-xs font-semibold tracking-widest uppercase">{t("nav.collapse")}</span>}
         </SidebarTrigger>
       </SidebarFooter>
-    </Sidebar>
-  );
+    </Sidebar>;
 }

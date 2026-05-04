@@ -59,6 +59,17 @@ export function ResponseBlock({ responses }: ResponseBlockProps) {
     const isExpanded = expanded[type];
     const formattedBody = formatJson(body);
 
+    const syntaxHighlight = (str: string) => {
+      let highlighted = str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      
+      highlighted = highlighted.replace(/(["'])(?:(?=(\\?))\2.)*?\1/g, '<span class="text-[#22E6B5]">$&</span>');
+      
+      return { __html: highlighted };
+    };
+
     return (
       <div className={cn(
         "border rounded-lg overflow-hidden",
@@ -98,7 +109,7 @@ export function ResponseBlock({ responses }: ResponseBlockProps) {
             <Button
               variant="ghost"
               size="icon"
-              className="absolute right-2 top-2 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-background z-10"
+              className="absolute right-2 top-2 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-background hover:text-[#8A3CFF] z-10"
               onClick={() => copyToClipboard(formattedBody, type)}
             >
               {copied === type ? (
@@ -107,8 +118,8 @@ export function ResponseBlock({ responses }: ResponseBlockProps) {
                 <Copy className="h-4 w-4" />
               )}
             </Button>
-            <pre className="bg-[#1e1e1e] dark:bg-[#0d0d0d] text-[#d4d4d4] p-4 overflow-x-auto text-sm font-mono leading-relaxed">
-              <code>{formattedBody}</code>
+            <pre className="bg-[#0E1329] border border-white/10 text-[#B87FFF] font-['JetBrains_Mono'] p-4 overflow-x-auto text-sm leading-relaxed">
+              <code dangerouslySetInnerHTML={syntaxHighlight(formattedBody)} />
             </pre>
           </div>
         )}

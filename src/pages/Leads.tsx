@@ -57,9 +57,9 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 const TYPE_BADGES: Record<string, { label: string; className: string }> = {
-  grupos: { label: "👥 Grupo", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800" },
-  ligacao: { label: "📞 Ligação", className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800" },
-  despacho: { label: "📱 WhatsApp", className: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400 border-teal-200 dark:border-teal-800" },
+  grupos: { label: "Grupo", className: "bg-[#2637C9]/10 text-[#7B8FFF] border-[#2637C9]/20" },
+  ligacao: { label: "Ligação", className: "bg-[#22DD4F]/10 text-[#22DD4F] border-[#22DD4F]/20" },
+  despacho: { label: "WhatsApp", className: "bg-[#006EFF]/10 text-[#6BAEFF] border-[#006EFF]/20" },
 };
 
 export default function Leads() {
@@ -221,51 +221,38 @@ export default function Leads() {
   };
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Leads"
-        description="Consulte, crie, modifique ou remova seus leads"
-        actions={
-          <div className="flex gap-2">
-            <Button variant="outline" className="gap-2" onClick={handleSync} disabled={isSyncing}>
-              <RefreshCw className={cn("h-4 w-4", isSyncing && "animate-spin")} />
-              Sync
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="gap-2">
-                  <Download className="h-4 w-4" /> Extrair
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setExtractOpen(true)}>
-                  <Users className="h-4 w-4 mr-2" /> De Grupos do WhatsApp
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setImportOpen(true)}>
-                  <Upload className="h-4 w-4 mr-2" /> De Planilha (CSV/Excel)
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => toast.info("Em breve: importação via API externa")}>
-                  <RefreshCw className="h-4 w-4 mr-2" /> De API Externa
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button onClick={() => setCreateOpen(true)} className="gap-2">
-              <Plus className="h-4 w-4" /> Novo Lead
-            </Button>
-          </div>
-        }
-      />
-
-      {/* Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <MetricCard title="Total" value={stats.total.toLocaleString()} icon={Users} />
-        <MetricCard title="Ativos" value={stats.active.toLocaleString()} icon={UserCheck} />
-        <MetricCard title="Em Campanha" value={stats.inCampaign.toLocaleString()} icon={Megaphone} />
-        <MetricCard title="Inativos" value={stats.inactive.toLocaleString()} icon={UserX} />
+    <div className="flex flex-col gap-6 p-8 overflow-y-auto flex-1 min-h-0 bg-background">
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-[22px] font-semibold text-foreground tracking-tight m-0 font-['Sora']">Leads</h1>
+          <p className="text-[14px] text-muted-foreground mt-1">Gerencie sua base de contatos</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="h-9 gap-1.5 px-3 font-medium text-[13px] bg-transparent border-border text-foreground shadow-none rounded-md">
+                <Download className="w-3.5 h-3.5" /> Ferramentas
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 rounded-xl shadow-lg border-border bg-card">
+              <DropdownMenuItem className="rounded-lg m-1 gap-2.5 font-medium cursor-pointer" onClick={() => setExtractOpen(true)}>
+                <Users className="h-4 w-4" /> De Grupos do WhatsApp
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-border" />
+              <DropdownMenuItem className="rounded-lg m-1 gap-2.5 font-medium cursor-pointer" onClick={() => setImportOpen(true)}>
+                <Upload className="h-4 w-4" /> De Planilha (CSV/Excel)
+              </DropdownMenuItem>
+              <DropdownMenuItem className="rounded-lg m-1 gap-2.5 font-medium cursor-pointer" onClick={() => handleSync()} disabled={isSyncing}>
+                <RefreshCw className={cn("h-4 w-4", isSyncing && "animate-spin")} /> Sincronizar Base
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button onClick={() => setCreateOpen(true)} className="h-9 gap-1.5 px-3.5 font-medium text-[13px] bg-primary text-primary-foreground shadow-none rounded-md hover:bg-primary/90">
+            <Plus className="w-3.5 h-3.5" /> Novo Lead
+          </Button>
+        </div>
       </div>
 
-      {/* Bulk Actions Bar */}
       <BulkActionsBar
         count={effectiveCount}
         totalCount={totalCount}
@@ -282,216 +269,203 @@ export default function Leads() {
         onCancel={clearSelection}
       />
 
-      {/* Search & Filters */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Pesquisar..."
-            className="pl-9"
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          />
-        </div>
-        <span className="text-sm text-muted-foreground">{totalCount} resultados</span>
-
-        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
-          <SelectTrigger className="w-[140px]"><SelectValue placeholder="Status" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            <SelectItem value="active">Ativos</SelectItem>
-            <SelectItem value="inactive">Inativos</SelectItem>
-            <SelectItem value="blocked">Bloqueados</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v); setPage(1); if (v !== "grupos") setGroupFilter("all"); }}>
-          <SelectTrigger className="w-[140px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os tipos</SelectItem>
-            <SelectItem value="grupos">👥 Grupo</SelectItem>
-            <SelectItem value="ligacao">📞 Ligação</SelectItem>
-            <SelectItem value="despacho">📱 WhatsApp</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v); setPage(1); if (v !== "whatsapp_group") setGroupFilter("all"); }}>
-          <SelectTrigger className="w-[150px]"><SelectValue placeholder="Origem" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas origens</SelectItem>
-            <SelectItem value="import_csv">Importação CSV</SelectItem>
-            <SelectItem value="whatsapp_group">Grupo WhatsApp</SelectItem>
-            <SelectItem value="api">API Externa</SelectItem>
-            <SelectItem value="manual">Manual</SelectItem>
-            <SelectItem value="call_campaign">Campanha Ligação</SelectItem>
-            <SelectItem value="dispatch_campaign">Campanha Despacho</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={tagFilter} onValueChange={(v) => { setTagFilter(v); setPage(1); }}>
-          <SelectTrigger className="w-[160px]"><SelectValue placeholder="Tag" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas as tags</SelectItem>
-            {availableTags.map(tag => (
-              <SelectItem key={tag} value={tag}>{tag}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {(typeFilter === "grupos" || sourceFilter === "whatsapp_group") && (
-          <Select value={groupFilter} onValueChange={(v) => { setGroupFilter(v); setPage(1); }}>
-            <SelectTrigger className="w-[200px]"><SelectValue placeholder="Selecionar Grupo" /></SelectTrigger>
+      <div className="bg-card border border-border rounded-lg shadow-[0_1px_2px_hsl(220_15%_10%/0.05)] overflow-hidden flex flex-col">
+        {/* Toolbar */}
+        <div className="flex flex-wrap items-center gap-2.5 px-4 py-3.5 border-b border-border">
+          <div className="relative flex-1 max-w-[280px]">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <Input
+              placeholder="Buscar leads..."
+              className="h-8 pl-8 text-[13px] bg-secondary border-transparent rounded-md focus-visible:ring-1 focus-visible:ring-primary shadow-none text-foreground"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            />
+          </div>
+          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
+            <SelectTrigger className="h-8 text-[13px] font-medium border-border bg-transparent shadow-none w-[110px] rounded-md">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todos os grupos</SelectItem>
-              {groupNames.map(name => (
-                <SelectItem key={name} value={name}>{name}</SelectItem>
+              <SelectItem value="all">Status</SelectItem>
+              <SelectItem value="active">Ativos</SelectItem>
+              <SelectItem value="inactive">Inativos</SelectItem>
+              <SelectItem value="blocked">Bloqueados</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v); setPage(1); if (v !== "grupos") setGroupFilter("all"); }}>
+            <SelectTrigger className="h-8 text-[13px] font-medium border-border bg-transparent shadow-none w-[110px] rounded-md">
+              <SelectValue placeholder="Tipo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tipos</SelectItem>
+              <SelectItem value="grupos">Grupo</SelectItem>
+              <SelectItem value="ligacao">Ligação</SelectItem>
+              <SelectItem value="despacho">WhatsApp</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <Select value={tagFilter} onValueChange={(v) => { setTagFilter(v); setPage(1); }}>
+            <SelectTrigger className="h-8 text-[13px] font-medium border-border bg-transparent shadow-none w-[110px] rounded-md">
+              <SelectValue placeholder="Tag" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tags</SelectItem>
+              {availableTags.map(tag => (
+                <SelectItem key={tag} value={tag}>{tag}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-        )}
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="icon"><Menu className="h-4 w-4" /></Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setImportOpen(true)}>
-              <Upload className="h-4 w-4 mr-2" /> Importar leads
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => {
-              const csv = ["nome,telefone,lid,email,tags,origem,tipo,grupo", ...leads.map((l) =>
-                `"${l.name || ""}","${l.phone || ""}","${l.lid || ""}","${l.email || ""}","${(l.tags || []).join(",")}","${SOURCE_LABELS[l.source_type || ""] || ""}","${l.active_campaign_type || ""}","${l.source_group_name || ""}"`
-              )].join("\n");
-              const blob = new Blob([csv], { type: "text/csv" });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url; a.download = "leads.csv"; a.click();
-              URL.revokeObjectURL(url);
-            }}>
-              <Download className="h-4 w-4 mr-2" /> Exportar leads
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      {/* Table */}
-      <div className="border rounded-lg">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-12">
-                 <Checkbox
-                  checked={selectAllResults || (leads.length > 0 && selectedIds.size === leads.length)}
-                  onCheckedChange={toggleAll}
-                />
-              </TableHead>
-              <TableHead>Nome</TableHead>
-              <TableHead>Telefone</TableHead>
-              <TableHead>LID</TableHead>
-              <TableHead>Origem</TableHead>
-              <TableHead>Tipo</TableHead>
-              <TableHead>Grupo</TableHead>
-              <TableHead>Tags</TableHead>
-              <TableHead className="w-12"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
-            ) : leads.length === 0 ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhum lead encontrado.</TableCell></TableRow>
-            ) : (
-              leads.map((lead) => {
-                const typeBadge = lead.active_campaign_type ? TYPE_BADGES[lead.active_campaign_type] : null;
-                return (
-                  <TableRow key={lead.id}>
-                    <TableCell>
-                      <Checkbox checked={selectedIds.has(lead.id)} onCheckedChange={() => toggleSelect(lead.id)} />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
-                          <Users className="h-4 w-4 text-muted-foreground" />
-                        </div>
-                        <span className="font-medium">{lead.name || "—"}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{lead.phone ? formatPhone(lead.phone) : "—"}</TableCell>
-                    <TableCell>
-                      {lead.lid ? (
-                        <span
-                          className="text-xs font-mono text-muted-foreground cursor-pointer hover:text-foreground"
-                          title={lead.lid}
-                          onClick={() => { navigator.clipboard.writeText(lead.lid!); toast.success("LID copiado!"); }}
-                        >
-                          {lead.lid.length > 16 ? `${lead.lid.slice(0, 10)}...@lid` : lead.lid}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm text-muted-foreground">
-                        {lead.source_name || SOURCE_LABELS[lead.source_type || ""] || "—"}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      {typeBadge ? (
-                        <Badge variant="outline" className={cn("text-xs border", typeBadge.className)}>
-                          {typeBadge.label}
-                        </Badge>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm text-muted-foreground">{lead.source_group_name || "—"}</span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {(lead.tags || []).slice(0, 3).map((tag) => (
-                          <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
-                        ))}
-                        {(lead.tags || []).length > 3 && (
-                          <Badge variant="outline" className="text-xs">+{lead.tags.length - 3}</Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <LeadActionsMenu
-                        lead={lead}
-                        onEdit={setEditLead}
-                        onHistory={setHistoryLead}
-                        onAddTag={(l) => { setSelectedIds(new Set([l.id])); setTagDialogMode("add"); }}
-                        onAddToCampaign={(l) => { setSelectedIds(new Set([l.id])); setCampaignDialogOpen(true); }}
-                        onBlock={(l) => updateLead.mutate({ id: l.id, status: "blocked" })}
-                        onDelete={(l) => deleteLead.mutate(l.id)}
-                      />
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">
-            Página {page} de {totalPages}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(page - 1)}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="sm" disabled={page === totalPages} onClick={() => setPage(page + 1)}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
         </div>
-      )}
+
+        {/* Table */}
+        <div className="overflow-x-auto w-full">
+          <table className="w-full border-collapse">
+            <thead className="bg-secondary/50">
+              <tr>
+                <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border w-10">
+                  <Checkbox
+                    checked={selectAllResults || (leads.length > 0 && selectedIds.size === leads.length)}
+                    onCheckedChange={toggleAll}
+                    className="rounded-sm w-3.5 h-3.5"
+                  />
+                </th>
+                <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Nome</th>
+                <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Telefone</th>
+                <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Tag</th>
+                <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Origem</th>
+                <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Status</th>
+                <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Data</th>
+                <th className="px-4 py-2.5 border-b border-border w-10"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                <tr><td colSpan={8} className="text-center py-12 text-sm text-muted-foreground font-medium">Carregando leads...</td></tr>
+              ) : leads.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="text-center py-12">
+                    <p className="text-sm text-muted-foreground font-medium">Nenhum lead encontrado.</p>
+                  </td>
+                </tr>
+              ) : (
+                leads.map((lead, i) => {
+                  const isEven = i % 2 === 0;
+                  // Map statuses
+                  let statusLabel = "Pendente";
+                  let bgStatus = "hsl(220 10% 96%)";
+                  let textStatus = "hsl(220 10% 45%)";
+                  let dotStatus = "hsl(220 10% 45%)";
+                  
+                  if (lead.status === "active") {
+                    statusLabel = "Ativo";
+                    bgStatus = "hsl(142 71% 45%/0.12)";
+                    textStatus = "hsl(142 61% 35%)";
+                    dotStatus = "hsl(142 61% 35%)";
+                  } else if (lead.status === "inactive" || lead.status === "blocked") {
+                    statusLabel = "Inativo";
+                    bgStatus = "hsl(0 72% 51%/0.1)";
+                    textStatus = "hsl(0 62% 45%)";
+                    dotStatus = "hsl(0 62% 45%)";
+                  }
+
+                  const firstLetter = (lead.name || "?")[0].toUpperCase();
+
+                  return (
+                    <tr key={lead.id} className={cn("border-b border-border/50", isEven ? "bg-transparent" : "bg-muted/30")}>
+                      <td className="px-4 py-3 align-middle">
+                        <Checkbox checked={selectedIds.has(lead.id)} onCheckedChange={() => toggleSelect(lead.id)} className="rounded-sm w-3.5 h-3.5" />
+                      </td>
+                      <td className="px-4 py-3 align-middle">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-full bg-primary/10 text-primary text-[12px] font-semibold flex items-center justify-center shrink-0">
+                            {firstLetter}
+                          </div>
+                          <span className="text-[13px] font-medium text-foreground">{lead.name || "Sem Nome"}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 align-middle text-[12px] font-mono text-muted-foreground">
+                        {lead.phone ? formatPhone(lead.phone) : "—"}
+                      </td>
+                      <td className="px-4 py-3 align-middle">
+                        <div className="flex flex-wrap gap-1">
+                          {(lead.tags || []).slice(0, 1).map((tag) => (
+                            <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 text-primary text-[11px] font-medium">
+                              {tag}
+                            </span>
+                          ))}
+                          {(lead.tags || []).length > 1 && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-secondary text-muted-foreground text-[11px] font-medium">
+                              +{(lead.tags?.length || 0) - 1}
+                            </span>
+                          )}
+                          {(!lead.tags || lead.tags.length === 0) && <span className="text-[12px] text-muted-foreground">—</span>}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 align-middle text-[13px] text-muted-foreground">
+                        {lead.source_name || SOURCE_LABELS[lead.source_type || ""] || "—"}
+                      </td>
+                      <td className="px-4 py-3 align-middle">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[12px] font-medium" style={{ backgroundColor: bgStatus, color: textStatus }}>
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: dotStatus }} />
+                          {statusLabel}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 align-middle text-[12px] font-mono text-muted-foreground">
+                        {new Date(lead.created_at).toLocaleDateString('pt-BR')}
+                      </td>
+                      <td className="px-4 py-3 align-middle text-right">
+                        <LeadActionsMenu
+                          lead={lead}
+                          onEdit={setEditLead}
+                          onHistory={setHistoryLead}
+                          onAddTag={(l) => { setSelectedIds(new Set([l.id])); setTagDialogMode("add"); }}
+                          onAddToCampaign={(l) => { setSelectedIds(new Set([l.id])); setCampaignDialogOpen(true); }}
+                          onBlock={(l) => updateLead.mutate({ id: l.id, status: "blocked" })}
+                          onDelete={(l) => deleteLead.mutate(l.id)}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-secondary/30">
+            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-widest">
+              Página {page} de {totalPages}
+            </span>
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md" disabled={page === 1} onClick={() => setPage(page - 1)}>
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </Button>
+              <div className="flex items-center gap-1 px-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  const p = i + 1;
+                  return (
+                    <Button
+                      key={p}
+                      variant={page === p ? "default" : "ghost"}
+                      size="sm"
+                      className={cn("h-7 w-7 rounded-md text-[12px] font-medium p-0", page === p ? "bg-primary text-white shadow-none" : "text-muted-foreground")}
+                      onClick={() => setPage(p)}
+                    >
+                      {p}
+                    </Button>
+                  );
+                })}
+              </div>
+              <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md" disabled={page === totalPages} onClick={() => setPage(page + 1)}>
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Dialogs */}
       <CreateLeadDialog

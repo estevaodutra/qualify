@@ -18,23 +18,23 @@ import { Skeleton } from "@/components/ui/skeleton";
 const severityConfig = {
   info: {
     icon: Info,
-    bgClass: "bg-info/10",
-    iconClass: "text-info",
+    bgClass: "bg-[#2637C9]/12",
+    iconClass: "text-[#7B8FFF]",
   },
   warning: {
     icon: AlertTriangle,
-    bgClass: "bg-warning/10",
-    iconClass: "text-warning",
+    bgClass: "bg-[#FFB432]/12",
+    iconClass: "text-[#FFB432]",
   },
   error: {
     icon: AlertCircle,
-    bgClass: "bg-error/10",
-    iconClass: "text-error",
+    bgClass: "bg-[#FF7A7A]/12",
+    iconClass: "text-[#FF7A7A]",
   },
   success: {
     icon: CheckCircle,
-    bgClass: "bg-success/10",
-    iconClass: "text-success",
+    bgClass: "bg-[#22DD4F]/12",
+    iconClass: "text-[#22DD4F]",
   },
 };
 
@@ -87,8 +87,9 @@ export default function Alerts() {
         description="Notificações do sistema e alertas críticos"
         actions={
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
+            className="hover:text-[#8A3CFF]"
             onClick={handleMarkAllAsRead}
             disabled={unreadCount === 0}
           >

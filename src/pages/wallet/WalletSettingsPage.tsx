@@ -10,6 +10,7 @@ import { useWallet, useUpdateWalletSettings } from "@/hooks/useWallet";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Loader2 } from "lucide-react";
+import { WalletTabs } from "@/components/wallet/WalletTabs";
 import { toast } from "@/hooks/use-toast";
 
 export default function WalletSettingsPage() {
@@ -58,12 +59,9 @@ export default function WalletSettingsPage() {
       <PageHeader
         title="Configurações da carteira"
         description={disabled ? "Apenas administradores podem alterar" : "Alertas e limites de consumo"}
-        actions={
-          <Button asChild variant="outline" size="sm">
-            <Link to="/carteira"><ArrowLeft className="mr-1 h-4 w-4" /> Voltar</Link>
-          </Button>
-        }
       />
+
+      <WalletTabs />
 
       <Card className="space-y-4 p-6">
         <h3 className="font-semibold">Alertas de saldo baixo</h3>

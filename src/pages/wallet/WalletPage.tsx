@@ -8,6 +8,7 @@ import { Wallet as WalletIcon, Plus, ArrowRight, Phone, Bot, ArrowDownToLine, Ar
 import { PageHeader } from "@/components/dispatch/PageHeader";
 import { useWallet, useWalletTransactions, useMonthConsumption, type WalletTransaction } from "@/hooks/useWallet";
 import { AddBalanceDialog } from "@/components/wallet/AddBalanceDialog";
+import { WalletTabs } from "@/components/wallet/WalletTabs";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts";
 
 const fmt = (v: number) => Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -42,43 +43,35 @@ export default function WalletPage() {
       <PageHeader
         title="Carteira"
         description="Saldo e recargas para ligações e URA"
-        actions={
-          <>
-            <Button asChild variant="outline">
-              <Link to="/carteira/extrato">Ver extrato</Link>
-            </Button>
-            <Button asChild variant="outline" size="icon">
-              <Link to="/carteira/configuracoes" aria-label="Configurações"><Settings className="h-4 w-4" /></Link>
-            </Button>
-          </>
-        }
       />
+
+      <WalletTabs />
 
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Balance card */}
-        <Card className="lg:col-span-2 p-6 bg-gradient-to-br from-primary/10 via-background to-background border-primary/20">
+        <Card className="lg:col-span-2 p-6 bg-gradient-to-br from-[#1a1f3e] to-[#0E1329] border-primary/20">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 font-['Sora'] text-sm text-white/60">
                 <WalletIcon className="h-4 w-4" />
-                <span>Saldo atual</span>
+                <span>Saldo disponível</span>
                 <Badge className={status.color}>{status.label}</Badge>
               </div>
               {wallet.isLoading ? (
-                <Skeleton className="mt-2 h-12 w-48" />
+                <Skeleton className="mt-2 h-12 w-48 bg-white/10" />
               ) : (
-                <div className="mt-2 text-5xl font-bold tracking-tight">{fmt(balance)}</div>
+                <div className="mt-2 font-['JetBrains_Mono'] text-3xl font-bold text-white">{fmt(balance)}</div>
               )}
-              <div className="mt-2 text-sm text-muted-foreground">
-                Disponível: <span className="font-medium text-foreground">{fmt(available)}</span>
+              <div className="mt-2 text-sm text-white/60">
+                Disponível: <span className="font-medium text-white">{fmt(available)}</span>
                 {reserved > 0 && <> · Reservado: {fmt(reserved)}</>}
               </div>
-              <div className="mt-1 text-xs text-muted-foreground">
+              <div className="mt-1 text-xs text-white/40">
                 ≈ {callMinutesEstimate} minutos de ligação
               </div>
             </div>
-            <Button size="lg" onClick={() => setOpenAdd(true)}>
-              <Plus className="mr-2 h-4 w-4" /> Adicionar saldo
+            <Button size="lg" onClick={() => setOpenAdd(true)} className="bg-gradient-to-r from-[#8A3CFF] to-[#2E39D9] font-['Sora'] font-semibold hover:shadow-[0_4px_20px_rgba(138,60,255,0.35)] text-white border-none">
+              <Plus className="mr-2 h-4 w-4" /> Recarregar
             </Button>
           </div>
         </Card>

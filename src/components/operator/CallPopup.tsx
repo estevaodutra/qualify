@@ -107,7 +107,7 @@ export function CallPopup({ embedded = false }: CallPopupProps) {
     <>
       <div className={cn(
         "rounded-xl border bg-card overflow-hidden",
-        !embedded && "fixed bottom-6 right-6 z-50 w-[380px] shadow-2xl",
+        !embedded && "fixed bottom-6 right-6 z-50 w-[380px] shadow-[0_0_40px_rgba(138,60,255,0.15)] border-[#8A3CFF]/30",
         embedded && "w-full shadow-sm"
       )}>
         {/* Header */}
@@ -124,7 +124,9 @@ export function CallPopup({ embedded = false }: CallPopupProps) {
           </div>
           <div className="flex items-center gap-1">
             {callStatus === "on_call" && (
-              <span className="text-xs font-mono bg-muted px-2 py-0.5 rounded">⏱️ {formatDuration(callDuration)}</span>
+              <span className="font-['JetBrains_Mono'] text-2xl font-semibold text-emerald-500 mr-2">
+                {formatDuration(callDuration)}
+              </span>
             )}
             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setMinimized(true)}>
               <Minus className="h-3 w-3" />
@@ -202,22 +204,29 @@ export function CallPopup({ embedded = false }: CallPopupProps) {
                 <p className="text-xs text-muted-foreground">A ligação pode não ter sido iniciada.</p>
               </div>
               <Button
-                variant="destructive"
                 size="sm"
-                className="w-full"
+                className="w-full bg-[#FF7A7A] hover:bg-[#FF5C5C] text-white border-none"
                 onClick={() => cancelDialing()}
               >
                 <PhoneOff className="h-3.5 w-3.5 mr-1.5" />
-                Cancelar chamada
+                Encerrar chamada
               </Button>
             </div>
           )}
 
           {/* Ringing state */}
           {callStatus === "ringing" && (
-            <div className="text-center space-y-2 py-2">
-              <div className="text-2xl animate-pulse">🔔</div>
-              <p className="text-xs text-muted-foreground">📱 Aguardando atendimento...</p>
+            <div className="text-center space-y-3 py-3">
+              <div className="text-4xl animate-pulse">🔔</div>
+              <p className="text-sm font-medium text-amber-500">Aguardando atendimento...</p>
+              <div className="flex gap-2 justify-center mt-2 px-2">
+                <Button className="flex-1 bg-gradient-to-r from-[#22DD4F] to-[#22E6B5] text-white hover:opacity-90 border-none shadow-sm">
+                  <Phone className="h-4 w-4 mr-2" /> Atender
+                </Button>
+                <Button className="flex-1 bg-[#FF7A7A] hover:bg-[#FF5C5C] text-white border-none shadow-sm" onClick={() => cancelDialing()}>
+                  <PhoneOff className="h-4 w-4 mr-2" /> Encerrar
+                </Button>
+              </div>
             </div>
           )}
 
@@ -243,6 +252,12 @@ export function CallPopup({ embedded = false }: CallPopupProps) {
                   </div>
                 </div>
               )}
+              <Button
+                className="w-full bg-[#FF7A7A] hover:bg-[#FF5C5C] text-white border-none shadow-sm mt-3"
+                onClick={() => setShowCallDialog(true)}
+              >
+                <PhoneOff className="h-4 w-4 mr-2" /> Encerrar chamada
+              </Button>
             </>
           )}
 

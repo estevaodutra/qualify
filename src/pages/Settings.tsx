@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -229,53 +230,66 @@ export default function Settings() {
   };
 
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-10 pb-10">
       <PageHeader
         title={t("settings.title")}
         description={t("settings.description")}
         actions={
-          <Button className="gap-2" onClick={handleSaveChanges} disabled={isSaving}>
+          <Button className="h-10 px-6 gap-2.5 rounded-xl gradient-primary glow-primary font-['Sora'] font-semibold shadow-lg transition-all hover:opacity-90 active:scale-95" onClick={handleSaveChanges} disabled={isSaving}>
             {isSaving ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-4.5 w-4.5 animate-spin" />
             ) : (
-              <Save className="h-4 w-4" />
+              <Save className="h-4.5 w-4.5" />
             )}
             {isSaving ? t("settings.saving") : t("settings.saveChanges")}
           </Button>
         }
       />
 
-      <div className="grid gap-6">
-        {/* General Settings */}
-        <Card className="shadow-elevation-sm">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Globe className="h-5 w-5 text-primary" />
-              <CardTitle className="text-base">{t("settings.general")}</CardTitle>
+      <Tabs defaultValue="company" className="w-full">
+        <TabsList className="w-full justify-start border-b border-border/20 bg-transparent rounded-none p-0 mb-8 overflow-x-auto flex-nowrap hide-scrollbar">
+          <TabsTrigger value="company" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Empresa</TabsTrigger>
+          <TabsTrigger value="security" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Segurança</TabsTrigger>
+          <TabsTrigger value="notifications" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Notificações</TabsTrigger>
+          <TabsTrigger value="appearance" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Aparência</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="company" className="space-y-8 outline-none animate-fade-in">
+          {/* General Settings */}
+          <Card className="border-white/40 bg-card/60 backdrop-blur-xl shadow-sm rounded-2xl overflow-hidden transition-colors hover:border-[#8A3CFF]/20">
+          <CardHeader className="pb-4 border-b border-border/40">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-primary/10">
+                <Globe className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <CardTitle className="text-lg font-bold tracking-tight">{t("settings.general")}</CardTitle>
+                <CardDescription className="text-xs font-medium text-muted-foreground/60">{t("settings.generalDescription")}</CardDescription>
+              </div>
             </div>
-            <CardDescription>{t("settings.generalDescription")}</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="company">{t("settings.companyName")}</Label>
+          <CardContent className="pt-8 space-y-8">
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="space-y-2.5">
+                <Label htmlFor="company" className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">{t("settings.companyName")}</Label>
                 <Input
                   id="company"
                   value={settings.companyName}
                   onChange={(e) => setSettings((prev) => ({ ...prev, companyName: e.target.value }))}
                   placeholder={t("settings.companyNamePlaceholder")}
+                  className="h-11 rounded-xl border-border/40 bg-background/40 transition-all focus:bg-background"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="timezone">{t("settings.timezone")}</Label>
+              <div className="space-y-2.5">
+                <Label htmlFor="timezone" className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">{t("settings.timezone")}</Label>
                 <Select
                   value={settings.timezone}
                   onValueChange={(value) => setSettings((prev) => ({ ...prev, timezone: value }))}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="h-11 rounded-xl border-border/40 bg-background/40 transition-all">
                     <SelectValue placeholder={t("settings.selectTimezone")} />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="rounded-xl">
                     <SelectItem value="america_sao_paulo">America/Sao_Paulo (BRT)</SelectItem>
                     <SelectItem value="america_new_york">America/New_York (EST)</SelectItem>
                     <SelectItem value="europe_london">Europe/London (GMT)</SelectItem>
@@ -284,15 +298,15 @@ export default function Settings() {
                 </Select>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="language">{t("settings.language")}</Label>
+            <div className="space-y-2.5">
+              <Label htmlFor="language" className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">{t("settings.language")}</Label>
               <Select value={language} onValueChange={handleLanguageChange}>
-                <SelectTrigger className="w-[200px]">
+                <SelectTrigger className="h-11 w-full md:w-[240px] rounded-xl border-border/40 bg-background/40 transition-all">
                   <SelectValue placeholder={t("settings.selectLanguage")} />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="en">English</SelectItem>
-                  <SelectItem value="pt">Português</SelectItem>
+                <SelectContent className="rounded-xl">
+                  <SelectItem value="en">English (US)</SelectItem>
+                  <SelectItem value="pt">Português (BR)</SelectItem>
                   <SelectItem value="es">Español</SelectItem>
                 </SelectContent>
               </Select>
@@ -300,107 +314,131 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        {/* Notification Settings */}
-        <Card className="shadow-elevation-sm">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Bell className="h-5 w-5 text-primary" />
-              <CardTitle className="text-base">{t("settings.notifications")}</CardTitle>
+        </TabsContent>
+
+        <TabsContent value="notifications" className="space-y-8 outline-none animate-fade-in">
+          {/* Notification Settings */}
+          <Card className="border-white/40 bg-card/60 backdrop-blur-xl shadow-sm rounded-2xl overflow-hidden transition-colors hover:border-[#8A3CFF]/20">
+          <CardHeader className="pb-4 border-b border-border/40">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-primary/10">
+                <Bell className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <CardTitle className="text-lg font-bold tracking-tight">{t("settings.notifications")}</CardTitle>
+                <CardDescription className="text-xs font-medium text-muted-foreground/60">{t("settings.notificationsDescription")}</CardDescription>
+              </div>
             </div>
-            <CardDescription>{t("settings.notificationsDescription")}</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label>{t("settings.emailNotifications")}</Label>
-                <p className="text-sm text-muted-foreground">
+          <CardContent className="pt-8 space-y-6">
+            <div className="flex items-center justify-between p-4 rounded-2xl bg-muted/20 border border-border/10 transition-colors hover:bg-muted/30">
+              <div className="space-y-1">
+                <Label className="text-sm font-bold text-foreground">{t("settings.emailNotifications")}</Label>
+                <p className="text-xs font-medium text-muted-foreground/60 max-w-md">
                   {t("settings.emailNotificationsDescription")}
                 </p>
               </div>
               <Switch
                 checked={settings.emailNotifications}
                 onCheckedChange={handleToggleChange("emailNotifications")}
+                className="data-[state=checked]:bg-primary"
               />
             </div>
-            <Separator />
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label>{t("settings.smsAlerts")}</Label>
-                <p className="text-sm text-muted-foreground">
+            
+            <div className="flex items-center justify-between p-4 rounded-2xl bg-muted/20 border border-border/10 transition-colors hover:bg-muted/30">
+              <div className="space-y-1">
+                <Label className="text-sm font-bold text-foreground">{t("settings.smsAlerts")}</Label>
+                <p className="text-xs font-medium text-muted-foreground/60 max-w-md">
                   {t("settings.smsAlertsDescription")}
                 </p>
               </div>
               <Switch
                 checked={settings.webhookNotifications}
                 onCheckedChange={handleToggleChange("webhookNotifications")}
+                className="data-[state=checked]:bg-primary"
               />
             </div>
-            <Separator />
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label>{t("settings.slackIntegration")}</Label>
-                <p className="text-sm text-muted-foreground">
+            
+            <div className="flex items-center justify-between p-4 rounded-2xl bg-muted/20 border border-border/10 transition-colors hover:bg-muted/30">
+              <div className="space-y-1">
+                <Label className="text-sm font-bold text-foreground">{t("settings.slackIntegration")}</Label>
+                <p className="text-xs font-medium text-muted-foreground/60 max-w-md">
                   {t("settings.slackIntegrationDescription")}
                 </p>
               </div>
               <Switch
                 checked={settings.highFailureAlerts}
                 onCheckedChange={handleToggleChange("highFailureAlerts")}
+                className="data-[state=checked]:bg-primary"
               />
             </div>
           </CardContent>
         </Card>
 
-        {/* Security Settings */}
-        <Card className="shadow-elevation-sm">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-primary" />
-              <CardTitle className="text-base">{t("settings.security")}</CardTitle>
+        </TabsContent>
+
+        <TabsContent value="security" className="space-y-8 outline-none animate-fade-in">
+          {/* Security Settings */}
+          <Card className="border-white/40 bg-card/60 backdrop-blur-xl shadow-sm rounded-2xl overflow-hidden transition-colors hover:border-[#8A3CFF]/20">
+          <CardHeader className="pb-4 border-b border-border/40">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-primary/10">
+                <Shield className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <CardTitle className="text-lg font-bold tracking-tight">{t("settings.security")}</CardTitle>
+                <CardDescription className="text-xs font-medium text-muted-foreground/60">{t("settings.securityDescription")}</CardDescription>
+              </div>
             </div>
-            <CardDescription>{t("settings.securityDescription")}</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label>{t("settings.twoFactorAuth")}</Label>
-                <p className="text-sm text-muted-foreground">
+          <CardContent className="pt-8 space-y-6">
+            <div className="flex items-center justify-between p-5 rounded-2xl bg-muted/20 border border-border/10 transition-all hover:bg-muted/30">
+              <div className="space-y-1">
+                <Label className="text-sm font-bold text-foreground">{t("settings.twoFactorAuth")}</Label>
+                <p className="text-xs font-medium text-muted-foreground/60 max-w-md">
                   {t("settings.twoFactorDescription")}
                 </p>
               </div>
-              <Button variant="outline" size="sm" onClick={handleEnable2FA}>
+              <Button variant="outline" className="h-10 rounded-xl px-5 font-bold border-border/40 bg-background/50 hover:bg-background transition-all" onClick={handleEnable2FA}>
                 {t("settings.enable2FA")}
               </Button>
             </div>
-            <Separator />
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label>{t("settings.apiKeys")}</Label>
-                <p className="text-sm text-muted-foreground">
+            
+            <div className="flex items-center justify-between p-5 rounded-2xl bg-muted/20 border border-border/10 transition-all hover:bg-muted/30">
+              <div className="space-y-1">
+                <Label className="text-sm font-bold text-foreground">{t("settings.apiKeys")}</Label>
+                <p className="text-xs font-medium text-muted-foreground/60 max-w-md">
                   {t("settings.apiKeysDescription")}
                 </p>
               </div>
-              <Button variant="outline" size="sm" onClick={handleManageApiKeys}>
+              <Button variant="outline" className="h-10 rounded-xl px-5 font-bold border-border/40 bg-background/50 hover:bg-background transition-all" onClick={handleManageApiKeys}>
                 {t("settings.manageKeys")}
               </Button>
             </div>
           </CardContent>
         </Card>
 
-        {/* Appearance */}
-        <Card className="shadow-elevation-sm">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Palette className="h-5 w-5 text-primary" />
-              <CardTitle className="text-base">{t("settings.appearance")}</CardTitle>
+        </TabsContent>
+
+        <TabsContent value="appearance" className="space-y-8 outline-none animate-fade-in">
+          {/* Appearance */}
+          <Card className="border-white/40 bg-card/60 backdrop-blur-xl shadow-sm rounded-2xl overflow-hidden transition-colors hover:border-[#8A3CFF]/20">
+          <CardHeader className="pb-4 border-b border-border/40">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-primary/10">
+                <Palette className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <CardTitle className="text-lg font-bold tracking-tight">{t("settings.appearance")}</CardTitle>
+                <CardDescription className="text-xs font-medium text-muted-foreground/60">{t("settings.appearanceDescription")}</CardDescription>
+              </div>
             </div>
-            <CardDescription>{t("settings.appearanceDescription")}</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label>{t("settings.darkMode")}</Label>
-                <p className="text-sm text-muted-foreground">
+          <CardContent className="pt-8 space-y-6">
+            <div className="flex items-center justify-between p-4 rounded-2xl bg-muted/20 border border-border/10">
+              <div className="space-y-1">
+                <Label className="text-sm font-bold text-foreground">{t("settings.darkMode")}</Label>
+                <p className="text-xs font-medium text-muted-foreground/60">
                   {t("settings.darkModeDescription")}
                 </p>
               </div>
@@ -409,37 +447,41 @@ export default function Settings() {
                 onCheckedChange={(checked) => {
                   setTheme(checked ? "dark" : "light");
                 }}
+                className="data-[state=checked]:bg-primary"
               />
             </div>
           </CardContent>
         </Card>
-      </div>
+        </TabsContent>
+      </Tabs>
 
-      {/* 2FA Dialog - Conditionally rendered */}
+      {/* 2FA Dialog - Redesigned */}
       {show2FADialog && (
         <Dialog open={show2FADialog} onOpenChange={setShow2FADialog}>
-          <DialogContent>
+          <DialogContent className="max-w-md rounded-2xl border-border/40 bg-background/95 backdrop-blur-xl shadow-2xl">
             <DialogHeader>
-              <DialogTitle>{t("settings.enable2FATitle")}</DialogTitle>
-              <DialogDescription>
+              <DialogTitle className="text-xl font-bold">{t("settings.enable2FATitle")}</DialogTitle>
+              <DialogDescription className="text-sm font-medium text-muted-foreground/70">
                 {t("settings.scanQRCode")}
               </DialogDescription>
             </DialogHeader>
-            <div className="flex justify-center py-6">
-              <div className="h-48 w-48 rounded-lg bg-muted flex items-center justify-center">
-                <span className="text-muted-foreground text-sm">QR Code</span>
+            <div className="flex justify-center py-8">
+              <div className="h-52 w-52 rounded-2xl bg-white p-4 shadow-inner border-2 border-primary/20">
+                <div className="h-full w-full bg-muted/20 rounded-lg flex items-center justify-center border-dashed border-2 border-border/40">
+                  <span className="text-muted-foreground/40 text-[10px] font-bold uppercase tracking-widest">QR Code Placeholder</span>
+                </div>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="verify-code">{t("settings.verificationCode")}</Label>
-              <Input id="verify-code" placeholder={t("settings.verificationCodePlaceholder")} />
+            <div className="space-y-2.5">
+              <Label htmlFor="verify-code" className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">{t("settings.verificationCode")}</Label>
+              <Input id="verify-code" placeholder="000 000" className="h-12 text-center text-lg font-mono tracking-[0.5em] rounded-xl border-border/40" />
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShow2FADialog(false)}>
+            <DialogFooter className="pt-4 gap-3">
+              <Button variant="outline" className="rounded-xl font-semibold border-border/40" onClick={() => setShow2FADialog(false)}>
                 {t("common.cancel")}
               </Button>
-              <Button onClick={confirm2FA} className="gap-2">
-                <Check className="h-4 w-4" />
+              <Button onClick={confirm2FA} className="rounded-xl font-['Sora'] font-semibold gradient-primary glow-primary px-8">
+                <Check className="mr-2 h-4.5 w-4.5" />
                 {t("settings.verify")}
               </Button>
             </DialogFooter>
@@ -447,68 +489,87 @@ export default function Settings() {
         </Dialog>
       )}
 
-      {/* API Keys List Dialog - Conditionally rendered */}
+      {/* API Keys List Dialog - Redesigned */}
       {showApiKeyDialog && (
         <Dialog open={showApiKeyDialog} onOpenChange={setShowApiKeyDialog}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl rounded-2xl border-border/40 bg-background/95 backdrop-blur-xl shadow-2xl">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Key className="h-5 w-5" />
+              <DialogTitle className="flex items-center gap-3 text-xl font-bold">
+                <div className="p-1.5 rounded-lg bg-primary/10">
+                  <Key className="h-5 w-5 text-primary" />
+                </div>
                 {t("settings.manageAPIKeys")}
               </DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="text-sm font-medium text-muted-foreground/70">
                 {t("settings.apiKeysListDescription")}
               </DialogDescription>
             </DialogHeader>
             
-            <div className="space-y-4 py-4 max-h-[400px] overflow-y-auto">
+            <div className="space-y-4 py-6 max-h-[440px] overflow-y-auto px-1">
               {isLoadingKeys ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <div className="flex flex-col items-center justify-center py-20 gap-4">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <p className="text-sm font-bold text-muted-foreground/60 uppercase tracking-widest">Carregando chaves...</p>
                 </div>
               ) : apiKeys.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Key className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p>{t("settings.noKeysYet")}</p>
-                  <p className="text-sm">{t("settings.createFirstKey")}</p>
+                <div className="text-center py-20 bg-muted/10 rounded-2xl border border-dashed border-border/40">
+                  <Key className="h-16 w-16 mx-auto mb-4 text-muted-foreground/20" />
+                  <p className="font-bold text-foreground mb-1">{t("settings.noKeysYet")}</p>
+                  <p className="text-sm font-medium text-muted-foreground/60">{t("settings.createFirstKey")}</p>
                 </div>
               ) : (
                 apiKeys.map((key) => (
                   <div 
                     key={key.id} 
-                    className={`rounded-lg border p-4 ${key.revoked_at ? 'opacity-60 bg-muted/50' : ''}`}
+                    className={cn(
+                      "group rounded-2xl border border-border/20 p-5 transition-all hover:bg-muted/30 hover:border-border/60",
+                      key.revoked_at ? 'opacity-50 bg-muted/20 grayscale' : 'bg-muted/10'
+                    )}
                   >
                     <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className="font-medium truncate">{key.name}</p>
-                          <Badge variant={key.environment === 'production' ? 'default' : 'secondary'}>
+                      <div className="flex-1 min-w-0 space-y-3">
+                        <div className="flex items-center gap-3">
+                          <p className="font-bold text-foreground truncate">{key.name}</p>
+                          <Badge className={cn(
+                            "text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 border-none",
+                            key.environment === 'production' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                          )}>
                             {key.environment === 'production' ? 'Production' : 'Test'}
                           </Badge>
                           {key.revoked_at && (
-                            <Badge variant="destructive">{t("settings.revoked")}</Badge>
+                            <Badge variant="destructive" className="text-[10px] font-bold uppercase tracking-widest border-none">{t("settings.revoked")}</Badge>
                           )}
                         </div>
-                        <p className="text-sm text-muted-foreground font-mono">
-                          {getMaskedKey(key.key_prefix, key.last_four)}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {t("settings.created")}: {formatDate(key.created_at)}
-                          {key.last_used_at && ` • ${t("settings.lastUsed")}: ${formatDate(key.last_used_at)}`}
+                        <div className="relative group/key">
+                          <p className="font-mono text-sm font-bold text-muted-foreground/70 bg-background/50 rounded-lg px-3 py-2 border border-border/10">
+                            {getMaskedKey(key.key_prefix, key.last_four)}
+                          </p>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 rounded-md opacity-0 group-hover/key:opacity-100 transition-opacity"
+                            onClick={() => copyToClipboard(getMaskedKey(key.key_prefix, key.last_four))}
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                        <p className="text-[11px] font-medium text-muted-foreground/50">
+                          Criada em {formatDate(key.created_at)}
+                          {key.last_used_at && ` • Último uso: ${formatDate(key.last_used_at)}`}
                         </p>
                       </div>
                       {!key.revoked_at && (
                         <Button 
                           variant="ghost" 
-                          size="sm"
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          size="icon"
+                          className="h-10 w-10 rounded-xl text-destructive hover:text-destructive hover:bg-destructive/10"
                           onClick={() => handleRevokeKey(key.id)}
                           disabled={revokingKeyId === key.id}
                         >
                           {revokingKeyId === key.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <Loader2 className="h-4.5 w-4.5 animate-spin" />
                           ) : (
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-4.5 w-4.5" />
                           )}
                         </Button>
                       )}
@@ -518,12 +579,12 @@ export default function Settings() {
               )}
             </div>
 
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowApiKeyDialog(false)}>
+            <DialogFooter className="pt-4 gap-3">
+              <Button variant="ghost" className="rounded-xl font-semibold text-muted-foreground hover:bg-muted/10" onClick={() => setShowApiKeyDialog(false)}>
                 {t("common.close")}
               </Button>
-              <Button onClick={() => setShowNewKeyDialog(true)} className="gap-2">
-                <Plus className="h-4 w-4" />
+              <Button onClick={() => setShowNewKeyDialog(true)} className="rounded-xl font-['Sora'] font-semibold gradient-primary glow-primary px-6 gap-2">
+                <Plus className="h-4.5 w-4.5" />
                 {t("settings.generateNewKey")}
               </Button>
             </DialogFooter>
@@ -531,37 +592,38 @@ export default function Settings() {
         </Dialog>
       )}
 
-      {/* Generate New Key Dialog - Conditionally rendered */}
+      {/* Generate New Key Dialog - Redesigned */}
       {showNewKeyDialog && (
         <Dialog open={showNewKeyDialog} onOpenChange={setShowNewKeyDialog}>
-          <DialogContent>
+          <DialogContent className="max-w-md rounded-2xl border-border/40 bg-background/95 backdrop-blur-xl shadow-2xl">
             <DialogHeader>
-              <DialogTitle>{t("settings.generateNewKey")}</DialogTitle>
-              <DialogDescription>
+              <DialogTitle className="text-xl font-bold">{t("settings.generateNewKey")}</DialogTitle>
+              <DialogDescription className="text-sm font-medium text-muted-foreground/70">
                 {t("settings.newKeyDescription")}
               </DialogDescription>
             </DialogHeader>
             
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="key-name">{t("settings.keyName")}</Label>
+            <div className="space-y-6 py-6">
+              <div className="space-y-2.5">
+                <Label htmlFor="key-name" className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">{t("settings.keyName")}</Label>
                 <Input
                   id="key-name"
                   value={newKeyName}
                   onChange={(e) => setNewKeyName(e.target.value)}
                   placeholder={t("settings.keyNamePlaceholder")}
+                  className="h-11 rounded-xl border-border/40 bg-background/40"
                 />
               </div>
-              <div className="space-y-2">
-                <Label>{t("settings.environment")}</Label>
+              <div className="space-y-2.5">
+                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">{t("settings.environment")}</Label>
                 <Select 
                   value={newKeyEnvironment} 
                   onValueChange={(v) => setNewKeyEnvironment(v as "production" | "test")}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="h-11 rounded-xl border-border/40 bg-background/40">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="rounded-xl">
                     <SelectItem value="production">Production</SelectItem>
                     <SelectItem value="test">Test</SelectItem>
                   </SelectContent>
@@ -569,15 +631,15 @@ export default function Settings() {
               </div>
             </div>
 
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowNewKeyDialog(false)}>
+            <DialogFooter className="gap-3">
+              <Button variant="ghost" className="rounded-xl font-semibold text-muted-foreground" onClick={() => setShowNewKeyDialog(false)}>
                 {t("common.cancel")}
               </Button>
-              <Button onClick={handleGenerateKey} disabled={isGeneratingKey} className="gap-2">
+              <Button onClick={handleGenerateKey} disabled={isGeneratingKey} className="rounded-xl font-['Sora'] font-semibold gradient-primary glow-primary px-8 gap-2">
                 {isGeneratingKey ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-4.5 w-4.5 animate-spin" />
                 ) : (
-                  <Key className="h-4 w-4" />
+                  <Key className="h-4.5 w-4.5" />
                 )}
                 {isGeneratingKey ? t("settings.generating") : t("settings.generate")}
               </Button>
@@ -586,62 +648,67 @@ export default function Settings() {
         </Dialog>
       )}
 
-      {/* New Key Result Dialog - Conditionally rendered */}
+      {/* New Key Result Dialog - Redesigned */}
       {showNewKeyResultDialog && (
         <Dialog open={showNewKeyResultDialog} onOpenChange={setShowNewKeyResultDialog}>
-          <DialogContent>
+          <DialogContent className="max-w-md rounded-2xl border-border/40 bg-background/95 backdrop-blur-xl shadow-2xl">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-green-600">
-                <Check className="h-5 w-5" />
+              <DialogTitle className="flex items-center gap-3 text-xl font-bold text-success">
+                <div className="p-1.5 rounded-lg bg-success/10">
+                  <Check className="h-5 w-5" />
+                </div>
                 {t("settings.keyCreatedTitle")}
               </DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="text-sm font-medium text-muted-foreground/70 pt-1">
                 {t("settings.keyCreatedDescription")}
               </DialogDescription>
             </DialogHeader>
             
-            <div className="space-y-4 py-4">
-              <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
-                  <div className="text-sm">
-                    <p className="font-medium text-amber-600 dark:text-amber-400">
+            <div className="space-y-6 py-6">
+              <div className="rounded-2xl border border-warning/20 bg-warning/5 p-5 animate-pulse-subtle">
+                <div className="flex items-start gap-4">
+                  <div className="p-1.5 rounded-lg bg-warning/20">
+                    <AlertTriangle className="h-5 w-5 text-warning" />
+                  </div>
+                  <div className="text-sm space-y-1.5">
+                    <p className="font-bold text-warning-foreground">
                       {t("settings.saveKeyWarning")}
                     </p>
-                    <p className="text-muted-foreground mt-1">
+                    <p className="text-muted-foreground leading-relaxed font-medium">
                       {t("settings.saveKeyWarningDescription")}
                     </p>
                   </div>
                 </div>
               </div>
               
-              <div className="space-y-2">
-                <Label>{t("settings.yourApiKey")}</Label>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 relative">
+              <div className="space-y-3">
+                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">{t("settings.yourApiKey")}</Label>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 relative group">
                     <Input
                       readOnly
                       value={showGeneratedKey ? generatedKey : '•'.repeat(generatedKey.length)}
-                      className="font-mono pr-10"
+                      className="h-12 font-mono font-bold text-primary pr-12 rounded-xl border-primary/20 bg-primary/5 tracking-wider"
                     />
                     <Button
                       variant="ghost"
-                      size="sm"
-                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                      size="icon"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-10 w-10 rounded-lg hover:bg-primary/10 transition-colors"
                       onClick={() => setShowGeneratedKey(!showGeneratedKey)}
                     >
-                      {showGeneratedKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      {showGeneratedKey ? <EyeOff className="h-4.5 w-4.5 text-primary/60" /> : <Eye className="h-4.5 w-4.5 text-primary/60" />}
                     </Button>
                   </div>
-                  <Button variant="outline" size="icon" onClick={() => copyToClipboard(generatedKey)}>
-                    <Copy className="h-4 w-4" />
+                  <Button variant="outline" size="icon" className="h-12 w-12 rounded-xl border-border/40 hover:bg-muted/10 transition-all" onClick={() => copyToClipboard(generatedKey)}>
+                    <Copy className="h-5 w-5 text-muted-foreground" />
                   </Button>
                 </div>
               </div>
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="pt-2">
               <Button 
+                className="w-full h-12 rounded-xl font-['Sora'] font-semibold gradient-primary glow-primary shadow-lg"
                 onClick={() => {
                   setShowNewKeyResultDialog(false);
                   setGeneratedKey("");

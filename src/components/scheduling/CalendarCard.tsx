@@ -28,60 +28,82 @@ export function CalendarCard({ calendar, onEdit, onToggleStatus, onDelete }: Pro
   };
 
   return (
-    <Card className="p-5 space-y-4 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3 min-w-0 flex-1">
-          <div
-            className="h-10 w-10 rounded-lg flex items-center justify-center shrink-0"
-            style={{ backgroundColor: `${calendar.color}20`, color: calendar.color }}
-          >
-            <Icon className="h-5 w-5" />
+    <Card className="group relative overflow-hidden border-white/40 bg-card/60 backdrop-blur-xl shadow-sm rounded-2xl transition-all duration-300 hover:shadow-xl hover:border-primary/20 hover:-translate-y-1">
+      <CardContent className="p-6 space-y-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-4 min-w-0 flex-1">
+            <div
+              className="h-12 w-12 rounded-xl flex items-center justify-center shrink-0 shadow-sm"
+              style={{ backgroundColor: `${calendar.color}15`, color: calendar.color, border: `1px solid ${calendar.color}30` }}
+            >
+              <Icon className="h-6 w-6" />
+            </div>
+            <div className="min-w-0 flex-1 pt-0.5">
+              <h3 className="text-base font-bold text-foreground truncate tracking-tight">{calendar.name}</h3>
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">{MODALITY_LABELS[calendar.modality]}</span>
+                <span className="h-1 w-1 rounded-full bg-muted-foreground/30" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">{calendar.durationMinutes} min</span>
+              </div>
+            </div>
           </div>
-          <div className="min-w-0 flex-1">
-            <h3 className="font-semibold truncate">{calendar.name}</h3>
-            <p className="text-xs text-muted-foreground">{MODALITY_LABELS[calendar.modality]} · {calendar.durationMinutes} min</p>
+          <Badge 
+            variant="outline" 
+            className={cn(
+              "text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 border-none",
+              calendar.status === "active" ? "bg-emerald-500/10 text-emerald-600" : "bg-muted text-muted-foreground"
+            )}
+          >
+            {calendar.status === "active" ? "Ativo" : "Pausado"}
+          </Badge>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            {DAY_SHORT.map((d, i) => (
+              <div
+                key={i}
+                className={cn(
+                  "h-7 w-7 rounded-lg text-[10px] font-bold flex items-center justify-center transition-all",
+                  days[i]?.enabled 
+                    ? "bg-primary text-white shadow-sm glow-primary" 
+                    : "bg-muted/30 text-muted-foreground/40"
+                )}
+              >
+                {d}
+              </div>
+            ))}
           </div>
         </div>
-        <Badge variant={calendar.status === "active" ? "default" : "secondary"}>
-          {calendar.status === "active" ? "Ativo" : "Pausado"}
-        </Badge>
-      </div>
 
-      <div className="flex items-center gap-1">
-        {DAY_SHORT.map((d, i) => (
-          <div
-            key={i}
-            className={`h-6 w-6 rounded text-[10px] font-medium flex items-center justify-center ${
-              days[i]?.enabled ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
-            }`}
-          >
-            {d}
+        <div className="relative group/link">
+          <div className="flex items-center gap-3 rounded-xl bg-muted/20 border border-border/10 px-3 py-2.5 transition-colors group-hover/link:bg-muted/30">
+            <CalIcon className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+            <span className="text-xs truncate flex-1 font-mono font-medium text-muted-foreground/70">{publicLink}</span>
+            <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg hover:bg-background" onClick={copyLink}>
+              <Copy className="h-3.5 w-3.5" />
+            </Button>
           </div>
-        ))}
-      </div>
-
-      <div className="flex items-center gap-2 rounded bg-muted/50 px-2 py-1.5">
-        <CalIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-        <span className="text-xs truncate flex-1 font-mono">{publicLink}</span>
-        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={copyLink}>
-          <Copy className="h-3 w-3" />
-        </Button>
-      </div>
-
-      <div className="flex items-center justify-between gap-2 pt-2 border-t border-border">
-        <span className="text-xs text-muted-foreground">0 agendamentos este mês</span>
-        <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={onEdit} title="Editar">
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={onToggleStatus} title={calendar.status === "active" ? "Pausar" : "Ativar"}>
-            <Settings className="h-3.5 w-3.5" />
-          </Button>
-          <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={onDelete} title="Excluir">
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
         </div>
-      </div>
+
+        <div className="flex items-center justify-between gap-4 pt-4 border-t border-border/10">
+          <div className="flex flex-col">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40">Performance</span>
+            <span className="text-xs font-bold text-foreground">0 agendamentos /mês</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Button size="icon" variant="ghost" className="h-9 w-9 rounded-xl hover:bg-primary/5 hover:text-primary transition-all" onClick={onEdit} title="Editar">
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button size="icon" variant="ghost" className="h-9 w-9 rounded-xl hover:bg-primary/5 transition-all" onClick={onToggleStatus} title={calendar.status === "active" ? "Pausar" : "Ativar"}>
+              <Settings className="h-4 w-4" />
+            </Button>
+            <Button size="icon" variant="ghost" className="h-9 w-9 rounded-xl text-destructive/60 hover:text-destructive hover:bg-destructive/5 transition-all" onClick={onDelete} title="Excluir">
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </CardContent>
     </Card>
   );
 }

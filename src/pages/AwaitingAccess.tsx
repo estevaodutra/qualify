@@ -40,46 +40,65 @@ export default function AwaitingAccess() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/30 px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center space-y-4">
-          <div className="mx-auto w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center">
-            <Clock className="h-7 w-7 text-primary" />
-          </div>
-          <div>
-            <CardTitle className="text-2xl font-bold">Aguardando acesso</CardTitle>
-            <CardDescription className="mt-2">
-              Sua conta foi criada com sucesso! Aguarde um administrador adicionar você a uma empresa.
-            </CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {user?.email && (
-            <div className="flex items-center gap-3 rounded-lg border bg-muted/40 p-3">
-              <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">Conectado como</p>
-                <p className="text-sm font-medium truncate">{user.email}</p>
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden px-4 bg-background">
+      {/* Decorative Background Blobs */}
+      <div className="absolute -top-40 -left-40 w-[600px] h-[600px] bg-primary/10 blur-[140px] rounded-full" />
+      <div className="absolute -bottom-40 -right-40 w-[500px] h-[500px] bg-purple-500/10 blur-[120px] rounded-full animate-float" />
+      <div className="absolute inset-0 bg-noise opacity-[0.03] pointer-events-none" />
+
+      <div className="relative z-10 w-full max-w-md animate-fade-in">
+        <div className="premium-card">
+          <div className="h-1.5 w-full gradient-primary" />
+          
+          <div className="p-10 text-center">
+            <div className="mx-auto w-20 h-20 bg-primary/10 rounded-3xl flex items-center justify-center mb-8 animate-bounce-soft">
+              <Clock className="h-10 w-10 text-primary" />
+            </div>
+            
+            <h1 className="text-3xl font-black gradient-text mb-4">Aguardando Acesso</h1>
+            <p className="text-sm font-medium text-muted-foreground/60 leading-relaxed mb-10 px-4">
+              Sua conta foi criada com sucesso no ecossistema Qualify. Aguarde a liberação por um administrador.
+            </p>
+
+            <div className="space-y-6">
+              {user?.email && (
+                <div className="flex items-center gap-4 rounded-2xl border border-white/5 bg-white/5 p-4 text-left">
+                  <div className="h-10 w-10 rounded-xl bg-muted/20 flex items-center justify-center">
+                    <Mail className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40">Autenticado como</p>
+                    <p className="text-sm font-bold truncate text-foreground">{user.email}</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3 pt-4">
+                <Button 
+                  onClick={handleRecheck} 
+                  disabled={isChecking} 
+                  className="h-12 rounded-2xl text-xs font-black uppercase tracking-widest gradient-primary shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all"
+                >
+                  <RefreshCw className={cn("mr-2 h-4 w-4", isChecking ? "animate-spin" : "")} />
+                  Verificar Liberação
+                </Button>
+                <Button 
+                  onClick={handleSignOut} 
+                  variant="ghost" 
+                  className="h-12 rounded-2xl text-xs font-black uppercase tracking-widest text-muted-foreground hover:text-foreground transition-all"
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sair da Conta
+                </Button>
               </div>
             </div>
-          )}
-
-          <p className="text-sm text-muted-foreground text-center">
-            Entre em contato com o administrador da sua empresa para solicitar acesso.
-          </p>
-
-          <div className="flex flex-col gap-2">
-            <Button onClick={handleRecheck} disabled={isChecking} className="w-full">
-              <RefreshCw className={`mr-2 h-4 w-4 ${isChecking ? "animate-spin" : ""}`} />
-              Verificar novamente
-            </Button>
-            <Button onClick={handleSignOut} variant="outline" className="w-full">
-              <LogOut className="mr-2 h-4 w-4" />
-              Sair
-            </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+        
+        <p className="mt-8 text-center text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/30">
+          Suporte prioritário: <span className="text-primary/40 underline cursor-pointer">help@qualify.ia</span>
+        </p>
+      </div>
     </div>
   );
 }

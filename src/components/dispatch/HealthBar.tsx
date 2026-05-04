@@ -12,15 +12,15 @@ export function HealthBar({ value, label, showValue = true, size = "md", classNa
   const clampedValue = Math.max(0, Math.min(100, value));
 
   const getHealthColor = () => {
-    if (clampedValue >= 80) return "bg-success";
-    if (clampedValue >= 50) return "bg-warning";
-    return "bg-error";
+    if (clampedValue >= 80) return "bg-gradient-to-r from-[#8A3CFF] to-[#2E39D9]";
+    if (clampedValue >= 60) return "bg-gradient-to-r from-[#FFB432] to-[#FF7A7A]";
+    return "bg-gradient-to-r from-[#FF7A7A] to-[#FF5CF7]";
   };
 
   const getHealthBgColor = () => {
-    if (clampedValue >= 80) return "bg-success/20";
-    if (clampedValue >= 50) return "bg-warning/20";
-    return "bg-error/20";
+    if (clampedValue >= 80) return "bg-[#8A3CFF]/15";
+    if (clampedValue >= 60) return "bg-[#FFB432]/15";
+    return "bg-[#FF7A7A]/15";
   };
 
   const heights = {

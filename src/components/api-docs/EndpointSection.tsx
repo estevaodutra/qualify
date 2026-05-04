@@ -9,10 +9,10 @@ interface EndpointSectionProps {
 }
 
 const methodColors = {
-  GET: "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30",
-  POST: "bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/30",
-  PUT: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30",
-  DELETE: "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30",
+  GET: "bg-[#22DD4F]/12 text-[#22DD4F] border-[#22DD4F]/25 font-['JetBrains_Mono']",
+  POST: "bg-[#8A3CFF]/15 text-[#B87FFF] border-[#8A3CFF]/30 font-['JetBrains_Mono']",
+  PUT: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 font-['JetBrains_Mono']",
+  DELETE: "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30 font-['JetBrains_Mono']",
 };
 
 export function EndpointSection({ endpoint }: EndpointSectionProps) {
@@ -28,7 +28,10 @@ export function EndpointSection({ endpoint }: EndpointSectionProps) {
             )}>
               {endpoint.method}
             </span>
-            <code className="font-mono text-base font-semibold text-foreground">
+            <code className={cn(
+              "font-['JetBrains_Mono'] text-sm font-semibold",
+              endpoint.path.includes("/call-dial") ? "text-[#8A3CFF]" : "text-foreground"
+            )}>
               {endpoint.path}
             </code>
           </div>

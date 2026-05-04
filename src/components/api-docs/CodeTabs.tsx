@@ -34,12 +34,24 @@ export function CodeTabs({ examples }: CodeTabsProps) {
     }
   };
 
+  const syntaxHighlight = (str: string) => {
+    let highlighted = str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+    
+    highlighted = highlighted.replace(/(["'])(?:(?=(\\?))\2.)*?\1/g, '<span class="text-[#22E6B5]">$&</span>');
+    highlighted = highlighted.replace(/\b(POST|GET|PUT|DELETE)\b/g, '<span class="text-[#8A3CFF] font-semibold">$&</span>');
+    
+    return { __html: highlighted };
+  };
+
   const CodeBlock = ({ code, language }: { code: string; language: string }) => (
     <div className="relative group">
       <Button
         variant="ghost"
         size="icon"
-        className="absolute right-2 top-2 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-background"
+        className="absolute right-2 top-2 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-background hover:text-[#8A3CFF]"
         onClick={() => copyToClipboard(code, language)}
       >
         {copiedTab === language ? (
@@ -48,8 +60,8 @@ export function CodeTabs({ examples }: CodeTabsProps) {
           <Copy className="h-4 w-4" />
         )}
       </Button>
-      <pre className="bg-[#1e1e1e] dark:bg-[#0d0d0d] text-[#d4d4d4] p-4 rounded-lg overflow-x-auto text-sm font-mono leading-relaxed">
-        <code>{code}</code>
+      <pre className="bg-[#0E1329] border border-white/10 text-[#B87FFF] font-['JetBrains_Mono'] p-4 rounded-lg overflow-x-auto text-sm leading-relaxed">
+        <code dangerouslySetInnerHTML={syntaxHighlight(code)} />
       </pre>
     </div>
   );

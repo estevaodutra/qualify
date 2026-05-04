@@ -146,7 +146,7 @@ const ApiDocs = () => {
                   <h4 className="text-sm font-semibold mb-2">Base URL</h4>
                   <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg border border-border">
                     <code className="font-mono text-sm flex-1 text-primary">{baseUrl}</code>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => copyToClipboard(baseUrl, "baseUrl")}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-[#8A3CFF]" onClick={() => copyToClipboard(baseUrl, "baseUrl")}>
                       {copied === "baseUrl" ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
                     </Button>
                   </div>

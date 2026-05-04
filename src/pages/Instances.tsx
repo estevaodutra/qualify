@@ -650,21 +650,32 @@ export default function Instances() {
         return "pending";
     }
   };
-  return <div className="space-y-8 animate-fade-in">
-      <PageHeader title={t("instances.title")} description={t("instances.description")} actions={<Button variant="outline" className="gap-2" onClick={handleRefreshStatus} disabled={isRefreshing}>
-            <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
-            {isRefreshing ? t("instances.refreshing") : t("instances.refreshStatus")}
-          </Button>} />
+  return <div className="space-y-10 pb-10">
+      <PageHeader title={t("instances.title")} description={t("instances.description")} actions={
+        <div className="flex gap-3">
+          <Button variant="outline" className="h-10 rounded-xl border-border/50 bg-background/50 backdrop-blur-sm transition-all hover:bg-background gap-2" onClick={handleRefreshStatus} disabled={isRefreshing}>
+            <RefreshCw className={cn("h-4 w-4 text-muted-foreground", isRefreshing ? "animate-spin" : "")} />
+            <span className="text-sm font-semibold">{isRefreshing ? t("instances.refreshing") : t("instances.refreshStatus")}</span>
+          </Button>
+          <Button 
+            className="h-10 px-5 gap-2.5 rounded-xl gradient-primary glow-primary font-semibold shadow-lg transition-all hover:opacity-90 active:scale-95" 
+            onClick={() => setShowAddDialog(true)}
+          >
+            <Plus className="h-4 w-4" />
+            Nova Instância
+          </Button>
+        </div>
+      } />
 
       <Tabs defaultValue="whatsapp" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="whatsapp" className="gap-2">
+        <TabsList className="bg-muted/50 p-1.5 rounded-2xl border border-border/40 backdrop-blur-md inline-flex">
+          <TabsTrigger value="whatsapp" className="gap-2 rounded-xl px-6 data-[state=active]:bg-background data-[state=active]:shadow-sm">
             <MessageSquare className="h-4 w-4" />
-            {t("instances.whatsapp")}
+            <span className="font-semibold text-sm">{t("instances.whatsapp")}</span>
           </TabsTrigger>
-          <TabsTrigger value="settings" className="gap-2">
+          <TabsTrigger value="settings" className="gap-2 rounded-xl px-6 data-[state=active]:bg-background data-[state=active]:shadow-sm">
             <Settings className="h-4 w-4" />
-            {t("instances.settings")}
+            <span className="font-semibold text-sm">{t("instances.settings")}</span>
           </TabsTrigger>
         </TabsList>
 
@@ -697,111 +708,115 @@ export default function Instances() {
           )}
 
           {/* Instance Cards */}
-          {!isLoading && <div className="grid gap-6 md:grid-cols-2">
-            {instances.map(instance => <Card key={instance.id} className="shadow-elevation-sm hover:shadow-elevation-md transition-shadow">
-                <CardHeader className="flex flex-row items-start justify-between pb-2">
-                  <div className="flex items-center gap-3">
-                    <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${instance.status === "connected" ? "bg-success/15" : instance.status === "waitingConnection" ? "bg-warning/15" : "bg-muted"}`}>
-                      {instance.status === "connected" ? <CheckCircle className="h-5 w-5 text-success" /> : instance.status === "waitingConnection" ? <MessageSquare className="h-5 w-5 text-warning animate-pulse" /> : <XCircle className="h-5 w-5 text-muted-foreground" />}
+          {!isLoading && <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 stagger-children">
+            {instances.map((instance, idx) => <Card key={instance.id} className={cn(
+              "border-white/40 bg-card/60 backdrop-blur-xl shadow-sm rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-[0_4px_24px_rgba(138,60,255,0.08)] hover:border-[#8A3CFF]/30 hover:-translate-y-1 group animate-fade-in",
+              `stagger-${(idx % 4) + 1}`
+            )}>
+                <CardHeader className="flex flex-row items-start justify-between pb-3 border-b border-border/30">
+                  <div className="flex items-center gap-4">
+                    <div className={cn(
+                      "flex h-12 w-12 items-center justify-center rounded-2xl shadow-sm transition-all group-hover:scale-105",
+                      instance.status === "connected" ? "bg-success/10 text-success" : instance.status === "waitingConnection" ? "bg-warning/10 text-warning" : "bg-muted/30 text-muted-foreground"
+                    )}>
+                      {instance.status === "connected" ? <CheckCircle className="h-6 w-6" /> : instance.status === "waitingConnection" ? <MessageSquare className="h-6 w-6 animate-pulse" /> : <XCircle className="h-6 w-6" />}
                     </div>
                     <div>
-                      <CardTitle className="text-base">{instance.name}</CardTitle>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge variant="secondary" className="text-xs">
+                      <CardTitle className="text-lg font-bold tracking-tight">{instance.name}</CardTitle>
+                      <div className="flex items-center gap-2.5 mt-1.5">
+                        <Badge variant="secondary" className="text-[10px] uppercase font-bold tracking-widest bg-muted/40 border-none px-2 py-0.5">
                           {instance.provider}
                         </Badge>
-                        <Badge variant="outline" className="text-xs gap-1">
+                        <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-widest border-border/40 text-muted-foreground gap-1.5 px-2 py-0.5">
                           {getFunctionIcon(instance.function)}
                           {getFunctionLabel(instance.function)}
                         </Badge>
                       </div>
                     </div>
                   </div>
-                  <div className="flex flex-col items-end gap-1">
+                  <div className="flex flex-col items-end gap-2">
                     <StatusBadge status={getStatusDisplay(instance.status)} />
                     <PaymentStatusBadge status={instance.paymentStatus} />
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Connected Number */}
-                  {instance.connectedNumber && <div>
-                      <p className="text-xs text-muted-foreground mb-1">{t("instances.connectedNumber")}</p>
-                      <p className="font-mono text-sm font-medium">{instance.connectedNumber}</p>
-                    </div>}
-
-                  {/* Instance Credentials */}
-                  {instance.idInstance && (
-                    <div className="p-2 bg-muted/50 rounded text-xs font-mono space-y-1">
-                      <p><span className="text-muted-foreground">Instance ID:</span> {instance.idInstance}</p>
-                      <p><span className="text-muted-foreground">Token:</span> ••••••{instance.tokenInstance?.slice(-6)}</p>
+                <CardContent className="space-y-5 pt-5">
+                  {/* Connected Number & Credentials */}
+                  <div className="grid grid-cols-2 gap-4 p-4 rounded-2xl bg-muted/20 border border-border/20">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 mb-1.5">{t("instances.connectedNumber")}</p>
+                      <p className="font-mono text-xs font-bold text-foreground">
+                        {instance.connectedNumber || "NÃO CONECTADO"}
+                      </p>
                     </div>
-                  )}
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 mb-1.5">INSTANCE ID</p>
+                      <p className="font-mono text-xs font-bold text-foreground truncate">
+                        {instance.idInstance || "PENDENTE"}
+                      </p>
+                    </div>
+                  </div>
 
-                  {/* Expiration Countdown */}
-                  {instance.expirationDate && (
-                    <ExpirationCountdown expirationDate={instance.expirationDate} />
-                  )}
-
-                  {/* Health & Stats */}
-                  {instance.status === "connected" && <>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-1">{t("instances.health")}</p>
+                  {/* Expiration & Health Row */}
+                  <div className="flex items-center justify-between px-1">
+                    {instance.expirationDate && (
+                      <ExpirationCountdown expirationDate={instance.expirationDate} />
+                    )}
+                    {instance.status === "connected" && (
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 mb-1">{t("instances.health")}</p>
                           <HealthBar value={instance.health} size="sm" />
                         </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-1">{t("instances.dispatches")}</p>
-                          <p className="font-mono text-sm font-semibold">
-                            {instance.dispatches.toLocaleString()}
-                          </p>
+                        <div className="text-right">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 mb-1">{t("instances.dispatches")}</p>
+                          <p className="font-mono text-xs font-bold">{instance.dispatches.toLocaleString()}</p>
                         </div>
                       </div>
-
-                      <div className="text-xs text-muted-foreground">
-                        {t("instances.lastCheck")}: {instance.lastCheck}
-                      </div>
-                    </>}
-
-                  {/* Waiting Connection Message */}
-                  {instance.status === "waitingConnection" && <div className="rounded-lg bg-warning/10 p-3 text-center">
-                      <p className="text-sm text-warning font-medium">{t("instances.waitingConnection")}</p>
-                    </div>}
+                    )}
+                  </div>
 
                   {/* Features */}
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-2">{t("instances.features")}</p>
-                    <div className="flex flex-wrap gap-1">
-                      {instance.features.map(feature => <Badge key={feature} variant="outline" className="text-xs font-normal">
+                  <div className="px-1">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 mb-2.5">Funcionalidades Ativas</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {instance.features.map(feature => <Badge key={feature} variant="outline" className="text-[10px] font-semibold border-border/40 text-muted-foreground/80 bg-background/30 backdrop-blur-sm">
                           {feature}
                         </Badge>)}
                     </div>
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-2 pt-2">
-                    {instance.status === "waitingConnection" ? <Button variant="default" size="sm" className="flex-1 gap-2" onClick={() => handleConnect(instance)}>
-                        <QrCode className="h-4 w-4" />
+                  <div className="flex items-center gap-2.5 pt-2">
+                    {instance.status === "waitingConnection" ? (
+                      <Button className="flex-1 h-11 gap-2.5 rounded-xl gradient-primary glow-primary font-bold shadow-md transition-all active:scale-95" onClick={() => handleConnect(instance)}>
+                        <QrCode className="h-4.5 w-4.5" />
                         {t("instances.viewQR")}
-                      </Button> : <Button variant={instance.status === "connected" ? "outline" : "default"} size="sm" className="flex-1 gap-2" onClick={() => instance.status === "connected" ? handleConfigure(instance) : handleConnect(instance)}>
-                        <Settings className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <Button variant="outline" className={cn(
+                        "flex-1 h-11 gap-2.5 rounded-xl font-bold transition-all border-border/50 bg-background/40 hover:bg-background/80 active:scale-95",
+                        instance.status !== "connected" && "border-primary text-primary hover:bg-primary/5 shadow-sm"
+                      )} onClick={() => instance.status === "connected" ? handleConfigure(instance) : handleConnect(instance)}>
+                        {instance.status === "connected" ? <Settings className="h-4.5 w-4.5" /> : <Phone className="h-4.5 w-4.5" />}
                         {instance.status === "connected" ? t("instances.configure") : t("instances.connect")}
-                      </Button>}
-                    <Button variant="ghost" size="sm" onClick={() => handleEditClick(instance)} title={t("instances.edit")}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm" asChild>
-                      
-                    </Button>
-                    <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => {
-                  setInstanceToDelete(instance);
-                  setShowDeleteDialog(true);
-                }}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                      </Button>
+                    )}
+                    
+                    <div className="flex items-center gap-1.5">
+                      <Button variant="outline" size="icon" className="h-11 w-11 rounded-xl border-border/40 bg-background/40 hover:bg-background/80" onClick={() => handleEditClick(instance)} title={t("instances.edit")}>
+                        <Pencil className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                      <Button variant="outline" size="icon" className="h-11 w-11 rounded-xl border-destructive/20 bg-destructive/5 hover:bg-destructive/10 group/trash" onClick={() => {
+                        setInstanceToDelete(instance);
+                        setShowDeleteDialog(true);
+                      }}>
+                        <Trash2 className="h-4 w-4 text-destructive/60 transition-colors group-hover/trash:text-destructive" />
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>)}
-          </div>}
+            </div>}
           {/* Add Instance */}
           <Card className="border-dashed shadow-elevation-sm">
             <CardContent className="flex flex-col items-center justify-center py-8">

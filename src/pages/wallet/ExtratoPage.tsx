@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useWalletTransactions } from "@/hooks/useWallet";
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
+import { WalletTabs } from "@/components/wallet/WalletTabs";
 
 const fmt = (v: number) => Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -57,12 +58,9 @@ export default function ExtratoPage() {
       <PageHeader
         title="Extrato"
         description="Histórico completo de movimentações"
-        actions={
-          <Button asChild variant="outline" size="sm">
-            <Link to="/carteira"><ArrowLeft className="mr-1 h-4 w-4" /> Voltar</Link>
-          </Button>
-        }
       />
+
+      <WalletTabs />
 
       <div className="flex flex-wrap gap-3">
         <Select value={period} onValueChange={(v) => setPeriod(v as any)}>
@@ -115,10 +113,10 @@ export default function ExtratoPage() {
                 const meta = typeMap[t.type] || { label: t.type, variant: "outline" as const };
                 return (
                   <TableRow key={t.id}>
-                    <TableCell className="text-sm">{new Date(t.created_at).toLocaleString("pt-BR")}</TableCell>
+                    <TableCell className="font-['JetBrains_Mono'] text-xs text-muted-foreground">{new Date(t.created_at).toLocaleString("pt-BR")}</TableCell>
                     <TableCell><Badge variant={meta.variant}>{meta.label}</Badge></TableCell>
                     <TableCell className="text-sm">{t.description || "-"}</TableCell>
-                    <TableCell className={`text-right font-medium ${Number(t.amount) >= 0 ? "text-success" : "text-destructive"}`}>
+                    <TableCell className={`text-right ${Number(t.amount) >= 0 ? "text-[#22DD4F] font-semibold" : "text-[#FF7A7A]"}`}>
                       {Number(t.amount) >= 0 ? "+" : ""}{fmt(Number(t.amount))}
                     </TableCell>
                     <TableCell className="text-right text-sm">{fmt(Number(t.balance_after))}</TableCell>

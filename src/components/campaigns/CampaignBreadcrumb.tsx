@@ -21,26 +21,34 @@ const channelLabels = {
 
 export function CampaignBreadcrumb({ channel, type }: CampaignBreadcrumbProps) {
   return (
-    <Breadcrumb>
-      <BreadcrumbList>
+    <Breadcrumb className="animate-fade-in stagger-1">
+      <BreadcrumbList className="flex items-center gap-1">
         <BreadcrumbItem>
           <BreadcrumbLink asChild>
-            <Link to="/campaigns">Campanhas</Link>
+            <Link to="/campaigns" className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40 hover:text-primary transition-colors">
+              Hub de Campanhas
+            </Link>
           </BreadcrumbLink>
         </BreadcrumbItem>
-        <BreadcrumbSeparator>
-          <ChevronRight className="h-4 w-4" />
+        
+        <BreadcrumbSeparator className="opacity-20">
+          <ChevronRight className="h-3 w-3" />
         </BreadcrumbSeparator>
+
         <BreadcrumbItem>
-          <BreadcrumbLink className="text-muted-foreground">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40">
             {channelLabels[channel]}
-          </BreadcrumbLink>
+          </span>
         </BreadcrumbItem>
-        <BreadcrumbSeparator>
-          <ChevronRight className="h-4 w-4" />
+
+        <BreadcrumbSeparator className="opacity-20">
+          <ChevronRight className="h-3 w-3" />
         </BreadcrumbSeparator>
+
         <BreadcrumbItem>
-          <BreadcrumbPage>{type}</BreadcrumbPage>
+          <BreadcrumbPage className="text-[10px] font-bold uppercase tracking-widest text-primary/80">
+            {type}
+          </BreadcrumbPage>
         </BreadcrumbItem>
       </BreadcrumbList>
     </Breadcrumb>

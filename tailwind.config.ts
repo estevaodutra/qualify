@@ -14,6 +14,7 @@ export default {
     },
     extend: {
       fontFamily: {
+        brand: ['Sora', '-apple-system', 'sans-serif'],
         sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
       },

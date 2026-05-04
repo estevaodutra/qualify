@@ -36,38 +36,46 @@ export default function CalendarsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+    <div className="space-y-10 pb-10">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
         <div>
-          <h1 className="text-2xl font-bold">Calendários</h1>
-          <p className="text-sm text-muted-foreground mt-1">Gerencie seus tipos de agendamento</p>
+          <h1 className="text-3xl font-bold tracking-tight gradient-text">Gestão de Agendamentos</h1>
+          <p className="text-sm font-medium text-muted-foreground/60 mt-1">Crie e gerencie fluxos de agendamento automatizados e personalizados.</p>
         </div>
-        <Button onClick={handleNew}>
-          <Plus className="h-4 w-4 mr-2" /> Criar Calendário
+        <Button onClick={handleNew} className="h-11 px-6 gap-2.5 rounded-xl gradient-primary glow-primary font-bold shadow-lg transition-all hover:opacity-90 active:scale-95">
+          <Plus className="h-5 w-5" /> Criar Calendário
         </Button>
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground text-sm">Carregando...</div>
+        <div className="flex flex-col items-center justify-center py-20 gap-4">
+          <div className="h-10 w-10 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
+          <p className="text-xs font-bold text-muted-foreground/60 uppercase tracking-widest">Carregando calendários...</p>
+        </div>
       ) : calendars.length === 0 ? (
-        <div className="text-center py-16 border-2 border-dashed border-border rounded-lg">
-          <CalIcon className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
-          <h3 className="font-medium">Nenhum calendário ainda</h3>
-          <p className="text-sm text-muted-foreground mt-1 mb-4">Crie seu primeiro tipo de agendamento</p>
-          <Button onClick={handleNew}>
-            <Plus className="h-4 w-4 mr-2" /> Criar Calendário
+        <div className="flex flex-col items-center justify-center py-24 bg-card/40 border-2 border-dashed border-white/40 rounded-3xl animate-fade-in">
+          <div className="p-5 rounded-2xl bg-muted/10 mb-6">
+            <CalIcon className="h-12 w-12 text-muted-foreground/30" />
+          </div>
+          <h3 className="text-xl font-bold text-foreground">Nenhum calendário ainda</h3>
+          <p className="text-sm font-medium text-muted-foreground/60 mt-2 mb-8 max-w-xs text-center">
+            Comece criando seu primeiro tipo de agendamento para disponibilizar para seus clientes.
+          </p>
+          <Button onClick={handleNew} className="h-11 px-8 gap-2.5 rounded-xl gradient-primary glow-primary font-bold shadow-lg transition-all hover:opacity-90 active:scale-95">
+            <Plus className="h-5 w-5" /> Criar Calendário
           </Button>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {calendars.map((cal) => (
-            <CalendarCard
-              key={cal.id}
-              calendar={cal}
-              onEdit={() => handleEdit(cal)}
-              onToggleStatus={() => handleToggle(cal)}
-              onDelete={() => setToDelete(cal)}
-            />
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 stagger-children">
+          {calendars.map((cal, idx) => (
+            <div key={cal.id} className={cn("animate-fade-in-up", `stagger-${(idx % 5) + 1}`)}>
+              <CalendarCard
+                calendar={cal}
+                onEdit={() => handleEdit(cal)}
+                onToggleStatus={() => handleToggle(cal)}
+                onDelete={() => setToDelete(cal)}
+              />
+            </div>
           ))}
         </div>
       )}

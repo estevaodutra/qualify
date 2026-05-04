@@ -85,7 +85,7 @@ export function DataTable<T>({
               <TableRow
                 key={keyExtractor(item)}
                 onClick={() => onRowClick?.(item)}
-                className={cn(onRowClick && "cursor-pointer hover:bg-muted/50 transition-colors")}
+                className={cn(onRowClick && "cursor-pointer hover:bg-[#8A3CFF]/5 transition-colors")}
               >
                 {columns.map((column) => (
                   <TableCell key={String(column.key)} className={column.className}>
