@@ -91,7 +91,7 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4 font-['Inter']">
-      <div className="w-full max-w-[420px] animate-fade-in-up">
+      <div className="w-full max-w-[420px]">
         {/* Card */}
         <div className="bg-card border border-border rounded-xl shadow-[0_1px_2px_hsl(220_15%_10%/0.05)] overflow-hidden">
 

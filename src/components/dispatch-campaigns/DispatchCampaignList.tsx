@@ -21,7 +21,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Plus, Search, MoreVertical, Settings, Trash2, Play, Pause, FileEdit, Megaphone, Copy,
+  Plus, Search, MoreVertical, Settings, Trash2, Play, Pause, FileEdit, Megaphone, Copy, CheckCircle, MessageSquare
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
