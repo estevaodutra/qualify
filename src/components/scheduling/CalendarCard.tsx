@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import { Phone, Video, MapPin, Copy, Settings, Pencil, Trash2, Calendar as CalIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

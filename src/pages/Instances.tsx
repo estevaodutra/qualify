@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { PageHeader, StatusBadge, HealthBar, AlertBanner } from "@/components/dispatch";
 import { Button } from "@/components/ui/button";

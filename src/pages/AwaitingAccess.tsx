@@ -6,6 +6,7 @@ import { Clock, LogOut, RefreshCw, Mail } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 export default function AwaitingAccess() {
   const { user, signOut } = useAuth();

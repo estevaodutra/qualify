@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import { useState, useMemo } from "react";
 import { useLeads, Lead, LeadFilters } from "@/hooks/useLeads";
 import { useCallQueue } from "@/hooks/useCallQueue";

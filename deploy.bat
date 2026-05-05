@@ -1,3 +1,3 @@
 git add .
-git commit -m "fix: resolve production white screen caused by missing lucide-react imports"
+git commit -m "fix: resolve production ReferenceError cn is not defined by adding missing imports"
 git push
