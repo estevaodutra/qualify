@@ -24,8 +24,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           <AppHeader />
           <InstanceStatusBanner />
           <main className="flex-1 overflow-auto p-5 md:p-8 scrollbar-thin">
-            {children}
-            <Outlet />
+            {children || <Outlet />}
           </main>
         </div>
       </div>

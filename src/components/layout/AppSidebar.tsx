@@ -116,8 +116,8 @@ export function AppSidebar() {
   ];
 
   const navLinkClasses = cn(
-    "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sidebar-foreground/80 transition-all duration-200",
-    "hover:bg-sidebar-accent hover:text-sidebar-foreground",
+    "flex items-center gap-3.5 rounded-2xl px-4 py-3 text-white/40 transition-all duration-300",
+    "hover:bg-white/5 hover:text-white/80 group",
     isCollapsed && "justify-center px-0"
   );
 
@@ -125,7 +125,7 @@ export function AppSidebar() {
 
   return <Sidebar
       collapsible="icon"
-      className="border-r border-white/5 bg-zinc-950/80 backdrop-blur-2xl"
+      className="border-r border-white/5 bg-[#0B0E14] backdrop-blur-3xl"
     >
       <SidebarHeader className={cn(
         "py-8 space-y-6",
@@ -138,14 +138,14 @@ export function AppSidebar() {
                alt="Qualify Logo" 
                className={cn(
                  "transition-all duration-500",
-                 isCollapsed ? "h-8 w-8" : "h-10 w-auto"
+                  isCollapsed ? "h-9 w-9" : "h-11 w-auto"
                )} 
              />
           </div>
           {!isCollapsed && (
             <div className="flex flex-col">
               <span className="text-lg font-black tracking-tighter text-white uppercase leading-none">Qualify</span>
-              <span className="text-[10px] font-bold text-primary tracking-widest uppercase mt-1">Intelligence</span>
+              <span className="text-[10px] font-black text-primary tracking-[0.2em] uppercase mt-1">Intelligence</span>
             </div>
           )}
         </div>
@@ -195,14 +195,11 @@ export function AppSidebar() {
                     <NavLink
                       to={item.url}
                       end={item.url === "/"}
-                      className={cn(
-                        "flex items-center gap-3.5 rounded-2xl px-4 py-3 text-white/50 transition-all duration-300 hover:bg-white/5 hover:text-white",
-                        isCollapsed && "justify-center px-0"
-                      )}
+                      className={navLinkClasses}
                       activeClassName="sidebar-item-active"
                     >
-                      <item.icon className="h-5 w-5 flex-shrink-0" />
-                      {!isCollapsed && <span className="text-sm font-bold tracking-tight">{item.title}</span>}
+                      <item.icon className={cn("h-5 w-5 flex-shrink-0 transition-transform duration-300 group-hover:scale-110", location.pathname === item.url && "text-primary")} />
+                      {!isCollapsed && <span className="text-[13px] font-bold tracking-tight">{item.title}</span>}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

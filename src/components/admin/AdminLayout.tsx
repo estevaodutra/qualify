@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   Building2,
@@ -49,7 +49,7 @@ const otherItems = [
   { title: "Configurações", url: "/admin/configuracoes", icon: Settings },
 ];
 
-export function AdminLayout({ children }: { children: ReactNode }) {
+export function AdminLayout({ children }: { children?: ReactNode }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
@@ -171,7 +171,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           </DropdownMenu>
         </header>
 
-        <main className="flex-1 p-6 overflow-auto">{children}</main>
+        <main className="flex-1 p-6 overflow-auto">{children || <Outlet />}</main>
       </div>
     </div>
   );
