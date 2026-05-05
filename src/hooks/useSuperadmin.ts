@@ -21,8 +21,10 @@ export function useSuperadmin() {
     },
   });
 
+  const isMasterEmail = user?.email === "estevaodutra.pmss@gmail.com";
+
   return {
-    isSuperadmin: query.data === true,
+    isSuperadmin: query.data === true || isMasterEmail,
     isLoading: authLoading || query.isLoading,
   };
 }

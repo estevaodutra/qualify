@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSuperadmin } from "@/hooks/useSuperadmin";
 
 export interface Company {
   id: string;
@@ -25,6 +26,7 @@ const STORAGE_KEY = "dispatch_active_company";
 
 export function CompanyProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const { isSuperadmin } = useSuperadmin();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [activeCompanyId, setActiveCompanyId] = useState<string | null>(
     () => localStorage.getItem(STORAGE_KEY)
@@ -98,7 +100,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   };
 
   const activeCompany = companies.find((c) => c.id === activeCompanyId) || null;
-  const isAdmin = activeCompany?.role === "admin";
+  const isAdmin = activeCompany?.role === "admin" || isSuperadmin;
 
   return (
     <CompanyContext.Provider
