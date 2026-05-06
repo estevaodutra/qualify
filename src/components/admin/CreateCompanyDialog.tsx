@@ -22,17 +22,6 @@ export function CreateCompanyDialog({ open, onClose }: CreateCompanyDialogProps)
     e.preventDefault();
     if (!name || !ownerId) return;
 
-    // Check if user already has a company
-    const selectedUser = users?.find(u => u.id === ownerId);
-    if (selectedUser && selectedUser.company_count > 0) {
-      toast({
-        title: "Usuário já possui empresa",
-        description: "Este usuário já está vinculado a uma organização. O sistema agora permite apenas uma empresa por usuário.",
-        variant: "destructive"
-      });
-      return;
-    }
-
     create.mutate(
       { name, owner_id: ownerId },
       {

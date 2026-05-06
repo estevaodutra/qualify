@@ -26,17 +26,6 @@ export function CompanyDetailsDialog({
   const handleAddMember = async () => {
     if (!companyId || !newMemberId) return;
 
-    // Check if user already has a company
-    const selectedUser = allUsers?.find(u => u.id === newMemberId);
-    if (selectedUser && selectedUser.company_count > 0) {
-      toast({
-        title: "Usuário já possui empresa",
-        description: "Este usuário já está vinculado a uma organização. O sistema permite apenas uma empresa por usuário.",
-        variant: "destructive"
-      });
-      return;
-    }
-
     addMember.mutate(
       { company_id: companyId, user_id: newMemberId, role: newMemberRole },
       {
