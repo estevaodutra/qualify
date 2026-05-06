@@ -181,6 +181,24 @@ export function useCreateCompany() {
   });
 }
 
+export function useDeleteCompany() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any)
+        .from("companies")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "companies"] });
+      toast({ title: "Empresa excluída com sucesso" });
+    },
+    onError: (e: any) => toast({ title: "Erro ao excluir empresa", description: e.message, variant: "destructive" }),
+  });
+}
+
 export function useCreditManual() {
   const qc = useQueryClient();
   return useMutation({

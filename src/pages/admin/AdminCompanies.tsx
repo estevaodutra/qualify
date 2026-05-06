@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAdminCompanies, useToggleCompanyActive, type AdminCompany } from "@/hooks/useAdmin";
+import { useAdminCompanies, useToggleCompanyActive, useDeleteCompany, type AdminCompany } from "@/hooks/useAdmin";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -10,8 +10,8 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Plus, Search, Eye, Power, PowerOff } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { MoreHorizontal, Plus, Search, Eye, Power, PowerOff, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { CompanyDetailsDialog } from "@/components/admin/CompanyDetailsDialog";
 import { AddBalanceManualDialog } from "@/components/admin/AddBalanceManualDialog";
@@ -24,6 +24,7 @@ const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", curren
 export default function AdminCompanies() {
   const { data, isLoading } = useAdminCompanies();
   const toggle = useToggleCompanyActive();
+  const deleteCompany = useDeleteCompany();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [balanceFilter, setBalanceFilter] = useState("all");
@@ -140,6 +141,17 @@ export default function AdminCompanies() {
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => { impersonateCompany(c.id); window.location.href = "/"; }}>
                           <Eye className="mr-2 h-4 w-4" /> Personificar
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => {
+                            if (window.confirm(`Tem certeza que deseja EXCLUIR permanentemente a empresa ${c.name}? Todos os dados (carteira, membros, instâncias) serão apagados.`)) {
+                              deleteCompany.mutate(c.id);
+                            }
+                          }}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" /> Excluir Empresa
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
