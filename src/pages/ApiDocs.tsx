@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { PageHeader } from "@/components/dispatch";
-import { ApiSidebar, CategorySection, WebhookConfigSection } from "@/components/api-docs";
+import { ApiSidebar, CategorySection, WebhookConfigSection, ApiKeyManager } from "@/components/api-docs";
 import { apiEndpoints, eventTypes } from "@/data/api-endpoints";
 import { useLanguage } from "@/i18n";
 import { Button } from "@/components/ui/button";
@@ -156,7 +156,7 @@ const ApiDocs = () => {
           </section>
 
           {/* Authentication */}
-          <section id="authentication" className="scroll-mt-20">
+          <section id="authentication" className="scroll-mt-20 space-y-6">
             <Card className="border-border">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -199,6 +199,8 @@ const ApiDocs = () => {
                 </div>
               </CardContent>
             </Card>
+
+            <ApiKeyManager />
           </section>
 
           {/* Webhook Configuration */}
