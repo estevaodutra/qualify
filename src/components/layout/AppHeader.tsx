@@ -8,6 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useLanguage } from "@/i18n";
 import { useAuth } from "@/contexts/AuthContext";
@@ -41,6 +42,7 @@ export function AppHeader() {
 
   const userEmail = user?.email || "Usuário";
   const userName = user?.user_metadata?.full_name || userEmail.split("@")[0];
+  const avatarUrl = user?.user_metadata?.avatar_url;
   const initials = userName.slice(0, 2).toUpperCase();
 
   return (
@@ -86,9 +88,12 @@ export function AppHeader() {
                 variant="ghost"
                 className="h-9 rounded-xl px-2 gap-2.5 hover:bg-accent transition-all active:scale-95 group"
               >
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg gradient-primary text-white text-xs font-bold shadow-sm glow-sm transition-transform duration-200 group-hover:scale-105">
-                  {initials}
-                </div>
+                <Avatar className="h-7 w-7 rounded-lg shadow-sm transition-transform duration-200 group-hover:scale-105">
+                  <AvatarImage src={avatarUrl} alt={userName} className="object-cover" />
+                  <AvatarFallback className="rounded-lg gradient-primary text-white text-[10px] font-bold uppercase">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
                 <div className="hidden lg:flex flex-col items-start leading-none">
                   <span className="text-[13px] font-semibold text-foreground">{userName}</span>
                   <span className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest mt-0.5">Admin</span>
@@ -99,9 +104,12 @@ export function AppHeader() {
             <DropdownMenuContent align="end" className="w-60 rounded-2xl shadow-elevation-lg border-border/50 bg-background/95 backdrop-blur-xl p-2">
               <DropdownMenuLabel className="px-3 py-3">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl gradient-primary text-white text-sm font-bold shrink-0 glow-sm">
-                    {initials}
-                  </div>
+                  <Avatar className="h-10 w-10 rounded-xl shadow-sm">
+                    <AvatarImage src={avatarUrl} alt={userName} className="object-cover" />
+                    <AvatarFallback className="rounded-xl gradient-primary text-white text-xs font-bold uppercase">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
                   <div className="flex flex-col min-w-0">
                     <p className="text-[13px] font-semibold text-foreground truncate">{userName}</p>
                     <p className="text-[11px] text-muted-foreground/60 truncate">{userEmail}</p>
