@@ -1,9 +1,14 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { MessageSquare, Zap, Users, Wifi, Phone, HelpCircle, Code } from "lucide-react";
+import { MessageSquare, Zap, Users, Wifi, Phone, HelpCircle, Code, Eye, RefreshCw } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 const eventCategories = [
   {
@@ -64,6 +69,32 @@ const eventCategories = [
 ];
 
 export default function AdminEventDictionary() {
+  const [pendingEvents, setPendingEvents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetchPendingEvents();
+  }, []);
+
+  const fetchPendingEvents = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("webhook_events")
+        .select("*")
+        .eq("classification", "pending")
+        .order("received_at", { ascending: false })
+        .limit(10);
+      
+      if (error) throw error;
+      setPendingEvents(data || []);
+    } catch (err) {
+      console.error("Error fetching pending events:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -78,6 +109,7 @@ export default function AdminEventDictionary() {
           <TabsTrigger value="categories">Categorias</TabsTrigger>
           <TabsTrigger value="providers">Mapeamento por Provedor</TabsTrigger>
           <TabsTrigger value="rules">Regras Especiais</TabsTrigger>
+          <TabsTrigger value="pending" className="text-destructive">Reclassificação</TabsTrigger>
         </TabsList>
 
         <TabsContent value="categories" className="space-y-4">
@@ -231,6 +263,78 @@ export default function AdminEventDictionary() {
                   </div>
                 </li>
               </ul>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="pending">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Fila de Reclassificação</CardTitle>
+                <CardDescription>
+                  Eventos recentes marcados como 'unknown'. Use o payload bruto para criar novos mapeamentos.
+                </CardDescription>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={fetchPendingEvents}
+                disabled={loading}
+              >
+                <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />
+                Atualizar
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Data</TableHead>
+                      <TableHead>Provedor</TableHead>
+                      <TableHead>Subtipo</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pendingEvents.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                          {loading ? "Carregando..." : "Nenhum evento pendente de reclassificação."}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      pendingEvents.map((event) => (
+                        <TableRow key={event.id}>
+                          <TableCell className="text-xs">
+                            {format(new Date(event.received_at), "dd/MM/yyyy HH:mm:ss")}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="capitalize">{event.source}</Badge>
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {event.event_subtype || "-"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => {
+                                console.log("Raw Event:", event.raw_event);
+                                alert("O payload foi enviado para o console do navegador (F12) para inspeção.");
+                              }}
+                            >
+                              <Eye className="h-4 w-4 mr-2" />
+                              Ver JSON
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
