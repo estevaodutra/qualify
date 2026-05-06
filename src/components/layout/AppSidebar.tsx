@@ -24,6 +24,7 @@ import {
   Wallet,
   Receipt,
   SlidersHorizontal,
+  UserCircle,
 } from "lucide-react";
 import {
   Sidebar,
@@ -115,6 +116,8 @@ export function AppSidebar() {
   };
 
   const settingsSubItems = [
+    { title: "Perfil", url: "/settings/profile", icon: UserCircle },
+    { title: "Conta", url: "/settings/account", icon: Settings },
     { title: "Carteira", url: "/carteira", icon: Wallet },
     { title: t("nav.billing"), url: "/billing", icon: CreditCard },
     ...(isAdmin ? [{ title: "Membros", url: "/configuracoes/membros", icon: Users }] : []),

@@ -26,12 +26,16 @@ import {
 } from "@/components/ui/dialog";
 import { 
   Save, Globe, Bell, Shield, Palette, Loader2, Check, Copy, Plus, 
-  Trash2, Eye, EyeOff, AlertTriangle, Key 
+  Trash2, Eye, EyeOff, AlertTriangle, Key, User as UserIcon, Building2 
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "next-themes";
 import { useLanguage } from "@/i18n";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
+import { ImageUpload } from "@/components/settings/ImageUpload";
+import { useLocation, useNavigate } from "react-router-dom";
 
 interface ApiKey {
   id: string;
@@ -48,6 +52,10 @@ export default function Settings() {
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
   const { language, setLanguage, t } = useLanguage();
+  const { user } = useAuth();
+  const { activeCompany, refreshCompanies } = useCompany();
+  const location = useLocation();
+  const navigate = useNavigate();
   
   const [isSaving, setIsSaving] = useState(false);
   const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
@@ -55,6 +63,27 @@ export default function Settings() {
   const [showNewKeyDialog, setShowNewKeyDialog] = useState(false);
   const [showNewKeyResultDialog, setShowNewKeyResultDialog] = useState(false);
   
+  // Tab handling
+  const getTabFromPath = () => {
+    const path = location.pathname;
+    if (path.includes("/settings/profile")) return "profile";
+    if (path.includes("/settings/account")) return "security";
+    return "company";
+  };
+  
+  const [activeTab, setActiveTab] = useState(getTabFromPath());
+
+  useEffect(() => {
+    setActiveTab(getTabFromPath());
+  }, [location.pathname]);
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    if (value === "profile") navigate("/settings/profile");
+    else if (value === "security") navigate("/settings/account");
+    else navigate("/settings");
+  };
+
   // API Keys state
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [isLoadingKeys, setIsLoadingKeys] = useState(false);
@@ -67,7 +96,10 @@ export default function Settings() {
   
   // Form state
   const [settings, setSettings] = useState({
-    companyName: "Acme Corp",
+    companyName: "",
+    logoUrl: "",
+    fullName: "",
+    avatarUrl: "",
     timezone: "america_sao_paulo",
     emailNotifications: true,
     webhookNotifications: false,
@@ -76,6 +108,42 @@ export default function Settings() {
     sessionTimeout: "60",
     compactMode: false,
   });
+
+  // Load initial data
+  useEffect(() => {
+    if (user) {
+      setSettings(prev => ({
+        ...prev,
+        fullName: user.user_metadata?.full_name || "",
+        avatarUrl: user.user_metadata?.avatar_url || "",
+      }));
+      
+      const fetchProfile = async () => {
+        const { data } = await supabase
+          .from('profiles')
+          .select('avatar_url, full_name')
+          .eq('id', user.id)
+          .single();
+        
+        if (data) {
+          setSettings(prev => ({
+            ...prev,
+            fullName: data.full_name || prev.fullName,
+            avatarUrl: data.avatar_url || prev.avatarUrl,
+          }));
+        }
+      };
+      fetchProfile();
+    }
+    
+    if (activeCompany) {
+      setSettings(prev => ({
+        ...prev,
+        companyName: activeCompany.name || "",
+        logoUrl: activeCompany.logo_url || "",
+      }));
+    }
+  }, [user, activeCompany]);
 
   // Fetch API keys
   const fetchApiKeys = async () => {
@@ -186,12 +254,53 @@ export default function Settings() {
 
   const handleSaveChanges = async () => {
     setIsSaving(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setIsSaving(false);
-    toast({
-      title: t("settings.settingsSaved"),
-      description: t("settings.settingsSaved"),
-    });
+    try {
+      if (user) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            full_name: settings.fullName,
+            avatar_url: settings.avatarUrl
+          })
+          .eq('id', user.id);
+        
+        if (profileError) throw profileError;
+
+        await supabase.auth.updateUser({
+          data: { 
+            full_name: settings.fullName,
+            avatar_url: settings.avatarUrl
+          }
+        });
+      }
+
+      if (activeCompany) {
+        const { error: companyError } = await supabase
+          .from('companies')
+          .update({
+            name: settings.companyName,
+            logo_url: settings.logoUrl
+          })
+          .eq('id', activeCompany.id);
+        
+        if (companyError) throw companyError;
+        refreshCompanies();
+      }
+
+      toast({
+        title: "Configurações salvas",
+        description: "Suas alterações foram aplicadas com sucesso.",
+      });
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      toast({
+        title: "Erro ao salvar",
+        description: "Não foi possível salvar as alterações.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleEnable2FA = () => {
@@ -247,78 +356,142 @@ export default function Settings() {
         }
       />
 
-      <Tabs defaultValue="company" className="w-full">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
         <TabsList className="w-full justify-start border-b border-border/20 bg-transparent rounded-none p-0 mb-8 overflow-x-auto flex-nowrap hide-scrollbar">
           <TabsTrigger value="company" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Empresa</TabsTrigger>
+          <TabsTrigger value="profile" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Perfil</TabsTrigger>
           <TabsTrigger value="security" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Segurança</TabsTrigger>
           <TabsTrigger value="notifications" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Notificações</TabsTrigger>
           <TabsTrigger value="appearance" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Aparência</TabsTrigger>
         </TabsList>
 
         <TabsContent value="company" className="space-y-8 outline-none animate-fade-in">
-          {/* General Settings */}
           <Card className="border-white/40 bg-card/60 backdrop-blur-xl shadow-sm rounded-2xl overflow-hidden transition-colors hover:border-[#8A3CFF]/20">
-          <CardHeader className="pb-4 border-b border-border/40">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-primary/10">
-                <Globe className="h-5 w-5 text-primary" />
+            <CardHeader className="pb-4 border-b border-border/40">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-primary/10">
+                  <Building2 className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg font-bold tracking-tight">Dados da Empresa</CardTitle>
+                  <CardDescription className="text-xs font-medium text-muted-foreground/60">Gerencie a identidade e configurações da sua organização.</CardDescription>
+                </div>
               </div>
-              <div>
-                <CardTitle className="text-lg font-bold tracking-tight">{t("settings.general")}</CardTitle>
-                <CardDescription className="text-xs font-medium text-muted-foreground/60">{t("settings.generalDescription")}</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-8 space-y-8">
-            <div className="grid gap-6 md:grid-cols-2">
-              <div className="space-y-2.5">
-                <Label htmlFor="company" className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">{t("settings.companyName")}</Label>
-                <Input
-                  id="company"
-                  value={settings.companyName}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, companyName: e.target.value }))}
-                  placeholder={t("settings.companyNamePlaceholder")}
-                  className="h-11 rounded-xl border-border/40 bg-background/40 transition-all focus:bg-background"
-                />
-              </div>
-              <div className="space-y-2.5">
-                <Label htmlFor="timezone" className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">{t("settings.timezone")}</Label>
-                <Select
-                  value={settings.timezone}
-                  onValueChange={(value) => setSettings((prev) => ({ ...prev, timezone: value }))}
-                >
-                  <SelectTrigger className="h-11 rounded-xl border-border/40 bg-background/40 transition-all">
-                    <SelectValue placeholder={t("settings.selectTimezone")} />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl">
-                    <SelectItem value="america_sao_paulo">America/Sao_Paulo (BRT)</SelectItem>
-                    <SelectItem value="america_new_york">America/New_York (EST)</SelectItem>
-                    <SelectItem value="europe_london">Europe/London (GMT)</SelectItem>
-                    <SelectItem value="asia_tokyo">Asia/Tokyo (JST)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-2.5">
-              <Label htmlFor="language" className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">{t("settings.language")}</Label>
-              <Select value={language} onValueChange={handleLanguageChange}>
-                <SelectTrigger className="h-11 w-full md:w-[240px] rounded-xl border-border/40 bg-background/40 transition-all">
-                  <SelectValue placeholder={t("settings.selectLanguage")} />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl">
-                  <SelectItem value="en">English (US)</SelectItem>
-                  <SelectItem value="pt">Português (BR)</SelectItem>
-                  <SelectItem value="es">Español</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent className="pt-8 space-y-8">
+              <div className="flex flex-col md:flex-row gap-8 items-start">
+                <div className="space-y-3">
+                  <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">Logo da Empresa</Label>
+                  <ImageUpload 
+                    currentUrl={settings.logoUrl} 
+                    onUploadSuccess={(url) => setSettings(prev => ({ ...prev, logoUrl: url }))}
+                    type="company"
+                    name={settings.companyName}
+                  />
+                </div>
 
+                <div className="flex-1 w-full space-y-6">
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <div className="space-y-2.5">
+                      <Label htmlFor="company" className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">{t("settings.companyName")}</Label>
+                      <Input
+                        id="company"
+                        value={settings.companyName}
+                        onChange={(e) => setSettings((prev) => ({ ...prev, companyName: e.target.value }))}
+                        placeholder={t("settings.companyNamePlaceholder")}
+                        className="h-11 rounded-xl border-border/40 bg-background/40 transition-all focus:bg-background"
+                      />
+                    </div>
+                    <div className="space-y-2.5">
+                      <Label htmlFor="timezone" className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">{t("settings.timezone")}</Label>
+                      <Select
+                        value={settings.timezone}
+                        onValueChange={(value) => setSettings((prev) => ({ ...prev, timezone: value }))}
+                      >
+                        <SelectTrigger className="h-11 rounded-xl border-border/40 bg-background/40 transition-all">
+                          <SelectValue placeholder={t("settings.selectTimezone")} />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl">
+                          <SelectItem value="america_sao_paulo">America/Sao_Paulo (BRT)</SelectItem>
+                          <SelectItem value="america_new_york">America/New_York (EST)</SelectItem>
+                          <SelectItem value="europe_london">Europe/London (GMT)</SelectItem>
+                          <SelectItem value="asia_tokyo">Asia/Tokyo (JST)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-2.5">
+                    <Label htmlFor="language" className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">{t("settings.language")}</Label>
+                    <Select value={language} onValueChange={handleLanguageChange}>
+                      <SelectTrigger className="h-11 w-full md:w-[240px] rounded-xl border-border/40 bg-background/40 transition-all">
+                        <SelectValue placeholder={t("settings.selectLanguage")} />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl">
+                        <SelectItem value="en">English (US)</SelectItem>
+                        <SelectItem value="pt">Português (BR)</SelectItem>
+                        <SelectItem value="es">Español</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="profile" className="space-y-8 outline-none animate-fade-in">
+          <Card className="border-white/40 bg-card/60 backdrop-blur-xl shadow-sm rounded-2xl overflow-hidden transition-colors hover:border-[#8A3CFF]/20">
+            <CardHeader className="pb-4 border-b border-border/40">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-primary/10">
+                  <UserIcon className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg font-bold tracking-tight">Meu Perfil</CardTitle>
+                  <CardDescription className="text-xs font-medium text-muted-foreground/60">Atualize suas informações pessoais e foto de perfil.</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-8 space-y-8">
+              <div className="flex flex-col md:flex-row gap-8 items-start">
+                <div className="space-y-3">
+                  <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">Foto de Perfil</Label>
+                  <ImageUpload 
+                    currentUrl={settings.avatarUrl} 
+                    onUploadSuccess={(url) => setSettings(prev => ({ ...prev, avatarUrl: url }))}
+                    type="profile"
+                    name={settings.fullName}
+                  />
+                </div>
+
+                <div className="flex-1 w-full space-y-6">
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <div className="space-y-2.5">
+                      <Label htmlFor="fullName" className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">Nome Completo</Label>
+                      <Input
+                        id="fullName"
+                        value={settings.fullName}
+                        onChange={(e) => setSettings((prev) => ({ ...prev, fullName: e.target.value }))}
+                        placeholder="Seu nome"
+                        className="h-11 rounded-xl border-border/40 bg-background/40 transition-all focus:bg-background"
+                      />
+                    </div>
+                    <div className="space-y-2.5">
+                      <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">Email</Label>
+                      <Input
+                        value={user?.email || ""}
+                        disabled
+                        className="h-11 rounded-xl border-border/40 bg-muted/20 opacity-60 cursor-not-allowed"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="notifications" className="space-y-8 outline-none animate-fade-in">
-          {/* Notification Settings */}
           <Card className="border-white/40 bg-card/60 backdrop-blur-xl shadow-sm rounded-2xl overflow-hidden transition-colors hover:border-[#8A3CFF]/20">
           <CardHeader className="pb-4 border-b border-border/40">
             <div className="flex items-center gap-3">
@@ -375,11 +548,9 @@ export default function Settings() {
             </div>
           </CardContent>
         </Card>
-
         </TabsContent>
 
         <TabsContent value="security" className="space-y-8 outline-none animate-fade-in">
-          {/* Security Settings */}
           <Card className="border-white/40 bg-card/60 backdrop-blur-xl shadow-sm rounded-2xl overflow-hidden transition-colors hover:border-[#8A3CFF]/20">
           <CardHeader className="pb-4 border-b border-border/40">
             <div className="flex items-center gap-3">
@@ -418,11 +589,9 @@ export default function Settings() {
             </div>
           </CardContent>
         </Card>
-
         </TabsContent>
 
         <TabsContent value="appearance" className="space-y-8 outline-none animate-fade-in">
-          {/* Appearance */}
           <Card className="border-white/40 bg-card/60 backdrop-blur-xl shadow-sm rounded-2xl overflow-hidden transition-colors hover:border-[#8A3CFF]/20">
           <CardHeader className="pb-4 border-b border-border/40">
             <div className="flex items-center gap-3">
@@ -456,7 +625,7 @@ export default function Settings() {
         </TabsContent>
       </Tabs>
 
-      {/* 2FA Dialog - Redesigned */}
+      {/* 2FA Dialog */}
       {show2FADialog && (
         <Dialog open={show2FADialog} onOpenChange={setShow2FADialog}>
           <DialogContent className="max-w-md rounded-2xl border-border/40 bg-background/95 backdrop-blur-xl shadow-2xl">
@@ -490,7 +659,7 @@ export default function Settings() {
         </Dialog>
       )}
 
-      {/* API Keys List Dialog - Redesigned */}
+      {/* API Keys List Dialog */}
       {showApiKeyDialog && (
         <Dialog open={showApiKeyDialog} onOpenChange={setShowApiKeyDialog}>
           <DialogContent className="max-w-2xl rounded-2xl border-border/40 bg-background/95 backdrop-blur-xl shadow-2xl">
@@ -593,7 +762,7 @@ export default function Settings() {
         </Dialog>
       )}
 
-      {/* Generate New Key Dialog - Redesigned */}
+      {/* Generate New Key Dialog */}
       {showNewKeyDialog && (
         <Dialog open={showNewKeyDialog} onOpenChange={setShowNewKeyDialog}>
           <DialogContent className="max-w-md rounded-2xl border-border/40 bg-background/95 backdrop-blur-xl shadow-2xl">
@@ -649,7 +818,7 @@ export default function Settings() {
         </Dialog>
       )}
 
-      {/* New Key Result Dialog - Redesigned */}
+      {/* New Key Result Dialog */}
       {showNewKeyResultDialog && (
         <Dialog open={showNewKeyResultDialog} onOpenChange={setShowNewKeyResultDialog}>
           <DialogContent className="max-w-md rounded-2xl border-border/40 bg-background/95 backdrop-blur-xl shadow-2xl">

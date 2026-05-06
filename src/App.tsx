@@ -97,6 +97,8 @@ const App = () => {
                       <Route path="/alerts" element={<Alerts />} />
                       <Route path="/billing" element={<Billing />} />
                       <Route path="/settings" element={<Settings />} />
+                      <Route path="/settings/profile" element={<Settings />} />
+                      <Route path="/settings/account" element={<Settings />} />
                       <Route path="/api-docs" element={<ApiDocs />} />
                       
                       {/* Wallet routes */}

@@ -112,23 +112,6 @@ export function AppHeader() {
               <DropdownMenuSeparator className="bg-border/50 my-1" />
 
               <DropdownMenuItem
-                onClick={() => navigate("/settings")}
-                className="rounded-xl gap-3 px-3 py-2.5 text-[13px] font-medium cursor-pointer"
-              >
-                <UserCircle className="h-4 w-4 text-muted-foreground" />
-                {t("header.profile")}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => navigate("/settings")}
-                className="rounded-xl gap-3 px-3 py-2.5 text-[13px] font-medium cursor-pointer"
-              >
-                <Settings className="h-4 w-4 text-muted-foreground" />
-                {t("header.accountSettings")}
-              </DropdownMenuItem>
-
-              <DropdownMenuSeparator className="bg-border/50 my-1" />
-
-              <DropdownMenuItem
                 onClick={handleSignOut}
                 className="rounded-xl gap-3 px-3 py-2.5 text-[13px] font-bold text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer"
               >
