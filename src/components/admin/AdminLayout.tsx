@@ -15,6 +15,8 @@ import {
   ChevronDown,
   BookOpen,
   Code2,
+  Activity,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -49,6 +51,8 @@ const otherItems = [
   { title: "Provedores", url: "/admin/provedores", icon: Phone },
   { title: "Relatórios", url: "/admin/relatorios", icon: FileBarChart },
   { title: "API Docs", url: "/admin/api", icon: BookOpen },
+  { title: "Logs", url: "/admin/logs", icon: Activity },
+  { title: "Eventos", url: "/admin/events", icon: Zap },
   { title: "Dicionário", url: "/admin/dicionario", icon: Code2 },
   { title: "Configurações", url: "/admin/configuracoes", icon: Settings },
 ];

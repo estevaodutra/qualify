@@ -92,9 +92,7 @@ const App = () => {
                       <Route path="/painel-ligacoes" element={<CallPanel />} />
                       <Route path="/leads" element={<Leads />} />
                       <Route path="/numbers" element={<PhoneNumbers />} />
-                      <Route path="/logs" element={<Logs />} />
                       <Route path="/instances" element={<Instances />} />
-                      <Route path="/events" element={<WebhookEvents />} />
                       <Route path="/alerts" element={<Alerts />} />
                       <Route path="/billing" element={<Billing />} />
                       <Route path="/settings" element={<Settings />} />
@@ -162,6 +160,8 @@ const App = () => {
                       <Route path="provedores" element={<AdminPlaceholder title="Provedores" description="Monitoramento e configuração de gateways externos." />} />
                       <Route path="relatorios" element={<AdminPlaceholder title="Relatórios" description="Extração de dados e BI administrativo." />} />
                       <Route path="api" element={<ApiDocs />} />
+                      <Route path="logs" element={<Logs />} />
+                      <Route path="events" element={<WebhookEvents />} />
                       <Route path="dicionario" element={<AdminEventDictionary />} />
                       <Route path="configuracoes" element={<AdminPlaceholder title="Configurações" description="Ajustes globais da plataforma Qualify." />} />
                     </Route>
