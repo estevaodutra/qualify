@@ -144,6 +144,43 @@ export function useToggleCompanyActive() {
   });
 }
 
+export function useCreateCompany() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ name, owner_id }: { name: string; owner_id: string }) => {
+      const sb = supabase as any;
+      const { data: company, error: companyError } = await sb
+        .from("companies")
+        .insert({ name, owner_id })
+        .select()
+        .single();
+      
+      if (companyError) throw companyError;
+
+      // Create initial wallet
+      const { error: walletError } = await sb
+        .from("wallets")
+        .insert({ company_id: company.id, balance: 0 });
+      
+      if (walletError) throw walletError;
+
+      // Add owner as admin member
+      const { error: memberError } = await sb
+        .from("company_members")
+        .insert({ company_id: company.id, user_id: owner_id, role: "admin" });
+      
+      if (memberError) throw memberError;
+
+      return company;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "companies"] });
+      toast({ title: "Empresa criada com sucesso" });
+    },
+    onError: (e: any) => toast({ title: "Erro ao criar empresa", description: e.message, variant: "destructive" }),
+  });
+}
+
 export function useCreditManual() {
   const qc = useQueryClient();
   return useMutation({
@@ -232,6 +269,42 @@ export function useToggleSuperadmin() {
     onSuccess: (_, v) => {
       qc.invalidateQueries({ queryKey: ["admin", "users"] });
       toast({ title: v.make ? "Promovido a superadmin" : "Removido de superadmin" });
+    },
+    onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
+}
+
+export function useAddCompanyMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ company_id, user_id, role }: { company_id: string; user_id: string; role: string }) => {
+      const { error } = await (supabase as any)
+        .from("company_members")
+        .insert({ company_id, user_id, role });
+      if (error) throw error;
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ["admin", "company", vars.company_id] });
+      toast({ title: "Membro adicionado" });
+    },
+    onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
+}
+
+export function useRemoveCompanyMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ company_id, user_id }: { company_id: string; user_id: string }) => {
+      const { error } = await (supabase as any)
+        .from("company_members")
+        .delete()
+        .eq("company_id", company_id)
+        .eq("user_id", user_id);
+      if (error) throw error;
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ["admin", "company", vars.company_id] });
+      toast({ title: "Membro removido" });
     },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });

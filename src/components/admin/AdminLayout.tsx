@@ -18,6 +18,7 @@ import {
   Activity,
   Zap,
 } from "lucide-react";
+import { ImpersonationBanner } from "./ImpersonationBanner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
@@ -158,6 +159,7 @@ export function AdminLayout({ children }: { children?: ReactNode }) {
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
+        <ImpersonationBanner />
         <header className="h-14 sticky top-0 z-40 border-b bg-background/95 backdrop-blur flex items-center justify-between px-6">
           <Badge variant="destructive" className="gap-1.5">
             <Shield className="h-3 w-3" />

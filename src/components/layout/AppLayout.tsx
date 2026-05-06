@@ -3,6 +3,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { AppHeader } from "./AppHeader";
 import { InstanceStatusBanner } from "./InstanceStatusBanner";
+import { ImpersonationBanner } from "../admin/ImpersonationBanner";
 import { useCallQueue } from "@/hooks/useCallQueue";
 
 interface AppLayoutProps {
@@ -21,6 +22,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         <AppSidebar />
 
         <div className="flex flex-1 flex-col relative z-10 min-w-0">
+          <ImpersonationBanner />
           <AppHeader />
           <InstanceStatusBanner />
           <main className="flex-1 overflow-auto p-5 md:p-8 scrollbar-thin">

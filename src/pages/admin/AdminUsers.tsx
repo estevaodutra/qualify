@@ -8,11 +8,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Search, Shield, ShieldOff } from "lucide-react";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Plus } from "lucide-react";
+import { CreateUserDialog } from "@/components/admin/CreateUserDialog";
 
 export default function AdminUsers() {
   const { data, isLoading } = useAdminUsers();
   const toggle = useToggleSuperadmin();
   const [search, setSearch] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
 
   const filtered = (data || []).filter((u) =>
     !search ||
@@ -22,9 +25,14 @@ export default function AdminUsers() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Usuários</h1>
-        <p className="text-muted-foreground">Todos os usuários da plataforma</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Usuários</h1>
+          <p className="text-muted-foreground">Todos os usuários da plataforma</p>
+        </div>
+        <Button onClick={() => setIsCreating(true)}>
+          <Plus className="mr-2 h-4 w-4" /> Novo Usuário
+        </Button>
       </div>
 
       <Card className="p-4">
@@ -77,6 +85,11 @@ export default function AdminUsers() {
           </Table>
         )}
       </Card>
+
+      <CreateUserDialog
+        open={isCreating}
+        onClose={() => setIsCreating(false)}
+      />
     </div>
   );
 }

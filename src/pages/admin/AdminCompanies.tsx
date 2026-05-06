@@ -15,7 +15,9 @@ import { MoreHorizontal, Plus, Search, Eye, Power, PowerOff } from "lucide-react
 import { format } from "date-fns";
 import { CompanyDetailsDialog } from "@/components/admin/CompanyDetailsDialog";
 import { AddBalanceManualDialog } from "@/components/admin/AddBalanceManualDialog";
+import { CreateCompanyDialog } from "@/components/admin/CreateCompanyDialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useCompany } from "@/contexts/CompanyContext";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -27,6 +29,8 @@ export default function AdminCompanies() {
   const [balanceFilter, setBalanceFilter] = useState("all");
   const [details, setDetails] = useState<AdminCompany | null>(null);
   const [credit, setCredit] = useState<AdminCompany | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const { impersonateCompany } = useCompany();
 
   const filtered = (data || []).filter((c) => {
     if (search && !c.name.toLowerCase().includes(search.toLowerCase()) &&
@@ -46,6 +50,9 @@ export default function AdminCompanies() {
           <h1 className="text-3xl font-bold tracking-tight">Empresas</h1>
           <p className="text-muted-foreground">Gerencie todas as empresas da plataforma</p>
         </div>
+        <Button onClick={() => setIsCreating(true)}>
+          <Plus className="mr-2 h-4 w-4" /> Nova Empresa
+        </Button>
       </div>
 
       <Card className="p-4">
@@ -131,6 +138,9 @@ export default function AdminCompanies() {
                           {c.is_active ? <PowerOff className="mr-2 h-4 w-4" /> : <Power className="mr-2 h-4 w-4" />}
                           {c.is_active ? "Desativar" : "Ativar"}
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => { impersonateCompany(c.id); window.location.href = "/"; }}>
+                          <Eye className="mr-2 h-4 w-4" /> Personificar
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -152,6 +162,11 @@ export default function AdminCompanies() {
         company={credit}
         open={!!credit}
         onClose={() => setCredit(null)}
+      />
+
+      <CreateCompanyDialog
+        open={isCreating}
+        onClose={() => setIsCreating(false)}
       />
     </div>
   );

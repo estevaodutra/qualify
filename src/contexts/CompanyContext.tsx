@@ -18,6 +18,8 @@ interface CompanyContextType {
   isLoading: boolean;
   isAdmin: boolean;
   refetch: () => void;
+  impersonateCompany: (id: string | null) => void;
+  isImpersonating: boolean;
 }
 
 const CompanyContext = createContext<CompanyContextType | undefined>(undefined);
@@ -30,6 +32,9 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [activeCompanyId, setActiveCompanyId] = useState<string | null>(
     () => localStorage.getItem(STORAGE_KEY)
+  );
+  const [impersonatedCompanyId, setImpersonatedCompanyId] = useState<string | null>(
+    () => localStorage.getItem("dispatch_impersonated_company")
   );
   const [isLoading, setIsLoading] = useState(true);
 
@@ -99,19 +104,32 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEY, id);
   };
 
-  const activeCompany = companies.find((c) => c.id === activeCompanyId) || null;
+  const impersonateCompany = (id: string | null) => {
+    if (!isSuperadmin && id !== null) return;
+    setImpersonatedCompanyId(id);
+    if (id) {
+      localStorage.setItem("dispatch_impersonated_company", id);
+    } else {
+      localStorage.removeItem("dispatch_impersonated_company");
+    }
+  };
+
+  const effectiveCompanyId = (isSuperadmin && impersonatedCompanyId) || activeCompanyId;
+  const activeCompany = companies.find((c) => c.id === effectiveCompanyId) || null;
   const isAdmin = activeCompany?.role === "admin" || isSuperadmin;
 
   return (
     <CompanyContext.Provider
       value={{
         companies,
-        activeCompanyId,
+        activeCompanyId: effectiveCompanyId,
         activeCompany,
         setActiveCompany,
         isLoading,
         isAdmin,
         refetch: fetchCompanies,
+        impersonateCompany,
+        isImpersonating: !!(isSuperadmin && impersonatedCompanyId),
       }}
     >
       {children}
