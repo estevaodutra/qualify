@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateCompany, useAdminUsers } from "@/hooks/useAdmin";
+import { toast } from "@/hooks/use-toast";
 
 interface CreateCompanyDialogProps {
   open: boolean;
@@ -20,6 +21,17 @@ export function CreateCompanyDialog({ open, onClose }: CreateCompanyDialogProps)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !ownerId) return;
+
+    // Check if user already has a company
+    const selectedUser = users?.find(u => u.id === ownerId);
+    if (selectedUser && selectedUser.company_count > 0) {
+      toast({
+        title: "Usuário já possui empresa",
+        description: "Este usuário já está vinculado a uma organização. O sistema agora permite apenas uma empresa por usuário.",
+        variant: "destructive"
+      });
+      return;
+    }
 
     create.mutate(
       { name, owner_id: ownerId },

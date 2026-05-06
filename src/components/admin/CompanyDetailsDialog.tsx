@@ -7,6 +7,7 @@ import { format } from "date-fns";
 import { Plus, Trash2, UserPlus, X } from "lucide-react";
 import { useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "@/hooks/use-toast";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -24,6 +25,18 @@ export function CompanyDetailsDialog({
 
   const handleAddMember = async () => {
     if (!companyId || !newMemberId) return;
+
+    // Check if user already has a company
+    const selectedUser = allUsers?.find(u => u.id === newMemberId);
+    if (selectedUser && selectedUser.company_count > 0) {
+      toast({
+        title: "Usuário já possui empresa",
+        description: "Este usuário já está vinculado a uma organização. O sistema permite apenas uma empresa por usuário.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     addMember.mutate(
       { company_id: companyId, user_id: newMemberId, role: newMemberRole },
       {
