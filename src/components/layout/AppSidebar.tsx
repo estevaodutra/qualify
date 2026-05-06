@@ -73,14 +73,20 @@ export function AppSidebar() {
   const isCampaignsRoute = location.pathname.startsWith("/campaigns");
   const [campaignsOpen, setCampaignsOpen] = useState(isCampaignsRoute);
 
-  const isWalletRoute = location.pathname.startsWith("/carteira");
-  const [walletOpen, setWalletOpen] = useState(isWalletRoute);
+  const isSettingsRoute = location.pathname.startsWith("/settings") || 
+                          location.pathname.startsWith("/carteira") || 
+                          location.pathname.startsWith("/billing") || 
+                          location.pathname.startsWith("/configuracoes/membros");
+                          
+  const [settingsOpen, setSettingsOpen] = useState(() => {
+    const saved = localStorage.getItem("sidebar_settings_open");
+    return saved === null ? isSettingsRoute : saved === "true";
+  });
 
-  const walletSubItems = [
-    { title: "Saldo e Recarga", url: "/carteira", icon: Wallet, end: true },
-    { title: "Extrato", url: "/carteira/extrato", icon: Receipt, end: false },
-    { title: "Configurações", url: "/carteira/configuracoes", icon: SlidersHorizontal, end: false },
-  ];
+  const handleSettingsOpenChange = (open: boolean) => {
+    setSettingsOpen(open);
+    localStorage.setItem("sidebar_settings_open", String(open));
+  };
 
   const mainNavItems = [
     { title: t("nav.dashboard"), url: "/", icon: LayoutDashboard },
@@ -88,7 +94,12 @@ export function AppSidebar() {
     { title: t("nav.leads") || "Leads", url: "/leads", icon: Users },
     { title: "Agendamentos", url: "/agendamentos/calendarios", icon: CalendarDays },
     { title: t("nav.phoneNumbers"), url: "/numbers", icon: Phone },
-    { title: t("nav.logs") || "Logs", url: "/logs", icon: FileText },
+  ];
+
+  const systemNavItems = [
+    { title: "Connections", url: "/instances", icon: MessageSquare },
+    { title: t("nav.alerts"), url: "/alerts", icon: Bell },
+    { title: "</> API", url: "/api-docs", icon: Code2 },
   ];
 
   const campaignSubItems: Record<string, Array<{ title: string; url: string; icon: any; comingSoon?: boolean }>> = {
@@ -103,14 +114,10 @@ export function AppSidebar() {
     ],
   };
 
-  const systemNavItems = [
-    { title: t("nav.instances"), url: "/instances", icon: MessageSquare },
-    { title: t("nav.webhookEvents") || "Eventos", url: "/events", icon: Radio },
-    { title: t("nav.alerts"), url: "/alerts", icon: Bell },
+  const settingsSubItems = [
+    { title: "Carteira", url: "/carteira", icon: Wallet },
     { title: t("nav.billing"), url: "/billing", icon: CreditCard },
     ...(isAdmin ? [{ title: "Membros", url: "/configuracoes/membros", icon: Users }] : []),
-    { title: t("nav.settings"), url: "/settings", icon: Settings },
-    { title: t("nav.apiDocs"), url: "/api-docs", icon: Code2 },
   ];
 
   const navLinkClasses = cn(
@@ -180,7 +187,7 @@ export function AppSidebar() {
         )}
       </SidebarHeader>
 
-      <SidebarContent className={cn("py-4", isCollapsed ? "px-1" : "px-4")}>
+      <SidebarContent className={cn("py-4 overflow-visible", isCollapsed ? "px-1" : "px-4")}>
         <SidebarGroup className="pb-6">
           {!isCollapsed && (
             <div className="px-4 pb-3 text-[10px] font-black uppercase tracking-[0.25em] text-white/30">Principal</div>
@@ -315,79 +322,6 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup className="pb-4">
-          {!isCollapsed && (
-            <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-white/30">Finanças</div>
-          )}
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {isCollapsed ? (
-                <SidebarMenuItem>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <SidebarMenuButton
-                        tooltip="Carteira"
-                        className={cn(navLinkClasses, isWalletRoute && activeClasses)}
-                      >
-                        <Wallet className="h-[18px] w-[18px] flex-shrink-0" />
-                      </SidebarMenuButton>
-                    </PopoverTrigger>
-                    <PopoverContent side="right" align="start" className="w-52 p-1.5 rounded-xl shadow-2xl border-white/10 bg-[#0B0E14] backdrop-blur-xl">
-                      {walletSubItems.map((item) => (
-                        <NavLink
-                          key={item.url}
-                          to={item.url}
-                          end={item.end}
-                          className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-white/70 hover:bg-white/10 hover:text-white transition-all"
-                          activeClassName="bg-white/10 text-white font-semibold"
-                        >
-                          <item.icon className="h-4 w-4" />
-                          <span>{item.title}</span>
-                        </NavLink>
-                      ))}
-                    </PopoverContent>
-                  </Popover>
-                </SidebarMenuItem>
-              ) : (
-                <Collapsible
-                  open={walletOpen}
-                  onOpenChange={setWalletOpen}
-                  className="group/collapsible"
-                >
-                  <SidebarMenuItem>
-                    <CollapsibleTrigger asChild>
-                      <SidebarMenuButton
-                        tooltip="Carteira"
-                        className={cn(navLinkClasses, isWalletRoute && !walletOpen && activeClasses)}
-                      >
-                        <Wallet className="h-[18px] w-[18px] flex-shrink-0" />
-                        <span className="flex-1 text-sm">Carteira</span>
-                        <ChevronRight className={cn("h-3.5 w-3.5 transition-transform duration-300 text-white/30", walletOpen && "rotate-90")} />
-                      </SidebarMenuButton>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="animate-fade-in pl-3 pr-1 pt-1">
-                      <div className="space-y-1 border-l border-white/10 ml-5 pl-2 my-1">
-                        {walletSubItems.map((item) => (
-                          <NavLink
-                            key={item.url}
-                            to={item.url}
-                            end={item.end}
-                            className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs text-white/60 hover:bg-white/10 hover:text-white transition-all"
-                            activeClassName="text-white font-bold"
-                          >
-                            <item.icon className="h-3.5 w-3.5" />
-                            <span>{item.title}</span>
-                          </NavLink>
-                        ))}
-                      </div>
-                    </CollapsibleContent>
-                  </SidebarMenuItem>
-                </Collapsible>
-              )}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
         <Separator className="mx-5 my-4 bg-white/5" />
 
         <SidebarGroup>
@@ -405,11 +339,81 @@ export function AppSidebar() {
                       activeClassName={activeClasses}
                     >
                       <item.icon className="h-[17px] w-[17px] flex-shrink-0" />
-                      {!isCollapsed && <span className="text-[13px]">{item.title}</span>}
+                      {!isCollapsed && <span className="text-[13px] font-bold tracking-tight">{item.title}</span>}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <Separator className="mx-5 my-4 bg-white/5" />
+
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {isCollapsed ? (
+                <SidebarMenuItem>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <SidebarMenuButton
+                        tooltip="Settings"
+                        className={cn(navLinkClasses, isSettingsRoute && activeClasses)}
+                      >
+                        <Settings className="h-[18px] w-[18px] flex-shrink-0" />
+                      </SidebarMenuButton>
+                    </PopoverTrigger>
+                    <PopoverContent side="right" align="start" className="w-52 p-1.5 rounded-xl shadow-2xl border-white/10 bg-[#0B0E14] backdrop-blur-xl">
+                      {settingsSubItems.map((item) => (
+                        <NavLink
+                          key={item.url}
+                          to={item.url}
+                          className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-white/70 hover:bg-white/10 hover:text-white transition-all"
+                          activeClassName="bg-white/10 text-white font-semibold"
+                        >
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                        </NavLink>
+                      ))}
+                    </PopoverContent>
+                  </Popover>
+                </SidebarMenuItem>
+              ) : (
+                <Collapsible
+                  open={settingsOpen}
+                  onOpenChange={handleSettingsOpenChange}
+                  className="group/collapsible"
+                >
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton
+                        tooltip="Settings"
+                        className={cn(navLinkClasses, isSettingsRoute && !settingsOpen && activeClasses)}
+                      >
+                        <Settings className="h-[18px] w-[18px] flex-shrink-0" />
+                        <span className="flex-1 text-sm font-bold">Settings</span>
+                        <ChevronRight className={cn("h-3.5 w-3.5 transition-transform duration-300 text-white/30", settingsOpen && "rotate-90")} />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="animate-fade-in pl-3 pr-1 pt-1">
+                      <div className="space-y-1 border-l border-white/10 ml-5 pl-2 my-1">
+                        {settingsSubItems.map((item) => (
+                          <NavLink
+                            key={item.url}
+                            to={item.url}
+                            className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs text-white/60 hover:bg-white/10 hover:text-white transition-all"
+                            activeClassName="text-white font-bold"
+                          >
+                            <item.icon className="h-3.5 w-3.5" />
+                            <span>{item.title}</span>
+                          </NavLink>
+                        ))}
+                      </div>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
