@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Radio, RefreshCw, Download, ChevronLeft, ChevronRight, Search, Copy, Eye, RotateCw, Ban, Pencil, Check, X } from "lucide-react";
+import { Radio, RefreshCw, Download, ChevronLeft, ChevronRight, Search, Copy, Eye, RotateCw, Ban, Pencil, Check, X, Zap } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
