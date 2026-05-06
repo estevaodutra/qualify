@@ -409,9 +409,6 @@ export function classifyZApiEvent(rawEvent: Record<string, unknown>): Classifica
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // FALLBACK: Unknown
-  // ─────────────────────────────────────────────────────────────────────────────
   return {
     eventType: "unknown",
     eventSubtype: eventName || null,

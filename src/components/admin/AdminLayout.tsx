@@ -13,6 +13,7 @@ import {
   ArrowLeft,
   LogOut,
   ChevronDown,
+  BookOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +47,7 @@ const otherItems = [
   { title: "Preços", url: "/admin/precos", icon: Tag },
   { title: "Provedores", url: "/admin/provedores", icon: Phone },
   { title: "Relatórios", url: "/admin/relatorios", icon: FileBarChart },
+  { title: "Dicionário", url: "/admin/dicionario", icon: BookOpen },
   { title: "Configurações", url: "/admin/configuracoes", icon: Settings },
 ];
 

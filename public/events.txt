@@ -1,0 +1,62 @@
+Aqui está o mapeamento dos eventos reconhecidos pela plataforma (fonte: `supabase/functions/_shared/event-classifier.ts` + categorização de UI em `src/hooks/useWebhookEvents.ts`).
+
+Categorias de eventos
+
+Mensagens
+- `text_message` — texto / extendedText / conversation
+- `image_message` — body.image, imageUrl, mimeType image/*
+- `video_message` — body.video, videoUrl, mimeType video/*
+- `audio_message` — body.audio, audioUrl, ptt, mimeType audio/*
+- `document_message` — documento, documentWithCaption
+- `sticker_message`
+- `location_message`
+- `contact_message` — vcard / contactMessage
+- `message_status` — ACK (sent/delivered/read)
+- `message_reaction` — reactionMessage
+- `message_revoked` — message.revoked
+- `message_received`, `message_sent`, `message_read`, `read_by_me`, `played`
+
+Interativos
+- `button_response` — buttonsResponseMessage
+- `list_response` — listResponseMessage
+- `poll_message` — criação de enquete (pollCreationMessage)
+- `poll_response` — voto em enquete (regra de prioridade máxima: `body.pollVote`)
+- `reaction`
+
+Grupos
+- `group_join` — GROUP_PARTICIPANT_ADD / INVITE / group.participant.add
+- `group_leave` — GROUP_PARTICIPANT_REMOVE / LEAVE
+- `group_promote` — GROUP_PARTICIPANT_PROMOTE
+- `group_demote` — GROUP_PARTICIPANT_DEMOTE
+- `group_update` — GROUP_CREATE / SUBJECT / DESCRIPTION / ICON
+
+Conexão
+- `connection_status` — connection.update / connected / disconnected
+- `qrcode_update` — qrcode.updated
+- `chat_presence` — on-chat-presence
+
+Chamadas
+- `call_received` — call.received
+
+Pendentes
+- `unknown` — payload sem regra correspondente (fica em "pending" para reclassificação manual)
+
+Origem por provedor
+
+Eventos Z-API são classificados via 3 fontes no `classifyZApiEvent`:
+1. `ZAPI_EVENT_MAP` — nomes diretos (novo formato `poll.vote`, `message.ack`, `group.participant.*`, `connection.update`, etc., e legacy `on-message-send`, `ReceivedCallback`, etc.)
+2. `MESSAGE_TYPE_MAP` — tipos de mensagem (camelCase como `imageMessage` e lowercase como `ptt`, `vcard`)
+3. `NOTIFICATION_MAP` — notificações de grupo (`GROUP_*`)
+
+Regras especiais relevantes:
+- Poll vote tem prioridade máxima (qualquer evento com `body.pollVote` vira `poll_response`).
+- `body.photo` é foto de perfil, não imagem — é ignorado na regra de imagem.
+- Direção (`inbound`/`outbound`/`system`) é detectada via `detectDirection`.
+
+Quer que eu liste também as regras detalhadas de detecção (ordem, condições) ou abra o classificador completo?
+
+Documentar mapeamento
+Endpoint de eventos
+Console de webhooks
+Ferramenta de reclassificação
+Testes do classificador

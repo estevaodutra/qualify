@@ -29,6 +29,7 @@ import {
 } from "@/hooks/useWebhookEvents";
 import { useInstances } from "@/hooks/useInstances";
 import { cn } from "@/lib/utils";
+import { EventActionRules } from "@/components/webhook/EventActionRules";
 
 const EVENT_TYPES = [
   "text_message", "image_message", "video_message", "audio_message",
@@ -364,6 +365,10 @@ export default function WebhookEvents() {
               </Badge>
             ) : null}
           </TabsTrigger>
+          <TabsTrigger value="rules">
+            <Zap className="mr-2 h-4 w-4" />
+            Regras
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value={activeTab} className="space-y-4">
@@ -452,6 +457,10 @@ export default function WebhookEvents() {
               </div>
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="rules">
+          <EventActionRules />
         </TabsContent>
       </Tabs>
 

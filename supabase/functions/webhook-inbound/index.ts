@@ -568,6 +568,46 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ==========================================
+    // PROCESS CUSTOM EVENT ACTION RULES
+    // ==========================================
+    if (instance?.user_id) {
+      try {
+        const { data: rules } = await supabase
+          .from("event_action_rules")
+          .select("*")
+          .eq("user_id", instance.user_id)
+          .eq("event_type", classification.eventType)
+          .eq("is_active", true);
+
+        if (rules && rules.length > 0) {
+          console.log(`[webhook-inbound] Found ${rules.length} custom rules for event ${classification.eventType}`);
+          for (const rule of rules) {
+            // Trigger action
+            console.log(`[webhook-inbound] Triggering action ${rule.action_type} for rule ${rule.name}`);
+            
+            if (rule.action_type === "webhook") {
+              const config = rule.action_config as any;
+              if (config.url) {
+                fetch(config.url, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    rule_name: rule.name,
+                    event_type: classification.eventType,
+                    context: context,
+                    payload: rawEvent
+                  })
+                }).catch(err => console.error(`[webhook-inbound] Rule webhook error:`, err));
+              }
+            }
+          }
+        }
+      } catch (ruleError) {
+        console.error("[webhook-inbound] Error processing custom rules:", ruleError);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,

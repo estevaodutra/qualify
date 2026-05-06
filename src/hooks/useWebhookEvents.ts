@@ -341,3 +341,126 @@ export function useReclassifyAllEvents() {
     },
   });
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// REGRAS DE AÇÃO DE EVENTOS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface EventActionRule {
+  id: string;
+  userId: string;
+  name: string;
+  eventType: string;
+  conditions: Record<string, any>;
+  actionType: string;
+  actionConfig: Record<string, any>;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export function useEventActionRules() {
+  const { user } = useAuth();
+  
+  return useQuery({
+    queryKey: ["event-action-rules"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("event_action_rules")
+        .select("*")
+        .order("created_at", { ascending: false });
+      
+      if (error) throw error;
+      
+      return (data || []).map((row) => ({
+        id: row.id,
+        userId: row.user_id,
+        name: row.name,
+        eventType: row.event_type,
+        conditions: row.conditions,
+        actionType: row.action_type,
+        actionConfig: row.action_config,
+        isActive: row.is_active,
+        createdAt: row.created_at,
+      })) as EventActionRule[];
+    },
+    enabled: !!user,
+  });
+}
+
+export function useCreateEventActionRule() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  
+  return useMutation({
+    mutationFn: async (rule: Omit<EventActionRule, "id" | "userId" | "createdAt">) => {
+      if (!user) throw new Error("User not authenticated");
+      
+      const { data, error } = await supabase
+        .from("event_action_rules")
+        .insert({
+          user_id: user.id,
+          name: rule.name,
+          event_type: rule.eventType,
+          conditions: rule.conditions,
+          action_type: rule.actionType,
+          action_config: rule.actionConfig,
+          is_active: rule.isActive,
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["event-action-rules"] });
+    },
+  });
+}
+
+export function useUpdateEventActionRule() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: Partial<EventActionRule> & { id: string }) => {
+      const { data, error } = await supabase
+        .from("event_action_rules")
+        .update({
+          ...(updates.name && { name: updates.name }),
+          ...(updates.eventType && { event_type: updates.eventType }),
+          ...(updates.conditions && { conditions: updates.conditions }),
+          ...(updates.actionType && { action_type: updates.actionType }),
+          ...(updates.actionConfig && { action_config: updates.actionConfig }),
+          ...(updates.isActive !== undefined && { is_active: updates.isActive }),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["event-action-rules"] });
+    },
+  });
+}
+
+export function useDeleteEventActionRule() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("event_action_rules")
+        .delete()
+        .eq("id", id);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["event-action-rules"] });
+    },
+  });
+}
