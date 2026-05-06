@@ -36,7 +36,7 @@ import { cn } from "@/lib/utils";
 const EVENT_TYPES = [
   "text_message", "image_message", "video_message", "audio_message",
   "document_message", "sticker_message", "location_message", "contact_message",
-  "message_status", "message_reaction", "message_revoked", "poll_response",
+  "message_status", "message_delivered", "message_reaction", "message_revoked", "poll_response",
   "group_join", "group_leave", "connection_status", "call_received", "unknown"
 ];
 

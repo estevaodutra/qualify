@@ -35,6 +35,7 @@ const EVENT_TYPES = [
   "text_message", "image_message", "video_message", "audio_message",
   "document_message", "sticker_message", "location_message", "contact_message",
   "message_status", "message_reaction", "message_revoked", "message_received", "message_read", "read_by_me",
+  "message_delivered",
   "button_response", "list_response", "poll_response",
   "group_join", "group_leave", "group_promote", "group_demote", "group_update",
   "connection_status", "qrcode_update",

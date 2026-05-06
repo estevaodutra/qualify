@@ -58,6 +58,8 @@ const ZAPI_EVENT_MAP: Record<string, string> = {
   "on-chat-presence": "chat_presence",
   "on-participant-changed": "group_update",
   "ReceivedCallback": "text_message",
+  "DeliveryCallback": "message_delivered",
+  "ReadCallback": "message_read",
 };
 
 // Message type mapping (both camelCase and lowercase)
@@ -92,6 +94,8 @@ const MESSAGE_TYPE_MAP: Record<string, string> = {
   contact: "contact_message",
   poll_creation: "poll_message",
   poll_response: "poll_response",
+  deliverycallback: "message_delivered",
+  readcallback: "message_read",
 };
 
 // Group notification mapping
