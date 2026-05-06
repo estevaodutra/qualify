@@ -131,6 +131,11 @@ export function AppSidebar() {
 
   const activeClasses = "bg-white/10 text-white font-bold sidebar-active-item shadow-sm";
 
+  const subNavLinkClasses = cn(
+    "flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-xs text-white/60 hover:bg-white/10 hover:text-white transition-all",
+    isCollapsed && "justify-center px-0"
+  );
+
   return <Sidebar
       collapsible="icon"
       className="border-r border-white/5 bg-[#0B0E14] backdrop-blur-3xl"
@@ -190,7 +195,7 @@ export function AppSidebar() {
         )}
       </SidebarHeader>
 
-      <SidebarContent className={cn("py-4 overflow-visible", isCollapsed ? "px-1" : "px-4")}>
+      <SidebarContent className={cn("py-4 overflow-y-auto scrollbar-hide", isCollapsed ? "px-1" : "px-4")}>
         <SidebarGroup className="pb-6">
           {!isCollapsed && (
             <div className="px-4 pb-3 text-[10px] font-black uppercase tracking-[0.25em] text-white/30">Principal</div>
@@ -289,12 +294,11 @@ export function AppSidebar() {
                     </CollapsibleTrigger>
                     <CollapsibleContent className="animate-fade-in pl-3 pr-1 pt-1">
                       <div className="space-y-1 border-l border-white/10 ml-5 pl-2 my-1">
-                        <div className="flex items-center gap-2 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.1em] text-white/20">WhatsApp</div>
                         {campaignSubItems.whatsapp.map((item) => (
                           <NavLink
                             key={item.url}
                             to={item.url}
-                            className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs text-white/60 hover:bg-white/10 hover:text-white transition-all"
+                            className={subNavLinkClasses}
                             activeClassName="text-white font-bold"
                           >
                             <item.icon className="h-3.5 w-3.5" />
@@ -307,7 +311,7 @@ export function AppSidebar() {
                             key={item.url}
                             to={item.url}
                             className={cn(
-                              "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs text-white/60 hover:bg-white/10 hover:text-white transition-all",
+                              subNavLinkClasses,
                               item.comingSoon && "opacity-60"
                             )}
                             activeClassName="text-white font-bold"
@@ -405,7 +409,7 @@ export function AppSidebar() {
                           <NavLink
                             key={item.url}
                             to={item.url}
-                            className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs text-white/60 hover:bg-white/10 hover:text-white transition-all"
+                            className={subNavLinkClasses}
                             activeClassName="text-white font-bold"
                           >
                             <item.icon className="h-3.5 w-3.5" />
