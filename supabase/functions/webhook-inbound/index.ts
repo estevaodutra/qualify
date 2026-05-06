@@ -430,6 +430,27 @@ Deno.serve(async (req) => {
     }
 
     // ==========================================
+    // AUTO-ALERT FOR UNKNOWN EVENTS
+    // ==========================================
+    if (classification.eventType === "unknown" && instance?.user_id) {
+      try {
+        await supabase
+          .from("alerts")
+          .insert({
+            user_id: instance.user_id,
+            severity: "warning",
+            title: "Evento não identificado",
+            description: `Recebido payload do tipo '${classification.eventSubtype || "desconhecido"}' sem mapeamento técnico.`,
+            entity: "webhook",
+            read: false
+          });
+      } catch (alertError) {
+        console.error("[webhook-inbound] Error creating alert for unknown event:", alertError);
+      }
+    }
+
+
+    // ==========================================
     // AUTO-ACCUMULATE LEADS for Group Execution Lists
     // ==========================================
     if (context.chatJid && (context.senderPhone || context.senderLid)) {
