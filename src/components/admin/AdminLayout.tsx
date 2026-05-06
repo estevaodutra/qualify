@@ -47,7 +47,8 @@ const otherItems = [
   { title: "Preços", url: "/admin/precos", icon: Tag },
   { title: "Provedores", url: "/admin/provedores", icon: Phone },
   { title: "Relatórios", url: "/admin/relatorios", icon: FileBarChart },
-  { title: "Dicionário", url: "/admin/dicionario", icon: BookOpen },
+  { title: "API Docs", url: "/admin/api", icon: BookOpen },
+  { title: "Dicionário", url: "/admin/dicionario", icon: Code2 },
   { title: "Configurações", url: "/admin/configuracoes", icon: Settings },
 ];
 

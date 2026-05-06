@@ -100,7 +100,7 @@ const App = () => {
                       <Route path="/settings" element={<Settings />} />
                       <Route path="/settings/profile" element={<Settings />} />
                       <Route path="/settings/account" element={<Settings />} />
-                      <Route path="/api-docs" element={<ApiDocs />} />
+
                       
                       {/* Wallet routes */}
                       <Route path="/carteira" element={<WalletPage />} />
@@ -161,6 +161,7 @@ const App = () => {
                       <Route path="precos" element={<AdminPlaceholder title="Tabela de Preços" description="Configuração de custos por serviço e provedor." />} />
                       <Route path="provedores" element={<AdminPlaceholder title="Provedores" description="Monitoramento e configuração de gateways externos." />} />
                       <Route path="relatorios" element={<AdminPlaceholder title="Relatórios" description="Extração de dados e BI administrativo." />} />
+                      <Route path="api" element={<ApiDocs />} />
                       <Route path="dicionario" element={<AdminEventDictionary />} />
                       <Route path="configuracoes" element={<AdminPlaceholder title="Configurações" description="Ajustes globais da plataforma Qualify." />} />
                     </Route>

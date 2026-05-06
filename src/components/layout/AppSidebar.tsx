@@ -100,7 +100,6 @@ export function AppSidebar() {
   const systemNavItems = [
     { title: "Connections", url: "/instances", icon: MessageSquare },
     { title: t("nav.alerts"), url: "/alerts", icon: Bell },
-    { title: "API", url: "/api-docs", icon: Code2 },
   ];
 
   const campaignSubItems: Record<string, Array<{ title: string; url: string; icon: any; comingSoon?: boolean }>> = {
