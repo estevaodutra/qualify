@@ -52,6 +52,7 @@ import AdminCompanies from "./pages/admin/AdminCompanies";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminTransactions from "./pages/admin/AdminTransactions";
 import AdminEventDictionary from "./pages/admin/AdminEventDictionary";
+import AdminPlaceholder from "./components/admin/AdminPlaceholder";
 
 const App = () => {
   const [queryClient] = useState(() => new QueryClient());
@@ -155,7 +156,13 @@ const App = () => {
                       <Route path="empresas" element={<AdminCompanies />} />
                       <Route path="usuarios" element={<AdminUsers />} />
                       <Route path="financeiro/transacoes" element={<AdminTransactions />} />
+                      <Route path="financeiro/recargas" element={<AdminPlaceholder title="Recargas" description="Gerenciamento de recargas e faturas." />} />
+                      <Route path="financeiro/consumo" element={<AdminPlaceholder title="Consumo" description="Análise detalhada de consumo por empresa." />} />
+                      <Route path="precos" element={<AdminPlaceholder title="Tabela de Preços" description="Configuração de custos por serviço e provedor." />} />
+                      <Route path="provedores" element={<AdminPlaceholder title="Provedores" description="Monitoramento e configuração de gateways externos." />} />
+                      <Route path="relatorios" element={<AdminPlaceholder title="Relatórios" description="Extração de dados e BI administrativo." />} />
                       <Route path="dicionario" element={<AdminEventDictionary />} />
+                      <Route path="configuracoes" element={<AdminPlaceholder title="Configurações" description="Ajustes globais da plataforma Qualify." />} />
                     </Route>
 
                     <Route path="*" element={<NotFound />} />
