@@ -4,6 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
 
 export interface Alert {
   id: string;
@@ -42,14 +43,23 @@ export function useAlerts() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { activeCompanyId } = useCompany();
 
   const { data: alerts = [], isLoading } = useQuery({
-    queryKey: ["alerts"],
+    queryKey: ["alerts", activeCompanyId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("alerts")
         .select("*")
         .order("created_at", { ascending: false });
+
+      if (activeCompanyId) {
+        query = query.eq("company_id", activeCompanyId);
+      } else {
+        query = query.eq("user_id", user?.id);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 

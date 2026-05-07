@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
 
 // Database instance type (matches Supabase schema)
 interface DbInstance {
@@ -142,6 +143,7 @@ export function useInstances() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { activeCompanyId } = useCompany();
 
   // Fetch all instances
   const {
@@ -150,12 +152,20 @@ export function useInstances() {
     error,
     refetch,
   } = useQuery({
-    queryKey: ["instances"],
+    queryKey: ["instances", activeCompanyId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("instances")
         .select("*")
         .order("created_at", { ascending: false });
+
+      if (activeCompanyId) {
+        query = query.eq("company_id", activeCompanyId);
+      } else {
+        query = query.eq("user_id", user?.id);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error("Error fetching instances:", error);
@@ -185,6 +195,7 @@ export function useInstances() {
           phone: newInstance.phone,
           status: "disconnected",
           user_id: user.id,
+          company_id: activeCompanyId,
           instance_function: newInstance.instance_function || "dispatcher",
         })
         .select()

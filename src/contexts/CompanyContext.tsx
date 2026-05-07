@@ -46,35 +46,59 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      // Get all company memberships for the user
-      const { data: memberships, error: memError } = await (supabase as any)
-        .from("company_members")
-        .select("company_id, role")
-        .eq("user_id", user.id)
-        .eq("is_active", true);
+      let companyRows: any[] = [];
+      let roleMap = new Map<string, string>();
 
-      if (memError) throw memError;
-      if (!memberships || memberships.length === 0) {
-        setCompanies([]);
-        setIsLoading(false);
-        return;
+      if (isSuperadmin) {
+        // Superadmin fetches ALL companies
+        const { data: allCompanies, error: compError } = await (supabase as any)
+          .from("companies")
+          .select("id, name, owner_id")
+          .order("name");
+
+        if (compError) throw compError;
+        companyRows = allCompanies || [];
+
+        // Also fetch their own memberships to know their roles in specific companies
+        const { data: memberships } = await (supabase as any)
+          .from("company_members")
+          .select("company_id, role")
+          .eq("user_id", user.id)
+          .eq("is_active", true);
+
+        roleMap = new Map((memberships || []).map((m: any) => [m.company_id, m.role]));
+      } else {
+        // Regular user fetches only memberships
+        const { data: memberships, error: memError } = await (supabase as any)
+          .from("company_members")
+          .select("company_id, role")
+          .eq("user_id", user.id)
+          .eq("is_active", true);
+
+        if (memError) throw memError;
+        if (!memberships || memberships.length === 0) {
+          setCompanies([]);
+          setIsLoading(false);
+          return;
+        }
+
+        const companyIds = memberships.map((m: any) => m.company_id);
+        roleMap = new Map(memberships.map((m: any) => [m.company_id, m.role]));
+
+        const { data, error: compError } = await (supabase as any)
+          .from("companies")
+          .select("id, name, owner_id")
+          .in("id", companyIds);
+
+        if (compError) throw compError;
+        companyRows = data || [];
       }
 
-      const companyIds = memberships.map((m: any) => m.company_id);
-      const roleMap = new Map(memberships.map((m: any) => [m.company_id, m.role]));
-
-      const { data: companyRows, error: compError } = await (supabase as any)
-        .from("companies")
-        .select("id, name, owner_id")
-        .in("id", companyIds);
-
-      if (compError) throw compError;
-
-      const mapped: Company[] = (companyRows || []).map((c: any) => ({
+      const mapped: Company[] = companyRows.map((c: any) => ({
         id: c.id,
         name: c.name,
         ownerId: c.owner_id,
-        role: roleMap.get(c.id) || "operator",
+        role: roleMap.get(c.id) || (isSuperadmin ? "admin" : "operator"),
       }));
 
       setCompanies(mapped);
@@ -93,15 +117,20 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [user, activeCompanyId]);
+  }, [user, activeCompanyId, isSuperadmin, impersonatedCompanyId]);
 
   useEffect(() => {
     fetchCompanies();
   }, [fetchCompanies]);
 
   const setActiveCompany = (id: string) => {
-    setActiveCompanyId(id);
-    localStorage.setItem(STORAGE_KEY, id);
+    if (isSuperadmin) {
+      // For superadmin, switching through the dropdown also triggers impersonation
+      impersonateCompany(id);
+    } else {
+      setActiveCompanyId(id);
+      localStorage.setItem(STORAGE_KEY, id);
+    }
   };
 
   const impersonateCompany = (id: string | null) => {

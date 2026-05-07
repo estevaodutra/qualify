@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useCompany } from "@/contexts/CompanyContext";
 import { safeBatchUpsert } from "@/lib/supabase-batch";
 
 export interface Lead {
@@ -54,16 +55,21 @@ const SYNC_BATCH_SIZE = 50;
 export function useLeads(filters: LeadFilters = {}) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { activeCompanyId } = useCompany();
   const page = filters.page ?? 1;
   const limit = filters.limit ?? PAGE_SIZE;
 
   const leadsQuery = useQuery({
-    queryKey: ["leads", filters],
+    queryKey: ["leads", activeCompanyId, filters],
     queryFn: async () => {
       let query = supabase
         .from("leads")
         .select("*", { count: "exact" })
         .order("created_at", { ascending: false });
+
+      if (activeCompanyId) {
+        query = query.eq("company_id", activeCompanyId);
+      }
 
       if (filters.search) {
         query = query.or(`name.ilike.%${filters.search}%,phone.ilike.%${filters.search}%,lid.ilike.%${filters.search}%`);
@@ -98,37 +104,51 @@ export function useLeads(filters: LeadFilters = {}) {
   });
 
   const groupNamesQuery = useQuery({
-    queryKey: ["leads-group-names"],
+    queryKey: ["leads-group-names", activeCompanyId],
     queryFn: async () => {
-      const { data } = await supabase
+      let query = supabase
         .from("leads")
         .select("source_group_name")
-        .not("source_group_name", "is", null)
-        .order("source_group_name");
+        .not("source_group_name", "is", null);
+      
+      if (activeCompanyId) {
+        query = query.eq("company_id", activeCompanyId);
+      }
+      
+      const { data } = await query.order("source_group_name");
       const names = [...new Set((data || []).map(d => d.source_group_name).filter(Boolean))];
       return names as string[];
     },
   });
 
   const tagNamesQuery = useQuery({
-    queryKey: ["leads-tag-names"],
+    queryKey: ["leads-tag-names", activeCompanyId],
     queryFn: async () => {
-      const { data } = await supabase
+      let query = supabase
         .from("leads")
         .select("tags")
         .not("tags", "eq", "{}");
+      
+      if (activeCompanyId) {
+        query = query.eq("company_id", activeCompanyId);
+      }
+      
+      const { data } = await query;
       const allTags = (data || []).flatMap(d => d.tags || []);
       return [...new Set(allTags)].sort() as string[];
     },
   });
 
   const statsQuery = useQuery({
-    queryKey: ["leads-stats"],
+    queryKey: ["leads-stats", activeCompanyId],
     queryFn: async () => {
-      const { count: total } = await supabase.from("leads").select("*", { count: "exact", head: true });
-      const { count: active } = await supabase.from("leads").select("*", { count: "exact", head: true }).eq("status", "active");
-      const { count: inCampaign } = await supabase.from("leads").select("*", { count: "exact", head: true }).not("active_campaign_id", "is", null);
-      const { count: inactive } = await supabase.from("leads").select("*", { count: "exact", head: true }).eq("status", "inactive");
+      const baseQuery = supabase.from("leads").select("*", { count: "exact", head: true });
+      if (activeCompanyId) baseQuery.eq("company_id", activeCompanyId);
+
+      const { count: total } = await baseQuery;
+      const { count: active } = await baseQuery.eq("status", "active");
+      const { count: inCampaign } = await baseQuery.not("active_campaign_id", "is", null);
+      const { count: inactive } = await baseQuery.eq("status", "inactive");
       return {
         total: total || 0,
         active: active || 0,
@@ -149,6 +169,7 @@ export function useLeads(filters: LeadFilters = {}) {
         lid: lead.lid || null,
         email: lead.email || null,
         tags: lead.tags || [],
+        company_id: activeCompanyId,
         source_type: "manual",
       }).select().single();
       if (error) throw error;
