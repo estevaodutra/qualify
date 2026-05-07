@@ -65,7 +65,7 @@ const App = () => {
             <CompanyProvider>
               <TooltipProvider>
                 <Toaster />
-                <Sonner />
+                <Sonner position="top-right" expand={true} richColors />
                 <BrowserRouter>
                   <Routes>
                     {/* Public route */}

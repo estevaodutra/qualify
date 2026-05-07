@@ -315,7 +315,6 @@ export function MembersTab({ campaignId }: MembersTabProps) {
 
       if (uniqueMembers.size > 0) {
         await addMembersBulk(Array.from(uniqueMembers.values()));
-        toast.success(`${uniqueMembers.size} membro(s) importado(s) com sucesso!`);
       } else {
         toast.info("Nenhum membro novo encontrado.");
       }
