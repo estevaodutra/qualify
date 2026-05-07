@@ -36,7 +36,7 @@ export interface EndpointCategory {
   endpoints: Endpoint[];
 }
 
-const API_BASE_URL = "https://btvzspqcnzcslkdtddwl.supabase.co/functions/v1";
+const API_BASE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 
 export const apiEndpoints: EndpointCategory[] = [
   {

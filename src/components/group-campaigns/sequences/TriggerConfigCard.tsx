@@ -74,8 +74,8 @@ export function TriggerConfigCard({
   const TriggerIcon = triggerInfo.icon;
 
   // Generate webhook URL pointing to the actual Edge Function
-  const webhookUrl = sequenceId 
-    ? `https://btvzspqcnzcslkdtddwl.supabase.co/functions/v1/trigger-sequence/${sequenceId}`
+  const webhookUrl = sequenceId
+    ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/trigger-sequence/${sequenceId}`
     : "";
 
 
