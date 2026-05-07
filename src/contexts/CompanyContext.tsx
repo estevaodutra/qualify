@@ -143,7 +143,12 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const effectiveCompanyId = (isSuperadmin && impersonatedCompanyId) || activeCompanyId;
+  const stopImpersonating = () => {
+    setImpersonatedCompanyId(null);
+    localStorage.removeItem("dispatch_impersonated_company");
+  };
+
+  const effectiveCompanyId = (isSuperadmin && impersonatedCompanyId) ? impersonatedCompanyId : activeCompanyId;
   const activeCompany = companies.find((c) => c.id === effectiveCompanyId) || null;
   const isAdmin = activeCompany?.role === "admin" || isSuperadmin;
 
@@ -158,7 +163,8 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         isAdmin,
         refetch: fetchCompanies,
         impersonateCompany,
-        isImpersonating: !!(isSuperadmin && impersonatedCompanyId),
+        stopImpersonating,
+        isImpersonating: !!impersonatedCompanyId,
       }}
     >
       {children}

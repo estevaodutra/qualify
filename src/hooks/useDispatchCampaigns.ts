@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
 
 export interface DispatchCampaign {
   id: string;
@@ -40,15 +41,25 @@ const transformDbToFrontend = (db: DbDispatchCampaign): DispatchCampaign => ({
 export function useDispatchCampaigns() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { activeCompanyId } = useCompany();
   const queryClient = useQueryClient();
 
   const { data: campaigns = [], isLoading } = useQuery({
-    queryKey: ["dispatch_campaigns"],
+    queryKey: ["dispatch_campaigns", activeCompanyId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("dispatch_campaigns")
         .select("*")
         .order("created_at", { ascending: false });
+
+      if (activeCompanyId) {
+        query = query.eq("company_id", activeCompanyId);
+      } else {
+        // Strict isolation: only show user-owned campaigns that don't belong to any company
+        query = query.eq("user_id", user?.id).is("company_id", null);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       return (data as DbDispatchCampaign[]).map(transformDbToFrontend);
@@ -64,6 +75,7 @@ export function useDispatchCampaigns() {
         .from("dispatch_campaigns")
         .insert({
           user_id: user.id,
+          company_id: activeCompanyId,
           name: campaign.name,
           description: campaign.description || null,
           status: "draft",

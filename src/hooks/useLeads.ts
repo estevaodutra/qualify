@@ -143,7 +143,11 @@ export function useLeads(filters: LeadFilters = {}) {
     queryKey: ["leads-stats", activeCompanyId],
     queryFn: async () => {
       const baseQuery = supabase.from("leads").select("*", { count: "exact", head: true });
-      if (activeCompanyId) baseQuery.eq("company_id", activeCompanyId);
+      if (activeCompanyId) {
+        baseQuery.eq("company_id", activeCompanyId);
+      } else {
+        baseQuery.is("company_id", null);
+      }
 
       const { count: total } = await baseQuery;
       const { count: active } = await baseQuery.eq("status", "active");

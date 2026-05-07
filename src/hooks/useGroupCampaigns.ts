@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
 
 export interface GroupCampaign {
   id: string;
@@ -58,15 +59,26 @@ const transformDbToFrontend = (db: DbGroupCampaign): GroupCampaign => ({
 export function useGroupCampaigns() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { activeCompanyId } = useCompany();
   const queryClient = useQueryClient();
 
   const { data: campaigns = [], isLoading, error, refetch } = useQuery({
-    queryKey: ["group_campaigns"],
+    queryKey: ["group_campaigns", activeCompanyId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("group_campaigns")
         .select("*")
         .order("created_at", { ascending: false });
+
+      if (activeCompanyId) {
+        query = query.eq("company_id", activeCompanyId);
+      } else {
+        // Strict isolation: if no company selected, only show those explicitly with NO company_id
+        // and owned by the user. This prevents leakage from other companies.
+        query = query.eq("user_id", user?.id).is("company_id", null);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       return (data as DbGroupCampaign[]).map(transformDbToFrontend);
@@ -88,6 +100,7 @@ export function useGroupCampaigns() {
         .from("group_campaigns")
         .insert({
           user_id: user.id,
+          company_id: activeCompanyId,
           name: campaign.name,
           instance_id: campaign.instanceId || null,
           group_name: campaign.groupName || null,

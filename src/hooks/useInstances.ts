@@ -162,7 +162,8 @@ export function useInstances() {
       if (activeCompanyId) {
         query = query.eq("company_id", activeCompanyId);
       } else {
-        query = query.eq("user_id", user?.id);
+        // Strict isolation
+        query = query.eq("user_id", user?.id).is("company_id", null);
       }
 
       const { data, error } = await query;
