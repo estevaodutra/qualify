@@ -91,13 +91,14 @@ const DAYS_OF_WEEK = [
 export function NewMessageDialog({ open, onClose, onSave, triggerType }: NewMessageDialogProps) {
   const [step, setStep] = useState<1 | 2>(1);
   const [selectedType, setSelectedType] = useState<string | null>(null);
-  const [scheduleType, setScheduleType] = useState<"fixed" | "delay" | "recurring">("fixed");
+  const [scheduleType, setScheduleType] = useState<"fixed" | "delay" | "recurring" | "recurring_month">("fixed");
   const [fixedDate, setFixedDate] = useState<Date | undefined>();
   const [fixedTime, setFixedTime] = useState("09:00");
   const [delayValue, setDelayValue] = useState(1);
   const [delayUnit, setDelayUnit] = useState("days");
   const [delayTime, setDelayTime] = useState("08:00");
   const [recurringDays, setRecurringDays] = useState<string[]>([]);
+  const [recurringMonthDays, setRecurringMonthDays] = useState<string[]>([]);
   const [recurringTime, setRecurringTime] = useState("08:00");
 
   const reset = () => {
@@ -110,6 +111,7 @@ export function NewMessageDialog({ open, onClose, onSave, triggerType }: NewMess
     setDelayUnit("days");
     setDelayTime("08:00");
     setRecurringDays([]);
+    setRecurringMonthDays([]);
     setRecurringTime("08:00");
   };
 
@@ -139,13 +141,18 @@ export function NewMessageDialog({ open, onClose, onSave, triggerType }: NewMess
     } else if (scheduleType === "recurring") {
       schedule.days = recurringDays.map(Number);
       schedule.times = [recurringTime];
+    } else if (scheduleType === "recurring_month") {
+      schedule.days = recurringMonthDays.map(Number);
+      schedule.times = [recurringTime];
     }
     onSave(selectedType, schedule);
     handleClose();
   };
 
   const unitLabel = delayUnit === "minutes" ? "minuto(s)" : delayUnit === "hours" ? "hora(s)" : "dia(s)";
-  const selectedDayLabels = recurringDays.map(Number).sort((a, b) => a - b).map(d => DAYS_OF_WEEK[d]?.label).join(", ");
+  const selectedDayLabels = scheduleType === "recurring"
+    ? recurringDays.map(Number).sort((a, b) => a - b).map(d => DAYS_OF_WEEK[d]?.label).join(", ")
+    : recurringMonthDays.map(Number).sort((a, b) => a - b).join(", ");
   const selectedTypeInfo = ALL_TYPES.find(t => t.type === selectedType);
 
   return (
@@ -194,7 +201,7 @@ export function NewMessageDialog({ open, onClose, onSave, triggerType }: NewMess
             </DialogHeader>
 
             <div className="space-y-5">
-              <RadioGroup value={scheduleType} onValueChange={(v) => setScheduleType(v as "fixed" | "delay" | "recurring")} className="flex flex-wrap gap-4">
+              <RadioGroup value={scheduleType} onValueChange={(v) => setScheduleType(v as any)} className="flex flex-wrap gap-4">
                 <div className="flex items-center gap-2">
                   <RadioGroupItem value="fixed" id="sched-fixed" />
                   <Label htmlFor="sched-fixed" className="text-sm cursor-pointer">Data e hora específica</Label>
@@ -206,6 +213,10 @@ export function NewMessageDialog({ open, onClose, onSave, triggerType }: NewMess
                 <div className="flex items-center gap-2">
                   <RadioGroupItem value="recurring" id="sched-recurring" />
                   <Label htmlFor="sched-recurring" className="text-sm cursor-pointer">Dias da semana</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="recurring_month" id="sched-recurring-month" />
+                  <Label htmlFor="sched-recurring-month" className="text-sm cursor-pointer">Dia do mês</Label>
                 </div>
               </RadioGroup>
 
@@ -257,7 +268,7 @@ export function NewMessageDialog({ open, onClose, onSave, triggerType }: NewMess
                     💡 Mensagem será enviada {delayValue} {unitLabel} após o lead entrar na campanha{delayUnit === "days" ? `, às ${delayTime}` : ""}.
                   </p>
                 </div>
-              ) : (
+              ) : scheduleType === "recurring" ? (
                 <div className="space-y-3">
                   <div className="space-y-1.5">
                     <Label className="text-xs">Dias da semana</Label>
@@ -276,6 +287,38 @@ export function NewMessageDialog({ open, onClose, onSave, triggerType }: NewMess
                   {recurringDays.length > 0 && (
                     <p className="text-xs text-muted-foreground">
                       💡 Mensagem será enviada toda {selectedDayLabels} às {recurringTime}.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Dias do mês</Label>
+                    <div className="grid grid-cols-7 gap-1 max-w-sm">
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                        <Badge
+                          key={day}
+                          variant={recurringMonthDays.includes(String(day)) ? "default" : "outline"}
+                          className="cursor-pointer text-[10px] px-0 h-8 w-full flex items-center justify-center select-none"
+                          onClick={() => {
+                            const d = String(day);
+                            setRecurringMonthDays(prev =>
+                              prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d].sort((a, b) => Number(a) - Number(b))
+                            );
+                          }}
+                        >
+                          {day}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-1.5 w-32">
+                    <Label className="text-xs">Horário de envio</Label>
+                    <Input type="time" value={recurringTime} onChange={e => setRecurringTime(e.target.value)} className="h-9" />
+                  </div>
+                  {recurringMonthDays.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      💡 Mensagem será enviada todo dia {selectedDayLabels} às {recurringTime}.
                     </p>
                   )}
                 </div>

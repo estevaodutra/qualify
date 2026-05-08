@@ -176,6 +176,7 @@ function NodeScheduleSection({
                   <SelectItem value="fixed">📅 Data e hora fixa</SelectItem>
                   <SelectItem value="delay">⏱️ Delay relativo</SelectItem>
                   <SelectItem value="recurring">🔄 Recorrente (dias da semana)</SelectItem>
+                  <SelectItem value="recurring_month">📅 Recorrente (dia do mês)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -245,23 +246,40 @@ function NodeScheduleSection({
               </div>
             )}
 
-            {/* RECURRING */}
-            {scheduleType === "recurring" && (
+            {/* RECURRING OR RECURRING_MONTH */}
+            {(scheduleType === "recurring" || scheduleType === "recurring_month") && (
               <>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Dias da semana</Label>
-                  <div className="flex flex-wrap gap-1">
-                    {WEEKDAY_LABELS.map((label, idx) => (
-                      <Badge
-                        key={idx}
-                        variant={days.includes(idx) ? "default" : "outline"}
-                        className="cursor-pointer text-xs px-2 py-1 select-none"
-                        onClick={() => toggleDay(idx)}
-                      >
-                        {label}
-                      </Badge>
-                    ))}
-                  </div>
+                  <Label className="text-xs">
+                    {scheduleType === "recurring" ? "Dias da semana" : "Dias do mês"}
+                  </Label>
+                  {scheduleType === "recurring" ? (
+                    <div className="flex flex-wrap gap-1">
+                      {WEEKDAY_LABELS.map((label, idx) => (
+                        <Badge
+                          key={idx}
+                          variant={days.includes(idx) ? "default" : "outline"}
+                          className="cursor-pointer text-xs px-2 py-1 select-none"
+                          onClick={() => toggleDay(idx)}
+                        >
+                          {label}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-7 gap-1">
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                        <Badge
+                          key={day}
+                          variant={days.includes(day) ? "default" : "outline"}
+                          className="cursor-pointer text-[10px] px-0 h-6 w-full flex items-center justify-center select-none"
+                          onClick={() => toggleDay(day)}
+                        >
+                          {day}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-1.5">

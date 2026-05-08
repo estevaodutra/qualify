@@ -76,7 +76,15 @@ function getScheduleLabel(node: LocalNode): { prefix: string; dateStr: string } 
     return { prefix: "Delay:", dateStr: `${v} ${unitLabel}${t ? ` às ${t}` : ""}` };
   }
 
-  // recurring
+  if (scheduleType === "recurring_month") {
+    const days = (schedule.days as number[]) || [];
+    const times = (schedule.times as string[]) || [];
+    const dayStr = days.sort((a, b) => a - b).join(", ") || "—";
+    const timeStr = times.join(", ") || "—";
+    return { prefix: "Recorrente:", dateStr: `Dias ${dayStr} · ${timeStr}` };
+  }
+
+  // recurring (weekday)
   const days = (schedule.days as number[]) || [];
   const times = (schedule.times as string[]) || [];
   const dayLabels = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];

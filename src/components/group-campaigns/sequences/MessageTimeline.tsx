@@ -174,6 +174,12 @@ function getScheduleSortKey(node: LocalNode): string {
     return `b_${String(v * multiplier).padStart(10, "0")}`;
   }
 
+  if (type === "recurring_month") {
+    const days = (schedule.days as number[]) || [32];
+    const times = (schedule.times as string[]) || ["99:99"];
+    return `d_${String(days[0]).padStart(2, "0")}_${times[0]}`;
+  }
+
   const days = (schedule.days as number[]) || [9];
   const times = (schedule.times as string[]) || ["99:99"];
   return `c_${days[0]}_${times[0]}`;
