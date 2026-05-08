@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
 
 export type MediaType = "image" | "video" | "audio" | "document" | "sticker";
@@ -8,6 +9,7 @@ export type MediaType = "image" | "video" | "audio" | "document" | "sticker";
 export interface MediaItem {
   id: string;
   userId: string;
+  companyId: string | null;
   filename: string;
   storagePath: string;
   publicUrl: string;
@@ -20,6 +22,7 @@ export interface MediaItem {
 interface DbMediaItem {
   id: string;
   user_id: string;
+  company_id: string | null;
   filename: string;
   storage_path: string;
   public_url: string;
@@ -32,6 +35,7 @@ interface DbMediaItem {
 const transformMediaItem = (item: DbMediaItem): MediaItem => ({
   id: item.id,
   userId: item.user_id,
+  companyId: item.company_id,
   filename: item.filename,
   storagePath: item.storage_path,
   publicUrl: item.public_url,
@@ -43,19 +47,25 @@ const transformMediaItem = (item: DbMediaItem): MediaItem => ({
 
 export function useMediaLibrary(mediaType?: MediaType) {
   const { user } = useAuth();
+  const { activeCompanyId } = useCompany();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const { data: mediaItems, isLoading, refetch } = useQuery({
-    queryKey: ["media-library", user?.id, mediaType],
+    queryKey: ["media-library", user?.id, activeCompanyId, mediaType],
     queryFn: async () => {
       if (!user) return [];
 
       let query = supabase
         .from("user_media_library")
         .select("*")
-        .eq("user_id", user.id)
         .order("created_at", { ascending: false });
+
+      if (activeCompanyId) {
+        query = query.eq("company_id", activeCompanyId);
+      } else {
+        query = query.eq("user_id", user.id);
+      }
 
       if (mediaType) {
         query = query.eq("media_type", mediaType);
@@ -75,6 +85,7 @@ export function useMediaLibrary(mediaType?: MediaType) {
       storagePath: string;
       publicUrl: string;
       mediaType: MediaType;
+      companyId?: string | null;
       mimeType?: string;
       fileSize?: number;
     }) => {
@@ -82,6 +93,7 @@ export function useMediaLibrary(mediaType?: MediaType) {
 
       const { error } = await supabase.from("user_media_library").insert({
         user_id: user.id,
+        company_id: item.companyId || activeCompanyId,
         filename: item.filename,
         storage_path: item.storagePath,
         public_url: item.publicUrl,
@@ -147,10 +159,15 @@ export function useMediaLibrary(mediaType?: MediaType) {
     let dbQuery = supabase
       .from("user_media_library")
       .select("*")
-      .eq("user_id", user.id)
       .ilike("filename", `%${query}%`)
       .order("created_at", { ascending: false })
       .limit(20);
+
+    if (activeCompanyId) {
+      dbQuery = dbQuery.eq("company_id", activeCompanyId);
+    } else {
+      dbQuery = dbQuery.eq("user_id", user.id);
+    }
 
     if (mediaType) {
       dbQuery = dbQuery.eq("media_type", mediaType);

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
 import { useMediaLibrary } from "@/hooks/useMediaLibrary";
 
@@ -50,6 +51,7 @@ const TYPE_LIMITS: Record<MediaType, { maxMB: number; types: string[]; label: st
 
 export function useMediaUpload(mediaType: MediaType) {
   const { user } = useAuth();
+  const { activeCompanyId } = useCompany();
   const { toast } = useToast();
   const { addToLibrary } = useMediaLibrary();
   const [isUploading, setIsUploading] = useState(false);
@@ -94,7 +96,8 @@ export function useMediaUpload(mediaType: MediaType) {
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
-      const filePath = `${user.id}/${mediaType}/${fileName}`;
+      const ownerPath = activeCompanyId ? `companies/${activeCompanyId}` : user.id;
+      const filePath = `${ownerPath}/${mediaType}/${fileName}`;
 
       setProgress(30);
 
