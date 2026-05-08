@@ -198,6 +198,11 @@ export function TimelineSequenceBuilder({ sequence, onBack, onUpdate }: Timeline
 
   const handleManualSendNode = async () => {
     if (!editingNode) return;
+    if (!sequence.groupCampaignId || !sequence.id) {
+      toast.error("Erro: Campanha ou Sequência não identificada.");
+      return;
+    }
+
     setIsSendingManual(true);
     try {
       // Save before executing
@@ -206,6 +211,12 @@ export function TimelineSequenceBuilder({ sequence, onBack, onUpdate }: Timeline
       })));
       await saveConnections({ connectionsToSave: [], idMapping });
       await onUpdate({ id: sequence.id, updates: { name, triggerType, triggerConfig: triggerConfig as Record<string, unknown> } });
+
+      console.log("Invoking execute-message (manual) with:", { 
+        campaignId: sequence.groupCampaignId, 
+        sequenceId: sequence.id, 
+        manualNodeIndex: editingNode.nodeOrder 
+      });
 
       const { error } = await supabase.functions.invoke("execute-message", {
         body: { campaignId: sequence.groupCampaignId, sequenceId: sequence.id, manualNodeIndex: editingNode.nodeOrder },
@@ -227,6 +238,11 @@ export function TimelineSequenceBuilder({ sequence, onBack, onUpdate }: Timeline
   };
 
   const handleExecuteNode = async (node: LocalNode) => {
+    if (!sequence.groupCampaignId || !sequence.id) {
+      toast.error("Erro: Campanha ou Sequência não identificada.");
+      return;
+    }
+
     try {
       // We MUST save before executing because the Edge Function reads from the DB
       toast.info("Salvando e executando...");
@@ -237,6 +253,12 @@ export function TimelineSequenceBuilder({ sequence, onBack, onUpdate }: Timeline
       })));
       await saveConnections({ connectionsToSave: [], idMapping });
       await onUpdate({ id: sequence.id, updates: { name, triggerType, triggerConfig: triggerConfig as Record<string, unknown> } });
+
+      console.log("Invoking execute-message with:", { 
+        campaignId: sequence.groupCampaignId, 
+        sequenceId: sequence.id, 
+        manualNodeIndex: node.nodeOrder 
+      });
 
       const { data, error } = await supabase.functions.invoke("execute-message", {
         body: { campaignId: sequence.groupCampaignId, sequenceId: sequence.id, manualNodeIndex: node.nodeOrder },
