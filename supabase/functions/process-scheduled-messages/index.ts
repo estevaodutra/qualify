@@ -15,6 +15,7 @@ interface ScheduleConfig {
   days: number[];
   times: string[];
   mode?: string;
+  scheduleType?: "fixed" | "delay" | "recurring" | "recurring_month";
 }
 
 interface GroupMessage {
@@ -265,11 +266,17 @@ Deno.serve(async (req) => {
       "Sun": 0, "Mon": 1, "Tue": 2, "Wed": 3, "Thu": 4, "Fri": 5, "Sat": 6
     };
     const currentDay = dayMap[dayString] ?? new Date().getDay();
+
+    // Get day of month (1-31)
+    const currentMonthDay = parseInt(new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Sao_Paulo",
+      day: "numeric",
+    }).format(now));
     
     // Get today's date for execution tracking
     const todayDate = new Date().toISOString().split("T")[0];
 
-    console.log(`[Scheduler] Running at ${currentTime} (Brazil), day ${currentDay}, date ${todayDate}`);
+    console.log(`[Scheduler] Running at ${currentTime} (Brazil), day ${currentDay}, monthDay ${currentMonthDay}, date ${todayDate}`);
 
     // ============= CLEANUP ORPHAN EXECUTIONS =============
     const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
@@ -407,10 +414,18 @@ Deno.serve(async (req) => {
         return false;
       }
       
-      const matchesDay = schedule.days.includes(currentDay);
+      const type = schedule.scheduleType || "recurring";
       const matchesTime = schedule.times.includes(currentTime);
       
-      console.log(`[Scheduler] Message ${msg.id}: day ${currentDay} in [${schedule.days.join(",")}]=${matchesDay}, time ${currentTime} in [${schedule.times.join(",")}]=${matchesTime}`);
+      if (type === "recurring_month") {
+        const matchesDay = schedule.days.includes(currentMonthDay);
+        console.log(`[Scheduler] Message ${msg.id} (month): day ${currentMonthDay} in [${schedule.days.join(",")}]=${matchesDay}, time ${currentTime} in [${schedule.times.join(",")}]=${matchesTime}`);
+        return matchesDay && matchesTime;
+      }
+
+      // Default to weekly recurring
+      const matchesDay = schedule.days.includes(currentDay);
+      console.log(`[Scheduler] Message ${msg.id} (week): day ${currentDay} in [${schedule.days.join(",")}]=${matchesDay}, time ${currentTime} in [${schedule.times.join(",")}]=${matchesTime}`);
       
       return matchesDay && matchesTime;
     });

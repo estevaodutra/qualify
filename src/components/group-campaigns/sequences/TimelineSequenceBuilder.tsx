@@ -200,6 +200,13 @@ export function TimelineSequenceBuilder({ sequence, onBack, onUpdate }: Timeline
     if (!editingNode) return;
     setIsSendingManual(true);
     try {
+      // Save before executing
+      const idMapping = await saveNodes(localNodes.map(node => ({
+        localId: node.id, nodeType: node.nodeType, positionX: 0, positionY: node.nodeOrder * 100, nodeOrder: node.nodeOrder, config: node.config,
+      })));
+      await saveConnections({ connectionsToSave: [], idMapping });
+      await onUpdate({ id: sequence.id, updates: { name, triggerType, triggerConfig: triggerConfig as Record<string, unknown> } });
+
       const { error } = await supabase.functions.invoke("execute-message", {
         body: { campaignId: sequence.groupCampaignId, sequenceId: sequence.id, manualNodeIndex: editingNode.nodeOrder },
       });
@@ -214,7 +221,16 @@ export function TimelineSequenceBuilder({ sequence, onBack, onUpdate }: Timeline
 
   const handleExecuteNode = async (node: LocalNode) => {
     try {
-      toast.info("Executando...");
+      // We MUST save before executing because the Edge Function reads from the DB
+      toast.info("Salvando e executando...");
+      
+      // Perform a silent save first
+      const idMapping = await saveNodes(localNodes.map(node => ({
+        localId: node.id, nodeType: node.nodeType, positionX: 0, positionY: node.nodeOrder * 100, nodeOrder: node.nodeOrder, config: node.config,
+      })));
+      await saveConnections({ connectionsToSave: [], idMapping });
+      await onUpdate({ id: sequence.id, updates: { name, triggerType, triggerConfig: triggerConfig as Record<string, unknown> } });
+
       const { data, error } = await supabase.functions.invoke("execute-message", {
         body: { campaignId: sequence.groupCampaignId, sequenceId: sequence.id, manualNodeIndex: node.nodeOrder },
       });
