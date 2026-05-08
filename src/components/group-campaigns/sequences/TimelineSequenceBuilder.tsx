@@ -212,8 +212,15 @@ export function TimelineSequenceBuilder({ sequence, onBack, onUpdate }: Timeline
       });
       if (error) throw error;
       toast.success("Mensagem disparada!");
-    } catch {
-      toast.error("Erro ao disparar mensagem");
+    } catch (err: any) {
+      console.error("Manual send error:", err);
+      let errorMsg = "Erro ao disparar mensagem";
+      if (err.context?.json?.error) {
+        errorMsg = err.context.json.error;
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
+      toast.error(errorMsg);
     } finally {
       setIsSendingManual(false);
     }
@@ -244,9 +251,17 @@ export function TimelineSequenceBuilder({ sequence, onBack, onUpdate }: Timeline
       } else {
         toast.success("Mensagem executada com sucesso!");
       }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Erro ao executar mensagem";
-      toast.error(msg);
+    } catch (err: any) {
+      console.error("Execute error:", err);
+      let errorMsg = "Erro ao executar mensagem";
+      
+      if (err.context?.json?.error) {
+        errorMsg = err.context.json.error;
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
+      
+      toast.error(errorMsg);
     }
   };
 
