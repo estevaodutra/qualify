@@ -34,6 +34,10 @@ import {
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 
+const Label = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
+  <p className={`text-sm font-medium ${className}`}>{children}</p>
+);
+
 const ContextCampaignLogs = () => {
   const navigate = useNavigate();
   const { executions, isLoading, refetch, deleteExecution } = useContextExecutions();
@@ -227,10 +231,5 @@ const ContextCampaignLogs = () => {
     </div>
   );
 };
-
-// Internal label component just in case
-const Label = ({ children, className = "" }: { children: any, className?: string }) => (
-  <p className={`text-sm font-medium ${className}`}>{children}</p>
-);
 
 export default ContextCampaignLogs;

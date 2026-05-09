@@ -76,6 +76,33 @@ const ContextCampaigns = () => {
 
   const connectedInstances = instances?.filter(i => i.status === "connected") || [];
 
+  const defaultCampaign: Partial<ContextCampaign> = {
+    name: "",
+    group_jid: "",
+    instance_id: "",
+    trigger_type: "keyword",
+    trigger_config: { keyword: "#novoproduto", duration_minutes: 30 },
+    webhook_url: "",
+    opening_message: "",
+    closing_message: "",
+    is_active: true,
+  };
+
+  const handleOpenChange = (open: boolean) => {
+    setIsCreateOpen(open);
+    if (!open) {
+      setEditingCampaign(null);
+      setAvailableGroups([]);
+    }
+  };
+
+  const handleNewCampaign = () => {
+    setEditingCampaign(null);
+    setNewCampaign(defaultCampaign);
+    setAvailableGroups([]);
+    setIsCreateOpen(true);
+  };
+
   const handleEdit = (campaign: ContextCampaign) => {
     setEditingCampaign(campaign);
     setNewCampaign({
@@ -153,18 +180,21 @@ const ContextCampaigns = () => {
         </div>
 
         <div className="flex gap-2">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={() => navigate("logs")}
-            className="rounded-full px-6 border-primary/20 hover:bg-primary/5"
+            className="rounded-full px-6"
           >
             <History className="w-5 h-5 mr-2" />
             Ver Logs
           </Button>
 
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <Dialog open={isCreateOpen} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
-              <Button className="rounded-full px-6 shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all duration-300">
+              <Button
+                className="rounded-full px-6 shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all duration-300"
+                onClick={handleNewCampaign}
+              >
                 <Plus className="w-5 h-5 mr-2" />
                 Nova Campanha
               </Button>
@@ -323,10 +353,7 @@ const ContextCampaigns = () => {
             </div>
 
             <DialogFooter>
-              <Button variant="ghost" onClick={() => {
-                setIsCreateOpen(false);
-                setEditingCampaign(null);
-              }}>Cancelar</Button>
+              <Button variant="ghost" onClick={() => handleOpenChange(false)}>Cancelar</Button>
               <Button onClick={handleCreate} disabled={createCampaign.isPending || updateCampaign.isPending}>
                 {createCampaign.isPending || updateCampaign.isPending ? "Salvando..." : (editingCampaign ? "Salvar Alterações" : "Criar Campanha")}
               </Button>
@@ -334,6 +361,7 @@ const ContextCampaigns = () => {
           </DialogContent>
         </Dialog>
       </div>
+    </div>
 
       {campaignsLoading ? (
         <div className="flex items-center justify-center h-64">
@@ -381,39 +409,49 @@ const ContextCampaigns = () => {
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-primary/5 flex items-center justify-between gap-2">
+                <div className="pt-4 border-t border-border/50 grid grid-cols-3 gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    className="flex-1 rounded-full border-primary/10 hover:bg-primary/5 text-primary font-bold"
+                    className="rounded-lg text-xs font-semibold"
                     onClick={() => triggerContext.mutate({ campaignId: campaign.id })}
                     disabled={triggerContext.isPending}
                   >
-                    <Play className="w-4 h-4 mr-2 text-green-500" />
+                    <Play className="w-3.5 h-3.5 mr-1.5 text-green-500" />
                     Executar
                   </Button>
-                  
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="rounded-full text-primary hover:bg-primary/10"
-                      onClick={() => handleEdit(campaign)}
-                      title="Editar Campanha"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </Button>
-                    
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="rounded-full text-destructive hover:bg-destructive/10"
-                      onClick={() => deleteCampaign.mutate(campaign.id)}
-                      title="Excluir Campanha"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-lg text-xs font-semibold"
+                    onClick={() => handleEdit(campaign)}
+                  >
+                    <Pencil className="w-3.5 h-3.5 mr-1.5 text-primary" />
+                    Editar
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-lg text-xs font-semibold"
+                    onClick={() => navigate(`logs?campaign=${campaign.id}`)}
+                  >
+                    <History className="w-3.5 h-3.5 mr-1.5 text-primary" />
+                    Logs
+                  </Button>
+                </div>
+
+                <div className="flex justify-end">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="rounded-lg text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => deleteCampaign.mutate(campaign.id)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                    Excluir
+                  </Button>
                 </div>
               </CardContent>
             </Card>

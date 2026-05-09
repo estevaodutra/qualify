@@ -102,6 +102,9 @@ export const useContextCampaigns = () => {
       queryClient.invalidateQueries({ queryKey: ["context-campaigns"] });
       toast.success("Campanha atualizada!");
     },
+    onError: (error: any) => {
+      toast.error(`Erro ao atualizar campanha: ${error.message}`);
+    },
   });
 
   const deleteCampaign = useMutation({
