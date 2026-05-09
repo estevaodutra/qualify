@@ -435,3 +435,5 @@ const ContextCampaigns = () => {
 };
 
 export default ContextCampaigns;
+
+// Build Version: 1.0.4 - Table Logs & Edit Button
