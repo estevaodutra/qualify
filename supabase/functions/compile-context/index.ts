@@ -51,8 +51,8 @@ Deno.serve(async (req) => {
       .from("webhook_events")
       .select("event_type, chat_name, chat_jid, sender_name, sender_phone, raw_event, event_timestamp")
       .eq("chat_jid", groupJid)
-      .gte("event_timestamp", startAt)
-      .lte("event_timestamp", endAt)
+      .gte("received_at", startAt)
+      .lte("received_at", endAt)
       .order("event_timestamp", { ascending: true });
 
     if (eventsError) throw eventsError;
