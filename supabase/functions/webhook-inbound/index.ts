@@ -633,16 +633,22 @@ Deno.serve(async (req) => {
     // AUTO-TRIGGER CONTEXT CAMPAIGNS (KEYWORDS & FIRST MESSAGE)
     // ==========================================
     const CONTEXT_TRIGGER_TYPES = ["text_message", "image_message", "audio_message", "video_message", "document_message", "sticker_message"];
-    if (CONTEXT_TRIGGER_TYPES.includes(classification.eventType) && context.chatJid && context.chatType === "group" && instance?.id && classification.direction === "inbound") {
+    if (CONTEXT_TRIGGER_TYPES.includes(classification.eventType) && context.chatJid && context.chatType === "group" && classification.direction === "inbound") {
       try {
         const bodyText = (rawEvent.body?.text?.message || rawEvent.body?.text || rawEvent.message?.conversation || rawEvent.message?.extendedTextMessage?.text || "") as string;
         const triggerLabel = bodyText || `[${classification.eventType}]`;
 
-        // Find ALL active context campaigns for this group
+        // Normalize the group JID to match any stored format
+        // e.g. "1203634269161998032@g.us" → base "1203634269161998032"
+        const groupBase = context.chatJid
+          .replace(/@g\.us$/, "")
+          .replace(/-group$/, "");
+
+        // Find ALL active context campaigns for this group (any JID format)
         const { data: activeCampaigns } = await supabase
           .from("context_campaigns")
           .select("*")
-          .eq("group_jid", context.chatJid)
+          .or(`group_jid.eq.${context.chatJid},group_jid.eq.${groupBase}-group,group_jid.eq.${groupBase}@g.us,group_jid.eq.${groupBase}`)
           .eq("is_active", true);
 
         if (!activeCampaigns || activeCampaigns.length === 0) {

@@ -145,8 +145,16 @@ const ContextCampaigns = () => {
       const data = await response.json();
       const rawGroups = data.groups || data || [];
       const groupsOnly = rawGroups.filter((item: any) => item.isGroup === true);
-      
-      setAvailableGroups(groupsOnly.map((g: any) => ({ phone: g.phone, name: g.name })));
+
+      const normalizeGroupJid = (phone: string) => {
+        if (phone.includes("@")) return phone;
+        return phone.replace(/-group$/, "") + "@g.us";
+      };
+
+      setAvailableGroups(groupsOnly.map((g: any) => ({
+        phone: normalizeGroupJid(g.phone),
+        name: g.name,
+      })));
       toast.success(`${groupsOnly.length} grupos encontrados!`);
     } catch (error) {
       console.error("Erro ao listar grupos:", error);
