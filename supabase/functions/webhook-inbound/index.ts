@@ -630,50 +630,111 @@ Deno.serve(async (req) => {
     }
 
     // ==========================================
-    // AUTO-TRIGGER CONTEXT CAMPAIGNS (KEYWORDS)
+    // AUTO-TRIGGER CONTEXT CAMPAIGNS (KEYWORDS & FIRST MESSAGE)
     // ==========================================
     if (classification.eventType === "text_message" && context.chatJid && context.chatType === "group" && instance?.id) {
       try {
         const bodyText = (rawEvent.body?.text?.message || rawEvent.body?.text || rawEvent.message?.conversation || rawEvent.message?.extendedTextMessage?.text || "") as string;
         
-        if (bodyText) {
-          // Find if this text starts with any active keyword for this group
-          const { data: activeCampaigns } = await supabase
-            .from("context_campaigns")
-            .select("*")
-            .eq("group_jid", context.chatJid)
-            .eq("trigger_type", "keyword")
-            .eq("is_active", true);
+        // Find ALL active context campaigns for this group
+        const { data: activeCampaigns } = await supabase
+          .from("context_campaigns")
+          .select("*")
+          .eq("group_jid", context.chatJid)
+          .eq("is_active", true);
 
-          for (const campaign of (activeCampaigns || [])) {
-            const config = campaign.trigger_config as any;
-            const keyword = config?.keyword;
+        // Check if there is already an active (collecting) window for this group
+        const { data: activeExecs } = await supabase
+          .from("context_executions")
+          .select("id")
+          .eq("status", "collecting")
+          .eq("company_id", instance.user_id) // Or use specific campaign match
+          .filter("campaign_id", "in", `(${activeCampaigns?.map(c => c.id).join(",") || ""})`)
+          .limit(1);
+
+        const hasActiveWindow = activeExecs && activeExecs.length > 0;
+
+        for (const campaign of (activeCampaigns || [])) {
+          const config = campaign.trigger_config as any;
+          let shouldTrigger = false;
+
+          // Type 1: Keyword match (starts a window if none active or even if active depending on logic, here we'll follow "starts a window")
+          const keyword = config?.keyword;
+          if (campaign.trigger_type === "keyword" && keyword && bodyText.toLowerCase().startsWith(keyword.toLowerCase())) {
+            shouldTrigger = true;
+          }
+
+          // Type 2: First Message (if no window is currently active)
+          if (campaign.trigger_type === "first_message" && !hasActiveWindow) {
+            shouldTrigger = true;
+          }
+
+          if (shouldTrigger) {
+            console.log(`[webhook-inbound] 🎯 Context Trigger! Campaign: ${campaign.name}, Type: ${campaign.trigger_type}`);
             
-            if (keyword && bodyText.toLowerCase().startsWith(keyword.toLowerCase())) {
-              console.log(`[webhook-inbound] 🎯 Keyword match! Campaign: ${campaign.name}, Keyword: ${keyword}`);
-              
-              const durationMinutes = config?.duration_minutes || 30;
-              const startAt = new Date().toISOString();
-              const endAt = new Date(Date.now() + durationMinutes * 60000).toISOString();
+            const durationMinutes = config?.duration_minutes || 30;
+            const startAt = new Date().toISOString();
+            const endAt = new Date(Date.now() + durationMinutes * 60000).toISOString();
 
-              const { data: execution, error: execError } = await supabase
-                .from("context_executions")
-                .insert({
-                  campaign_id: campaign.id,
-                  user_id: campaign.user_id,
-                  company_id: campaign.company_id,
-                  start_at: startAt,
-                  end_at: endAt,
-                  status: "collecting",
-                  trigger_message: bodyText
-                })
-                .select()
-                .single();
+            const { data: execution, error: execError } = await supabase
+              .from("context_executions")
+              .insert({
+                campaign_id: campaign.id,
+                user_id: campaign.user_id,
+                company_id: campaign.company_id,
+                start_at: startAt,
+                end_at: endAt,
+                status: "collecting",
+                trigger_message: bodyText
+              })
+              .select()
+              .single();
 
-              if (execError) {
-                console.error("[webhook-inbound] Error creating context execution:", execError);
-              } else {
-                console.log(`[webhook-inbound] Context window started: ${execution.id}, ending at: ${endAt}`);
+            if (!execError && execution) {
+              console.log(`[webhook-inbound] Context window started: ${execution.id}`);
+
+              // AUTO-SEND OPENING MESSAGE
+              if (campaign.opening_message) {
+                console.log(`[webhook-inbound] Sending opening message for campaign ${campaign.id}`);
+                
+                // Fetch instance details to send message
+                const { data: fullInstance } = await supabase
+                  .from("instances")
+                  .select("*")
+                  .eq("id", instance.id)
+                  .single();
+
+                if (fullInstance) {
+                  const WEBHOOK_URL = "https://n8n-n8n.nuwfic.easypanel.host/webhook/send_messages";
+                  const payload = {
+                    action: "message.send_text",
+                    campaign: { id: campaign.id, name: campaign.name },
+                    instance: {
+                      id: fullInstance.id,
+                      name: fullInstance.name,
+                      phone: fullInstance.phone || "",
+                      provider: fullInstance.provider,
+                      externalId: fullInstance.external_instance_id,
+                      externalToken: fullInstance.external_instance_token
+                    },
+                    destination: {
+                      phone: context.chatJid.split("@")[0],
+                      jid: context.chatJid,
+                      name: context.chatName || ""
+                    },
+                    node: {
+                      id: "context_opening",
+                      type: "text",
+                      config: { text: campaign.opening_message }
+                    }
+                  };
+
+                  fetch(WEBHOOK_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                  }).catch(e => console.error("[webhook-inbound] Error sending opening message:", e));
+                }
               }
             }
           }

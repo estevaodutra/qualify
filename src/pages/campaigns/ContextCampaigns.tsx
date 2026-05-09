@@ -1,40 +1,40 @@
 import { useState } from "react";
-import { 
-  Card, 
-  CardContent, 
-  CardDescription, 
-  CardHeader, 
-  CardTitle 
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogFooter, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogTrigger 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
 } from "@/components/ui/dialog";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { 
-  Plus, 
-  MessageSquare, 
-  Activity, 
-  Clock, 
-  Hash, 
-  Settings2, 
-  Play, 
-  Trash2, 
+import {
+  Plus,
+  MessageSquare,
+  Activity,
+  Clock,
+  Hash,
+  Settings2,
+  Play,
+  Trash2,
   ArrowRight,
   Webhook
 } from "lucide-react";
@@ -72,7 +72,7 @@ const ContextCampaigns = () => {
             Capture, compile e envie o contexto de grupos automaticamente para seu Webhook.
           </p>
         </div>
-        
+
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
             <Button className="rounded-full px-6 shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all duration-300">
@@ -87,32 +87,32 @@ const ContextCampaigns = () => {
                 Configure como e quando o contexto do grupo deve ser coletado.
               </DialogDescription>
             </DialogHeader>
-            
+
             <div className="grid gap-6 py-4">
               <div className="space-y-2">
                 <Label>Nome da Campanha</Label>
-                <Input 
-                  placeholder="Ex: Lançamento de Produto" 
+                <Input
+                  placeholder="Ex: Lançamento de Produto"
                   value={newCampaign.name}
-                  onChange={(e) => setNewCampaign({...newCampaign, name: e.target.value})}
+                  onChange={(e) => setNewCampaign({ ...newCampaign, name: e.target.value })}
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label>ID do Grupo (JID)</Label>
-                <Input 
-                  placeholder="123456789@g.us" 
+                <Input
+                  placeholder="123456789@g.us"
                   value={newCampaign.group_jid}
-                  onChange={(e) => setNewCampaign({...newCampaign, group_jid: e.target.value})}
+                  onChange={(e) => setNewCampaign({ ...newCampaign, group_jid: e.target.value })}
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Tipo de Gatilho</Label>
-                  <Select 
-                    value={newCampaign.trigger_type} 
-                    onValueChange={(v: any) => setNewCampaign({...newCampaign, trigger_type: v})}
+                  <Select
+                    value={newCampaign.trigger_type}
+                    onValueChange={(v: any) => setNewCampaign({ ...newCampaign, trigger_type: v })}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -124,16 +124,16 @@ const ContextCampaigns = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                
+
                 {newCampaign.trigger_type === "keyword" && (
                   <div className="space-y-2">
                     <Label>Hashtag/Palavra</Label>
-                    <Input 
-                      placeholder="#suapala" 
+                    <Input
+                      placeholder="#suapala"
                       value={newCampaign.trigger_config?.keyword}
                       onChange={(e) => setNewCampaign({
-                        ...newCampaign, 
-                        trigger_config: {...newCampaign.trigger_config, keyword: e.target.value}
+                        ...newCampaign,
+                        trigger_config: { ...newCampaign.trigger_config, keyword: e.target.value }
                       })}
                     />
                   </div>
@@ -143,12 +143,12 @@ const ContextCampaigns = () => {
               {newCampaign.trigger_type === "keyword" && (
                 <div className="space-y-2">
                   <Label>Duração da Coleta (Minutos)</Label>
-                  <Input 
+                  <Input
                     type="number"
                     value={newCampaign.trigger_config?.duration_minutes}
                     onChange={(e) => setNewCampaign({
-                      ...newCampaign, 
-                      trigger_config: {...newCampaign.trigger_config, duration_minutes: parseInt(e.target.value)}
+                      ...newCampaign,
+                      trigger_config: { ...newCampaign.trigger_config, duration_minutes: parseInt(e.target.value) }
                     })}
                   />
                 </div>
@@ -158,16 +158,16 @@ const ContextCampaigns = () => {
                 <Label>Webhook URL</Label>
                 <div className="relative">
                   <Webhook className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-                  <Input 
+                  <Input
                     className="pl-10"
-                    placeholder="https://sua-api.com/webhook" 
+                    placeholder="https://sua-api.com/webhook"
                     value={newCampaign.webhook_url}
-                    onChange={(e) => setNewCampaign({...newCampaign, webhook_url: e.target.value})}
+                    onChange={(e) => setNewCampaign({ ...newCampaign, webhook_url: e.target.value })}
                   />
                 </div>
               </div>
             </div>
-            
+
             <DialogFooter>
               <Button variant="ghost" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
               <Button onClick={handleCreate} disabled={createCampaign.isPending}>
@@ -189,12 +189,12 @@ const ContextCampaigns = () => {
               <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
                   <div className={`p-2 rounded-xl bg-primary/10 text-primary group-hover:scale-110 transition-transform duration-300`}>
-                    {campaign.trigger_type === "keyword" ? <Hash className="w-5 h-5" /> : 
-                     campaign.trigger_type === "scheduled" ? <Clock className="w-5 h-5" /> : 
-                     <MessageSquare className="w-5 h-5" />}
+                    {campaign.trigger_type === "keyword" ? <Hash className="w-5 h-5" /> :
+                      campaign.trigger_type === "scheduled" ? <Clock className="w-5 h-5" /> :
+                        <MessageSquare className="w-5 h-5" />}
                   </div>
-                  <Switch 
-                    checked={campaign.is_active} 
+                  <Switch
+                    checked={campaign.is_active}
                     onCheckedChange={(v) => updateCampaign.mutate({ id: campaign.id, is_active: v })}
                   />
                 </div>
@@ -208,9 +208,9 @@ const ContextCampaigns = () => {
                   <div className="flex items-center text-sm text-muted-foreground">
                     <Activity className="w-4 h-4 mr-2 opacity-50" />
                     <span>
-                      {campaign.trigger_type === "keyword" ? `Gatilho: ${campaign.trigger_config.keyword}` : 
-                       campaign.trigger_type === "scheduled" ? `Diário às ${campaign.trigger_config.daily_time}` : 
-                       "Acionamento Manual"}
+                      {campaign.trigger_type === "keyword" ? `Gatilho: ${campaign.trigger_config.keyword}` :
+                        campaign.trigger_type === "scheduled" ? `Diário às ${campaign.trigger_config.daily_time}` :
+                          "Acionamento Manual"}
                     </span>
                   </div>
                   <div className="flex items-center text-sm text-muted-foreground">
@@ -220,9 +220,9 @@ const ContextCampaigns = () => {
                 </div>
 
                 <div className="pt-4 border-t border-primary/5 flex items-center justify-between gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     className="flex-1 rounded-full border-primary/10 hover:bg-primary/5"
                     onClick={() => triggerContext.mutate({ campaignId: campaign.id })}
                     disabled={triggerContext.isPending}
@@ -230,9 +230,9 @@ const ContextCampaigns = () => {
                     <Play className="w-4 h-4 mr-2 text-green-500" />
                     Executar
                   </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     className="rounded-full text-destructive hover:bg-destructive/10"
                     onClick={() => deleteCampaign.mutate(campaign.id)}
                   >
@@ -242,7 +242,7 @@ const ContextCampaigns = () => {
               </CardContent>
             </Card>
           ))}
-          
+
           {campaigns?.length === 0 && (
             <div className="col-span-full py-20 text-center border-2 border-dashed border-primary/10 rounded-3xl bg-primary/5">
               <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">

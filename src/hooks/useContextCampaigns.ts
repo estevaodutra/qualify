@@ -8,7 +8,7 @@ export interface ContextCampaign {
   id: string;
   name: string;
   group_jid: string;
-  trigger_type: "manual" | "scheduled" | "keyword";
+  trigger_type: "manual" | "scheduled" | "keyword" | "first_message";
   trigger_config: {
     keyword?: string;
     duration_minutes?: number;
@@ -16,6 +16,8 @@ export interface ContextCampaign {
     limit_count?: number;
   };
   webhook_url: string;
+  opening_message?: string;
+  closing_message?: string;
   is_active: boolean;
   created_at: string;
 }

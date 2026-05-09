@@ -145,7 +145,56 @@ Deno.serve(async (req) => {
       webhookResponse = e.message;
     }
 
-    // 5. Update execution status
+    // 5. AUTO-SEND CLOSING MESSAGE
+    if (campaign.closing_message && webhookStatus === "success") {
+      try {
+        // Find an active instance for this company to send the message
+        const { data: activeInstance } = await supabase
+          .from("instances")
+          .select("*")
+          .eq("user_id", campaign.user_id)
+          .eq("status", "connected")
+          .limit(1)
+          .maybeSingle();
+
+        if (activeInstance) {
+          const WEBHOOK_URL = "https://n8n-n8n.nuwfic.easypanel.host/webhook/send_messages";
+          const payload = {
+            action: "message.send_text",
+            campaign: { id: campaign.id, name: campaign.name },
+            instance: {
+              id: activeInstance.id,
+              name: activeInstance.name,
+              phone: activeInstance.phone || "",
+              provider: activeInstance.provider,
+              externalId: activeInstance.external_instance_id,
+              externalToken: activeInstance.external_instance_token
+            },
+            destination: {
+              phone: groupJid.split("@")[0],
+              jid: groupJid,
+              name: events[0]?.chat_name || "Grupo"
+            },
+            node: {
+              id: "context_closing",
+              type: "text",
+              config: { text: campaign.closing_message }
+            }
+          };
+
+          await fetch(WEBHOOK_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+          console.log(`[compile-context] Closing message sent for campaign ${campaign.id}`);
+        }
+      } catch (e) {
+        console.error("[compile-context] Error sending closing message:", e);
+      }
+    }
+
+    // 6. Update execution status
     await supabase
       .from("context_executions")
       .update({
