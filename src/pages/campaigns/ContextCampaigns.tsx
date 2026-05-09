@@ -38,7 +38,8 @@ import {
   ArrowRight,
   Webhook,
   List,
-  History
+  History,
+  Pencil
 } from "lucide-react";
 import { useContextCampaigns, ContextCampaign } from "@/hooks/useContextCampaigns";
 import { useInstances } from "@/hooks/useInstances";
@@ -54,6 +55,7 @@ const ContextCampaigns = () => {
   const { configs } = useWebhookConfigs();
   
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingCampaign, setEditingCampaign] = useState<ContextCampaign | null>(null);
   const [isListingGroups, setIsListingGroups] = useState(false);
   const [availableGroups, setAvailableGroups] = useState<{phone: string, name: string}[]>([]);
   
@@ -73,6 +75,16 @@ const ContextCampaigns = () => {
   });
 
   const connectedInstances = instances?.filter(i => i.status === "connected") || [];
+
+  const handleEdit = (campaign: ContextCampaign) => {
+    setEditingCampaign(campaign);
+    setNewCampaign({
+      ...campaign
+    });
+    // Forcar carregamento do grupo atual se necessário ou permitir seleção
+    setAvailableGroups([{ phone: campaign.group_jid, name: campaign.group_jid }]);
+    setIsCreateOpen(true);
+  };
 
   const handleListGroups = async () => {
     if (!newCampaign.instance_id) return;
@@ -118,8 +130,13 @@ const ContextCampaigns = () => {
   };
 
   const handleCreate = async () => {
-    await createCampaign.mutateAsync(newCampaign);
+    if (editingCampaign) {
+      await updateCampaign.mutateAsync({ id: editingCampaign.id, ...newCampaign });
+    } else {
+      await createCampaign.mutateAsync(newCampaign);
+    }
     setIsCreateOpen(false);
+    setEditingCampaign(null);
     setAvailableGroups([]);
   };
 
@@ -154,11 +171,11 @@ const ContextCampaigns = () => {
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px] backdrop-blur-xl bg-background/80 border-primary/10">
               <DialogHeader>
-                <DialogTitle>Criar Campanha de Contexto</DialogTitle>
-                <DialogDescription>
-                  Configure como e quando o contexto do grupo deve ser coletado.
-                </DialogDescription>
-              </DialogHeader>
+              <DialogTitle>{editingCampaign ? "Editar Campanha" : "Criar Campanha"} de Contexto</DialogTitle>
+              <DialogDescription>
+                Configure como e quando o contexto do grupo deve ser coletado.
+              </DialogDescription>
+            </DialogHeader>
 
             <div className="grid gap-6 py-4">
               <div className="space-y-2">
@@ -306,9 +323,12 @@ const ContextCampaigns = () => {
             </div>
 
             <DialogFooter>
-              <Button variant="ghost" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
-              <Button onClick={handleCreate} disabled={createCampaign.isPending}>
-                {createCampaign.isPending ? "Criando..." : "Criar Campanha"}
+              <Button variant="ghost" onClick={() => {
+                setIsCreateOpen(false);
+                setEditingCampaign(null);
+              }}>Cancelar</Button>
+              <Button onClick={handleCreate} disabled={createCampaign.isPending || updateCampaign.isPending}>
+                {createCampaign.isPending || updateCampaign.isPending ? "Salvando..." : (editingCampaign ? "Salvar Alterações" : "Criar Campanha")}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -371,6 +391,14 @@ const ContextCampaigns = () => {
                   >
                     <Play className="w-4 h-4 mr-2 text-green-500" />
                     Executar
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="rounded-full text-primary hover:bg-primary/10"
+                    onClick={() => handleEdit(campaign)}
+                  >
+                    <Pencil className="w-4 h-4" />
                   </Button>
                   <Button
                     variant="ghost"
