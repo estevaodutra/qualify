@@ -636,7 +636,9 @@ Deno.serve(async (req) => {
     if (CONTEXT_TRIGGER_TYPES.includes(classification.eventType) && context.chatJid && context.chatType === "group" && classification.direction === "inbound") {
       try {
         const bodyText = (rawEvent.body?.text?.message || rawEvent.body?.text || rawEvent.message?.conversation || rawEvent.message?.extendedTextMessage?.text || "") as string;
-        const triggerLabel = bodyText || `[${classification.eventType}]`;
+        const rawBody = rawEvent.body as any;
+        const mediaCaption = (rawBody?.image?.caption || rawBody?.video?.caption || rawBody?.document?.fileName || "") as string;
+        const triggerLabel = bodyText || mediaCaption || `[${classification.eventType}]`;
 
         // Normalize the group JID to match any stored format
         // e.g. "1203634269161998032@g.us" → base "1203634269161998032"

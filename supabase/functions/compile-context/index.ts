@@ -220,12 +220,13 @@ Deno.serve(async (req) => {
             }
           };
 
-          await fetch(WEBHOOK_URL, {
+          const closingResp = await fetch(WEBHOOK_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
           });
-          console.log(`[compile-context] Closing message sent for campaign ${campaign.id}`);
+          const closingBody = await closingResp.text();
+          console.log(`[compile-context] Closing message response (${closingResp.status}): ${closingBody}`);
         }
       } catch (e) {
         console.error("[compile-context] Error sending closing message:", e);

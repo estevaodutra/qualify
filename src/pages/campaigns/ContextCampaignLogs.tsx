@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -43,6 +43,14 @@ const ContextCampaignLogs = () => {
   const { executions, isLoading, refetch, deleteExecution } = useContextExecutions();
   const [selectedLog, setSelectedLog] = useState<ContextExecution | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Keep modal data fresh when executions list updates (e.g. "collecting" → "completed")
+  useEffect(() => {
+    if (selectedLog && executions) {
+      const updated = executions.find(e => e.id === selectedLog.id);
+      if (updated) setSelectedLog(updated);
+    }
+  }, [executions]);
 
   const filteredExecutions = executions?.filter(ex => 
     ex.campaign?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -211,17 +219,27 @@ const ContextCampaignLogs = () => {
 
               {selectedLog.result_payload?.summary && (
                 <div className="space-y-2">
-                  <Label className="text-primary font-bold">Resumo Gerado</Label>
-                  <div className="p-6 rounded-2xl bg-gradient-to-br from-primary/5 to-transparent border border-primary/10 whitespace-pre-wrap leading-relaxed text-sm">
-                    {selectedLog.result_payload.summary}
+                  <Label className="text-primary font-bold">Resumo</Label>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    {Object.entries(selectedLog.result_payload.summary).map(([k, v]) => (
+                      <div key={k} className="flex justify-between px-3 py-1.5 rounded-lg bg-primary/5">
+                        <span className="text-muted-foreground capitalize">{k.replace(/_/g, " ")}</span>
+                        <span className="font-bold">{String(v)}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
 
               <div className="space-y-2">
-                <Label className="text-muted-foreground">Resposta do Webhook</Label>
-                <div className="p-4 rounded-2xl bg-zinc-950 font-mono text-xs text-zinc-400 overflow-x-auto">
-                  <pre>{JSON.stringify(selectedLog.result_payload || {}, null, 2)}</pre>
+                <Label className="text-muted-foreground">Payload do Webhook</Label>
+                <div className="p-4 rounded-2xl bg-zinc-950 font-mono text-xs text-zinc-400 overflow-x-auto max-h-48">
+                  <pre>{selectedLog.result_payload
+                    ? JSON.stringify(selectedLog.result_payload, null, 2)
+                    : selectedLog.status === "collecting"
+                      ? "⏳ Aguardando fim da janela de coleta..."
+                      : "Sem dados"
+                  }</pre>
                 </div>
               </div>
             </div>
