@@ -71,37 +71,61 @@ Deno.serve(async (req) => {
 
     events.forEach(event => {
       const raw = event.raw_event as any;
-      const content = raw.body?.text?.message || raw.body?.text || raw.message?.conversation || raw.message?.extendedTextMessage?.text || "";
-      
+      const sender = event.sender_name || event.sender_phone || "Desconhecido";
+
+      // Z-API wraps text inside body.text.message; other providers use body.text or message.conversation
+      const textContent = raw.body?.text?.message || raw.body?.text || raw.message?.conversation || raw.message?.extendedTextMessage?.text || "";
+
       switch (event.event_type) {
         case "text_message":
-          if (content) compilation.texts.push(`${event.sender_name || event.sender_phone}: ${content}`);
+          if (textContent) compilation.texts.push(`${sender}: ${textContent}`);
           break;
-        case "image_message":
-          const imgUrl = raw.body?.imageUrl || raw.imageUrl || "";
+
+        case "image_message": {
+          // Z-API: body.image.imageUrl  |  fallback: body.imageUrl / imageUrl
+          const imgUrl = raw.body?.image?.imageUrl || raw.body?.imageUrl || raw.imageUrl || "";
+          const caption = raw.body?.image?.caption || "";
           if (imgUrl) compilation.images.push(imgUrl);
+          if (caption) compilation.texts.push(`${sender} [imagem]: ${caption}`);
           break;
-        case "audio_message":
-          const audioUrl = raw.body?.audioUrl || raw.audioUrl || "";
+        }
+
+        case "audio_message": {
+          // Z-API: body.audio.audioUrl
+          const audioUrl = raw.body?.audio?.audioUrl || raw.body?.audioUrl || raw.audioUrl || "";
           if (audioUrl) compilation.audios.push(audioUrl);
           break;
-        case "video_message":
-          const videoUrl = raw.body?.videoUrl || raw.videoUrl || "";
+        }
+
+        case "video_message": {
+          // Z-API: body.video.videoUrl
+          const videoUrl = raw.body?.video?.videoUrl || raw.body?.videoUrl || raw.videoUrl || "";
+          const videoCaption = raw.body?.video?.caption || "";
           if (videoUrl) compilation.videos.push(videoUrl);
+          if (videoCaption) compilation.texts.push(`${sender} [vídeo]: ${videoCaption}`);
           break;
-        case "document_message":
-          const docUrl = raw.body?.documentUrl || raw.documentUrl || "";
-          if (docUrl) compilation.documents.push(docUrl);
+        }
+
+        case "document_message": {
+          // Z-API: body.document.documentUrl
+          const docUrl = raw.body?.document?.documentUrl || raw.body?.documentUrl || raw.documentUrl || "";
+          const docName = raw.body?.document?.fileName || raw.body?.document?.title || "";
+          if (docUrl) compilation.documents.push(docName ? `${docName}: ${docUrl}` : docUrl);
           break;
-        case "reaction":
-          const reaction = raw.body?.reaction?.value || "";
-          if (reaction) compilation.reactions.push(`${event.sender_name || event.sender_phone} reagiu com ${reaction}`);
+        }
+
+        case "reaction": {
+          const reaction = raw.body?.reaction?.value || raw.body?.reactionValue || "";
+          if (reaction) compilation.reactions.push(`${sender} reagiu com ${reaction}`);
           break;
+        }
+
         case "group_join":
-          compilation.members_joined.push(event.sender_name || event.sender_phone || "Desconhecido");
+          compilation.members_joined.push(sender);
           break;
+
         case "group_leave":
-          compilation.members_left.push(event.sender_name || event.sender_phone || "Desconhecido");
+          compilation.members_left.push(sender);
           break;
       }
     });
