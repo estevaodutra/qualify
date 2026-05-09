@@ -385,29 +385,35 @@ const ContextCampaigns = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="flex-1 rounded-full border-primary/10 hover:bg-primary/5"
+                    className="flex-1 rounded-full border-primary/10 hover:bg-primary/5 text-primary font-bold"
                     onClick={() => triggerContext.mutate({ campaignId: campaign.id })}
                     disabled={triggerContext.isPending}
                   >
                     <Play className="w-4 h-4 mr-2 text-green-500" />
                     Executar
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="rounded-full text-primary hover:bg-primary/10"
-                    onClick={() => handleEdit(campaign)}
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="rounded-full text-destructive hover:bg-destructive/10"
-                    onClick={() => deleteCampaign.mutate(campaign.id)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="rounded-full text-primary hover:bg-primary/10"
+                      onClick={() => handleEdit(campaign)}
+                      title="Editar Campanha"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                    
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="rounded-full text-destructive hover:bg-destructive/10"
+                      onClick={() => deleteCampaign.mutate(campaign.id)}
+                      title="Excluir Campanha"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
