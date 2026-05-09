@@ -632,10 +632,12 @@ Deno.serve(async (req) => {
     // ==========================================
     // AUTO-TRIGGER CONTEXT CAMPAIGNS (KEYWORDS & FIRST MESSAGE)
     // ==========================================
-    if (classification.eventType === "text_message" && context.chatJid && context.chatType === "group" && instance?.id) {
+    const CONTEXT_TRIGGER_TYPES = ["text_message", "image_message", "audio_message", "video_message", "document_message", "sticker_message"];
+    if (CONTEXT_TRIGGER_TYPES.includes(classification.eventType) && context.chatJid && context.chatType === "group" && instance?.id && classification.direction === "inbound") {
       try {
         const bodyText = (rawEvent.body?.text?.message || rawEvent.body?.text || rawEvent.message?.conversation || rawEvent.message?.extendedTextMessage?.text || "") as string;
-        
+        const triggerLabel = bodyText || `[${classification.eventType}]`;
+
         // Find ALL active context campaigns for this group
         const { data: activeCampaigns } = await supabase
           .from("context_campaigns")
@@ -643,35 +645,39 @@ Deno.serve(async (req) => {
           .eq("group_jid", context.chatJid)
           .eq("is_active", true);
 
+        if (!activeCampaigns || activeCampaigns.length === 0) {
+          // No campaigns for this group, skip
+        } else {
+
         // Check if there is already an active (collecting) window for this group
+        const campaignIds = activeCampaigns.map((c: { id: string }) => c.id);
         const { data: activeExecs } = await supabase
           .from("context_executions")
           .select("id")
           .eq("status", "collecting")
-          .eq("company_id", instance.user_id) // Or use specific campaign match
-          .filter("campaign_id", "in", `(${activeCampaigns?.map(c => c.id).join(",") || ""})`)
+          .in("campaign_id", campaignIds)
           .limit(1);
 
         const hasActiveWindow = activeExecs && activeExecs.length > 0;
 
-        for (const campaign of (activeCampaigns || [])) {
+        for (const campaign of activeCampaigns) {
           const config = campaign.trigger_config as any;
           let shouldTrigger = false;
 
-          // Type 1: Keyword match (starts a window if none active or even if active depending on logic, here we'll follow "starts a window")
+          // Type 1: Keyword match — only on text_message (needs text content)
           const keyword = config?.keyword;
-          if (campaign.trigger_type === "keyword" && keyword && bodyText.toLowerCase().startsWith(keyword.toLowerCase())) {
+          if (campaign.trigger_type === "keyword" && keyword && classification.eventType === "text_message" && bodyText.toLowerCase().startsWith(keyword.toLowerCase())) {
             shouldTrigger = true;
           }
 
-          // Type 2: First Message (if no window is currently active)
+          // Type 2: First Message — any inbound message type opens the window
           if (campaign.trigger_type === "first_message" && !hasActiveWindow) {
             shouldTrigger = true;
           }
 
           if (shouldTrigger) {
-            console.log(`[webhook-inbound] 🎯 Context Trigger! Campaign: ${campaign.name}, Type: ${campaign.trigger_type}`);
-            
+            console.log(`[webhook-inbound] 🎯 Context Trigger! Campaign: ${campaign.name}, Type: ${campaign.trigger_type}, EventType: ${classification.eventType}`);
+
             const durationMinutes = config?.duration_minutes || 30;
             const startAt = new Date().toISOString();
             const endAt = new Date(Date.now() + durationMinutes * 60000).toISOString();
@@ -685,7 +691,7 @@ Deno.serve(async (req) => {
                 start_at: startAt,
                 end_at: endAt,
                 status: "collecting",
-                trigger_message: bodyText
+                trigger_message: triggerLabel
               })
               .select()
               .single();
@@ -739,6 +745,7 @@ Deno.serve(async (req) => {
             }
           }
         }
+        } // end else (activeCampaigns found)
       } catch (contextErr) {
         console.error("[webhook-inbound] Error processing context trigger:", contextErr);
       }
