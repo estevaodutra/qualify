@@ -119,6 +119,7 @@ const ContextCampaigns = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="keyword">Palavra-Chave</SelectItem>
+                      <SelectItem value="first_message">Primeira Mensagem</SelectItem>
                       <SelectItem value="scheduled">Diário (Agendado)</SelectItem>
                       <SelectItem value="manual">Manual</SelectItem>
                     </SelectContent>
@@ -153,6 +154,24 @@ const ContextCampaigns = () => {
                   />
                 </div>
               )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Mensagem de Abertura (Opcional)</Label>
+                  <Input 
+                    placeholder="Ex: Iniciando coleta de dados..." 
+                    value={newCampaign.opening_message}
+                    onChange={(e) => setNewCampaign({...newCampaign, opening_message: e.target.value})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Mensagem de Fechamento (Opcional)</Label>
+                  <Input 
+                    placeholder="Ex: Coleta finalizada. Enviando resumo." 
+                    value={newCampaign.closing_message}
+                    onChange={(e) => setNewCampaign({...newCampaign, closing_message: e.target.value})}
+                  />
+                </div>
+              </div>
 
               <div className="space-y-2">
                 <Label>Webhook URL</Label>
