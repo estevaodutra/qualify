@@ -36,7 +36,8 @@ import {
   Play,
   Trash2,
   ArrowRight,
-  Webhook
+  Webhook,
+  List
 } from "lucide-react";
 import { useContextCampaigns, ContextCampaign } from "@/hooks/useContextCampaigns";
 import { useInstances } from "@/hooks/useInstances";
