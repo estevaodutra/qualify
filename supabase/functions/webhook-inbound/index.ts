@@ -685,7 +685,8 @@ Deno.serve(async (req) => {
             console.log(`[webhook-inbound] 🎯 Context Trigger! Campaign: ${campaign.name}, Type: ${campaign.trigger_type}, EventType: ${classification.eventType}`);
 
             const durationMinutes = config?.duration_minutes || 30;
-            const startAt = new Date().toISOString();
+            // Go back 30s so the triggering message itself is inside the window
+            const startAt = new Date(Date.now() - 30000).toISOString();
             const endAt = new Date(Date.now() + durationMinutes * 60000).toISOString();
 
             const { data: execution, error: execError } = await supabase
