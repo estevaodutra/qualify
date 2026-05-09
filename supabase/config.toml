@@ -1,4 +1,4 @@
-project_id = "btvzspqcnzcslkdtddwl"
+project_id = "yvznxdzadfvmbnwbsmbb"
 
 [functions.generate-api-key]
 verify_jwt = false
@@ -103,4 +103,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.wallet-debit-ura]
+verify_jwt = false
+
+[functions.compile-context]
 verify_jwt = false
