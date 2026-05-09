@@ -23,6 +23,22 @@ export interface ContextCampaign {
   created_at: string;
 }
 
+export interface ContextExecution {
+  id: string;
+  campaign_id: string;
+  user_id: string;
+  company_id: string;
+  start_at: string;
+  end_at: string;
+  status: "collecting" | "completed" | "failed";
+  trigger_message: string;
+  result_payload: any;
+  created_at: string;
+  campaign?: {
+    name: string;
+  };
+}
+
 export const useContextCampaigns = () => {
   const { user } = useAuth();
   const { activeCompanyId } = useCompany();
@@ -154,3 +170,53 @@ export const useContextCampaigns = () => {
     triggerContext,
   };
 };
+
+export function useContextExecutions(campaignId?: string) {
+  const { activeCompanyId } = useCompany();
+
+  const { data: executions, isLoading, refetch } = useQuery({
+    queryKey: ["context-executions", activeCompanyId, campaignId],
+    queryFn: async () => {
+      if (!activeCompanyId) return [];
+      
+      let query = supabase
+        .from("context_executions")
+        .select(`
+          *,
+          campaign:context_campaigns(name)
+        `)
+        .order("created_at", { ascending: false });
+
+      if (activeCompanyId) {
+        query = query.eq("company_id", activeCompanyId);
+      }
+      
+      if (campaignId) {
+        query = query.eq("campaign_id", campaignId);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as ContextExecution[];
+    },
+    enabled: !!activeCompanyId,
+  });
+
+  const deleteExecution = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("context_executions").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      refetch();
+      toast.success("Log removido com sucesso");
+    }
+  });
+
+  return {
+    executions,
+    isLoading,
+    refetch,
+    deleteExecution
+  };
+}

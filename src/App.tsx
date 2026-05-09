@@ -22,6 +22,7 @@ import {
   URACampaigns,
   CallCampaigns,
   ContextCampaigns,
+  ContextCampaignLogs,
 } from "./pages/campaigns";
 import PhoneNumbers from "./pages/PhoneNumbers";
 import Logs from "./pages/Logs";
@@ -118,6 +119,7 @@ const App = () => {
                         <Route path="telefonia/ura" element={<URACampaigns />} />
                         <Route path="telefonia/ligacao" element={<CallCampaigns />} />
                         <Route path="whatsapp/contexto" element={<ContextCampaigns />} />
+                        <Route path="whatsapp/contexto/logs" element={<ContextCampaignLogs />} />
                       </Route>
 
                       {/* Scheduling routes */}

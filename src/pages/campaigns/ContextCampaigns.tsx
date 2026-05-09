@@ -37,15 +37,18 @@ import {
   Trash2,
   ArrowRight,
   Webhook,
-  List
+  List,
+  History
 } from "lucide-react";
 import { useContextCampaigns, ContextCampaign } from "@/hooks/useContextCampaigns";
 import { useInstances } from "@/hooks/useInstances";
 import { useWebhookConfigs, getWebhookUrlForCategory } from "@/hooks/useWebhookConfigs";
 import { buildGroupPayload } from "@/lib/webhook-utils";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 
 const ContextCampaigns = () => {
+  const navigate = useNavigate();
   const { campaigns, isLoading: campaignsLoading, createCampaign, deleteCampaign, triggerContext, updateCampaign } = useContextCampaigns();
   const { instances, isLoading: instancesLoading } = useInstances();
   const { configs } = useWebhookConfigs();
@@ -132,20 +135,30 @@ const ContextCampaigns = () => {
           </p>
         </div>
 
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger asChild>
-            <Button className="rounded-full px-6 shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all duration-300">
-              <Plus className="w-5 h-5 mr-2" />
-              Nova Campanha
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px] backdrop-blur-xl bg-background/80 border-primary/10">
-            <DialogHeader>
-              <DialogTitle>Criar Campanha de Contexto</DialogTitle>
-              <DialogDescription>
-                Configure como e quando o contexto do grupo deve ser coletado.
-              </DialogDescription>
-            </DialogHeader>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => navigate("logs")}
+            className="rounded-full px-6 border-primary/20 hover:bg-primary/5"
+          >
+            <History className="w-5 h-5 mr-2" />
+            Ver Logs
+          </Button>
+
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <DialogTrigger asChild>
+              <Button className="rounded-full px-6 shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all duration-300">
+                <Plus className="w-5 h-5 mr-2" />
+                Nova Campanha
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px] backdrop-blur-xl bg-background/80 border-primary/10">
+              <DialogHeader>
+                <DialogTitle>Criar Campanha de Contexto</DialogTitle>
+                <DialogDescription>
+                  Configure como e quando o contexto do grupo deve ser coletado.
+                </DialogDescription>
+              </DialogHeader>
 
             <div className="grid gap-6 py-4">
               <div className="space-y-2">

@@ -5,3 +5,4 @@ export { default as PirateCampaigns } from "./PirateCampaigns";
 export { default as URACampaigns } from "./URACampaigns";
 export { default as CallCampaigns } from "./CallCampaigns";
 export { default as ContextCampaigns } from "./ContextCampaigns";
+export { default as ContextCampaignLogs } from "./ContextCampaignLogs";
