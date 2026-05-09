@@ -555,7 +555,7 @@ function extractZApiContext(rawEvent: Record<string, unknown>): EventContext {
     chatJid = (rawEvent.phone || body?.phone) as string | null;
   }
 
-  const isGroup = chatJid?.includes("@g.us") || false;
+  const isGroup = chatJid?.includes("@g.us") || chatJid?.endsWith("-group") || false;
 
   // senderPhone
   let senderPhone = (
