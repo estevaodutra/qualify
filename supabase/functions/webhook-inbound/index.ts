@@ -706,14 +706,15 @@ Deno.serve(async (req) => {
               console.log(`[webhook-inbound] Context window started: ${execution.id}`);
 
               // AUTO-SEND OPENING MESSAGE
-              if (campaign.opening_message) {
+              const instanceId = campaign.instance_id || instance?.id;
+              if (campaign.opening_message && instanceId) {
                 console.log(`[webhook-inbound] Sending opening message for campaign ${campaign.id}`);
-                
-                // Fetch instance details to send message
+
+                // Prefer campaign's configured instance; fall back to webhook instance
                 const { data: fullInstance } = await supabase
                   .from("instances")
                   .select("*")
-                  .eq("id", instance.id)
+                  .eq("id", instanceId)
                   .single();
 
                 if (fullInstance) {
