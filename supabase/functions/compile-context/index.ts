@@ -149,13 +149,27 @@ Deno.serve(async (req) => {
     if (campaign.closing_message && webhookStatus === "success") {
       try {
         // Find an active instance for this company to send the message
-        const { data: activeInstance } = await supabase
-          .from("instances")
-          .select("*")
-          .eq("user_id", campaign.user_id)
-          .eq("status", "connected")
-          .limit(1)
-          .maybeSingle();
+        let activeInstance = null;
+        
+        if (campaign.instance_id) {
+          const { data: inst } = await supabase
+            .from("instances")
+            .select("*")
+            .eq("id", campaign.instance_id)
+            .single();
+          activeInstance = inst;
+        }
+
+        if (!activeInstance || activeInstance.status !== "connected") {
+          const { data: fallback } = await supabase
+            .from("instances")
+            .select("*")
+            .eq("user_id", campaign.user_id)
+            .eq("status", "connected")
+            .limit(1)
+            .maybeSingle();
+          activeInstance = fallback;
+        }
 
         if (activeInstance) {
           const WEBHOOK_URL = "https://n8n-n8n.nuwfic.easypanel.host/webhook/send_messages";

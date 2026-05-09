@@ -8,6 +8,7 @@ export interface ContextCampaign {
   id: string;
   name: string;
   group_jid: string;
+  instance_id?: string;
   trigger_type: "manual" | "scheduled" | "keyword" | "first_message";
   trigger_config: {
     keyword?: string;

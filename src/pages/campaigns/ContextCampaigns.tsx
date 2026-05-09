@@ -39,26 +39,84 @@ import {
   Webhook
 } from "lucide-react";
 import { useContextCampaigns, ContextCampaign } from "@/hooks/useContextCampaigns";
-import { useCampaigns } from "@/hooks/useCampaigns"; // For group selection if needed
+import { useInstances } from "@/hooks/useInstances";
+import { useWebhookConfigs, getWebhookUrlForCategory } from "@/hooks/useWebhookConfigs";
+import { buildGroupPayload } from "@/lib/webhook-utils";
+import { toast } from "sonner";
 
 const ContextCampaigns = () => {
-  const { campaigns, isLoading, createCampaign, deleteCampaign, triggerContext, updateCampaign } = useContextCampaigns();
+  const { campaigns, isLoading: campaignsLoading, createCampaign, deleteCampaign, triggerContext, updateCampaign } = useContextCampaigns();
+  const { instances, isLoading: instancesLoading } = useInstances();
+  const { configs } = useWebhookConfigs();
+  
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isListingGroups, setIsListingGroups] = useState(false);
+  const [availableGroups, setAvailableGroups] = useState<{phone: string, name: string}[]>([]);
+  
   const [newCampaign, setNewCampaign] = useState<Partial<ContextCampaign>>({
     name: "",
     group_jid: "",
+    instance_id: "",
     trigger_type: "keyword",
     trigger_config: {
       keyword: "#novoproduto",
       duration_minutes: 30
     },
     webhook_url: "",
+    opening_message: "",
+    closing_message: "",
     is_active: true
   });
+
+  const connectedInstances = instances?.filter(i => i.status === "connected") || [];
+
+  const handleListGroups = async () => {
+    if (!newCampaign.instance_id) return;
+    
+    const instance = instances?.find(i => i.id === newCampaign.instance_id);
+    if (!instance) return;
+    
+    setIsListingGroups(true);
+    try {
+      const webhookUrl = getWebhookUrlForCategory("groups", configs);
+      const payload = buildGroupPayload({
+        action: "group.list",
+        instance: {
+          id: instance.id,
+          name: instance.name,
+          phone: instance.phoneNumber || "",
+          provider: instance.provider,
+          externalId: instance.idInstance || "",
+          externalToken: instance.tokenInstance || "",
+        }
+      });
+      
+      const response = await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      
+      if (!response.ok) throw new Error("Falha ao buscar grupos");
+      
+      const data = await response.json();
+      const rawGroups = data.groups || data || [];
+      const groupsOnly = rawGroups.filter((item: any) => item.isGroup === true);
+      
+      setAvailableGroups(groupsOnly.map((g: any) => ({ phone: g.phone, name: g.name })));
+      toast.success(`${groupsOnly.length} grupos encontrados!`);
+    } catch (error) {
+      console.error("Erro ao listar grupos:", error);
+      toast.error("Falha ao listar grupos.");
+    } finally {
+      setIsListingGroups(false);
+    }
+  };
 
   const handleCreate = async () => {
     await createCampaign.mutateAsync(newCampaign);
     setIsCreateOpen(false);
+    setAvailableGroups([]);
   };
 
   return (
@@ -98,13 +156,57 @@ const ContextCampaigns = () => {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label>ID do Grupo (JID)</Label>
-                <Input
-                  placeholder="123456789@g.us"
-                  value={newCampaign.group_jid}
-                  onChange={(e) => setNewCampaign({ ...newCampaign, group_jid: e.target.value })}
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Instância de WhatsApp</Label>
+                  <Select
+                    value={newCampaign.instance_id}
+                    onValueChange={(v) => setNewCampaign({ ...newCampaign, instance_id: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a instância" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {connectedInstances.map(instance => (
+                        <SelectItem key={instance.id} value={instance.id}>
+                          {instance.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Grupo</Label>
+                  <div className="flex gap-2">
+                    <Select
+                      value={newCampaign.group_jid}
+                      onValueChange={(v) => setNewCampaign({ ...newCampaign, group_jid: v })}
+                      disabled={availableGroups.length === 0}
+                    >
+                      <SelectTrigger className="flex-1">
+                        <SelectValue placeholder={availableGroups.length === 0 ? "Liste os grupos primeiro" : "Selecione o grupo"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableGroups.map(group => (
+                          <SelectItem key={group.phone} value={group.phone}>
+                            {group.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="icon"
+                      onClick={handleListGroups}
+                      disabled={!newCampaign.instance_id || isListingGroups}
+                      className="shrink-0"
+                    >
+                      <List className={`w-4 h-4 ${isListingGroups ? 'animate-spin' : ''}`} />
+                    </Button>
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -229,10 +331,15 @@ const ContextCampaigns = () => {
                   <div className="flex items-center text-sm text-muted-foreground">
                     <Activity className="w-4 h-4 mr-2 opacity-50" />
                     <span>
-                      {campaign.trigger_type === "keyword" ? `Gatilho: ${campaign.trigger_config.keyword}` :
-                        campaign.trigger_type === "scheduled" ? `Diário às ${campaign.trigger_config.daily_time}` :
-                          "Acionamento Manual"}
+                      {campaign.trigger_type === "keyword" ? `Gatilho: ${campaign.trigger_config.keyword}` : 
+                       campaign.trigger_type === "first_message" ? "Gatilho: Primeira Mensagem" :
+                       campaign.trigger_type === "scheduled" ? `Diário às ${campaign.trigger_config.daily_time}` : 
+                       "Acionamento Manual"}
                     </span>
+                  </div>
+                  <div className="flex items-center text-sm text-muted-foreground">
+                    <Webhook className="w-4 h-4 mr-2 opacity-50" />
+                    <span>Instância: {instances?.find(i => i.id === campaign.instance_id)?.name || "Não definida"}</span>
                   </div>
                   <div className="flex items-center text-sm text-muted-foreground">
                     <Clock className="w-4 h-4 mr-2 opacity-50" />
