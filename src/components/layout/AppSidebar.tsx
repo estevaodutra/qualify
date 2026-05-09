@@ -25,6 +25,7 @@ import {
   Receipt,
   SlidersHorizontal,
   UserCircle,
+  Activity,
 } from "lucide-react";
 import {
   Sidebar,
@@ -107,6 +108,7 @@ export function AppSidebar() {
       { title: "Disparos", url: "/campaigns/whatsapp/despacho", icon: SendHorizontal },
       { title: "Grupos", url: "/campaigns/whatsapp/grupos", icon: Users },
       { title: "Pirata", url: "/campaigns/whatsapp/pirata", icon: Skull },
+      { title: "Contexto", url: "/campaigns/whatsapp/contexto", icon: Activity },
     ],
     telefonia: [
       { title: "URA", url: "/campaigns/telefonia/ura", icon: Bot, comingSoon: true },

@@ -629,7 +629,62 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ==========================================
+    // AUTO-TRIGGER CONTEXT CAMPAIGNS (KEYWORDS)
+    // ==========================================
+    if (classification.eventType === "text_message" && context.chatJid && context.chatType === "group" && instance?.id) {
+      try {
+        const bodyText = (rawEvent.body?.text?.message || rawEvent.body?.text || rawEvent.message?.conversation || rawEvent.message?.extendedTextMessage?.text || "") as string;
+        
+        if (bodyText) {
+          // Find if this text starts with any active keyword for this group
+          const { data: activeCampaigns } = await supabase
+            .from("context_campaigns")
+            .select("*")
+            .eq("group_jid", context.chatJid)
+            .eq("trigger_type", "keyword")
+            .eq("is_active", true);
+
+          for (const campaign of (activeCampaigns || [])) {
+            const config = campaign.trigger_config as any;
+            const keyword = config?.keyword;
+            
+            if (keyword && bodyText.toLowerCase().startsWith(keyword.toLowerCase())) {
+              console.log(`[webhook-inbound] 🎯 Keyword match! Campaign: ${campaign.name}, Keyword: ${keyword}`);
+              
+              const durationMinutes = config?.duration_minutes || 30;
+              const startAt = new Date().toISOString();
+              const endAt = new Date(Date.now() + durationMinutes * 60000).toISOString();
+
+              const { data: execution, error: execError } = await supabase
+                .from("context_executions")
+                .insert({
+                  campaign_id: campaign.id,
+                  user_id: campaign.user_id,
+                  company_id: campaign.company_id,
+                  start_at: startAt,
+                  end_at: endAt,
+                  status: "collecting",
+                  trigger_message: bodyText
+                })
+                .select()
+                .single();
+
+              if (execError) {
+                console.error("[webhook-inbound] Error creating context execution:", execError);
+              } else {
+                console.log(`[webhook-inbound] Context window started: ${execution.id}, ending at: ${endAt}`);
+              }
+            }
+          }
+        }
+      } catch (contextErr) {
+        console.error("[webhook-inbound] Error processing context trigger:", contextErr);
+      }
+    }
+
     return new Response(
+
       JSON.stringify({
         success: true,
         event_id: insertedEvent.id,

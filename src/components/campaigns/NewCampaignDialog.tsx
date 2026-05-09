@@ -16,6 +16,7 @@ import {
   PhoneCall,
   MessageSquare,
   Phone,
+  Activity,
 } from "lucide-react";
 
 interface NewCampaignDialogProps {
@@ -50,6 +51,15 @@ const campaignTypes = {
       icon: Skull,
       href: "/campaigns/whatsapp/pirata",
       colorClass: "bg-purple-500",
+      enabled: true,
+    },
+    {
+      id: "contexto",
+      title: "Contexto",
+      description: "Coleta e compilação de contexto de grupos",
+      icon: Activity,
+      href: "/campaigns/whatsapp/contexto",
+      colorClass: "bg-indigo-500",
       enabled: true,
     },
   ],

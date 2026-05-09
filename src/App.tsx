@@ -21,6 +21,7 @@ import {
   PirateCampaigns,
   URACampaigns,
   CallCampaigns,
+  ContextCampaigns,
 } from "./pages/campaigns";
 import PhoneNumbers from "./pages/PhoneNumbers";
 import Logs from "./pages/Logs";
@@ -116,6 +117,7 @@ const App = () => {
                         <Route path="whatsapp/pirata" element={<PirateCampaigns />} />
                         <Route path="telefonia/ura" element={<URACampaigns />} />
                         <Route path="telefonia/ligacao" element={<CallCampaigns />} />
+                        <Route path="whatsapp/contexto" element={<ContextCampaigns />} />
                       </Route>
 
                       {/* Scheduling routes */}
