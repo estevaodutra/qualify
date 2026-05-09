@@ -141,33 +141,35 @@ const ContextCampaigns = () => {
                 )}
               </div>
 
-              {newCampaign.trigger_type === "keyword" && (
+              {(newCampaign.trigger_type === "keyword" || newCampaign.trigger_type === "first_message") && (
                 <div className="space-y-2">
                   <Label>Duração da Coleta (Minutos)</Label>
-                  <Input
+                  <Input 
                     type="number"
+                    placeholder="Ex: 30"
                     value={newCampaign.trigger_config?.duration_minutes}
                     onChange={(e) => setNewCampaign({
-                      ...newCampaign,
-                      trigger_config: { ...newCampaign.trigger_config, duration_minutes: parseInt(e.target.value) }
+                      ...newCampaign, 
+                      trigger_config: {...newCampaign.trigger_config, duration_minutes: parseInt(e.target.value)}
                     })}
                   />
                 </div>
               )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Mensagem de Abertura (Opcional)</Label>
                   <Input 
-                    placeholder="Ex: Iniciando coleta de dados..." 
-                    value={newCampaign.opening_message}
+                    placeholder="Ex: Coleta iniciada..." 
+                    value={newCampaign.opening_message || ""}
                     onChange={(e) => setNewCampaign({...newCampaign, opening_message: e.target.value})}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>Mensagem de Fechamento (Opcional)</Label>
                   <Input 
-                    placeholder="Ex: Coleta finalizada. Enviando resumo." 
-                    value={newCampaign.closing_message}
+                    placeholder="Ex: Coleta finalizada." 
+                    value={newCampaign.closing_message || ""}
                     onChange={(e) => setNewCampaign({...newCampaign, closing_message: e.target.value})}
                   />
                 </div>
