@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
 
     if (eventsError) throw eventsError;
 
-    // 3. Compile data into arrays
+    // 3. Compile data into arrays + build structured event list
     const compilation = {
       texts: [] as string[],
       images: [] as string[],
@@ -69,9 +69,27 @@ Deno.serve(async (req) => {
       members_left: [] as string[],
     };
 
+    const eventsList: Array<{
+      received_at: string; type: string; sender: string;
+      content: string; media_url?: string;
+    }> = [];
+
     events.forEach(event => {
       const raw = event.raw_event as any;
       const sender = event.sender_name || event.sender_phone || "Desconhecido";
+
+      // Build event entry for the structured list
+      const evtText = raw.body?.text?.message || raw.body?.text || "";
+      const evtCaption = raw.body?.image?.caption || raw.body?.video?.caption || "";
+      const evtMediaUrl = raw.body?.image?.imageUrl || raw.body?.audio?.audioUrl ||
+                          raw.body?.video?.videoUrl || raw.body?.document?.documentUrl || "";
+      eventsList.push({
+        received_at: event.received_at,
+        type: event.event_type,
+        sender,
+        content: evtText || evtCaption || (evtMediaUrl ? `[${event.event_type}]` : ""),
+        ...(evtMediaUrl ? { media_url: evtMediaUrl } : {}),
+      });
 
       // Z-API wraps text inside body.text.message; other providers use body.text or message.conversation
       const textContent = raw.body?.text?.message || raw.body?.text || raw.message?.conversation || raw.message?.extendedTextMessage?.text || "";
@@ -149,7 +167,8 @@ Deno.serve(async (req) => {
         image_count: compilation.images.length,
         audio_count: compilation.audios.length
       },
-      data: compilation
+      data: compilation,
+      events: eventsList
     };
 
     // 4. Send to Webhook
@@ -242,7 +261,8 @@ Deno.serve(async (req) => {
           webhook_status: webhookStatus,
           webhook_response: webhookResponse,
           summary: payload.summary,
-          data: payload.data
+          data: payload.data,
+          events: payload.events
         }
       })
       .eq("id", execution.id);

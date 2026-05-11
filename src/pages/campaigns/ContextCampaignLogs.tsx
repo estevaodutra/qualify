@@ -231,86 +231,68 @@ const ContextCampaignLogs = () => {
                 </div>
               )}
 
-              {selectedLog.result_payload?.data && (() => {
-                const d = selectedLog.result_payload.data as {
-                  texts?: string[]; images?: string[]; audios?: string[];
-                  videos?: string[]; documents?: string[];
-                };
-                const hasContent = [d.texts, d.images, d.audios, d.videos, d.documents].some(a => a && a.length > 0);
-                if (!hasContent) return null;
-                return (
-                  <div className="space-y-3">
-                    <Label className="text-primary font-bold">Conteúdo Capturado</Label>
-
-                    {d.texts && d.texts.length > 0 && (
-                      <div className="space-y-1">
-                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Textos ({d.texts.length})</p>
-                        <div className="space-y-1 max-h-32 overflow-y-auto">
-                          {d.texts.map((t, i) => (
-                            <p key={i} className="text-xs px-3 py-1.5 rounded-lg bg-muted/40 break-words">{t}</p>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {d.images && d.images.length > 0 && (
-                      <div className="space-y-1">
-                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Imagens ({d.images.length})</p>
-                        <div className="flex flex-wrap gap-2">
-                          {d.images.map((url, i) => (
-                            <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                               className="block h-16 w-16 rounded-lg overflow-hidden border border-border bg-muted hover:opacity-80 transition-opacity">
-                              <img src={url} alt={`img-${i}`} className="h-full w-full object-cover" />
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {d.audios && d.audios.length > 0 && (
-                      <div className="space-y-1">
-                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Áudios ({d.audios.length})</p>
-                        <div className="space-y-1">
-                          {d.audios.map((url, i) => (
-                            <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                               className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg bg-muted/40 text-primary hover:underline break-all">
-                              🎵 Áudio {i + 1}
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {d.videos && d.videos.length > 0 && (
-                      <div className="space-y-1">
-                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Vídeos ({d.videos.length})</p>
-                        <div className="space-y-1">
-                          {d.videos.map((url, i) => (
-                            <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                               className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg bg-muted/40 text-primary hover:underline break-all">
-                              🎬 Vídeo {i + 1}
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {d.documents && d.documents.length > 0 && (
-                      <div className="space-y-1">
-                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Documentos ({d.documents.length})</p>
-                        <div className="space-y-1">
-                          {d.documents.map((url, i) => (
-                            <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                               className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg bg-muted/40 text-primary hover:underline break-all">
-                              📄 {url.split("/").pop() || `Documento ${i + 1}`}
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+              {selectedLog.result_payload?.events && (selectedLog.result_payload.events as any[]).length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-primary font-bold">
+                    Eventos Capturados ({(selectedLog.result_payload.events as any[]).length})
+                  </Label>
+                  <div className="rounded-xl border border-border overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-muted/50 text-muted-foreground font-bold uppercase tracking-wider">
+                          <th className="px-3 py-2 text-left">Horário</th>
+                          <th className="px-3 py-2 text-left">Tipo</th>
+                          <th className="px-3 py-2 text-left">Remetente</th>
+                          <th className="px-3 py-2 text-left">Conteúdo</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {(selectedLog.result_payload.events as any[]).map((ev, i) => {
+                          const typeLabels: Record<string, { label: string; color: string }> = {
+                            text_message:    { label: "Texto",      color: "bg-blue-500/10 text-blue-600" },
+                            image_message:   { label: "Imagem",     color: "bg-purple-500/10 text-purple-600" },
+                            audio_message:   { label: "Áudio",      color: "bg-green-500/10 text-green-600" },
+                            video_message:   { label: "Vídeo",      color: "bg-orange-500/10 text-orange-600" },
+                            document_message:{ label: "Documento",  color: "bg-yellow-500/10 text-yellow-600" },
+                            reaction:        { label: "Reação",     color: "bg-pink-500/10 text-pink-600" },
+                            group_join:      { label: "Entrou",     color: "bg-emerald-500/10 text-emerald-600" },
+                            group_leave:     { label: "Saiu",       color: "bg-red-500/10 text-red-600" },
+                          };
+                          const typeInfo = typeLabels[ev.type] ?? { label: ev.type, color: "bg-muted text-muted-foreground" };
+                          const time = ev.received_at ? format(new Date(ev.received_at), "HH:mm:ss", { locale: ptBR }) : "—";
+                          return (
+                            <tr key={i} className="hover:bg-muted/30 transition-colors">
+                              <td className="px-3 py-2 font-mono whitespace-nowrap">{time}</td>
+                              <td className="px-3 py-2">
+                                <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${typeInfo.color}`}>
+                                  {typeInfo.label}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 text-muted-foreground truncate max-w-[80px]" title={ev.sender}>{ev.sender}</td>
+                              <td className="px-3 py-2">
+                                {ev.media_url && ev.type === "image_message" ? (
+                                  <a href={ev.media_url} target="_blank" rel="noopener noreferrer"
+                                     className="flex items-center gap-2 hover:opacity-80">
+                                    <img src={ev.media_url} alt="" className="h-8 w-8 rounded object-cover border border-border flex-shrink-0" />
+                                    {ev.content && <span className="truncate max-w-[120px] text-muted-foreground" title={ev.content}>{ev.content}</span>}
+                                  </a>
+                                ) : ev.media_url ? (
+                                  <a href={ev.media_url} target="_blank" rel="noopener noreferrer"
+                                     className="text-primary hover:underline truncate block max-w-[180px]">
+                                    {ev.content || ev.media_url.split("/").pop()}
+                                  </a>
+                                ) : (
+                                  <span className="truncate block max-w-[200px]" title={ev.content}>{ev.content}</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
-                );
-              })()}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label className="text-muted-foreground">Resposta do Webhook</Label>

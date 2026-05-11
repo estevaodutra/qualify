@@ -286,7 +286,10 @@ export function classifyZApiEvent(rawEvent: Record<string, unknown>): Classifica
     READ: "message_read",
     READ_BY_ME: "read_by_me",
   };
-  if (bodyStatus && STATUS_MAP[bodyStatus]) {
+  // Guarda: se status=RECEIVED mas tem body.text.message, é uma mensagem de texto —
+  // deixar a Regra 11 tratar para classificar como text_message
+  const hasTextContent = (body as any)?.text?.message !== undefined;
+  if (bodyStatus && STATUS_MAP[bodyStatus] && !(bodyStatus === "RECEIVED" && hasTextContent)) {
     return {
       eventType: STATUS_MAP[bodyStatus],
       eventSubtype: bodyStatus,
