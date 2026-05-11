@@ -241,7 +241,8 @@ Deno.serve(async (req) => {
         result_payload: {
           webhook_status: webhookStatus,
           webhook_response: webhookResponse,
-          summary: payload.summary
+          summary: payload.summary,
+          data: payload.data
         }
       })
       .eq("id", execution.id);

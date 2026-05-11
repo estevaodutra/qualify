@@ -231,11 +231,92 @@ const ContextCampaignLogs = () => {
                 </div>
               )}
 
+              {selectedLog.result_payload?.data && (() => {
+                const d = selectedLog.result_payload.data as {
+                  texts?: string[]; images?: string[]; audios?: string[];
+                  videos?: string[]; documents?: string[];
+                };
+                const hasContent = [d.texts, d.images, d.audios, d.videos, d.documents].some(a => a && a.length > 0);
+                if (!hasContent) return null;
+                return (
+                  <div className="space-y-3">
+                    <Label className="text-primary font-bold">Conteúdo Capturado</Label>
+
+                    {d.texts && d.texts.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Textos ({d.texts.length})</p>
+                        <div className="space-y-1 max-h-32 overflow-y-auto">
+                          {d.texts.map((t, i) => (
+                            <p key={i} className="text-xs px-3 py-1.5 rounded-lg bg-muted/40 break-words">{t}</p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {d.images && d.images.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Imagens ({d.images.length})</p>
+                        <div className="flex flex-wrap gap-2">
+                          {d.images.map((url, i) => (
+                            <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                               className="block h-16 w-16 rounded-lg overflow-hidden border border-border bg-muted hover:opacity-80 transition-opacity">
+                              <img src={url} alt={`img-${i}`} className="h-full w-full object-cover" />
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {d.audios && d.audios.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Áudios ({d.audios.length})</p>
+                        <div className="space-y-1">
+                          {d.audios.map((url, i) => (
+                            <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                               className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg bg-muted/40 text-primary hover:underline break-all">
+                              🎵 Áudio {i + 1}
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {d.videos && d.videos.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Vídeos ({d.videos.length})</p>
+                        <div className="space-y-1">
+                          {d.videos.map((url, i) => (
+                            <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                               className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg bg-muted/40 text-primary hover:underline break-all">
+                              🎬 Vídeo {i + 1}
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {d.documents && d.documents.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Documentos ({d.documents.length})</p>
+                        <div className="space-y-1">
+                          {d.documents.map((url, i) => (
+                            <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                               className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg bg-muted/40 text-primary hover:underline break-all">
+                              📄 {url.split("/").pop() || `Documento ${i + 1}`}
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               <div className="space-y-2">
-                <Label className="text-muted-foreground">Payload do Webhook</Label>
-                <div className="p-4 rounded-2xl bg-zinc-950 font-mono text-xs text-zinc-400 overflow-x-auto max-h-48">
+                <Label className="text-muted-foreground">Resposta do Webhook</Label>
+                <div className="p-4 rounded-2xl bg-zinc-950 font-mono text-xs text-zinc-400 overflow-x-auto max-h-32">
                   <pre>{selectedLog.result_payload
-                    ? JSON.stringify(selectedLog.result_payload, null, 2)
+                    ? JSON.stringify({ webhook_status: selectedLog.result_payload.webhook_status, webhook_response: selectedLog.result_payload.webhook_response }, null, 2)
                     : selectedLog.status === "collecting"
                       ? "⏳ Aguardando fim da janela de coleta..."
                       : "Sem dados"
