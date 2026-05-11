@@ -226,14 +226,15 @@ export default function Instances() {
         },
       });
       
-      const response = await fetch(webhookUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
+      if (!webhookUrl) throw new Error("URL de webhook não configurada para instâncias.");
+
+      const { data: proxyResult, error: proxyError } = await supabase.functions.invoke("webhook-proxy", {
+        body: { url: webhookUrl, payload }
       });
-      const data = await response.json();
+      if (proxyError) throw proxyError;
+      if (!proxyResult?.success) throw new Error(`Webhook retornou status ${proxyResult?.status}: ${proxyResult?.body}`);
+
+      const data = JSON.parse(proxyResult.body);
       console.log("Webhook response:", data);
 
       // Normalizar resposta - pode ser array ou objeto
