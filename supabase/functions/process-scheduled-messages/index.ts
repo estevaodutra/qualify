@@ -1084,11 +1084,16 @@ Deno.serve(async (req) => {
           if (nodesWithSchedule.length === 0) continue;
 
           for (const node of nodesWithSchedule) {
-            const schedule = (node as any).config.schedule as { days: number[]; times: string[]; enabled: boolean };
-            
-            const matchesDay = schedule.days.includes(currentDay);
+            const schedule = (node as any).config.schedule as { days: number[]; times: string[]; enabled: boolean; scheduleType?: string };
+
+            const scheduleType = schedule.scheduleType || "recurring";
+            const matchesDay = scheduleType === "recurring_month"
+              ? schedule.days.includes(currentMonthDay)
+              : schedule.days.includes(currentDay);
             const matchesTime = schedule.times.includes(currentTime);
-            
+
+            console.log(`[Scheduler] Per-node check seq="${seq.name}" node=${(node as any).node_order} type=${scheduleType} days=[${schedule.days}] matchDay(${scheduleType === "recurring_month" ? currentMonthDay : currentDay})=${matchesDay} times=[${schedule.times}] matchTime(${currentTime})=${matchesTime}`);
+
             if (!matchesDay || !matchesTime) continue;
 
             console.log(`[Scheduler] ✅ Per-node match: sequence "${seq.name}" node ${(node as any).node_order} (${(node as any).node_type})`);
