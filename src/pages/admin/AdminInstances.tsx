@@ -244,10 +244,12 @@ export default function AdminInstances() {
         const dbId = existingMap.get(inst.id);
         if (dbId) {
           const { error } = await (supabase as any).from("instances").update(rowData).eq("id", dbId);
-          error ? errors++ : updated++;
+          if (error) { errors++; console.error("[sync] Update error:", error.message, inst.id); }
+          else updated++;
         } else {
           const { error } = await (supabase as any).from("instances").insert({ ...rowData, external_instance_id: inst.id, phone: "" });
-          error ? errors++ : inserted++;
+          if (error) { errors++; console.error("[sync] Insert error:", error.message, inst.id); }
+          else inserted++;
         }
       }
       await refetch();
