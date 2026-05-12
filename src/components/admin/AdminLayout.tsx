@@ -17,6 +17,7 @@ import {
   Code2,
   Activity,
   Zap,
+  Smartphone,
 } from "lucide-react";
 import { ImpersonationBanner } from "./ImpersonationBanner";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ const mainItems = [
   { title: "Dashboard", url: "/admin", icon: LayoutDashboard, end: true },
   { title: "Empresas", url: "/admin/empresas", icon: Building2 },
   { title: "Usuários", url: "/admin/usuarios", icon: Users },
+  { title: "Instâncias", url: "/admin/instancias", icon: Smartphone },
 ];
 
 const financialItems = [

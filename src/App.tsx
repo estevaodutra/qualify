@@ -51,6 +51,7 @@ import { AdminRoute } from "@/components/auth/AdminRoute";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminCompanies from "./pages/admin/AdminCompanies";
+import AdminInstances from "./pages/admin/AdminInstances";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminTransactions from "./pages/admin/AdminTransactions";
 import AdminEventDictionary from "./pages/admin/AdminEventDictionary";
@@ -157,6 +158,7 @@ const App = () => {
                       <Route index element={<AdminDashboard />} />
                       <Route path="empresas" element={<AdminCompanies />} />
                       <Route path="usuarios" element={<AdminUsers />} />
+                      <Route path="instancias" element={<AdminInstances />} />
                       <Route path="financeiro/transacoes" element={<AdminTransactions />} />
                       <Route path="financeiro/recargas" element={<AdminPlaceholder title="Recargas" description="Gerenciamento de recargas e faturas." />} />
                       <Route path="financeiro/consumo" element={<AdminPlaceholder title="Consumo" description="Análise detalhada de consumo por empresa." />} />

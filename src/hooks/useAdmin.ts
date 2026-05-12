@@ -545,3 +545,48 @@ export function useUpdateSetting() {
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
 }
+
+// ============================================================
+// Instances (all companies)
+// ============================================================
+export interface AdminInstance {
+  id: string;
+  name: string;
+  phone: string;
+  status: string;
+  provider: string;
+  external_instance_id: string | null;
+  external_instance_token: string | null;
+  user_id: string | null;
+  created_at: string | null;
+  company_name: string;
+}
+
+export function useAdminInstances() {
+  return useQuery({
+    queryKey: ["admin", "instances"],
+    queryFn: async () => {
+      const sb = supabase as any;
+      const { data, error } = await sb
+        .from("instances")
+        .select("id, name, phone, status, provider, external_instance_id, external_instance_token, user_id, created_at")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+
+      const userIds = [...new Set(((data || []) as any[]).map((i) => i.user_id).filter(Boolean))];
+      let companyByUser = new Map<string, string>();
+      if (userIds.length > 0) {
+        const { data: companies } = await sb
+          .from("companies")
+          .select("name, owner_id")
+          .in("owner_id", userIds);
+        companyByUser = new Map(((companies || []) as any[]).map((c) => [c.owner_id, c.name]));
+      }
+
+      return ((data || []) as any[]).map((inst) => ({
+        ...inst,
+        company_name: companyByUser.get(inst.user_id) || "—",
+      })) as AdminInstance[];
+    },
+  });
+}
