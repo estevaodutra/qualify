@@ -11,17 +11,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Search, Copy, Eye, EyeOff, RefreshCw, Smartphone, List, Loader2 } from "lucide-react";
+import { Search, Copy, Eye, EyeOff, RefreshCw, Smartphone, RefreshCcw, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 
 const WEBHOOK_URL = "https://n8n-n8n.nuwfic.easypanel.host/webhook/instance";
 
@@ -59,12 +51,7 @@ export default function AdminInstances() {
   const { data: instances = [], isLoading, refetch } = useAdminInstances();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-
-  // Provider instances modal
-  const [providerInstances, setProviderInstances] = useState<any[]>([]);
-  const [isListingAll, setIsListingAll] = useState(false);
-  const [showProviderModal, setShowProviderModal] = useState(false);
-  const [providerTotal, setProviderTotal] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const filtered = instances.filter((inst: AdminInstance) => {
     const q = search.toLowerCase();
@@ -78,13 +65,13 @@ export default function AdminInstances() {
     return matchSearch && matchStatus;
   });
 
-  const handleListAll = async () => {
-    setIsListingAll(true);
+  const handleSyncAll = async () => {
+    setIsSyncing(true);
     try {
-      let allInstances: any[] = [];
+      // 1. Buscar todas as instâncias do provedor Z-API (com paginação)
+      let allProviderInstances: any[] = [];
       let page = 1;
       let totalPages = 1;
-      let totalItems = 0;
 
       do {
         const { data: proxyResult, error } = await (supabase as any).functions.invoke("webhook-proxy", {
@@ -95,19 +82,55 @@ export default function AdminInstances() {
 
         const parsed = JSON.parse(proxyResult.body);
         const result = Array.isArray(parsed) ? parsed[0] : parsed;
-        allInstances = [...allInstances, ...(result.content || [])];
+        allProviderInstances = [...allProviderInstances, ...(result.content || [])];
         totalPages = result.totalPage || 1;
-        totalItems = result.total || allInstances.length;
         page++;
       } while (page <= totalPages);
 
-      setProviderInstances(allInstances);
-      setProviderTotal(totalItems);
-      setShowProviderModal(true);
+      // 2. Mapear DB existente por external_instance_id
+      const existingMap = new Map(
+        instances
+          .filter(i => i.external_instance_id)
+          .map(i => [i.external_instance_id!, i.id])
+      );
+
+      let updated = 0, inserted = 0, errors = 0;
+
+      for (const inst of allProviderInstances) {
+        const isConnected = !!(inst.phoneConnected && inst.whatsappConnected);
+        const rowData = {
+          name: inst.name,
+          external_instance_token: inst.token,
+          status: isConnected ? "connected" : "disconnected",
+          payment_status: inst.paymentStatus ?? null,
+          expiration_date: inst.due ? new Date(inst.due).toISOString() : null,
+          provider: "Z-API",
+        };
+
+        const dbId = existingMap.get(inst.id);
+        if (dbId) {
+          const { error } = await (supabase as any)
+            .from("instances")
+            .update(rowData)
+            .eq("id", dbId);
+          error ? errors++ : updated++;
+        } else {
+          const { error } = await (supabase as any)
+            .from("instances")
+            .insert({ ...rowData, external_instance_id: inst.id, phone: "" });
+          error ? errors++ : inserted++;
+        }
+      }
+
+      await refetch();
+      toast({
+        title: "Sincronização concluída",
+        description: `${updated} atualizadas · ${inserted} novas · ${errors} erros`,
+      });
     } catch (e: any) {
-      toast({ title: "Erro ao listar instâncias", description: e.message, variant: "destructive" });
+      toast({ title: "Erro ao sincronizar", description: e.message, variant: "destructive" });
     } finally {
-      setIsListingAll(false);
+      setIsSyncing(false);
     }
   };
 
@@ -122,9 +145,11 @@ export default function AdminInstances() {
           <p className="text-sm text-muted-foreground mt-1">Todas as conexões WhatsApp da plataforma</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleListAll} disabled={isListingAll}>
-            {isListingAll ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <List className="h-4 w-4 mr-2" />}
-            {isListingAll ? "Buscando..." : "Listar Todas Instâncias"}
+          <Button onClick={handleSyncAll} disabled={isSyncing} size="sm">
+            {isSyncing
+              ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              : <RefreshCcw className="h-4 w-4 mr-2" />}
+            {isSyncing ? "Sincronizando..." : "Sincronizar com Z-API"}
           </Button>
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
@@ -139,7 +164,12 @@ export default function AdminInstances() {
           <div className="flex gap-3 flex-wrap">
             <div className="relative flex-1 min-w-48">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-              <Input placeholder="Buscar por empresa, nome, phone ou Instance ID..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
+              <Input
+                placeholder="Buscar por empresa, nome, phone ou Instance ID..."
+                className="pl-9"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-44">
@@ -159,7 +189,7 @@ export default function AdminInstances() {
         </CardContent>
       </Card>
 
-      {/* Tabela banco */}
+      {/* Tabela */}
       <Card>
         <CardContent className="p-0 overflow-x-auto">
           <table className="w-full text-sm">
@@ -215,68 +245,6 @@ export default function AdminInstances() {
           </table>
         </CardContent>
       </Card>
-
-      {/* Modal — instâncias do provedor (Z-API) */}
-      <Dialog open={showProviderModal} onOpenChange={setShowProviderModal}>
-        <DialogContent className="max-w-5xl max-h-[85vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <List className="h-5 w-5 text-primary" />
-              Instâncias no Provedor
-              <Badge variant="secondary" className="ml-2">{providerTotal} total</Badge>
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="overflow-auto flex-1 -mx-1 px-1">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 z-10">
-                <tr className="border-b bg-background text-xs uppercase tracking-wider text-muted-foreground">
-                  <th className="px-3 py-2 text-left">Nome</th>
-                  <th className="px-3 py-2 text-left">ID</th>
-                  <th className="px-3 py-2 text-left">Token</th>
-                  <th className="px-3 py-2 text-left">Conectado</th>
-                  <th className="px-3 py-2 text-left">Pagamento</th>
-                  <th className="px-3 py-2 text-left">Vencimento</th>
-                  <th className="px-3 py-2 text-left">Tenant</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {providerInstances.map((inst, i) => {
-                  const isConnected = inst.phoneConnected && inst.whatsappConnected;
-                  const isPaid = inst.paymentStatus === "PAID";
-                  const dueDate = inst.due ? new Date(inst.due) : null;
-                  return (
-                    <tr key={inst.id || i} className="hover:bg-muted/30 transition-colors">
-                      <td className="px-3 py-2 font-medium max-w-[160px] truncate" title={inst.name}>{inst.name}</td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-1">
-                          <span className="font-mono text-xs truncate max-w-[100px]" title={inst.id}>{inst.id}</span>
-                          <button onClick={() => copyToClipboard(inst.id, "ID")} className="text-muted-foreground hover:text-foreground flex-shrink-0"><Copy className="h-3 w-3" /></button>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2"><MaskedToken value={inst.token} /></td>
-                      <td className="px-3 py-2">
-                        <Badge className={`text-xs border ${isConnected ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : "bg-red-500/10 text-red-600 border-red-500/20"}`}>
-                          {isConnected ? "Ativo" : "Offline"}
-                        </Badge>
-                      </td>
-                      <td className="px-3 py-2">
-                        <Badge className={`text-xs border ${isPaid ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : "bg-yellow-500/10 text-yellow-600 border-yellow-500/20"}`}>
-                          {isPaid ? "PAGO" : "PENDENTE"}
-                        </Badge>
-                      </td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">
-                        {dueDate ? format(dueDate, "dd/MM/yyyy", { locale: ptBR }) : "—"}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground truncate max-w-[140px]" title={inst.tenant}>{inst.tenant || "—"}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
