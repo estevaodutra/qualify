@@ -38,6 +38,30 @@ const Label = ({ children, className = "" }: { children: React.ReactNode; classN
   <p className={`text-sm font-medium ${className}`}>{children}</p>
 );
 
+const CountdownTimer = ({ endAt }: { endAt: string }) => {
+  const [remaining, setRemaining] = useState(() =>
+    Math.max(0, Math.floor((new Date(endAt).getTime() - Date.now()) / 1000))
+  );
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setRemaining(Math.max(0, Math.floor((new Date(endAt).getTime() - Date.now()) / 1000)));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [endAt]);
+
+  if (remaining <= 0)
+    return <span className="text-xs text-blue-400 animate-pulse font-medium">Encerrando...</span>;
+
+  const mm = String(Math.floor(remaining / 60)).padStart(2, "0");
+  const ss = String(remaining % 60).padStart(2, "0");
+  return (
+    <span className="text-sm font-mono font-bold text-blue-500">
+      {mm}:{ss} <span className="text-[10px] font-normal text-blue-400">restante</span>
+    </span>
+  );
+};
+
 const ContextCampaignLogs = () => {
   const navigate = useNavigate();
   const { executions, isLoading, refetch, deleteExecution } = useContextExecutions();
@@ -153,8 +177,9 @@ const ContextCampaignLogs = () => {
                       </td>
                       <td className="px-6 py-4">
                         <span className="text-sm font-mono text-muted-foreground">
-                          {log.status === "collecting" ? "---" : 
-                            `${Math.round((new Date(log.end_at).getTime() - new Date(log.start_at).getTime()) / 60000)} min`
+                          {log.status === "collecting"
+                            ? <CountdownTimer endAt={log.end_at} />
+                            : `${Math.round((new Date(log.end_at).getTime() - new Date(log.start_at).getTime()) / 60000)} min`
                           }
                         </span>
                       </td>
