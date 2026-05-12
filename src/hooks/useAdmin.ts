@@ -157,12 +157,7 @@ export function useCreateCompany() {
       
       if (companyError) throw companyError;
 
-      // Create initial wallet
-      const { error: walletError } = await sb
-        .from("wallets")
-        .insert({ company_id: company.id, balance: 0 });
-      
-      if (walletError) throw walletError;
+      // Wallet is created automatically by the trigger trg_companies_create_wallet
 
       // Add owner as admin member
       const { error: memberError } = await sb
