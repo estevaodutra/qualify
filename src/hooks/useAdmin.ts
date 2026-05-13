@@ -559,6 +559,7 @@ export interface AdminInstance {
   external_instance_token: string | null;
   user_id: string | null;
   created_at: string | null;
+  payment_status: string | null;
   company_name: string;
 }
 
@@ -569,7 +570,7 @@ export function useAdminInstances() {
       const sb = supabase as any;
       const { data, error } = await sb
         .from("instances")
-        .select("id, name, phone, status, provider, external_instance_id, external_instance_token, user_id, created_at")
+        .select("id, name, phone, status, provider, external_instance_id, external_instance_token, user_id, created_at, payment_status")
         .order("created_at", { ascending: false });
       if (error) throw error;
 
