@@ -15,7 +15,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Copy, RefreshCw, Upload, Link2, Trash2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Loader2, Copy, RefreshCw, Upload, Link2, Trash2, Shuffle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 
@@ -35,6 +36,8 @@ export function ConfigTab({ campaign, onUpdate }: ConfigTabProps) {
   const [formData, setFormData] = useState({
     name: campaign.name,
     instanceId: campaign.instanceId || "",
+    instanceIds: (campaign.config?.instance_ids as string[]) || [],
+    instanceLock: (campaign.config?.instance_lock as boolean) ?? true,
     groupName: campaign.groupName || "",
     groupDescription: campaign.groupDescription || "",
     messagePermission: campaign.messagePermission,
@@ -46,20 +49,28 @@ export function ConfigTab({ campaign, onUpdate }: ConfigTabProps) {
     setFormData({
       name: campaign.name,
       instanceId: campaign.instanceId || "",
+      instanceIds: (campaign.config?.instance_ids as string[]) || [],
+      instanceLock: (campaign.config?.instance_lock as boolean) ?? true,
       groupName: campaign.groupName || "",
       groupDescription: campaign.groupDescription || "",
       messagePermission: campaign.messagePermission,
       editPermission: campaign.editPermission,
     });
-  }, [campaign.id, campaign.instanceId, campaign.name, campaign.groupName, 
-      campaign.groupDescription, campaign.messagePermission, campaign.editPermission]);
+  }, [campaign.id, campaign.instanceId, campaign.name, campaign.groupName,
+      campaign.groupDescription, campaign.messagePermission, campaign.editPermission,
+      campaign.config]);
 
   const handleSave = async () => {
     setIsUpdating(true);
     try {
       await onUpdate(campaign.id, {
         name: formData.name,
-        instanceId: formData.instanceId || undefined,
+        instanceId: formData.instanceLock ? (formData.instanceId || undefined) : undefined,
+        config: {
+          ...campaign.config,
+          instance_ids: formData.instanceIds,
+          instance_lock: formData.instanceLock,
+        },
         groupName: formData.groupName || undefined,
         groupDescription: formData.groupDescription || undefined,
         messagePermission: formData.messagePermission,
@@ -102,35 +113,91 @@ export function ConfigTab({ campaign, onUpdate }: ConfigTabProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="name">Nome da Campanha</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          <div className="space-y-2">
+            <Label htmlFor="name">Nome da Campanha</Label>
+            <Input
+              id="name"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            />
+          </div>
+
+          {/* Pool de instâncias */}
+          <div className="space-y-2">
+            <Label>Instâncias WhatsApp</Label>
+            <p className="text-xs text-muted-foreground">
+              Selecione uma ou mais instâncias para esta campanha.
+            </p>
+            <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-1 border rounded-md p-2">
+              {connectedInstances.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2 px-1">Nenhuma instância conectada.</p>
+              ) : connectedInstances.map((inst) => (
+                <label
+                  key={inst.id}
+                  className="flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-muted/50 transition-colors"
+                >
+                  <Checkbox
+                    checked={formData.instanceIds.includes(inst.id)}
+                    onCheckedChange={(checked) => {
+                      setFormData(f => ({
+                        ...f,
+                        instanceIds: checked
+                          ? [...f.instanceIds, inst.id]
+                          : f.instanceIds.filter(id => id !== inst.id),
+                        instanceId: !checked && f.instanceId === inst.id ? "" : f.instanceId,
+                      }));
+                    }}
+                  />
+                  <span className="text-sm">{inst.name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Toggle de restrição — só aparece com 2+ instâncias no pool */}
+          {formData.instanceIds.length > 1 && (
+            <div className="flex items-center justify-between p-3 rounded-md border bg-muted/20">
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium flex items-center gap-2">
+                  <Shuffle className="h-3.5 w-3.5 text-muted-foreground" />
+                  Envio aleatório balanceado
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Ativado: qualquer instância do pool envia. Desativado: apenas a instância específica.
+                </p>
+              </div>
+              <Switch
+                checked={!formData.instanceLock}
+                onCheckedChange={(v) =>
+                  setFormData(f => ({ ...f, instanceLock: !v, instanceId: v ? "" : f.instanceId }))
+                }
               />
             </div>
+          )}
 
+          {/* Select da instância específica */}
+          {formData.instanceLock && formData.instanceIds.length > 0 && (
             <div className="space-y-2">
-              <Label htmlFor="instance">Instância WhatsApp</Label>
+              <Label>Instância principal</Label>
               <Select
                 value={formData.instanceId}
                 onValueChange={(v) => setFormData({ ...formData, instanceId: v })}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione uma instância" />
+                  <SelectValue placeholder="Selecione a instância exclusiva" />
                 </SelectTrigger>
                 <SelectContent>
-                  {connectedInstances.map((instance) => (
-                    <SelectItem key={instance.id} value={instance.id}>
-                      {instance.name}
-                    </SelectItem>
-                  ))}
+                  {connectedInstances
+                    .filter(i => formData.instanceIds.includes(i.id))
+                    .map((instance) => (
+                      <SelectItem key={instance.id} value={instance.id}>
+                        {instance.name}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
 

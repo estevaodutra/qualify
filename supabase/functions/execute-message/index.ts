@@ -334,6 +334,7 @@ Deno.serve(async (req) => {
         name,
         status,
         instance_id,
+        config,
         user_id,
         instances(
           id,
@@ -357,9 +358,25 @@ Deno.serve(async (req) => {
     }
 
     const typedCampaign = campaign as unknown as CampaignData;
-    const instance = typedCampaign.instances;
+    let instance = typedCampaign.instances;
 
-    if (!typedCampaign.instance_id || !instance) {
+    // Pool selection: if no pinned instance, pick randomly from config.instance_ids
+    if (!instance) {
+      const config = (typedCampaign as any).config as Record<string, unknown> | null;
+      const poolIds = (config?.instance_ids as string[]) || [];
+      if (poolIds.length > 0) {
+        const { data: pool } = await supabase
+          .from("instances")
+          .select("id, name, phone, provider, external_instance_id, external_instance_token, status")
+          .in("id", poolIds)
+          .eq("status", "connected");
+        if (pool?.length) {
+          instance = pool[Math.floor(Math.random() * pool.length)] as any;
+        }
+      }
+    }
+
+    if (!instance) {
       console.error("[ExecuteMessage] Campaign has no instance linked:", campaignId);
       return new Response(
         JSON.stringify({

@@ -495,16 +495,32 @@ async function executeAction(
       // Get campaign instance
       const { data: campaign } = await supabase
         .from("group_campaigns")
-        .select("instance_id")
+        .select("instance_id, config")
         .eq("id", list.campaign_id)
         .maybeSingle();
 
-      if (!campaign?.instance_id) throw new Error("Campaign has no instance");
+      // Resolve instance: use pinned instance_id or pick randomly from pool
+      let resolvedInstanceId = campaign?.instance_id as string | null;
+      if (!resolvedInstanceId) {
+        const poolIds = ((campaign?.config as any)?.instance_ids as string[]) || [];
+        if (poolIds.length > 0) {
+          const { data: pool } = await supabase
+            .from("instances")
+            .select("id")
+            .in("id", poolIds)
+            .eq("status", "connected");
+          if (pool?.length) {
+            resolvedInstanceId = pool[Math.floor(Math.random() * pool.length)].id;
+          }
+        }
+      }
+
+      if (!resolvedInstanceId) throw new Error("Campaign has no instance");
 
       const { data: instance } = await supabase
         .from("instances")
         .select("external_instance_id, external_instance_token")
-        .eq("id", campaign.instance_id)
+        .eq("id", resolvedInstanceId)
         .maybeSingle();
 
       if (!instance?.external_instance_id || !instance?.external_instance_token) {
