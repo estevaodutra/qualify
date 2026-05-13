@@ -33,6 +33,7 @@ import {
   MessageSquare,
   FileEdit,
   Copy,
+  Upload,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -46,6 +47,7 @@ interface GroupCampaignListProps {
   onDelete: (id: string) => Promise<void>;
   onStatusChange: (id: string, status: string) => Promise<void>;
   onCreateNew: () => void;
+  onImport?: () => void;
 }
 
 const statusColors: Record<string, string> = {
@@ -62,6 +64,7 @@ export function GroupCampaignList({
   onDelete,
   onStatusChange,
   onCreateNew,
+  onImport,
 }: GroupCampaignListProps) {
   const { t } = useLanguage();
   const [searchTerm, setSearchTerm] = useState("");
@@ -108,10 +111,18 @@ export function GroupCampaignList({
             className="pl-10"
           />
         </div>
-        <Button onClick={onCreateNew}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nova Campanha
-        </Button>
+        <div className="flex gap-2">
+          {onImport && (
+            <Button variant="outline" onClick={onImport}>
+              <Upload className="mr-2 h-4 w-4" />
+              Importar
+            </Button>
+          )}
+          <Button onClick={onCreateNew}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nova Campanha
+          </Button>
+        </div>
       </div>
 
       {/* Grid */}
