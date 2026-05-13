@@ -28,7 +28,8 @@ interface MessageSequence {
 interface GroupCampaign {
   id: string;
   name: string;
-  instance_id: string;
+  instance_id: string | null;
+  config?: Record<string, unknown>;
 }
 
 /**
@@ -155,7 +156,7 @@ Deno.serve(async (req) => {
     // Fetch the campaign to get campaign ID
     const { data: campaign, error: campaignError } = await supabase
       .from("group_campaigns")
-      .select("id, name, instance_id")
+      .select("id, name, instance_id, config")
       .eq("id", typedSequence.group_campaign_id)
       .single();
 
@@ -168,6 +169,23 @@ Deno.serve(async (req) => {
     }
 
     const typedCampaign = campaign as GroupCampaign;
+
+    // Pre-check: verify campaign has an instance configured before calling execute-message
+    const campaignConfig = typedCampaign.config as Record<string, unknown> | null;
+    const poolIds = (campaignConfig?.instance_ids as string[]) || [];
+    const hasInstance = !!typedCampaign.instance_id || poolIds.length > 0;
+
+    if (!hasInstance) {
+      console.error(`[TriggerSequence] Campaign ${typedCampaign.id} has no instance configured`);
+      return new Response(
+        JSON.stringify({
+          error: "Campanha sem instância configurada. Abra a aba Configuração da campanha, selecione ao menos uma instância e salve.",
+          campaignId: typedCampaign.id,
+          campaignName: typedCampaign.name,
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // ── Deduplication guard (best-effort) ───────────────────────────────────
     // Prevent the same sequence from firing multiple times within 15 seconds.
