@@ -1,3 +1,4 @@
+// deploy: 2026-05-13
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
