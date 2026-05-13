@@ -648,6 +648,37 @@ Deno.serve(async (req) => {
             }]
           : groups.map(g => ({ group_jid: g.group_jid, group_name: g.group_name, isPrivate: false }));
 
+      // Membership validation: private phone destinations must be active group members
+      let effectiveDests = destinations;
+      const privatePhoneDests = destinations.filter(
+        (d: DestinationData) => d.isPrivate && d.group_jid?.endsWith("@s.whatsapp.net")
+      );
+      if (privatePhoneDests.length > 0) {
+        const phones = privatePhoneDests.map((d: DestinationData) => d.group_jid.replace("@s.whatsapp.net", ""));
+        const { data: members } = await supabase
+          .from("group_members")
+          .select("phone")
+          .eq("group_campaign_id", campaignId)
+          .in("phone", phones)
+          .eq("status", "active");
+        const activePhonesSet = new Set((members || []).map((m: any) => m.phone));
+        effectiveDests = destinations.filter((d: DestinationData) => {
+          if (!d.isPrivate || !d.group_jid?.endsWith("@s.whatsapp.net")) return true;
+          const phone = d.group_jid.replace("@s.whatsapp.net", "");
+          if (!activePhonesSet.has(phone)) {
+            console.warn(`[ExecuteMessage] ${phone} não é membro ativo da campanha ${campaignId} — ignorado`);
+            return false;
+          }
+          return true;
+        });
+        if (effectiveDests.length === 0) {
+          return new Response(
+            JSON.stringify({ error: "Nenhum destino válido: números não são membros ativos da campanha", campaignId }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+
       // Determine starting node index
       const startNodeIndex = isResumedExecution && startFromNodeIndex !== undefined ? startFromNodeIndex : 0;
 
@@ -677,7 +708,7 @@ Deno.serve(async (req) => {
                 trigger_context: triggerContext || {},
                 current_node_index: nodeIndex + 1, // Resume from next node
                 nodes_data: sortedNodes,
-                destinations: destinations,
+                destinations: effectiveDests,
                 status: "paused",
                 resume_at: resumeAt.toISOString(),
                 nodes_processed: nodesProcessed,
@@ -741,7 +772,7 @@ Deno.serve(async (req) => {
           Object.assign(formattedConfig, resolvedConfig);
           
           // Group management nodes operate on linked groups (using group_jid)
-          for (const dest of destinations) {
+          for (const dest of effectiveDests) {
             const payload = buildStandardPayload({
               action,
               node: { id: node.id, type: node.node_type, order: node.node_order, config: formattedConfig },
@@ -936,7 +967,7 @@ Deno.serve(async (req) => {
         }
 
         // Send this node to all destinations
-        for (const dest of destinations) {
+        for (const dest of effectiveDests) {
           const action = getActionForNodeType(node.node_type);
           
           // Clone and format config, applying variable replacement
