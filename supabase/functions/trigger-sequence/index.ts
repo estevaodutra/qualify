@@ -169,6 +169,41 @@ Deno.serve(async (req) => {
 
     const typedCampaign = campaign as GroupCampaign;
 
+    // ── Deduplication guard ──────────────────────────────────────────────────
+    // Prevent the same sequence from firing multiple times within 15 seconds
+    // (e.g. when multiple WhatsApp instances forward the same webhook trigger)
+    const dedupeWindow = new Date(Date.now() - 15000).toISOString();
+    const { data: recentExec } = await supabase
+      .from("sequence_executions")
+      .select("id, created_at")
+      .eq("sequence_id", typedSequence.id)
+      .gte("created_at", dedupeWindow)
+      .limit(1)
+      .maybeSingle();
+
+    if (recentExec) {
+      console.log(`[TriggerSequence] Deduplicated — sequence ${sequenceId} already triggered at ${recentExec.created_at}`);
+      return new Response(
+        JSON.stringify({ success: true, deduplicated: true, message: "Sequence already triggered recently" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Insert early execution record as distributed lock so concurrent calls are blocked
+    await supabase.from("sequence_executions").insert({
+      sequence_id: typedSequence.id,
+      campaign_id: typedCampaign.id,
+      user_id: typedSequence.user_id,
+      status: "processing",
+      trigger_context: {},
+      destinations: [],
+      nodes_data: [],
+      nodes_processed: 0,
+      nodes_failed: 0,
+      current_node_index: 0,
+    });
+    // ── End deduplication guard ──────────────────────────────────────────────
+
     // Apply field mappings from trigger_config
     const triggerConfig = typedSequence.trigger_config || {};
     const fieldMappings = triggerConfig.fieldMappings || [];
