@@ -4,7 +4,7 @@ import { useGroupCampaigns, useImportGroupCampaign, GroupCampaign } from "@/hook
 import { GroupCampaignList, GroupCampaignDetails, CreateGroupDialog } from "@/components/group-campaigns";
 import { CampaignBreadcrumb } from "@/components/campaigns";
 import { toast } from "sonner";
-import { Upload } from "lucide-react";
+import { Upload, CheckCircle2, XCircle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +24,8 @@ export default function GroupCampaignsPage() {
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [importJson, setImportJson] = useState("");
   const [importError, setImportError] = useState<string | null>(null);
+  const [importFileName, setImportFileName] = useState<string | null>(null);
+  const [importValid, setImportValid] = useState<boolean | null>(null);
 
   const importMutation = useImportGroupCampaign();
   
@@ -77,6 +79,47 @@ export default function GroupCampaignsPage() {
     } catch (error) {
       toast.error(t("common.error"));
     }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith(".json")) {
+      setImportFileName(file.name);
+      setImportValid(false);
+      setImportError("O arquivo deve ter extensão .json");
+      setImportJson("");
+      e.target.value = "";
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      setImportFileName(file.name);
+      setImportError(null);
+      let parsed: any;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        setImportError("Arquivo JSON inválido ou corrompido.");
+        setImportValid(false);
+        setImportJson("");
+        return;
+      }
+      if (parsed.type !== "group_campaign") {
+        setImportError("Arquivo inválido — o campo 'type' deve ser 'group_campaign'.");
+        setImportValid(false);
+        setImportJson("");
+        return;
+      }
+      setImportJson(text);
+      setImportValid(true);
+      setImportError(null);
+    };
+    reader.readAsText(file);
+    e.target.value = "";
   };
 
   const handleImport = () => {
@@ -156,23 +199,86 @@ export default function GroupCampaignsPage() {
         isCreating={isCreating}
       />
 
-      <Dialog open={showImportDialog} onOpenChange={open => { setShowImportDialog(open); if (!open) { setImportJson(""); setImportError(null); } }}>
+      <Dialog open={showImportDialog} onOpenChange={open => {
+        setShowImportDialog(open);
+        if (!open) { setImportJson(""); setImportError(null); setImportFileName(null); setImportValid(null); }
+      }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Upload className="h-4 w-4" /> Importar Campanha
             </DialogTitle>
             <DialogDescription>
-              Cole o JSON exportado do DispatchOne abaixo.
+              Selecione um arquivo .json ou cole o conteúdo abaixo.
             </DialogDescription>
           </DialogHeader>
-          <Textarea
-            className="font-mono text-xs min-h-[220px]"
-            placeholder='{"version":"1.0","type":"group_campaign",...}'
-            value={importJson}
-            onChange={e => { setImportJson(e.target.value); setImportError(null); }}
-          />
-          {importError && <p className="text-sm text-destructive">{importError}</p>}
+
+          <div className="space-y-3">
+            {/* Zona de upload */}
+            <label
+              htmlFor="import-file-input"
+              className={`flex flex-col items-center justify-center w-full h-28 border-2 border-dashed rounded-lg cursor-pointer transition-colors select-none
+                ${importValid === true
+                  ? "border-emerald-500 bg-emerald-500/5"
+                  : importValid === false
+                  ? "border-destructive bg-destructive/5"
+                  : "border-muted-foreground/30 bg-muted/30 hover:bg-muted/50"
+                }`}
+            >
+              {importValid === true ? (
+                <>
+                  <CheckCircle2 className="h-6 w-6 text-emerald-500 mb-1" />
+                  <span className="text-sm font-medium text-emerald-600">{importFileName}</span>
+                  <span className="text-xs text-muted-foreground">Arquivo válido · clique para trocar</span>
+                </>
+              ) : importValid === false ? (
+                <>
+                  <XCircle className="h-6 w-6 text-destructive mb-1" />
+                  <span className="text-sm font-medium text-destructive">{importFileName}</span>
+                  <span className="text-xs text-muted-foreground">Clique para selecionar outro arquivo</span>
+                </>
+              ) : (
+                <>
+                  <Upload className="h-6 w-6 text-muted-foreground mb-1" />
+                  <span className="text-sm text-muted-foreground">Clique para selecionar arquivo .json</span>
+                </>
+              )}
+              <input
+                id="import-file-input"
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={handleFileUpload}
+              />
+            </label>
+
+            {/* Separador */}
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-muted-foreground">ou cole o JSON</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+
+            {/* Textarea */}
+            <Textarea
+              className="font-mono text-xs min-h-[140px]"
+              placeholder='{"version":"1.0","type":"group_campaign",...}'
+              value={importJson}
+              onChange={e => {
+                setImportJson(e.target.value);
+                setImportError(null);
+                setImportValid(null);
+                setImportFileName(null);
+              }}
+            />
+          </div>
+
+          {importError && (
+            <p className="text-sm text-destructive flex items-center gap-1">
+              <XCircle className="h-3.5 w-3.5 flex-shrink-0" /> {importError}
+            </p>
+          )}
+
           <DialogFooter>
             <Button variant="ghost" onClick={() => setShowImportDialog(false)}>Cancelar</Button>
             <Button onClick={handleImport} disabled={importMutation.isPending || !importJson.trim()}>
