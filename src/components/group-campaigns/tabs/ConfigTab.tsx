@@ -129,28 +129,38 @@ export function ConfigTab({ campaign, onUpdate }: ConfigTabProps) {
               Selecione uma ou mais instâncias para esta campanha.
             </p>
             <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-1 border rounded-md p-2">
-              {connectedInstances.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-2 px-1">Nenhuma instância conectada.</p>
-              ) : connectedInstances.map((inst) => (
-                <label
-                  key={inst.id}
-                  className="flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-muted/50 transition-colors"
-                >
-                  <Checkbox
-                    checked={formData.instanceIds.includes(inst.id)}
-                    onCheckedChange={(checked) => {
-                      setFormData(f => ({
-                        ...f,
-                        instanceIds: checked
-                          ? [...f.instanceIds, inst.id]
-                          : f.instanceIds.filter(id => id !== inst.id),
-                        instanceId: !checked && f.instanceId === inst.id ? "" : f.instanceId,
-                      }));
-                    }}
-                  />
-                  <span className="text-sm">{inst.name}</span>
-                </label>
-              ))}
+              {instances.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2 px-1">Nenhuma instância disponível.</p>
+              ) : instances.map((inst) => {
+                const isConnected = inst.status === "connected";
+                return (
+                  <label
+                    key={inst.id}
+                    className="flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-muted/50 transition-colors"
+                  >
+                    <Checkbox
+                      checked={formData.instanceIds.includes(inst.id)}
+                      onCheckedChange={(checked) => {
+                        setFormData(f => ({
+                          ...f,
+                          instanceIds: checked
+                            ? [...f.instanceIds, inst.id]
+                            : f.instanceIds.filter(id => id !== inst.id),
+                          instanceId: !checked && f.instanceId === inst.id ? "" : f.instanceId,
+                        }));
+                      }}
+                    />
+                    <span className="text-sm flex-1">{inst.name}</span>
+                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                      isConnected
+                        ? "bg-emerald-500/10 text-emerald-600"
+                        : "bg-red-500/10 text-red-500"
+                    }`}>
+                      {isConnected ? "Conectada" : "Desconectada"}
+                    </span>
+                  </label>
+                );
+              })}
             </div>
           </div>
 

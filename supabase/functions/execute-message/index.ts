@@ -360,18 +360,22 @@ Deno.serve(async (req) => {
     const typedCampaign = campaign as unknown as CampaignData;
     let instance = typedCampaign.instances;
 
-    // Pool selection: if no pinned instance, pick randomly from config.instance_ids
+    // Pool selection: pick randomly from config.instance_ids (no status filter — Z-API is authoritative)
     if (!instance) {
       const config = (typedCampaign as any).config as Record<string, unknown> | null;
       const poolIds = (config?.instance_ids as string[]) || [];
+      console.log(`[ExecuteMessage] Pool mode — poolIds:`, poolIds);
       if (poolIds.length > 0) {
         const { data: pool } = await supabase
           .from("instances")
           .select("id, name, phone, provider, external_instance_id, external_instance_token, status")
-          .in("id", poolIds)
-          .eq("status", "connected");
+          .in("id", poolIds);
         if (pool?.length) {
-          instance = pool[Math.floor(Math.random() * pool.length)] as any;
+          // Prefer connected instances; fall back to any if none are marked connected
+          const connected = (pool as any[]).filter((i: any) => i.status === "connected");
+          const candidates = connected.length > 0 ? connected : pool;
+          instance = candidates[Math.floor(Math.random() * candidates.length)] as any;
+          console.log(`[ExecuteMessage] Selected instance: ${(instance as any)?.name} (${(instance as any)?.status})`);
         }
       }
     }
