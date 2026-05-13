@@ -82,6 +82,25 @@ const TimerDisplay = ({ timeLeft, isExpired }: { timeLeft: number; isExpired: bo
   );
 };
 
+// Countdown até expiração (atualiza a cada minuto)
+const ExpirationCountdown = ({ expiresAt }: { expiresAt: string }) => {
+  const calc = () => new Date(expiresAt).getTime() - Date.now();
+  const [remaining, setRemaining] = useState(calc);
+  useEffect(() => {
+    const id = setInterval(() => setRemaining(calc()), 60000);
+    return () => clearInterval(id);
+  }, [expiresAt]);
+  if (remaining <= 0) return <span className="text-[10px] text-destructive font-medium">Expirado</span>;
+  const days = Math.floor(remaining / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((remaining % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const mins = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+  return (
+    <span className="text-[10px] text-orange-500 font-mono whitespace-nowrap">
+      {days > 0 ? `vence em ${days}d ${hours}h` : hours > 0 ? `vence em ${hours}h ${mins}m` : `vence em ${mins}m`}
+    </span>
+  );
+};
+
 // Helper para montar payload de instância
 function instPayload(inst: AdminInstance, action: string, extra?: Record<string, unknown>) {
   return {
@@ -415,7 +434,6 @@ export default function AdminInstances() {
                 ? <tr><td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">Nenhuma instância encontrada.</td></tr>
                 : filtered.map((inst: AdminInstance) => {
                     const s = statusConfig[inst.status] ?? { label: inst.status, className: "bg-muted text-muted-foreground" };
-                    const isPaid = inst.payment_status === "PAID";
                     return (
                       <tr key={inst.id} className="hover:bg-muted/30 transition-colors">
                         <td className="px-4 py-3 font-medium">{inst.company_name}</td>
@@ -436,10 +454,15 @@ export default function AdminInstances() {
                           <Badge className={`text-xs font-medium border ${s.className}`}>{s.label}</Badge>
                         </td>
                         <td className="px-4 py-3">
-                          {inst.payment_status
-                            ? <Badge className={`text-xs font-medium border ${isPaid ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : "bg-yellow-500/10 text-yellow-600 border-yellow-500/20"}`}>
-                                {isPaid ? "Pago" : "Pendente"}
-                              </Badge>
+                          {inst.payment_status === "PAID"
+                            ? <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-xs font-medium border">Pago</Badge>
+                            : inst.payment_status === "TRIAL"
+                            ? <div className="flex flex-col gap-0.5">
+                                <Badge className="bg-orange-500/10 text-orange-600 border-orange-500/20 text-xs font-medium border w-fit">Trial</Badge>
+                                {inst.expiration_date && <ExpirationCountdown expiresAt={inst.expiration_date} />}
+                              </div>
+                            : inst.payment_status
+                            ? <Badge className="bg-yellow-500/10 text-yellow-600 border-yellow-500/20 text-xs font-medium border">Pendente</Badge>
                             : <span className="text-muted-foreground text-xs">—</span>
                           }
                         </td>
