@@ -96,7 +96,9 @@ export function useMediaUpload(mediaType: MediaType) {
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
-      const ownerPath = activeCompanyId ? `companies/${activeCompanyId}` : user.id;
+      const ownerPath = activeCompanyId
+        ? `${user.id}/companies/${activeCompanyId}`
+        : user.id;
       const filePath = `${ownerPath}/${mediaType}/${fileName}`;
 
       setProgress(30);
