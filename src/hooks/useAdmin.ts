@@ -558,6 +558,7 @@ export interface AdminInstance {
   external_instance_id: string | null;
   external_instance_token: string | null;
   user_id: string | null;
+  company_id: string | null;
   created_at: string | null;
   payment_status: string | null;
   expiration_date: string | null;
@@ -571,23 +572,23 @@ export function useAdminInstances() {
       const sb = supabase as any;
       const { data, error } = await sb
         .from("instances")
-        .select("id, name, phone, status, provider, external_instance_id, external_instance_token, user_id, created_at, payment_status, expiration_date")
+        .select("id, name, phone, status, provider, external_instance_id, external_instance_token, user_id, company_id, created_at, payment_status, expiration_date")
         .order("created_at", { ascending: false });
       if (error) throw error;
 
-      const userIds = [...new Set(((data || []) as any[]).map((i) => i.user_id).filter(Boolean))];
-      let companyByUser = new Map<string, string>();
-      if (userIds.length > 0) {
+      const companyIds = [...new Set(((data || []) as any[]).map((i: any) => i.company_id).filter(Boolean))];
+      let companyById = new Map<string, string>();
+      if (companyIds.length > 0) {
         const { data: companies } = await sb
           .from("companies")
-          .select("name, owner_id")
-          .in("owner_id", userIds);
-        companyByUser = new Map(((companies || []) as any[]).map((c) => [c.owner_id, c.name]));
+          .select("id, name")
+          .in("id", companyIds);
+        companyById = new Map(((companies || []) as any[]).map((c: any) => [c.id, c.name]));
       }
 
       return ((data || []) as any[]).map((inst) => ({
         ...inst,
-        company_name: companyByUser.get(inst.user_id) || "—",
+        company_name: companyById.get(inst.company_id) || "—",
       })) as AdminInstance[];
     },
   });

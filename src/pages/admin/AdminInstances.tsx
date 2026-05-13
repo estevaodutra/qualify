@@ -152,6 +152,10 @@ export default function AdminInstances() {
   const [cancelingInstance, setCancelingInstance] = useState<AdminInstance | null>(null);
   const [isCanceling, setIsCanceling] = useState(false);
 
+  // — Fetch phones —
+  const [isFetchingPhones, setIsFetchingPhones] = useState(false);
+  const [fetchingPhoneId, setFetchingPhoneId] = useState<string | null>(null);
+
   // QR countdown
   useEffect(() => {
     if (!showConnectDialog || connectionStep === "select" || isQrExpired) return;
@@ -310,6 +314,26 @@ export default function AdminInstances() {
     } finally { setIsCanceling(false); }
   };
 
+  // Fetch phone numbers for connected instances sequentially
+  const fetchPhoneNumbers = async (source?: AdminInstance[]) => {
+    const connected = (source || instances).filter(i => i.status === "connected");
+    if (!connected.length) return;
+    setIsFetchingPhones(true);
+    for (const inst of connected) {
+      setFetchingPhoneId(inst.id);
+      try {
+        const parsed = await callWebhook(instPayload(inst, "device"));
+        const phone: string | undefined = Array.isArray(parsed) ? parsed[0]?.phone : parsed?.phone;
+        if (phone) {
+          await (supabase as any).from("instances").update({ phone }).eq("id", inst.id);
+        }
+      } catch { /* silent per-instance */ }
+    }
+    setIsFetchingPhones(false);
+    setFetchingPhoneId(null);
+    refetch();
+  };
+
   // Sync
   const handleSyncAll = async () => {
     setIsSyncing(true);
@@ -373,6 +397,9 @@ export default function AdminInstances() {
           <Button onClick={handleSyncAll} disabled={isSyncing} size="sm">
             {isSyncing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCcw className="h-4 w-4 mr-2" />}
             {isSyncing ? "Sincronizando..." : "Sincronizar com Z-API"}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => fetchPhoneNumbers()} disabled={isFetchingPhones || isLoading}>
+            {isFetchingPhones ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Buscando...</> : <><Phone className="h-4 w-4 mr-2" /> Buscar Telefones</>}
           </Button>
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} /> Atualizar
@@ -438,7 +465,12 @@ export default function AdminInstances() {
                       <tr key={inst.id} className="hover:bg-muted/30 transition-colors">
                         <td className="px-4 py-3 font-medium">{inst.company_name}</td>
                         <td className="px-4 py-3">{inst.name}</td>
-                        <td className="px-4 py-3 font-mono text-xs">{inst.phone || "—"}</td>
+                        <td className="px-4 py-3 font-mono text-xs">
+                          {fetchingPhoneId === inst.id
+                            ? <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                            : inst.phone || "—"
+                          }
+                        </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1">
                             <span className="font-mono text-xs truncate max-w-[140px]" title={inst.external_instance_id || ""}>{inst.external_instance_id || "—"}</span>
