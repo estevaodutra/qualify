@@ -47,6 +47,9 @@ import ExtratoPage from "./pages/wallet/ExtratoPage";
 import WalletSettingsPage from "./pages/wallet/WalletSettingsPage";
 import AwaitingAccess from "./pages/AwaitingAccess";
 import MembersPage from "./pages/settings/MembersPage";
+import QuizFunnelsPage from "./pages/quiz/QuizFunnelsPage";
+import QuizEditorPage from "./pages/quiz/QuizEditorPage";
+import QuizPublicPage from "./pages/public/QuizPublicPage";
 import { AdminRoute } from "@/components/auth/AdminRoute";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -71,8 +74,9 @@ const App = () => {
                 <Sonner position="top-right" expand={true} richColors />
                 <BrowserRouter>
                   <Routes>
-                    {/* Public route */}
+                    {/* Public routes */}
                     <Route path="/auth" element={<Auth />} />
+                    <Route path="/q/:slug" element={<QuizPublicPage />} />
 
                     {/* Awaiting access — authenticated but no company */}
                     <Route
@@ -110,6 +114,10 @@ const App = () => {
                       
                       {/* Settings sub-routes */}
                       <Route path="/configuracoes/membros" element={<MembersPage />} />
+
+                      {/* Quiz / Funnel routes */}
+                      <Route path="/quiz" element={<QuizFunnelsPage />} />
+                      <Route path="/quiz/:id" element={<QuizEditorPage />} />
 
                       {/* Campaigns routes */}
                       <Route path="/campaigns">

@@ -26,6 +26,7 @@ import {
   SlidersHorizontal,
   UserCircle,
   Activity,
+  Layers,
 } from "lucide-react";
 import {
   Sidebar,
@@ -94,6 +95,7 @@ export function AppSidebar() {
     { title: t("nav.dashboard"), url: "/", icon: LayoutDashboard },
     { title: t("nav.callPanel"), url: "/painel-ligacoes", icon: PhoneCall },
     { title: t("nav.leads") || "Leads", url: "/leads", icon: Users },
+    { title: "Funis", url: "/quiz", icon: Layers },
     { title: "Agendamentos", url: "/agendamentos/calendarios", icon: CalendarDays },
     { title: t("nav.phoneNumbers"), url: "/numbers", icon: Phone },
   ];
