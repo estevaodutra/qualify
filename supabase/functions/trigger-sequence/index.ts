@@ -252,7 +252,7 @@ Deno.serve(async (req) => {
       respondentName: extractField(payload, "name") || extractField(payload, "user.name") || "",
       respondentJid: destinationPhone ? `${destinationPhone}@s.whatsapp.net` : "",
       groupJid: "",
-      sendPrivate: true, // Always single execution for webhook triggers
+      sendPrivate: !!triggerConfig.sendPrivate, // Respect the user's trigger configuration
       customFields,
     };
 
@@ -284,19 +284,33 @@ Deno.serve(async (req) => {
 
     console.log(`[TriggerSequence] Calling execute-message with:`, JSON.stringify(executePayload).substring(0, 500));
 
-    const { data: executeResult, error: executeError } = await supabase.functions.invoke(
-      "execute-message",
-      { body: executePayload }
-    );
+    const executeUrl = `${supabaseUrl}/functions/v1/execute-message`;
+    const executeResponse = await fetch(executeUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${supabaseServiceKey}`
+      },
+      body: JSON.stringify(executePayload)
+    });
 
-    if (executeError) {
-      console.error("[TriggerSequence] Failed to execute sequence:", executeError);
+    const responseText = await executeResponse.text();
+    let executeResult;
+    try {
+      executeResult = JSON.parse(responseText);
+    } catch {
+      executeResult = { raw: responseText };
+    }
+
+    if (!executeResponse.ok) {
+      console.error("[TriggerSequence] Failed to execute sequence. Status:", executeResponse.status, "Body:", responseText);
       return new Response(
         JSON.stringify({ 
           error: "Failed to execute sequence",
-          details: executeError.message 
+          details: executeResult.error || responseText,
+          status: executeResponse.status
         }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: executeResponse.status === 400 ? 400 : 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

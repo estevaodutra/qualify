@@ -124,9 +124,9 @@ export function ConfigTab({ campaign, onUpdate }: ConfigTabProps) {
 
           {/* Pool de instâncias */}
           <div className="space-y-2">
-            <Label>Instâncias WhatsApp</Label>
+            <Label>Pool de Instâncias WhatsApp</Label>
             <p className="text-xs text-muted-foreground">
-              Selecione uma ou mais instâncias para esta campanha.
+              Selecione as instâncias que participarão desta campanha. As instâncias secundárias servirão para blindagem e administração do grupo (capa, título, descrição, etc).
             </p>
             <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-1 border rounded-md p-2">
               {instances.length === 0 ? (
@@ -187,8 +187,11 @@ export function ConfigTab({ campaign, onUpdate }: ConfigTabProps) {
 
           {/* Select da instância específica */}
           {formData.instanceLock && formData.instanceIds.length > 0 && (
-            <div className="space-y-2">
-              <Label>Instância principal</Label>
+            <div className="space-y-2 mt-4 pt-4 border-t">
+              <Label>Instância Principal de Envio</Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Somente esta instância será utilizada para mandar mensagens e enviar conteúdos. As demais instâncias do pool atuarão apenas como administradoras.
+              </p>
               <Select
                 value={formData.instanceId}
                 onValueChange={(v) => setFormData({ ...formData, instanceId: v })}

@@ -182,15 +182,63 @@ function ComponentPreview({ component, primaryColor, borderRadius }: { component
     );
   }
 
-  if (type === "field_name" || type === "field_email" || type === "field_phone") {
+  if (
+    type === "field_name" || type === "field_email" || type === "field_phone" ||
+    type === "field_number" || type === "field_date"
+  ) {
     return (
-      <div className="space-y-1">
-        {config.label && <label className="text-xs font-medium opacity-70">{config.label as string}</label>}
+      <div className="space-y-1" style={{ width: (config.width as string) || "100%" }}>
+        {config.label && (config.labelStyle as string) !== "none" && (
+          <label className="text-xs font-medium opacity-70">{config.label as string}</label>
+        )}
         <div
           className="w-full px-3 py-2.5 border-2 border-current/20 text-sm opacity-50"
           style={{ borderRadius }}
         >
+          {(config.placeholder as string) || (type === "field_date" ? "dd/mm/YYYY" : "...")}
+        </div>
+      </div>
+    );
+  }
+
+  if (type === "field_textarea") {
+    return (
+      <div className="space-y-1" style={{ width: (config.width as string) || "100%" }}>
+        {config.label && (config.labelStyle as string) !== "none" && (
+          <label className="text-xs font-medium opacity-70">{config.label as string}</label>
+        )}
+        <div
+          className="w-full px-3 py-2.5 border-2 border-current/20 text-sm opacity-50 min-h-[72px]"
+          style={{ borderRadius }}
+        >
           {(config.placeholder as string) || "..."}
+        </div>
+      </div>
+    );
+  }
+
+  if (type === "field_height" || type === "field_weight") {
+    const unit = (config.unit as string) || (type === "field_height" ? "cm" : "kg");
+    const val = (config.defaultValue as number) ?? (type === "field_height" ? 180 : 70);
+    const min = (config.min as number) ?? (type === "field_height" ? 100 : 30);
+    const max = (config.max as number) ?? (type === "field_height" ? 250 : 300);
+    const pct = ((val - min) / (max - min)) * 100;
+    return (
+      <div className="space-y-2 py-1" style={{ width: (config.width as string) || "100%" }}>
+        <div className="flex justify-between text-xs opacity-70">
+          <span>{min} {unit}</span>
+          <span className="font-semibold text-sm">{val} {unit}</span>
+          <span>{max} {unit}</span>
+        </div>
+        <div className="relative h-2 rounded-full bg-current/10">
+          <div
+            className="absolute inset-y-0 left-0 rounded-full"
+            style={{ width: `${pct}%`, backgroundColor: primaryColor }}
+          />
+          <div
+            className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-white shadow-sm"
+            style={{ left: `calc(${pct}% - 8px)`, backgroundColor: primaryColor }}
+          />
         </div>
       </div>
     );

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { DEFAULT_DESIGN_CONFIG, DesignConfig } from "@/components/quiz/design/DesignTab";
+import { FIELD_TYPES, QuizComponentType } from "@/hooks/useQuizComponents";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -269,8 +270,8 @@ export default function QuizPublicPage() {
     // ─── Validation of required fields ───────────────────────────────────────
     const errors: Record<string, string> = {};
     for (const comp of currentComponents) {
-      if (["field_name", "field_email", "field_phone"].includes(comp.component_type)) {
-        if (comp.config.required && !formValues[comp.id]?.trim()) {
+      if (FIELD_TYPES.includes(comp.component_type as QuizComponentType)) {
+        if (comp.config.required && !formValues[comp.id]?.toString().trim()) {
           errors[comp.id] = "Este campo é obrigatório.";
         }
       }
@@ -293,12 +294,15 @@ export default function QuizPublicPage() {
     const allAnswers: Record<string, unknown> = {};
 
     for (const comp of currentComponents) {
-      if (["field_name", "field_email", "field_phone"].includes(comp.component_type)) {
+      if (FIELD_TYPES.includes(comp.component_type as QuizComponentType)) {
         const val = formValues[comp.id] || "";
         if (val) {
           await saveAnswer(comp.id, currentStep.id, val);
-          const key = comp.component_type === "field_name" ? "name" : comp.component_type === "field_email" ? "email" : "phone";
-          stepLeadData[key] = val;
+          // Only specific fields go to the main lead table
+          if (comp.component_type === "field_name") stepLeadData.name = val;
+          if (comp.component_type === "field_email") stepLeadData.email = val;
+          if (comp.component_type === "field_phone") stepLeadData.phone = val;
+          // All go to allAnswers
           allAnswers[comp.id] = val;
         }
       }
@@ -608,25 +612,103 @@ function PublicComponent({
     );
   }
 
-  if (type === "field_name" || type === "field_email" || type === "field_phone") {
-    const inputType = type === "field_email" ? "email" : type === "field_phone" ? "tel" : "text";
+  if (FIELD_TYPES.includes(type as QuizComponentType)) {
+    const isSlider = type === "field_height" || type === "field_weight";
+    const isTextarea = type === "field_textarea";
     const hasError = !!validationError;
+    const width = (config.width as string) || "100%";
+    const showLabel = config.label && (config.labelStyle as string) !== "none";
+
+    // Sliders
+    if (isSlider) {
+      const unit = (config.unit as string) || (type === "field_height" ? "cm" : "kg");
+      const defVal = (config.defaultValue as number) ?? (type === "field_height" ? 180 : 70);
+      const min = (config.min as number) ?? (type === "field_height" ? 100 : 30);
+      const max = (config.max as number) ?? (type === "field_height" ? 250 : 300);
+      
+      const currentVal = formValue ? Number(formValue) : defVal;
+      const pct = ((currentVal - min) / (max - min)) * 100;
+
+      // Initialize form value with default on first render if empty
+      if (!formValue) {
+        setTimeout(() => onFormChange(String(defVal)), 0);
+      }
+
+      return (
+        <div className="space-y-2 py-1" style={{ width }}>
+          {showLabel && <label className="text-sm font-medium">{config.label as string}</label>}
+          <div className="flex justify-between text-xs opacity-70">
+            <span>{min} {unit}</span>
+            <span className="font-semibold text-sm" style={{ color: primaryColor }}>{currentVal} {unit}</span>
+            <span>{max} {unit}</span>
+          </div>
+          <div className="relative h-2 rounded-full bg-current/10 w-full mt-2">
+            <div
+              className="absolute inset-y-0 left-0 rounded-full pointer-events-none"
+              style={{ width: `${pct}%`, backgroundColor: primaryColor }}
+            />
+            <input
+              type="range"
+              min={min}
+              max={max}
+              value={currentVal}
+              onChange={(e) => onFormChange(e.target.value)}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            />
+            <div
+              className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-white shadow-sm pointer-events-none"
+              style={{ left: `calc(${pct}% - 8px)`, backgroundColor: primaryColor }}
+            />
+          </div>
+          {hasError && <p className="text-xs text-red-500">{validationError}</p>}
+        </div>
+      );
+    }
+
+    // Common styling for text-like inputs
+    const inputStyle = {
+      borderRadius,
+      borderColor: hasError ? "#ef4444" : "currentColor",
+      opacity: hasError ? 1 : 0.7,
+      backgroundColor: "transparent",
+      color: "inherit",
+    };
+
+    if (isTextarea) {
+      return (
+        <div className="space-y-1.5" style={{ width }}>
+          {showLabel && <label className="text-sm font-medium">{config.label as string}</label>}
+          <textarea
+            placeholder={(config.placeholder as string) || ""}
+            value={formValue}
+            onChange={(e) => onFormChange(e.target.value)}
+            className="w-full px-3 py-2.5 border-2 text-sm outline-none transition-colors min-h-[80px]"
+            style={inputStyle}
+            onFocus={(e) => (e.currentTarget.style.opacity = "1")}
+            onBlur={(e) => (e.currentTarget.style.opacity = hasError ? "1" : "0.7")}
+          />
+          {hasError && <p className="text-xs text-red-500">{validationError}</p>}
+        </div>
+      );
+    }
+
+    // Normal inputs
+    let inputType = "text";
+    if (type === "field_email") inputType = "email";
+    else if (type === "field_phone") inputType = "tel";
+    else if (type === "field_number") inputType = "number";
+    else if (type === "field_date") inputType = "date";
+
     return (
-      <div className="space-y-1.5">
-        {config.label && <label className="text-sm font-medium">{config.label as string}</label>}
+      <div className="space-y-1.5" style={{ width }}>
+        {showLabel && <label className="text-sm font-medium">{config.label as string}</label>}
         <input
           type={inputType}
           placeholder={(config.placeholder as string) || ""}
           value={formValue}
           onChange={(e) => onFormChange(e.target.value)}
           className="w-full px-3 py-2.5 border-2 text-sm outline-none transition-colors"
-          style={{
-            borderRadius,
-            borderColor: hasError ? "#ef4444" : "currentColor",
-            opacity: hasError ? 1 : 0.7,
-            backgroundColor: "transparent",
-            color: "inherit",
-          }}
+          style={inputStyle}
           onFocus={(e) => (e.currentTarget.style.opacity = "1")}
           onBlur={(e) => (e.currentTarget.style.opacity = hasError ? "1" : "0.7")}
         />

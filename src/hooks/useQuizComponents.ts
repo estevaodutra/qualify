@@ -10,7 +10,18 @@ export type QuizComponentType =
   | "options"
   | "field_name"
   | "field_email"
-  | "field_phone";
+  | "field_phone"
+  | "field_number"
+  | "field_textarea"
+  | "field_date"
+  | "field_height"
+  | "field_weight";
+
+export const FIELD_TYPES: QuizComponentType[] = [
+  "field_name", "field_email", "field_phone",
+  "field_number", "field_textarea", "field_date",
+  "field_height", "field_weight",
+];
 
 export interface QuizComponent {
   id: string;
@@ -152,6 +163,16 @@ export function useAllQuizComponents(funnelId: string) {
   });
 }
 
+const APPEARANCE_DEFAULTS = {
+  labelStyle: "default",
+  textAlign: "left",
+  borderRadius: "inherit",
+  width: "100%",
+  alignment: "left",
+  showAfterSeconds: null,
+  displayRules: [],
+};
+
 function getDefaultConfig(type: QuizComponentType): Record<string, unknown> {
   switch (type) {
     case "text":
@@ -159,24 +180,38 @@ function getDefaultConfig(type: QuizComponentType): Record<string, unknown> {
     case "image":
       return { url: "", alt: "", width: "100%" };
     case "button":
-      return { text: "Continuar", destination: null, style: "primary" };
+      return {
+        text: "Próxima Etapa", destination: null, style: "primary",
+        animated: true, relief: false, fixedBottom: false,
+        navigationType: "step",
+        ...APPEARANCE_DEFAULTS, width: "80%", alignment: "center",
+      };
     case "options":
       return {
         question: "Qual é sua pergunta?",
-        required: true,
-        multiple: false,
-        autoAdvance: true,
+        required: true, multiple: false, autoAdvance: true,
         options: [
           { id: crypto.randomUUID(), text: "Opção A", image: null, points: 0, value: "A", destination: null },
           { id: crypto.randomUUID(), text: "Opção B", image: null, points: 0, value: "B", destination: null },
         ],
+        ...APPEARANCE_DEFAULTS,
       };
     case "field_name":
-      return { label: "Seu nome", placeholder: "Digite seu nome", required: true, variableName: "name" };
+      return { label: "Seu nome", placeholder: "Digite seu nome...", required: false, variableName: "name", ...APPEARANCE_DEFAULTS };
     case "field_email":
-      return { label: "Seu e-mail", placeholder: "email@exemplo.com", required: true, variableName: "email" };
+      return { label: "E-mail", placeholder: "Digite seu e-mail...", required: false, variableName: "email", ...APPEARANCE_DEFAULTS };
     case "field_phone":
-      return { label: "Seu telefone", placeholder: "(00) 00000-0000", required: true, variableName: "phone" };
+      return { label: "Celular", placeholder: "Digite seu celular...", required: false, variableName: "phone", mask: "(99) 99999-9999", ...APPEARANCE_DEFAULTS };
+    case "field_number":
+      return { label: "Número", placeholder: "Digite um número...", required: false, variableName: "number", mask: "", ...APPEARANCE_DEFAULTS };
+    case "field_textarea":
+      return { label: "Mensagem", placeholder: "Digite sua mensagem...", required: false, variableName: "message", ...APPEARANCE_DEFAULTS };
+    case "field_date":
+      return { label: "Data", placeholder: "Insira uma data...", required: false, variableName: "date", mask: "dd/mm/YYYY", ...APPEARANCE_DEFAULTS };
+    case "field_height":
+      return { required: false, unit: "cm", defaultValue: 180, min: 100, max: 250, variableName: "height", ...APPEARANCE_DEFAULTS };
+    case "field_weight":
+      return { required: false, unit: "kg", defaultValue: 70, min: 30, max: 300, variableName: "weight", ...APPEARANCE_DEFAULTS };
     default:
       return {};
   }

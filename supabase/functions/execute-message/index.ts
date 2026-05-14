@@ -650,32 +650,36 @@ Deno.serve(async (req) => {
 
       // Membership validation: private phone destinations must be active group members
       let effectiveDests = destinations;
-      const privatePhoneDests = destinations.filter(
-        (d: DestinationData) => d.isPrivate && d.group_jid?.endsWith("@s.whatsapp.net")
-      );
-      if (privatePhoneDests.length > 0) {
-        const phones = privatePhoneDests.map((d: DestinationData) => d.group_jid.replace("@s.whatsapp.net", ""));
-        const { data: members } = await supabase
-          .from("group_members")
-          .select("phone")
-          .eq("group_campaign_id", campaignId)
-          .in("phone", phones)
-          .eq("status", "active");
-        const activePhonesSet = new Set((members || []).map((m: any) => m.phone));
-        effectiveDests = destinations.filter((d: DestinationData) => {
-          if (!d.isPrivate || !d.group_jid?.endsWith("@s.whatsapp.net")) return true;
-          const phone = d.group_jid.replace("@s.whatsapp.net", "");
-          if (!activePhonesSet.has(phone)) {
-            console.warn(`[ExecuteMessage] ${phone} não é membro ativo da campanha ${campaignId} — ignorado`);
-            return false;
+      
+      // Skip membership validation for webhook triggers to allow external leads
+      if (!isTriggeredExecution) {
+        const privatePhoneDests = destinations.filter(
+          (d: DestinationData) => d.isPrivate && d.group_jid?.endsWith("@s.whatsapp.net")
+        );
+        if (privatePhoneDests.length > 0) {
+          const phones = privatePhoneDests.map((d: DestinationData) => d.group_jid.replace("@s.whatsapp.net", ""));
+          const { data: members } = await supabase
+            .from("group_members")
+            .select("phone")
+            .eq("group_campaign_id", campaignId)
+            .in("phone", phones)
+            .eq("status", "active");
+          const activePhonesSet = new Set((members || []).map((m: any) => m.phone));
+          effectiveDests = destinations.filter((d: DestinationData) => {
+            if (!d.isPrivate || !d.group_jid?.endsWith("@s.whatsapp.net")) return true;
+            const phone = d.group_jid.replace("@s.whatsapp.net", "");
+            if (!activePhonesSet.has(phone)) {
+              console.warn(`[ExecuteMessage] ${phone} não é membro ativo da campanha ${campaignId} — ignorado`);
+              return false;
+            }
+            return true;
+          });
+          if (effectiveDests.length === 0) {
+            return new Response(
+              JSON.stringify({ error: "Nenhum destino válido: números não são membros ativos da campanha", campaignId }),
+              { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
           }
-          return true;
-        });
-        if (effectiveDests.length === 0) {
-          return new Response(
-            JSON.stringify({ error: "Nenhum destino válido: números não são membros ativos da campanha", campaignId }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
         }
       }
 

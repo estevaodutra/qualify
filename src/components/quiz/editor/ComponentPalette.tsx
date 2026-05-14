@@ -1,4 +1,4 @@
-import { Type, Image, MousePointer, ListChecks, User, Mail, Phone } from "lucide-react";
+import { Type, Image, MousePointer, ListChecks, User, Mail, Phone, Hash, AlignLeft, Calendar, Ruler, Scale } from "lucide-react";
 import { QuizComponentType } from "@/hooks/useQuizComponents";
 import { cn } from "@/lib/utils";
 
@@ -10,13 +10,18 @@ interface ComponentDef {
 }
 
 const components: ComponentDef[] = [
-  { type: "field_name", label: "Nome", icon: <User className="w-4 h-4" />, category: "formulario" },
-  { type: "field_email", label: "E-mail", icon: <Mail className="w-4 h-4" />, category: "formulario" },
-  { type: "field_phone", label: "Telefone", icon: <Phone className="w-4 h-4" />, category: "formulario" },
-  { type: "options", label: "Quiz / Opções", icon: <ListChecks className="w-4 h-4" />, category: "quiz" },
-  { type: "text", label: "Texto", icon: <Type className="w-4 h-4" />, category: "conteudo" },
-  { type: "image", label: "Imagem", icon: <Image className="w-4 h-4" />, category: "conteudo" },
-  { type: "button", label: "Botão", icon: <MousePointer className="w-4 h-4" />, category: "conteudo" },
+  { type: "field_name",     label: "Nome",       icon: <User className="w-4 h-4" />,       category: "formulario" },
+  { type: "field_email",    label: "E-mail",     icon: <Mail className="w-4 h-4" />,       category: "formulario" },
+  { type: "field_phone",    label: "Celular",    icon: <Phone className="w-4 h-4" />,      category: "formulario" },
+  { type: "field_number",   label: "Número",     icon: <Hash className="w-4 h-4" />,       category: "formulario" },
+  { type: "field_textarea", label: "Mensagem",   icon: <AlignLeft className="w-4 h-4" />, category: "formulario" },
+  { type: "field_date",     label: "Data",       icon: <Calendar className="w-4 h-4" />,  category: "formulario" },
+  { type: "field_height",   label: "Altura",     icon: <Ruler className="w-4 h-4" />,     category: "formulario" },
+  { type: "field_weight",   label: "Peso",       icon: <Scale className="w-4 h-4" />,     category: "formulario" },
+  { type: "options",        label: "Quiz / Opções", icon: <ListChecks className="w-4 h-4" />, category: "quiz" },
+  { type: "text",           label: "Texto",      icon: <Type className="w-4 h-4" />,      category: "conteudo" },
+  { type: "image",          label: "Imagem",     icon: <Image className="w-4 h-4" />,     category: "conteudo" },
+  { type: "button",         label: "Botão",      icon: <MousePointer className="w-4 h-4" />, category: "conteudo" },
 ];
 
 const categoryLabel: Record<ComponentDef["category"], string> = {
