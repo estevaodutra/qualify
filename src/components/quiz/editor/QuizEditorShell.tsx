@@ -1,12 +1,13 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Globe, ArrowLeft, Loader2, Settings } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useQueryClient } from "@tanstack/react-query";
 import { QuizFunnel, useQuizFunnels } from "@/hooks/useQuizFunnels";
 import { useQuizSteps } from "@/hooks/useQuizSteps";
-import { useQuizComponents, useAllQuizComponents } from "@/hooks/useQuizComponents";
+import { useQuizComponents, useAllQuizComponents, QuizComponent } from "@/hooks/useQuizComponents";
 import { StepList } from "./StepList";
 import { ComponentPalette } from "./ComponentPalette";
 import { MobilePreview } from "./MobilePreview";
@@ -22,6 +23,7 @@ interface Props {
 
 export function QuizEditorShell({ funnel }: Props) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { publishFunnel, updateFunnel } = useQuizFunnels();
 
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
@@ -30,9 +32,15 @@ export function QuizEditorShell({ funnel }: Props) {
   const [isPublishing, setIsPublishing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
+  const [unsavedComponents, setUnsavedComponents] = useState<Record<string, Record<string, unknown>>>({});
+  const [unsavedDesign, setUnsavedDesign] = useState<Partial<DesignConfig>>({});
+
+  const hasUnsavedChanges = Object.keys(unsavedComponents).length > 0 || Object.keys(unsavedDesign).length > 0;
+
   const designConfig: DesignConfig = {
     ...DEFAULT_DESIGN_CONFIG,
     ...(funnel.designConfig as Partial<DesignConfig>),
+    ...unsavedDesign,
   };
 
   const { steps, isLoading: stepsLoading, createStep, deleteStep, reorderSteps } = useQuizSteps(funnel.id);
@@ -48,30 +56,53 @@ export function QuizEditorShell({ funnel }: Props) {
 
   const selectedComponent = components.find((c) => c.id === selectedComponentId) || null;
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const handleComponentChange = useCallback(
     (id: string, config: Record<string, unknown>) => {
-      setIsSaving(true);
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => {
-        updateComponent({ id, config }).finally(() => setIsSaving(false));
-      }, 800);
+      setUnsavedComponents(prev => ({ ...prev, [id]: config }));
+      
+      // Update cache immediately so the UI (MobilePreview) reflects it
+      queryClient.setQueryData(["quiz_components", activeStepId], (old: QuizComponent[] | undefined) => 
+        old?.map(c => c.id === id ? { ...c, config } : c)
+      );
     },
-    [updateComponent]
+    [queryClient, activeStepId]
   );
 
-  const designDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleDesignChange = useCallback(
     (config: DesignConfig) => {
-      setIsSaving(true);
-      if (designDebounceRef.current) clearTimeout(designDebounceRef.current);
-      designDebounceRef.current = setTimeout(() => {
-        updateFunnel({ id: funnel.id, updates: { design_config: config as unknown as Record<string, unknown> } }).finally(() => setIsSaving(false));
-      }, 800);
+      setUnsavedDesign(config);
     },
-    [funnel.id, updateFunnel]
+    []
   );
+
+  const handleSaveAll = async () => {
+    if (!hasUnsavedChanges) return;
+    setIsSaving(true);
+    try {
+      const promises: Promise<any>[] = Object.entries(unsavedComponents).map(([id, config]) =>
+        updateComponent({ id, config })
+      );
+      if (Object.keys(unsavedDesign).length > 0) {
+        promises.push(updateFunnel({ id: funnel.id, updates: { design_config: unsavedDesign as any } }));
+      }
+      await Promise.all(promises);
+      setUnsavedComponents({});
+      setUnsavedDesign({});
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasUnsavedChanges]);
 
   const handleSettingsSave = async (
     field: "webhook_config" | "seo_config" | "pixel_config",
@@ -129,7 +160,13 @@ export function QuizEditorShell({ funnel }: Props) {
       {/* Top bar */}
       <div className="flex items-center justify-between px-4 py-2 border-b bg-background shrink-0">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/quiz")}>
+          <Button variant="ghost" size="icon" onClick={() => {
+            if (hasUnsavedChanges) {
+              handleSaveAll().then(() => navigate("/quiz"));
+            } else {
+              navigate("/quiz");
+            }
+          }}>
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
@@ -149,6 +186,14 @@ export function QuizEditorShell({ funnel }: Props) {
           )}
           <Button variant="ghost" size="icon" onClick={() => setShowSettings(true)}>
             <Settings className="w-4 h-4" />
+          </Button>
+          <Button
+            size="sm"
+            variant={hasUnsavedChanges ? "default" : "secondary"}
+            onClick={handleSaveAll}
+            disabled={!hasUnsavedChanges || isSaving}
+          >
+            {isSaving ? "Salvando..." : "Salvar"}
           </Button>
           <Button
             size="sm"

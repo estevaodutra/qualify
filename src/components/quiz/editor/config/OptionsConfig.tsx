@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 
 interface QuizOption {
   id: string;
@@ -47,9 +48,9 @@ export function OptionsConfig({ config, onChange, steps }: Props) {
     <div className="space-y-4">
       <div className="space-y-1.5">
         <Label>Pergunta</Label>
-        <Input
+        <RichTextEditor
           value={(config.question as string) || ""}
-          onChange={(e) => onChange({ ...config, question: e.target.value })}
+          onChange={(v) => onChange({ ...config, question: v })}
           placeholder="Qual é sua pergunta?"
         />
       </div>
