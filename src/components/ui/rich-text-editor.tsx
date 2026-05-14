@@ -20,9 +20,10 @@ interface RichTextEditorProps {
   onChange: (value: string) => void;
   placeholder?: string;
   minHeight?: string;
+  variant?: 'default' | 'inline';
 }
 
-export function RichTextEditor({ value, onChange, placeholder = "Digite seu texto...", minHeight = "120px" }: RichTextEditorProps) {
+export function RichTextEditor({ value, onChange, placeholder = "Digite seu texto...", minHeight = "120px", variant = 'default' }: RichTextEditorProps) {
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -45,8 +46,10 @@ export function RichTextEditor({ value, onChange, placeholder = "Digite seu text
     },
     editorProps: {
       attributes: {
-        class: 'prose prose-sm dark:prose-invert max-w-none focus:outline-none w-full min-h-[120px] p-3 border rounded-md bg-background',
-        style: `min-height: ${minHeight}`,
+        class: variant === 'inline' 
+          ? 'prose prose-sm dark:prose-invert max-w-none focus:outline-none w-full' 
+          : 'prose prose-sm dark:prose-invert max-w-none focus:outline-none w-full min-h-[120px] p-3 border rounded-md bg-background',
+        style: variant === 'inline' ? '' : `min-height: ${minHeight}`,
       },
     },
   });

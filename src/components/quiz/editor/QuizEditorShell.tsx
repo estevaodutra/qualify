@@ -257,6 +257,7 @@ export function QuizEditorShell({ funnel }: Props) {
               components={components}
               selectedComponentId={selectedComponentId}
               onSelectComponent={setSelectedComponentId}
+              onChangeComponent={handleComponentChange}
               onDeleteComponent={handleDeleteComponent}
               onDuplicateComponent={handleDuplicateComponent}
               onReorderComponents={reorderComponents}

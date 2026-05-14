@@ -6,6 +6,7 @@ import { QuizComponent } from "@/hooks/useQuizComponents";
 import { QuizStep } from "@/hooks/useQuizSteps";
 import { DesignConfig, DEFAULT_DESIGN_CONFIG } from "../design/DesignTab";
 import { cn } from "@/lib/utils";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 
 const RADIUS: Record<string, string> = {
   square: "0px",
@@ -18,6 +19,7 @@ interface Props {
   components: QuizComponent[];
   selectedComponentId: string | null;
   onSelectComponent: (id: string) => void;
+  onChangeComponent?: (id: string, config: Record<string, unknown>) => void;
   onDeleteComponent: (id: string) => void;
   onDuplicateComponent: (component: QuizComponent) => void;
   onReorderComponents: (ids: string[]) => void;
@@ -31,6 +33,7 @@ export function MobilePreview({
   components,
   selectedComponentId,
   onSelectComponent,
+  onChangeComponent,
   onDeleteComponent,
   onDuplicateComponent,
   onReorderComponents,
@@ -124,6 +127,7 @@ export function MobilePreview({
                   primaryColor={d.primaryColor}
                   borderRadius={borderRadius}
                   onSelect={() => onSelectComponent(comp.id)}
+                  onChangeConfig={(config) => onChangeComponent?.(comp.id, config)}
                   onDuplicate={() => onDuplicateComponent(comp)}
                   onDelete={() => onDeleteComponent(comp.id)}
                 />
@@ -150,6 +154,7 @@ function SortableComponentItem({
   primaryColor: string;
   borderRadius: string;
   onSelect: () => void;
+  onChangeConfig?: (config: Record<string, unknown>) => void;
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
@@ -197,23 +202,40 @@ function SortableComponentItem({
         </button>
       </div>
 
-      <div className="pointer-events-none">
-        <ComponentPreview component={component} primaryColor={primaryColor} borderRadius={borderRadius} />
+      <div className="pointer-events-auto">
+        <ComponentPreview 
+          component={component} 
+          primaryColor={primaryColor} 
+          borderRadius={borderRadius} 
+          onChangeConfig={onChangeConfig}
+        />
       </div>
     </div>
   );
 }
 
-function ComponentPreview({ component, primaryColor, borderRadius }: { component: QuizComponent; primaryColor: string; borderRadius: string }) {
+function ComponentPreview({ 
+  component, 
+  primaryColor, 
+  borderRadius,
+  onChangeConfig 
+}: { 
+  component: QuizComponent; 
+  primaryColor: string; 
+  borderRadius: string;
+  onChangeConfig?: (config: Record<string, unknown>) => void;
+}) {
   const { componentType: type, config } = component;
 
   if (type === "text") {
     return (
-      <div
-        className="text-sm py-1"
-        style={{ textAlign: (config.align as any) || "center" }}
-        dangerouslySetInnerHTML={{ __html: (config.content as string) || "" }}
-      />
+      <div className="text-sm py-1" style={{ textAlign: (config.align as any) || "center" }}>
+        <RichTextEditor
+          variant="inline"
+          value={(config.content as string) || ""}
+          onChange={(val) => onChangeConfig?.({ ...config, content: val })}
+        />
+      </div>
     );
   }
 
@@ -257,7 +279,13 @@ function ComponentPreview({ component, primaryColor, borderRadius }: { component
     return (
       <div className="space-y-2">
         {config.question && (
-          <p className="text-sm font-medium text-center mb-3">{config.question as string}</p>
+          <div className="text-sm font-medium text-center mb-3">
+            <RichTextEditor
+              variant="inline"
+              value={(config.question as string) || ""}
+              onChange={(val) => onChangeConfig?.({ ...config, question: val })}
+            />
+          </div>
         )}
         {options.map((opt) => (
           <button
