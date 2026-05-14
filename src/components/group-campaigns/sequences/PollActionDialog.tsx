@@ -362,7 +362,7 @@ export function PollActionDialog({
                         </SelectItem>
                       ))}
                       {sequences.length === 0 && selectedCampaignId && (
-                        <SelectItem value="" disabled>
+                        <SelectItem value="__empty__" disabled>
                           Nenhuma sequência encontrada
                         </SelectItem>
                       )}
