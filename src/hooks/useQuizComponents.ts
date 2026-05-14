@@ -108,8 +108,21 @@ export function useQuizComponents(stepId: string, funnelId: string) {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["quiz_components", stepId] }),
-    onError: (e: Error) => toast({ title: "Erro ao salvar", description: e.message, variant: "destructive" }),
+    onMutate: async ({ id, config }) => {
+      await queryClient.cancelQueries({ queryKey: ["quiz_components", stepId] });
+      const previousComponents = queryClient.getQueryData(["quiz_components", stepId]);
+      queryClient.setQueryData(["quiz_components", stepId], (old: QuizComponent[] | undefined) => 
+        old?.map(c => c.id === id ? { ...c, config } : c)
+      );
+      return { previousComponents };
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousComponents) {
+        queryClient.setQueryData(["quiz_components", stepId], context.previousComponents);
+      }
+      toast({ title: "Erro ao salvar", description: err.message, variant: "destructive" });
+    },
+    // Removido o invalidateQueries para não sobrescrever a tela de quem está digitando
   });
 
   const deleteMutation = useMutation({
@@ -131,8 +144,23 @@ export function useQuizComponents(stepId: string, funnelId: string) {
         if (error) throw error;
       }
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["quiz_components", stepId] }),
-    onError: (e: Error) => toast({ title: "Erro ao reordenar", description: e.message, variant: "destructive" }),
+    onMutate: async (orderedIds) => {
+      await queryClient.cancelQueries({ queryKey: ["quiz_components", stepId] });
+      const previousComponents = queryClient.getQueryData(["quiz_components", stepId]);
+      queryClient.setQueryData(["quiz_components", stepId], (old: QuizComponent[] | undefined) => {
+        if (!old) return old;
+        const newArr = [...old];
+        newArr.sort((a, b) => orderedIds.indexOf(a.id) - orderedIds.indexOf(b.id));
+        return newArr.map((c, i) => ({ ...c, componentOrder: i }));
+      });
+      return { previousComponents };
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousComponents) {
+        queryClient.setQueryData(["quiz_components", stepId], context.previousComponents);
+      }
+      toast({ title: "Erro ao reordenar", description: err.message, variant: "destructive" });
+    },
   });
 
   return {

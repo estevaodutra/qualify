@@ -137,8 +137,8 @@ export function QuizEditorShell({ funnel }: Props) {
 
         <div className="flex items-center gap-2">
           {isSaving && (
-            <span className="text-xs text-muted-foreground flex items-center gap-1">
-              <Loader2 className="w-3 h-3 animate-spin" /> Salvando...
+            <span className="text-[10px] text-muted-foreground/50 flex items-center gap-1 mr-2">
+              <Loader2 className="w-3 h-3 animate-spin" />
             </span>
           )}
           <Button variant="ghost" size="icon" onClick={() => setShowSettings(true)}>
