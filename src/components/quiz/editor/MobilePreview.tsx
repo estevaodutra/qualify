@@ -146,6 +146,7 @@ function SortableComponentItem({
   primaryColor,
   borderRadius,
   onSelect,
+  onChangeConfig,
   onDuplicate,
   onDelete
 }: {
