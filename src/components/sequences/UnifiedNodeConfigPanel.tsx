@@ -486,26 +486,24 @@ export function UnifiedNodeConfigPanel({
                   </p>
                 )}
               </div>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Visualização Única</Label>
+                  <p className="text-xs text-muted-foreground">Mídia desaparece após ser vista</p>
+                </div>
+                <Switch
+                  checked={(node.config.viewOnce as boolean) || false}
+                  onCheckedChange={checked => updateConfig("viewOnce", checked)}
+                />
+              </div>
               {isGroup && (
-                <>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Visualização Única</Label>
-                      <p className="text-xs text-muted-foreground">Mídia desaparece após ser vista</p>
-                    </div>
-                    <Switch
-                      checked={(node.config.viewOnce as boolean) || false}
-                      onCheckedChange={checked => updateConfig("viewOnce", checked)}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <Label>Enviar no privado</Label>
-                    <Switch
-                      checked={(node.config.sendPrivate as boolean) || false}
-                      onCheckedChange={checked => updateConfig("sendPrivate", checked)}
-                    />
-                  </div>
-                </>
+                <div className="flex items-center justify-between">
+                  <Label>Enviar no privado</Label>
+                  <Switch
+                    checked={(node.config.sendPrivate as boolean) || false}
+                    onCheckedChange={checked => updateConfig("sendPrivate", checked)}
+                  />
+                </div>
               )}
             </>
           )}
@@ -531,36 +529,34 @@ export function UnifiedNodeConfigPanel({
                   </p>
                 )}
               </div>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Recado (Video Note)</Label>
+                  <p className="text-xs text-muted-foreground">Envia como bolinha circular flutuante</p>
+                </div>
+                <Switch
+                  checked={(node.config.isVideoNote as boolean) || false}
+                  onCheckedChange={checked => updateConfig("isVideoNote", checked)}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Visualização Única</Label>
+                  <p className="text-xs text-muted-foreground">Mídia desaparece após ser vista</p>
+                </div>
+                <Switch
+                  checked={(node.config.viewOnce as boolean) || false}
+                  onCheckedChange={checked => updateConfig("viewOnce", checked)}
+                />
+              </div>
               {isGroup && (
-                <>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Recado (Video Note)</Label>
-                      <p className="text-xs text-muted-foreground">Envia como bolinha circular flutuante</p>
-                    </div>
-                    <Switch
-                      checked={(node.config.isVideoNote as boolean) || false}
-                      onCheckedChange={checked => updateConfig("isVideoNote", checked)}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Visualização Única</Label>
-                      <p className="text-xs text-muted-foreground">Mídia desaparece após ser vista</p>
-                    </div>
-                    <Switch
-                      checked={(node.config.viewOnce as boolean) || false}
-                      onCheckedChange={checked => updateConfig("viewOnce", checked)}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <Label>Enviar no privado</Label>
-                    <Switch
-                      checked={(node.config.sendPrivate as boolean) || false}
-                      onCheckedChange={checked => updateConfig("sendPrivate", checked)}
-                    />
-                  </div>
-                </>
+                <div className="flex items-center justify-between">
+                  <Label>Enviar no privado</Label>
+                  <Switch
+                    checked={(node.config.sendPrivate as boolean) || false}
+                    onCheckedChange={checked => updateConfig("sendPrivate", checked)}
+                  />
+                </div>
               )}
             </>
           )}
@@ -586,33 +582,31 @@ export function UnifiedNodeConfigPanel({
                   </p>
                 </div>
               )}
+              <div className="flex items-center justify-between">
+                <Label>Mensagem de voz (PTT)</Label>
+                <Switch
+                  checked={(node.config.isVoiceMessage as boolean) ?? true}
+                  onCheckedChange={checked => updateConfig("isVoiceMessage", checked)}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Visualização Única</Label>
+                  <p className="text-xs text-muted-foreground">Áudio desaparece após ser ouvido</p>
+                </div>
+                <Switch
+                  checked={(node.config.viewOnce as boolean) || false}
+                  onCheckedChange={checked => updateConfig("viewOnce", checked)}
+                />
+              </div>
               {isGroup && (
-                <>
-                  <div className="flex items-center justify-between">
-                    <Label>Mensagem de voz (PTT)</Label>
-                    <Switch
-                      checked={(node.config.isVoiceMessage as boolean) ?? true}
-                      onCheckedChange={checked => updateConfig("isVoiceMessage", checked)}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Visualização Única</Label>
-                      <p className="text-xs text-muted-foreground">Áudio desaparece após ser ouvido</p>
-                    </div>
-                    <Switch
-                      checked={(node.config.viewOnce as boolean) || false}
-                      onCheckedChange={checked => updateConfig("viewOnce", checked)}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <Label>Enviar no privado</Label>
-                    <Switch
-                      checked={(node.config.sendPrivate as boolean) || false}
-                      onCheckedChange={checked => updateConfig("sendPrivate", checked)}
-                    />
-                  </div>
-                </>
+                <div className="flex items-center justify-between">
+                  <Label>Enviar no privado</Label>
+                  <Switch
+                    checked={(node.config.sendPrivate as boolean) || false}
+                    onCheckedChange={checked => updateConfig("sendPrivate", checked)}
+                  />
+                </div>
               )}
             </>
           )}
@@ -646,32 +640,30 @@ export function UnifiedNodeConfigPanel({
                   </p>
                 )}
               </div>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Visualização Única</Label>
+                  <p className="text-xs text-muted-foreground">Documento desaparece após ser visto</p>
+                </div>
+                <Switch
+                  checked={(node.config.viewOnce as boolean) || false}
+                  onCheckedChange={checked => updateConfig("viewOnce", checked)}
+                />
+              </div>
               {isGroup && (
-                <>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Visualização Única</Label>
-                      <p className="text-xs text-muted-foreground">Documento desaparece após ser visto</p>
-                    </div>
-                    <Switch
-                      checked={(node.config.viewOnce as boolean) || false}
-                      onCheckedChange={checked => updateConfig("viewOnce", checked)}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <Label>Enviar no privado</Label>
-                    <Switch
-                      checked={(node.config.sendPrivate as boolean) || false}
-                      onCheckedChange={checked => updateConfig("sendPrivate", checked)}
-                    />
-                  </div>
-                </>
+                <div className="flex items-center justify-between">
+                  <Label>Enviar no privado</Label>
+                  <Switch
+                    checked={(node.config.sendPrivate as boolean) || false}
+                    onCheckedChange={checked => updateConfig("sendPrivate", checked)}
+                  />
+                </div>
               )}
             </>
           )}
 
-          {/* STICKER - Group only */}
-          {node.nodeType === "sticker" && isGroup && (
+          {/* STICKER */}
+          {node.nodeType === "sticker" && (
             <>
               <div className="space-y-2">
                 <Label>Sticker</Label>
@@ -688,13 +680,15 @@ export function UnifiedNodeConfigPanel({
                   onCheckedChange={checked => updateConfig("viewOnce", checked)}
                 />
               </div>
-              <div className="flex items-center justify-between">
-                <Label>Enviar no privado</Label>
-                <Switch
-                  checked={(node.config.sendPrivate as boolean) || false}
-                  onCheckedChange={checked => updateConfig("sendPrivate", checked)}
-                />
-              </div>
+              {isGroup && (
+                <div className="flex items-center justify-between">
+                  <Label>Enviar no privado</Label>
+                  <Switch
+                    checked={(node.config.sendPrivate as boolean) || false}
+                    onCheckedChange={checked => updateConfig("sendPrivate", checked)}
+                  />
+                </div>
+              )}
             </>
           )}
 
