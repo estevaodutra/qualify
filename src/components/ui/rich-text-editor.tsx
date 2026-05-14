@@ -14,6 +14,13 @@ import {
 } from 'lucide-react';
 import { Toggle } from '@/components/ui/toggle';
 import { Separator } from '@/components/ui/separator';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+
+const COLORS = [
+  '#000000', '#434343', '#666666', '#999999', '#B7B7B7', '#CCCCCC', '#D9D9D9', '#EFEFEF', '#F3F3F3', '#FFFFFF',
+  '#980000', '#FF0000', '#FF9900', '#FFFF00', '#00FF00', '#00FFFF', '#4A86E8', '#0000FF', '#9900FF', '#FF00FF',
+];
 
 interface RichTextEditorProps {
   value: string;
@@ -175,6 +182,42 @@ export function RichTextEditor({ value, onChange, placeholder = "Digite seu text
             >
               <AlignJustify className="h-4 w-4" />
             </Toggle>
+          </div>
+
+          <Separator orientation="vertical" className="h-6 mx-1" />
+
+          <div className="flex items-center gap-0.5">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-8 w-8 px-0 rounded-sm">
+                  <div className="flex flex-col items-center justify-center w-full h-full">
+                    <span className="text-[12px] font-bold leading-[12px] font-serif">A</span>
+                    <div 
+                      className="w-3.5 h-[3px] mt-[1px]" 
+                      style={{ backgroundColor: editor.getAttributes('textStyle').color || 'currentColor' }} 
+                    />
+                  </div>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[140px] p-2" align="center" sideOffset={8}>
+                <div className="grid grid-cols-5 gap-1">
+                  {COLORS.map(color => (
+                    <button
+                      key={color}
+                      className="w-5 h-5 rounded-sm border shadow-sm hover:scale-110 transition-transform"
+                      style={{ backgroundColor: color }}
+                      onClick={() => editor.chain().focus().setColor(color).run()}
+                    />
+                  ))}
+                  <button 
+                    className="col-span-5 text-[10px] text-center py-1 mt-1 border-t hover:bg-muted"
+                    onClick={() => editor.chain().focus().unsetColor().run()}
+                  >
+                    Remover cor
+                  </button>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
           <Separator orientation="vertical" className="h-6 mx-1" />

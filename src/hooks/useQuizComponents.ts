@@ -204,7 +204,10 @@ const APPEARANCE_DEFAULTS = {
 function getDefaultConfig(type: QuizComponentType): Record<string, unknown> {
   switch (type) {
     case "text":
-      return { content: "Digite seu texto aqui...", align: "center" };
+      return { 
+        content: "<h1>Texto informativo</h1><p>Este componente serve para fornecer instruções claras ao usuário. Utilize-o para destacar informações essenciais de forma objetiva e fácil de entender na plataforma.</p>", 
+        align: "center" 
+      };
     case "image":
       return { url: "", alt: "", width: "100%" };
     case "button":
