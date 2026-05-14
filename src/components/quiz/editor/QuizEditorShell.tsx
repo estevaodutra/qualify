@@ -110,6 +110,12 @@ export function QuizEditorShell({ funnel }: Props) {
     if (selectedComponentId === id) setSelectedComponentId(null);
   };
 
+  const handleDuplicateComponent = async (component: QuizComponent) => {
+    if (!activeStepId) return;
+    const comp = await createComponent({ componentType: component.componentType, config: component.config });
+    setSelectedComponentId(comp.id);
+  };
+
   const handlePublish = async () => {
     setIsPublishing(true);
     await publishFunnel({ id: funnel.id, publish: funnel.status !== "published" });
@@ -206,6 +212,9 @@ export function QuizEditorShell({ funnel }: Props) {
               components={components}
               selectedComponentId={selectedComponentId}
               onSelectComponent={setSelectedComponentId}
+              onDeleteComponent={handleDeleteComponent}
+              onDuplicateComponent={handleDuplicateComponent}
+              onReorderComponents={reorderComponents}
               designConfig={designConfig}
               stepIndex={steps.findIndex((s) => s.id === activeStepId)}
               totalSteps={steps.length}

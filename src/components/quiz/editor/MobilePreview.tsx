@@ -1,3 +1,7 @@
+import { GripVertical, Copy, Trash2 } from "lucide-react";
+import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { QuizComponent } from "@/hooks/useQuizComponents";
 import { QuizStep } from "@/hooks/useQuizSteps";
 import { DesignConfig, DEFAULT_DESIGN_CONFIG } from "../design/DesignTab";
@@ -14,12 +18,26 @@ interface Props {
   components: QuizComponent[];
   selectedComponentId: string | null;
   onSelectComponent: (id: string) => void;
+  onDeleteComponent: (id: string) => void;
+  onDuplicateComponent: (component: QuizComponent) => void;
+  onReorderComponents: (ids: string[]) => void;
   designConfig?: DesignConfig;
   stepIndex?: number;
   totalSteps?: number;
 }
 
-export function MobilePreview({ step, components, selectedComponentId, onSelectComponent, designConfig, stepIndex = 0, totalSteps = 1 }: Props) {
+export function MobilePreview({
+  step,
+  components,
+  selectedComponentId,
+  onSelectComponent,
+  onDeleteComponent,
+  onDuplicateComponent,
+  onReorderComponents,
+  designConfig,
+  stepIndex = 0,
+  totalSteps = 1,
+}: Props) {
   const d = { ...DEFAULT_DESIGN_CONFIG, ...designConfig };
   const borderRadius = RADIUS[d.borderRadius] || "12px";
 
@@ -32,6 +50,15 @@ export function MobilePreview({ step, components, selectedComponentId, onSelectC
     backgroundColor: d.backgroundColor,
     color: d.textColor,
   } as React.CSSProperties;
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = components.findIndex((c) => c.id === active.id);
+    const newIndex = components.findIndex((c) => c.id === over.id);
+    const reordered = arrayMove(components, oldIndex, newIndex);
+    onReorderComponents(reordered.map((c) => c.id));
+  };
 
   if (!step) {
     return (
@@ -87,22 +114,91 @@ export function MobilePreview({ step, components, selectedComponentId, onSelectC
             </div>
           )}
 
-          {components.map((comp) => (
-            <div
-              key={comp.id}
-              className={cn(
-                "rounded-lg cursor-pointer transition-all",
-                selectedComponentId === comp.id
-                  ? "ring-2 ring-offset-1"
-                  : "hover:ring-1 hover:ring-current/30"
-              )}
-              style={selectedComponentId === comp.id ? { ringColor: d.primaryColor } as React.CSSProperties : {}}
-              onClick={() => onSelectComponent(comp.id)}
-            >
-              <ComponentPreview component={comp} primaryColor={d.primaryColor} borderRadius={borderRadius} />
-            </div>
-          ))}
+          <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={components.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+              {components.map((comp) => (
+                <SortableComponentItem
+                  key={comp.id}
+                  component={comp}
+                  isSelected={selectedComponentId === comp.id}
+                  primaryColor={d.primaryColor}
+                  borderRadius={borderRadius}
+                  onSelect={() => onSelectComponent(comp.id)}
+                  onDuplicate={() => onDuplicateComponent(comp)}
+                  onDelete={() => onDeleteComponent(comp.id)}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function SortableComponentItem({
+  component,
+  isSelected,
+  primaryColor,
+  borderRadius,
+  onSelect,
+  onDuplicate,
+  onDelete
+}: {
+  component: QuizComponent;
+  isSelected: boolean;
+  primaryColor: string;
+  borderRadius: string;
+  onSelect: () => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: component.id });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        ...(isSelected ? { ringColor: primaryColor } : {})
+      } as React.CSSProperties}
+      className={cn(
+        "relative group rounded-lg cursor-pointer transition-all",
+        isSelected ? "ring-2 ring-offset-1" : "hover:ring-1 hover:ring-current/30",
+        isDragging && "opacity-50 ring-2 z-50"
+      )}
+      onClick={onSelect}
+    >
+      {/* Floating Action Bar */}
+      <div className={cn(
+        "absolute right-2 top-2 flex items-center gap-1 p-1 rounded-md bg-white/90 dark:bg-black/90 backdrop-blur-sm border shadow-sm transition-opacity opacity-0 group-hover:opacity-100 z-10 text-foreground",
+        isSelected && "opacity-100"
+      )}>
+        <button
+          {...attributes}
+          {...listeners}
+          className="w-6 h-6 flex items-center justify-center rounded hover:bg-black/5 dark:hover:bg-white/10 cursor-grab"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <GripVertical className="w-3.5 h-3.5" />
+        </button>
+        <button
+          className="w-6 h-6 flex items-center justify-center rounded hover:bg-black/5 dark:hover:bg-white/10"
+          onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
+        >
+          <Copy className="w-3.5 h-3.5" />
+        </button>
+        <button
+          className="w-6 h-6 flex items-center justify-center rounded hover:bg-destructive/10 text-destructive"
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      <div className="pointer-events-none">
+        <ComponentPreview component={component} primaryColor={primaryColor} borderRadius={borderRadius} />
       </div>
     </div>
   );
