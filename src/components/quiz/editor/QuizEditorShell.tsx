@@ -182,21 +182,21 @@ export function QuizEditorShell({ funnel }: Props) {
 
         {/* Construtor tab */}
         <TabsContent value="construtor" className="flex-1 flex min-h-0 mt-0">
-          {/* Left panel */}
+          {/* Panel: Etapas */}
+          <div className="w-48 border-r flex flex-col shrink-0 min-h-0 bg-muted/10">
+            <StepList
+              steps={steps}
+              selectedStepId={activeStepId}
+              onSelectStep={handleSelectStep}
+              onAddStep={handleAddStep}
+              onDeleteStep={handleDeleteStep}
+              onReorder={reorderSteps}
+            />
+          </div>
+
+          {/* Panel: Componentes */}
           <div className="w-56 border-r flex flex-col shrink-0 min-h-0">
-            <div className="flex-[1.2] border-b min-h-0 overflow-hidden flex flex-col">
-              <StepList
-                steps={steps}
-                selectedStepId={activeStepId}
-                onSelectStep={handleSelectStep}
-                onAddStep={handleAddStep}
-                onDeleteStep={handleDeleteStep}
-                onReorder={reorderSteps}
-              />
-            </div>
-            <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-              <ComponentPalette onAdd={handleAddComponent} disabled={!activeStepId} />
-            </div>
+            <ComponentPalette onAdd={handleAddComponent} disabled={!activeStepId} />
           </div>
 
           {/* Center: preview */}
