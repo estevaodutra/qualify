@@ -237,34 +237,54 @@ Deno.serve(async (req) => {
           
           if (sequenceId) {
             console.log(`[HandlePollResponse] Starting sequence ${sequenceId} for ${respondent.phone}`);
+            const campaignType = actionConfig.config.campaignType as string || "group";
             
-            // Build trigger context with respondent data
-            const triggerContext = {
-              respondentPhone: respondent.phone,
-              respondentName: respondent.name || "",
-              respondentJid: respondent.jid || `${respondent.phone}@s.whatsapp.net`,
-              groupJid: group_jid,
-              pollOptionText: response.option_text || typedPoll.options[response.option_index] || "",
-              sendPrivate: sendPrivate,
-            };
-            
-            // Invoke execute-message function with triggerContext
-            const executeResponse = await fetch(`${supabaseUrl}/functions/v1/execute-message`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${supabaseServiceKey}`,
-              },
-              body: JSON.stringify({
-                campaignId: campaignId,
-                sequenceId: sequenceId,
-                triggerContext: triggerContext,
-              }),
-            });
+            if (campaignType === "dispatch") {
+              const executeResponse = await fetch(`${supabaseUrl}/functions/v1/execute-dispatch-sequence`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${supabaseServiceKey}`,
+                },
+                body: JSON.stringify({
+                  campaignId: campaignId,
+                  sequenceId: sequenceId,
+                  contactPhone: respondent.phone,
+                  contactName: respondent.name || "",
+                }),
+              });
+              actionResult = await executeResponse.json();
+              actionSuccess = executeResponse.ok && actionResult.success !== false;
+              console.log(`[HandlePollResponse] Dispatch sequence execution result:`, actionResult);
+            } else {
+              // Build trigger context with respondent data
+              const triggerContext = {
+                respondentPhone: respondent.phone,
+                respondentName: respondent.name || "",
+                respondentJid: respondent.jid || `${respondent.phone}@s.whatsapp.net`,
+                groupJid: group_jid,
+                pollOptionText: response.option_text || typedPoll.options[response.option_index] || "",
+                sendPrivate: sendPrivate,
+              };
+              
+              // Invoke execute-message function with triggerContext
+              const executeResponse = await fetch(`${supabaseUrl}/functions/v1/execute-message`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${supabaseServiceKey}`,
+                },
+                body: JSON.stringify({
+                  campaignId: campaignId,
+                  sequenceId: sequenceId,
+                  triggerContext: triggerContext,
+                }),
+              });
 
-            actionResult = await executeResponse.json();
-            actionSuccess = executeResponse.ok && actionResult.success !== false;
-            console.log(`[HandlePollResponse] Sequence execution result:`, actionResult);
+              actionResult = await executeResponse.json();
+              actionSuccess = executeResponse.ok && actionResult.success !== false;
+              console.log(`[HandlePollResponse] Group sequence execution result:`, actionResult);
+            }
           } else {
             actionResult = { error: "No sequence ID configured" };
           }

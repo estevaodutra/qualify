@@ -17,6 +17,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectGroup,
+  SelectLabel,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -36,7 +38,9 @@ import {
   ClipboardList,
 } from "lucide-react";
 import { useSequences } from "@/hooks/useSequences";
+import { useDispatchSequences } from "@/hooks/useDispatchSequences";
 import { useGroupCampaigns } from "@/hooks/useGroupCampaigns";
+import { useDispatchCampaigns } from "@/hooks/useDispatchCampaigns";
 import { useCampaignGroups } from "@/hooks/useCampaignGroups";
 import { useGroupExecutionList } from "@/hooks/useGroupExecutionList";
 
@@ -184,9 +188,15 @@ export function PollActionDialog({
   const [config, setConfig] = useState<Record<string, unknown>>({});
 
   // Data hooks
-  const { campaigns } = useGroupCampaigns();
+  const { campaigns: groupCampaigns } = useGroupCampaigns();
+  const { campaigns: dispatchCampaigns } = useDispatchCampaigns();
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>(currentCampaignId || "");
-  const { sequences } = useSequences(selectedCampaignId || undefined);
+  
+  const isDispatchSelected = dispatchCampaigns.some(c => c.id === selectedCampaignId);
+  const { sequences: groupSequences } = useSequences(isDispatchSelected ? undefined : (selectedCampaignId || undefined));
+  const { sequences: dispatchSequences } = useDispatchSequences(isDispatchSelected ? selectedCampaignId : undefined);
+  const sequences = isDispatchSelected ? dispatchSequences : groupSequences;
+  
   const { linkedGroups } = useCampaignGroups(currentCampaignId || null);
 
   // Tag input state
@@ -279,9 +289,11 @@ export function PollActionDialog({
                     if (v === "current") {
                       setSelectedCampaignId(currentCampaignId || "");
                       updateConfig("campaignId", currentCampaignId);
+                      updateConfig("campaignType", "group");
                     } else {
                       setSelectedCampaignId("");
                       updateConfig("campaignId", "");
+                      updateConfig("campaignType", "");
                       updateConfig("sequenceId", "");
                     }
                   }}
@@ -299,6 +311,7 @@ export function PollActionDialog({
                         onValueChange={(v) => {
                           setSelectedCampaignId(v);
                           updateConfig("campaignId", v);
+                          updateConfig("campaignType", dispatchCampaigns.some(c => c.id === v) ? "dispatch" : "group");
                           updateConfig("sequenceId", "");
                         }}
                       >
@@ -306,13 +319,26 @@ export function PollActionDialog({
                           <SelectValue placeholder="Selecione uma campanha" />
                         </SelectTrigger>
                         <SelectContent>
-                          {campaigns
-                            .filter((c) => c.id !== currentCampaignId)
-                            .map((campaign) => (
-                              <SelectItem key={campaign.id} value={campaign.id}>
-                                {campaign.name}
-                              </SelectItem>
-                            ))}
+                          <SelectGroup>
+                            <SelectLabel>Campanhas de Grupo</SelectLabel>
+                            {groupCampaigns
+                              .filter((c) => c.id !== currentCampaignId)
+                              .map((campaign) => (
+                                <SelectItem key={campaign.id} value={campaign.id}>
+                                  {campaign.name}
+                                </SelectItem>
+                              ))}
+                          </SelectGroup>
+                          {dispatchCampaigns.length > 0 && (
+                            <SelectGroup>
+                              <SelectLabel>Campanhas de Disparo</SelectLabel>
+                              {dispatchCampaigns.map((campaign) => (
+                                <SelectItem key={campaign.id} value={campaign.id}>
+                                  {campaign.name}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -715,7 +741,7 @@ export function PollActionDialog({
               <AddToListConfig
                 config={config}
                 updateConfig={updateConfig}
-                campaigns={campaigns}
+                campaigns={groupCampaigns}
               />
             )}
 
