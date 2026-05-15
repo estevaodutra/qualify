@@ -21,6 +21,22 @@ import {
   Pencil, ImageIcon, UserPlus, UserMinus, ShieldPlus, ShieldMinus, Settings, CircleDot,
 } from "lucide-react";
 
+function formatWhatsAppText(text: string) {
+  const escaped = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+
+  const formatted = escaped
+    .replace(/\*(.*?)\*/g, '<strong>$1</strong>')
+    .replace(/_(.*?)_/g, '<em>$1</em>')
+    .replace(/~(.*?)~/g, '<del>$1</del>')
+    .replace(/```(.*?)```/gs, '<code class="bg-muted px-1 py-0.5 rounded text-xs">$1</code>');
+  return <div dangerouslySetInnerHTML={{ __html: formatted }} />;
+}
+
 interface UnifiedNodeConfigPanelProps {
   node: LocalNode;
   onUpdate: (config: Record<string, unknown>) => void;
@@ -423,14 +439,16 @@ export function UnifiedNodeConfigPanel({
                   }
                 </p>
               </div>
-              {!isGroup && node.config.content && (
+              {node.config.content && (
                 <div>
-                  <Label className="text-sm text-muted-foreground">Prévia:</Label>
-                  <div className="mt-2 p-3 rounded-lg bg-muted text-sm whitespace-pre-wrap">
-                    {String(node.config.content)
-                      .replace("{nome}", "João")
-                      .replace("{telefone}", "+55 11 99999-9999")
-                      .replace("{email}", "joao@email.com")}
+                  <Label className="text-sm text-muted-foreground mb-2 block">Prévia:</Label>
+                  <div className="p-4 rounded-xl bg-card border shadow-sm text-[13px] leading-relaxed whitespace-pre-wrap text-card-foreground">
+                    {formatWhatsAppText(
+                      String(node.config.content)
+                        .replace(isGroup ? /\{\{name\}\}/g : /\{nome\}/g, "João")
+                        .replace(isGroup ? /\{\{phone\}\}/g : /\{telefone\}/g, "+55 11 99999-9999")
+                        .replace(isGroup ? /\{\{group\}\}/g : /\{email\}/g, isGroup ? "Grupo VIP" : "joao@email.com")
+                    )}
                   </div>
                 </div>
               )}
