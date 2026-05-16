@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { LocalNode } from "./shared-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,7 +41,9 @@ function formatWhatsAppText(text: string) {
 // Convert WhatsApp markdown to HTML for Tiptap editor
 function waMarkdownToHtml(text: string): string {
   if (!text) return "<p></p>";
-  return text
+  // Normalize: colapsa 3+ newlines consecutivas em 2 (1 linha em branco)
+  const normalized = text.replace(/\n{3,}/g, "\n\n");
+  return normalized
     .split("\n")
     .map(line => {
       const html = line
@@ -401,6 +403,19 @@ export function UnifiedNodeConfigPanel({
 }: UnifiedNodeConfigPanelProps) {
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
   const [editingOptionIndex, setEditingOptionIndex] = useState<number | null>(null);
+
+  // Normaliza o conteúdo de mensagem ao abrir o dialog, corrigindo dados
+  // corrompidos com excesso de newlines sem depender de o usuário editar.
+  useEffect(() => {
+    if (!open || node.nodeType !== "message") return;
+    const raw = (node.config.content as string) || "";
+    if (!raw) return;
+    const normalized = htmlToWaMarkdown(waMarkdownToHtml(raw));
+    if (normalized !== raw) {
+      onUpdate({ ...node.config, content: normalized });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const nodeInfo = NODE_TITLES[node.nodeType] || NODE_TITLES.message;
   const Icon = nodeInfo.icon;
