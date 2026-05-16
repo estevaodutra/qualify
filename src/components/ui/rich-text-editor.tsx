@@ -63,12 +63,10 @@ export function RichTextEditor({ value, onChange, placeholder = "Digite seu text
   });
 
   useEffect(() => {
-    if (editor && value !== editor.getHTML()) {
-      // Evita atualização do cursor se o valor vir de fora mas for igual (ou quase)
-      const isSame = editor.getHTML() === value;
-      if (!isSame) {
-        editor.commands.setContent(value, false);
-      }
+    // Só sincroniza conteúdo externo quando o editor não está focado,
+    // evitando reset do cursor enquanto o usuário digita.
+    if (editor && !editor.view.hasFocus() && value !== editor.getHTML()) {
+      editor.commands.setContent(value, false);
     }
   }, [value, editor]);
 
