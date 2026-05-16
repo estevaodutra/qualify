@@ -66,11 +66,15 @@ function htmlToWaMarkdown(html: string): string {
     .replace(/<s>([\s\S]*?)<\/s>/g, "~$1~")
     .replace(/<del>([\s\S]*?)<\/del>/g, "~$1~")
     .replace(/<code>([\s\S]*?)<\/code>/g, "```$1```")
-    .replace(/<\/p>\s*<p>/g, "\n")
+    // Parágrafo vazio (com ou sem <br>) → linha em branco ANTES das fronteiras
+    .replace(/<p>(?:\s*<br\s*\/?>)?\s*<\/p>/g, "\n\n")
+    // Fronteiras entre parágrafos não-vazios (sem \s* para não absorver os \n\n acima)
+    .replace(/<\/p><p>/g, "\n")
     .replace(/<p>/g, "").replace(/<\/p>/g, "")
     .replace(/<br\s*\/?>/g, "\n")
     .replace(/<[^>]+>/g, "")
     .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
