@@ -6,37 +6,39 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectGroup, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useCallCampaigns } from "@/hooks/useCallCampaigns";
-import { GroupExecutionList } from "@/hooks/useGroupExecutionList";
+import { useGroupCampaigns } from "@/hooks/useGroupCampaigns";
+import { useDispatchCampaigns } from "@/hooks/useDispatchCampaigns";
+import { useSequences } from "@/hooks/useSequences";
+import { useDispatchSequences } from "@/hooks/useDispatchSequences";
+import { GroupExecutionList, ExecutionListConfig } from "@/hooks/useGroupExecutionList";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Webhook, MessageSquare, Phone, Clock, CalendarClock, Zap, ChevronDown, Copy, GripVertical, Trash2, Plus, Type, Hash, ToggleLeft } from "lucide-react";
+import { Webhook, MessageSquare, Phone, Clock, CalendarClock, Zap, ChevronDown, Copy, GripVertical, Trash2, Plus, Type, Hash, ToggleLeft, PlaySquare } from "lucide-react";
+
+const DELAY_OPTIONS = [
+  { value: 0, label: "Imediatamente" },
+  { value: 5, label: "5 segundos" },
+  { value: 30, label: "30 segundos" },
+  { value: 60, label: "1 minuto" },
+  { value: 300, label: "5 minutos" },
+  { value: 600, label: "10 minutos" },
+  { value: 1800, label: "30 minutos" },
+];
 
 type WebhookField = { id: string; name: string; type: "string" | "number" | "boolean"; value: string };
 
 interface ExecutionListConfigDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (config: {
-    name: string;
-    window_type: "fixed" | "duration";
-    window_start_time?: string;
-    window_end_time?: string;
-    window_duration_hours?: number;
-    monitored_events: string[];
-    action_type: "webhook" | "message" | "call";
-    webhook_url?: string;
-    webhook_params?: Record<string, any> | WebhookField[];
-    message_template?: string;
-    call_campaign_id?: string;
-    execution_schedule_type?: "window_end" | "scheduled" | "immediate";
-    execution_scheduled_time?: string;
-    execution_days_of_week?: number[];
-  }) => void;
+  onSave: (config: ExecutionListConfig) => void;
   existing?: GroupExecutionList | null;
   isSaving?: boolean;
+  currentCampaignId?: string;
 }
 
 const EVENT_OPTIONS = [
@@ -62,6 +64,7 @@ export function ExecutionListConfigDialog({
   onSave,
   existing,
   isSaving,
+  currentCampaignId,
 }: ExecutionListConfigDialogProps) {
   const [name, setName] = useState("");
   const [windowType, setWindowType] = useState<"fixed" | "duration" | "fulltime">("fixed");
@@ -69,7 +72,7 @@ export function ExecutionListConfigDialog({
   const [endTime, setEndTime] = useState("18:00");
   const [durationHours, setDurationHours] = useState(6);
   const [monitoredEvents, setMonitoredEvents] = useState<string[]>(["group_join"]);
-  const [actionType, setActionType] = useState<"webhook" | "message" | "call">("webhook");
+  const [actionType, setActionType] = useState<"webhook" | "message" | "call" | "start_sequence">("webhook");
   const [webhookUrl, setWebhookUrl] = useState("");
   const [webhookFields, setWebhookFields] = useState<WebhookField[]>([]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -79,7 +82,25 @@ export function ExecutionListConfigDialog({
   const [execScheduledTime, setExecScheduledTime] = useState("10:00");
   const [execDaysOfWeek, setExecDaysOfWeek] = useState<number[]>([1, 2, 3, 4, 5]);
 
+  // Sequence state
+  const [seqScope, setSeqScope] = useState<"this" | "other">("this");
+  const [seqOtherCampaignId, setSeqOtherCampaignId] = useState("");
+  const [seqOtherCampaignType, setSeqOtherCampaignType] = useState<"group" | "dispatch">("group");
+  const [seqSequenceId, setSeqSequenceId] = useState("");
+  const [seqDelaySeconds, setSeqDelaySeconds] = useState(0);
+  const [seqSendPrivate, setSeqSendPrivate] = useState(false);
+  const [seqOncePerParticipant, setSeqOncePerParticipant] = useState(true);
+
   const { campaigns: callCampaigns } = useCallCampaigns();
+  const { campaigns: groupCampaigns } = useGroupCampaigns();
+  const { campaigns: dispatchCampaigns } = useDispatchCampaigns();
+
+  // Determine which campaign+type to load sequences from
+  const activeCampaignId = seqScope === "this" ? (currentCampaignId || "") : seqOtherCampaignId;
+  const isDispatch = seqScope === "other" && seqOtherCampaignType === "dispatch";
+  const { sequences: groupSeqs } = useSequences(!isDispatch ? activeCampaignId || undefined : undefined);
+  const { sequences: dispatchSeqs } = useDispatchSequences(isDispatch ? activeCampaignId : undefined);
+  const sequences = isDispatch ? dispatchSeqs : groupSeqs;
 
   useEffect(() => {
     if (existing) {
@@ -92,7 +113,19 @@ export function ExecutionListConfigDialog({
       setEndTime(existing.window_end_time?.slice(0, 5) || "18:00");
       setDurationHours(existing.window_duration_hours || 6);
       setMonitoredEvents(existing.monitored_events || ["group_join"]);
-      setActionType(existing.action_type as "webhook" | "message" | "call");
+      setActionType(existing.action_type as "webhook" | "message" | "call" | "start_sequence");
+      // Restore sequence config from webhook_params when action_type is start_sequence
+      if (existing.action_type === "start_sequence") {
+        const sp = (existing.webhook_params as any) || {};
+        const isScopeThis = sp.campaignId === currentCampaignId;
+        setSeqScope(isScopeThis ? "this" : "other");
+        setSeqOtherCampaignId(isScopeThis ? "" : (sp.campaignId || ""));
+        setSeqOtherCampaignType(sp.campaignType || "group");
+        setSeqSequenceId(sp.sequenceId || "");
+        setSeqDelaySeconds(sp.delaySeconds ?? 0);
+        setSeqSendPrivate(sp.sendPrivate ?? false);
+        setSeqOncePerParticipant(sp.oncePerParticipant ?? true);
+      }
       setWebhookUrl(existing.webhook_url || "");
       const params = (existing as any).webhook_params;
       if (Array.isArray(params)) {
@@ -136,6 +169,13 @@ export function ExecutionListConfigDialog({
       setExecScheduleType("window_end");
       setExecScheduledTime("10:00");
       setExecDaysOfWeek([1, 2, 3, 4, 5]);
+      setSeqScope("this");
+      setSeqOtherCampaignId("");
+      setSeqOtherCampaignType("group");
+      setSeqSequenceId("");
+      setSeqDelaySeconds(0);
+      setSeqSendPrivate(false);
+      setSeqOncePerParticipant(true);
     }
   }, [existing, open]);
 
@@ -200,6 +240,8 @@ export function ExecutionListConfigDialog({
     if (actionType === "webhook" && hasDuplicateNames()) return false;
     if (actionType === "message" && !messageTemplate.trim()) return false;
     if (actionType === "call" && !callCampaignId) return false;
+    if (actionType === "start_sequence" && !seqSequenceId) return false;
+    if (actionType === "start_sequence" && seqScope === "other" && !seqOtherCampaignId) return false;
     if (execScheduleType === "scheduled" && !execScheduledTime) return false;
     return true;
   };
@@ -213,6 +255,8 @@ export function ExecutionListConfigDialog({
   const handleSave = () => {
     const isFulltime = windowType === "fulltime";
     const mappedWindowType = isFulltime ? "fixed" : windowType;
+    const resolvedSeqCampaignId = seqScope === "this" ? (currentCampaignId || "") : seqOtherCampaignId;
+    const resolvedSeqCampaignType = seqScope === "this" ? "group" : seqOtherCampaignType;
     onSave({
       name: name.trim(),
       window_type: mappedWindowType as "fixed" | "duration",
@@ -228,6 +272,12 @@ export function ExecutionListConfigDialog({
       execution_schedule_type: execScheduleType,
       execution_scheduled_time: execScheduleType === "scheduled" ? execScheduledTime : undefined,
       execution_days_of_week: execScheduleType === "scheduled" ? execDaysOfWeek : undefined,
+      sequence_campaign_id: actionType === "start_sequence" ? resolvedSeqCampaignId : undefined,
+      sequence_campaign_type: actionType === "start_sequence" ? resolvedSeqCampaignType : undefined,
+      sequence_id: actionType === "start_sequence" ? seqSequenceId : undefined,
+      sequence_delay_seconds: actionType === "start_sequence" ? seqDelaySeconds : undefined,
+      sequence_send_private: actionType === "start_sequence" ? seqSendPrivate : undefined,
+      sequence_once_per_participant: actionType === "start_sequence" ? seqOncePerParticipant : undefined,
     });
   };
 
@@ -321,7 +371,7 @@ export function ExecutionListConfigDialog({
           {/* Action Type */}
           <div className="space-y-3">
             <Label className="text-sm font-semibold">Ação ao Executar</Label>
-            <RadioGroup value={actionType} onValueChange={(v) => setActionType(v as "webhook" | "message" | "call")}>
+            <RadioGroup value={actionType} onValueChange={(v) => setActionType(v as "webhook" | "message" | "call" | "start_sequence")}>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="webhook" id="at-webhook" />
                 <Webhook className="h-4 w-4 text-muted-foreground" />
@@ -336,6 +386,11 @@ export function ExecutionListConfigDialog({
                 <RadioGroupItem value="call" id="at-call" />
                 <Phone className="h-4 w-4 text-muted-foreground" />
                 <Label htmlFor="at-call">Disparo de Ligação</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="start_sequence" id="at-sequence" />
+                <PlaySquare className="h-4 w-4 text-green-500" />
+                <Label htmlFor="at-sequence">Iniciar Sequência</Label>
               </div>
             </RadioGroup>
 
@@ -525,6 +580,110 @@ export function ExecutionListConfigDialog({
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            )}
+
+            {actionType === "start_sequence" && (
+              <div className="space-y-4">
+                <Tabs
+                  value={seqScope}
+                  onValueChange={(v) => {
+                    setSeqScope(v as "this" | "other");
+                    setSeqSequenceId("");
+                    setSeqOtherCampaignId("");
+                  }}
+                >
+                  <TabsList className="w-full">
+                    <TabsTrigger value="this" className="flex-1">Esta campanha</TabsTrigger>
+                    <TabsTrigger value="other" className="flex-1">Outra campanha</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="other" className="mt-3">
+                    <Label className="text-xs text-muted-foreground">Campanha</Label>
+                    <Select
+                      value={seqOtherCampaignId}
+                      onValueChange={(v) => {
+                        setSeqOtherCampaignId(v);
+                        setSeqSequenceId("");
+                        const isDisp = dispatchCampaigns.some((c) => c.id === v);
+                        setSeqOtherCampaignType(isDisp ? "dispatch" : "group");
+                      }}
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Selecione uma campanha" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectLabel>Campanhas de Grupo</SelectLabel>
+                          {groupCampaigns
+                            .filter((c) => c.id !== currentCampaignId)
+                            .map((c) => (
+                              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                            ))}
+                        </SelectGroup>
+                        {dispatchCampaigns.length > 0 && (
+                          <SelectGroup>
+                            <SelectLabel>Campanhas de Disparo</SelectLabel>
+                            {dispatchCampaigns.map((c) => (
+                              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                            ))}
+                          </SelectGroup>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </TabsContent>
+                </Tabs>
+
+                <div>
+                  <Label className="text-xs text-muted-foreground">Sequência</Label>
+                  <Select
+                    value={seqSequenceId}
+                    onValueChange={setSeqSequenceId}
+                    disabled={!activeCampaignId}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder={activeCampaignId ? "Selecione uma sequência" : "Selecione uma campanha primeiro"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sequences.map((seq) => (
+                        <SelectItem key={seq.id} value={seq.id}>{seq.name}</SelectItem>
+                      ))}
+                      {sequences.length === 0 && activeCampaignId && (
+                        <SelectItem value="__empty__" disabled>Nenhuma sequência encontrada</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label className="text-xs text-muted-foreground">Delay antes de iniciar</Label>
+                  <Select value={String(seqDelaySeconds)} onValueChange={(v) => setSeqDelaySeconds(Number(v))}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DELAY_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-sm">Enviar no privado</Label>
+                    <p className="text-xs text-muted-foreground">Executa a sequência no chat privado do participante</p>
+                  </div>
+                  <Switch checked={seqSendPrivate} onCheckedChange={setSeqSendPrivate} />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-sm">Executar apenas uma vez</Label>
+                    <p className="text-xs text-muted-foreground">Ignora eventos repetidos do mesmo participante</p>
+                  </div>
+                  <Switch checked={seqOncePerParticipant} onCheckedChange={setSeqOncePerParticipant} />
+                </div>
               </div>
             )}
           </div>

@@ -13,7 +13,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ClipboardList, Clock, Zap, Users, Pencil, Play, Webhook, MessageSquare, Phone, ArrowLeft, Plus, Trash2, RefreshCw, Infinity, RotateCw, Eye, Copy, UserCheck, UserX, AlertCircle } from "lucide-react";
+import { ClipboardList, Clock, Zap, Users, Pencil, Play, Webhook, MessageSquare, Phone, ArrowLeft, Plus, Trash2, RefreshCw, Infinity, RotateCw, Eye, Copy, UserCheck, UserX, AlertCircle, PlaySquare } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
@@ -31,12 +31,14 @@ const ACTION_ICONS: Record<string, React.ReactNode> = {
   webhook: <Webhook className="h-4 w-4" />,
   message: <MessageSquare className="h-4 w-4" />,
   call: <Phone className="h-4 w-4" />,
+  start_sequence: <PlaySquare className="h-4 w-4 text-green-500" />,
 };
 
 const ACTION_LABELS: Record<string, string> = {
   webhook: "Webhook",
   message: "Mensagem",
   call: "Ligação",
+  start_sequence: "Iniciar Sequência",
 };
 
 function isFulltime(list: GroupExecutionList): boolean {
@@ -702,6 +704,7 @@ export function ExecutionListTab({ campaignId }: ExecutionListTabProps) {
           onSave={handleSave}
           existing={editingList}
           isSaving={updateList.isPending}
+          currentCampaignId={campaignId}
         />
       </>
     );
@@ -784,6 +787,7 @@ export function ExecutionListTab({ campaignId }: ExecutionListTabProps) {
         onSave={handleSave}
         existing={editingList}
         isSaving={createList.isPending || updateList.isPending}
+      currentCampaignId={campaignId}
       />
 
       <AlertDialog open={!!deletingId} onOpenChange={(v) => { if (!v) setDeletingId(null); }}>

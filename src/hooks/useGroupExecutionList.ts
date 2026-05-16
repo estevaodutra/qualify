@@ -13,7 +13,7 @@ export interface GroupExecutionList {
   window_end_time: string | null;
   window_duration_hours: number | null;
   monitored_events: string[];
-  action_type: "webhook" | "message" | "call";
+  action_type: "webhook" | "message" | "call" | "start_sequence";
   webhook_url: string | null;
   webhook_params: Record<string, any> | Array<{ id: string; name: string; type: string; value: string }>;
   message_template: string | null;
@@ -85,6 +85,29 @@ function calculateWindowTimes(config: {
   }
 
   return { start: windowStart.toISOString(), end: windowEnd.toISOString() };
+}
+
+export interface ExecutionListConfig {
+  name: string;
+  window_type: "fixed" | "duration";
+  window_start_time?: string;
+  window_end_time?: string;
+  window_duration_hours?: number;
+  monitored_events: string[];
+  action_type: "webhook" | "message" | "call" | "start_sequence";
+  webhook_url?: string;
+  webhook_params?: Record<string, any> | Array<{ id: string; name: string; type: string; value: string }>;
+  message_template?: string;
+  call_campaign_id?: string;
+  execution_schedule_type?: "window_end" | "scheduled" | "immediate";
+  execution_scheduled_time?: string;
+  execution_days_of_week?: number[];
+  sequence_campaign_id?: string;
+  sequence_campaign_type?: "group" | "dispatch";
+  sequence_id?: string;
+  sequence_delay_seconds?: number;
+  sequence_send_private?: boolean;
+  sequence_once_per_participant?: boolean;
 }
 
 export function useGroupExecutionList(campaignId: string) {
@@ -160,24 +183,24 @@ export function useGroupExecutionList(campaignId: string) {
   };
 
   const createList = useMutation({
-    mutationFn: async (config: {
-      name: string;
-      window_type: "fixed" | "duration";
-      window_start_time?: string;
-      window_end_time?: string;
-      window_duration_hours?: number;
-      monitored_events: string[];
-      action_type: "webhook" | "message" | "call";
-      webhook_url?: string;
-      webhook_params?: Record<string, any> | Array<{ id: string; name: string; type: string; value: string }>;
-      message_template?: string;
-      call_campaign_id?: string;
-      execution_schedule_type?: "window_end" | "scheduled" | "immediate";
-      execution_scheduled_time?: string;
-      execution_days_of_week?: number[];
-    }) => {
+    mutationFn: async (config: ExecutionListConfig) => {
       if (!user) throw new Error("Not authenticated");
       const { start, end } = calculateWindowTimes(config);
+
+      const resolvedWebhookParams =
+        config.action_type === "webhook"
+          ? (config.webhook_params ?? {})
+          : config.action_type === "start_sequence"
+          ? {
+              _type: "sequence_config",
+              campaignId: config.sequence_campaign_id,
+              campaignType: config.sequence_campaign_type,
+              sequenceId: config.sequence_id,
+              delaySeconds: config.sequence_delay_seconds ?? 0,
+              sendPrivate: config.sequence_send_private ?? false,
+              oncePerParticipant: config.sequence_once_per_participant ?? true,
+            }
+          : {};
 
       const { data, error } = await (supabase as any)
         .from("group_execution_lists")
@@ -192,7 +215,7 @@ export function useGroupExecutionList(campaignId: string) {
           monitored_events: config.monitored_events,
           action_type: config.action_type,
           webhook_url: config.action_type === "webhook" ? config.webhook_url : null,
-          webhook_params: config.action_type === "webhook" ? (config.webhook_params ?? {}) : {},
+          webhook_params: resolvedWebhookParams,
           message_template: config.action_type === "message" ? config.message_template : null,
           call_campaign_id: config.action_type === "call" ? config.call_campaign_id : null,
           current_window_start: start,
@@ -214,26 +237,23 @@ export function useGroupExecutionList(campaignId: string) {
   });
 
   const updateList = useMutation({
-    mutationFn: async (params: {
-      id: string;
-      config: {
-        name: string;
-        window_type: "fixed" | "duration";
-        window_start_time?: string;
-        window_end_time?: string;
-        window_duration_hours?: number;
-        monitored_events: string[];
-        action_type: "webhook" | "message" | "call";
-        webhook_url?: string;
-        webhook_params?: Record<string, any> | Array<{ id: string; name: string; type: string; value: string }>;
-        message_template?: string;
-        call_campaign_id?: string;
-        execution_schedule_type?: "window_end" | "scheduled" | "immediate";
-        execution_scheduled_time?: string;
-        execution_days_of_week?: number[];
-      };
-    }) => {
+    mutationFn: async (params: { id: string; config: ExecutionListConfig }) => {
       const { start, end } = calculateWindowTimes(params.config);
+
+      const resolvedWebhookParams =
+        params.config.action_type === "webhook"
+          ? (params.config.webhook_params ?? {})
+          : params.config.action_type === "start_sequence"
+          ? {
+              _type: "sequence_config",
+              campaignId: params.config.sequence_campaign_id,
+              campaignType: params.config.sequence_campaign_type,
+              sequenceId: params.config.sequence_id,
+              delaySeconds: params.config.sequence_delay_seconds ?? 0,
+              sendPrivate: params.config.sequence_send_private ?? false,
+              oncePerParticipant: params.config.sequence_once_per_participant ?? true,
+            }
+          : {};
 
       const { error } = await (supabase as any)
         .from("group_execution_lists")
@@ -246,7 +266,7 @@ export function useGroupExecutionList(campaignId: string) {
           monitored_events: params.config.monitored_events,
           action_type: params.config.action_type,
           webhook_url: params.config.action_type === "webhook" ? params.config.webhook_url : null,
-          webhook_params: params.config.action_type === "webhook" ? (params.config.webhook_params ?? {}) : {},
+          webhook_params: resolvedWebhookParams,
           message_template: params.config.action_type === "message" ? params.config.message_template : null,
           call_campaign_id: params.config.action_type === "call" ? params.config.call_campaign_id : null,
           current_window_start: start,

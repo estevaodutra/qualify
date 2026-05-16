@@ -567,6 +567,52 @@ async function executeAction(
       break;
     }
 
+    case "start_sequence": {
+      const seqConfig = Array.isArray(list.webhook_params)
+        ? null
+        : (list.webhook_params as Record<string, any>);
+      if (!seqConfig?.sequenceId) throw new Error("No sequence configured");
+
+      const campaignId = seqConfig.campaignId || list.campaign_id;
+      const sendPrivate = seqConfig.sendPrivate ?? false;
+      const delaySeconds = seqConfig.delaySeconds ?? 0;
+
+      // Find the sequence's trigger webhook URL via trigger-sequence function
+      const triggerUrl = `${supabaseUrl}/functions/v1/trigger-sequence/${seqConfig.sequenceId}`;
+
+      const payload: Record<string, any> = {
+        destination: {
+          phone: lead.phone,
+          name: lead.name || "",
+          sendPrivate,
+        },
+        campaignId,
+        leadPhone: lead.phone,
+        leadName: lead.name || "",
+      };
+
+      const triggerFn = async () => {
+        const resp = await fetch(triggerUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${supabaseKey}`,
+          },
+          body: JSON.stringify(payload),
+        });
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error(`trigger-sequence returned ${resp.status}: ${text.slice(0, 200)}`);
+        }
+      };
+
+      if (delaySeconds > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delaySeconds * 1000));
+      }
+      await triggerFn();
+      break;
+    }
+
     default:
       throw new Error(`Unknown action type: ${list.action_type}`);
   }
