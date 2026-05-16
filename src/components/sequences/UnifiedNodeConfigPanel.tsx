@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -35,6 +36,42 @@ function formatWhatsAppText(text: string) {
     .replace(/~(.*?)~/g, '<del>$1</del>')
     .replace(/```(.*?)```/gs, '<code class="bg-muted px-1 py-0.5 rounded text-xs">$1</code>');
   return <div dangerouslySetInnerHTML={{ __html: formatted }} />;
+}
+
+// Convert WhatsApp markdown to HTML for Tiptap editor
+function waMarkdownToHtml(text: string): string {
+  if (!text) return "<p></p>";
+  return text
+    .split("\n")
+    .map(line => {
+      const html = line
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/```([^`]*)```/g, "<code>$1</code>")
+        .replace(/\*([^*\n]+)\*/g, "<strong>$1</strong>")
+        .replace(/_([^_\n]+)_/g, "<em>$1</em>")
+        .replace(/~([^~\n]+)~/g, "<s>$1</s>");
+      return `<p>${html || "<br>"}</p>`;
+    })
+    .join("");
+}
+
+// Convert Tiptap HTML back to WhatsApp markdown for storage
+function htmlToWaMarkdown(html: string): string {
+  if (!html) return "";
+  return html
+    .replace(/<strong>([\s\S]*?)<\/strong>/g, "*$1*")
+    .replace(/<b>([\s\S]*?)<\/b>/g, "*$1*")
+    .replace(/<em>([\s\S]*?)<\/em>/g, "_$1_")
+    .replace(/<i>([\s\S]*?)<\/i>/g, "_$1_")
+    .replace(/<s>([\s\S]*?)<\/s>/g, "~$1~")
+    .replace(/<del>([\s\S]*?)<\/del>/g, "~$1~")
+    .replace(/<code>([\s\S]*?)<\/code>/g, "```$1```")
+    .replace(/<\/p>\s*<p>/g, "\n")
+    .replace(/<p>/g, "").replace(/<\/p>/g, "")
+    .replace(/<br\s*\/?>/g, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ")
+    .trim();
 }
 
 interface UnifiedNodeConfigPanelProps {
@@ -426,11 +463,12 @@ export function UnifiedNodeConfigPanel({
             <>
               <div className="space-y-2">
                 <Label>Conteúdo da Mensagem</Label>
-                <Textarea
+                <RichTextEditor
+                  toolbar="whatsapp"
+                  value={waMarkdownToHtml((node.config.content as string) || "")}
+                  onChange={(html) => updateConfig("content", htmlToWaMarkdown(html))}
                   placeholder="Digite a mensagem..."
-                  value={(node.config.content as string) || ""}
-                  onChange={e => updateConfig("content", e.target.value)}
-                  rows={isGroup ? 4 : 5}
+                  minHeight={isGroup ? "100px" : "120px"}
                 />
                 <p className="text-xs text-muted-foreground">
                   {isGroup
@@ -439,19 +477,6 @@ export function UnifiedNodeConfigPanel({
                   }
                 </p>
               </div>
-              {node.config.content && (
-                <div>
-                  <Label className="text-sm text-muted-foreground mb-2 block">Prévia:</Label>
-                  <div className="p-4 rounded-xl bg-card border shadow-sm text-[13px] leading-relaxed whitespace-pre-wrap text-card-foreground">
-                    {formatWhatsAppText(
-                      String(node.config.content)
-                        .replace(isGroup ? /\{\{name\}\}/g : /\{nome\}/g, "João")
-                        .replace(isGroup ? /\{\{phone\}\}/g : /\{telefone\}/g, "+55 11 99999-9999")
-                        .replace(isGroup ? /\{\{group\}\}/g : /\{email\}/g, isGroup ? "Grupo VIP" : "joao@email.com")
-                    )}
-                  </div>
-                </div>
-              )}
               {isGroup && (
                 <>
                   <div className="flex items-center justify-between">

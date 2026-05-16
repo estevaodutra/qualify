@@ -28,9 +28,10 @@ interface RichTextEditorProps {
   placeholder?: string;
   minHeight?: string;
   variant?: 'default' | 'inline';
+  toolbar?: 'full' | 'whatsapp';
 }
 
-export function RichTextEditor({ value, onChange, placeholder = "Digite seu texto...", minHeight = "120px", variant = 'default' }: RichTextEditorProps) {
+export function RichTextEditor({ value, onChange, placeholder = "Digite seu texto...", minHeight = "120px", variant = 'default', toolbar = 'full' }: RichTextEditorProps) {
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -78,11 +79,29 @@ export function RichTextEditor({ value, onChange, placeholder = "Digite seu text
   return (
     <div className="relative w-full">
       {editor && (
-        <BubbleMenu 
-          editor={editor} 
+        <BubbleMenu
+          editor={editor}
           tippyOptions={{ duration: 100 }}
           className="flex flex-wrap items-center gap-1 p-1 rounded-md border bg-background shadow-md"
         >
+          {toolbar === 'whatsapp' ? (
+            /* WhatsApp-only toolbar: Bold, Italic, Strike, Code */
+            <div className="flex items-center gap-0.5">
+              <Toggle size="sm" pressed={editor.isActive('bold')} onPressedChange={() => editor.chain().focus().toggleBold().run()} className="h-8 w-8 px-0">
+                <Bold className="h-4 w-4" />
+              </Toggle>
+              <Toggle size="sm" pressed={editor.isActive('italic')} onPressedChange={() => editor.chain().focus().toggleItalic().run()} className="h-8 w-8 px-0">
+                <Italic className="h-4 w-4" />
+              </Toggle>
+              <Toggle size="sm" pressed={editor.isActive('strike')} onPressedChange={() => editor.chain().focus().toggleStrike().run()} className="h-8 w-8 px-0">
+                <Strikethrough className="h-4 w-4" />
+              </Toggle>
+              <Toggle size="sm" pressed={editor.isActive('code')} onPressedChange={() => editor.chain().focus().toggleCode().run()} className="h-8 w-8 px-0">
+                <span className="text-xs font-mono font-bold">{'</>'}</span>
+              </Toggle>
+            </div>
+          ) : (
+            <>
           <div className="flex items-center gap-0.5">
             <Toggle
               size="sm"
@@ -240,6 +259,8 @@ export function RichTextEditor({ value, onChange, placeholder = "Digite seu text
               <ListOrdered className="h-4 w-4" />
             </Toggle>
           </div>
+            </>
+          )}
         </BubbleMenu>
       )}
       <EditorContent editor={editor} />
