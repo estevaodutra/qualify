@@ -1142,7 +1142,7 @@ export function UnifiedNodeConfigPanel({
             } else {
               return (
                 <>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-4 gap-2">
                     <div className="space-y-1">
                       <Label className="text-xs">Dias</Label>
                       <Input type="number" min={0} value={(node.config.days as number) || 0} onChange={e => updateConfig("days", parseInt(e.target.value) || 0)} />
@@ -1154,6 +1154,10 @@ export function UnifiedNodeConfigPanel({
                     <div className="space-y-1">
                       <Label className="text-xs">Minutos</Label>
                       <Input type="number" min={0} max={59} value={(node.config.minutes as number) || 0} onChange={e => updateConfig("minutes", parseInt(e.target.value) || 0)} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Segundos</Label>
+                      <Input type="number" min={0} max={59} value={(node.config.seconds as number) || 0} onChange={e => updateConfig("seconds", parseInt(e.target.value) || 0)} />
                     </div>
                   </div>
                   <div>
