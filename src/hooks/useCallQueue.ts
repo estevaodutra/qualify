@@ -411,6 +411,7 @@ export function useCallQueue(options: UseCallQueueOptions = {}) {
         .upsert({
           campaign_id: cId,
           user_id: authUser.id,
+          company_id: activeCompanyId || null,
           status: "running",
           session_started_at: new Date().toISOString(),
           calls_made: 0,
