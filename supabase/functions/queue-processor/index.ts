@@ -168,7 +168,17 @@ async function healStaleInCallItems(supabase: any, companyId: string) {
         .maybeSingle();
 
       if (!log || terminalStatuses.includes(log.call_status) || log.ended_at) {
-        // Case 1: call_log already terminal or ended — just clean up queue item
+        // Case 1: call_log already terminal or ended — clean up queue item and reset lead status
+        if (item.lead_id) {
+          const leadStatus = !log ? 'pending'
+            : ['completed', 'answered'].includes(log.call_status) ? 'completed'
+            : ['no_answer', 'no_answer_rescheduled', 'voicemail_rescheduled', 'cancelled_rescheduled'].includes(log.call_status) ? 'no_answer'
+            : ['failed', 'cancelled', 'busy', 'timeout', 'voicemail'].includes(log.call_status) ? 'failed'
+            : 'pending';
+          await supabase.from('call_leads')
+            .update({ status: leadStatus, assigned_operator_id: null })
+            .eq('id', item.lead_id);
+        }
         idsToDelete.push(item.id);
       } else if (activeStatuses.includes(log.call_status)) {
         // Case 2: call_log still active — check if timed out (>10 min)
@@ -186,9 +196,9 @@ async function healStaleInCallItems(supabase: any, companyId: string) {
           // Release operator
           await supabase.rpc('release_operator', { p_call_id: log.id, p_force: true });
 
-          // Revert lead to waiting
+          // Revert lead to pending for retry
           if (log.lead_id) {
-            await supabase.from('call_leads').update({ status: 'waiting' }).eq('id', log.lead_id);
+            await supabase.from('call_leads').update({ status: 'pending', assigned_operator_id: null }).eq('id', log.lead_id);
           }
 
           idsToDelete.push(item.id);
@@ -196,9 +206,14 @@ async function healStaleInCallItems(supabase: any, companyId: string) {
         }
       }
     } else {
-      // No call_log_id — delete if older than 5 minutes
+      // No call_log_id — delete if older than 5 minutes and reset lead status
       const createdAt = new Date(item.created_at).getTime();
       if (Date.now() - createdAt > 5 * 60 * 1000) {
+        if (item.lead_id) {
+          await supabase.from('call_leads')
+            .update({ status: 'pending', assigned_operator_id: null })
+            .eq('id', item.lead_id);
+        }
         idsToDelete.push(item.id);
       }
     }

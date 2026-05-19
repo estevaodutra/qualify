@@ -643,7 +643,7 @@ Deno.serve(async (req) => {
     }
 
     // ==================== UPDATE LEAD STATUS ====================
-    if (callLog.lead_id) {
+    {
       let leadStatus = 'calling';
       if (mappedStatus === 'completed') {
         leadStatus = 'completed';
@@ -653,10 +653,21 @@ Deno.serve(async (req) => {
         leadStatus = 'failed';
       }
 
-      await supabase
-        .from('call_leads')
-        .update({ status: leadStatus })
-        .eq('id', callLog.lead_id);
+      if (callLog.lead_id) {
+        await supabase
+          .from('call_leads')
+          .update({ status: leadStatus })
+          .eq('id', callLog.lead_id);
+      } else if (callLog.campaign_id && requestBody.lead_phone) {
+        // Fallback: atualiza por phone + campaign_id quando lead_id está ausente no call_log
+        const cleanPhone = String(requestBody.lead_phone).replace(/\D/g, '');
+        await supabase
+          .from('call_leads')
+          .update({ status: leadStatus })
+          .eq('campaign_id', callLog.campaign_id)
+          .eq('phone', cleanPhone)
+          .eq('status', 'calling');
+      }
     }
 
     // ==================== RETRY LOGIC (REPLACES OLD RESCHEDULING) ====================

@@ -76,6 +76,10 @@ Deno.serve(async (req) => {
       .eq("external_instance_id", externalInstanceId)
       .maybeSingle();
 
+    if (!instance) {
+      console.warn(`[webhook-inbound] Instance not found for external_instance_id="${externalInstanceId}". Event will be saved with user_id=null (visible via external_instance_id RLS fallback).`);
+    }
+
     // Classify using shared classifier
     const classification: ClassificationResult = classifyEvent(source, rawEvent);
     console.log(`[webhook-inbound] Classified as: ${classification.eventType} (${classification.classification}, rule: ${classification.matchedRule}, confidence: ${classification.confidence})`);
@@ -453,6 +457,12 @@ Deno.serve(async (req) => {
     // ==========================================
     // AUTO-ACCUMULATE LEADS for Group Execution Lists
     // ==========================================
+    if (classification.eventType === "group_join" || classification.eventType === "group_leave") {
+      console.log(`[webhook-inbound] Group event: type=${classification.eventType}, chatJid=${context.chatJid}, phone=${context.senderPhone}, lid=${context.senderLid}`);
+      if (!context.senderPhone && !context.senderLid) {
+        console.warn(`[webhook-inbound] SKIP execution list: no participant identifier. raw_event keys: ${Object.keys(rawEvent).join(", ")}`);
+      }
+    }
     if (context.chatJid && (context.senderPhone || context.senderLid)) {
       try {
         // Find group campaign by group_jid via campaign_groups

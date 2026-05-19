@@ -592,10 +592,40 @@ function extractZApiContext(rawEvent: Record<string, unknown>): EventContext {
         }
       }
     } else {
-      // Fallback to connectedPhone only if no notificationParameters
-      const connectedPhone = body?.connectedPhone as string | undefined;
-      if (connectedPhone) {
-        senderPhone = connectedPhone;
+      // Fallback 1: rawEvent.participants array (Evolution API / other providers)
+      const participants = (rawEvent.participants || (body as Record<string, unknown>)?.participants) as unknown[] | undefined;
+      const first = Array.isArray(participants) ? participants[0] : null;
+      if (first) {
+        if (typeof first === "string" && first.includes("@lid")) {
+          senderLid = first;
+          senderPhone = null;
+        } else if (typeof first === "string") {
+          senderPhone = first.split("@")[0];
+        } else if (typeof first === "object" && first !== null && (first as Record<string, unknown>).id) {
+          const id = (first as Record<string, unknown>).id as string;
+          senderPhone = id.includes("@") ? id.split("@")[0] : id;
+        }
+      }
+
+      // Fallback 2: rawEvent.participant singular (if not already extracted)
+      if (!senderPhone && !senderLid) {
+        const single = rawEvent.participant as string | undefined;
+        if (single) {
+          if (single.includes("@lid")) {
+            senderLid = single;
+            senderPhone = null;
+          } else {
+            senderPhone = single.includes("@") ? single.split("@")[0] : single;
+          }
+        }
+      }
+
+      // Last resort: connectedPhone (bot's own phone — only if nothing else matched)
+      if (!senderPhone && !senderLid) {
+        const connectedPhone = body?.connectedPhone as string | undefined;
+        if (connectedPhone) {
+          senderPhone = connectedPhone;
+        }
       }
     }
   }
