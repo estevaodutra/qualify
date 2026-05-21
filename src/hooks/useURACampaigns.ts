@@ -80,10 +80,11 @@ const transformDbToFrontend = (db: DbURACampaign): URACampaign => ({
 
 /** Call the ura-campaign-sync edge function to create/update the campaign on MOS BR */
 async function syncCampaignToMosBR(campaignId: string): Promise<void> {
-  const { error } = await supabase.functions.invoke("ura-campaign-sync", {
+  const { data, error } = await supabase.functions.invoke("ura-campaign-sync", {
     body: { campaign_id: campaignId },
   });
-  if (error) console.warn("[useURACampaigns] MOS BR sync failed (non-blocking):", error);
+  if (error) throw new Error(error.message);
+  if (data?.error) throw new Error(`Erro na MOS BR: ${data.error} - ${JSON.stringify(data.detail || '')}`);
 }
 
 export function useURACampaigns() {
@@ -131,7 +132,7 @@ export function useURACampaigns() {
       const created = transformDbToFrontend(data as DbURACampaign);
 
       // Fire-and-forget sync to MOS BR
-      syncCampaignToMosBR(created.id).catch(console.warn);
+      await syncCampaignToMosBR(created.id);
 
       return created;
     },
@@ -178,7 +179,7 @@ export function useURACampaigns() {
       const updated = transformDbToFrontend(data as DbURACampaign);
 
       // Sync the updated config to MOS BR (fire-and-forget, non-blocking)
-      syncCampaignToMosBR(id).catch(console.warn);
+      await syncCampaignToMosBR(id);
 
       return updated;
     },
@@ -242,7 +243,7 @@ export function useURACampaigns() {
       if (insertErr) throw insertErr;
 
       const duped = transformDbToFrontend(newCampaign as DbURACampaign);
-      syncCampaignToMosBR(duped.id).catch(console.warn);
+      await syncCampaignToMosBR(duped.id);
       return duped;
     },
     onSuccess: () => {
@@ -305,4 +306,5 @@ export function useURACampaigns() {
     isUploadingAudio: uploadAudioMutation.isPending,
   };
 }
+
 
