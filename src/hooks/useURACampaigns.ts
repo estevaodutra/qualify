@@ -22,6 +22,8 @@ export interface URACampaign {
   smsMessage: string | null;
   smsServiceId: number | null;
   smsRule: string | null;
+  mosCampaignId: number | null;
+  mosAudioName: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -46,6 +48,8 @@ interface DbURACampaign {
   sms_message: string | null;
   sms_service_id: number | null;
   sms_rule: string | null;
+  mos_campaign_id: number | null;
+  mos_audio_name: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -68,9 +72,33 @@ const transformDbToFrontend = (db: DbURACampaign): URACampaign => ({
   smsMessage: db.sms_message,
   smsServiceId: db.sms_service_id,
   smsRule: db.sms_rule,
+  mosCampaignId: db.mos_campaign_id,
+  mosAudioName: db.mos_audio_name,
   createdAt: db.created_at || new Date().toISOString(),
   updatedAt: db.updated_at || new Date().toISOString(),
 });
+
+/** Call the ura-campaign-sync edge function to create/update the campaign on MOS BR */
+async function syncCampaignToMosBR(campaignId: string): Promise<void> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token;
+  const { data: urlData } = supabase.storage.from("__").getPublicUrl("__");
+  const projectUrl = (supabase as any).supabaseUrl as string;
+
+  const res = await fetch(`${projectUrl}/functions/v1/ura-campaign-sync`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: token ? `Bearer ${token}` : "",
+    },
+    body: JSON.stringify({ campaign_id: campaignId }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    console.warn("[useURACampaigns] MOS BR sync failed (non-blocking):", err);
+  }
+}
 
 export function useURACampaigns() {
   const { toast } = useToast();
@@ -86,9 +114,7 @@ export function useURACampaigns() {
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (activeCompanyId) {
-        query = query.eq("company_id", activeCompanyId);
-      }
+      if (activeCompanyId) query = query.eq("company_id", activeCompanyId);
 
       const { data, error } = await query;
       if (error) throw error;
@@ -98,10 +124,7 @@ export function useURACampaigns() {
   });
 
   const createCampaignMutation = useMutation({
-    mutationFn: async (campaign: {
-      name: string;
-      description?: string;
-    }) => {
+    mutationFn: async (campaign: { name: string; description?: string }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("User not authenticated");
 
@@ -118,11 +141,17 @@ export function useURACampaigns() {
         .single();
 
       if (error) throw error;
-      return transformDbToFrontend(data as DbURACampaign);
+
+      const created = transformDbToFrontend(data as DbURACampaign);
+
+      // Fire-and-forget sync to MOS BR
+      syncCampaignToMosBR(created.id).catch(console.warn);
+
+      return created;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ura_campaigns"] });
-      toast({ title: "Campanha criada", description: "Campanha de URA criada com sucesso." });
+      toast({ title: "Campanha criada", description: "Campanha de URA criada e sincronizada com a MOS BR." });
     },
     onError: (error: Error) => {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
@@ -160,11 +189,16 @@ export function useURACampaigns() {
         .single();
 
       if (error) throw error;
-      return transformDbToFrontend(data as DbURACampaign);
+      const updated = transformDbToFrontend(data as DbURACampaign);
+
+      // Sync the updated config to MOS BR (fire-and-forget, non-blocking)
+      syncCampaignToMosBR(id).catch(console.warn);
+
+      return updated;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ura_campaigns"] });
-      toast({ title: "Atualizado", description: "Campanha de URA atualizada com sucesso." });
+      toast({ title: "Atualizado", description: "Campanha atualizada e sincronizada com a MOS BR." });
     },
     onError: (error: Error) => {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
@@ -199,7 +233,7 @@ export function useURACampaigns() {
         .insert({
           user_id: user.id,
           company_id: original.company_id || null,
-          name: `Cópia de ${original.name}`,
+          name: `Copia de ${original.name}`,
           description: original.description,
           status: "draft",
           service_id: original.service_id,
@@ -215,12 +249,15 @@ export function useURACampaigns() {
           sms_message: original.sms_message,
           sms_service_id: original.sms_service_id,
           sms_rule: original.sms_rule,
+          // mos_campaign_id intentionally omitted — will be created fresh on MOS BR
         })
         .select()
         .single();
       if (insertErr) throw insertErr;
 
-      return transformDbToFrontend(newCampaign as DbURACampaign);
+      const duped = transformDbToFrontend(newCampaign as DbURACampaign);
+      syncCampaignToMosBR(duped.id).catch(console.warn);
+      return duped;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ura_campaigns"] });
@@ -228,6 +265,40 @@ export function useURACampaigns() {
     },
     onError: (error: Error) => {
       toast({ title: "Erro ao duplicar", description: error.message, variant: "destructive" });
+    },
+  });
+
+  /** Upload audio file to MOS BR and save the audio name to the campaign */
+  const uploadAudioMutation = useMutation({
+    mutationFn: async ({ campaignId, file, nome }: { campaignId: string; file: File; nome?: string }) => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const projectUrl = (supabase as any).supabaseUrl as string;
+
+      const formData = new FormData();
+      formData.append("campaign_id", campaignId);
+      formData.append("audio", file, file.name);
+      formData.append("nome", nome ?? file.name.replace(/\.[^/.]+$/, "").toUpperCase());
+
+      const res = await fetch(`${projectUrl}/functions/v1/ura-campaign-sync`, {
+        method: "POST",
+        headers: { Authorization: token ? `Bearer ${token}` : "" },
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`Erro no upload: ${err}`);
+      }
+
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ura_campaigns"] });
+      toast({ title: "Audio enviado", description: "O audio foi registrado na plataforma MOS BR com sucesso." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro no upload", description: error.message, variant: "destructive" });
     },
   });
 
@@ -240,9 +311,11 @@ export function useURACampaigns() {
     updateCampaign: updateCampaignMutation.mutateAsync,
     deleteCampaign: deleteCampaignMutation.mutateAsync,
     duplicateCampaign: duplicateCampaignMutation.mutateAsync,
+    uploadAudio: uploadAudioMutation.mutateAsync,
     isCreating: createCampaignMutation.isPending,
     isUpdating: updateCampaignMutation.isPending,
     isDeleting: deleteCampaignMutation.isPending,
     isDuplicating: duplicateCampaignMutation.isPending,
+    isUploadingAudio: uploadAudioMutation.isPending,
   };
 }
