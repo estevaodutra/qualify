@@ -199,7 +199,7 @@ export function useURACampaigns() {
         .insert({
           user_id: user.id,
           company_id: original.company_id || null,
-          name: Cópia de ,
+          name: `Cópia de ${original.name}`,
           description: original.description,
           status: "draft",
           service_id: original.service_id,

@@ -40,12 +40,12 @@ export function URAHistoryTab({ campaign }: URAHistoryTabProps) {
         l.costValue ?? 0,
       ]);
 
-      const csvContent = [headers.join(","), ...rows.map((r) => r.map((cell) => "").join(","))].join("\n");
+      const csvContent = [headers.join(","), ...rows.map((r) => r.map((cell) => `"${cell}"`).join(","))].join("\n");
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.setAttribute("href", url);
-      link.setAttribute("download", logs-ura-.csv);
+      link.setAttribute("download", `logs-ura-${campaign.name.toLowerCase().replace(/\s+/g, "-")}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -130,7 +130,7 @@ export function URAHistoryTab({ campaign }: URAHistoryTabProps) {
                       <span className="text-muted-foreground">{count} ({percentage.toFixed(0)}%)</span>
                     </div>
                     <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                      <div className="h-full bg-primary" style={{ width: ${percentage}% }} />
+                      <div className="h-full bg-primary" style={{ width: `${percentage}%` }} />
                     </div>
                   </div>
                 );
@@ -161,7 +161,7 @@ export function URAHistoryTab({ campaign }: URAHistoryTabProps) {
                       <span className="text-muted-foreground">{count} ({percentage.toFixed(0)}%)</span>
                     </div>
                     <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                      <div className="h-full bg-emerald-500" style={{ width: ${percentage}% }} />
+                      <div className="h-full bg-emerald-500" style={{ width: `${percentage}%` }} />
                     </div>
                   </div>
                 );
@@ -210,7 +210,7 @@ export function URAHistoryTab({ campaign }: URAHistoryTabProps) {
                     {log.startedAt ? format(new Date(log.startedAt), "dd/MM/yyyy HH:mm:ss") : "-"}
                   </TableCell>
                   <TableCell className="font-mono text-sm">
-                    {log.durationSeconds != null ? ${log.durationSeconds}s : "-"}
+                    {log.durationSeconds != null ? `${log.durationSeconds}s` : "-"}
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className="border-border">

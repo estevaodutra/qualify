@@ -102,7 +102,7 @@ export function useURALogs(campaignId: string) {
         const cause = log.cause_name || "Sem causa";
         causeDistribution[cause] = (causeDistribution[cause] || 0) + 1;
 
-        const key = log.dtmf_pressed ? Tecla  : "Sem Resposta (DTMF)";
+        const key = log.dtmf_pressed ? `Tecla ${log.dtmf_pressed}` : "Sem Resposta (DTMF)";
         dtmfDistribution[key] = (dtmfDistribution[key] || 0) + 1;
       });
 

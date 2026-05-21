@@ -126,7 +126,7 @@ export function DTMFActionsTab({ campaign, onUpdate }: DTMFActionsTabProps) {
       setShowDialog(false);
       toast({
         title: "Ação de DTMF atualizada",
-        description: Tecla  configurada com sucesso.,
+        description: `Tecla ${selectedKey} configurada com sucesso.`,
       });
     } catch (err) {
       console.error(err);
@@ -146,7 +146,7 @@ export function DTMFActionsTab({ campaign, onUpdate }: DTMFActionsTabProps) {
       });
       toast({
         title: "Ação de DTMF removida",
-        description: Mapeamento da Tecla  foi removido.,
+        description: `Mapeamento da Tecla ${key} foi removido.`,
       });
     } catch (err) {
       console.error(err);
@@ -160,12 +160,12 @@ export function DTMFActionsTab({ campaign, onUpdate }: DTMFActionsTabProps) {
     switch (act.action_type) {
       case "start_sequence": {
         const type = act.action_config?.campaignType === "dispatch" ? "Disparo" : "Grupo";
-        return Iniciar Sequência ();
+        return `Iniciar Sequência (${type})`;
       }
       case "add_tag":
-        return Adicionar Tag: ;
+        return `Adicionar Tag: ${act.action_config?.tag}`;
       case "webhook":
-        return Webhook: ;
+        return `Webhook: ${act.action_config?.url}`;
       default:
         return "Desconhecida";
     }
@@ -190,7 +190,11 @@ export function DTMFActionsTab({ campaign, onUpdate }: DTMFActionsTabProps) {
               return (
                 <div
                   key={key}
-                  className={p-4 rounded-xl border transition-all flex justify-between items-center }
+                  className={`p-4 rounded-xl border transition-all flex justify-between items-center ${
+                    hasAction
+                      ? "border-primary/30 bg-primary/5 hover:border-primary/50"
+                      : "border-border bg-card hover:bg-muted/30"
+                  }`}
                 >
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">

@@ -217,7 +217,7 @@ export function URACampaignList({
                   <div className="flex justify-between items-center text-xs text-muted-foreground">
                     <span>Áudio: {campaign.audioType === "tts" ? "TTS (Texto)" : campaign.audioType === "ura" ? "URA do Sistema" : "Áudio Customizado"}</span>
                     <span className="font-semibold text-foreground/80">
-                      {campaign.audioValue ? (campaign.audioValue.length > 20 ? ${campaign.audioValue.substring(0, 20)}... : campaign.audioValue) : "Não configurado"}
+                      {campaign.audioValue ? (campaign.audioValue.length > 20 ? `${campaign.audioValue.substring(0, 20)}...` : campaign.audioValue) : "Não configurado"}
                     </span>
                   </div>
 
