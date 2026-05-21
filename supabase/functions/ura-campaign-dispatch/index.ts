@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
   );
 
   try {
-    const { campaign_id } = await req.json();
+    const { campaign_id, lead_id } = await req.json();
 
     if (!campaign_id) {
       return new Response(JSON.stringify({ error: "campaign_id is required" }), {
@@ -42,16 +42,25 @@ Deno.serve(async (req) => {
     if (!camp.mos_campaign_id) throw new Error("Campanha ainda nao esta sincronizada com a MOS BR.");
     if (!camp.audio_value) throw new Error("A campanha precisa ter um audio configurado.");
 
-    // 2. Filtrar apenas leads pendentes
-    const pendingLeads = (camp.ura_leads || []).filter((l: any) => l.status === "pending" || l.status === "failed");
-    if (pendingLeads.length === 0) {
-      return new Response(JSON.stringify({ ok: true, message: "Nenhum lead pendente para disparar." }), {
+    // 2. Filtrar os leads a serem disparados
+    let targetLeads = [];
+    if (lead_id) {
+      // Disparo unitario especifico
+      targetLeads = (camp.ura_leads || []).filter((l: any) => l.id === lead_id);
+      if (targetLeads.length === 0) throw new Error("Lead nao encontrado nesta campanha.");
+    } else {
+      // Disparo em lote
+      targetLeads = (camp.ura_leads || []).filter((l: any) => l.status === "pending" || l.status === "failed");
+    }
+    
+    if (targetLeads.length === 0) {
+      return new Response(JSON.stringify({ ok: true, message: "Nenhum lead valido para disparar." }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // A MOS BR aceita ate 10.000 leads por lote.
-    const batch = pendingLeads.slice(0, 10000);
+    const batch = targetLeads.slice(0, 10000);
 
     const payload = {
       sendTvozMultiRequest: {

@@ -41,7 +41,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Upload, UserPlus, Search, RefreshCw, X, Bot } from "lucide-react";
+import { Plus, Trash2, Upload, UserPlus, Search, RefreshCw, X, Bot, Play } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface URALeadsTabProps {
@@ -80,6 +80,7 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [newLead, setNewLead] = useState({ phone: "", name: "", email: "" });
   const [isDispatching, setIsDispatching] = useState(false);
+  const [dispatchingLeadId, setDispatchingLeadId] = useState<string | null>(null);
 
   const currentStatusFilter = statusFilter === "all" ? undefined : statusFilter;
   const {
@@ -129,7 +130,6 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
         const lines = text.split("\n");
         const newLeads = [];
 
-        // Skip header if looks like one, or just parse
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i].trim();
           if (!line) continue;
@@ -139,7 +139,6 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
           let name = parts[1]?.trim() || "";
           let email = parts[2]?.trim() || "";
 
-          // if phone is completely non-numeric, it might be a header.
           if (!/^\d+$/.test(phone.replace(/\D/g, ""))) continue;
 
           newLeads.push({ phone, name, email });
@@ -160,7 +159,7 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
     reader.readAsText(file);
   };
 
-  const handleDispatch = async () => {
+  const handleDispatch = async (leadId?: string) => {
     if (!campaign.mosCampaignId) {
       toast({ title: "Atencao", description: "A campanha precisa estar sincronizada com a MOS BR (aba Configuracoes).", variant: "destructive" });
       return;
@@ -169,15 +168,20 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
       toast({ title: "Atencao", description: "Faca o upload de um audio na aba Configuracoes primeiro.", variant: "destructive" });
       return;
     }
-    if ((stats?.pending || 0) === 0) {
-      toast({ title: "Atencao", description: "Nenhum lead pendente para disparar." });
-      return;
+
+    if (leadId) {
+      setDispatchingLeadId(leadId);
+    } else {
+      if ((stats?.pending || 0) === 0) {
+        toast({ title: "Atencao", description: "Nenhum lead pendente para disparar." });
+        return;
+      }
+      setIsDispatching(true);
     }
 
-    setIsDispatching(true);
     try {
       const { data, error } = await supabase.functions.invoke("ura-campaign-dispatch", {
-        body: { campaign_id: campaign.id },
+        body: { campaign_id: campaign.id, lead_id: leadId },
       });
 
       if (error) throw new Error(error.message || "Erro desconhecido ao chamar a Edge Function");
@@ -187,12 +191,12 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
         title: "Disparo iniciado!",
         description: `Enviados ${data.count || 0} leads para a MOS BR. Acompanhe o status.`,
       });
-      // The function changes status to in_progress in DB. Wait a bit then UI will refresh.
     } catch (err: any) {
       console.error(err);
       toast({ title: "Erro no disparo", description: err.message, variant: "destructive" });
     } finally {
       setIsDispatching(false);
+      setDispatchingLeadId(null);
     }
   };
 
@@ -242,7 +246,7 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
             variant="outline"
             className="h-10 gap-2 w-full sm:w-auto border-border"
             onClick={() => fileInputRef.current?.click()}
-            disabled={isBatchAdding || isDispatching}
+            disabled={isBatchAdding || isDispatching || !!dispatchingLeadId}
           >
             <Upload className="h-4 w-4 text-muted-foreground" />
             {isBatchAdding ? "Importando..." : "Importar CSV"}
@@ -252,7 +256,7 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
             variant="outline"
             className="h-10 gap-2 w-full sm:w-auto border-border"
             onClick={() => setShowAddDialog(true)}
-            disabled={isAdding || isDispatching}
+            disabled={isAdding || isDispatching || !!dispatchingLeadId}
           >
             <UserPlus className="h-4 w-4 text-muted-foreground" />
             Adicionar Lead
@@ -263,7 +267,7 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
               <Button
                 variant="outline"
                 className="h-10 gap-2 w-full sm:w-auto text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700"
-                disabled={isResetting || (stats?.total === 0) || isDispatching}
+                disabled={isResetting || (stats?.total === 0) || isDispatching || !!dispatchingLeadId}
               >
                 <RefreshCw className="h-4 w-4" />
                 Reiniciar
@@ -286,8 +290,8 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
           <Button
             variant="default"
             className="h-10 gap-2 w-full sm:w-auto shadow-sm"
-            onClick={handleDispatch}
-            disabled={isDispatching || (stats?.pending === 0) || !campaign.mosCampaignId}
+            onClick={() => handleDispatch()}
+            disabled={isDispatching || !!dispatchingLeadId || (stats?.pending === 0) || !campaign.mosCampaignId}
           >
             {isDispatching ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
             {isDispatching ? "Enviando..." : "Disparar Campanha"}
@@ -340,15 +344,28 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
                     {lead.durationSeconds != null ? `${lead.durationSeconds}s` : "-"}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                      onClick={() => deleteLead(lead.id)}
-                      disabled={isDeleting}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-primary hover:bg-primary/10"
+                        onClick={() => handleDispatch(lead.id)}
+                        disabled={isDispatching || dispatchingLeadId === lead.id || lead.status === 'completed' || !campaign.mosCampaignId}
+                        title="Disparar apenas para este lead"
+                      >
+                        {dispatchingLeadId === lead.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => deleteLead(lead.id)}
+                        disabled={isDeleting}
+                        title="Excluir lead"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
