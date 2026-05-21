@@ -80,24 +80,10 @@ const transformDbToFrontend = (db: DbURACampaign): URACampaign => ({
 
 /** Call the ura-campaign-sync edge function to create/update the campaign on MOS BR */
 async function syncCampaignToMosBR(campaignId: string): Promise<void> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData?.session?.access_token;
-  const { data: urlData } = supabase.storage.from("__").getPublicUrl("__");
-  const projectUrl = (supabase as any).supabaseUrl as string;
-
-  const res = await fetch(`${projectUrl}/functions/v1/ura-campaign-sync`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: token ? `Bearer ${token}` : "",
-    },
-    body: JSON.stringify({ campaign_id: campaignId }),
+  const { error } = await supabase.functions.invoke("ura-campaign-sync", {
+    body: { campaign_id: campaignId },
   });
-
-  if (!res.ok) {
-    const err = await res.text();
-    console.warn("[useURACampaigns] MOS BR sync failed (non-blocking):", err);
-  }
+  if (error) console.warn("[useURACampaigns] MOS BR sync failed (non-blocking):", error);
 }
 
 export function useURACampaigns() {
@@ -273,7 +259,7 @@ export function useURACampaigns() {
     mutationFn: async ({ campaignId, file, nome }: { campaignId: string; file: File; nome?: string }) => {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
-      const projectUrl = (supabase as any).supabaseUrl as string;
+      const projectUrl = import.meta.env.VITE_SUPABASE_URL as string;
 
       const formData = new FormData();
       formData.append("campaign_id", campaignId);
@@ -319,3 +305,4 @@ export function useURACampaigns() {
     isUploadingAudio: uploadAudioMutation.isPending,
   };
 }
+
