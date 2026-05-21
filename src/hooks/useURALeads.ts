@@ -39,7 +39,7 @@ interface DbURALead {
   attempts: number | null;
   dtmf_pressed: string | null;
   duration_seconds: number | null;
-  last_call_at: string | null;
+  last_attempt_at: string | null;
   custom_fields: Record<string, any> | null;
   created_at: string | null;
 }
@@ -54,7 +54,7 @@ const transformDbToFrontend = (db: DbURALead): URALead => ({
   attempts: db.attempts ?? 0,
   dtmfPressed: db.dtmf_pressed,
   durationSeconds: db.duration_seconds,
-  lastCallAt: db.last_call_at,
+  lastCallAt: db.last_attempt_at,
   customFields: db.custom_fields || {},
   createdAt: db.created_at || new Date().toISOString(),
 });
@@ -268,7 +268,7 @@ export function useURALeads(campaignId: string, statusFilter?: URALeadStatus) {
           attempts: 0,
           dtmf_pressed: null,
           duration_seconds: null,
-          last_call_at: null,
+          last_attempt_at: null,
         })
         .eq("campaign_id", campaignId);
 
@@ -298,3 +298,4 @@ export function useURALeads(campaignId: string, statusFilter?: URALeadStatus) {
     isResetting: resetLeadsMutation.isPending,
   };
 }
+
