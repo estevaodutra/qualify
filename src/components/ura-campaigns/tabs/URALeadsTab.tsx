@@ -291,7 +291,7 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
             variant="default"
             className="h-10 gap-2 w-full sm:w-auto shadow-sm"
             onClick={() => handleDispatch()}
-            disabled={isDispatching || !!dispatchingLeadId || (stats?.pending === 0) || !campaign.mosCampaignId}
+            disabled={isDispatching || !!dispatchingLeadId}
           >
             {isDispatching ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
             {isDispatching ? "Enviando..." : "Disparar Campanha"}
@@ -350,7 +350,7 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
                         variant="ghost"
                         className="h-8 w-8 text-primary hover:bg-primary/10"
                         onClick={() => handleDispatch(lead.id)}
-                        disabled={isDispatching || dispatchingLeadId === lead.id || lead.status === 'completed' || !campaign.mosCampaignId}
+                        disabled={isDispatching || dispatchingLeadId === lead.id || lead.status === 'completed'}
                         title="Disparar apenas para este lead"
                       >
                         {dispatchingLeadId === lead.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
@@ -426,3 +426,4 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
     </div>
   );
 }
+
