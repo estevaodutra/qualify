@@ -1,6 +1,7 @@
 ﻿import { useState, useRef, useMemo } from "react";
 import { URACampaign } from "@/hooks/useURACampaigns";
 import { useURALeads, URALeadStatus, URALead } from "@/hooks/useURALeads";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +41,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Upload, UserPlus, Search, RefreshCw, X } from "lucide-react";
+import { Plus, Trash2, Upload, UserPlus, Search, RefreshCw, X, Bot } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface URALeadsTabProps {
@@ -51,8 +52,8 @@ const statusLabels: Record<URALeadStatus, string> = {
   pending: "Pendente",
   calling: "Ligando",
   in_progress: "Em Progresso",
-  completed: "Concluído",
-  no_answer: "Não Atendeu",
+  completed: "Concluido",
+  no_answer: "Nao Atendeu",
   busy: "Ocupado",
   failed: "Falhou",
   cancelled: "Cancelado",
@@ -78,6 +79,7 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
   const [search, setSearch] = useState("");
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [newLead, setNewLead] = useState({ phone: "", name: "", email: "" });
+  const [isDispatching, setIsDispatching] = useState(false);
 
   const currentStatusFilter = statusFilter === "all" ? undefined : statusFilter;
   const {
@@ -99,11 +101,22 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
     return leads.filter((l) => {
       const matchesSearch =
         l.phone.includes(search) ||
-        (l.name?.toLowerCase() || "").includes(search.toLowerCase()) ||
-        (l.email?.toLowerCase() || "").includes(search.toLowerCase());
+        (l.name && l.name.toLowerCase().includes(search.toLowerCase())) ||
+        (l.email && l.email.toLowerCase().includes(search.toLowerCase()));
       return matchesSearch;
     });
   }, [leads, search]);
+
+  const handleManualAdd = async () => {
+    if (!newLead.phone) return;
+    try {
+      await addLead(newLead);
+      setShowAddDialog(false);
+      setNewLead({ phone: "", name: "", email: "" });
+    } catch (err) {
+      // toast already handled by hook
+    }
+  };
 
   const handleImportCSV = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -113,118 +126,83 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
     reader.onload = async (e) => {
       try {
         const text = e.target?.result as string;
-        const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
-        if (lines.length <= 1) {
-          toast({
-            title: "Arquivo vazio",
-            description: "O arquivo CSV enviado não contém dados de lead.",
-            variant: "destructive",
-          });
+        const lines = text.split("\n");
+        const newLeads = [];
+
+        // Skip header if looks like one, or just parse
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line) continue;
+          
+          const parts = line.split(",");
+          let phone = parts[0]?.trim();
+          let name = parts[1]?.trim() || "";
+          let email = parts[2]?.trim() || "";
+
+          // if phone is completely non-numeric, it might be a header.
+          if (!/^\d+$/.test(phone.replace(/\D/g, ""))) continue;
+
+          newLeads.push({ phone, name, email });
+        }
+
+        if (newLeads.length === 0) {
+          toast({ title: "Arquivo vazio", description: "Nenhum lead valido encontrado no CSV.", variant: "destructive" });
           return;
         }
 
-        const headers = lines[0].split(",").map((h) => h.trim().toLowerCase().replace(/"/g, ""));
-        const phoneIndex = headers.findIndex(
-          (h) => h.includes("phone") || h.includes("tel") || h.includes("fone") || h.includes("cel")
-        );
-        const nameIndex = headers.findIndex((h) => h.includes("name") || h.includes("nome"));
-        const emailIndex = headers.findIndex((h) => h.includes("email") || h.includes("mail"));
-
-        if (phoneIndex === -1) {
-          toast({
-            title: "Telefone não encontrado",
-            description: "Certifique-se de que o CSV possui uma coluna 'telefone' ou 'phone'.",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        const leadsToAdd = lines
-          .slice(1)
-          .map((line) => {
-            const cols = line.split(",").map((s) => s.trim().replace(/"/g, ""));
-            const phone = cols[phoneIndex];
-            const name = nameIndex !== -1 ? cols[nameIndex] : null;
-            const email = emailIndex !== -1 ? cols[emailIndex] : null;
-
-            // Custom fields: any column that is not name, phone, or email
-            const customFields: Record<string, any> = {};
-            headers.forEach((h, idx) => {
-              if (idx !== phoneIndex && idx !== nameIndex && idx !== emailIndex && cols[idx]) {
-                customFields[h] = cols[idx];
-              }
-            });
-
-            return { phone, name, email, customFields };
-          })
-          .filter((l) => l.phone);
-
-        if (leadsToAdd.length === 0) {
-          toast({
-            title: "Nenhum lead válido",
-            description: "Nenhum lead com telefone válido foi encontrado no CSV.",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        await addLeadsBatch(leadsToAdd);
-      } catch (err: any) {
-        toast({
-          title: "Erro ao importar",
-          description: err.message || "Houve uma falha ao processar o CSV.",
-          variant: "destructive",
-        });
+        await addLeadsBatch(newLeads);
+      } catch (err) {
+        console.error("Erro ao ler CSV", err);
+      } finally {
+        if (fileInputRef.current) fileInputRef.current.value = "";
       }
     };
     reader.readAsText(file);
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
   };
 
-  const handleManualAdd = async () => {
-    if (!newLead.phone.trim()) return;
+  const handleDispatch = async () => {
+    if (!campaign.mosCampaignId) {
+      toast({ title: "Atencao", description: "A campanha precisa estar sincronizada com a MOS BR (aba Configuracoes).", variant: "destructive" });
+      return;
+    }
+    if (!campaign.audioValue) {
+      toast({ title: "Atencao", description: "Faca o upload de um audio na aba Configuracoes primeiro.", variant: "destructive" });
+      return;
+    }
+    if ((stats?.pending || 0) === 0) {
+      toast({ title: "Atencao", description: "Nenhum lead pendente para disparar." });
+      return;
+    }
 
+    setIsDispatching(true);
     try {
-      await addLead({
-        phone: newLead.phone.trim(),
-        name: newLead.name.trim() || undefined,
-        email: newLead.email.trim() || undefined,
+      const { data, error } = await supabase.functions.invoke("ura-campaign-dispatch", {
+        body: { campaign_id: campaign.id },
       });
-      setNewLead({ phone: "", name: "", email: "" });
-      setShowAddDialog(false);
-    } catch (err) {
+
+      if (error) throw new Error(error.message || "Erro desconhecido ao chamar a Edge Function");
+      if (data?.error) throw new Error(data.error);
+
+      toast({
+        title: "Disparo iniciado!",
+        description: `Enviados ${data.count || 0} leads para a MOS BR. Acompanhe o status.`,
+      });
+      // The function changes status to in_progress in DB. Wait a bit then UI will refresh.
+    } catch (err: any) {
       console.error(err);
+      toast({ title: "Erro no disparo", description: err.message, variant: "destructive" });
+    } finally {
+      setIsDispatching(false);
     }
   };
 
   return (
     <div className="space-y-6">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        {[
-          { label: "Total", value: stats?.total || 0, color: "text-foreground" },
-          { label: "Pendentes", value: stats?.pending || 0, color: "text-slate-500" },
-          { label: "Em Execução", value: stats?.inProgress || 0, color: "text-blue-500" },
-          { label: "Atendidos (OK)", value: stats?.completed || 0, color: "text-emerald-500" },
-          { label: "Falhas", value: stats?.failed || 0, color: "text-rose-500" },
-        ].map((stat, i) => (
-          <Card key={i} className="border-border shadow-sm rounded-xl">
-            <CardContent className="p-4 flex flex-col items-center justify-center">
-              <span className="text-xs text-muted-foreground font-medium mb-1">{stat.label}</span>
-              <span className={`text-2xl font-bold font-mono ${stat.color}`}>{stat.value}</span>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-card border border-border p-4 rounded-xl shadow-sm">
-        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+      {/* Filters and Actions */}
+      <div className="flex flex-col sm:flex-row gap-4 items-center justify-between bg-card p-4 rounded-xl border border-border shadow-sm">
+        <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto flex-1">
           {/* Search */}
-          <div className="relative w-full sm:w-64">
+          <div className="relative w-full sm:max-w-xs">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Pesquisar leads..."
@@ -243,8 +221,8 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
               <SelectItem value="all">Todos os Status</SelectItem>
               <SelectItem value="pending">Pendente</SelectItem>
               <SelectItem value="in_progress">Em Progresso</SelectItem>
-              <SelectItem value="completed">Concluído</SelectItem>
-              <SelectItem value="no_answer">Não Atendeu</SelectItem>
+              <SelectItem value="completed">Concluido</SelectItem>
+              <SelectItem value="no_answer">Nao Atendeu</SelectItem>
               <SelectItem value="busy">Ocupado</SelectItem>
               <SelectItem value="failed">Falhou</SelectItem>
             </SelectContent>
@@ -252,7 +230,7 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
         </div>
 
         {/* Buttons */}
-        <div className="flex gap-2 w-full sm:w-auto justify-end">
+        <div className="flex gap-2 w-full sm:w-auto justify-end flex-wrap">
           <input
             ref={fileInputRef}
             type="file"
@@ -264,7 +242,7 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
             variant="outline"
             className="h-10 gap-2 w-full sm:w-auto border-border"
             onClick={() => fileInputRef.current?.click()}
-            disabled={isBatchAdding}
+            disabled={isBatchAdding || isDispatching}
           >
             <Upload className="h-4 w-4 text-muted-foreground" />
             {isBatchAdding ? "Importando..." : "Importar CSV"}
@@ -274,7 +252,7 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
             variant="outline"
             className="h-10 gap-2 w-full sm:w-auto border-border"
             onClick={() => setShowAddDialog(true)}
-            disabled={isAdding}
+            disabled={isAdding || isDispatching}
           >
             <UserPlus className="h-4 w-4 text-muted-foreground" />
             Adicionar Lead
@@ -285,7 +263,7 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
               <Button
                 variant="outline"
                 className="h-10 gap-2 w-full sm:w-auto text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700"
-                disabled={isResetting || (stats?.total === 0)}
+                disabled={isResetting || (stats?.total === 0) || isDispatching}
               >
                 <RefreshCw className="h-4 w-4" />
                 Reiniciar
@@ -295,7 +273,7 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
               <AlertDialogHeader>
                 <AlertDialogTitle>Reiniciar campanha de URA?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Isso voltará o status de todos os leads para "Pendente" e limpará as tentativas e teclas pressionadas. Útil para reexecutar a campanha.
+                  Isso voltara o status de todos os leads para "Pendente" e limpara as tentativas e teclas pressionadas. util para reexecutar a campanha.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -304,6 +282,16 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+
+          <Button
+            variant="default"
+            className="h-10 gap-2 w-full sm:w-auto shadow-sm"
+            onClick={handleDispatch}
+            disabled={isDispatching || (stats?.pending === 0) || !campaign.mosCampaignId}
+          >
+            {isDispatching ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
+            {isDispatching ? "Enviando..." : "Disparar Campanha"}
+          </Button>
         </div>
       </div>
 
@@ -323,8 +311,8 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
                 <TableHead>Status</TableHead>
                 <TableHead>Tentativas</TableHead>
                 <TableHead>Tecla DTMF</TableHead>
-                <TableHead>Duração</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
+                <TableHead>Duracao</TableHead>
+                <TableHead className="text-right">Acoes</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -374,12 +362,12 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Adicionar Lead Manualmente</DialogTitle>
-            <DialogDescription>Digite as informações básicas do contato.</DialogDescription>
+            <DialogDescription>Digite as informacoes basicas do contato.</DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="phone">Telefone (DDI+DDD+Número)</Label>
+              <Label htmlFor="phone">Telefone (DDI+DDD+Numero)</Label>
               <Input
                 id="phone"
                 placeholder="Ex: 5511999999999"
@@ -391,7 +379,7 @@ export function URALeadsTab({ campaign }: URALeadsTabProps) {
               <Label htmlFor="name">Nome (Opcional)</Label>
               <Input
                 id="name"
-                placeholder="Ex: João da Silva"
+                placeholder="Ex: Joao da Silva"
                 value={newLead.name}
                 onChange={(e) => setNewLead({ ...newLead, name: e.target.value })}
               />
