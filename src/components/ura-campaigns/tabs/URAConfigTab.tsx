@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +24,6 @@ export function URAConfigTab({ campaign, onUpdate }: URAConfigTabProps) {
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState(campaign.name);
   const [description, setDescription] = useState(campaign.description || "");
-  const [agressividade, setAgressividade] = useState(campaign.agressividade || 1);
   const [audioType, setAudioType] = useState<URACampaign["audioType"]>(campaign.audioType);
   const [audioValue, setAudioValue] = useState(campaign.audioValue || "");
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -72,7 +70,7 @@ export function URAConfigTab({ campaign, onUpdate }: URAConfigTabProps) {
           serviceId: null,
           regraRenitenciaId: null,
           costCenterName: null,
-          agressividade,
+          agressividade: 1,
           limiteCanaisAtivos: 0,
           limiteCanais: 0,
           audioType,
@@ -126,18 +124,6 @@ export function URAConfigTab({ campaign, onUpdate }: URAConfigTabProps) {
                 <div className="space-y-1">
                   <Label htmlFor="description">Descricao</Label>
                   <Input id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Opcional" />
-                </div>
-              </div>
-
-              {/* Performance Sliders */}
-              <div className="space-y-4 pt-4 border-t border-border">
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <Label>Agressividade (Fator Multiplicador)</Label>
-                    <span className="font-mono text-sm font-bold">{agressividade}x</span>
-                  </div>
-                  <Slider value={[agressividade]} min={1} max={10} step={1} onValueChange={([v]) => setAgressividade(v)} />
-                  <p className="text-xs text-muted-foreground">Multiplicador de chamadas simultaneas por canal livre.</p>
                 </div>
               </div>
             </CardContent>
