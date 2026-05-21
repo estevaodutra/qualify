@@ -8,16 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Upload, Music, Volume2, Save, Trash2, FileAudio, Bot, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react";
+import { Upload, Music, Volume2, Save, Trash2, Bot, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface URAConfigTabProps {
@@ -33,18 +25,10 @@ export function URAConfigTab({ campaign, onUpdate }: URAConfigTabProps) {
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState(campaign.name);
   const [description, setDescription] = useState(campaign.description || "");
-  const [serviceId, setServiceId] = useState(campaign.serviceId?.toString() || "");
-  const [regraRenitenciaId, setRegraRenitenciaId] = useState(campaign.regraRenitenciaId?.toString() || "");
-  const [costCenterName, setCostCenterName] = useState(campaign.costCenterName || "");
-  const [agressividade, setAgressividade] = useState(campaign.agressividade);
-  const [limiteCanaisAtivos, setLimiteCanaisAtivos] = useState(campaign.limiteCanaisAtivos);
-  const [limiteCanais, setLimiteCanais] = useState(campaign.limiteCanais);
+  const [agressividade, setAgressividade] = useState(campaign.agressividade || 1);
   const [audioType, setAudioType] = useState<URACampaign["audioType"]>(campaign.audioType);
   const [audioValue, setAudioValue] = useState(campaign.audioValue || "");
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [smsFallback, setSmsFallback] = useState(!!campaign.smsMessage);
-  const [smsMessage, setSmsMessage] = useState(campaign.smsMessage || "");
-  const [smsRule, setSmsRule] = useState(campaign.smsRule || "no_answer");
 
   const hasMosCampaign = !!campaign.mosCampaignId;
 
@@ -58,7 +42,6 @@ export function URAConfigTab({ campaign, onUpdate }: URAConfigTabProps) {
       return;
     }
 
-    // Progress simulation while the real upload happens
     setUploadProgress(10);
     const interval = setInterval(() => {
       setUploadProgress((prev) => (prev >= 85 ? 85 : prev + 10));
@@ -86,16 +69,16 @@ export function URAConfigTab({ campaign, onUpdate }: URAConfigTabProps) {
         updates: {
           name,
           description: description || null,
-          serviceId: serviceId ? parseInt(serviceId) : null,
-          regraRenitenciaId: regraRenitenciaId ? parseInt(regraRenitenciaId) : null,
-          costCenterName: costCenterName || null,
+          serviceId: null,
+          regraRenitenciaId: null,
+          costCenterName: null,
           agressividade,
-          limiteCanaisAtivos,
-          limiteCanais,
+          limiteCanaisAtivos: 0,
+          limiteCanais: 0,
           audioType,
           audioValue: audioValue || null,
-          smsMessage: smsFallback ? smsMessage : null,
-          smsRule: smsFallback ? smsRule : null,
+          smsMessage: null,
+          smsRule: null,
         },
       });
     } catch (error) {
@@ -146,21 +129,6 @@ export function URAConfigTab({ campaign, onUpdate }: URAConfigTabProps) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-1">
-                  <Label htmlFor="serviceId">ID do Servico (MOS BR)</Label>
-                  <Input id="serviceId" type="number" value={serviceId} onChange={(e) => setServiceId(e.target.value)} placeholder="Ex: 504" />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="regraId">ID Regra de Renitencia</Label>
-                  <Input id="regraId" type="number" value={regraRenitenciaId} onChange={(e) => setRegraRenitenciaId(e.target.value)} placeholder="Ex: 12" />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="costCenter">Centro de Custo</Label>
-                  <Input id="costCenter" value={costCenterName} onChange={(e) => setCostCenterName(e.target.value)} placeholder="Ex: MARKETING" />
-                </div>
-              </div>
-
               {/* Performance Sliders */}
               <div className="space-y-4 pt-4 border-t border-border">
                 <div className="space-y-2">
@@ -171,56 +139,8 @@ export function URAConfigTab({ campaign, onUpdate }: URAConfigTabProps) {
                   <Slider value={[agressividade]} min={1} max={10} step={1} onValueChange={([v]) => setAgressividade(v)} />
                   <p className="text-xs text-muted-foreground">Multiplicador de chamadas simultaneas por canal livre.</p>
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <Label>Limite Canais Ativos</Label>
-                      <span className="font-mono text-sm font-bold">{limiteCanaisAtivos === 0 ? "Ilimitado" : limiteCanaisAtivos}</span>
-                    </div>
-                    <Slider value={[limiteCanaisAtivos]} min={0} max={100} step={5} onValueChange={([v]) => setLimiteCanaisAtivos(v)} />
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <Label>Limite Canais Globais</Label>
-                      <span className="font-mono text-sm font-bold">{limiteCanais === 0 ? "Ilimitado" : limiteCanais}</span>
-                    </div>
-                    <Slider value={[limiteCanais]} min={0} max={200} step={5} onValueChange={([v]) => setLimiteCanais(v)} />
-                  </div>
-                </div>
               </div>
             </CardContent>
-          </Card>
-
-          {/* SMS Fallback */}
-          <Card className="border-border shadow-sm rounded-xl">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-              <div>
-                <CardTitle className="text-base font-semibold">Transbordo para SMS</CardTitle>
-                <CardDescription>Envie um SMS automatico caso a ligacao nao seja atendida.</CardDescription>
-              </div>
-              <Switch checked={smsFallback} onCheckedChange={setSmsFallback} />
-            </CardHeader>
-            {smsFallback && (
-              <CardContent className="space-y-4">
-                <div className="space-y-1">
-                  <Label>Regra de Disparo do SMS</Label>
-                  <Select value={smsRule} onValueChange={setSmsRule}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="no_answer">Nao Atendeu</SelectItem>
-                      <SelectItem value="busy">Ocupado</SelectItem>
-                      <SelectItem value="failed">Falha Geral</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="smsMessage">Mensagem de SMS</Label>
-                  <Textarea id="smsMessage" value={smsMessage} onChange={(e) => setSmsMessage(e.target.value)} placeholder="Ola! Tentamos falar com voce..." rows={3} />
-                  <p className="text-right text-xs text-muted-foreground">{smsMessage.length} chars</p>
-                </div>
-              </CardContent>
-            )}
           </Card>
         </div>
 
