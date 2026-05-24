@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { LocalNode } from "./shared-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -402,20 +402,7 @@ export function UnifiedNodeConfigPanel({
   getActionLabel,
 }: UnifiedNodeConfigPanelProps) {
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
-  const [editingOptionIndex, setEditingOptionIndex] = useState<number | null>(null);
-
-  // Normaliza o conteúdo de mensagem ao abrir o dialog, corrigindo dados
-  // corrompidos com excesso de newlines sem depender de o usuário editar.
-  useEffect(() => {
-    if (!open || node.nodeType !== "message") return;
-    const raw = (node.config.content as string) || "";
-    if (!raw) return;
-    const normalized = htmlToWaMarkdown(waMarkdownToHtml(raw));
-    if (normalized !== raw) {
-      onUpdate({ ...node.config, content: normalized });
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  const [editingOptionIndex, setEditingOptionIndex] = useState<number | null>(null);  // Format is maintained explicitly by the user, so no initialization conversion is needed
 
   const nodeInfo = NODE_TITLES[node.nodeType] || NODE_TITLES.message;
   const Icon = nodeInfo.icon;
@@ -482,13 +469,7 @@ export function UnifiedNodeConfigPanel({
             <>
               <div className="space-y-2">
                 <Label>Conteúdo da Mensagem</Label>
-                <RichTextEditor
-                  toolbar="whatsapp"
-                  value={waMarkdownToHtml((node.config.content as string) || "")}
-                  onChange={(html) => updateConfig("content", htmlToWaMarkdown(html))}
-                  placeholder="Digite a mensagem..."
-                  minHeight={isGroup ? "100px" : "120px"}
-                />
+                <Textarea value={(node.config.content as string) || ""} onChange={(e) => updateConfig("content", e.target.value)} placeholder="Digite a mensagem (Use *negrito*, _itálico_, ~riscado~)..." className="resize-none font-mono text-sm" rows={isGroup ? 6 : 8} />
                 <p className="text-xs text-muted-foreground">
                   {isGroup
                     ? <>Variáveis: {"{{name}}"}, {"{{phone}}"}, {"{{group}}"}</>
