@@ -105,7 +105,7 @@ export function QuizEditorShell({ funnel }: Props) {
   }, [hasUnsavedChanges]);
 
   const handleSettingsSave = async (
-    field: "webhook_config" | "seo_config" | "pixel_config",
+    field: "webhook_config" | "seo_config" | "pixel_config" | "design_config",
     value: Record<string, unknown>
   ) => {
     await updateFunnel({ id: funnel.id, updates: { [field]: value } });

@@ -363,8 +363,10 @@ export default function QuizPublicPage() {
 
   // ─── Design ──────────────────────────────────────────────────────────────
 
+  
   const d: DesignConfig = { ...DEFAULT_DESIGN_CONFIG, ...(funnel?.design_config as Partial<DesignConfig> || {}) };
   const borderRadius = RADIUS[d.borderRadius] || "12px";
+  const redirectConfig = (funnel?.design_config as Record<string, any>)?.redirect_config || {};
 
   const cssVars = {
     "--quiz-primary": d.primaryColor,
@@ -374,6 +376,10 @@ export default function QuizPublicPage() {
     backgroundColor: d.backgroundColor,
     color: d.textColor,
   } as React.CSSProperties;
+
+  const currentStep = steps[currentStepIndex] || null;
+  const progressPercent = steps.length > 0 ? Math.round(((currentStepIndex + 1) / steps.length) * 100) : 0;
+
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -394,11 +400,20 @@ export default function QuizPublicPage() {
   }
 
   if (completed) {
+    if (redirectConfig.type === "url" && redirectConfig.url) {
+      window.location.href = redirectConfig.url;
+      return (
+        <div className="flex items-center justify-center min-h-screen" style={cssVars}>
+          <div className="w-8 h-8 animate-spin opacity-40 border-4 border-current border-t-transparent rounded-full" />
+        </div>
+      );
+    }
+
     return (
       <div className="flex flex-col items-center justify-center min-h-screen gap-4 p-4 text-center" style={cssVars}>
         <CheckCircle className="w-16 h-16" style={{ color: d.primaryColor }} />
-        <h2 className="text-2xl font-bold">Obrigado!</h2>
-        <p className="opacity-60">Suas respostas foram registradas com sucesso.</p>
+        <h2 className="text-2xl font-bold">{redirectConfig.title || "Obrigado!"}</h2>
+        <p className="opacity-60 max-w-md">{redirectConfig.message || "Suas respostas foram registradas com sucesso."}</p>
       </div>
     );
   }
