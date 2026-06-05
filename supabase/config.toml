@@ -107,3 +107,6 @@ verify_jwt = false
 
 [functions.compile-context]
 verify_jwt = false
+
+[functions.test-db]
+verify_jwt = false
