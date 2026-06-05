@@ -321,15 +321,13 @@ export function TimelineSequenceBuilder({ sequence, onBack, onUpdate }: Timeline
         </div>
       </div>
 
-      {triggerType === "webhook" && (
-        <TriggerConfigCard
-          triggerType={triggerType}
-          triggerConfig={triggerConfig}
-          onTriggerTypeChange={() => {}}
-          onTriggerConfigChange={(config) => setTriggerConfig(config)}
-          sequenceId={sequence.id}
-        />
-      )}
+      <TriggerConfigCard
+        triggerType={triggerType}
+        triggerConfig={triggerConfig}
+        onTriggerTypeChange={(type) => setTriggerType(type)}
+        onTriggerConfigChange={(config) => setTriggerConfig(config)}
+        sequenceId={sequence.id}
+      />
 
       {/* Timeline */}
       <MessageTimeline

@@ -271,7 +271,7 @@ Deno.serve(async (req) => {
 
     // Parse request body
     const body: ExecuteMessageRequest = await req.json();
-    const { messageId, campaignId, sequenceId, triggerContext, executionId, startFromNodeIndex, manualNodeIndex } = body;
+    const { messageId, campaignId, sequenceId, triggerContext, executionId, startFromNodeIndex, manualNodeIndex, targetPhones } = body;
 
     // Check if this is a resumed execution
     const isResumedExecution = !!executionId && startFromNodeIndex !== undefined;
@@ -405,14 +405,15 @@ Deno.serve(async (req) => {
     // For triggered execution with sendPrivate, we send to the respondent, not to groups
     const sendToPrivate = isTriggeredExecution && triggerContext?.sendPrivate;
     
-    // Get linked groups (not needed for private sends, but we fetch anyway for logging)
+    // Get linked groups (only required if we don't send to private destinations)
     const { data: linkedGroups, error: groupsError } = await supabase
       .from("campaign_groups")
       .select("id, group_jid, group_name")
       .eq("campaign_id", campaignId);
 
-    // For triggered private sends, we don't need groups
-    if (!sendToPrivate && (groupsError || !linkedGroups || linkedGroups.length === 0)) {
+    const hasPrivateDestinations = sendToPrivate || (targetPhones && targetPhones.length > 0) || isManualNodeExecution;
+
+    if (!hasPrivateDestinations && (groupsError || !linkedGroups || linkedGroups.length === 0)) {
       return new Response(
         JSON.stringify({ error: "No linked groups found" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -633,8 +634,7 @@ Deno.serve(async (req) => {
       };
 
       // Determine destinations based on targetPhones or sendToPrivate flag
-      const targetPhones = body.targetPhones;
-      const destinations: DestinationData[] = targetPhones && targetPhones.length > 0
+      let destinations: DestinationData[] = targetPhones && targetPhones.length > 0
         ? targetPhones.map((phone: string) => ({
             group_jid: `${phone}@s.whatsapp.net`,
             group_name: phone,
@@ -647,6 +647,27 @@ Deno.serve(async (req) => {
               isPrivate: true
             }]
           : groups.map(g => ({ group_jid: g.group_jid, group_name: g.group_name, isPrivate: false }));
+
+      // If this is a manual test execution from the builder and we have no destinations,
+      // fallback to sending to the instance's own number to allow preview/testing.
+      if (isManualNodeExecution && destinations.length === 0 && instance.phone) {
+        const cleanPhone = instance.phone.replace(/\D/g, "");
+        if (cleanPhone) {
+          console.log(`[ExecuteMessage] Manual test execution: no destinations found, sending to instance phone: ${cleanPhone}`);
+          destinations = [{
+            group_jid: `${cleanPhone}@s.whatsapp.net`,
+            group_name: `Teste (${instance.name})`,
+            isPrivate: true
+          }];
+        }
+      }
+
+      if (destinations.length === 0) {
+        return new Response(
+          JSON.stringify({ error: "Nenhum destino configurado para esta campanha. Vincule grupos ou configure instâncias." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
       // Membership validation: private phone destinations must be active group members
       let effectiveDests = destinations;

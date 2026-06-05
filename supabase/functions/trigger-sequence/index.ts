@@ -252,7 +252,7 @@ Deno.serve(async (req) => {
       respondentName: extractField(payload, "name") || extractField(payload, "user.name") || "",
       respondentJid: destinationPhone ? `${destinationPhone}@s.whatsapp.net` : "",
       groupJid: "",
-      sendPrivate: !!triggerConfig.sendPrivate, // Respect the user's trigger configuration
+      sendPrivate: typedSequence.trigger_type === "webhook" || !!triggerConfig.sendPrivate || !!destinationPhone,
       customFields,
     };
 
