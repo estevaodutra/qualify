@@ -337,3 +337,33 @@ export async function getInstanceStatus(instance: any): Promise<any> {
   
   return await response.json();
 }
+
+// Register all webhooks in Z-API
+export async function registerZApiWebhooks(instance: any, webhookUrl: string): Promise<void> {
+  const { external_instance_id: id, external_instance_token: token } = instance;
+  const baseUrl = `https://api.z-api.io/instances/${id}/token/${token}`;
+  
+  const endpoints = [
+    "/update-webhook-received",
+    "/update-webhook-delivery",
+    "/update-webhook-message-status",
+  ];
+  
+  for (const ep of endpoints) {
+    try {
+      console.log(`[whatsapp-client] Registering webhook ${ep} with URL ${webhookUrl}`);
+      const response = await fetch(`${baseUrl}${ep}`, {
+        method: "PUT",
+        headers: getZApiHeaders(),
+        body: JSON.stringify({ value: webhookUrl }),
+      });
+      if (!response.ok) {
+        const txt = await response.text();
+        console.error(`[whatsapp-client] Failed to register webhook ${ep}:`, txt);
+      }
+    } catch (err: any) {
+      console.error(`[whatsapp-client] Network error registering webhook ${ep}:`, err.message);
+    }
+  }
+}
+
