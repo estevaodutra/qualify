@@ -110,3 +110,7 @@ verify_jwt = false
 
 [functions.test-db]
 verify_jwt = false
+
+[functions.register-all-webhooks]
+verify_jwt = false
+
