@@ -1,12 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendWhatsAppMessage } from "../_shared/whatsapp-client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Default webhook URL for messages category
-const DEFAULT_MESSAGES_WEBHOOK = "https://n8n-n8n.nuwfic.easypanel.host/webhook/send_messages";
+
 
 // Max delay per node (20 seconds to stay safe under timeout)
 const MAX_DELAY_MS = 20000;
@@ -360,11 +360,11 @@ Deno.serve(async (req) => {
     const typedCampaign = campaign as unknown as CampaignData;
     let instance = typedCampaign.instances;
 
-    // Pool selection: pick randomly from config.instance_ids (no status filter — Z-API is authoritative)
-    if (!instance) {
+    // Pool selection: pick randomly from config.instance_ids if no instance, or if the default instance is not connected
+    if (!instance || instance.status !== "connected") {
       const config = (typedCampaign as any).config as Record<string, unknown> | null;
       const poolIds = (config?.instance_ids as string[]) || [];
-      console.log(`[ExecuteMessage] Pool mode — poolIds:`, poolIds);
+      console.log(`[ExecuteMessage] Checking pool mode - poolIds:`, poolIds);
       if (poolIds.length > 0) {
         const { data: pool } = await supabase
           .from("instances")
@@ -373,9 +373,14 @@ Deno.serve(async (req) => {
         if (pool?.length) {
           // Prefer connected instances; fall back to any if none are marked connected
           const connected = (pool as any[]).filter((i: any) => i.status === "connected");
-          const candidates = connected.length > 0 ? connected : pool;
-          instance = candidates[Math.floor(Math.random() * candidates.length)] as any;
-          console.log(`[ExecuteMessage] Selected instance: ${(instance as any)?.name} (${(instance as any)?.status})`);
+          if (connected.length > 0) {
+            instance = connected[Math.floor(Math.random() * connected.length)] as any;
+            console.log(`[ExecuteMessage] Selected connected instance from pool: ${(instance as any)?.name}`);
+          } else if (!instance) {
+            // Only overwrite if we didn't have an instance yet, otherwise keep the default disconnected instance
+            instance = pool[Math.floor(Math.random() * pool.length)] as any;
+            console.log(`[ExecuteMessage] Selected disconnected instance from pool (no connected instances found): ${(instance as any)?.name}`);
+          }
         }
       }
     }
@@ -432,7 +437,7 @@ Deno.serve(async (req) => {
 
     const webhookUrl = (webhookConfig?.is_active && webhookConfig?.url) 
       ? webhookConfig.url 
-      : DEFAULT_MESSAGES_WEBHOOK;
+      : "";
 
     // Get sequence nodes if sequence is linked
     let sequenceNodes: SequenceNode[] = [];
@@ -546,37 +551,22 @@ Deno.serve(async (req) => {
           .single();
 
         try {
-          const response = await fetch(webhookUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
+          const result = await sendWhatsAppMessage(payload);
 
           const responseTimeMs = Date.now() - sendStartTime;
-          const responseText = await response.text();
-          let responseData;
-          try {
-            responseData = JSON.parse(responseText);
-          } catch {
-            responseData = { raw: responseText };
-          }
+          const responseData = result.details || result;
 
           // Parse Z-API response
-          let zaapId = null;
-          let externalMessageId = null;
-          if (Array.isArray(responseData) && responseData.length > 0) {
-            const firstResult = responseData[0];
-            zaapId = firstResult.zaapId || null;
-            externalMessageId = firstResult.messageId || firstResult.id || null;
-          }
+          const zaapId = result.zaapId || null;
+          const externalMessageId = result.messageId || null;
 
           // Update log
           if (logEntry?.id) {
             await supabase
               .from("group_message_logs")
               .update({
-                status: response.ok ? "sent" : "failed",
-                error_message: response.ok ? null : `HTTP ${response.status}`,
+                status: result.ok ? "sent" : "failed",
+                error_message: result.ok ? null : `HTTP ${result.status}`,
                 response_time_ms: responseTimeMs,
                 provider_response: responseData,
                 zaap_id: zaapId,
@@ -585,12 +575,12 @@ Deno.serve(async (req) => {
               .eq("id", logEntry.id);
           }
 
-          if (response.ok) {
+          if (result.ok) {
             nodesProcessed++;
             console.log(`[ExecuteMessage] ✅ Sent to ${group.group_name}`);
           } else {
             nodesFailed++;
-            console.log(`[ExecuteMessage] ❌ Failed for ${group.group_name}: HTTP ${response.status}`);
+            console.log(`[ExecuteMessage] ❌ Failed for ${group.group_name}: HTTP ${result.status}`);
           }
         } catch (err) {
           nodesFailed++;
@@ -825,31 +815,25 @@ Deno.serve(async (req) => {
               .select().single();
 
             try {
-              const response = await fetch(webhookUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-              });
+              const result = await sendWhatsAppMessage(payload);
 
               const responseTimeMs = Date.now() - sendStartTime;
-              const responseText = await response.text();
-              let responseData;
-              try { responseData = JSON.parse(responseText); } catch { responseData = { raw: responseText }; }
+              const responseData = result.details || result;
 
               if (logEntry?.id) {
                 await supabase.from("group_message_logs").update({
-                  status: response.ok ? "sent" : "failed",
-                  error_message: response.ok ? null : `HTTP ${response.status}`,
+                  status: result.ok ? "sent" : "failed",
+                  error_message: result.ok ? null : `HTTP ${result.status}`,
                   response_time_ms: responseTimeMs, provider_response: responseData,
                 }).eq("id", logEntry.id);
               }
 
-              if (response.ok) {
+              if (result.ok) {
                 console.log(`[ExecuteMessage] ✅ Group mgmt ${node.node_type} on ${dest.group_name}`);
                 webhookResponses.push({ nodeType: node.node_type, nodeOrder: node.node_order, destination: dest.group_jid, status: "sent", data: responseData });
               } else {
                 nodesFailed++;
-                console.log(`[ExecuteMessage] ❌ Group mgmt ${node.node_type} failed: HTTP ${response.status}`);
+                console.log(`[ExecuteMessage] ❌ Group mgmt ${node.node_type} failed: HTTP ${result.status}`);
                 webhookResponses.push({ nodeType: node.node_type, nodeOrder: node.node_order, destination: dest.group_jid, status: "failed", data: responseData });
               }
             } catch (err) {
@@ -1057,37 +1041,22 @@ Deno.serve(async (req) => {
             .single();
 
           try {
-            const response = await fetch(webhookUrl, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            });
+            const result = await sendWhatsAppMessage(payload);
 
             const responseTimeMs = Date.now() - sendStartTime;
-            const responseText = await response.text();
-            let responseData;
-            try {
-              responseData = JSON.parse(responseText);
-            } catch {
-              responseData = { raw: responseText };
-            }
+            const responseData = result.details || result;
 
             // Parse Z-API response
-            let zaapId = null;
-            let externalMessageId = null;
-            if (Array.isArray(responseData) && responseData.length > 0) {
-              const firstResult = responseData[0];
-              zaapId = firstResult.zaapId || null;
-              externalMessageId = firstResult.messageId || firstResult.id || null;
-            }
+            const zaapId = result.zaapId || null;
+            const externalMessageId = result.messageId || null;
 
             // Update log
             if (logEntry?.id) {
               await supabase
                 .from("group_message_logs")
                 .update({
-                  status: response.ok ? "sent" : "failed",
-                  error_message: response.ok ? null : `HTTP ${response.status}`,
+                  status: result.ok ? "sent" : "failed",
+                  error_message: result.ok ? null : `HTTP ${result.status}`,
                   response_time_ms: responseTimeMs,
                   provider_response: responseData,
                   zaap_id: zaapId,
@@ -1096,7 +1065,7 @@ Deno.serve(async (req) => {
                 .eq("id", logEntry.id);
             }
 
-            if (response.ok) {
+            if (result.ok) {
               console.log(`[ExecuteMessage] ✅ Node ${node.node_type} sent to ${dest.group_name}${dest.isPrivate ? ' (private)' : ''}`);
               webhookResponses.push({ nodeType: node.node_type, nodeOrder: node.node_order, destination: dest.group_jid, status: "sent", data: responseData });
               

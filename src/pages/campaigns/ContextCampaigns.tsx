@@ -44,6 +44,7 @@ import {
 import { useContextCampaigns, ContextCampaign } from "@/hooks/useContextCampaigns";
 import { useInstances } from "@/hooks/useInstances";
 import { useWebhookConfigs, getWebhookUrlForCategory } from "@/hooks/useWebhookConfigs";
+import { supabase } from "@/integrations/supabase/client";
 import { buildGroupPayload } from "@/lib/webhook-utils";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
@@ -121,29 +122,17 @@ const ContextCampaigns = () => {
     
     setIsListingGroups(true);
     try {
-      const webhookUrl = getWebhookUrlForCategory("groups", configs);
-      const payload = buildGroupPayload({
-        action: "group.list",
-        instance: {
-          id: instance.id,
-          name: instance.name,
-          phone: instance.phoneNumber || "",
-          provider: instance.provider,
-          externalId: instance.idInstance || "",
-          externalToken: instance.tokenInstance || "",
-        }
+      const { data: proxyData, error: proxyError } = await supabase.functions.invoke("zapi-proxy", {
+        body: {
+          instanceId: instance.id,
+          endpoint: "/chats",
+          method: "GET",
+        },
       });
       
-      const response = await fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      if (proxyError) throw new Error("Falha ao buscar grupos");
       
-      if (!response.ok) throw new Error("Falha ao buscar grupos");
-      
-      const data = await response.json();
-      const rawGroups = data.groups || data || [];
+      const rawGroups = proxyData || [];
       const groupsOnly = rawGroups.filter((item: any) => item.isGroup === true);
 
       const normalizeGroupJid = (phone: string) => {

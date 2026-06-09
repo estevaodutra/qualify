@@ -122,47 +122,22 @@ export function GroupsListTab({ campaignId }: GroupsListTabProps) {
     setSelectedGroups([]);
     
     try {
-      // Usar URL dinâmica do webhook
-      const webhookUrl = getWebhookUrlForCategory("groups", configs);
-      const payload = buildGroupPayload({
-        action: "group.list",
-        instance: {
-          id: instance.id,
-          name: instance.name,
-          phone: instance.phoneNumber || "",
-          provider: instance.provider,
-          externalId: instance.idInstance || "",
-          externalToken: instance.tokenInstance || "",
+      const { data: proxyData, error: proxyError } = await supabase.functions.invoke("zapi-proxy", {
+        body: {
+          instanceId: instance.id,
+          endpoint: "/chats",
+          method: "GET",
         },
-        campaign: campaignId ? {
-          id: campaignId,
-          name: "",
-        } : undefined,
       });
       
-      const response = await fetch(
-        webhookUrl,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
-        }
-      );
-      
-      if (!response.ok) {
+      if (proxyError) {
         throw new Error("Falha ao buscar grupos");
       }
       
-      const data = await response.json();
-      
-      // Filter only groups (isGroup === true)
-      const rawGroups = data.groups || data || [];
+      const rawGroups = proxyData || [];
       const groupsOnly = rawGroups.filter((item: WhatsAppGroup) => item.isGroup === true);
       
       setGroups(groupsOnly);
-      
       toast.success(`${groupsOnly.length} grupo(s) encontrado(s)!`);
     } catch (error) {
       console.error("Erro ao listar grupos:", error);
@@ -178,30 +153,17 @@ export function GroupsListTab({ campaignId }: GroupsListTabProps) {
     if (!instance || !campaignId) return;
 
     try {
-      const webhookUrl = getWebhookUrlForCategory("groups", configs);
-      const payload = buildGroupPayload({
-        action: "group.members",
-        instance: {
-          id: instance.id,
-          name: instance.name,
-          phone: instance.phoneNumber || "",
-          provider: instance.provider,
-          externalId: instance.idInstance || "",
-          externalToken: instance.tokenInstance || "",
+      const { data: proxyData, error: proxyError } = await supabase.functions.invoke("zapi-proxy", {
+        body: {
+          instanceId: instance.id,
+          endpoint: `/group-members?groupId=${groupJid}`,
+          method: "GET",
         },
-        campaign: { id: campaignId, name: "" },
-        group: { jid: groupJid },
       });
 
-      const response = await fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      if (proxyError) throw new Error("Falha ao buscar membros");
 
-      if (!response.ok) throw new Error("Falha ao buscar membros");
-
-      const data = await response.json();
+      const data = proxyData;
       
       // Resposta é um array de objetos de grupo, cada um com "participants"
       let membersList: any[] = [];
@@ -209,6 +171,8 @@ export function GroupsListTab({ campaignId }: GroupsListTabProps) {
         for (const item of data) {
           if (item.participants && Array.isArray(item.participants)) {
             membersList.push(...item.participants);
+          } else if (item.phone) {
+            membersList.push(item);
           }
         }
       } else if (data.participants) {

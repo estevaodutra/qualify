@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendWhatsAppMessage } from "../_shared/whatsapp-client.ts";
 import {
   classifyEvent,
   extractContext,
@@ -731,7 +732,6 @@ Deno.serve(async (req) => {
                   .single();
 
                 if (fullInstance) {
-                  const WEBHOOK_URL = "https://n8n-n8n.nuwfic.easypanel.host/webhook/send_messages";
                   const payload = {
                     action: "message.send_text",
                     campaign: { id: campaign.id, name: campaign.name },
@@ -751,15 +751,12 @@ Deno.serve(async (req) => {
                     node: {
                       id: "context_opening",
                       type: "text",
+                      order: 0,
                       config: { text: campaign.opening_message }
                     }
                   };
 
-                  fetch(WEBHOOK_URL, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload)
-                  }).catch(e => console.error("[webhook-inbound] Error sending opening message:", e));
+                  sendWhatsAppMessage(payload as any).catch(e => console.error("[webhook-inbound] Error sending opening message:", e));
                 }
               }
             }

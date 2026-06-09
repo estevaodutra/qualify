@@ -44,7 +44,7 @@ interface MembersTabProps {
 }
 
 export function MembersTab({ campaignId }: MembersTabProps) {
-  const { members, stats, isLoading, addMember, addMembersBulk, removeMember, reactivateMember, isAdding } = useGroupMembers(campaignId);
+  const { members, stats, isLoading, addMember, addMembersBulk, removeMember, reactivateMember, isAdding, refetch } = useGroupMembers(campaignId);
 
   const { linkedGroups } = useCampaignGroups(campaignId);
   const { instances } = useInstances();
@@ -251,73 +251,35 @@ export function MembersTab({ campaignId }: MembersTabProps) {
     }
 
     setIsFetchingMembers(true);
-    const uniqueMembers = new Map<string, { phone: string; name?: string; isAdmin: boolean }>();
 
     try {
+      let totalSynced = 0;
       for (const group of linkedGroups) {
         const instance = instances?.find(i => i.id === group.instanceId);
         if (!instance) continue;
 
-        const payload = buildGroupPayload({
-          action: "group.members",
-          instance: {
-            id: instance.id,
-            name: instance.name,
-            phone: instance.phoneNumber || "",
-            provider: instance.provider,
-            externalId: instance.idInstance || "",
-            externalToken: instance.tokenInstance || "",
-          },
-          campaign: { id: campaignId, name: "" },
-          group: { jid: group.groupJid },
+        const { data, error } = await supabase.functions.invoke("sync-group-members", {
+          body: {
+            groupJid: group.groupJid,
+            campaignId: campaignId,
+            instanceId: instance.id,
+            userId: user?.id,
+            trigger: "manual_sync",
+          }
         });
 
-        const response = await fetch(
-          "https://n8n-n8n.nuwfic.easypanel.host/webhook/events_sent",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          }
-        );
-
-        if (!response.ok) {
-          console.error(`Falha ao buscar membros do grupo ${group.groupName}`);
+        if (error) {
+          console.error(`Falha ao sincronizar membros do grupo ${group.groupName}:`, error);
           continue;
         }
 
-        const data = await response.json();
-
-        let membersList: any[] = [];
-        if (Array.isArray(data)) {
-          for (const item of data) {
-            if (item.participants && Array.isArray(item.participants)) {
-              membersList.push(...item.participants);
-            }
-          }
-        } else if (data.participants) {
-          membersList = data.participants;
-        } else if (data.members) {
-          membersList = data.members;
-        }
-
-        for (const m of membersList) {
-          if (m.phone && !m.phone.includes("-group")) {
-            const existing = uniqueMembers.get(m.phone);
-            uniqueMembers.set(m.phone, {
-              phone: m.phone,
-              name: m.name || existing?.name || undefined,
-              isAdmin: m.isAdmin || m.isSuperAdmin || existing?.isAdmin || false,
-            });
-          }
+        if (data?.success) {
+          totalSynced += (data.entered || 0);
         }
       }
 
-      if (uniqueMembers.size > 0) {
-        await addMembersBulk(Array.from(uniqueMembers.values()));
-      } else {
-        toast.info("Nenhum membro novo encontrado.");
-      }
+      toast.success("Sincronização com o WhatsApp concluída!");
+      refetch();
     } catch (error) {
       console.error("Erro ao buscar membros:", error);
       toast.error("Falha ao buscar membros. Tente novamente.");

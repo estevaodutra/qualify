@@ -1,12 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendWhatsAppMessage } from "../_shared/whatsapp-client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Default webhook URL for messages category
-const DEFAULT_MESSAGES_WEBHOOK = "https://n8n-n8n.nuwfic.easypanel.host/webhook/messages";
+
 
 // Max delay per node in Edge Function (20 seconds to stay under timeout)
 const MAX_DELAY_MS = 20000;
@@ -536,7 +536,7 @@ Deno.serve(async (req) => {
 
         const webhookUrl = (webhookConfig?.is_active && webhookConfig?.url) 
           ? webhookConfig.url 
-          : DEFAULT_MESSAGES_WEBHOOK;
+          : "";
 
         // Get sequence nodes if sequence is linked
         let sequenceNodes: SequenceNode[] = [];
@@ -614,19 +614,8 @@ Deno.serve(async (req) => {
             });
 
             try {
-              const response = await fetch(webhookUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-              });
-
-              const responseText = await response.text();
-              let responseData;
-              try {
-                responseData = JSON.parse(responseText);
-              } catch {
-                responseData = { raw: responseText };
-              }
+              const result = await sendWhatsAppMessage(payload as any);
+              const responseData = result.details || result;
 
               // Log individual send
               await supabase.from("group_message_logs").insert({
@@ -640,13 +629,13 @@ Deno.serve(async (req) => {
                 instance_id: instance.id,
                 instance_name: instance.name,
                 campaign_name: campaign.name,
-                status: response.ok ? "sent" : "failed",
-                error_message: response.ok ? null : `HTTP ${response.status}`,
+                status: result.ok ? "sent" : "failed",
+                error_message: result.ok ? null : `HTTP ${result.status}`,
                 payload,
                 provider_response: responseData,
               });
 
-              if (response.ok) {
+              if (result.ok) {
                 nodesProcessed++;
               } else {
                 nodesFailed++;
@@ -775,19 +764,8 @@ Deno.serve(async (req) => {
               });
 
               try {
-                const response = await fetch(webhookUrl, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(payload),
-                });
-
-                const responseText = await response.text();
-                let responseData;
-                try {
-                  responseData = JSON.parse(responseText);
-                } catch {
-                  responseData = { raw: responseText };
-                }
+                const result = await sendWhatsAppMessage(payload as any);
+                const responseData = result.details || result;
 
                 // Log individual node execution
                 await supabase.from("group_message_logs").insert({
@@ -802,17 +780,17 @@ Deno.serve(async (req) => {
                   instance_id: instance.id,
                   instance_name: instance.name,
                   campaign_name: campaign.name,
-                  status: response.ok ? "sent" : "failed",
-                  error_message: response.ok ? null : `HTTP ${response.status}`,
+                  status: result.ok ? "sent" : "failed",
+                  error_message: result.ok ? null : `HTTP ${result.status}`,
                   payload,
                   provider_response: responseData,
                 });
 
-                if (response.ok) {
+                if (result.ok) {
                   console.log(`[Scheduler] ✅ Node ${node.node_type} sent to ${group.group_name}`);
                 } else {
                   nodesFailed++;
-                  console.error(`[Scheduler] ❌ Node ${node.node_type} failed for ${group.group_name}: HTTP ${response.status}`);
+                  console.error(`[Scheduler] ❌ Node ${node.node_type} failed for ${group.group_name}: HTTP ${result.status}`);
                 }
               } catch (err) {
                 nodesFailed++;

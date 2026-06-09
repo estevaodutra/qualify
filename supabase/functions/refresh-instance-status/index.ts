@@ -1,11 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getInstanceStatus } from "../_shared/whatsapp-client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const WEBHOOK_URL = "https://n8n-n8n.nuwfic.easypanel.host/webhook/status_instances";
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -42,39 +43,30 @@ Deno.serve(async (req) => {
 
     console.log(`Found ${instances.length} instances to refresh`);
 
-    // Build payload for webhook
-    const payload = instances.map((inst) => ({
-      id: inst.external_instance_id,
-      token: inst.external_instance_token,
-    }));
-
-    // Call the n8n webhook
-    const webhookResponse = await fetch(WEBHOOK_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    if (!webhookResponse.ok) {
-      const errorText = await webhookResponse.text();
-      console.error("Webhook error:", webhookResponse.status, errorText);
-      return new Response(
-        JSON.stringify({ success: false, error: `Webhook returned ${webhookResponse.status}` }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    // Fetch status directly from Z-API for each instance
+    const results = [];
+    for (const inst of instances) {
+      try {
+        const zapiStatus = await getInstanceStatus(inst);
+        results.push({
+          id: inst.external_instance_id,
+          connected: zapiStatus.connected || false,
+          paymentStatus: zapiStatus.paymentStatus || "ACTIVE",
+          due: zapiStatus.due || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        });
+      } catch (err: any) {
+        console.error(`[status-refresh] Failed for ${inst.name}:`, err.message);
+        // Retain status as disconnected if API call fails
+        results.push({
+          id: inst.external_instance_id,
+          connected: false,
+          paymentStatus: "ERROR",
+          due: null,
+        });
+      }
     }
 
-    const results = await webhookResponse.json();
-
-    if (!Array.isArray(results)) {
-      console.error("Webhook response is not an array:", results);
-      return new Response(
-        JSON.stringify({ success: false, error: "Invalid webhook response format" }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    console.log(`Webhook returned ${results.length} results`);
+    console.log(`Z-API status check returned ${results.length} results`);
 
     let updatedCount = 0;
 

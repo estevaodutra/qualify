@@ -25,7 +25,6 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // Auth client to validate user
     const authClient = createClient(supabaseUrl, supabaseServiceKey);
     const { data: { user }, error: userError } = await authClient.auth.getUser(token);
 
@@ -36,17 +35,16 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Parse request body
-    const { instanceId, endpoint, method = "POST", body: requestBody } = await req.json();
+    const { instanceId, method, phone } = await req.json();
 
-    if (!instanceId || !endpoint) {
+    if (!instanceId || !method) {
       return new Response(
-        JSON.stringify({ error: "Missing required fields: instanceId, endpoint" }),
+        JSON.stringify({ error: "Missing required fields: instanceId, method" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Fetch instance credentials using service role (bypasses RLS)
+    // Fetch instance credentials
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
     const { data: instance, error: instanceError } = await adminClient
       .from("instances")
@@ -61,9 +59,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Verify ownership: check if user owns the instance or is a company member
+    // Check permissions
     if (instance.user_id !== user.id) {
-      // Check company membership
       const { data: membership } = await adminClient
         .from("company_members")
         .select("id")
@@ -71,76 +68,59 @@ Deno.serve(async (req) => {
         .eq("is_active", true)
         .limit(1);
 
-      // Also check if instance belongs to any company the user is part of
-      const { data: instanceCheck } = await adminClient
-        .from("instances")
-        .select("user_id")
-        .eq("id", instanceId)
-        .single();
-
       if (!membership || membership.length === 0) {
         return new Response(
-          JSON.stringify({ error: "Unauthorized: you do not have access to this instance" }),
+          JSON.stringify({ error: "Unauthorized access to instance" }),
           { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
     }
 
-    if (!instance.external_instance_id || !instance.external_instance_token) {
+    const { external_instance_id: id, external_instance_token: token_val } = instance;
+    if (!id || !token_val) {
       return new Response(
         JSON.stringify({ error: "Instance credentials not configured" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Build Z-API URL
-    const zapiUrl = `https://api.z-api.io/instances/${instance.external_instance_id}/token/${instance.external_instance_token}${endpoint}`;
-
-    // Build headers with Client-Token and Authorization if present
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-    const clientToken = Deno.env.get("CLIENT_TOKEN");
-    const authorization = Deno.env.get("AUTHORIZATION");
-    if (clientToken) headers["Client-Token"] = clientToken;
-    if (authorization) headers["Authorization"] = authorization;
-
-    // Make proxy request to Z-API
-    const fetchOptions: RequestInit = {
-      method: method.toUpperCase(),
-      headers,
-    };
-
-    if (method.toUpperCase() !== "GET" && requestBody) {
-      fetchOptions.body = JSON.stringify(requestBody);
+    const baseUrl = `https://api.z-api.io/instances/${id}/token/${token_val}`;
+    let zapiResponse;
+    
+    if (method === "phone") {
+      const cleanPhone = phone?.replace(/\D/g, "");
+      console.log(`[connect-instance] Generating pairing code for ${cleanPhone}`);
+      zapiResponse = await fetch(`${baseUrl}/pairing-code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: cleanPhone })
+      });
+    } else {
+      console.log(`[connect-instance] Generating QR code image`);
+      zapiResponse = await fetch(`${baseUrl}/qr-code/image`, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" }
+      });
     }
 
-    const zapiResponse = await fetch(zapiUrl, fetchOptions);
-    const zapiData = await zapiResponse.json();
+    const data = await zapiResponse.json();
 
     if (!zapiResponse.ok) {
+      console.error(`[connect-instance] Z-API Error (HTTP ${zapiResponse.status}):`, data);
       return new Response(
-        JSON.stringify({
-          error: "Z-API request failed",
-          status: zapiResponse.status,
-          details: zapiData,
-        }),
-        {
-          status: zapiResponse.status,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        JSON.stringify({ error: "Z-API request failed", details: data }),
+        { status: zapiResponse.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    return new Response(JSON.stringify(zapiData), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  } catch (err) {
-    const error = err as Error;
-    console.error("zapi-proxy error:", error.message);
     return new Response(
-      JSON.stringify({ error: error.message || "Internal server error" }),
+      JSON.stringify(data),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  } catch (err: any) {
+    console.error("connect-instance error:", err.message);
+    return new Response(
+      JSON.stringify({ error: err.message || "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

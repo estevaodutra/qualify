@@ -377,7 +377,6 @@ export default function QuizPublicPage() {
     color: d.textColor,
   } as React.CSSProperties;
 
-  const currentStep = steps[currentStepIndex] || null;
   const progressPercent = steps.length > 0 ? Math.round(((currentStepIndex + 1) / steps.length) * 100) : 0;
 
 

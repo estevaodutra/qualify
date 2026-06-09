@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { usePirateGroups } from "@/hooks/usePirateGroups";
 import { useInstances } from "@/hooks/useInstances";
+import { supabase } from "@/integrations/supabase/client";
 import { useWebhookConfigs, getWebhookUrlForCategory } from "@/hooks/useWebhookConfigs";
 import { buildGroupPayload } from "@/lib/webhook-utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,29 +59,17 @@ export function PirateGroupsTab({ campaignId, instanceId }: PirateGroupsTabProps
     setSelectedJids([]);
 
     try {
-      const webhookUrl = getWebhookUrlForCategory("groups", configs);
-      const payload = buildGroupPayload({
-        action: "group.list",
-        instance: {
-          id: instance.id,
-          name: instance.name,
-          phone: instance.phoneNumber || "",
-          provider: instance.provider,
-          externalId: instance.idInstance || "",
-          externalToken: instance.tokenInstance || "",
+      const { data: proxyData, error: proxyError } = await supabase.functions.invoke("zapi-proxy", {
+        body: {
+          instanceId: instance.id,
+          endpoint: "/chats",
+          method: "GET",
         },
       });
 
-      const response = await fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      if (proxyError) throw new Error("Falha ao buscar grupos");
 
-      if (!response.ok) throw new Error("Falha ao buscar grupos");
-
-      const data = await response.json();
-      const rawGroups = data.groups || data || [];
+      const rawGroups = proxyData || [];
       const groupsOnly = rawGroups.filter((item: WhatsAppGroup) => item.isGroup === true);
       setAvailableGroups(groupsOnly);
       toast.success(`${groupsOnly.length} grupo(s) encontrado(s)`);

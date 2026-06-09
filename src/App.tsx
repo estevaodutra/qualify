@@ -33,6 +33,7 @@ import Settings from "./pages/Settings";
 import ApiDocs from "./pages/ApiDocs";
 import WebhookEvents from "./pages/WebhookEvents";
 import Auth from "./pages/Auth";
+import Chat from "./pages/Chat";
 import OperatorScript from "./pages/OperatorScript";
 import CallPanel from "./pages/CallPanel";
 import NotFound from "./pages/NotFound";
@@ -96,6 +97,7 @@ const App = () => {
                       }
                     >
                       <Route path="/" element={<Dashboard />} />
+                      <Route path="/chat" element={<Chat />} />
                       <Route path="/painel-ligacoes" element={<CallPanel />} />
                       <Route path="/leads" element={<Leads />} />
                       <Route path="/numbers" element={<PhoneNumbers />} />

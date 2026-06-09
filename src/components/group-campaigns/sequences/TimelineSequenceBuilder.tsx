@@ -226,8 +226,15 @@ export function TimelineSequenceBuilder({ sequence, onBack, onUpdate }: Timeline
     } catch (err: any) {
       console.error("Manual send error:", err);
       let errorMsg = "Erro ao disparar mensagem";
-      if (err.context?.json?.error) {
-        errorMsg = err.context.json.error;
+      if (err.context && typeof err.context.json === "function") {
+        try {
+          const body = await err.context.json();
+          if (body && body.error) {
+            errorMsg = body.error;
+          }
+        } catch (_) {
+          // Ignora erro de parser do JSON
+        }
       } else if (err.message) {
         errorMsg = err.message;
       }
@@ -276,9 +283,15 @@ export function TimelineSequenceBuilder({ sequence, onBack, onUpdate }: Timeline
     } catch (err: any) {
       console.error("Execute error:", err);
       let errorMsg = "Erro ao executar mensagem";
-      
-      if (err.context?.json?.error) {
-        errorMsg = err.context.json.error;
+      if (err.context && typeof err.context.json === "function") {
+        try {
+          const body = await err.context.json();
+          if (body && body.error) {
+            errorMsg = body.error;
+          }
+        } catch (_) {
+          // Ignora erro de parser do JSON
+        }
       } else if (err.message) {
         errorMsg = err.message;
       }

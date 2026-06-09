@@ -95,13 +95,14 @@ export function AppSidebar() {
     { title: t("nav.dashboard"), url: "/", icon: LayoutDashboard },
     { title: t("nav.callPanel"), url: "/painel-ligacoes", icon: PhoneCall },
     { title: t("nav.leads") || "Leads", url: "/leads", icon: Users },
+    { title: "Chat CRM", url: "/chat", icon: MessageSquare },
     { title: "Funis", url: "/quiz", icon: Layers },
     { title: "Agendamentos", url: "/agendamentos/calendarios", icon: CalendarDays },
     { title: t("nav.phoneNumbers"), url: "/numbers", icon: Phone },
   ];
 
   const systemNavItems = [
-    { title: "Connections", url: "/instances", icon: MessageSquare },
+    { title: "Connections", url: "/instances", icon: Radio },
     { title: t("nav.alerts"), url: "/alerts", icon: Bell },
   ];
 

@@ -1,11 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendWhatsAppMessage } from "../_shared/whatsapp-client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const DEFAULT_MESSAGES_WEBHOOK = "https://n8n-n8n.nuwfic.easypanel.host/webhook/send_messages";
+
 const MAX_DELAY_MS = 20000;
 
 interface ExecuteDispatchRequest {
@@ -247,7 +248,7 @@ Deno.serve(async (req) => {
 
     const webhookUrl = (webhookConfig?.is_active && webhookConfig?.url)
       ? webhookConfig.url
-      : DEFAULT_MESSAGES_WEBHOOK;
+      : "";
 
     console.log(`[DispatchSequence] ${typedSteps.length} steps, webhook: ${webhookUrl}`);
 
@@ -358,20 +359,14 @@ Deno.serve(async (req) => {
 
         try {
           const sendStart = Date.now();
-          const response = await fetch(webhookUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-
+          const result = await sendWhatsAppMessage(payload);
+ 
           const responseTimeMs = Date.now() - sendStart;
-          const responseText = await response.text();
-          let responseData;
-          try { responseData = JSON.parse(responseText); } catch { responseData = { raw: responseText }; }
-
+          const responseData = result.details || result;
+ 
           // Log to dispatch_sequence_logs AND group_message_logs in parallel
-          const logStatus = response.ok ? "sent" : "failed";
-          const logError = response.ok ? null : `HTTP ${response.status}: ${responseText.substring(0, 200)}`;
+          const logStatus = result.ok ? "sent" : "failed";
+          const logError = result.ok ? null : `HTTP ${result.status}: ${JSON.stringify(responseData)}`;
           const now = new Date().toISOString();
 
           await Promise.all([
@@ -408,11 +403,11 @@ Deno.serve(async (req) => {
             })(),
           ]);
 
-          if (response.ok) {
+          if (result.ok) {
             console.log(`[DispatchSequence] ✅ Step ${step.step_order} sent to ${contactPhone} (${responseTimeMs}ms)`);
             stepsProcessed++;
           } else {
-            console.error(`[DispatchSequence] ❌ Step ${step.step_order} failed: HTTP ${response.status}`);
+            console.error(`[DispatchSequence] ❌ Step ${step.step_order} failed: HTTP ${result.status}`);
             stepsFailed++;
           }
         } catch (err) {

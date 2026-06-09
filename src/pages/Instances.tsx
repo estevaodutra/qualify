@@ -228,14 +228,12 @@ export default function Instances() {
       
       if (!webhookUrl) throw new Error("URL de webhook não configurada para instâncias.");
 
-      const { data: proxyResult, error: proxyError } = await supabase.functions.invoke("webhook-proxy", {
-        body: { url: webhookUrl, payload }
+      const { data, error } = await supabase.functions.invoke("connect-instance", {
+        body: { instanceId: selectedInstance.id, method, phone: selectedInstance.phoneNumber }
       });
-      if (proxyError) throw proxyError;
-      if (!proxyResult?.success) throw new Error(`Webhook retornou status ${proxyResult?.status}: ${proxyResult?.body}`);
+      if (error) throw error;
 
-      const data = JSON.parse(proxyResult.body);
-      console.log("Webhook response:", data);
+      console.log("Connect instance response:", data);
 
       // Normalizar resposta - pode ser array ou objeto
       let normalizedData = data;
@@ -435,50 +433,9 @@ export default function Instances() {
         }));
 
       if (instancesPayload.length > 0) {
-        const { data: proxyData, error: proxyError } = await supabase.functions.invoke("webhook-proxy", {
-          body: {
-            url: "https://n8n-n8n.nuwfic.easypanel.host/webhook/status_instances",
-            payload: { instances: instancesPayload },
-          },
-        });
-
-        if (proxyError) {
-          console.error("Webhook error:", proxyError);
-        } else {
-          let results: any[] = [];
-          try {
-            const bodyData = typeof proxyData?.body === "string"
-              ? JSON.parse(proxyData.body)
-              : proxyData?.body || proxyData;
-            results = Array.isArray(bodyData) ? bodyData : bodyData?.instances || [];
-          } catch { /* ignore parse errors */ }
-
-          for (const result of results) {
-            if (!result.id) continue;
-
-            // Match by external instance ID (Z-API id), not our internal UUID
-            const instance = instances.find(i => i.idInstance === result.id);
-            if (!instance) continue;
-
-            const newDbStatus = result.connected ? "connected" : "disconnected";
-            const currentDbStatus = mapFrontendStatusToDb(instance.status);
-
-            const updates: Record<string, any> = {};
-
-            if (newDbStatus !== currentDbStatus) {
-              updates.status = newDbStatus;
-            }
-            if (result.paymentStatus) {
-              updates.payment_status = result.paymentStatus;
-            }
-            if (result.due) {
-              updates.expiration_date = new Date(result.due).toISOString();
-            }
-
-            if (Object.keys(updates).length > 0) {
-              await updateInstance({ id: instance.id, updates });
-            }
-          }
+        const { error: refreshError } = await supabase.functions.invoke("refresh-instance-status");
+        if (refreshError) {
+          console.error("Refresh status error:", refreshError);
         }
       }
 

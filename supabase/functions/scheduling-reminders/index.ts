@@ -3,6 +3,7 @@
 // event to the central agenda webhook (n8n).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.0";
+import { sendWhatsAppMessage } from "../_shared/whatsapp-client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,7 +11,6 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const AGENDA_WEBHOOK_URL = "https://n8n-n8n.nuwfic.easypanel.host/webhook/agenda";
 const PUBLIC_APP_URL = "https://qualifyapp.dev";
 
 type Window = {
@@ -53,23 +53,45 @@ const WINDOWS: Window[] = [
   },
 ];
 
-async function postAgenda(payload: unknown) {
-  try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 10_000);
-    const res = await fetch(AGENDA_WEBHOOK_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      signal: ctrl.signal,
-    });
-    clearTimeout(t);
-    return res.ok;
-  } catch (err) {
-    console.error("[scheduling-reminders] post failed", (err as Error).message);
-    return false;
+const replaceVars = (text: string, appt: any, cal: any, attendant: any) => {
+  if (!text) return "";
+  let result = text;
+  
+  let dateStr = "";
+  let timeStr = "";
+  if (appt.scheduled_start) {
+    try {
+      const d = new Date(appt.scheduled_start);
+      dateStr = d.toLocaleDateString("pt-BR", { timeZone: appt.timezone || "America/Sao_Paulo" });
+      timeStr = d.toLocaleTimeString("pt-BR", { timeZone: appt.timezone || "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
+    } catch {
+      dateStr = appt.scheduled_start.split("T")[0];
+      timeStr = appt.scheduled_start.split("T")[1]?.substring(0, 5) || "";
+    }
   }
-}
+
+  const variables: Record<string, string> = {
+    "lead.name": appt.lead_name || "",
+    "lead.phone": appt.lead_phone || "",
+    "lead.email": appt.lead_email || "",
+    "appointment.date": dateStr,
+    "appointment.time": timeStr,
+    "appointment.meeting_url": appt.meeting_url || "",
+    "calendar.name": cal?.name || "",
+    "attendant.name": attendant?.name || "",
+    nome: appt.lead_name || "",
+    data: dateStr,
+    hora: timeStr,
+    link_gerenciar: `${PUBLIC_APP_URL}/agendamento/${appt.cancel_token}/gerenciar`,
+    link_cancelar: `${PUBLIC_APP_URL}/agendamento/${appt.cancel_token}/cancelar`,
+    link_reagendar: `${PUBLIC_APP_URL}/agendamento/${appt.cancel_token}/reagendar`,
+  };
+
+  for (const [key, value] of Object.entries(variables)) {
+    result = result.replaceAll(`{{${key}}}`, value);
+  }
+  return result;
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -162,6 +184,19 @@ Deno.serve(async (req) => {
         (attendants.data ?? []).map((a: any) => [a.id, a]),
       );
 
+      // Fetch required instances
+      const instanceIds = [
+        ...new Set([
+          ...(settings.data ?? []).map((s: any) => s.default_whatsapp_instance_id),
+          ...(notifs.data ?? []).map((n: any) => n.whatsapp_instance_id),
+        ].filter(Boolean))
+      ] as string[];
+
+      const { data: instancesData } = instanceIds.length
+        ? await admin.from("instances").select("*").in("id", instanceIds)
+        : { data: [] as any[] };
+      const instanceMap = new Map((instancesData ?? []).map((i: any) => [i.id, i]));
+
       for (const appt of rows) {
         lastId = appt.id;
         const notif = notifMap.get(appt.calendar_id);
@@ -176,61 +211,42 @@ Deno.serve(async (req) => {
           : null;
         const settings = settingsMap.get(appt.company_id);
 
+        const instanceId = notif.whatsapp_instance_id || settings?.default_whatsapp_instance_id;
+        const instance = instanceId ? instanceMap.get(instanceId) : null;
+
+        if (!instance || instance.status !== "connected") {
+          console.warn(`[scheduling-reminders] Connected instance not found for appt ${appt.id}`);
+          continue;
+        }
+
+        const messageText = replaceVars(notif[w.notifMsgCol] as string, appt, cal, attendant);
+
         const payload = {
-          event: w.event,
-          timestamp: new Date().toISOString(),
-          company: { id: appt.company_id },
-          calendar: cal
-            ? {
-                id: cal.id,
-                name: cal.name,
-                slug: cal.slug,
-                color: cal.color,
-                modality: cal.modality,
-                duration_minutes: cal.duration_minutes,
-                notifications: notif,
-              }
-            : null,
-          attendant: attendant
-            ? {
-                id: attendant.id,
-                name: attendant.name,
-                email: attendant.email,
-                phone: attendant.phone,
-              }
-            : null,
-          lead: {
-            name: appt.lead_name,
+          action: "message.send_text",
+          node: {
+            id: `reminder_${appt.id}_${w.key}`,
+            type: "text",
+            order: 0,
+            config: { text: messageText },
+          },
+          campaign: { id: appt.calendar_id, name: cal?.name || "Calendar" },
+          instance: {
+            id: instance.id,
+            name: instance.name,
+            phone: instance.phone || "",
+            provider: instance.provider,
+            externalId: instance.external_instance_id,
+            externalToken: instance.external_instance_token,
+          },
+          destination: {
             phone: appt.lead_phone,
-            email: appt.lead_email,
-            custom_fields: appt.custom_fields ?? {},
-            answers: appt.answers ?? {},
-          },
-          appointment: {
-            id: appt.id,
-            status: appt.status,
-            scheduled_start: appt.scheduled_start,
-            scheduled_end: appt.scheduled_end,
-            timezone: appt.timezone,
-            meeting_url: appt.meeting_url,
-            location_snapshot: appt.location_snapshot,
-            cancel_token: appt.cancel_token,
-            manage_link: `${PUBLIC_APP_URL}/agendamento/${appt.cancel_token}/gerenciar`,
-            cancel_link: `${PUBLIC_APP_URL}/agendamento/${appt.cancel_token}/cancelar`,
-            reschedule_link: `${PUBLIC_APP_URL}/agendamento/${appt.cancel_token}/reagendar`,
-          },
-          instance_hint: settings?.default_whatsapp_instance_id
-            ? { id: settings.default_whatsapp_instance_id }
-            : null,
-          utm: {
-            source: appt.utm_source,
-            medium: appt.utm_medium,
-            campaign: appt.utm_campaign,
+            jid: `${appt.lead_phone.replace(/\D/g, "")}@s.whatsapp.net`,
+            name: appt.lead_name || "",
           },
         };
 
-        const ok = await postAgenda(payload);
-        if (ok) {
+        const result = await sendWhatsAppMessage(payload as any);
+        if (result.ok) {
           await admin
             .from("scheduling_appointments")
             .update({ [w.sentCol]: new Date().toISOString() })

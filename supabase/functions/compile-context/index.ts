@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendWhatsAppMessage } from "../_shared/whatsapp-client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -215,7 +216,6 @@ Deno.serve(async (req) => {
         }
 
         if (activeInstance) {
-          const WEBHOOK_URL = "https://n8n-n8n.nuwfic.easypanel.host/webhook/send_messages";
           const payload = {
             action: "message.send_text",
             campaign: { id: campaign.id, name: campaign.name },
@@ -235,17 +235,13 @@ Deno.serve(async (req) => {
             node: {
               id: "context_closing",
               type: "text",
+              order: 0,
               config: { text: campaign.closing_message }
             }
           };
 
-          const closingResp = await fetch(WEBHOOK_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-          });
-          const closingBody = await closingResp.text();
-          console.log(`[compile-context] Closing message response (${closingResp.status}): ${closingBody}`);
+          const result = await sendWhatsAppMessage(payload as any);
+          console.log(`[compile-context] Closing message result ok=${result.ok} status=${result.status}`);
         }
       } catch (e) {
         console.error("[compile-context] Error sending closing message:", e);

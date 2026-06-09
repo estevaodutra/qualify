@@ -1,13 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendWhatsAppMessage } from "../_shared/whatsapp-client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Default webhook URLs
-const DEFAULT_MESSAGES_WEBHOOK = "https://n8n-n8n.nuwfic.easypanel.host/webhook/messages";
-const DEFAULT_GROUPS_WEBHOOK = "https://n8n-n8n.nuwfic.easypanel.host/webhook/groups";
+
 
 // ============= Types =============
 
@@ -205,10 +204,7 @@ Deno.serve(async (req) => {
       .select("category, url, is_active")
       .eq("user_id", typedPoll.user_id);
 
-    const getWebhookUrl = (category: string, defaultUrl: string): string => {
-      const config = webhookConfigs?.find((c) => c.category === category && c.is_active);
-      return config?.url || defaultUrl;
-    };
+
 
     // Variable replacement context
     const variables: Record<string, string> = {
@@ -288,13 +284,10 @@ Deno.serve(async (req) => {
           } else {
             actionResult = { error: "No sequence ID configured" };
           }
-          break;
         }
-
+        break;
         case "send_private_message": {
-          const content = replaceVariables(actionConfig.config.content as string || "", variables);
-          const messagesWebhook = getWebhookUrl("messages", DEFAULT_MESSAGES_WEBHOOK);
-          
+          const content = replaceVariables(actionConfig.config.message as string || "", variables);
           const payload = {
             action: "message.send_text",
             node: {
@@ -326,14 +319,10 @@ Deno.serve(async (req) => {
             },
           };
 
-          const msgResponse = await fetch(messagesWebhook, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
+          const result = await sendWhatsAppMessage(payload as any);
 
-          actionResult = { status: msgResponse.status, sent: msgResponse.ok };
-          actionSuccess = msgResponse.ok;
+          actionResult = { status: result.status, sent: result.ok };
+          actionSuccess = result.ok;
           console.log(`[HandlePollResponse] Private message sent: ${actionSuccess}`);
           break;
         }
@@ -381,35 +370,31 @@ Deno.serve(async (req) => {
         }
 
         case "remove_from_group": {
-          const groupsWebhook = getWebhookUrl("groups", DEFAULT_GROUPS_WEBHOOK);
-          
           // Send message before if configured
           if (actionConfig.config.sendMessageBefore) {
             const message = replaceVariables(actionConfig.config.message as string || "", variables);
-            const messagesWebhook = getWebhookUrl("messages", DEFAULT_MESSAGES_WEBHOOK);
             
-            await fetch(messagesWebhook, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                action: "message.send_text",
-                node: { id: `pre_remove_${responseRecord.id}`, type: "text", order: 0, config: { text: message } },
-                instance: instance ? {
-                  id: instance.id,
-                  name: instance.name,
-                  phone: instance.phone || "",
-                  provider: instance.provider,
-                  externalId: instance.external_instance_id || "",
-                  externalToken: instance.external_instance_token || "",
-                } : null,
-                destination: { phone: respondent.phone, jid: respondent.jid || `${respondent.phone}@s.whatsapp.net`, name: respondent.name || "" },
-              }),
-            });
+            await sendWhatsAppMessage({
+              action: "message.send_text",
+              node: { id: `pre_remove_${responseRecord.id}`, type: "text", order: 0, config: { text: message } },
+              campaign: { id: typedPoll.campaign_id, name: "" },
+              instance: instance ? {
+                id: instance.id,
+                name: instance.name,
+                phone: instance.phone || "",
+                provider: instance.provider,
+                externalId: instance.external_instance_id || "",
+                externalToken: instance.external_instance_token || "",
+              } : null,
+              destination: { phone: respondent.phone, jid: respondent.jid || `${respondent.phone}@s.whatsapp.net`, name: respondent.name || "" },
+            } as any);
           }
 
           // Remove from group
           const removePayload = {
             action: "group.remove_participant",
+            node: { id: `remove_${responseRecord.id}`, type: "group_remove_participant", order: 0, config: { phone: respondent.phone } },
+            campaign: { id: typedPoll.campaign_id, name: "" },
             instance: instance ? {
               id: instance.id,
               name: instance.name,
@@ -418,33 +403,28 @@ Deno.serve(async (req) => {
               externalId: instance.external_instance_id || "",
               externalToken: instance.external_instance_token || "",
             } : null,
-            group: {
-              jid: group_jid,
-            },
-            participant: {
+            destination: {
               phone: respondent.phone,
-              jid: respondent.jid || `${respondent.phone}@s.whatsapp.net`,
+              jid: group_jid,
+              name: respondent.name || "",
             },
           };
 
-          const removeResponse = await fetch(groupsWebhook, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(removePayload),
-          });
+          const result = await sendWhatsAppMessage(removePayload as any);
 
-          actionResult = { status: removeResponse.status, removed: removeResponse.ok };
-          actionSuccess = removeResponse.ok;
+          actionResult = { status: result.status, removed: result.ok };
+          actionSuccess = result.ok;
           console.log(`[HandlePollResponse] Member removed: ${actionSuccess}`);
           break;
         }
 
         case "add_to_group": {
-          const groupsWebhook = getWebhookUrl("groups", DEFAULT_GROUPS_WEBHOOK);
           const targetGroupJid = actionConfig.config.targetGroupJid as string;
 
           const addPayload = {
             action: "group.add_participant",
+            node: { id: `add_${responseRecord.id}`, type: "group_add_participant", order: 0, config: { phone: respondent.phone } },
+            campaign: { id: typedPoll.campaign_id, name: "" },
             instance: instance ? {
               id: instance.id,
               name: instance.name,
@@ -453,46 +433,36 @@ Deno.serve(async (req) => {
               externalId: instance.external_instance_id || "",
               externalToken: instance.external_instance_token || "",
             } : null,
-            group: {
-              jid: targetGroupJid,
-            },
-            participant: {
+            destination: {
               phone: respondent.phone,
-              jid: respondent.jid || `${respondent.phone}@s.whatsapp.net`,
+              jid: targetGroupJid,
+              name: respondent.name || "",
             },
           };
 
-          const addResponse = await fetch(groupsWebhook, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(addPayload),
-          });
+          const result = await sendWhatsAppMessage(addPayload as any);
 
-          actionResult = { status: addResponse.status, added: addResponse.ok };
-          actionSuccess = addResponse.ok;
+          actionResult = { status: result.status, added: result.ok };
+          actionSuccess = result.ok;
 
           // Send welcome message if configured
           if (actionSuccess && actionConfig.config.sendWelcome) {
             const welcomeMessage = replaceVariables(actionConfig.config.welcomeMessage as string || "", variables);
-            const messagesWebhook = getWebhookUrl("messages", DEFAULT_MESSAGES_WEBHOOK);
             
-            await fetch(messagesWebhook, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                action: "message.send_text",
-                node: { id: `welcome_${responseRecord.id}`, type: "text", order: 0, config: { text: welcomeMessage } },
-                instance: instance ? {
-                  id: instance.id,
-                  name: instance.name,
-                  phone: instance.phone || "",
-                  provider: instance.provider,
-                  externalId: instance.external_instance_id || "",
-                  externalToken: instance.external_instance_token || "",
-                } : null,
-                destination: { phone: targetGroupJid, jid: targetGroupJid, name: actionConfig.config.targetGroupName as string || "" },
-              }),
-            });
+            await sendWhatsAppMessage({
+              action: "message.send_text",
+              node: { id: `welcome_${responseRecord.id}`, type: "text", order: 0, config: { text: welcomeMessage } },
+              campaign: { id: typedPoll.campaign_id, name: "" },
+              instance: instance ? {
+                id: instance.id,
+                name: instance.name,
+                phone: instance.phone || "",
+                provider: instance.provider,
+                externalId: instance.external_instance_id || "",
+                externalToken: instance.external_instance_token || "",
+              } : null,
+              destination: { phone: targetGroupJid, jid: targetGroupJid, name: actionConfig.config.targetGroupName as string || "" },
+            } as any);
           }
           console.log(`[HandlePollResponse] Member added to group: ${actionSuccess}`);
           break;
@@ -504,28 +474,24 @@ Deno.serve(async (req) => {
 
           if (notifyType === "whatsapp") {
             const targetPhone = actionConfig.config.targetPhone as string;
-            const messagesWebhook = getWebhookUrl("messages", DEFAULT_MESSAGES_WEBHOOK);
 
-            const notifyResponse = await fetch(messagesWebhook, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                action: "message.send_text",
-                node: { id: `notify_${responseRecord.id}`, type: "text", order: 0, config: { text: message } },
-                instance: instance ? {
-                  id: instance.id,
-                  name: instance.name,
-                  phone: instance.phone || "",
-                  provider: instance.provider,
-                  externalId: instance.external_instance_id || "",
-                  externalToken: instance.external_instance_token || "",
-                } : null,
-                destination: { phone: targetPhone, jid: `${targetPhone}@s.whatsapp.net`, name: "Admin" },
-              }),
-            });
+            const result = await sendWhatsAppMessage({
+              action: "message.send_text",
+              node: { id: `notify_${responseRecord.id}`, type: "text", order: 0, config: { text: message } },
+              campaign: { id: typedPoll.campaign_id, name: "" },
+              instance: instance ? {
+                id: instance.id,
+                name: instance.name,
+                phone: instance.phone || "",
+                provider: instance.provider,
+                externalId: instance.external_instance_id || "",
+                externalToken: instance.external_instance_token || "",
+              } : null,
+              destination: { phone: targetPhone, jid: `${targetPhone}@s.whatsapp.net`, name: "Admin" },
+            } as any);
 
-            actionResult = { status: notifyResponse.status, notified: notifyResponse.ok };
-            actionSuccess = notifyResponse.ok;
+            actionResult = { status: result.status, notified: result.ok };
+            actionSuccess = result.ok;
           } else if (notifyType === "webhook") {
             const webhookUrl = actionConfig.config.webhookUrl as string;
             

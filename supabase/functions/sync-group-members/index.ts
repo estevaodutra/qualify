@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { groupGetMembers } from "../_shared/whatsapp-client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -68,46 +69,16 @@ Deno.serve(async (req) => {
       ? groupJid.replace("@g.us", "-group")
       : groupJid;
 
-    const n8nUrl = "https://n8n-n8n.nuwfic.easypanel.host/webhook/events_sent";
-
-    const n8nResp = await fetch(n8nUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "group.members",
-        instance: {
-          id: inst.id,
-          name: inst.name || "",
-          phone: inst.phone || "",
-          provider: inst.provider || "z-api",
-          externalId: inst.external_instance_id,
-          externalToken: inst.external_instance_token,
-        },
-        campaign: { id: campaignId },
-        group: { jid: zapiGroupJid },
-      }),
-    });
-
-    if (!n8nResp.ok) {
-      const errText = await n8nResp.text();
-      console.error(`[sync] n8n error ${n8nResp.status}: ${errText}`);
+    let raw: any = null;
+    try {
+      raw = await groupGetMembers(inst, groupJid);
+      console.log(`[sync] Z-API group members retrieved: ${raw?.length || 0} members`);
+    } catch (e: any) {
+      console.error(`[sync] Z-API error: ${e.message}`);
       return new Response(
-        JSON.stringify({ success: false, error: `n8n error: ${n8nResp.status}` }),
+        JSON.stringify({ success: false, error: `Z-API error: ${e.message}` }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
-    }
-
-    // 4. Parse n8n response (supports array or object with participants/members)
-    const rawText = await n8nResp.text();
-    console.log(`[sync] n8n raw response (${rawText.length} chars): ${rawText.slice(0, 500)}`);
-
-    let raw: any = null;
-    if (rawText.trim().length > 0) {
-      try {
-        raw = JSON.parse(rawText);
-      } catch (e) {
-        console.error("[sync] Failed to parse n8n JSON:", e);
-      }
     }
 
     let participants: N8nParticipant[] = [];

@@ -229,36 +229,19 @@ export function ExtractLeadsDialog({ open, onOpenChange }: Props) {
     setSelectedGroupJids(new Set());
 
     try {
-      const webhookUrl = "https://n8n-n8n.nuwfic.easypanel.host/webhook/events_sent";
-      const payload = buildGroupPayload({
-        action: "group.list",
-        instance: {
-          id: selectedInstance.id,
-          name: selectedInstance.name,
-          phone: selectedInstance.phoneNumber || "",
-          provider: selectedInstance.provider,
-          externalId: selectedInstance.idInstance || "",
-          externalToken: selectedInstance.tokenInstance || "",
+      const { data: proxyData, error: proxyError } = await supabase.functions.invoke("zapi-proxy", {
+        body: {
+          instanceId: selectedInstance.id,
+          endpoint: "/chats",
+          method: "GET",
         },
-      });
-
-      const { data: proxyData, error: proxyError } = await supabase.functions.invoke("webhook-proxy", {
-        body: { url: webhookUrl, payload },
       });
 
       if (proxyError) throw new Error("Falha ao buscar grupos");
 
       console.log("fetchGroups proxy response:", JSON.stringify(proxyData).substring(0, 500));
 
-      // webhook-proxy returns { success, status, body } — body is a JSON string
-      let data: any;
-      try {
-        data = typeof proxyData.body === "string" ? JSON.parse(proxyData.body) : proxyData.body;
-      } catch {
-        data = proxyData;
-      }
-
-      const rawGroups = data.groups || data || [];
+      const rawGroups = proxyData || [];
       const groupsOnly = rawGroups.filter((item: WhatsAppGroup) => item.isGroup === true);
       setGroups(groupsOnly);
       toast.success(`${groupsOnly.length} grupo(s) encontrado(s)!`);
@@ -293,26 +276,16 @@ export function ExtractLeadsDialog({ open, onOpenChange }: Props) {
       setExtractProgress(Math.round(((gi) / selectedArr.length) * 100));
 
       try {
-        const webhookUrl = "https://n8n-n8n.nuwfic.easypanel.host/webhook/events_sent";
-        const payload = buildGroupPayload({
-          action: "group.members",
-          instance: {
-            id: selectedInstance.id,
-            name: selectedInstance.name,
-            phone: selectedInstance.phoneNumber || "",
-            provider: selectedInstance.provider,
-            externalId: selectedInstance.idInstance || "",
-            externalToken: selectedInstance.tokenInstance || "",
+        const { data: proxyData, error: proxyError } = await supabase.functions.invoke("zapi-proxy", {
+          body: {
+            instanceId: selectedInstance.id,
+            endpoint: `/group-members?groupId=${jid}`,
+            method: "GET",
           },
-          group: { jid },
-        });
-
-        const { data: proxyData, error: proxyError } = await supabase.functions.invoke("webhook-proxy", {
-          body: { url: webhookUrl, payload },
         });
 
         if (proxyError || !proxyData) {
-          console.error(`Webhook proxy error for group ${groupName}:`, proxyError);
+          console.error(`Proxy error for group ${groupName}:`, proxyError);
           toast.error(`Falha ao buscar membros de "${groupName}"`);
           await new Promise(r => setTimeout(r, 500));
           continue;
@@ -320,21 +293,7 @@ export function ExtractLeadsDialog({ open, onOpenChange }: Props) {
 
         console.log(`extractMembers proxy response for ${groupName}:`, JSON.stringify(proxyData).substring(0, 500));
 
-        let data: any;
-        try {
-          data = typeof proxyData.body === "string" ? JSON.parse(proxyData.body) : proxyData.body;
-        } catch {
-          console.error(`JSON parse error for group ${groupName}`);
-          toast.error(`Resposta inválida para "${groupName}"`);
-          await new Promise(r => setTimeout(r, 500));
-          continue;
-        }
-
-        if (!data) {
-          console.warn(`Empty response for group ${groupName}`);
-          await new Promise(r => setTimeout(r, 500));
-          continue;
-        }
+        let data: any = proxyData;
 
         // Parse response — support multiple response structures
         let membersList: any[] = [];
@@ -403,7 +362,7 @@ export function ExtractLeadsDialog({ open, onOpenChange }: Props) {
     setExtractedMembers(allMembers);
     setExtractionStats({ total: totalCount, valid: validCount, duplicates: dupCount, invalid: invalidCount });
     setIsExtracting(false);
-  }, [selectedInstance, selectedGroupJids, groups, configs, ignoreAdmins, ignoreInvalid]);
+  }, [selectedInstance, selectedGroupJids, groups, ignoreAdmins, ignoreInvalid]);
 
   // ── Step 4: Import to campaign ──
   const importLeads = useCallback(async () => {

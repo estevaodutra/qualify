@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useInstances } from "@/hooks/useInstances";
+import { supabase } from "@/integrations/supabase/client";
 import { useWebhookConfigs, getWebhookUrlForCategory } from "@/hooks/useWebhookConfigs";
 import { buildGroupPayload } from "@/lib/webhook-utils";
 import { Skull, List, Plus, X } from "lucide-react";
@@ -87,28 +88,16 @@ export function CreatePirateCampaignDialog({
     setIsFetchingGroups(true);
     setHasFetched(true);
     try {
-      const webhookUrlCat = getWebhookUrlForCategory("groups", configs);
-      const payload = buildGroupPayload({
-        action: "group.list",
-        instance: {
-          id: instance.id,
-          name: instance.name,
-          phone: instance.phoneNumber || "",
-          provider: instance.provider,
-          externalId: instance.idInstance || "",
-          externalToken: instance.tokenInstance || "",
+      const { data: proxyData, error: proxyError } = await supabase.functions.invoke("zapi-proxy", {
+        body: {
+          instanceId: instance.id,
+          endpoint: "/chats",
+          method: "GET",
         },
       });
 
-      const response = await fetch(webhookUrlCat, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) throw new Error("Falha");
-      const data = await response.json();
-      const rawGroups = data.groups || data || [];
+      if (proxyError) throw new Error("Falha");
+      const rawGroups = proxyData || [];
       setAvailableGroups(rawGroups.filter((item: WhatsAppGroup) => item.isGroup === true));
     } catch {
       toast.error("Falha ao listar grupos");

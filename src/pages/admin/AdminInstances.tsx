@@ -25,7 +25,6 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
-const WEBHOOK_URL = "https://n8n-n8n.nuwfic.easypanel.host/webhook/instance";
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   connected:            { label: "Conectada",    className: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" },
@@ -100,22 +99,6 @@ const ExpirationCountdown = ({ expiresAt }: { expiresAt: string }) => {
     </span>
   );
 };
-
-// Helper para montar payload de instância
-function instPayload(inst: AdminInstance, action: string, extra?: Record<string, unknown>) {
-  return {
-    action,
-    instance: {
-      id: inst.id,
-      name: inst.name,
-      phone: inst.phone || "",
-      provider: inst.provider,
-      externalId: inst.external_instance_id || "",
-      externalToken: inst.external_instance_token || "",
-    },
-    ...extra,
-  };
-}
 
 export default function AdminInstances() {
   const { data: instances = [], isLoading, refetch } = useAdminInstances();
@@ -211,30 +194,18 @@ export default function AdminInstances() {
   // Connect
   const triggerAdminConnect = async (method: "qr" | "phone") => {
     if (!connectingInstance) return;
-    const webhookUrl = getWebhookUrlForCategory("instance", configs);
-    if (!webhookUrl) throw new Error("URL de webhook não configurada para instâncias.");
     setIsConnecting(true);
     setWebhookResponse(null);
     try {
-      const payload = buildInstancePayload({
-        action: "instance.connect",
-        instance: {
-          id: connectingInstance.id,
-          name: connectingInstance.name,
+      const { data, error: proxyError } = await (supabase as any).functions.invoke("connect-instance", {
+        body: {
+          instanceId: connectingInstance.id,
+          method,
           phone: method === "phone" ? connectingInstance.phone.replace(/\D/g, "") : "",
-          provider: connectingInstance.provider,
-          externalId: connectingInstance.external_instance_id || "",
-          externalToken: connectingInstance.external_instance_token || "",
-        },
-        connection: { method, origin: window.location.origin },
-      });
-      const { data: proxyResult, error: proxyError } = await (supabase as any).functions.invoke("webhook-proxy", {
-        body: { url: webhookUrl, payload },
+        }
       });
       if (proxyError) throw proxyError;
-      if (!proxyResult?.success) throw new Error(`Webhook retornou status ${proxyResult?.status}: ${proxyResult?.body}`);
 
-      const data = JSON.parse(proxyResult.body);
       let nd = Array.isArray(data) && data.length > 0 ? data[0] : data;
       if (nd?.connection?.code) nd = { ...nd, code: nd.connection.code };
 
@@ -276,7 +247,6 @@ export default function AdminInstances() {
     if (!renamingInstance || !newName.trim()) return;
     setIsRenaming(true);
     try {
-      await callWebhook(instPayload(renamingInstance, "rename instance", { newName: newName.trim() }));
       await (supabase as any).from("instances").update({ name: newName.trim() }).eq("id", renamingInstance.id);
       toast({ title: "Instância renomeada com sucesso!" });
       setShowRenameDialog(false);
@@ -305,8 +275,8 @@ export default function AdminInstances() {
     if (!cancelingInstance) return;
     setIsCanceling(true);
     try {
-      await callWebhook(instPayload(cancelingInstance, "cancel_instance"));
-      toast({ title: "Solicitação de cancelamento enviada!" });
+      await (supabase as any).from("instances").update({ status: "disconnected", payment_status: "CANCELED" }).eq("id", cancelingInstance.id);
+      toast({ title: "Instância cancelada e desativada!" });
       setShowCancelDialog(false);
       refetch();
     } catch (e: any) {
@@ -316,68 +286,27 @@ export default function AdminInstances() {
 
   // Fetch phone numbers for connected instances sequentially
   const fetchPhoneNumbers = async (source?: AdminInstance[]) => {
-    const connected = (source || instances).filter(i => i.status === "connected");
-    if (!connected.length) return;
     setIsFetchingPhones(true);
-    for (const inst of connected) {
-      setFetchingPhoneId(inst.id);
-      try {
-        const parsed = await callWebhook(instPayload(inst, "device"));
-        const phone: string | undefined = Array.isArray(parsed) ? parsed[0]?.phone : parsed?.phone;
-        if (phone) {
-          await (supabase as any).from("instances").update({ phone }).eq("id", inst.id);
-        }
-      } catch { /* silent per-instance */ }
+    try {
+      const { error } = await (supabase as any).functions.invoke("refresh-instance-status");
+      if (error) throw error;
+      toast({ title: "Status das instâncias atualizado!" });
+    } catch (e: any) {
+      toast({ title: "Erro ao atualizar status", description: e.message, variant: "destructive" });
+    } finally {
+      setIsFetchingPhones(false);
+      refetch();
     }
-    setIsFetchingPhones(false);
-    setFetchingPhoneId(null);
-    refetch();
   };
 
   // Sync
   const handleSyncAll = async () => {
     setIsSyncing(true);
     try {
-      let allProviderInstances: any[] = [];
-      let page = 1, totalPages = 1;
-      do {
-        const { data: pr, error } = await (supabase as any).functions.invoke("webhook-proxy", {
-          body: { url: WEBHOOK_URL, payload: { action: "instance.list_all", page } },
-        });
-        if (error) throw error;
-        if (!pr?.success) throw new Error(pr?.body || "Erro no webhook");
-        const parsed = JSON.parse(pr.body);
-        const result = Array.isArray(parsed) ? parsed[0] : parsed;
-        allProviderInstances = [...allProviderInstances, ...(result.content || [])];
-        totalPages = result.totalPage || 1;
-        page++;
-      } while (page <= totalPages);
-
-      const existingMap = new Map(
-        instances.filter(i => i.external_instance_id).map(i => [i.external_instance_id!, i.id])
-      );
-      let updated = 0, inserted = 0, errors = 0;
-      for (const inst of allProviderInstances) {
-        const isConnected = !!(inst.phoneConnected && inst.whatsappConnected);
-        const rowData = {
-          name: inst.name,
-          external_instance_token: inst.token,
-          status: isConnected ? "connected" : "disconnected",
-          payment_status: inst.paymentStatus ?? null,
-          expiration_date: inst.due ? new Date(inst.due).toISOString() : null,
-          provider: "Z-API",
-        };
-        const dbId = existingMap.get(inst.id);
-        if (dbId) {
-          const { error } = await (supabase as any).from("instances").update(rowData).eq("id", dbId);
-          if (error) { errors++; console.error("[sync] Update error:", error.message, inst.id); } else updated++;
-        } else {
-          const { error } = await (supabase as any).from("instances").insert({ ...rowData, external_instance_id: inst.id, phone: "" });
-          if (error) { errors++; console.error("[sync] Insert error:", error.message, inst.id); } else inserted++;
-        }
-      }
-      await refetch();
-      toast({ title: "Sincronização concluída", description: `${updated} atualizadas · ${inserted} novas · ${errors} erros` });
+      const { error } = await (supabase as any).functions.invoke("refresh-instance-status");
+      if (error) throw error;
+      toast({ title: "Status de instâncias sincronizado!" });
+      refetch();
     } catch (e: any) {
       toast({ title: "Erro ao sincronizar", description: e.message, variant: "destructive" });
     } finally { setIsSyncing(false); }

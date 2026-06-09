@@ -5,7 +5,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const N8N_WEBHOOK_URL = 'https://n8n-n8n.nuwfic.easypanel.host/webhook/gerar_pix';
 const MIN_AMOUNT = 250;
 
 Deno.serve(async (req) => {
@@ -120,29 +119,43 @@ Deno.serve(async (req) => {
       .single();
     if (payErr) throw new Error(`payment_create_failed: ${payErr.message}`);
 
-    // Call n8n
-    const payload = {
-      company_id,
-      payment_id: payment.id,
-      amount,
-      description: `Recarga Qualify - ${company?.name || ''}`,
-      payer_email: userEmail,
-      payer_name: (profile as any)?.full_name || userEmail,
-    };
-
-    let n8nData: any = null;
-    try {
-      const n8nResp = await fetch(N8N_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+    // Call Mercado Pago API directly
+    const mpAccessToken = Deno.env.get('MP_ACCESS_TOKEN');
+    if (!mpAccessToken) {
+      console.error('[create-pix-payment] Missing MP_ACCESS_TOKEN env var');
+      await supabase.from('wallet_payments').update({ status: 'failed' }).eq('id', payment.id);
+      return new Response(JSON.stringify({ error: 'gateway_error', message: 'Credenciais do Mercado Pago não configuradas.' }), {
+        status: 502,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
-      const text = await n8nResp.text();
-      try { n8nData = JSON.parse(text); } catch { n8nData = { raw: text }; }
-      if (!n8nResp.ok) throw new Error(`n8n returned ${n8nResp.status}`);
+    }
+
+    let mpData: any = null;
+    try {
+      const mpResp = await fetch('https://api.mercadopago.com/v1/payments', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${mpAccessToken}`,
+          'Content-Type': 'application/json',
+          'X-Idempotency-Key': payment.id,
+        },
+        body: JSON.stringify({
+          transaction_amount: amount,
+          description: `Recarga Qualify - ${company?.name || ''}`,
+          payment_method_id: 'pix',
+          payer: {
+            email: userEmail || 'financeiro@qualify.com',
+            first_name: (profile as any)?.full_name || 'Cliente Qualify',
+          },
+        }),
+      });
+
+      const text = await mpResp.text();
+      try { mpData = JSON.parse(text); } catch { mpData = { raw: text }; }
+      if (!mpResp.ok) throw new Error(`Mercado Pago returned ${mpResp.status}`);
     } catch (e) {
       const err = e as Error;
-      console.error('[create-pix-payment] n8n error:', err.message);
+      console.error('[create-pix-payment] Mercado Pago error:', err.message);
       await supabase.from('wallet_payments').update({ status: 'failed' }).eq('id', payment.id);
       return new Response(JSON.stringify({ error: 'gateway_error', message: err.message }), {
         status: 502,
@@ -150,16 +163,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    // n8n may return data wrapped in array or object
-    const data = Array.isArray(n8nData) ? n8nData[0] : n8nData;
-    const qr_code = data?.qr_code || data?.qrCode || null;
-    const qr_code_base64 = data?.qr_code_base64 || data?.qrCodeBase64 || null;
-    const ticket_url = data?.ticket_url || data?.ticketUrl || null;
-    const mp_payment_id = data?.payment_id || data?.mp_payment_id || data?.id?.toString() || null;
-    const new_expires_at = data?.expires_at || expiresAt;
+    const qr_code = mpData?.point_of_interaction?.transaction_data?.qr_code || null;
+    const qr_code_base64 = mpData?.point_of_interaction?.transaction_data?.qr_code_base64 || null;
+    const ticket_url = mpData?.point_of_interaction?.transaction_data?.ticket_url || null;
+    const mp_payment_id = mpData?.id?.toString() || null;
+    const new_expires_at = mpData?.date_of_expiration || expiresAt;
 
     if (!qr_code && !qr_code_base64) {
-      console.error('[create-pix-payment] n8n missing QR data:', data);
+      console.error('[create-pix-payment] Mercado Pago missing QR data:', mpData);
       await supabase.from('wallet_payments').update({ status: 'failed' }).eq('id', payment.id);
       return new Response(JSON.stringify({ error: 'gateway_invalid_response' }), {
         status: 502,

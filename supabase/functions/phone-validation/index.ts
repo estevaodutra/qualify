@@ -289,39 +289,26 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Send to n8n webhook for phone validation
-    const webhookUrl = 'https://n8n-n8n.nuwfic.easypanel.host/webhook/events_sent';
+    // Direct query to Z-API for phone validation
+    const zapiUrl = `https://api.z-api.io/instances/${instance.external_instance_id}/token/${instance.external_instance_token}/phone-exists/${cleanPhone}`;
 
-    console.log(`Sending phone validation to webhook: ${cleanPhone}`);
+    console.log(`Validating phone directly with Z-API: ${cleanPhone}`);
 
-    const webhookPayload = {
-      action: 'validation.phone_exists',
-      instance: {
-        id: instance.id,
-        name: instance.name,
-        provider: instance.provider,
-        external_instance_id: instance.external_instance_id,
-        external_instance_token: instance.external_instance_token
-      },
-      phone: cleanPhone
-    };
-
-    const webhookResponse = await fetch(webhookUrl, {
-      method: 'POST',
+    const webhookResponse = await fetch(zapiUrl, {
+      method: 'GET',
       headers: {
         'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(webhookPayload)
+      }
     });
 
     if (!webhookResponse.ok) {
       const errorText = await webhookResponse.text();
-      console.error('Webhook error:', webhookResponse.status, errorText);
+      console.error('Z-API error:', webhookResponse.status, errorText);
       const responseBody = {
         success: false,
         error: {
-          code: 'WEBHOOK_ERROR',
-          message: 'Erro ao consultar o webhook de validação.'
+          code: 'ZAPI_ERROR',
+          message: 'Erro ao consultar a Z-API para validação de número.'
         }
       };
       await logApiCall(supabase, {
@@ -334,7 +321,7 @@ Deno.serve(async (req) => {
         ipAddress,
         requestBody: { phone: cleanPhone },
         responseBody,
-        errorMessage: `Webhook error: ${webhookResponse.status}`,
+        errorMessage: `Z-API error: ${webhookResponse.status}`,
       });
       return new Response(
         JSON.stringify(responseBody),
