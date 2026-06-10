@@ -100,6 +100,7 @@ export function useChat() {
       return data as unknown as ChatConversation[];
     },
     enabled: !!activeCompanyId && !!user,
+    staleTime: 30000, // 30 seconds stale time since it's updated via realtime
   });
 
   // 2. Fetch Pipeline Stages
@@ -121,6 +122,7 @@ export function useChat() {
       return data as PipelineStage[];
     },
     enabled: !!activeCompanyId && !!user,
+    staleTime: 300000, // 5 minutes stale time as pipeline stages change rarely
   });
 
   // 3. Fetch Quick Templates
@@ -142,6 +144,7 @@ export function useChat() {
       return data as ChatTemplate[];
     },
     enabled: !!activeCompanyId && !!user,
+    staleTime: 300000, // 5 minutes stale time
   });
 
   // 4. Send Message Mutation

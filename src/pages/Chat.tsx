@@ -55,6 +55,7 @@ export default function Chat() {
         .map((p: any) => ({ id: p.id, name: p.full_name || p.email }));
     },
     enabled: !!activeCompanyId,
+    staleTime: 300000, // 5 minutes stale time
   });
 
   const selectedConv = conversations.find((c) => c.id === selectedConvId);
