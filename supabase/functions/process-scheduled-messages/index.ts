@@ -224,6 +224,48 @@ const getActionForNodeType = (nodeType: string): string => {
   return actionMap[nodeType] || "message.send_text";
 };
 
+async function waitForMessageDelivery(supabase: any, messageId: string | null, zaapId: string | null, timeoutMs = 8000) {
+  if (!messageId && !zaapId) return false;
+  const start = Date.now();
+  console.log(`[Scheduler] Waiting for delivery ack for messageId: ${messageId}, zaapId: ${zaapId}`);
+  
+  while (Date.now() - start < timeoutMs) {
+    const filters = [];
+    if (messageId) filters.push(`message_id.eq.${messageId}`);
+    if (zaapId) filters.push(`message_id.eq.${zaapId}`);
+    
+    if (filters.length === 0) break;
+
+    const { data, error } = await supabase
+      .from("webhook_events")
+      .select("event_type, raw_event")
+      .or(filters.join(","));
+
+    if (!error && data && data.length > 0) {
+      for (const event of data) {
+        const body = event.raw_event?.body;
+        const status = body?.status;
+        const eventType = event.event_type;
+        
+        if (
+          status === "SENT" ||
+          status === "DELIVERED" ||
+          status === "READ" ||
+          ["message_status", "message_received", "message_delivered", "message_read", "played", "read_by_me"].includes(eventType)
+        ) {
+          console.log(`[Scheduler] Delivery ack received for ${messageId || zaapId}: status=${status}, event_type=${eventType} after ${Date.now() - start}ms`);
+          return true;
+        }
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  
+  console.log(`[Scheduler] Timeout waiting for delivery ack for ${messageId || zaapId}. Fallback to safety delay.`);
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+  return false;
+}
+
 // ============= Main handler =============
 
 Deno.serve(async (req) => {
@@ -645,10 +687,9 @@ Deno.serve(async (req) => {
               console.error(`[Scheduler] Error sending to group ${group.group_jid}:`, err);
             }
           }
-        } else {
           // ============= SEQUENCE NODE-BY-NODE PROCESSING =============
           const sortedNodes = [...sequenceNodes].sort((a, b) => a.node_order - b.node_order);
-          const destinations = linkedGroups.map(g => ({ group_jid: g.group_jid, group_name: g.group_name, isPrivate: false }));
+          let activeGroups = [...linkedGroups];
 
           for (let nodeIndex = 0; nodeIndex < sortedNodes.length; nodeIndex++) {
             const node = sortedNodes[nodeIndex];
@@ -674,6 +715,7 @@ Deno.serve(async (req) => {
               if (delayMs > MAX_DELAY_MS) {
                 // Long delay - save state and schedule continuation
                 const resumeAt = new Date(Date.now() + delayMs);
+                const destinations = activeGroups.map(g => ({ group_jid: g.group_jid, group_name: g.group_name, isPrivate: false }));
                 
                 console.log(`[Scheduler] ⏱️ Long delay: ${delayMs}ms. Scheduling for ${resumeAt.toISOString()}`);
                 
@@ -732,8 +774,9 @@ Deno.serve(async (req) => {
               continue; // Don't send delay to webhook
             }
 
-            // For each group - send this node to all groups (Node-First strategy)
-            for (const group of linkedGroups) {
+            // For each group - send this node to all active groups (Node-First strategy)
+            const nextActiveGroups = [];
+            for (const group of activeGroups) {
               const action = getActionForNodeType(node.node_type);
               const formattedConfig = formatNodeConfig(node.config, node.node_type);
               
@@ -788,6 +831,9 @@ Deno.serve(async (req) => {
 
                 if (result.ok) {
                   console.log(`[Scheduler] ✅ Node ${node.node_type} sent to ${group.group_name}`);
+                  nextActiveGroups.push(group);
+                  // Wait for delivery to preserve ordering before next steps
+                  await waitForMessageDelivery(supabase, result.messageId, result.zaapId);
                 } else {
                   nodesFailed++;
                   console.error(`[Scheduler] ❌ Node ${node.node_type} failed for ${group.group_name}: HTTP ${result.status}`);
@@ -816,6 +862,12 @@ Deno.serve(async (req) => {
               }
             }
             
+            activeGroups = nextActiveGroups;
+            if (activeGroups.length === 0) {
+              console.log(`[Scheduler] No active groups left, stopping sequence`);
+              break;
+            }
+
             nodesProcessed++;
           }
         }

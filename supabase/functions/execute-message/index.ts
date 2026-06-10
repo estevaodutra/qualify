@@ -254,6 +254,48 @@ const GROUP_MANAGEMENT_NODE_TYPES = [
   "group_promote_admin", "group_remove_admin", "group_settings",
 ];
 
+async function waitForMessageDelivery(supabase: any, messageId: string | null, zaapId: string | null, timeoutMs = 8000) {
+  if (!messageId && !zaapId) return false;
+  const start = Date.now();
+  console.log(`[ExecuteMessage] Waiting for delivery ack for messageId: ${messageId}, zaapId: ${zaapId}`);
+  
+  while (Date.now() - start < timeoutMs) {
+    const filters = [];
+    if (messageId) filters.push(`message_id.eq.${messageId}`);
+    if (zaapId) filters.push(`message_id.eq.${zaapId}`);
+    
+    if (filters.length === 0) break;
+
+    const { data, error } = await supabase
+      .from("webhook_events")
+      .select("event_type, raw_event")
+      .or(filters.join(","));
+
+    if (!error && data && data.length > 0) {
+      for (const event of data) {
+        const body = event.raw_event?.body;
+        const status = body?.status;
+        const eventType = event.event_type;
+        
+        if (
+          status === "SENT" ||
+          status === "DELIVERED" ||
+          status === "READ" ||
+          ["message_status", "message_received", "message_delivered", "message_read", "played", "read_by_me"].includes(eventType)
+        ) {
+          console.log(`[ExecuteMessage] Delivery ack received for ${messageId || zaapId}: status=${status}, event_type=${eventType} after ${Date.now() - start}ms`);
+          return true;
+        }
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  
+  console.log(`[ExecuteMessage] Timeout waiting for delivery ack for ${messageId || zaapId}. Fallback to safety delay.`);
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+  return false;
+}
+
 // ============= Main handler =============
 
 Deno.serve(async (req) => {
@@ -697,6 +739,8 @@ Deno.serve(async (req) => {
       // Determine starting node index
       const startNodeIndex = isResumedExecution && startFromNodeIndex !== undefined ? startFromNodeIndex : 0;
 
+      let activeDestinations = [...effectiveDests];
+
       for (let nodeIndex = startNodeIndex; nodeIndex < sortedNodes.length; nodeIndex++) {
         const node = sortedNodes[nodeIndex];
         
@@ -976,7 +1020,8 @@ Deno.serve(async (req) => {
         }
 
         // Send this node to all destinations
-        for (const dest of effectiveDests) {
+        const nextActiveDestinations: DestinationData[] = [];
+        for (const dest of activeDestinations) {
           const action = getActionForNodeType(node.node_type);
           
           // Clone and format config, applying variable replacement
@@ -1069,6 +1114,9 @@ Deno.serve(async (req) => {
               console.log(`[ExecuteMessage] ✅ Node ${node.node_type} sent to ${dest.group_name}${dest.isPrivate ? ' (private)' : ''}`);
               webhookResponses.push({ nodeType: node.node_type, nodeOrder: node.node_order, destination: dest.group_jid, status: "sent", data: responseData });
               
+              // Add to next destinations list for subsequent sequence nodes
+              nextActiveDestinations.push(dest);
+
               // If this is a poll node and send was successful, register in poll_messages
               // (includes private sends — webhook-triggered sequences use sendPrivate=true and still need lookup by message_id/zaap_id)
               if (node.node_type === "poll" && (zaapId || externalMessageId)) {
@@ -1124,9 +1172,12 @@ Deno.serve(async (req) => {
                   }
                 }
               }
+
+              // Wait for delivery to preserve ordering before next steps
+              await waitForMessageDelivery(supabase, result.messageId, result.zaapId);
             } else {
               nodesFailed++;
-              console.log(`[ExecuteMessage] ❌ Node ${node.node_type} failed for ${dest.group_name}: HTTP ${response.status}`);
+              console.log(`[ExecuteMessage] ❌ Node ${node.node_type} failed for ${dest.group_name}: HTTP ${result.status}`);
               webhookResponses.push({ nodeType: node.node_type, nodeOrder: node.node_order, destination: dest.group_jid, status: "failed", data: responseData });
             }
           } catch (err) {
@@ -1146,6 +1197,12 @@ Deno.serve(async (req) => {
           }
         }
         
+        activeDestinations = nextActiveDestinations;
+        if (activeDestinations.length === 0) {
+          console.log(`[ExecuteMessage] No active destinations left, stopping sequence`);
+          break;
+        }
+
         nodesProcessed++;
       }
 

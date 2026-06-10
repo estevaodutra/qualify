@@ -161,6 +161,48 @@ const applyVariablesToConfig = (config: Record<string, unknown>, ctx: VariableCo
   }
 };
 
+async function waitForMessageDelivery(supabase: any, messageId: string | null, zaapId: string | null, timeoutMs = 8000) {
+  if (!messageId && !zaapId) return false;
+  const start = Date.now();
+  console.log(`[DispatchSequence] Waiting for delivery ack for messageId: ${messageId}, zaapId: ${zaapId}`);
+  
+  while (Date.now() - start < timeoutMs) {
+    const filters = [];
+    if (messageId) filters.push(`message_id.eq.${messageId}`);
+    if (zaapId) filters.push(`message_id.eq.${zaapId}`);
+    
+    if (filters.length === 0) break;
+
+    const { data, error } = await supabase
+      .from("webhook_events")
+      .select("event_type, raw_event")
+      .or(filters.join(","));
+
+    if (!error && data && data.length > 0) {
+      for (const event of data) {
+        const body = event.raw_event?.body;
+        const status = body?.status;
+        const eventType = event.event_type;
+        
+        if (
+          status === "SENT" ||
+          status === "DELIVERED" ||
+          status === "READ" ||
+          ["message_status", "message_received", "message_delivered", "message_read", "played", "read_by_me"].includes(eventType)
+        ) {
+          console.log(`[DispatchSequence] Delivery ack received for ${messageId || zaapId}: status=${status}, event_type=${eventType} after ${Date.now() - start}ms`);
+          return true;
+        }
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  
+  console.log(`[DispatchSequence] Timeout waiting for delivery ack for ${messageId || zaapId}. Fallback to safety delay.`);
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+  return false;
+}
+
 // ============= Main handler =============
 
 Deno.serve(async (req) => {
@@ -406,9 +448,14 @@ Deno.serve(async (req) => {
           if (result.ok) {
             console.log(`[DispatchSequence] ✅ Step ${step.step_order} sent to ${contactPhone} (${responseTimeMs}ms)`);
             stepsProcessed++;
+            
+            // Wait for message delivery to ensure sequential receipt
+            await waitForMessageDelivery(supabase, result.messageId, result.zaapId);
           } else {
             console.error(`[DispatchSequence] ❌ Step ${step.step_order} failed: HTTP ${result.status}`);
             stepsFailed++;
+            // Respect the order and stop the sequence on failure
+            break;
           }
         } catch (err) {
           stepsFailed++;
@@ -445,6 +492,8 @@ Deno.serve(async (req) => {
               }
             })(),
           ]);
+          // Respect the order and stop the sequence on failure
+          break;
         }
       }
     }
