@@ -125,6 +125,7 @@ export function AppSidebar() {
     { title: "Carteira", url: "/carteira", icon: Wallet },
     { title: t("nav.billing"), url: "/billing", icon: CreditCard },
     ...(isAdmin ? [{ title: "Membros", url: "/configuracoes/membros", icon: Users }] : []),
+    { title: "Logs", url: "/settings/logs", icon: FileText },
   ];
 
   const navLinkClasses = cn(

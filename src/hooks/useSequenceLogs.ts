@@ -114,3 +114,88 @@ export function useSequenceLogs(campaignId?: string) {
     refetch: query.refetch,
   };
 }
+
+export function useCompanySequenceLogs(companyId: string | undefined, campaignId?: string) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
+    queryKey: ["sequence-logs", companyId, campaignId],
+    queryFn: async () => {
+      if (!companyId) return [];
+
+      // Get all user ids belonging to the company
+      const { data: members, error: membersError } = await supabase
+        .from("company_members")
+        .select("user_id")
+        .eq("company_id", companyId);
+
+      if (membersError) throw membersError;
+      const userIds = (members || []).map(m => m.user_id);
+      if (userIds.length === 0) return [];
+
+      // 72-hour retention filter
+      const cutoffDate = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
+      
+      let queryBuilder = supabase
+        .from("group_message_logs")
+        .select("*")
+        .in("user_id", userIds)
+        .gte("sent_at", cutoffDate)
+        .order("sent_at", { ascending: false })
+        .limit(1000);
+
+      if (campaignId) {
+        queryBuilder = queryBuilder.eq("group_campaign_id", campaignId);
+      }
+
+      const { data, error } = await queryBuilder;
+      if (error) throw error;
+
+      return ((data || []) as unknown as RawLogRecord[]).map((log): SequenceLog => ({
+        id: log.id,
+        sentAt: log.sent_at,
+        campaignName: log.campaign_name || null,
+        groupName: log.group_name || null,
+        groupJid: log.group_jid || null,
+        nodeType: log.node_type || null,
+        nodeOrder: log.node_order || 0,
+        status: log.status || "sent",
+        errorMessage: log.error_message || null,
+        instanceName: log.instance_name || null,
+        responseTimeMs: log.response_time_ms || null,
+        sequenceId: log.sequence_id || null,
+        groupCampaignId: log.group_campaign_id,
+        payload: log.payload || null,
+      }));
+    },
+    enabled: !!user && !!companyId,
+    refetchInterval: 10000, // Refetch every 10 seconds
+  });
+
+  // Realtime subscription
+  useEffect(() => {
+    if (!user || !companyId) return;
+
+    const channel = supabase
+      .channel(`sequence-logs-realtime-${companyId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "group_message_logs" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["sequence-logs", companyId] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, companyId, queryClient]);
+
+  return {
+    logs: query.data || [],
+    isLoading: query.isLoading,
+    refetch: query.refetch,
+  };
+}

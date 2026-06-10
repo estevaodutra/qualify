@@ -72,3 +72,42 @@ export function useApiLogs() {
 
   return { logs, isLoading, refetch };
 }
+
+export function useCompanyApiLogs(companyId: string | undefined) {
+  const { user } = useAuth();
+
+  const { data: logs = [], isLoading, refetch } = useQuery({
+    queryKey: ["api-logs", companyId],
+    queryFn: async () => {
+      if (!companyId) return [];
+      
+      // Get all user ids belonging to the company
+      const { data: members, error: membersError } = await supabase
+        .from("company_members")
+        .select("user_id")
+        .eq("company_id", companyId);
+
+      if (membersError) throw membersError;
+      const userIds = (members || []).map(m => m.user_id);
+      if (userIds.length === 0) return [];
+
+      // 72-hour retention filter
+      const cutoffDate = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
+      
+      const { data, error } = await supabase
+        .from("api_logs")
+        .select("*")
+        .in("user_id", userIds)
+        .gte("created_at", cutoffDate)
+        .order("created_at", { ascending: false })
+        .limit(1000);
+
+      if (error) throw error;
+
+      return (data as DbApiLog[]).map(transformDbToFrontend);
+    },
+    enabled: !!user && !!companyId,
+  });
+
+  return { logs, isLoading, refetch };
+}

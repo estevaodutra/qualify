@@ -35,6 +35,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { ImageUpload } from "@/components/settings/ImageUpload";
+import { CompanyLogsTab } from "@/components/settings/CompanyLogsTab";
 import { useLocation, useNavigate } from "react-router-dom";
 
 interface ApiKey {
@@ -68,6 +69,7 @@ export default function Settings() {
     const path = location.pathname;
     if (path.includes("/settings/profile")) return "profile";
     if (path.includes("/settings/account")) return "security";
+    if (path.includes("/settings/logs")) return "logs";
     return "company";
   };
   
@@ -81,6 +83,7 @@ export default function Settings() {
     setActiveTab(value);
     if (value === "profile") navigate("/settings/profile");
     else if (value === "security") navigate("/settings/account");
+    else if (value === "logs") navigate("/settings/logs");
     else navigate("/settings");
   };
 
@@ -363,6 +366,7 @@ export default function Settings() {
           <TabsTrigger value="security" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Segurança</TabsTrigger>
           <TabsTrigger value="notifications" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Notificações</TabsTrigger>
           <TabsTrigger value="appearance" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Aparência</TabsTrigger>
+          <TabsTrigger value="logs" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Logs</TabsTrigger>
         </TabsList>
 
         <TabsContent value="company" className="space-y-8 outline-none animate-fade-in">
@@ -622,6 +626,10 @@ export default function Settings() {
             </div>
           </CardContent>
         </Card>
+        </TabsContent>
+
+        <TabsContent value="logs" className="space-y-8 outline-none animate-fade-in">
+          <CompanyLogsTab companyId={activeCompany?.id} />
         </TabsContent>
       </Tabs>
 

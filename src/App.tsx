@@ -107,6 +107,7 @@ const App = () => {
                       <Route path="/settings" element={<Settings />} />
                       <Route path="/settings/profile" element={<Settings />} />
                       <Route path="/settings/account" element={<Settings />} />
+                      <Route path="/settings/logs" element={<Settings />} />
 
                       
                       {/* Wallet routes */}
