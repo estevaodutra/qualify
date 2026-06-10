@@ -14,6 +14,7 @@ interface FunnelData {
   id: string;
   name: string;
   slug: string;
+  company_id: string;
   design_config: Record<string, unknown>;
   seo_config: Record<string, string>;
   pixel_config: Record<string, string>;
@@ -43,6 +44,7 @@ interface QuizOption {
   value: string;
   points: number;
   destination: string | null;
+  image: string | null;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -50,7 +52,7 @@ interface QuizOption {
 async function fetchPublicFunnel(slug: string) {
   const { data: funnel } = await (supabase as any)
     .from("quiz_funnels")
-    .select("id, name, slug, design_config, seo_config, pixel_config, webhook_config")
+    .select("id, name, slug, company_id, design_config, seo_config, pixel_config, webhook_config")
     .eq("slug", slug)
     .eq("status", "published")
     .single();
@@ -84,6 +86,14 @@ function getOrCreateSessionId(): string {
     sessionStorage.setItem(key, id);
   }
   return id;
+}
+
+function maskPhone(value: string): string {
+  const clean = value.replace(/\D/g, "");
+  if (clean.length <= 2) return clean;
+  if (clean.length <= 6) return `(${clean.slice(0, 2)}) ${clean.slice(2)}`;
+  if (clean.length <= 10) return `(${clean.slice(0, 2)}) ${clean.slice(2, 6)}-${clean.slice(6)}`;
+  return `(${clean.slice(0, 2)}) ${clean.slice(2, 7)}-${clean.slice(7, 11)}`;
 }
 
 const RADIUS: Record<string, string> = { square: "4px", medium: "12px", rounded: "24px" };
@@ -248,8 +258,49 @@ export default function QuizPublicPage() {
 
   // ─── Navigation ──────────────────────────────────────────────────────────
 
+  const shouldShowComponent = (comp: ComponentData) => {
+    const rules = (comp.config.displayRules as any[]) || [];
+    if (rules.length === 0) return true;
+
+    for (const rule of rules) {
+      if (!rule.fieldId) continue;
+      
+      const fieldVal = formValues[rule.fieldId] || "";
+      const selectedOpts = selectedOptions[rule.fieldId] || [];
+
+      const refComp = components.find((c) => c.id === rule.fieldId);
+      const refOptions = (refComp?.config.options as any[]) || [];
+
+      let isMatch = false;
+
+      const checkMatch = (valToCompare: string) => {
+        const rVal = (rule.value || "").toLowerCase().trim();
+        const cVal = (valToCompare || "").toLowerCase().trim();
+        if (rule.operator === "equals") return cVal === rVal;
+        if (rule.operator === "not_equals") return cVal !== rVal;
+        if (rule.operator === "contains") return cVal.includes(rVal);
+        return false;
+      };
+
+      if (refComp?.component_type === "options") {
+        isMatch = selectedOpts.some(optId => {
+          const opt = refOptions.find(o => o.id === optId);
+          return checkMatch(optId) || (opt && (checkMatch(opt.value) || checkMatch(opt.text)));
+        });
+      } else {
+        isMatch = checkMatch(fieldVal);
+      }
+
+      if (!isMatch) return false;
+    }
+
+    return true;
+  };
+
   const currentStep = steps[currentStepIndex] || null;
-  const currentComponents = components.filter((c) => c.step_id === currentStep?.id);
+  const currentComponents = components
+    .filter((c) => c.step_id === currentStep?.id)
+    .filter(shouldShowComponent);
 
   const handleOptionSelect = (componentId: string, optionId: string, multiple: boolean, destination: string | null) => {
     if (multiple) {
@@ -271,8 +322,21 @@ export default function QuizPublicPage() {
     const errors: Record<string, string> = {};
     for (const comp of currentComponents) {
       if (FIELD_TYPES.includes(comp.component_type as QuizComponentType)) {
-        if (comp.config.required && !formValues[comp.id]?.toString().trim()) {
+        const val = (formValues[comp.id] || "").toString().trim();
+        if (comp.config.required && !val) {
           errors[comp.id] = "Este campo é obrigatório.";
+        } else if (val) {
+          if (comp.component_type === "field_email") {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(val)) {
+              errors[comp.id] = "E-mail inválido. Digite um e-mail válido (ex: nome@email.com).";
+            }
+          } else if (comp.component_type === "field_phone") {
+            const digits = val.replace(/\D/g, "");
+            if (digits.length !== 10 && digits.length !== 11) {
+              errors[comp.id] = "Telefone inválido. Digite um número com DDD (ex: 11999999999).";
+            }
+          }
         }
       }
       if (comp.component_type === "options" && comp.config.required) {
@@ -301,7 +365,7 @@ export default function QuizPublicPage() {
           // Only specific fields go to the main lead table
           if (comp.component_type === "field_name") stepLeadData.name = val;
           if (comp.component_type === "field_email") stepLeadData.email = val;
-          if (comp.component_type === "field_phone") stepLeadData.phone = val;
+          if (comp.component_type === "field_phone") stepLeadData.phone = val.replace(/\D/g, "");
           // All go to allAnswers
           allAnswers[comp.id] = val;
         }
@@ -354,6 +418,80 @@ export default function QuizPublicPage() {
         .eq("id", sid);
       await (supabase as any).rpc("quiz_funnel_increment", { p_funnel_id: funnel.id, p_field: "completions" });
       if (wh?.trigger === "completion" || !wh?.trigger) await fireWebhook(leadData, allAnswers);
+
+      // Fetch all answers for this submission to sync to the CRM chat conversation
+      try {
+        const [{ data: answersData }, { data: subData }] = await Promise.all([
+          (supabase as any)
+            .from("quiz_answers")
+            .select("component_id, answer_value")
+            .eq("submission_id", sid),
+          (supabase as any)
+            .from("quiz_submissions")
+            .select("lead_id")
+            .eq("id", sid)
+            .single()
+        ]);
+
+        if (answersData && answersData.length > 0 && subData?.lead_id && funnel.company_id) {
+          const fullAnswersMap: Record<string, unknown> = {};
+          answersData.forEach((row: any) => {
+            fullAnswersMap[row.component_id] = row.answer_value;
+          });
+
+          // Find or create conversation in CRM Chat
+          const { data: existingConv } = await (supabase as any)
+            .from("chat_conversations")
+            .select("id")
+            .eq("company_id", funnel.company_id)
+            .eq("lead_id", subData.lead_id)
+            .maybeSingle();
+
+          let convId = existingConv?.id;
+          if (!convId) {
+            const { data: newConv } = await (supabase as any)
+              .from("chat_conversations")
+              .insert({
+                company_id: funnel.company_id,
+                lead_id: subData.lead_id,
+                status: "open",
+              })
+              .select("id")
+              .single();
+            convId = newConv?.id;
+          }
+
+          if (convId) {
+            const summaryText = `📋 Lead concluiu o Quiz: *${funnel.name}*\n\n` +
+              Object.entries(fullAnswersMap)
+                .map(([compId, value]) => {
+                  const comp = components.find((c) => c.id === compId);
+                  const question = comp?.config.label || comp?.config.question || comp?.component_type;
+                  const cleanQuestion = question ? String(question).replace(/<[^>]*>/g, "").trim() : "Pergunta";
+                  const valStr = Array.isArray(value)
+                    ? value.map(valId => {
+                        const opt = (comp?.config.options as any[])?.find(o => o.id === valId);
+                        return opt ? opt.text : valId;
+                      }).join(", ")
+                    : String(value);
+                  return `*${cleanQuestion}:* ${valStr}`;
+                })
+                .join("\n");
+
+            // Insert as system internal note
+            await (supabase as any).from("chat_messages").insert({
+              conversation_id: convId,
+              sender_type: "system",
+              message_type: "text",
+              body: summaryText,
+              is_internal: true,
+            });
+          }
+        }
+      } catch (e) {
+        console.error("Error syncing quiz answers to CRM chat:", e);
+      }
+
       setCompleted(true);
     } else {
       setCurrentStepIndex((i) => i + 1);
@@ -437,7 +575,7 @@ export default function QuizPublicPage() {
           </div>
         )}
 
-        <div className="p-6 space-y-4">
+        <div key={currentStepIndex} className="p-6 space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
           {/* Logo */}
           {currentStep.show_logo && d.logoUrl && (
             <div className="flex justify-center mb-2">
@@ -579,39 +717,91 @@ function PublicComponent({
   if (type === "options") {
     const options = (config.options as QuizOption[]) || [];
     const multiple = !!(config.multiple as boolean);
+    const hasImages = options.some((opt) => opt.image);
+
     return (
       <div className="space-y-2">
         {config.question && (
           <p className="text-base font-semibold text-center mb-4">{config.question as string}</p>
         )}
-        {options.map((opt) => {
-          const isSelected = selectedOptions.includes(opt.id);
-          return (
-            <button
-              key={opt.id}
-              onClick={() => onOptionSelect(opt.id, opt.destination)}
-              className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-all border-2"
-              style={{
-                borderRadius,
-                borderColor: isSelected ? primaryColor : "currentColor",
-                opacity: isSelected ? 1 : 0.7,
-                backgroundColor: isSelected ? primaryColor + "10" : "transparent",
-              }}
-            >
-              <span
-                className="w-6 h-6 flex items-center justify-center text-[10px] font-bold shrink-0 border-2"
-                style={{
-                  borderRadius: "50%",
-                  borderColor: isSelected ? primaryColor : "currentColor",
-                  color: isSelected ? primaryColor : "currentColor",
-                }}
-              >
-                {opt.value}
-              </span>
-              {opt.text}
-            </button>
-          );
-        })}
+        
+        {hasImages ? (
+          <div className="grid grid-cols-2 gap-3">
+            {options.map((opt) => {
+              const isSelected = selectedOptions.includes(opt.id);
+              return (
+                <button
+                  key={opt.id}
+                  onClick={() => onOptionSelect(opt.id, opt.destination)}
+                  className="flex flex-col items-center p-2 text-sm text-center transition-all border-2 h-full"
+                  style={{
+                    borderRadius,
+                    borderColor: isSelected ? primaryColor : "currentColor",
+                    opacity: isSelected ? 1 : 0.7,
+                    backgroundColor: isSelected ? primaryColor + "10" : "transparent",
+                  }}
+                >
+                  {opt.image ? (
+                    <img
+                      src={opt.image}
+                      alt={opt.text}
+                      className="w-full h-28 object-cover mb-2 rounded-md"
+                    />
+                  ) : (
+                    <div className="w-full h-28 bg-current/5 rounded-md flex items-center justify-center mb-2 text-xs opacity-40">
+                      Sem Imagem
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 mt-auto">
+                    <span
+                      className="w-5 h-5 flex items-center justify-center text-[9px] font-bold shrink-0 border-2"
+                      style={{
+                        borderRadius: "50%",
+                        borderColor: isSelected ? primaryColor : "currentColor",
+                        color: isSelected ? primaryColor : "currentColor",
+                      }}
+                    >
+                      {opt.value}
+                    </span>
+                    <span className="font-medium text-xs truncate max-w-[120px]">{opt.text}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {options.map((opt) => {
+              const isSelected = selectedOptions.includes(opt.id);
+              return (
+                <button
+                  key={opt.id}
+                  onClick={() => onOptionSelect(opt.id, opt.destination)}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-all border-2"
+                  style={{
+                    borderRadius,
+                    borderColor: isSelected ? primaryColor : "currentColor",
+                    opacity: isSelected ? 1 : 0.7,
+                    backgroundColor: isSelected ? primaryColor + "10" : "transparent",
+                  }}
+                >
+                  <span
+                    className="w-6 h-6 flex items-center justify-center text-[10px] font-bold shrink-0 border-2"
+                    style={{
+                      borderRadius: "50%",
+                      borderColor: isSelected ? primaryColor : "currentColor",
+                      color: isSelected ? primaryColor : "currentColor",
+                    }}
+                  >
+                    {opt.value}
+                  </span>
+                  {opt.text}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {multiple && selectedOptions.length > 0 && (
           <button
             className="w-full py-3 text-sm font-semibold mt-2"
@@ -625,7 +815,7 @@ function PublicComponent({
       </div>
     );
   }
-
+ 
   if (FIELD_TYPES.includes(type as QuizComponentType)) {
     const isSlider = type === "field_height" || type === "field_weight";
     const isTextarea = type === "field_textarea";
@@ -720,7 +910,10 @@ function PublicComponent({
           type={inputType}
           placeholder={(config.placeholder as string) || ""}
           value={formValue}
-          onChange={(e) => onFormChange(e.target.value)}
+          onChange={(e) => {
+            const val = type === "field_phone" ? maskPhone(e.target.value) : e.target.value;
+            onFormChange(val);
+          }}
           className="w-full px-3 py-2.5 border-2 text-sm outline-none transition-colors"
           style={inputStyle}
           onFocus={(e) => (e.currentTarget.style.opacity = "1")}

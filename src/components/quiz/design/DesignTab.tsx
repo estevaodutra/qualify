@@ -21,6 +21,41 @@ export const DEFAULT_DESIGN_CONFIG: DesignConfig = {
   logoUrl: "",
 };
 
+export const THEME_PRESETS = [
+  {
+    name: "Clean Corporate",
+    primaryColor: "#2563eb",
+    backgroundColor: "#ffffff",
+    textColor: "#1f2937",
+    borderRadius: "medium" as const,
+    fontFamily: "Inter",
+  },
+  {
+    name: "Dark Modern",
+    primaryColor: "#a855f7",
+    backgroundColor: "#111827",
+    textColor: "#f9fafb",
+    borderRadius: "medium" as const,
+    fontFamily: "Poppins",
+  },
+  {
+    name: "Neon Glow",
+    primaryColor: "#10b981",
+    backgroundColor: "#030712",
+    textColor: "#f3f4f6",
+    borderRadius: "rounded" as const,
+    fontFamily: "Montserrat",
+  },
+  {
+    name: "Glassmorphic Light",
+    primaryColor: "#db2777",
+    backgroundColor: "#f4f4f5cc",
+    textColor: "#18181b",
+    borderRadius: "rounded" as const,
+    fontFamily: "Poppins",
+  }
+];
+
 interface Props {
   config: DesignConfig;
   onChange: (config: DesignConfig) => void;
@@ -32,6 +67,28 @@ export function DesignTab({ config, onChange }: Props) {
 
   return (
     <div className="p-6 max-w-lg space-y-6">
+      <div>
+        <h3 className="text-sm font-semibold mb-3">Temas Rápidos</h3>
+        <div className="grid grid-cols-2 gap-2">
+          {THEME_PRESETS.map((preset) => (
+            <button
+              key={preset.name}
+              type="button"
+              onClick={() => onChange({ ...config, ...preset })}
+              className="flex items-center justify-between p-2.5 border rounded-md hover:border-primary transition-all text-left bg-card text-card-foreground shadow-sm"
+            >
+              <div>
+                <p className="text-xs font-semibold">{preset.name}</p>
+                <div className="flex gap-1 mt-1.5">
+                  <span className="w-3 h-3 rounded-full border shadow-sm" style={{ backgroundColor: preset.backgroundColor }} />
+                  <span className="w-3 h-3 rounded-full border shadow-sm" style={{ backgroundColor: preset.primaryColor }} />
+                  <span className="w-3 h-3 rounded-full border shadow-sm" style={{ backgroundColor: preset.textColor }} />
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
       <div>
         <h3 className="text-sm font-semibold mb-4">Cores</h3>
         <div className="grid grid-cols-2 gap-4">

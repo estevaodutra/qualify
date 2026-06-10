@@ -128,6 +128,15 @@ export function OptionsConfig({ config, onChange, steps }: Props) {
                 />
               </div>
             </div>
+            <div className="space-y-1 mt-1">
+              <Label className="text-[10px]">Imagem (URL)</Label>
+              <Input
+                className="h-7 text-xs w-full"
+                value={opt.image || ""}
+                onChange={(e) => updateOption(i, { image: e.target.value || null })}
+                placeholder="https://..."
+              />
+            </div>
           </div>
         ))}
         <Button variant="outline" size="sm" className="w-full text-xs" onClick={addOption}>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { QuizComponent, QuizComponentType, FIELD_TYPES } from "@/hooks/useQuizComponents";
+import { QuizComponent, QuizComponentType, FIELD_TYPES, useAllQuizComponents } from "@/hooks/useQuizComponents";
 import { QuizStep, useQuizSteps } from "@/hooks/useQuizSteps";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,7 +113,7 @@ export function ComponentConfigPanel({ component, activeStep, steps, onChange, o
 
         {/* Exibição tab */}
         <TabsContent value="exibicao" className="flex-1 overflow-y-auto p-3 mt-0">
-          <DisplayConfig config={component.config} onChange={handleChange} />
+          <DisplayConfig config={component.config} onChange={handleChange} funnelId={component.funnelId} currentComponentId={component.id} />
         </TabsContent>
       </Tabs>
     </div>
@@ -198,10 +198,46 @@ function AppearanceConfig({ config, onChange, hideLabel }: {
 
 // ─── Exibição ────────────────────────────────────────────────────────────────
 
-function DisplayConfig({ config, onChange }: {
+function DisplayConfig({ config, onChange, funnelId, currentComponentId }: {
   config: Record<string, unknown>;
   onChange: (c: Record<string, unknown>) => void;
+  funnelId: string;
+  currentComponentId: string;
 }) {
+  const { data: allComponents = [] } = useAllQuizComponents(funnelId);
+  const displayRules = (config.displayRules as any[]) || [];
+
+  const referencableComponents = allComponents.filter(
+    (c) => c.id !== currentComponentId && (c.componentType === "options" || FIELD_TYPES.includes(c.componentType))
+  );
+
+  const handleAddRule = () => {
+    if (referencableComponents.length === 0) return;
+    const newRule = {
+      id: crypto.randomUUID(),
+      fieldId: referencableComponents[0].id,
+      operator: "equals",
+      value: "",
+    };
+    onChange({ ...config, displayRules: [...displayRules, newRule] });
+  };
+
+  const handleRemoveRule = (id: string) => {
+    onChange({ ...config, displayRules: displayRules.filter((r) => r.id !== id) });
+  };
+
+  const handleUpdateRule = (id: string, updates: Record<string, unknown>) => {
+    onChange({
+      ...config,
+      displayRules: displayRules.map((r) => (r.id === id ? { ...r, ...updates } : r)),
+    });
+  };
+
+  const getComponentLabel = (c: any) => {
+    const label = c.config.label || c.config.question || c.componentType;
+    return label.replace(/<[^>]*>/g, "").substring(0, 30) || "Sem título";
+  };
+
   return (
     <div className="space-y-4">
       <div className="space-y-1.5">
@@ -216,12 +252,107 @@ function DisplayConfig({ config, onChange }: {
         <p className="text-xs text-muted-foreground">Deixe vazio para exibir imediatamente.</p>
       </div>
 
-      <div className="space-y-2">
-        <Label>Regras de exibição</Label>
-        <button className="w-full border border-dashed rounded-md py-2 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors">
-          + adicionar regra
-        </button>
-        <p className="text-xs text-muted-foreground">Em breve: exibição condicional baseada em respostas anteriores.</p>
+      <div className="space-y-3">
+        <Label>Regras de exibição (Condicionais)</Label>
+        
+        {displayRules.length === 0 ? (
+          <p className="text-xs text-muted-foreground italic">Exibido sempre por padrão.</p>
+        ) : (
+          <div className="space-y-3">
+            {displayRules.map((rule) => {
+              const refComp = referencableComponents.find((c) => c.id === rule.fieldId);
+              const refOptions = (refComp?.config.options as any[]) || [];
+
+              return (
+                <div key={rule.id} className="border p-2 rounded-md space-y-2 relative bg-muted/20">
+                  <button
+                    className="absolute top-1.5 right-1.5 text-destructive hover:text-destructive text-[10px]"
+                    onClick={() => handleRemoveRule(rule.id)}
+                  >
+                    Excluir
+                  </button>
+
+                  <div className="space-y-1">
+                    <Label className="text-[10px]">Se a pergunta...</Label>
+                    <Select
+                      value={rule.fieldId}
+                      onValueChange={(val) => handleUpdateRule(rule.id, { fieldId: val, value: "" })}
+                    >
+                      <SelectTrigger className="h-7 text-xs">
+                        <SelectValue placeholder="Selecione..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {referencableComponents.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {getComponentLabel(c)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-[10px]">Condição</Label>
+                      <Select
+                        value={rule.operator}
+                        onValueChange={(val) => handleUpdateRule(rule.id, { operator: val })}
+                      >
+                        <SelectTrigger className="h-7 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="equals">Igual a</SelectItem>
+                          <SelectItem value="not_equals">Diferente de</SelectItem>
+                          <SelectItem value="contains">Contém</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label className="text-[10px]">Valor</Label>
+                      {refComp?.componentType === "options" ? (
+                        <Select
+                          value={rule.value}
+                          onValueChange={(val) => handleUpdateRule(rule.id, { value: val })}
+                        >
+                          <SelectTrigger className="h-7 text-xs">
+                            <SelectValue placeholder="Escolha..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {refOptions.map((opt) => (
+                              <SelectItem key={opt.id} value={opt.value}>
+                                {opt.text}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          className="h-7 text-xs"
+                          placeholder="Valor..."
+                          value={rule.value}
+                          onChange={(e) => handleUpdateRule(rule.id, { value: e.target.value })}
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="w-full text-xs"
+          onClick={handleAddRule}
+          disabled={referencableComponents.length === 0}
+        >
+          {referencableComponents.length === 0 ? "Nenhuma outra pergunta disponível" : "+ Adicionar Regra"}
+        </Button>
       </div>
     </div>
   );

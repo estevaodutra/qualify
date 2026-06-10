@@ -276,7 +276,9 @@ function ComponentPreview({
   }
 
   if (type === "options") {
-    const options = (config.options as Array<{ id: string; text: string; value: string }>) || [];
+    const options = (config.options as Array<{ id: string; text: string; value: string; image?: string | null }>) || [];
+    const hasImages = options.some((opt) => opt.image);
+
     return (
       <div className="space-y-2">
         {config.question && (
@@ -288,21 +290,56 @@ function ComponentPreview({
             />
           </div>
         )}
-        {options.map((opt) => (
-          <button
-            key={opt.id}
-            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors border-2 border-current/20"
-            style={{ borderRadius }}
-          >
-            <span
-              className="w-6 h-6 flex items-center justify-center text-[10px] font-bold shrink-0 border-2 border-current/30"
-              style={{ borderRadius: "50%" }}
-            >
-              {opt.value}
-            </span>
-            {opt.text}
-          </button>
-        ))}
+        {hasImages ? (
+          <div className="grid grid-cols-2 gap-2">
+            {options.map((opt) => (
+              <button
+                key={opt.id}
+                className="flex flex-col items-center p-2 text-sm text-center transition-colors border-2 border-current/20 h-full"
+                style={{ borderRadius }}
+              >
+                {opt.image ? (
+                  <img
+                    src={opt.image}
+                    alt={opt.text}
+                    className="w-full h-20 object-cover mb-1.5 rounded"
+                  />
+                ) : (
+                  <div className="w-full h-20 bg-current/5 rounded flex items-center justify-center mb-1.5 text-[10px] opacity-40">
+                    Sem Imagem
+                  </div>
+                )}
+                <div className="flex items-center gap-1.5 mt-auto">
+                  <span
+                    className="w-4 h-4 flex items-center justify-center text-[8px] font-bold shrink-0 border border-current/30"
+                    style={{ borderRadius: "50%" }}
+                  >
+                    {opt.value}
+                  </span>
+                  <span className="text-xs truncate max-w-[80px] font-medium">{opt.text}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {options.map((opt) => (
+              <button
+                key={opt.id}
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors border-2 border-current/20"
+                style={{ borderRadius }}
+              >
+                <span
+                  className="w-6 h-6 flex items-center justify-center text-[10px] font-bold shrink-0 border-2 border-current/30"
+                  style={{ borderRadius: "50%" }}
+                >
+                  {opt.value}
+                </span>
+                {opt.text}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
