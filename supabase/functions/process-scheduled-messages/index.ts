@@ -673,7 +673,12 @@ Deno.serve(async (req) => {
                 campaign_name: campaign.name,
                 status: result.ok ? "sent" : "failed",
                 error_message: result.ok ? null : `HTTP ${result.status}`,
-                payload,
+                payload: {
+                  ...payload,
+                  zapiUrl: result.requestUrl,
+                  zapiBody: result.requestBody,
+                  curl: result.curl,
+                } as any,
                 provider_response: responseData,
               });
 
@@ -825,7 +830,12 @@ Deno.serve(async (req) => {
                   campaign_name: campaign.name,
                   status: result.ok ? "sent" : "failed",
                   error_message: result.ok ? null : `HTTP ${result.status}`,
-                  payload,
+                  payload: {
+                    ...payload,
+                    zapiUrl: result.requestUrl,
+                    zapiBody: result.requestBody,
+                    curl: result.curl,
+                  } as any,
                   provider_response: responseData,
                 });
 

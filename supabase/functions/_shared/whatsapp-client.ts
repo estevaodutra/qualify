@@ -31,6 +31,9 @@ export interface ZApiResponse {
   ok: boolean;
   status: number;
   details?: any;
+  requestUrl?: string;
+  requestBody?: any;
+  curl?: string;
 }
 
 function getZApiHeaders(): Record<string, string> {
@@ -250,10 +253,16 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
 
   const url = `${baseUrl}${endpoint}`;
 
+  const headers = getZApiHeaders();
+  const curlHeaders = Object.entries(headers)
+    .map(([k, v]) => `-H "${k}: ${v}"`)
+    .join(" ");
+  const curl = `curl -X POST "${url}" ${curlHeaders} -d '${JSON.stringify(body)}'`;
+
   try {
     const response = await fetch(url, {
       method: "POST",
-      headers: getZApiHeaders(),
+      headers,
       body: JSON.stringify(body),
     });
 
@@ -271,6 +280,9 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
         ok: false,
         status: response.status,
         details: responseData,
+        requestUrl: url,
+        requestBody: body,
+        curl,
       };
     }
 
@@ -282,6 +294,9 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
       zaapId: responseData.zaapId || responseData.id || null,
       messageId: responseData.messageId || responseData.id || null,
       details: responseData,
+      requestUrl: url,
+      requestBody: body,
+      curl,
     };
   } catch (error: any) {
     console.error("[whatsapp-client] Network error calling Z-API:", error);
@@ -289,6 +304,9 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
       ok: false,
       status: 500,
       details: error.message || error,
+      requestUrl: url,
+      requestBody: body,
+      curl,
     };
   }
 }

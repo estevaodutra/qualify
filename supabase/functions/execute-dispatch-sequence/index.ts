@@ -437,7 +437,12 @@ Deno.serve(async (req) => {
                 instance_id: instance.id,
                 error_message: logError,
                 response_time_ms: responseTimeMs,
-                payload: payload as unknown,
+                payload: {
+                  ...payload,
+                  zapiUrl: result.requestUrl,
+                  zapiBody: result.requestBody,
+                  curl: result.curl,
+                } as any,
               });
               if (gmlError) {
                 console.error("[DispatchSequence] group_message_logs insert FAILED:", JSON.stringify(gmlError));

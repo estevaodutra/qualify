@@ -613,6 +613,12 @@ Deno.serve(async (req) => {
                 provider_response: responseData,
                 zaap_id: zaapId,
                 external_message_id: externalMessageId,
+                payload: {
+                  ...payload,
+                  zapiUrl: result.requestUrl,
+                  zapiBody: result.requestBody,
+                  curl: result.curl,
+                } as any,
               })
               .eq("id", logEntry.id);
           }
@@ -868,7 +874,14 @@ Deno.serve(async (req) => {
                 await supabase.from("group_message_logs").update({
                   status: result.ok ? "sent" : "failed",
                   error_message: result.ok ? null : `HTTP ${result.status}`,
-                  response_time_ms: responseTimeMs, provider_response: responseData,
+                  response_time_ms: responseTimeMs, 
+                  provider_response: responseData,
+                  payload: {
+                    ...payload,
+                    zapiUrl: result.requestUrl,
+                    zapiBody: result.requestBody,
+                    curl: result.curl,
+                  } as any,
                 }).eq("id", logEntry.id);
               }
 
@@ -1106,6 +1119,12 @@ Deno.serve(async (req) => {
                   provider_response: responseData,
                   zaap_id: zaapId,
                   external_message_id: externalMessageId,
+                  payload: {
+                    ...payload,
+                    zapiUrl: result.requestUrl,
+                    zapiBody: result.requestBody,
+                    curl: result.curl,
+                  } as any,
                 })
                 .eq("id", logEntry.id);
             }
