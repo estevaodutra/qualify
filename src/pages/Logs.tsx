@@ -19,7 +19,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   RefreshCw, Download, Search, Send, CheckCircle, XCircle, Clock, Activity, 
-  Loader2 
+  Loader2, Copy
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -554,14 +554,66 @@ export default function Logs() {
                   </div>
                 )}
 
-                {selectedDispatchLog.payload && Object.keys(selectedDispatchLog.payload).length > 0 && (
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-2">Payload</p>
-                    <pre className="p-3 bg-muted rounded-lg text-xs overflow-auto max-h-48">
-                      {JSON.stringify(selectedDispatchLog.payload, null, 2)}
-                    </pre>
-                  </div>
-                )}
+                {(() => {
+                  const payload = selectedDispatchLog.payload as Record<string, any> | null;
+                  if (!payload || Object.keys(payload).length === 0) return null;
+
+                  const { curl, zapiUrl, zapiBody, ...otherPayload } = payload;
+
+                  return (
+                    <div className="space-y-4">
+                      {curl && (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium">Comando CURL (Z-API)</p>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 px-2 text-xs"
+                              onClick={() => {
+                                navigator.clipboard.writeText(curl);
+                                toast.success("CURL copiado para a área de transferência!");
+                              }}
+                            >
+                              <Copy className="h-3 w-3 mr-1" />
+                              Copiar CURL
+                            </Button>
+                          </div>
+                          <pre className="p-3 bg-muted rounded-lg text-xs font-mono whitespace-pre-wrap break-all max-h-48 overflow-auto border border-border/40">
+                            {curl}
+                          </pre>
+                        </div>
+                      )}
+
+                      {zapiUrl && (
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium">URL de Destino</p>
+                          <div className="p-2 bg-muted rounded font-mono text-xs break-all border border-border/40">
+                            {zapiUrl}
+                          </div>
+                        </div>
+                      )}
+
+                      {zapiBody && (
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium">Body Enviado (Z-API)</p>
+                          <pre className="p-3 bg-muted rounded-lg text-xs font-mono overflow-auto max-h-48 border border-border/40">
+                            {JSON.stringify(zapiBody, null, 2)}
+                          </pre>
+                        </div>
+                      )}
+
+                      {Object.keys(otherPayload).length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-sm text-muted-foreground">Payload do Sistema</p>
+                          <pre className="p-3 bg-muted rounded-lg text-xs overflow-auto max-h-48 border border-border/40">
+                            {JSON.stringify(otherPayload, null, 2)}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </ScrollArea>
           )}
