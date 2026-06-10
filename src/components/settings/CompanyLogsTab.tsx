@@ -498,13 +498,12 @@ export function CompanyLogsTab({ companyId }: CompanyLogsTabProps) {
 
       {/* Dispatch Detail Dialog */}
       <Dialog open={showDispatchDialog} onOpenChange={setShowDispatchDialog}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Detalhes do Envio</DialogTitle>
           </DialogHeader>
           {selectedDispatchLog && (
-            <ScrollArea className="max-h-[60vh]">
-              <div className="space-y-4">
+            <div className="space-y-4 pt-2">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-muted-foreground">Timestamp</p>
@@ -613,8 +612,7 @@ export function CompanyLogsTab({ companyId }: CompanyLogsTabProps) {
                     </div>
                   );
                 })()}
-              </div>
-            </ScrollArea>
+            </div>
           )}
         </DialogContent>
       </Dialog>
