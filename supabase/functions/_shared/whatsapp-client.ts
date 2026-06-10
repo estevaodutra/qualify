@@ -55,9 +55,19 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
   const { action, node, instance, destination } = payload;
   const { provider, externalId, externalToken } = instance;
   
-  // Normalizar JID/Phone: para grupos, usar o JID (contém @g.us ou @us).
+  // Normalizar JID/Phone: para grupos, usar o JID (contém @g.us ou -group).
   // Para privado, usar o phone.
-  const target = destination.jid.endsWith("@g.us") ? destination.jid : destination.phone.replace("@s.whatsapp.net", "");
+  let target = "";
+  const jid = destination.jid || "";
+  const phone = destination.phone || "";
+
+  if (jid.includes("-group") || jid.endsWith("@g.us")) {
+    target = jid.includes("@") ? jid : `${jid.replace("-group", "")}@g.us`;
+  } else if (phone.includes("-group") || phone.endsWith("@g.us")) {
+    target = phone.includes("@") ? phone : `${phone.replace("-group", "")}@g.us`;
+  } else {
+    target = phone.replace("@s.whatsapp.net", "");
+  }
 
   console.log(`[whatsapp-client] Sending action ${action} to ${target} via provider ${provider}`);
 
