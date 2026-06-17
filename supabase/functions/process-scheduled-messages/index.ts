@@ -357,23 +357,43 @@ Deno.serve(async (req) => {
 
       for (const execution of pausedExecutions as PausedExecution[]) {
         try {
-          // Check if parent sequence is still active before resuming
-          const { data: parentSequence } = await supabase
-            .from("message_sequences")
-            .select("active")
-            .eq("id", execution.sequence_id)
-            .single();
+          const isDispatch = (execution.trigger_context as any)?.campaignType === "dispatch";
+          
+          if (isDispatch) {
+            // Check if parent dispatch sequence is active
+            const { data: parentSequence } = await supabase
+              .from("dispatch_sequences")
+              .select("is_active")
+              .eq("id", execution.sequence_id)
+              .single();
 
-          if (!parentSequence || parentSequence.active === false) {
-            console.log(`[Scheduler] Sequence ${execution.sequence_id} is inactive — cancelling execution ${execution.id}`);
-            await supabase
-              .from("sequence_executions")
-              .update({ status: "cancelled", error_message: "Sequence deactivated", updated_at: new Date().toISOString() })
-              .eq("id", execution.id);
-            continue;
+            if (!parentSequence || parentSequence.is_active === false) {
+              console.log(`[Scheduler] Dispatch Sequence ${execution.sequence_id} is inactive — cancelling execution ${execution.id}`);
+              await supabase
+                .from("sequence_executions")
+                .update({ status: "cancelled", error_message: "Dispatch sequence deactivated", updated_at: new Date().toISOString() })
+                .eq("id", execution.id);
+              continue;
+            }
+          } else {
+            // Check if parent sequence is still active before resuming
+            const { data: parentSequence } = await supabase
+              .from("message_sequences")
+              .select("active")
+              .eq("id", execution.sequence_id)
+              .single();
+
+            if (!parentSequence || parentSequence.active === false) {
+              console.log(`[Scheduler] Sequence ${execution.sequence_id} is inactive — cancelling execution ${execution.id}`);
+              await supabase
+                .from("sequence_executions")
+                .update({ status: "cancelled", error_message: "Sequence deactivated", updated_at: new Date().toISOString() })
+                .eq("id", execution.id);
+              continue;
+            }
           }
 
-          console.log(`[Scheduler] Resuming execution ${execution.id} from node ${execution.current_node_index}`);
+          console.log(`[Scheduler] Resuming execution ${execution.id} from node ${execution.current_node_index} (isDispatch: ${isDispatch})`);
 
           // Mark as running to prevent duplicate processing
           await supabase
@@ -381,21 +401,38 @@ Deno.serve(async (req) => {
             .update({ status: "running", updated_at: new Date().toISOString() })
             .eq("id", execution.id);
 
-          // Call execute-message to continue processing
-          const response = await fetch(`${supabaseUrl}/functions/v1/execute-message`, {
+          // Call the appropriate edge function to continue processing
+          const fetchUrl = isDispatch 
+            ? `${supabaseUrl}/functions/v1/execute-dispatch-sequence`
+            : `${supabaseUrl}/functions/v1/execute-message`;
+
+          const fetchBody = isDispatch 
+            ? {
+                campaignId: execution.campaign_id,
+                sequenceId: execution.sequence_id,
+                contactPhone: (execution.trigger_context as any)?.contactPhone || "",
+                contactName: (execution.trigger_context as any)?.contactName || "",
+                contactId: (execution.trigger_context as any)?.contactId || undefined,
+                customFields: (execution.trigger_context as any)?.customFields || {},
+                executionId: execution.id,
+                startFromStepIndex: execution.current_node_index,
+              }
+            : {
+                campaignId: execution.campaign_id,
+                sequenceId: execution.sequence_id,
+                messageId: execution.message_id,
+                triggerContext: execution.trigger_context,
+                executionId: execution.id,
+                startFromNodeIndex: execution.current_node_index,
+              };
+
+          const response = await fetch(fetchUrl, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               "Authorization": `Bearer ${supabaseServiceKey}`,
             },
-            body: JSON.stringify({
-              campaignId: execution.campaign_id,
-              sequenceId: execution.sequence_id,
-              messageId: execution.message_id,
-              triggerContext: execution.trigger_context,
-              executionId: execution.id,
-              startFromNodeIndex: execution.current_node_index,
-            }),
+            body: JSON.stringify(fetchBody),
           });
 
           const result = await response.json();
