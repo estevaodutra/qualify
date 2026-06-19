@@ -106,12 +106,11 @@ export function useExportSchedules(groupCampaignId: string) {
 
   const exportNow = useMutation({
     mutationFn: async (params: { webhook_url: string; status_filter: string[] }) => {
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
 
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/export-members-webhook`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export-members-webhook`,
         {
           method: "POST",
           headers: {

@@ -26,7 +26,7 @@ const ApiDocs = () => {
   const [copied, setCopied] = useState<string | null>(null);
   const endpointsSectionRef = useRef<HTMLDivElement>(null);
 
-  const baseUrl = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1`;
+  const baseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 
   const handleCategoryChange = (categoryId: string) => {
     setActiveCategory(categoryId);

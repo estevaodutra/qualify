@@ -164,7 +164,7 @@ export function useWebhookConfigs() {
   };
 
   const getDynamicUrl = (categoryId: string): string => {
-    const baseUrl = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1`;
+    const baseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
     return `${baseUrl}/webhooks/${categoryId}`;
   };
 
