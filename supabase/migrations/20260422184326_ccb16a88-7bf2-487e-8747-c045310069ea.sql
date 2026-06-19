@@ -39,7 +39,7 @@ BEGIN
 
   IF v_should_fire THEN
     PERFORM net.http_post(
-      url := 'https://yvznxdzadfvmbnwbsmbb.supabase.co/functions/v1/scheduling-dispatch',
+      url := 'https://qualify.6ksfuf.easypanel.host/functions/v1/scheduling-dispatch',
       headers := '{"Content-Type":"application/json"}'::jsonb,
       body := jsonb_build_object(
         'appointment_id', NEW.id,

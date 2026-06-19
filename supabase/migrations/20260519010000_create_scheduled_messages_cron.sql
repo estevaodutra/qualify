@@ -5,7 +5,7 @@ SELECT cron.schedule(
   '* * * * *',
   $$
     SELECT net.http_post(
-      url     := 'https://yvznxdzadfvmbnwbsmbb.supabase.co/functions/v1/process-scheduled-messages',
+      url     := 'https://qualify.6ksfuf.easypanel.host/functions/v1/process-scheduled-messages',
       headers := jsonb_build_object('Content-Type', 'application/json'),
       body    := '{}'::jsonb
     );
