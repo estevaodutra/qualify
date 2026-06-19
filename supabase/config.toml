@@ -114,3 +114,20 @@ verify_jwt = false
 [functions.register-all-webhooks]
 verify_jwt = false
 
+[functions.when_sending]
+verify_jwt = false
+
+[functions.chat_presence]
+verify_jwt = false
+
+[functions.when_disconnecting]
+verify_jwt = false
+
+[functions.when_connecting]
+verify_jwt = false
+
+[functions.receive_message_status]
+verify_jwt = false
+
+[functions.received]
+verify_jwt = false
