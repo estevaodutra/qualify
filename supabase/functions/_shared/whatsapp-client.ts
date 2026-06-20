@@ -263,11 +263,12 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
       body.message = config.text || config.content || JSON.stringify(config);
   }
 
+  const url = `https://api.z-api.io/instances/${externalId}/token/${externalToken}${endpoint}`;
   const headers = getZApiHeaders();
   const curlHeaders = Object.entries(headers)
     .map(([k, v]) => `-H "${k}: ${v}"`)
     .join(" ");
-  const curl = `curl -X POST "https://api.z-api.io/instances/${externalId}/token/${externalToken}${endpoint}" ${curlHeaders} -d '${JSON.stringify(body)}'`;
+  const curl = `curl -X POST "${url}" ${curlHeaders} -d '${JSON.stringify(body)}'`;
 
   try {
     const response = await fetchZApi(
