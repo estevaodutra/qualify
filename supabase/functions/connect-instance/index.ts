@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { fetchZApi } from "../_shared/n8n-router.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -84,23 +85,27 @@ Deno.serve(async (req) => {
       );
     }
 
-    const baseUrl = `https://api.z-api.io/instances/${id}/token/${token_val}`;
     let zapiResponse;
     
     if (method === "phone") {
       const cleanPhone = phone?.replace(/\D/g, "");
       console.log(`[connect-instance] Generating pairing code for ${cleanPhone}`);
-      zapiResponse = await fetch(`${baseUrl}/pairing-code`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: cleanPhone })
-      });
+      zapiResponse = await fetchZApi(
+        id,
+        token_val,
+        "/pairing-code",
+        "POST",
+        { phone: cleanPhone }
+      );
     } else {
       console.log(`[connect-instance] Generating QR code image`);
-      zapiResponse = await fetch(`${baseUrl}/qr-code/image`, {
-        method: "GET",
-        headers: { "Content-Type": "application/json" }
-      });
+      zapiResponse = await fetchZApi(
+        id,
+        token_val,
+        "/qr-code/image",
+        "GET",
+        null
+      );
     }
 
     const data = await zapiResponse.json();

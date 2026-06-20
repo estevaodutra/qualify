@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { fetchZApi } from "../_shared/n8n-router.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -39,13 +40,15 @@ Deno.serve(async (req) => {
       const { external_instance_id: id, external_instance_token: token } = inst;
       if (!id || !token) continue;
 
-      const url = `https://api.z-api.io/instances/${id}/token/${token}/update-every-webhooks`;
       try {
-        const response = await fetch(url, {
-          method: "PUT",
-          headers,
-          body: JSON.stringify({ value: webhookUrl }),
-        });
+        const response = await fetchZApi(
+          id,
+          token,
+          "/update-every-webhooks",
+          "PUT",
+          { value: webhookUrl },
+          headers
+        );
         const respText = await response.text();
         results.push({
           instance: inst.name,

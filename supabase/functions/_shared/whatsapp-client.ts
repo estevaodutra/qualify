@@ -1,3 +1,5 @@
+import { fetchZApi } from "./n8n-router.ts";
+
 export interface StandardizedPayload {
   action: string;
   node: {
@@ -261,20 +263,21 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
       body.message = config.text || config.content || JSON.stringify(config);
   }
 
-  const url = `${baseUrl}${endpoint}`;
-
   const headers = getZApiHeaders();
   const curlHeaders = Object.entries(headers)
     .map(([k, v]) => `-H "${k}: ${v}"`)
     .join(" ");
-  const curl = `curl -X POST "${url}" ${curlHeaders} -d '${JSON.stringify(body)}'`;
+  const curl = `curl -X POST "https://api.z-api.io/instances/${externalId}/token/${externalToken}${endpoint}" ${curlHeaders} -d '${JSON.stringify(body)}'`;
 
   try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-    });
+    const response = await fetchZApi(
+      externalId,
+      externalToken,
+      endpoint,
+      "POST",
+      body,
+      headers
+    );
 
     const text = await response.text();
     let responseData: any;
@@ -330,13 +333,16 @@ export async function groupGetMembers(instance: any, groupJid: string): Promise<
   // Standard format for query param is groupId. Usually Z-API expects groupId
   const groupId = groupJid.includes("@") ? groupJid : `${groupJid.replace("-group", "")}@g.us`;
   
-  const url = `${baseUrl}/group-members?groupId=${groupId}`;
-  console.log(`[whatsapp-client] Fetching group members from: ${url}`);
+  console.log(`[whatsapp-client] Fetching group members: groupId=${groupId}`);
   
-  const response = await fetch(url, {
-    method: "GET",
-    headers: getZApiHeaders(),
-  });
+  const response = await fetchZApi(
+    id,
+    token,
+    `/group-members?groupId=${groupId}`,
+    "GET",
+    null,
+    getZApiHeaders()
+  );
   
   if (!response.ok) {
     const errorText = await response.text();
@@ -351,12 +357,15 @@ export async function groupGetMembers(instance: any, groupJid: string): Promise<
 // Fetch instance status
 export async function getInstanceStatus(instance: any): Promise<any> {
   const { external_instance_id: id, external_instance_token: token } = instance;
-  const url = `https://api.z-api.io/instances/${id}/token/${token}/status`;
   
-  const response = await fetch(url, {
-    method: "GET",
-    headers: getZApiHeaders(),
-  });
+  const response = await fetchZApi(
+    id,
+    token,
+    "/status",
+    "GET",
+    null,
+    getZApiHeaders()
+  );
   
   if (!response.ok) {
     const errorText = await response.text();
@@ -380,11 +389,14 @@ export async function registerZApiWebhooks(instance: any, webhookUrl: string): P
   for (const ep of endpoints) {
     try {
       console.log(`[whatsapp-client] Registering webhook ${ep} with URL ${webhookUrl}`);
-      const response = await fetch(`${baseUrl}${ep}`, {
-        method: "PUT",
-        headers: getZApiHeaders(),
-        body: JSON.stringify({ value: webhookUrl }),
-      });
+      const response = await fetchZApi(
+        id,
+        token,
+        ep,
+        "PUT",
+        { value: webhookUrl },
+        getZApiHeaders()
+      );
       if (!response.ok) {
         const txt = await response.text();
         console.error(`[whatsapp-client] Failed to register webhook ${ep}:`, txt);

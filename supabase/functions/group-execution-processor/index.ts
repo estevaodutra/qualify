@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { fetchZApi } from "../_shared/n8n-router.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -527,12 +528,14 @@ async function executeAction(
         throw new Error("Instance credentials not found");
       }
 
-      const zapiUrl = `https://api.z-api.io/instances/${instance.external_instance_id}/token/${instance.external_instance_token}/send-text`;
-      const resp = await fetch(zapiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Client-Token": Deno.env.get("ZAPI_CLIENT_TOKEN") || "" },
-        body: JSON.stringify({ phone: lead.phone, message }),
-      });
+      const resp = await fetchZApi(
+        instance.external_instance_id,
+        instance.external_instance_token,
+        "/send-text",
+        "POST",
+        { phone: lead.phone, message },
+        { "Client-Token": Deno.env.get("ZAPI_CLIENT_TOKEN") || "" }
+      );
       if (!resp.ok) {
         const text = await resp.text();
         throw new Error(`Z-API returned ${resp.status}: ${text.slice(0, 200)}`);

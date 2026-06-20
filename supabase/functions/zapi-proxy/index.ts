@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { fetchZApi } from "../_shared/n8n-router.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -93,9 +94,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Build Z-API URL
-    const zapiUrl = `https://api.z-api.io/instances/${instance.external_instance_id}/token/${instance.external_instance_token}${endpoint}`;
-
     // Build headers with Client-Token and Authorization if present
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -105,17 +103,15 @@ Deno.serve(async (req) => {
     if (clientToken) headers["Client-Token"] = clientToken;
     if (authorization) headers["Authorization"] = authorization;
 
-    // Make proxy request to Z-API
-    const fetchOptions: RequestInit = {
-      method: method.toUpperCase(),
-      headers,
-    };
-
-    if (method.toUpperCase() !== "GET" && requestBody) {
-      fetchOptions.body = JSON.stringify(requestBody);
-    }
-
-    const zapiResponse = await fetch(zapiUrl, fetchOptions);
+    // Make proxy request to Z-API via n8n router
+    const zapiResponse = await fetchZApi(
+      instance.external_instance_id,
+      instance.external_instance_token,
+      endpoint,
+      method,
+      requestBody,
+      headers
+    );
     const zapiData = await zapiResponse.json();
 
     if (!zapiResponse.ok) {

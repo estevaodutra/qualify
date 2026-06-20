@@ -1,4 +1,5 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { fetchZApi } from "../_shared/n8n-router.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -289,17 +290,15 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Direct query to Z-API for phone validation
-    const zapiUrl = `https://api.z-api.io/instances/${instance.external_instance_id}/token/${instance.external_instance_token}/phone-exists/${cleanPhone}`;
-
     console.log(`Validating phone directly with Z-API: ${cleanPhone}`);
 
-    const webhookResponse = await fetch(zapiUrl, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
+    const webhookResponse = await fetchZApi(
+      instance.external_instance_id,
+      instance.external_instance_token,
+      `/phone-exists/${cleanPhone}`,
+      "GET",
+      null
+    );
 
     if (!webhookResponse.ok) {
       const errorText = await webhookResponse.text();
