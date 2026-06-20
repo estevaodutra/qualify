@@ -105,6 +105,27 @@ export function routeZApiRequest(endpoint: string, method: string, requestBody: 
   };
 }
 
+function normalizeGroupJids(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj === "string") {
+    if (obj.includes("@g.us")) {
+      return obj.replace("@g.us", "-group");
+    }
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(normalizeGroupJids);
+  }
+  if (typeof obj === "object") {
+    const copy: Record<string, any> = {};
+    for (const key of Object.keys(obj)) {
+      copy[key] = normalizeGroupJids(obj[key]);
+    }
+    return copy;
+  }
+  return obj;
+}
+
 export async function fetchZApi(
   instanceId: string,
   instanceToken: string,
@@ -134,6 +155,9 @@ export async function fetchZApi(
     const parts = cleanEndpoint.split("/group-invitation-link/");
     if (parts[1]) content.groupId = parts[1];
   }
+
+  // Normalize group JIDs to -group format for n8n compatibility
+  content = normalizeGroupJids(content);
 
   // Route to the correct n8n endpoint
   const routed = routeZApiRequest(endpoint, method, content);
