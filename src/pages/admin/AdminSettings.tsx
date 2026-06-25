@@ -196,6 +196,7 @@ export default function AdminSettings() {
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
+                  </div>
                 </div>
 
                 {category.actions && category.actions.length > 0 && (
