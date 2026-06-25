@@ -196,8 +196,49 @@ export default function AdminSettings() {
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
-                  </div>
                 </div>
+
+                {category.actions && category.actions.length > 0 && (
+                  <div className="space-y-3 pt-2">
+                    {category.actions.some(a => a.type === "request") && (
+                      <div className="space-y-1">
+                        <span className="text-[11px] font-semibold text-muted-foreground block">
+                          Ações enviadas no payload (Z-API -> Webhook):
+                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {category.actions.filter(a => a.type === "request").map((act) => (
+                            <span
+                              key={act.id}
+                              className="text-[10px] bg-[#8A3CFF]/10 text-[#8A3CFF] dark:text-[#A770FF] px-2 py-0.5 rounded-md font-mono border border-[#8A3CFF]/20"
+                              title={act.description}
+                            >
+                              {act.id}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {category.actions.some(a => a.type === "event") && (
+                      <div className="space-y-1">
+                        <span className="text-[11px] font-semibold text-muted-foreground block">
+                          Eventos recebidos (Webhook -> Qualify):
+                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {category.actions.filter(a => a.type === "event").map((act) => (
+                            <span
+                              key={act.id}
+                              className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-md font-mono border border-emerald-500/20"
+                              title={act.description}
+                            >
+                              {act.id}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-muted/30">
                   <div className="flex items-center gap-2">

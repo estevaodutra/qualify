@@ -14,16 +14,22 @@ export function routeZApiRequest(endpoint: string, method: string, requestBody: 
     cleanEndpoint.includes("/update-group") ||
     cleanEndpoint.includes("/create-group")
   ) {
-    let action = "group_action";
-    if (cleanEndpoint.includes("/group-members")) action = "group_members";
-    else if (cleanEndpoint.includes("/group-invitation-link")) action = "group_invitation_link";
-    else if (cleanEndpoint === "/groups" || cleanEndpoint === "/group") action = "groups";
-    else if (cleanEndpoint.includes("/create-group")) action = "group_create";
-    else if (cleanEndpoint.includes("/update-group-name")) action = "group_update_name";
-    else if (cleanEndpoint.includes("/update-group-photo")) action = "group_update_photo";
-    else if (cleanEndpoint.includes("/update-group-description")) action = "group_update_description";
+    let action = "group.list"; // default fallback for groups
+    if (cleanEndpoint.includes("/group-members")) action = "group.get_members";
+    else if (cleanEndpoint.includes("/group-invitation-link")) action = "group.get_invite_link";
+    else if (cleanEndpoint.includes("/revoke-group-invitation-link")) action = "group.revoke_invite_link";
+    else if (cleanEndpoint.includes("/promote-group-admin")) action = "group.promote_admin";
+    else if (cleanEndpoint.includes("/demote-group-admin")) action = "group.demote_admin";
+    else if (cleanEndpoint.includes("/leave-group")) action = "group.leave";
+    else if (cleanEndpoint.includes("/create-group")) action = "group.create";
+    else if (cleanEndpoint.includes("/update-group-name")) action = "group.update_name";
+    else if (cleanEndpoint.includes("/update-group-photo")) action = "group.update_photo";
+    else if (cleanEndpoint.includes("/update-group-description")) action = "group.update_description";
     else if (cleanEndpoint.includes("/update-group-members")) {
-      action = requestBody?.action ? `group_${requestBody.action.toLowerCase()}_member` : "group_update_members";
+      const memberAction = requestBody?.action?.toLowerCase();
+      if (memberAction === "add") action = "group.add_member";
+      else if (memberAction === "remove") action = "group.remove_member";
+      else action = "group.update_members";
     }
     return {
       url: "https://n8n.6ksfuf.easypanel.host/webhook/manager_groups",
@@ -37,7 +43,22 @@ export function routeZApiRequest(endpoint: string, method: string, requestBody: 
     cleanEndpoint.includes("/delete-message") ||
     cleanEndpoint.includes("/read-message")
   ) {
-    const action = cleanEndpoint.replace(/^\//, "").replace(/-/g, "_");
+    let action = "message.send_text"; // default fallback for messages
+    if (cleanEndpoint.includes("/send-image")) action = "message.send_image";
+    else if (cleanEndpoint.includes("/send-video")) action = "message.send_video";
+    else if (cleanEndpoint.includes("/send-audio")) action = "message.send_audio";
+    else if (cleanEndpoint.includes("/send-document")) action = "message.send_document";
+    else if (cleanEndpoint.includes("/send-sticker")) action = "message.send_sticker";
+    else if (cleanEndpoint.includes("/send-location")) action = "message.send_location";
+    else if (cleanEndpoint.includes("/send-contact")) action = "message.send_contact";
+    else if (cleanEndpoint.includes("/send-buttons")) action = "message.send_buttons";
+    else if (cleanEndpoint.includes("/send-list")) action = "message.send_list";
+    else if (cleanEndpoint.includes("/send-poll")) action = "message.send_poll";
+    else if (cleanEndpoint.includes("/send-reaction")) action = "message.send_reaction";
+    else if (cleanEndpoint.includes("/send-media")) action = "message.send_media";
+    else if (cleanEndpoint.includes("/delete-message")) action = "message.delete";
+    else if (cleanEndpoint.includes("/read-message")) action = "message.read";
+
     return {
       url: "https://n8n.6ksfuf.easypanel.host/webhook/manager_messages",
       action
@@ -49,10 +70,19 @@ export function routeZApiRequest(endpoint: string, method: string, requestBody: 
     cleanEndpoint.includes("/phone-exists") ||
     cleanEndpoint.includes("/block-contact") ||
     cleanEndpoint.includes("/unblock-contact") ||
-    cleanEndpoint.includes("/contacts")
+    cleanEndpoint.includes("/contacts") ||
+    cleanEndpoint.includes("/contact-profile") ||
+    cleanEndpoint.includes("/contact-photo") ||
+    cleanEndpoint.includes("/business-info")
   ) {
-    let action = "contact_action";
-    if (cleanEndpoint.includes("/phone-exists")) action = "phone_exists";
+    let action = "contact.list"; // default fallback for contacts
+    if (cleanEndpoint.includes("/phone-exists")) action = "contact.check_exists";
+    else if (cleanEndpoint.includes("/block-contact")) action = "contact.block";
+    else if (cleanEndpoint.includes("/unblock-contact")) action = "contact.unblock";
+    else if (cleanEndpoint.includes("/contact-profile")) action = "contact.get_profile";
+    else if (cleanEndpoint.includes("/contact-photo")) action = "contact.get_photo";
+    else if (cleanEndpoint.includes("/business-info")) action = "contact.get_business_info";
+
     return {
       url: "https://n8n.6ksfuf.easypanel.host/webhook/manager_contacts",
       action
@@ -64,19 +94,35 @@ export function routeZApiRequest(endpoint: string, method: string, requestBody: 
     cleanEndpoint.includes("/chats") ||
     cleanEndpoint.includes("/mark-as-read") ||
     cleanEndpoint.includes("/archive-chat") ||
-    cleanEndpoint.includes("/pin-chat")
+    cleanEndpoint.includes("/pin-chat") ||
+    cleanEndpoint.includes("/mute-chat") ||
+    cleanEndpoint.includes("/unmute-chat") ||
+    cleanEndpoint.includes("/clear-chat") ||
+    cleanEndpoint.includes("/delete-chat")
   ) {
+    let action = "chat.list"; // default fallback for chats
+    if (cleanEndpoint.includes("/mark-as-read")) action = "chat.mark_read";
+    else if (cleanEndpoint.includes("/archive-chat")) action = "chat.archive";
+    else if (cleanEndpoint.includes("/pin-chat")) action = "chat.pin";
+    else if (cleanEndpoint.includes("/mute-chat")) action = "chat.mute";
+    else if (cleanEndpoint.includes("/unmute-chat")) action = "chat.unmute";
+    else if (cleanEndpoint.includes("/clear-chat")) action = "chat.clear";
+    else if (cleanEndpoint.includes("/delete-chat")) action = "chat.delete";
+
     return {
       url: "https://n8n.6ksfuf.easypanel.host/webhook/manager_chats",
-      action: cleanEndpoint.replace(/^\//, "").replace(/-/g, "_")
+      action
     };
   }
 
   // 5. Status Management
-  if (cleanEndpoint.includes("/status-") || cleanEndpoint.includes("/send-status")) {
+  if (cleanEndpoint.includes("/status-") || cleanEndpoint.includes("/send-status") || cleanEndpoint === "/status") {
+    let action = "status.list";
+    if (cleanEndpoint.includes("/status-") || cleanEndpoint.includes("/send-status")) action = "status.send";
+
     return {
       url: "https://n8n.6ksfuf.easypanel.host/webhook/manager_status",
-      action: cleanEndpoint.replace(/^\//, "").replace(/-/g, "_")
+      action
     };
   }
 
@@ -87,20 +133,25 @@ export function routeZApiRequest(endpoint: string, method: string, requestBody: 
     cleanEndpoint.includes("/collection") ||
     cleanEndpoint.includes("/business")
   ) {
+    let action = "business.get_catalog";
+    if (cleanEndpoint.includes("/product")) action = "business.send_product";
+    else if (cleanEndpoint.includes("/business-profile")) action = "business.get_profile";
+
     return {
       url: "https://n8n.6ksfuf.easypanel.host/webhook/manager_whatsapp_business",
-      action: cleanEndpoint.replace(/^\//, "").replace(/-/g, "_")
+      action
     };
   }
 
   // 7. Instance Management (Fallback/Default)
-  let instanceAction = "instance_action";
-  if (cleanEndpoint.includes("/status")) instanceAction = "status";
-  else if (cleanEndpoint.includes("/restart")) instanceAction = "restart";
-  else if (cleanEndpoint.includes("/disconnect")) instanceAction = "disconnect";
-  else if (cleanEndpoint.includes("/qr-code")) instanceAction = "qrcode";
-  else if (cleanEndpoint.includes("/update-every-webhooks")) instanceAction = "update_every_webhooks";
-  else if (cleanEndpoint.includes("/update-webhook-")) instanceAction = "update_webhook";
+  let instanceAction = "instance.status";
+  if (cleanEndpoint.includes("/status")) instanceAction = "instance.status";
+  else if (cleanEndpoint.includes("/restart")) instanceAction = "instance.restart";
+  else if (cleanEndpoint.includes("/disconnect")) instanceAction = "instance.disconnect";
+  else if (cleanEndpoint.includes("/qr-code")) instanceAction = "instance.qrcode";
+  else if (cleanEndpoint.includes("/connect")) instanceAction = "instance.connect";
+  else if (cleanEndpoint.includes("/update-every-webhooks")) instanceAction = "instance.update_every_webhooks";
+  else if (cleanEndpoint.includes("/update-webhook")) instanceAction = "instance.update_webhook";
 
   return {
     url: "https://n8n.6ksfuf.easypanel.host/webhook/manager_instance",
