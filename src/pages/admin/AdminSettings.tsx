@@ -204,7 +204,7 @@ export default function AdminSettings() {
                     {category.actions.some(a => a.type === "request") && (
                       <div className="space-y-1">
                         <span className="text-[11px] font-semibold text-muted-foreground block">
-                          Ações enviadas no payload (Z-API -> Webhook):
+                          {"Ações enviadas no payload (Z-API -> Webhook):"}
                         </span>
                         <div className="flex flex-wrap gap-1">
                           {category.actions.filter(a => a.type === "request").map((act) => (
@@ -223,7 +223,7 @@ export default function AdminSettings() {
                     {category.actions.some(a => a.type === "event") && (
                       <div className="space-y-1">
                         <span className="text-[11px] font-semibold text-muted-foreground block">
-                          Eventos recebidos (Webhook -> Qualify):
+                          {"Eventos recebidos (Webhook -> Qualify):"}
                         </span>
                         <div className="flex flex-wrap gap-1">
                           {category.actions.filter(a => a.type === "event").map((act) => (
