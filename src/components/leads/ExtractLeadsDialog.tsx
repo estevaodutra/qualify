@@ -232,7 +232,7 @@ export function ExtractLeadsDialog({ open, onOpenChange }: Props) {
       const { data: proxyData, error: proxyError } = await supabase.functions.invoke("zapi-proxy", {
         body: {
           instanceId: selectedInstance.id,
-          endpoint: "/chats",
+          endpoint: "/groups",
           method: "GET",
         },
       });

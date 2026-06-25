@@ -17,6 +17,7 @@ export function routeZApiRequest(endpoint: string, method: string, requestBody: 
     let action = "group_action";
     if (cleanEndpoint.includes("/group-members")) action = "group_members";
     else if (cleanEndpoint.includes("/group-invitation-link")) action = "group_invitation_link";
+    else if (cleanEndpoint === "/groups" || cleanEndpoint === "/group") action = "groups";
     else if (cleanEndpoint.includes("/create-group")) action = "group_create";
     else if (cleanEndpoint.includes("/update-group-name")) action = "group_update_name";
     else if (cleanEndpoint.includes("/update-group-photo")) action = "group_update_photo";

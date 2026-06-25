@@ -91,7 +91,7 @@ export function CreatePirateCampaignDialog({
       const { data: proxyData, error: proxyError } = await supabase.functions.invoke("zapi-proxy", {
         body: {
           instanceId: instance.id,
-          endpoint: "/chats",
+          endpoint: "/groups",
           method: "GET",
         },
       });
