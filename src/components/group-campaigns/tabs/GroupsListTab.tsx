@@ -15,6 +15,7 @@ import { useLanguage } from "@/i18n/LanguageContext";
 import { useWebhookConfigs, getWebhookUrlForCategory } from "@/hooks/useWebhookConfigs";
 import { buildGroupPayload } from "@/lib/webhook-utils";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import {
   GroupUpdateNameModal,
   GroupUpdatePhotoModal,
