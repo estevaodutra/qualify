@@ -30,7 +30,7 @@ export default function AdminSettings() {
       webhookCategories.forEach((cat) => {
         const customConfig = configs.find((c) => c.category === cat.id);
         state[cat.id] = {
-          url: customConfig?.url || "",
+          url: customConfig?.url || cat.defaultUrl || "",
           isActive: customConfig?.is_active ?? true,
         };
       });
@@ -71,10 +71,11 @@ export default function AdminSettings() {
 
   const handleReset = async (catId: string) => {
     await deleteConfig.mutateAsync(catId);
+    const cat = webhookCategories.find((c) => c.id === catId);
     setFormState((prev) => ({
       ...prev,
       [catId]: {
-        url: "",
+        url: cat?.defaultUrl || "",
         isActive: true,
       },
     }));
