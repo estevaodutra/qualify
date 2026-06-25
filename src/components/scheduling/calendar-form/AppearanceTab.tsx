@@ -10,6 +10,7 @@ import { Slider } from "@/components/ui/slider";
 import { supabase } from "@/integrations/supabase/client";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useCompany } from "@/contexts/CompanyContext";
 
 export interface AppearanceTabState {
   logoUrl: string;
@@ -61,6 +62,7 @@ interface Props {
 export function AppearanceTab({ state, onChange }: Props) {
   const { toast } = useToast();
   const [uploading, setUploading] = useState<"logo" | "bg" | null>(null);
+  const { activeCompanyId } = useCompany();
 
   const update = <K extends keyof AppearanceTabState>(key: K, value: AppearanceTabState[K]) => {
     onChange({ ...state, [key]: value });
@@ -70,7 +72,9 @@ export function AppearanceTab({ state, onChange }: Props) {
     setUploading(kind);
     try {
       const ext = file.name.split(".").pop();
-      const path = `${kind}/${crypto.randomUUID()}.${ext}`;
+      const path = activeCompanyId
+        ? `${activeCompanyId}/${kind}/${crypto.randomUUID()}.${ext}`
+        : `${kind}/${crypto.randomUUID()}.${ext}`;
       const { error } = await (supabase as any).storage.from("scheduling-assets").upload(path, file);
       if (error) throw error;
       const { data } = (supabase as any).storage.from("scheduling-assets").getPublicUrl(path);
