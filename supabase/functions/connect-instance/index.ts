@@ -108,12 +108,18 @@ Deno.serve(async (req) => {
       );
     }
 
-    const data = await zapiResponse.json();
+    const responseText = await zapiResponse.text();
+    let data = null;
+    try {
+      data = responseText ? JSON.parse(responseText) : null;
+    } catch (e) {
+      console.error("Failed to parse Z-API response as JSON:", responseText);
+    }
 
     if (!zapiResponse.ok) {
-      console.error(`[connect-instance] Z-API Error (HTTP ${zapiResponse.status}):`, data);
+      console.error(`[connect-instance] Z-API Error (HTTP ${zapiResponse.status}):`, data || responseText);
       return new Response(
-        JSON.stringify({ error: "Z-API request failed", details: data }),
+        JSON.stringify({ error: "Z-API request failed", details: data || responseText }),
         { status: zapiResponse.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

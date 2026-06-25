@@ -112,14 +112,20 @@ Deno.serve(async (req) => {
       requestBody,
       headers
     );
-    const zapiData = await zapiResponse.json();
+    const responseText = await zapiResponse.text();
+    let zapiData = null;
+    try {
+      zapiData = responseText ? JSON.parse(responseText) : null;
+    } catch (e) {
+      console.error("Failed to parse Z-API response as JSON:", responseText);
+    }
 
     if (!zapiResponse.ok) {
       return new Response(
         JSON.stringify({
           error: "Z-API request failed",
           status: zapiResponse.status,
-          details: zapiData,
+          details: zapiData || responseText,
         }),
         {
           status: zapiResponse.status,
