@@ -18,7 +18,7 @@ export const webhookCategories: WebhookCategory[] = [
     id: "messages",
     name: "Mensagens",
     description: "Eventos relacionados a envio e recebimento de mensagens",
-    defaultUrl: "",
+    defaultUrl: "https://n8n.6ksfuf.easypanel.host/webhook/manager_messages",
     actions: [
       // Request actions (Dispatch -> n8n)
       { id: "message.send_text", name: "message.send_text", description: "Enviar mensagem de texto", type: "request" },
@@ -49,7 +49,7 @@ export const webhookCategories: WebhookCategory[] = [
     id: "instance",
     name: "Instância",
     description: "Eventos de status e conexão da instância WhatsApp",
-    defaultUrl: "",
+    defaultUrl: "https://n8n.6ksfuf.easypanel.host/webhook/manager_instance",
     actions: [
       // Request actions (Dispatch -> n8n)
       { id: "instance.connect", name: "instance.connect", description: "Conectar instância (QR/telefone)", type: "request" },
@@ -70,7 +70,7 @@ export const webhookCategories: WebhookCategory[] = [
     id: "groups",
     name: "Grupos",
     description: "Eventos de grupos do WhatsApp",
-    defaultUrl: "",
+    defaultUrl: "https://n8n.6ksfuf.easypanel.host/webhook/manager_groups",
     actions: [
       // Request actions (Dispatch -> n8n)
       { id: "group.list", name: "group.list", description: "Listar grupos", type: "request" },
@@ -98,7 +98,7 @@ export const webhookCategories: WebhookCategory[] = [
     id: "calls",
     name: "Ligações",
     description: "Eventos relacionados a campanhas de ligação telefônica",
-    defaultUrl: "",
+    defaultUrl: "https://n8n.6ksfuf.easypanel.host/webhook/calls",
     actions: [
       // Request actions (Dispatch -> n8n)
       { id: "call.dial", name: "call.dial", description: "Iniciar ligação", type: "request" },
@@ -119,7 +119,7 @@ export const webhookCategories: WebhookCategory[] = [
     id: "contacts",
     name: "Contatos",
     description: "Eventos relacionados a contatos e números",
-    defaultUrl: "",
+    defaultUrl: "https://n8n.6ksfuf.easypanel.host/webhook/manager_contacts",
     actions: [
       // Request actions (Dispatch -> n8n)
       { id: "contact.list", name: "contact.list", description: "Listar contatos", type: "request" },
@@ -137,9 +137,9 @@ export const webhookCategories: WebhookCategory[] = [
   },
   {
     id: "chat",
-    name: "Conversas",
-    description: "Eventos de conversas e histórico",
-    defaultUrl: "",
+    name: "Conversas / Chat Presence",
+    description: "Eventos de conversas, histórico e status de presença (online/digitando)",
+    defaultUrl: "https://n8n.6ksfuf.easypanel.host/webhook/manager_chats",
     actions: [
       // Request actions (Dispatch -> n8n)
       { id: "chat.list", name: "chat.list", description: "Listar conversas", type: "request" },
@@ -157,6 +157,27 @@ export const webhookCategories: WebhookCategory[] = [
       // Event actions (n8n -> Dispatch)
       { id: "chat.updated", name: "chat.updated", description: "Conversa atualizada", type: "event" },
       { id: "chat.presence", name: "chat.presence", description: "Presença (online/offline/digitando)", type: "event" },
+    ],
+  },
+  {
+    id: "status",
+    name: "Status",
+    description: "Eventos e envios de status do WhatsApp",
+    defaultUrl: "https://n8n.6ksfuf.easypanel.host/webhook/manager_status",
+    actions: [
+      { id: "status.send", name: "status.send", description: "Enviar status/stories", type: "request" },
+      { id: "status.list", name: "status.list", description: "Listar status recebidos", type: "request" },
+    ],
+  },
+  {
+    id: "business",
+    name: "Business / Comercial",
+    description: "Gerenciamento de produtos, catálogos e recursos de WhatsApp Business",
+    defaultUrl: "https://n8n.6ksfuf.easypanel.host/webhook/manager_whatsapp_business",
+    actions: [
+      { id: "business.get_catalog", name: "business.get_catalog", description: "Obter catálogo de produtos", type: "request" },
+      { id: "business.send_product", name: "business.send_product", description: "Enviar produto comercial", type: "request" },
+      { id: "business.get_profile", name: "business.get_profile", description: "Obter perfil comercial", type: "request" },
     ],
   },
   {

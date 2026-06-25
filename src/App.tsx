@@ -60,6 +60,7 @@ import AdminUsers from "./pages/admin/AdminUsers";
 import AdminTransactions from "./pages/admin/AdminTransactions";
 import AdminEventDictionary from "./pages/admin/AdminEventDictionary";
 import AdminPlaceholder from "./components/admin/AdminPlaceholder";
+import AdminSettings from "./pages/admin/AdminSettings";
 
 const App = () => {
   const [queryClient] = useState(() => new QueryClient());
@@ -180,7 +181,7 @@ const App = () => {
                       <Route path="logs" element={<Logs />} />
                       <Route path="events" element={<WebhookEvents />} />
                       <Route path="dicionario" element={<AdminEventDictionary />} />
-                      <Route path="configuracoes" element={<AdminPlaceholder title="Configurações" description="Ajustes globais da plataforma Qualify." />} />
+                      <Route path="configuracoes" element={<AdminSettings />} />
                     </Route>
 
                     <Route path="*" element={<NotFound />} />

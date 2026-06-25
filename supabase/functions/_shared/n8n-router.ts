@@ -1,3 +1,5 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+
 export interface RoutedRequest {
   url: string;
   action: string;
@@ -126,6 +128,52 @@ function normalizeGroupJids(obj: any): any {
   return obj;
 }
 
+function getCategoryKeyForEndpoint(endpoint: string): string {
+  const cleanEndpoint = endpoint.split("?")[0].toLowerCase();
+  if (
+    cleanEndpoint.includes("/group") ||
+    cleanEndpoint.includes("/update-group") ||
+    cleanEndpoint.includes("/create-group")
+  ) {
+    return "groups";
+  }
+  if (
+    cleanEndpoint.includes("/send-") ||
+    cleanEndpoint.includes("/delete-message") ||
+    cleanEndpoint.includes("/read-message")
+  ) {
+    return "messages";
+  }
+  if (
+    cleanEndpoint.includes("/phone-exists") ||
+    cleanEndpoint.includes("/block-contact") ||
+    cleanEndpoint.includes("/unblock-contact") ||
+    cleanEndpoint.includes("/contacts")
+  ) {
+    return "contacts";
+  }
+  if (
+    cleanEndpoint.includes("/chats") ||
+    cleanEndpoint.includes("/mark-as-read") ||
+    cleanEndpoint.includes("/archive-chat") ||
+    cleanEndpoint.includes("/pin-chat")
+  ) {
+    return "chat";
+  }
+  if (cleanEndpoint.includes("/status-") || cleanEndpoint.includes("/send-status")) {
+    return "status";
+  }
+  if (
+    cleanEndpoint.includes("/product") ||
+    cleanEndpoint.includes("/label") ||
+    cleanEndpoint.includes("/collection") ||
+    cleanEndpoint.includes("/business")
+  ) {
+    return "business";
+  }
+  return "instance";
+}
+
 export async function fetchZApi(
   instanceId: string,
   instanceToken: string,
@@ -161,6 +209,39 @@ export async function fetchZApi(
 
   // Route to the correct n8n endpoint
   const routed = routeZApiRequest(endpoint, method, content);
+
+  // 1. Get user_id from instances table to resolve custom webhooks
+  let webhookUrl = "";
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (supabaseUrl && supabaseServiceKey) {
+      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+      const { data: instance } = await supabase
+        .from("instances")
+        .select("user_id")
+        .eq("external_instance_id", instanceId)
+        .maybeSingle();
+
+      if (instance?.user_id) {
+        const categoryKey = getCategoryKeyForEndpoint(endpoint);
+        const { data: webhookConfig } = await supabase
+          .from("webhook_configs")
+          .select("url, is_active")
+          .eq("user_id", instance.user_id)
+          .eq("category", categoryKey)
+          .maybeSingle();
+
+        if (webhookConfig?.is_active && webhookConfig?.url) {
+          webhookUrl = webhookConfig.url;
+        }
+      }
+    }
+  } catch (dbErr: any) {
+    console.error("[n8n-router] Error fetching webhook config from DB:", dbErr.message);
+  }
+
+  const targetUrl = webhookUrl || routed.url;
   
   // Extract API key if available
   const apiKey = headers["Client-Token"] || headers["Authorization"] || Deno.env.get("CLIENT_TOKEN") || "";
@@ -174,9 +255,9 @@ export async function fetchZApi(
     content: content
   };
 
-  console.log(`[n8n-router] Routing: ${endpoint} (${method}) -> ${routed.url} [Action: ${routed.action}]`);
+  console.log(`[n8n-router] Routing: ${endpoint} (${method}) -> ${targetUrl} [Action: ${routed.action}]`);
 
-  const response = await fetch(routed.url, {
+  const response = await fetch(targetUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
