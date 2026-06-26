@@ -252,10 +252,13 @@ export function NodeConfigPanel({ node, onUpdate, onClose }: NodeConfigPanelProp
                 />
               </div>
               <div className="flex items-center justify-between">
-                <Label>Mensagem de voz (PTT)</Label>
+                <div className="space-y-0.5">
+                  <Label>Waveform</Label>
+                  <p className="text-xs text-muted-foreground">Enviar como mensagem de voz (ondinhas)</p>
+                </div>
                 <Switch
-                  checked={(node.config.isVoiceMessage as boolean) ?? true}
-                  onCheckedChange={(checked) => updateConfig("isVoiceMessage", checked)}
+                  checked={(node.config.waveform as boolean) ?? true}
+                  onCheckedChange={(checked) => updateConfig("waveform", checked)}
                 />
               </div>
               <div className="flex items-center justify-between">
