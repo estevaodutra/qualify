@@ -263,9 +263,10 @@ export function useInstances() {
   // Delete instance mutation
   const deleteInstanceMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("instances").delete().eq("id", id);
+      const { error, count } = await supabase.from("instances").delete({ count: "exact" }).eq("id", id);
 
       if (error) throw error;
+      if (count === 0) throw new Error("A instância não pôde ser excluída. Verifique suas permissões.");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["instances"] });
