@@ -371,7 +371,7 @@ export async function getInstanceStatus(instance: any): Promise<any> {
     null,
     getZApiHeaders(),
     undefined,
-    false // triggerN8n = false
+    true // triggerN8n = true (user wants status to reach N8N)
   );
   
   if (!response.ok) {
