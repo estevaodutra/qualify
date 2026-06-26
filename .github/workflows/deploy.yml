@@ -1,0 +1,29 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches:
+      - master
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          script: |
+            # Ajuste o caminho abaixo para a pasta onde fica o projeto na sua VPS
+            cd /caminho/para/sua/pasta/qualify
+            
+            # Atualiza o código
+            git pull origin master
+            
+            # Caso o Supabase rode via Docker e você precise atualizar as functions (ajuste conforme seu uso real)
+            # Exemplo:
+            # supabase functions deploy
+            # ou docker-compose restart
