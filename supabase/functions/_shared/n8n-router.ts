@@ -116,7 +116,7 @@ export function routeZApiRequest(endpoint: string, method: string, requestBody: 
   }
 
   // 5. Status Management
-  if (cleanEndpoint.includes("/status-") || cleanEndpoint.includes("/send-status") || cleanEndpoint === "/status") {
+  if (cleanEndpoint.includes("/status-") || cleanEndpoint.includes("/send-status")) {
     let action = "status.list";
     if (cleanEndpoint.includes("/status-") || cleanEndpoint.includes("/send-status")) action = "status.send";
 
