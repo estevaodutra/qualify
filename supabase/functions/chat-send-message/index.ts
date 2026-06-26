@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
 
     // Check if the user is active in the conversation's company
     let hasAccess = false;
-    const { data: membership, error: memberErr } = await adminClient
+    const { data: membership } = await adminClient
       .from("company_members")
       .select("id")
       .eq("company_id", conv.company_id)
