@@ -56,6 +56,7 @@ Deno.serve(async (req) => {
       }
 
       // Verify company access
+      let hasAccess = false;
       const { data: membership } = await supabase
         .from('company_members')
         .select('id')
@@ -63,8 +64,20 @@ Deno.serve(async (req) => {
         .eq('user_id', userId)
         .eq('is_active', true)
         .maybeSingle();
+      
+      if (membership) {
+        hasAccess = true;
+      } else {
+        // Check if user is superadmin
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('is_superadmin')
+          .eq('id', userId)
+          .maybeSingle();
+        if (profile?.is_superadmin) hasAccess = true;
+      }
 
-      if (!membership) {
+      if (!hasAccess) {
         return new Response(JSON.stringify({ error: 'Access denied' }), {
           status: 403,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -108,7 +121,17 @@ Deno.serve(async (req) => {
         .eq('user_id', userId)
         .eq('is_active', true)
         .maybeSingle();
-      hasAccess = !!membership;
+      if (membership) hasAccess = true;
+    }
+    
+    if (!hasAccess) {
+      // Check if user is superadmin
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_superadmin')
+        .eq('id', userId)
+        .maybeSingle();
+      if (profile?.is_superadmin) hasAccess = true;
     }
 
     if (!hasAccess) {

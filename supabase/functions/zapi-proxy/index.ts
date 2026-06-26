@@ -64,6 +64,7 @@ Deno.serve(async (req) => {
 
     // Verify ownership: check if user owns the instance or is a company member
     if (instance.user_id !== user.id) {
+      let hasAccess = false;
       // Check company membership
       const { data: membership } = await adminClient
         .from("company_members")
@@ -72,14 +73,18 @@ Deno.serve(async (req) => {
         .eq("is_active", true)
         .limit(1);
 
-      // Also check if instance belongs to any company the user is part of
-      const { data: instanceCheck } = await adminClient
-        .from("instances")
-        .select("user_id")
-        .eq("id", instanceId)
-        .single();
+      if (membership && membership.length > 0) {
+        hasAccess = true;
+      } else {
+        const { data: profile } = await adminClient
+          .from("profiles")
+          .select("is_superadmin")
+          .eq("id", user.id)
+          .maybeSingle();
+        if (profile?.is_superadmin) hasAccess = true;
+      }
 
-      if (!membership || membership.length === 0) {
+      if (!hasAccess) {
         return new Response(
           JSON.stringify({ error: "Unauthorized: you do not have access to this instance" }),
           { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -87,12 +92,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (!instance.external_instance_id || !instance.external_instance_token) {
-      return new Response(
-        JSON.stringify({ error: "Instance credentials not configured" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    // Removed credential strict check to allow routing to N8N without DB credentials
 
     // Build headers with Client-Token and Authorization if present
     const headers: Record<string, string> = {
@@ -105,8 +105,8 @@ Deno.serve(async (req) => {
 
     // Make proxy request to Z-API via n8n router
     const zapiResponse = await fetchZApi(
-      instance.external_instance_id,
-      instance.external_instance_token,
+      instance.external_instance_id || "",
+      instance.external_instance_token || "",
       endpoint,
       method,
       requestBody,

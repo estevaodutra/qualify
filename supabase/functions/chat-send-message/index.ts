@@ -62,15 +62,27 @@ Deno.serve(async (req) => {
     }
 
     // Check if the user is active in the conversation's company
+    let hasAccess = false;
     const { data: membership, error: memberErr } = await adminClient
       .from("company_members")
       .select("id")
       .eq("company_id", conv.company_id)
       .eq("user_id", user.id)
       .eq("is_active", true)
-      .single();
+      .maybeSingle();
 
-    if (memberErr || !membership) {
+    if (membership) {
+      hasAccess = true;
+    } else {
+      const { data: profile } = await adminClient
+        .from("profiles")
+        .select("is_superadmin")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (profile?.is_superadmin) hasAccess = true;
+    }
+
+    if (!hasAccess) {
       return new Response(
         JSON.stringify({ error: "Forbidden: user is not an active member of this company" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }

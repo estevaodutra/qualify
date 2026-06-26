@@ -62,6 +62,7 @@ Deno.serve(async (req) => {
 
     // Check permissions
     if (instance.user_id !== user.id) {
+      let hasAccess = false;
       const { data: membership } = await adminClient
         .from("company_members")
         .select("id")
@@ -69,7 +70,18 @@ Deno.serve(async (req) => {
         .eq("is_active", true)
         .limit(1);
 
-      if (!membership || membership.length === 0) {
+      if (membership && membership.length > 0) {
+        hasAccess = true;
+      } else {
+        const { data: profile } = await adminClient
+          .from("profiles")
+          .select("is_superadmin")
+          .eq("id", user.id)
+          .maybeSingle();
+        if (profile?.is_superadmin) hasAccess = true;
+      }
+
+      if (!hasAccess) {
         return new Response(
           JSON.stringify({ error: "Unauthorized access to instance" }),
           { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -78,12 +90,8 @@ Deno.serve(async (req) => {
     }
 
     const { external_instance_id: id, external_instance_token: token_val } = instance;
-    if (!id || !token_val) {
-      return new Response(
-        JSON.stringify({ error: "Instance credentials not configured" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const resolvedId = id || "";
+    const resolvedToken = token_val || "";
 
     let zapiResponse;
     
@@ -91,8 +99,8 @@ Deno.serve(async (req) => {
       const cleanPhone = phone?.replace(/\D/g, "");
       console.log(`[connect-instance] Generating pairing code for ${cleanPhone}`);
       zapiResponse = await fetchZApi(
-        id,
-        token_val,
+        resolvedId,
+        resolvedToken,
         "/pairing-code",
         "POST",
         { phone: cleanPhone }
@@ -100,8 +108,8 @@ Deno.serve(async (req) => {
     } else {
       console.log(`[connect-instance] Generating QR code image`);
       zapiResponse = await fetchZApi(
-        id,
-        token_val,
+        resolvedId,
+        resolvedToken,
         "/qr-code/image",
         "GET",
         null
