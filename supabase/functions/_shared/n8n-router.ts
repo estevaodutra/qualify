@@ -319,14 +319,26 @@ export async function fetchZApi(
 
   console.log(`[n8n-router] Routing: ${endpoint} (${method}) -> ${targetUrl} [Action: ${routed.action}]`);
 
-  const response = await fetch(targetUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(n8nPayload)
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 seconds timeout
 
-  return response;
+  try {
+    const response = await fetch(targetUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(n8nPayload),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new Error("N8N Webhook Timeout (Demorou mais de 15 segundos)");
+    }
+    throw err;
+  }
 }
 // Trigger

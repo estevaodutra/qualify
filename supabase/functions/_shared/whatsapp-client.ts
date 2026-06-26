@@ -387,17 +387,28 @@ export async function getInstanceStatus(instance: any, triggerN8n: boolean = tru
   const data = await response.json();
 
   // Normalize N8N custom webhook response format
-  if (Array.isArray(data) && data[0]?.instance) {
-    return {
-      connected: data[0].instance.connected === true || String(data[0].instance.connected).toLowerCase() === "true",
-      paymentStatus: "ACTIVE",
-      due: null,
-      returnedId: data[0].instance.id,
-      returnedToken: data[0].instance.token
-    };
+  let normalizedData = data;
+  if (Array.isArray(data)) {
+    if (data[0]?.instance) {
+      return {
+        connected: data[0].instance.connected === true || String(data[0].instance.connected).toLowerCase() === "true",
+        paymentStatus: "ACTIVE",
+        due: null,
+        returnedId: data[0].instance.id,
+        returnedToken: data[0].instance.token
+      };
+    }
+    normalizedData = data[0] || {};
   }
 
-  return data;
+  // If Z-API returned a messageId or zaapId, it is successful
+  const isSuccess = !!(normalizedData?.messageId || normalizedData?.zaapId || normalizedData?.id);
+  
+  return {
+    ...normalizedData,
+    ok: isSuccess || normalizedData?.ok === true,
+    status: response.status
+  };
 }
 
 // Register all webhooks in Z-API
