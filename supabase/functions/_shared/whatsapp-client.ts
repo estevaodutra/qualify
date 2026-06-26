@@ -103,8 +103,7 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
       body.video = config.url;
       body.caption = config.caption || "";
       if (config.isVideoNote !== undefined) {
-        body.ptv = config.isVideoNote;
-        body.PTV = config.isVideoNote; // Send both to be safe
+        body.PTV = config.isVideoNote;
       }
       if (config.viewOnce !== undefined) body.viewOnce = config.viewOnce;
       break;
