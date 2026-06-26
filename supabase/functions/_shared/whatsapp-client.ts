@@ -402,11 +402,15 @@ export async function getInstanceStatus(instance: any, triggerN8n: boolean = tru
   }
 
   // If Z-API returned a messageId or zaapId, it is successful
-  const isSuccess = !!(normalizedData?.messageId || normalizedData?.zaapId || normalizedData?.id);
+  const hasMessageId = !!(normalizedData?.messageId || normalizedData?.zaapId || normalizedData?.id);
+  const isMessageAction = payload.action.startsWith("message.");
+  
+  // If it's a message action, it MUST have a message ID to be successful
+  const isSuccess = isMessageAction ? hasMessageId : (hasMessageId || normalizedData?.ok === true);
   
   return {
     ...normalizedData,
-    ok: isSuccess || normalizedData?.ok === true,
+    ok: isSuccess,
     status: response.status
   };
 }
