@@ -271,11 +271,13 @@ export async function fetchZApi(
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (supabaseUrl && supabaseServiceKey) {
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
-      const { data: instance } = await supabase
+      const { data: instances } = await supabase
         .from("instances")
         .select("user_id, name")
         .eq("external_instance_id", instanceId)
-        .maybeSingle();
+        .limit(1);
+      
+      const instance = instances && instances.length > 0 ? instances[0] : null;
 
       if (instance?.user_id) {
         instanceName = instance.name || "";
