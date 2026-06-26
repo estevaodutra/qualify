@@ -263,8 +263,9 @@ export async function fetchZApi(
   // Route to the correct n8n endpoint
   const routed = routeZApiRequest(endpoint, method, content);
 
-  // 1. Get user_id from instances table to resolve custom webhooks
+  // 1. Get user_id and name from instances table to resolve custom webhooks
   let webhookUrl = "";
+  let instanceName = "";
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -272,11 +273,12 @@ export async function fetchZApi(
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
       const { data: instance } = await supabase
         .from("instances")
-        .select("user_id")
+        .select("user_id, name")
         .eq("external_instance_id", instanceId)
         .maybeSingle();
 
       if (instance?.user_id) {
+        instanceName = instance.name || "";
         const categoryKey = getCategoryKeyForEndpoint(endpoint);
         const { data: webhookConfig } = await supabase
           .from("webhook_configs")
@@ -303,6 +305,7 @@ export async function fetchZApi(
     provider: "z_api",
     instance_id: instanceId,
     instance_token: instanceToken,
+    instance_name: instanceName,
     api_key: apiKey,
     action: routed.action,
     content: content
