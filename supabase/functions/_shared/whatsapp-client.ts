@@ -360,7 +360,7 @@ export async function groupGetMembers(instance: any, groupJid: string): Promise<
 }
 
 // Fetch instance status
-export async function getInstanceStatus(instance: any): Promise<any> {
+export async function getInstanceStatus(instance: any, triggerN8n: boolean = true): Promise<any> {
   const { external_instance_id: id, external_instance_token: token } = instance;
   
   const response = await fetchZApi(
@@ -371,7 +371,7 @@ export async function getInstanceStatus(instance: any): Promise<any> {
     null,
     getZApiHeaders(),
     undefined,
-    true // triggerN8n = true (user wants status to reach N8N)
+    triggerN8n
   );
   
   if (!response.ok) {

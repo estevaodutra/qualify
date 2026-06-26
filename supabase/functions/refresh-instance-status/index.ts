@@ -63,9 +63,11 @@ Deno.serve(async (req) => {
 
     // Fetch status directly from Z-API for each instance
     const results = [];
+    const isManualRequest = instanceIdsToRefresh.length > 0;
+    
     for (const inst of instances) {
       try {
-        const zapiStatus = await getInstanceStatus(inst);
+        const zapiStatus = await getInstanceStatus(inst, isManualRequest);
         results.push({
           id: inst.external_instance_id,
           connected: zapiStatus.connected || false,
