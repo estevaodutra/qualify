@@ -54,7 +54,7 @@ export default function Settings() {
   const { theme, setTheme } = useTheme();
   const { language, setLanguage, t } = useLanguage();
   const { user } = useAuth();
-  const { activeCompany, refreshCompanies } = useCompany();
+  const { activeCompany, refetch: refreshCompanies } = useCompany();
   const location = useLocation();
   const navigate = useNavigate();
   
