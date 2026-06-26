@@ -1,29 +1,30 @@
-name: Deploy to VPS
+name: Deploy Edge Functions to VPS
 
 on:
   push:
     branches:
       - master
       - main
+    paths:
+      - 'supabase/functions/**'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          password: ${{ secrets.VPS_PASSWORD }}
-          script: |
-            # Ajuste o caminho abaixo para a pasta onde fica o projeto na sua VPS
-            cd /caminho/para/sua/pasta/qualify
-            
-            # Atualiza o código
-            git pull origin master
-            
-            # Caso o Supabase rode via Docker e você precise atualizar as functions (ajuste conforme seu uso real)
-            # Exemplo:
-            # supabase functions deploy
-            # ou docker-compose restart
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install sshpass
+        run: |
+          sudo apt-get update && sudo apt-get install -y sshpass
+
+      - name: Copy functions to VPS via Rsync
+        run: |
+          # Copia a pasta de functions local para o volume do Supabase na VPS
+          sshpass -p "${{ secrets.VPS_PASSWORD }}" rsync -avz -e "ssh -o StrictHostKeyChecking=no" supabase/functions/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/supabase-qualify/volumes/functions/
+
+      - name: Restart functions container
+        run: |
+          # Reinicia o container que roda as Edge Functions para carregar o novo código
+          sshpass -p "${{ secrets.VPS_PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker restart qualify-functions-1"
