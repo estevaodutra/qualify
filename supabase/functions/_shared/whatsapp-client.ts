@@ -106,14 +106,8 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
     case "message.send_audio":
       endpoint = "/send-audio";
       body.audio = config.url;
-      if (config.waveform !== undefined) {
-        body.waveform = config.waveform;
-      } else if (config.isVoiceMessage !== undefined) {
-        body.waveform = config.isVoiceMessage;
-      }
-      if (config.viewOnce !== undefined) {
-        body.viewOnce = config.viewOnce;
-      }
+      body.waveform = config.waveform ?? config.isVoiceMessage ?? true;
+      body.viewOnce = config.viewOnce ?? false;
       break;
 
     case "message.send_document":
@@ -196,9 +190,8 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
       } else if (mediaType === "audio") {
         endpoint = "/send-audio";
         body.audio = mediaUrl;
-        if (config.waveform !== undefined) body.waveform = config.waveform;
-        else if (config.isVoiceMessage !== undefined) body.waveform = config.isVoiceMessage;
-        if (config.viewOnce !== undefined) body.viewOnce = config.viewOnce;
+        body.waveform = config.waveform ?? config.isVoiceMessage ?? true;
+        body.viewOnce = config.viewOnce ?? false;
         delete body.caption;
       } else {
         endpoint = "/send-document";
