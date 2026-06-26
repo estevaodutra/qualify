@@ -95,12 +95,18 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
       endpoint = "/send-image";
       body.image = config.url;
       body.caption = config.caption || "";
+      if (config.viewOnce !== undefined) body.viewOnce = config.viewOnce;
       break;
 
     case "message.send_video":
       endpoint = "/send-video";
       body.video = config.url;
       body.caption = config.caption || "";
+      if (config.isVideoNote !== undefined) {
+        body.ptv = config.isVideoNote;
+        body.PTV = config.isVideoNote; // Send both to be safe
+      }
+      if (config.viewOnce !== undefined) body.viewOnce = config.viewOnce;
       break;
 
     case "message.send_audio":
