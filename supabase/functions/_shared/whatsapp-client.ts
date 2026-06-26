@@ -386,7 +386,9 @@ export async function getInstanceStatus(instance: any): Promise<any> {
     return {
       connected: data[0].instance.connected === true || String(data[0].instance.connected).toLowerCase() === "true",
       paymentStatus: "ACTIVE",
-      due: null
+      due: null,
+      returnedId: data[0].instance.id,
+      returnedToken: data[0].instance.token
     };
   }
 

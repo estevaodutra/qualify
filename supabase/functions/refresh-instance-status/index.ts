@@ -71,6 +71,8 @@ Deno.serve(async (req) => {
           connected: zapiStatus.connected || false,
           paymentStatus: zapiStatus.paymentStatus || "ACTIVE",
           due: zapiStatus.due || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          returnedId: zapiStatus.returnedId,
+          returnedToken: zapiStatus.returnedToken,
         });
       } catch (err: any) {
         console.error(`[status-refresh] Failed for ${inst.name}:`, err.message);
@@ -108,6 +110,13 @@ Deno.serve(async (req) => {
       }
       if (result.due) {
         updates.expiration_date = new Date(result.due).toISOString();
+      }
+
+      // Unlink instance if n8n custom response returns empty ID or Token
+      if (result.returnedId === "" || result.returnedToken === "") {
+        updates.external_instance_id = null;
+        updates.external_instance_token = null;
+        updates.status = "disconnected";
       }
 
       if (Object.keys(updates).length === 0) continue;
