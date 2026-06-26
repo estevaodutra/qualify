@@ -134,14 +134,6 @@ Deno.serve(async (req) => {
       }
 
       updatedCount++;
-      if (newStatus === "connected") {
-        try {
-          const webhookUrl = `${supabaseUrl}/functions/v1/webhook-inbound`;
-          await registerZApiWebhooks(instance, webhookUrl);
-        } catch (webhookErr) {
-          console.error("Error registering webhooks:", webhookErr);
-        }
-      }
 
       // Auto-register phone number when instance becomes connected
       if (newStatus === "connected" && previousStatus !== "connected") {
