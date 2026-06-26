@@ -309,14 +309,24 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
       };
     }
 
-    // Z-API returns: { zaapId: "...", messageId: "...", id: "..." }
-    // We normalize this.
+    // Normalize N8N custom webhook response format
+    let normalizedData = responseData;
+    if (Array.isArray(responseData)) {
+      normalizedData = responseData[0] || {};
+    }
+
+    const zaapId = normalizedData.zaapId || normalizedData.id || null;
+    const messageId = normalizedData.messageId || normalizedData.id || null;
+    const isMessageAction = action.startsWith("message.");
+    const hasId = !!(zaapId || messageId);
+    const isSuccess = isMessageAction ? hasId : true;
+
     return {
-      ok: true,
+      ok: isSuccess,
       status: response.status,
-      zaapId: responseData.zaapId || responseData.id || null,
-      messageId: responseData.messageId || responseData.id || null,
-      details: responseData,
+      zaapId,
+      messageId,
+      details: normalizedData,
       requestUrl: url,
       requestBody: body,
       curl,
@@ -387,7 +397,6 @@ export async function getInstanceStatus(instance: any, triggerN8n: boolean = tru
   const data = await response.json();
 
   // Normalize N8N custom webhook response format
-  let normalizedData = data;
   if (Array.isArray(data)) {
     if (data[0]?.instance) {
       return {
@@ -398,19 +407,11 @@ export async function getInstanceStatus(instance: any, triggerN8n: boolean = tru
         returnedToken: data[0].instance.token
       };
     }
-    normalizedData = data[0] || {};
   }
 
-  // If Z-API returned a messageId or zaapId, it is successful
-  const hasMessageId = !!(normalizedData?.messageId || normalizedData?.zaapId || normalizedData?.id);
-  const isMessageAction = payload.action.startsWith("message.");
-  
-  // If it's a message action, it MUST have a message ID to be successful
-  const isSuccess = isMessageAction ? hasMessageId : (hasMessageId || normalizedData?.ok === true);
-  
   return {
-    ...normalizedData,
-    ok: isSuccess,
+    ...data,
+    ok: true,
     status: response.status
   };
 }
