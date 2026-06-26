@@ -149,6 +149,7 @@ export function routeZApiRequest(endpoint: string, method: string, requestBody: 
   else if (cleanEndpoint.includes("/restart")) instanceAction = "instance.restart";
   else if (cleanEndpoint.includes("/disconnect")) instanceAction = "instance.disconnect";
   else if (cleanEndpoint.includes("/qr-code")) instanceAction = "instance.qrcode";
+  else if (cleanEndpoint.includes("/pairing-code")) instanceAction = "instance.pairing_code";
   else if (cleanEndpoint.includes("/connect")) instanceAction = "instance.connect";
   else if (cleanEndpoint.includes("/update-every-webhooks")) instanceAction = "instance.update_every_webhooks";
   else if (cleanEndpoint.includes("/update-webhook")) instanceAction = "instance.update_webhook";
