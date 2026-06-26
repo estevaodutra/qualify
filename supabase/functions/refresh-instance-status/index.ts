@@ -18,12 +18,33 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    let instanceIdsToRefresh: string[] = [];
+    if (req.method === "POST") {
+      try {
+        const bodyText = await req.text();
+        if (bodyText) {
+          const body = JSON.parse(bodyText);
+          if (body.instances && Array.isArray(body.instances)) {
+            instanceIdsToRefresh = body.instances.map((i: any) => i.id);
+          }
+        }
+      } catch (e) {
+        console.log("No valid JSON body, assuming cron or full refresh");
+      }
+    }
+
     // Fetch all instances that have external credentials
-    const { data: instances, error: fetchError } = await supabase
+    let query = supabase
       .from("instances")
       .select("id, name, phone, status, provider, external_instance_id, external_instance_token, user_id")
       .not("external_instance_id", "is", null)
       .not("external_instance_token", "is", null);
+
+    if (instanceIdsToRefresh.length > 0) {
+      query = query.in("id", instanceIdsToRefresh);
+    }
+
+    const { data: instances, error: fetchError } = await query;
 
     if (fetchError) {
       console.error("Error fetching instances:", fetchError);

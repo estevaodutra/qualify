@@ -433,7 +433,9 @@ export default function Instances() {
         }));
 
       if (instancesPayload.length > 0) {
-        const { error: refreshError } = await supabase.functions.invoke("refresh-instance-status");
+        const { error: refreshError } = await supabase.functions.invoke("refresh-instance-status", {
+          body: { instances: instancesPayload }
+        });
         if (refreshError) {
           console.error("Refresh status error:", refreshError);
         }
