@@ -233,7 +233,8 @@ export async function fetchZApi(
   endpoint: string,
   method: string,
   body: any,
-  headers: Record<string, string> = {}
+  headers: Record<string, string> = {},
+  internalDbId?: string
 ): Promise<Response> {
   // Normalize body/payload
   let content = body ? { ...body } : {};
@@ -271,11 +272,13 @@ export async function fetchZApi(
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (supabaseUrl && supabaseServiceKey) {
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
-      const { data: instances } = await supabase
-        .from("instances")
-        .select("user_id, name")
-        .eq("external_instance_id", instanceId)
-        .limit(1);
+      let query = supabase.from("instances").select("user_id, name");
+      if (internalDbId) {
+        query = query.eq("id", internalDbId);
+      } else {
+        query = query.eq("external_instance_id", instanceId);
+      }
+      const { data: instances } = await query.limit(1);
       
       const instance = instances && instances.length > 0 ? instances[0] : null;
 

@@ -103,7 +103,9 @@ Deno.serve(async (req) => {
         resolvedToken,
         "/pairing-code",
         "POST",
-        { phone: cleanPhone }
+        { phone: cleanPhone },
+        {},
+        instanceId
       );
     } else {
       console.log(`[connect-instance] Generating QR code image`);
@@ -112,7 +114,9 @@ Deno.serve(async (req) => {
         resolvedToken,
         "/qr-code/image",
         "GET",
-        null
+        null,
+        {},
+        instanceId
       );
     }
 

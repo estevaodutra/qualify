@@ -110,7 +110,8 @@ Deno.serve(async (req) => {
       endpoint,
       method,
       requestBody,
-      headers
+      headers,
+      instanceId
     );
     const responseText = await zapiResponse.text();
     let zapiData = null;
