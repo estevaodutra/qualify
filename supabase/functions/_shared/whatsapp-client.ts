@@ -379,7 +379,18 @@ export async function getInstanceStatus(instance: any): Promise<any> {
     throw new Error(`Z-API status error (${response.status}): ${errorText}`);
   }
   
-  return await response.json();
+  const data = await response.json();
+
+  // Normalize N8N custom webhook response format
+  if (Array.isArray(data) && data[0]?.instance) {
+    return {
+      connected: data[0].instance.connected === true || String(data[0].instance.connected).toLowerCase() === "true",
+      paymentStatus: "ACTIVE",
+      due: null
+    };
+  }
+
+  return data;
 }
 
 // Register all webhooks in Z-API
