@@ -21,12 +21,9 @@ Deno.serve(async (req) => {
     let instanceIdsToRefresh: string[] = [];
     if (req.method === "POST") {
       try {
-        const bodyText = await req.text();
-        if (bodyText) {
-          const body = JSON.parse(bodyText);
-          if (body.instances && Array.isArray(body.instances)) {
-            instanceIdsToRefresh = body.instances.map((i: any) => i.id);
-          }
+        const body = await req.json();
+        if (body && body.instances && Array.isArray(body.instances)) {
+          instanceIdsToRefresh = body.instances.map((i: any) => i.id);
         }
       } catch (e) {
         console.log("No valid JSON body, assuming cron or full refresh");

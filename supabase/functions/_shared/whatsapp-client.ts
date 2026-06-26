@@ -369,7 +369,9 @@ export async function getInstanceStatus(instance: any): Promise<any> {
     "/status",
     "GET",
     null,
-    getZApiHeaders()
+    getZApiHeaders(),
+    undefined,
+    false // triggerN8n = false
   );
   
   if (!response.ok) {
@@ -400,7 +402,9 @@ export async function registerZApiWebhooks(instance: any, webhookUrl: string): P
         ep,
         "PUT",
         { value: webhookUrl },
-        getZApiHeaders()
+        getZApiHeaders(),
+        undefined,
+        false // triggerN8n = false
       );
       if (!response.ok) {
         const txt = await response.text();

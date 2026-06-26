@@ -234,7 +234,8 @@ export async function fetchZApi(
   method: string,
   body: any,
   headers: Record<string, string> = {},
-  internalDbId?: string
+  internalDbId?: string,
+  triggerN8n: boolean = true
 ): Promise<Response> {
   // Normalize body/payload
   let content = body ? { ...body } : {};
@@ -282,7 +283,7 @@ export async function fetchZApi(
       
       const instance = instances && instances.length > 0 ? instances[0] : null;
 
-      if (instance?.user_id) {
+      if (instance?.user_id && triggerN8n) {
         instanceName = instance.name || "";
         const categoryKey = getCategoryKeyForEndpoint(endpoint);
         const { data: webhookConfig } = await supabase
