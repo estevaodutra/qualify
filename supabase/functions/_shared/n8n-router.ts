@@ -25,6 +25,7 @@ export function routeZApiRequest(endpoint: string, method: string, requestBody: 
     else if (cleanEndpoint.includes("/update-group-name")) action = "group.update_name";
     else if (cleanEndpoint.includes("/update-group-photo")) action = "group.update_photo";
     else if (cleanEndpoint.includes("/update-group-description")) action = "group.update_description";
+    else if (cleanEndpoint.includes("/update-group-settings")) action = "group.update_settings";
     else if (cleanEndpoint.includes("/update-group-members")) {
       const memberAction = requestBody?.action?.toLowerCase();
       if (memberAction === "add") action = "group.add_member";
