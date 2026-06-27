@@ -958,7 +958,7 @@ Deno.serve(async (req) => {
         trigger_config,
         active
       `)
-      .eq("trigger_type", "scheduled")
+      .in("trigger_type", ["scheduled", "scheduled_once", "scheduled_recurring"])
       .eq("active", true);
 
     if (sequencesError) {
@@ -1155,21 +1155,35 @@ Deno.serve(async (req) => {
           // Filter nodes with config.schedule.enabled = true
           const nodesWithSchedule = scheduledNodes.filter((n: any) => {
             const schedule = n.config?.schedule;
-            return schedule?.enabled === true && Array.isArray(schedule?.days) && Array.isArray(schedule?.times);
+            if (!schedule?.enabled) return false;
+            
+            const type = schedule.scheduleType || "recurring";
+            if (type === "fixed") {
+              return !!schedule.fixedDate && !!schedule.fixedTime;
+            }
+            return Array.isArray(schedule.days) && Array.isArray(schedule.times);
           });
 
           if (nodesWithSchedule.length === 0) continue;
 
           for (const node of nodesWithSchedule) {
-            const schedule = (node as any).config.schedule as { days: number[]; times: string[]; enabled: boolean; scheduleType?: string };
-
+            const schedule = (node as any).config.schedule as any;
             const scheduleType = schedule.scheduleType || "recurring";
-            const matchesDay = scheduleType === "recurring_month"
-              ? schedule.days.includes(currentMonthDay)
-              : schedule.days.includes(currentDay);
-            const matchesTime = schedule.times.includes(currentTime);
 
-            console.log(`[Scheduler] Per-node check seq="${seq.name}" node=${(node as any).node_order} type=${scheduleType} days=[${schedule.days}] matchDay(${scheduleType === "recurring_month" ? currentMonthDay : currentDay})=${matchesDay} times=[${schedule.times}] matchTime(${currentTime})=${matchesTime}`);
+            let matchesDay = false;
+            let matchesTime = false;
+
+            if (scheduleType === "fixed") {
+              matchesDay = schedule.fixedDate === todayDate;
+              matchesTime = schedule.fixedTime === currentTime;
+            } else {
+              matchesDay = scheduleType === "recurring_month"
+                ? schedule.days.includes(currentMonthDay)
+                : schedule.days.includes(currentDay);
+              matchesTime = schedule.times.includes(currentTime);
+            }
+
+            console.log(`[Scheduler] Per-node check seq="${seq.name}" node=${(node as any).node_order} type=${scheduleType} matchDay=${matchesDay} matchTime=${matchesTime}`);
 
             if (!matchesDay || !matchesTime) continue;
 
