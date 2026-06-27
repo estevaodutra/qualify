@@ -1702,6 +1702,7 @@ export type Database = {
           name: string
           payment_status: string | null
           phone: string
+          profile_config: Json | null
           provider: string
           status: string
           user_id: string | null
@@ -1718,6 +1719,7 @@ export type Database = {
           name: string
           payment_status?: string | null
           phone: string
+          profile_config?: Json | null
           provider: string
           status?: string
           user_id?: string | null

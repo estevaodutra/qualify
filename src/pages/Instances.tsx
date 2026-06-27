@@ -19,6 +19,7 @@ import { useWebhookConfigs, getWebhookUrlForCategory } from "@/hooks/useWebhookC
 import { buildInstancePayload } from "@/lib/webhook-utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
+import { InstanceProfileConfig, ProfileConfigData, defaultProfileConfig } from "@/components/instances/InstanceProfileConfig";
 
 // Função para formatar número de telefone brasileiro
 const formatPhoneNumber = (value: string): string => {
@@ -166,6 +167,7 @@ export default function Instances() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showDisconnectedAlert, setShowDisconnectedAlert] = useState(true);
+  const [profileConfig, setProfileConfig] = useState<ProfileConfigData>(defaultProfileConfig);
   const [configForm, setConfigForm] = useState({
     apiKey: "",
     webhookUrl: "",
@@ -464,6 +466,7 @@ export default function Instances() {
       webhookUrl: "",
       instanceId: ""
     });
+    setProfileConfig((instance.profile_config as unknown as ProfileConfigData) || defaultProfileConfig);
     setShowConfigDialog(true);
   };
   const handleConnect = async (instance: Instance) => {
@@ -496,8 +499,17 @@ export default function Instances() {
     if (selectedInstance) {
       await updateInstance({
         id: selectedInstance.id,
-        updates: { status: "connected" }
+        updates: { 
+          status: "connected",
+          profile_config: profileConfig as any
+        }
       });
+      
+      if (profileConfig.autoUpdate) {
+        supabase.functions.invoke("update-instance-profile", {
+          body: { instanceId: selectedInstance.id }
+        }).catch(err => console.error("Failed to update profile", err));
+      }
     }
     setIsSaving(false);
     setShowConfigDialog(false);
@@ -824,29 +836,43 @@ export default function Instances() {
           </DialogHeader>
 
           {/* Configure Mode - Show technical fields */}
-          {selectedInstance?.status === "connected" && <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="apiKey">{t("instances.apiKey")}</Label>
-                <Input id="apiKey" type="password" placeholder={t("instances.apiKeyPlaceholder")} value={configForm.apiKey} onChange={e => setConfigForm(prev => ({
-              ...prev,
-              apiKey: e.target.value
-            }))} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="instanceId">{t("instances.instanceIdOptional")}</Label>
-                <Input id="instanceId" placeholder={t("instances.instanceId")} value={configForm.instanceId} onChange={e => setConfigForm(prev => ({
-              ...prev,
-              instanceId: e.target.value
-            }))} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="webhookUrl">{t("instances.webhookUrl")} ({t("common.optional")})</Label>
-                <Input id="webhookUrl" placeholder="https://your-domain.com/webhook" value={configForm.webhookUrl} onChange={e => setConfigForm(prev => ({
-              ...prev,
-              webhookUrl: e.target.value
-            }))} />
-              </div>
-            </div>}
+          {selectedInstance?.status === "connected" && (
+            <Tabs defaultValue="api" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-4">
+                <TabsTrigger value="api">Configuração API</TabsTrigger>
+                <TabsTrigger value="profile">Perfil do WhatsApp</TabsTrigger>
+              </TabsList>
+              <TabsContent value="api" className="space-y-4 py-4 mt-0">
+                <div className="space-y-2">
+                  <Label htmlFor="apiKey">{t("instances.apiKey")}</Label>
+                  <Input id="apiKey" type="password" placeholder={t("instances.apiKeyPlaceholder")} value={configForm.apiKey} onChange={e => setConfigForm(prev => ({
+                ...prev,
+                apiKey: e.target.value
+              }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="instanceId">{t("instances.instanceIdOptional")}</Label>
+                  <Input id="instanceId" placeholder={t("instances.instanceId")} value={configForm.instanceId} onChange={e => setConfigForm(prev => ({
+                ...prev,
+                instanceId: e.target.value
+              }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="webhookUrl">{t("instances.webhookUrl")} ({t("common.optional")})</Label>
+                  <Input id="webhookUrl" placeholder="https://your-domain.com/webhook" value={configForm.webhookUrl} onChange={e => setConfigForm(prev => ({
+                ...prev,
+                webhookUrl: e.target.value
+              }))} />
+                </div>
+              </TabsContent>
+              <TabsContent value="profile" className="mt-0">
+                <InstanceProfileConfig 
+                  config={profileConfig} 
+                  onChange={setProfileConfig} 
+                />
+              </TabsContent>
+            </Tabs>
+          )}
 
           {/* Connect Mode - Step 1: Select Method */}
           {selectedInstance?.status !== "connected" && connectionStep === "select" && <div className="space-y-4 py-4">
