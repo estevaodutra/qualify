@@ -52,7 +52,7 @@ export function routeZApiRequest(endpoint: string, method: string, requestBody: 
     else if (cleanEndpoint.includes("/send-sticker")) action = "message.send_sticker";
     else if (cleanEndpoint.includes("/send-location")) action = "message.send_location";
     else if (cleanEndpoint.includes("/send-contact")) action = "message.send_contact";
-    else if (cleanEndpoint.includes("/send-buttons")) action = "message.send_buttons";
+    else if (cleanEndpoint.includes("/send-button")) action = "message.send_buttons";
     else if (cleanEndpoint.includes("/send-list")) action = "message.send_list";
     else if (cleanEndpoint.includes("/send-poll")) action = "message.send_poll";
     else if (cleanEndpoint.includes("/send-reaction")) action = "message.send_reaction";

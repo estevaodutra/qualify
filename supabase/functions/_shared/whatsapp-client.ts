@@ -146,10 +146,18 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
       body.message = config.text || config.content || "";
       body.title = config.title || "";
       body.footer = config.footer || "";
-      body.buttons = (config.buttons || []).map((btn: any) => ({
-        id: btn.id || btn.value || Math.random().toString(),
-        label: btn.label || btn.text || "",
-      }));
+      body.buttons = (config.buttons || []).map((btn: any) => {
+        const mappedBtn: any = {
+          id: btn.id || btn.value || Math.random().toString(),
+          label: btn.label || btn.text || "",
+          type: btn.type || "REPLY",
+        };
+        
+        if (btn.url) mappedBtn.url = btn.url;
+        if (btn.phone) mappedBtn.phone = btn.phone;
+        
+        return mappedBtn;
+      });
       break;
 
     case "message.send_list":
