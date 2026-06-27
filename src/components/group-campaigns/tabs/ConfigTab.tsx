@@ -33,6 +33,7 @@ export function ConfigTab({ campaign, onUpdate }: ConfigTabProps) {
   const connectedInstances = instances.filter((i) => i.status === "connected");
 
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isSyncingGroups, setIsSyncingGroups] = useState(false);
   const [formData, setFormData] = useState({
     name: campaign.name,
     instanceId: campaign.instanceId || "",
@@ -96,6 +97,38 @@ export function ConfigTab({ campaign, onUpdate }: ConfigTabProps) {
       await onUpdate(campaign.id, { groupPhotoUrl: result.url });
     }
     if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleUpdateGroups = async () => {
+    setIsSyncingGroups(true);
+    try {
+      const response = await fetch("https://qualify.6ksfuf.easypanel.host/functions/v1/schedule-group-updates", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ campaign_id: campaign.id })
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || "Erro ao agendar atualização");
+      }
+      
+      toast({
+        title: "Atualização Agendada",
+        description: `${result.count} grupos serão atualizados em segundo plano (1 a cada 3 minutos).`,
+      });
+    } catch (err: any) {
+      toast({
+        title: "Erro",
+        description: err.message,
+        variant: "destructive"
+      });
+    } finally {
+      setIsSyncingGroups(false);
+    }
   };
 
   const handleRemovePhoto = async () => {
@@ -216,11 +249,17 @@ export function ConfigTab({ campaign, onUpdate }: ConfigTabProps) {
 
       {/* Group Info */}
       <Card>
-        <CardHeader>
-          <CardTitle>Informações do Grupo</CardTitle>
-          <CardDescription>
-            Configure o nome, descrição e foto do grupo no WhatsApp.
-          </CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Informações do Grupo</CardTitle>
+            <CardDescription>
+              Configure o nome, descrição e foto do grupo no WhatsApp.
+            </CardDescription>
+          </div>
+          <Button onClick={handleUpdateGroups} disabled={isSyncingGroups} variant="outline" size="sm">
+            {isSyncingGroups ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+            Atualizar Grupos
+          </Button>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
