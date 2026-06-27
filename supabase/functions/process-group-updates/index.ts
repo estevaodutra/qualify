@@ -91,18 +91,17 @@ Deno.serve(async (req) => {
           }, { "Client-Token": Deno.env.get("CLIENT_TOKEN") || "" });
         }
 
-        if (campaign.edit_permission) {
-          await fetchZApi(extId, extToken, "/update-group-settings", "POST", {
-            phone: jid,
-            action: campaign.edit_permission === "admins" ? "locked" : "unlocked",
-          }, { "Client-Token": Deno.env.get("CLIENT_TOKEN") || "" });
-        }
+        if (campaign.edit_permission || campaign.message_permission) {
+          const settingsPayload: any = { phone: jid };
+          
+          if (campaign.message_permission) {
+            settingsPayload.adminOnlyMessage = campaign.message_permission === "admins";
+          }
+          if (campaign.edit_permission) {
+            settingsPayload.adminOnlySettings = campaign.edit_permission === "admins";
+          }
 
-        if (campaign.message_permission) {
-          await fetchZApi(extId, extToken, "/update-group-settings", "POST", {
-            phone: jid,
-            action: campaign.message_permission === "admins" ? "announcement" : "not_announcement",
-          }, { "Client-Token": Deno.env.get("CLIENT_TOKEN") || "" });
+          await fetchZApi(extId, extToken, "/update-group-settings", "POST", settingsPayload, { "Client-Token": Deno.env.get("CLIENT_TOKEN") || "" });
         }
 
         // Complete task
