@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { fetchZApi } from "../_shared/whatsapp-client.ts";
+import { fetchZApi } from "../_shared/n8n-router.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
