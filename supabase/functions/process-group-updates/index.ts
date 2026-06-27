@@ -1,24 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { fetchZApi } from "../_shared/whatsapp-client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-// Function to fetch Z-API (similar to whatsapp-client)
-async function callZApi(instanceId: string, instanceToken: string, endpoint: string, body: any) {
-  const url = `https://api.z-api.io/instances/${instanceId}/token/${instanceToken}${endpoint}`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Client-Token": Deno.env.get("CLIENT_TOKEN") || "",
-    },
-    body: JSON.stringify(body),
-  });
-  const text = await response.text();
-  return { ok: response.ok, status: response.status, data: text };
-}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -85,38 +71,38 @@ Deno.serve(async (req) => {
 
         // Perform updates
         if (campaign.group_name) {
-          await callZApi(extId, extToken, "/update-group-name", {
+          await fetchZApi(extId, extToken, "/update-group-name", "POST", {
             phone: jid,
             groupName: campaign.group_name,
-          });
+          }, { "Client-Token": Deno.env.get("CLIENT_TOKEN") || "" });
         }
 
         if (campaign.group_description) {
-          await callZApi(extId, extToken, "/update-group-description", {
+          await fetchZApi(extId, extToken, "/update-group-description", "POST", {
             phone: jid,
             description: campaign.group_description,
-          });
+          }, { "Client-Token": Deno.env.get("CLIENT_TOKEN") || "" });
         }
 
         if (campaign.group_photo_url) {
-          await callZApi(extId, extToken, "/update-group-photo", {
+          await fetchZApi(extId, extToken, "/update-group-photo", "POST", {
             phone: jid,
             image: campaign.group_photo_url,
-          });
+          }, { "Client-Token": Deno.env.get("CLIENT_TOKEN") || "" });
         }
 
         if (campaign.edit_permission) {
-          await callZApi(extId, extToken, "/update-group-settings", {
+          await fetchZApi(extId, extToken, "/update-group-settings", "POST", {
             phone: jid,
             action: campaign.edit_permission === "admins" ? "locked" : "unlocked",
-          });
+          }, { "Client-Token": Deno.env.get("CLIENT_TOKEN") || "" });
         }
 
         if (campaign.message_permission) {
-          await callZApi(extId, extToken, "/update-group-settings", {
+          await fetchZApi(extId, extToken, "/update-group-settings", "POST", {
             phone: jid,
             action: campaign.message_permission === "admins" ? "announcement" : "not_announcement",
-          });
+          }, { "Client-Token": Deno.env.get("CLIENT_TOKEN") || "" });
         }
 
         // Complete task
