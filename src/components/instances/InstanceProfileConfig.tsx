@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { ImageUpload } from "@/components/settings/ImageUpload";
 
 export interface ProfileConfigData {
   autoUpdate: boolean;
@@ -57,13 +58,24 @@ export function InstanceProfileConfig({ config, onChange }: InstanceProfileConfi
 
       <div className="space-y-4">
         <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wider">Informações Básicas</h4>
-        <div className="space-y-2">
-          <Label>URL da Foto de Perfil</Label>
-          <Input 
-            placeholder="https://..." 
-            value={config.photoUrl} 
-            onChange={(e) => handleChange("photoUrl", e.target.value)} 
-          />
+        <div className="space-y-4">
+          <Label>Foto de Perfil</Label>
+          <div className="flex items-center gap-6">
+            <ImageUpload
+              currentUrl={config.photoUrl}
+              onUploadSuccess={(url) => handleChange("photoUrl", url)}
+              type="profile"
+              name={config.name || "Perfil"}
+            />
+            <div className="flex-1 space-y-2">
+              <Label className="text-xs text-muted-foreground">Ou insira o link da imagem diretamente</Label>
+              <Input 
+                placeholder="https://..." 
+                value={config.photoUrl} 
+                onChange={(e) => handleChange("photoUrl", e.target.value)} 
+              />
+            </div>
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
