@@ -14,6 +14,22 @@ import { useLanguage } from "@/i18n";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { useEffect, useState } from "react";
+
+function SystemClock() {
+  const [time, setTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="hidden lg:flex items-center justify-center h-9 px-3 rounded-xl border border-border/50 bg-muted/30 text-[13px] font-medium text-muted-foreground tracking-widest tabular-nums">
+      {time.toLocaleTimeString('pt-BR')}
+    </div>
+  );
+}
 
 export function AppHeader() {
   const { t } = useLanguage();
@@ -74,6 +90,8 @@ export function AppHeader() {
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_6px_rgba(16,185,129,0.6)]" />
             <span className="text-[10px] font-black tracking-[0.15em] uppercase">Sistemas OK</span>
           </div>
+
+          <SystemClock />
 
           {/* Notifications */}
           <button className="relative h-9 w-9 flex items-center justify-center rounded-xl border border-border/50 bg-muted/30 text-muted-foreground hover:bg-accent hover:text-foreground hover:border-border transition-all duration-200">
