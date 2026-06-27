@@ -487,14 +487,6 @@ export default function Instances() {
     setWebhookResponse(null);
   };
   const handleSaveConfig = async () => {
-    if (!configForm.apiKey) {
-      toast({
-        title: t("common.error"),
-        description: t("instances.apiKey") + " " + t("common.required").toLowerCase(),
-        variant: "destructive"
-      });
-      return;
-    }
     setIsSaving(true);
     if (selectedInstance) {
       await updateInstance({
@@ -837,41 +829,12 @@ export default function Instances() {
 
           {/* Configure Mode - Show technical fields */}
           {selectedInstance?.status === "connected" && (
-            <Tabs defaultValue="api" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-4">
-                <TabsTrigger value="api">Configuração API</TabsTrigger>
-                <TabsTrigger value="profile">Perfil do WhatsApp</TabsTrigger>
-              </TabsList>
-              <TabsContent value="api" className="space-y-4 py-4 mt-0">
-                <div className="space-y-2">
-                  <Label htmlFor="apiKey">{t("instances.apiKey")}</Label>
-                  <Input id="apiKey" type="password" placeholder={t("instances.apiKeyPlaceholder")} value={configForm.apiKey} onChange={e => setConfigForm(prev => ({
-                ...prev,
-                apiKey: e.target.value
-              }))} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="instanceId">{t("instances.instanceIdOptional")}</Label>
-                  <Input id="instanceId" placeholder={t("instances.instanceId")} value={configForm.instanceId} onChange={e => setConfigForm(prev => ({
-                ...prev,
-                instanceId: e.target.value
-              }))} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="webhookUrl">{t("instances.webhookUrl")} ({t("common.optional")})</Label>
-                  <Input id="webhookUrl" placeholder="https://your-domain.com/webhook" value={configForm.webhookUrl} onChange={e => setConfigForm(prev => ({
-                ...prev,
-                webhookUrl: e.target.value
-              }))} />
-                </div>
-              </TabsContent>
-              <TabsContent value="profile" className="mt-0">
-                <InstanceProfileConfig 
-                  config={profileConfig} 
-                  onChange={setProfileConfig} 
-                />
-              </TabsContent>
-            </Tabs>
+            <div className="py-2">
+              <InstanceProfileConfig 
+                config={profileConfig} 
+                onChange={setProfileConfig} 
+              />
+            </div>
           )}
 
           {/* Connect Mode - Step 1: Select Method */}
