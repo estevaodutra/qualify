@@ -105,6 +105,20 @@ Deno.serve(async (req) => {
           });
         }
 
+        if (campaign.edit_permission) {
+          await callZApi(extId, extToken, "/update-group-settings", {
+            phone: jid,
+            action: campaign.edit_permission === "admins" ? "locked" : "unlocked",
+          });
+        }
+
+        if (campaign.message_permission) {
+          await callZApi(extId, extToken, "/update-group-settings", {
+            phone: jid,
+            action: campaign.message_permission === "admins" ? "announcement" : "not_announcement",
+          });
+        }
+
         // Complete task
         await supabase
           .from("campaign_group_updates")
