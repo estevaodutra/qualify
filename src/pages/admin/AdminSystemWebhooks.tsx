@@ -116,13 +116,90 @@ export default function AdminSystemWebhooks() {
     }
 
     try {
+      // Base payload data for all events
+      const baseData = {
+        user: {
+          id: "usr_987654",
+          name: "João Silva",
+          email: "joao.silva@exemplo.com",
+          phone: "5511999999999"
+        },
+        company: {
+          id: "comp_123456",
+          name: "Empresa Exemplo LTDA",
+          document: "12.345.678/0001-90",
+          plan: "Plano Pro"
+        }
+      };
+
+      // Specific data based on event type
+      let specificData = {};
+      
+      if (eventId.startsWith("instance.")) {
+        specificData = {
+          instance: {
+            id: "inst_123",
+            name: "Atendimento Principal",
+            phone_number: "5511999998888",
+            status: eventId.split('.')[1]
+          }
+        };
+        if (eventId === "instance.error") {
+          specificData = {
+            ...specificData,
+            error: {
+              code: "ERR_DISCONNECTED",
+              message: "Conexão perdida com o provedor (Z-API)",
+              attempts: 3
+            }
+          };
+        }
+      } else if (eventId === "wallet.low_balance") {
+        specificData = {
+          wallet: {
+            balance: 5.50,
+            currency: "BRL",
+            minimum_threshold: 10.00
+          }
+        };
+      } else if (eventId === "payment.confirmed") {
+        specificData = {
+          wallet: {
+            balance: 105.50,
+            currency: "BRL"
+          },
+          payment: {
+            id: "pay_999",
+            amount: 100.00,
+            method: "PIX",
+            status: "approved"
+          }
+        };
+      } else if (eventId === "subscription.expiring") {
+        specificData = {
+          subscription: {
+            id: "sub_444",
+            plan: "Plano Pro",
+            status: "active",
+            expires_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+            days_remaining: 3
+          }
+        };
+      } else if (eventId === "company.created") {
+        specificData = {
+          source: "landing_page",
+          coupon: "BEMVINDO20"
+        };
+      }
+
       const payload = {
         event: eventId,
         test: true,
         timestamp: new Date().toISOString(),
         data: {
-          message: `Teste de evento ${eventId} a partir do painel Admin`,
-          company_id: "test-company-123"
+          ...baseData,
+          ...specificData,
+          _test_message: `Teste simulado de ${eventId} a partir do painel Admin`
         }
       };
 
