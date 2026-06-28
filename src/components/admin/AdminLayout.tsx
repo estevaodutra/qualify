@@ -18,6 +18,7 @@ import {
   Activity,
   Zap,
   Smartphone,
+  Bell,
 } from "lucide-react";
 import { ImpersonationBanner } from "./ImpersonationBanner";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,7 @@ const otherItems = [
   { title: "Logs", url: "/admin/logs", icon: Activity },
   { title: "Eventos", url: "/admin/events", icon: Zap },
   { title: "Dicionário", url: "/admin/dicionario", icon: Code2 },
+  { title: "Notificações", url: "/admin/notificacoes", icon: Bell },
   { title: "Configurações", url: "/admin/configuracoes", icon: Settings },
 ];
 
