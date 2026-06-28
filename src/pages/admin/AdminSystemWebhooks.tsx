@@ -102,11 +102,48 @@ export default function AdminSystemWebhooks() {
     }, 800);
   };
 
-  const handleTest = (eventId: string) => {
-    toast({
-      title: "Teste enviado",
-      description: `Disparando evento de teste para ${eventId}...`,
-    });
+  const handleTest = async (eventId: string) => {
+    const state = events[eventId];
+    const url = state?.customUrl || globalUrl;
+    
+    if (!url) {
+      toast({
+        title: "Erro",
+        description: "Nenhuma URL configurada para este evento.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const payload = {
+        event: eventId,
+        test: true,
+        timestamp: new Date().toISOString(),
+        data: {
+          message: `Teste de evento ${eventId} a partir do painel Admin`,
+          company_id: "test-company-123"
+        }
+      };
+
+      await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        mode: "no-cors",
+      });
+
+      toast({
+        title: "Teste enviado",
+        description: `Disparando evento de teste para ${eventId} na URL ${url.substring(0, 30)}...`,
+      });
+    } catch (err) {
+      toast({
+        title: "Erro de Conexão",
+        description: "Falha ao enviar o teste para a URL informada.",
+        variant: "destructive"
+      });
+    }
   };
 
   return (
