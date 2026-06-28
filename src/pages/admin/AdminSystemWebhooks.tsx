@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { 
   Save, 
   Bell, 
@@ -88,18 +89,72 @@ export default function AdminSystemWebhooks() {
   const [events, setEvents] = useState<Record<string, { isActive: boolean; customUrl: string }>>(
     SYSTEM_EVENTS.reduce((acc, ev) => ({ ...acc, [ev.id]: { isActive: true, customUrl: "" } }), {})
   );
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Carrega as configurações do Supabase
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("platform_settings")
+          .select("value")
+          .eq("key", "system_webhooks")
+          .single();
+
+        if (error && error.code !== "PGRST116") { // Não encontrou é ok (primeira vez)
+          console.error("Erro ao carregar configurações de webhook:", error);
+          return;
+        }
+
+        if (data?.value) {
+          const config = data.value as { globalUrl?: string, events?: Record<string, { isActive: boolean; customUrl: string }> };
+          if (config.globalUrl) setGlobalUrl(config.globalUrl);
+          if (config.events) {
+            setEvents(prev => ({ ...prev, ...config.events }));
+          }
+        }
+      } catch (err) {
+        console.error("Erro:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadSettings();
+  }, []);
 
   const handleSave = async () => {
     setIsSaving(true);
-    // Simulação de salvamento na API
-    setTimeout(() => {
-      setIsSaving(false);
+    try {
+      const payload = {
+        globalUrl,
+        events
+      };
+
+      const { error } = await supabase
+        .from("platform_settings")
+        .upsert({
+          key: "system_webhooks",
+          value: payload,
+          description: "Configuração de webhooks do sistema (n8n/make)"
+        }, { onConflict: "key" });
+
+      if (error) throw error;
+
       toast({
         title: "Configurações salvas",
         description: "As rotas de notificação do sistema foram atualizadas com sucesso.",
       });
-    }, 800);
+    } catch (err) {
+      toast({
+        title: "Erro ao salvar",
+        description: "Ocorreu um erro ao salvar as configurações.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleTest = async (eventId: string) => {
