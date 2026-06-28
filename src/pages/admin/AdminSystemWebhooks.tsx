@@ -196,15 +196,16 @@ export default function AdminSystemWebhooks() {
             id: "inst_123",
             name: "Atendimento Principal",
             phone_number: "5511999998888",
-            status: eventId.split('.')[1]
+            status: eventId.split('.')[1],
+            action_url: `https://qualify.app/auth/magic?token=temp_abc123&redirect=/instances?id=inst_123`
           }
         };
-        if (eventId === "instance.error") {
+        if (eventId === "instance.error" || eventId === "instance.disconnected") {
           specificData = {
             ...specificData,
             error: {
-              code: "ERR_DISCONNECTED",
-              message: "Conexão perdida com o provedor (Z-API)",
+              code: eventId === "instance.error" ? "ERR_CRITICAL" : "ERR_DISCONNECTED",
+              message: "Conexão perdida com o WhatsApp",
               attempts: 3
             }
           };
