@@ -431,18 +431,22 @@ export function classifyZApiEvent(rawEvent: Record<string, unknown>): Classifica
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export function classifyWahaEvent(rawEvent: Record<string, unknown>): ClassificationResult {
-  const event = rawEvent.event as string | undefined;
-  const payload = rawEvent.payload as Record<string, unknown> | undefined;
+  const unwrappedBody = (rawEvent.body as Record<string, unknown>) || rawEvent;
+  const event = unwrappedBody.event as string | undefined;
+  const payload = unwrappedBody.payload as Record<string, unknown> | undefined;
 
   const eventMap: Record<string, string> = {
     "message": "text_message",
     "message.any": "text_message",
     "message.ack": "message_status",
+    "message.revoked": "message_deleted",
+    "message.reaction": "message_reaction",
     "session.status": "connection_status",
     "group.v2.join": "group_join",
     "group.v2.leave": "group_leave",
     "state.change": "connection_status",
-    "poll.vote": "poll_response"
+    "poll.vote": "poll_response",
+    "chat.presence": "chat_presence"
   };
 
   if (event && eventMap[event]) {
@@ -588,6 +592,9 @@ function extractZApiContext(rawEvent: Record<string, unknown>): EventContext {
   const message = (rawEvent.message || body?.message) as Record<string, unknown> | undefined;
   const chat = (rawEvent.chat || body?.chat || message?.chat) as Record<string, unknown> | undefined;
   const sender = (rawEvent.sender || body?.sender || message?.sender) as Record<string, unknown> | undefined;
+  
+  // WAHA nested payload support
+  const wahaPayload = (body?.payload || rawEvent.payload) as Record<string, unknown> | undefined;
 
   // chatJid from multiple sources
   let chatJid = (
@@ -597,6 +604,7 @@ function extractZApiContext(rawEvent: Record<string, unknown>): EventContext {
     rawEvent.from ||
     body?.chatId ||
     body?.from ||
+    wahaPayload?.from ||
     chat?.id ||
     message?.from
   ) as string | null;
@@ -613,6 +621,8 @@ function extractZApiContext(rawEvent: Record<string, unknown>): EventContext {
     rawEvent.senderPhone ||
     body?.senderPhone ||
     body?.participantPhone ||    // Z-API poll votes use this field
+    wahaPayload?.participant ||
+    wahaPayload?.author ||
     rawEvent.participant as string
   ) as string | null;
 

@@ -39,21 +39,29 @@ Deno.serve(async (req) => {
       payload = body as InboundPayload;
     } else {
       const nestedBody = body.body as Record<string, unknown> | undefined;
+      
+      // Auto-detect WAHA
+      let detectedSource: "z-api" | "waha" = "z-api";
+      if (body.event || nestedBody?.event || (typeof nestedBody?.session === 'string' && nestedBody.session.startsWith('session_')) || nestedBody?.engine === "NOWEB") {
+         detectedSource = "waha";
+      }
+
       const instanceId = body.instanceId ||
         nestedBody?.instanceId ||
         body.instance ||
+        nestedBody?.session ||
         nestedBody?.connectedPhone ||
         body.phone ||
         body.sender?.phone ||
         "unknown";
 
       payload = {
-        source: "z-api",
+        source: detectedSource,
         instance_id: String(instanceId),
         raw_event: body,
       };
 
-      console.log("[webhook-inbound] Auto-wrapped raw payload, detected instance_id:", instanceId);
+      console.log(`[webhook-inbound] Auto-wrapped raw payload, detected source: ${detectedSource}, instance_id: ${instanceId}`);
     }
 
     if (!payload.instance_id || !payload.raw_event) {
