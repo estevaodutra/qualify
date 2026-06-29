@@ -27,7 +27,7 @@ export type InstanceFunction = "dispatcher" | "admin" | "spy" | "funnel";
 export interface Instance {
   id: string;
   name: string;
-  provider: "Z-API" | "Evolution API" | "Meta Business API";
+  provider: "Z-API" | "Evolution API" | "Meta Business API" | "WAHA";
   function: InstanceFunction;
   status: "connected" | "disconnected" | "waitingConnection";
   health: number;
@@ -96,6 +96,8 @@ const getProviderFeatures = (provider: string): string[] => {
       return ["Text", "Media", "Groups", "Status"];
     case "Meta Business API":
       return ["Official API", "Templates", "Analytics"];
+    case "WAHA":
+      return ["Text", "Media", "Groups", "Webhooks"];
     default:
       return ["Text", "Media"];
   }
@@ -110,6 +112,8 @@ const getProviderDocumentation = (provider: string): string => {
       return "https://doc.evolution-api.com";
     case "Meta Business API":
       return "https://developers.facebook.com/docs/whatsapp";
+    case "WAHA":
+      return "https://waha.devlike.pro";
     default:
       return "";
   }

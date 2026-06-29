@@ -13,7 +13,7 @@ const corsHeaders = {
 };
 
 interface InboundPayload {
-  source: "z-api" | "evolution" | "meta";
+  source: "z-api" | "evolution" | "meta" | "waha";
   instance_id: string;
   received_at?: string;
   raw_event: Record<string, unknown>;

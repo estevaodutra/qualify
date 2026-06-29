@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MessageSquare, Settings, RefreshCw, CheckCircle, XCircle, Plus, Loader2, Trash2, Radio, Shield, Eye, GitBranch, Pencil, QrCode, Phone, ArrowLeft, Copy, Clock, AlertTriangle } from "lucide-react";
+import { MessageSquare, Settings, RefreshCw, CheckCircle, XCircle, Plus, Loader2, Trash2, Radio, Shield, Eye, GitBranch, Pencil, QrCode, Phone, ArrowLeft, Copy, Clock, AlertTriangle, Info } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/i18n";
@@ -1049,6 +1049,12 @@ export default function Instances() {
                   <SelectItem value="Z-API">Z-API</SelectItem>
                   <SelectItem value="Evolution API">Evolution API</SelectItem>
                   <SelectItem value="Meta Business API">Meta Business API</SelectItem>
+                  <SelectItem value="WAHA">
+                    <div className="flex items-center gap-2" title="Implementação em fase BETA. Algumas funcionalidades podem não funcionar corretamente.">
+                      WAHA
+                      <Info className="h-3 w-3 text-amber-500" />
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1164,6 +1170,12 @@ export default function Instances() {
                   <SelectItem value="Z-API">Z-API</SelectItem>
                   <SelectItem value="Evolution API">Evolution API</SelectItem>
                   <SelectItem value="Meta Business API">Meta Business API</SelectItem>
+                  <SelectItem value="WAHA">
+                    <div className="flex items-center gap-2" title="Implementação em fase BETA. Algumas funcionalidades podem não funcionar corretamente.">
+                      WAHA
+                      <Info className="h-3 w-3 text-amber-500" />
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>

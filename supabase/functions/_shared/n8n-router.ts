@@ -266,7 +266,7 @@ export async function fetchZApi(
   // Route to the correct n8n endpoint
   const routed = routeZApiRequest(endpoint, method, content);
 
-  // 1. Get user_id and name from instances table to resolve custom webhooks
+  let actualProvider = "z_api";
   let webhookUrl = "";
   let instanceName = "";
   try {
@@ -274,7 +274,7 @@ export async function fetchZApi(
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (supabaseUrl && supabaseServiceKey) {
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
-      let query = supabase.from("instances").select("user_id, name");
+      let query = supabase.from("instances").select("user_id, name, provider");
       if (internalDbId) {
         query = query.eq("id", internalDbId);
       } else {
@@ -283,6 +283,10 @@ export async function fetchZApi(
       const { data: instances } = await query.limit(1);
       
       const instance = instances && instances.length > 0 ? instances[0] : null;
+
+      if (instance?.provider === "WAHA") actualProvider = "waha";
+      else if (instance?.provider === "Evolution API") actualProvider = "evolution";
+      else if (instance?.provider === "Meta Business API") actualProvider = "meta";
 
       if (instance?.user_id && triggerN8n) {
         instanceName = instance.name || "";
@@ -309,7 +313,7 @@ export async function fetchZApi(
   const apiKey = headers["Client-Token"] || headers["Authorization"] || Deno.env.get("CLIENT_TOKEN") || "";
 
   const n8nPayload = {
-    provider: "z_api",
+    provider: actualProvider,
     instance_id: instanceId,
     instance_token: instanceToken,
     instance_name: instanceName,
@@ -317,6 +321,7 @@ export async function fetchZApi(
     action: routed.action,
     content: content
   };
+
 
   console.log(`[n8n-router] Routing: ${endpoint} (${method}) -> ${targetUrl} [Action: ${routed.action}]`);
 

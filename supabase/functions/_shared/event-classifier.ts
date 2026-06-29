@@ -427,8 +427,53 @@ export function classifyZApiEvent(rawEvent: Record<string, unknown>): Classifica
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// CLASSIFICADORES - EVOLUTION & META
+// CLASSIFICADORES - WAHA, EVOLUTION & META
 // ═══════════════════════════════════════════════════════════════════════════════
+
+export function classifyWahaEvent(rawEvent: Record<string, unknown>): ClassificationResult {
+  const event = rawEvent.event as string | undefined;
+  const payload = rawEvent.payload as Record<string, unknown> | undefined;
+
+  const eventMap: Record<string, string> = {
+    "message": "text_message",
+    "message.any": "text_message",
+    "message.ack": "message_status",
+    "session.status": "connection_status",
+    "group.v2.join": "group_join",
+    "group.v2.leave": "group_leave",
+    "state.change": "connection_status",
+    "poll.vote": "poll_response"
+  };
+
+  if (event && eventMap[event]) {
+    let eventType = eventMap[event];
+    
+    if (eventType === "text_message" && payload) {
+      const type = (payload.type as string) || (payload.message as any)?.type;
+      if (type && MESSAGE_TYPE_MAP[type.toLowerCase()]) {
+         eventType = MESSAGE_TYPE_MAP[type.toLowerCase()];
+      }
+    }
+
+    return {
+      eventType,
+      eventSubtype: event,
+      classification: "identified",
+      direction: event.includes("ack") || event.includes("status") || event.includes("change") ? "system" : "inbound",
+      confidence: "medium",
+      matchedRule: "waha_event_map",
+    };
+  }
+
+  return {
+    eventType: "unknown",
+    eventSubtype: event || null,
+    classification: "pending",
+    direction: "system",
+    confidence: "low",
+    matchedRule: "no_match",
+  };
+}
 
 export function classifyEvolutionEvent(rawEvent: Record<string, unknown>): ClassificationResult {
   const event = rawEvent.event as string | undefined;
@@ -520,6 +565,8 @@ export function classifyEvent(source: string, rawEvent: Record<string, unknown>)
       return classifyEvolutionEvent(rawEvent);
     case "meta":
       return classifyMetaEvent(rawEvent);
+    case "waha":
+      return classifyWahaEvent(rawEvent);
     default:
       return classifyZApiEvent(rawEvent);
   }
@@ -537,7 +584,7 @@ export function extractContext(source: string, rawEvent: Record<string, unknown>
 function extractZApiContext(rawEvent: Record<string, unknown>): EventContext {
   const data = rawEvent.data as Record<string, unknown> | undefined;
   const key = (data?.key || rawEvent.key) as Record<string, unknown> | undefined;
-  const body = rawEvent.body as Record<string, unknown> | undefined;
+  const body = (rawEvent.body || rawEvent.payload) as Record<string, unknown> | undefined;
   const message = (rawEvent.message || body?.message) as Record<string, unknown> | undefined;
   const chat = (rawEvent.chat || body?.chat || message?.chat) as Record<string, unknown> | undefined;
   const sender = (rawEvent.sender || body?.sender || message?.sender) as Record<string, unknown> | undefined;
