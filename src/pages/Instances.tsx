@@ -286,11 +286,13 @@ export default function Instances() {
       const paymentStatus = instanceData.paymentStatus;
       const expirationDate = instanceData.expirationDate;
 
-      if (instanceId && instanceToken) {
+      if (instanceId) {
         const updates: Record<string, string> = {
           external_instance_id: instanceId,
-          external_instance_token: instanceToken,
         };
+        if (instanceToken) {
+           updates.external_instance_token = instanceToken;
+        }
         if (paymentStatus) updates.payment_status = paymentStatus;
         if (expirationDate) updates.expiration_date = new Date(expirationDate).toISOString();
 
