@@ -124,12 +124,12 @@ export default function AdminSystemWebhooks() {
     loadSettings();
   }, []);
 
-  const handleSave = async () => {
+  const handleSave = async (currentGlobalUrl = globalUrl, currentEvents = events) => {
     setIsSaving(true);
     try {
       const payload = {
-        globalUrl,
-        events
+        globalUrl: currentGlobalUrl,
+        events: currentEvents
       };
 
       const { error } = await supabase
@@ -316,9 +316,10 @@ export default function AdminSystemWebhooks() {
                 placeholder="https://seu-n8n.com/webhook/notificacoes"
                 value={globalUrl}
                 onChange={(e) => setGlobalUrl(e.target.value)}
+                onBlur={() => handleSave(globalUrl, events)}
                 className="flex-1"
               />
-              <Button onClick={handleSave} disabled={isSaving}>
+              <Button onClick={() => handleSave()} disabled={isSaving}>
                 {isSaving ? "Salvando..." : (
                   <>
                     <Save className="h-4 w-4 mr-2" />
@@ -358,7 +359,11 @@ export default function AdminSystemWebhooks() {
                 </div>
                 <Switch
                   checked={state.isActive}
-                  onCheckedChange={(val) => setEvents({ ...events, [event.id]: { ...state, isActive: val } })}
+                  onCheckedChange={(val) => {
+                    const newEvents = { ...events, [event.id]: { ...state, isActive: val } };
+                    setEvents(newEvents);
+                    handleSave(globalUrl, newEvents);
+                  }}
                 />
               </CardHeader>
               
@@ -370,6 +375,7 @@ export default function AdminSystemWebhooks() {
                       placeholder="Deixe em branco para usar a URL Global"
                       value={state.customUrl}
                       onChange={(e) => setEvents({ ...events, [event.id]: { ...state, customUrl: e.target.value } })}
+                      onBlur={() => handleSave(globalUrl, events)}
                       className="h-9 text-sm bg-muted/30"
                       disabled={!state.isActive}
                     />
@@ -392,7 +398,7 @@ export default function AdminSystemWebhooks() {
       </div>
       
       <div className="flex justify-end pt-4">
-        <Button size="lg" onClick={handleSave} disabled={isSaving}>
+        <Button size="lg" onClick={() => handleSave()} disabled={isSaving}>
           {isSaving ? "Salvando Alterações..." : "Salvar Todas as Configurações"}
         </Button>
       </div>
