@@ -777,9 +777,9 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-
       JSON.stringify({
         success: true,
+        provider: source,
         event_id: insertedEvent.id,
         event_type: classification.eventType,
         classification: classification.classification,
