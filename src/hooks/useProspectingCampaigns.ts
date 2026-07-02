@@ -171,16 +171,18 @@ export function useProspectingCampaigns() {
              })).filter(l => l.phone); // Apenas insere quem tem telefone
 
              if (leadsToInsert.length > 0) {
-               const { error: insertError } = await supabase.from("leads").insert(leadsToInsert);
+               // Usa upsert para não dar erro se o telefone já existir na base do usuário
+               const { error: insertError } = await supabase.from("leads").upsert(leadsToInsert, { onConflict: "user_id,phone" });
                if (insertError) {
                  console.error("Database insert error:", insertError);
-                 throw new Error("Erro ao salvar os leads no banco: " + insertError.message);
+                 throw new Error("Erro ao salvar os leads: " + insertError.message);
                }
              } else {
                console.warn("No leads with valid phone numbers found in the n8n response.");
              }
           } else {
              console.warn("Webhook responded but no array of leads was found. Response:", results);
+             throw new Error("O N8N não devolveu uma lista válida de contatos. Verifique o nó 'Respond to Webhook'.");
           }
 
           // Atualiza status para concluído
@@ -188,13 +190,13 @@ export function useProspectingCampaigns() {
           queryClient.invalidateQueries({ queryKey: ["prospecting_campaigns"] });
           toast({ title: "Prospecção Concluída!", description: "Sua busca terminou e retornou contatos prontos para uso." });
         } else {
-          throw new Error("Resposta da webhook com erro.");
+          throw new Error("Resposta da webhook com erro: " + response.statusText);
         }
       }).catch(async (e) => {
         console.error("Erro ao notificar webhook:", e);
         await supabase.from("prospecting_campaigns").update({ status: "error" }).eq("id", created.id);
         queryClient.invalidateQueries({ queryKey: ["prospecting_campaigns"] });
-        toast({ title: "Erro na Prospecção", description: "A prospecção falhou ou não retornou resultados no tempo esperado.", variant: "destructive" });
+        toast({ title: "Erro na Prospecção", description: e.message || "A prospecção falhou ou não retornou resultados no tempo esperado.", variant: "destructive" });
       });
 
       return { created, count: 0 };
