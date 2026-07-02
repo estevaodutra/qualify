@@ -137,9 +137,29 @@ export function useProspectingCampaigns() {
         })
       }).then(async (response) => {
         if (response.ok) {
-          const results = await response.json();
-          if (Array.isArray(results) && results.length > 0) {
-             const leadsToInsert = results.map((lead: any) => ({
+          let results = await response.json();
+          
+          // N8n sometimes wraps the response or stringifies it. Let's be robust.
+          if (typeof results === 'string') {
+            try {
+              results = JSON.parse(results);
+            } catch (e) {
+              console.error("Failed to parse stringified JSON from n8n", e);
+            }
+          }
+
+          // Sometimes n8n puts the array inside a property
+          let leadsArray = [];
+          if (Array.isArray(results)) {
+            leadsArray = results;
+          } else if (results && Array.isArray(results.data)) {
+            leadsArray = results.data;
+          } else if (results && Array.isArray(results.body)) {
+            leadsArray = results.body;
+          }
+
+          if (leadsArray.length > 0) {
+             const leadsToInsert = leadsArray.map((lead: any) => ({
                user_id: user.id,
                name: lead.name || lead.title || "Sem nome",
                phone: lead.phone || lead.phoneUnformatted || null,
@@ -151,8 +171,16 @@ export function useProspectingCampaigns() {
              })).filter(l => l.phone); // Apenas insere quem tem telefone
 
              if (leadsToInsert.length > 0) {
-               await supabase.from("leads").insert(leadsToInsert);
+               const { error: insertError } = await supabase.from("leads").insert(leadsToInsert);
+               if (insertError) {
+                 console.error("Database insert error:", insertError);
+                 throw new Error("Erro ao salvar os leads no banco: " + insertError.message);
+               }
+             } else {
+               console.warn("No leads with valid phone numbers found in the n8n response.");
              }
+          } else {
+             console.warn("Webhook responded but no array of leads was found. Response:", results);
           }
 
           // Atualiza status para concluído
