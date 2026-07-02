@@ -15,23 +15,11 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Fetch campaigns
-    const { data: campaigns } = await supabase.from("group_campaigns").select("*");
-    
-    // Fetch sequences
-    const { data: sequences } = await supabase.from("message_sequences").select("*");
-
-    // Fetch sequence nodes
-    const { data: nodes } = await supabase.from("sequence_nodes").select("*");
-
-    // Fetch campaign groups
-    const { data: groups } = await supabase.from("campaign_groups").select("*");
-
-    // Fetch instances
-    const { data: instances } = await supabase.from("instances").select("*");
+    // Fetch policies
+    const { data: policies, error } = await supabase.rpc('execute_sql', { sql_query: "SELECT * FROM pg_policies WHERE tablename = 'objects' AND schemaname = 'storage'" });
 
     return new Response(
-      JSON.stringify({ campaigns, sequences, nodes, groups, instances }),
+      JSON.stringify({ policies, error }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {

@@ -23,6 +23,7 @@ import {
   CallCampaigns,
   ContextCampaigns,
   ContextCampaignLogs,
+  ProspectingCampaigns,
 } from "./pages/campaigns";
 import PhoneNumbers from "./pages/PhoneNumbers";
 import Logs from "./pages/Logs";
@@ -134,6 +135,7 @@ const App = () => {
                         <Route path="telefonia/ligacao" element={<CallCampaigns />} />
                         <Route path="whatsapp/contexto" element={<ContextCampaigns />} />
                         <Route path="whatsapp/contexto/logs" element={<ContextCampaignLogs />} />
+                        <Route path="whatsapp/prospeccao" element={<ProspectingCampaigns />} />
                       </Route>
 
                       {/* Scheduling routes */}
