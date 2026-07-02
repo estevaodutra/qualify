@@ -196,7 +196,17 @@ export function useProspectingCampaigns() {
         console.error("Erro ao notificar webhook:", e);
         await supabase.from("prospecting_campaigns").update({ status: "error" }).eq("id", created.id);
         queryClient.invalidateQueries({ queryKey: ["prospecting_campaigns"] });
-        toast({ title: "Erro na Prospecção", description: e.message || "A prospecção falhou ou não retornou resultados no tempo esperado.", variant: "destructive" });
+        
+        let errorMessage = e.message || "A prospecção falhou ou não retornou resultados.";
+        if (errorMessage.includes("Failed to fetch")) {
+          errorMessage = "Erro de rede: O N8N demorou muito (Timeout) ou bloqueou a resposta por falta de permissão CORS no nó 'Respond to Webhook'.";
+        }
+
+        toast({ 
+          title: "Erro na Prospecção", 
+          description: errorMessage, 
+          variant: "destructive" 
+        });
       });
 
       return { created, count: 0 };
