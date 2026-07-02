@@ -118,9 +118,9 @@ export function useProspectingCampaigns() {
       
       const created = transformDbToFrontend(data as DbProspectingCampaign);
 
-      // Trigger Webhook
+      // Trigger Webhook and await response
       try {
-        await fetch("https://n8n.6ksfuf.easypanel.host/webhook/prospecition", {
+        const response = await fetch("https://n8n.6ksfuf.easypanel.host/webhook/prospecition", {
           method: "POST",
           headers: {
             "Content-Type": "application/json"
@@ -137,16 +137,48 @@ export function useProspectingCampaigns() {
             post_action_id: created.postActionId
           })
         });
+
+        if (response.ok) {
+          const results = await response.json();
+          // Assume results is an array of leads coming from n8n
+          if (Array.isArray(results) && results.length > 0) {
+             const leadsToInsert = results.map((lead: any) => ({
+               user_id: user.id,
+               name: lead.name || lead.title || "Sem nome",
+               phone: lead.phone || lead.phoneUnformatted || null,
+               custom_fields: lead,
+               active_campaign_id: created.id,
+               active_campaign_type: "whatsapp",
+               source_name: "Google Maps",
+               source_type: "prospecting"
+             })).filter(l => l.phone); // Apenas insere quem tem telefone
+
+             if (leadsToInsert.length > 0) {
+               await supabase.from("leads").insert(leadsToInsert);
+             }
+          }
+
+          // Atualiza status para concluído
+          await supabase.from("prospecting_campaigns").update({ status: "completed" }).eq("id", created.id);
+          created.status = "completed";
+          
+          return { created, count: Array.isArray(results) ? results.length : 0 };
+        }
       } catch (e) {
         console.error("Erro ao notificar webhook:", e);
-        // We don't throw here to not revert the UI creation, but it could be logged.
+        await supabase.from("prospecting_campaigns").update({ status: "error" }).eq("id", created.id);
+        created.status = "error";
       }
 
-      return created;
+      return { created, count: 0 };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["prospecting_campaigns"] });
-      toast({ title: "Campanha iniciada", description: "Sua busca foi enviada para processamento em segundo plano." });
+      if (data.created.status === "completed") {
+        toast({ title: "Prospecção Concluída!", description: `Sua busca terminou e retornou contatos prontos para uso.` });
+      } else {
+        toast({ title: "Aviso", description: "A prospecção falhou ou não retornou resultados no tempo esperado." });
+      }
     },
     onError: (error) => {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
