@@ -54,28 +54,53 @@ export function ProspectingLeadsDialog({ campaignId, campaignName, open, onOpenC
           ) : (
             <ScrollArea className="flex-1 h-full rounded-xl border border-border/30 bg-card/30">
               <div className="divide-y divide-border/30">
-                {leads.map((lead) => (
-                  <div key={lead.id} className="p-4 hover:bg-muted/30 transition-colors flex items-start gap-4">
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <User className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-semibold text-foreground truncate">{lead.name}</h4>
-                      <div className="flex items-center gap-4 mt-1">
-                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                          <Phone className="h-3.5 w-3.5" />
-                          <span>{lead.phone}</span>
+                {leads.map((lead) => {
+                  const custom = (lead.custom_fields || {}) as any;
+                  return (
+                    <div key={lead.id} className="p-4 hover:bg-muted/30 transition-colors flex items-start gap-4">
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <User className="h-5 w-5 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-foreground truncate">{lead.name}</h4>
+                        
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-1.5">
+                          {lead.phone && (
+                            <div className="flex items-center gap-1.5 text-sm text-muted-foreground whitespace-nowrap">
+                              <Phone className="h-3.5 w-3.5 shrink-0" />
+                              <span>{lead.phone}</span>
+                            </div>
+                          )}
+                          
+                          {custom.categoryName && (
+                            <div className="flex items-center gap-1.5 text-sm text-muted-foreground whitespace-nowrap">
+                              <Badge variant="outline" className="text-[10px] h-5 px-1.5 font-normal">
+                                {custom.categoryName}
+                              </Badge>
+                            </div>
+                          )}
+
+                          {custom.totalScore != null && (
+                            <div className="flex items-center gap-1.5 text-sm text-amber-500 font-medium whitespace-nowrap">
+                              <span className="text-[12px]">★</span>
+                              <span>{custom.totalScore}</span>
+                              {custom.reviewsCount != null && (
+                                <span className="text-muted-foreground text-xs font-normal">({custom.reviewsCount})</span>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        {lead.custom_fields && typeof lead.custom_fields === 'object' && (lead.custom_fields as any).address && (
-                          <div className="flex items-center gap-1.5 text-sm text-muted-foreground truncate">
-                            <MapPin className="h-3.5 w-3.5" />
-                            <span className="truncate">{(lead.custom_fields as any).address}</span>
+
+                        {custom.address && (
+                          <div className="flex items-start gap-1.5 text-sm text-muted-foreground mt-1.5">
+                            <MapPin className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                            <span className="line-clamp-2 leading-snug">{custom.address}</span>
                           </div>
                         )}
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </ScrollArea>
           )}
