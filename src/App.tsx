@@ -25,6 +25,7 @@ import {
   ContextCampaignLogs,
   ProspectingCampaigns,
 } from "./pages/campaigns";
+import ProspectingCampaignLeads from "./pages/campaigns/ProspectingCampaignLeads";
 import PhoneNumbers from "./pages/PhoneNumbers";
 import Logs from "./pages/Logs";
 import Instances from "./pages/Instances";
@@ -136,6 +137,7 @@ const App = () => {
                         <Route path="whatsapp/contexto" element={<ContextCampaigns />} />
                         <Route path="whatsapp/contexto/logs" element={<ContextCampaignLogs />} />
                         <Route path="whatsapp/prospeccao" element={<ProspectingCampaigns />} />
+                        <Route path="whatsapp/prospeccao/:id" element={<ProspectingCampaignLeads />} />
                       </Route>
 
                       {/* Scheduling routes */}
