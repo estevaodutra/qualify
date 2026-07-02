@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { useProspectingCampaigns } from "@/hooks/useProspectingCampaigns";
+import { useProspectingCampaigns, ProspectingCampaign } from "@/hooks/useProspectingCampaigns";
 import { ProspectingCampaignList, CreateProspectingDialog } from "@/components/prospecting-campaigns";
 import { CampaignBreadcrumb } from "@/components/campaigns";
 import { toast } from "sonner";
 
 export default function ProspectingCampaigns() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [editingCampaign, setEditingCampaign] = useState<ProspectingCampaign | null>(null);
 
   const {
     campaigns,
@@ -27,6 +28,7 @@ export default function ProspectingCampaigns() {
     try {
       await createCampaign(data);
       setShowCreateDialog(false);
+      setEditingCampaign(null);
     } catch {
       // toast is already handled in the hook, but we can do extra here if needed
     }
@@ -40,6 +42,16 @@ export default function ProspectingCampaigns() {
     }
   };
 
+  const handleRunAgain = (campaign: ProspectingCampaign) => {
+    setEditingCampaign(campaign);
+    setShowCreateDialog(true);
+  };
+
+  const handleEdit = (campaign: ProspectingCampaign) => {
+    setEditingCampaign(campaign);
+    setShowCreateDialog(true);
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <CampaignBreadcrumb channel="whatsapp" type="Prospecção" />
@@ -48,14 +60,23 @@ export default function ProspectingCampaigns() {
         campaigns={campaigns}
         isLoading={isLoading}
         onDelete={handleDelete}
-        onCreateNew={() => setShowCreateDialog(true)}
+        onCreateNew={() => {
+          setEditingCampaign(null);
+          setShowCreateDialog(true);
+        }}
+        onRunAgain={handleRunAgain}
+        onEdit={handleEdit}
       />
 
       <CreateProspectingDialog
         open={showCreateDialog}
-        onOpenChange={setShowCreateDialog}
+        onOpenChange={(open) => {
+          setShowCreateDialog(open);
+          if (!open) setEditingCampaign(null);
+        }}
         onCreate={handleCreate}
         isCreating={isCreating}
+        initialData={editingCampaign}
       />
     </div>
   );

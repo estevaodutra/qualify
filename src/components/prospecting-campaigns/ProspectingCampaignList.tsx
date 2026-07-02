@@ -79,83 +79,66 @@ export function ProspectingCampaignList({
           <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50 transition-colors group-focus-within:text-primary" />
           <Input
             placeholder="Buscar campanhas..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className="pl-11 h-11 rounded-xl border-border/40 bg-background/50 backdrop-blur-sm transition-all focus:bg-background focus:ring-primary/20"
-          />
-        </div>
-        <Button onClick={onCreateNew} className="h-11 px-6 rounded-xl gradient-primary glow-primary font-bold shadow-lg transition-all active:scale-95">
-          <Plus className="mr-2 h-4.5 w-4.5" />
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold flex items-center gap-2">
+          <Target className="h-6 w-6 text-primary" />
+          Prospecção Ativa
+        </h2>
+        <Button onClick={onCreateNew} className="rounded-xl shadow-lg shadow-primary/20 font-bold px-6">
+          <Search className="h-4 w-4 mr-2" />
           Nova Prospecção
         </Button>
       </div>
 
-      {filtered.length === 0 ? (
-        <Card className="p-20 text-center border-dashed border-2 border-border/40 bg-muted/10 rounded-3xl">
-          <div className="mx-auto w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-6 shadow-sm">
-            <Search className="h-8 w-8 text-primary" />
+      {campaigns.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center rounded-2xl border border-dashed border-border/50 bg-card/30">
+          <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mb-6">
+            <MapPin className="h-10 w-10 text-primary opacity-80" />
           </div>
-          <h3 className="text-xl font-bold tracking-tight mb-2.5">Nenhuma prospecção encontrada</h3>
-          <p className="text-sm text-muted-foreground/60 mb-8 max-w-xs mx-auto font-medium">
-            Busque por novos leads no Google Maps e expanda sua base de contatos automaticamente.
-          </p>
-          <Button onClick={onCreateNew} className="h-11 rounded-xl gradient-primary glow-primary font-bold px-8">
-            <Plus className="mr-2 h-4.5 w-4.5" />
-            Iniciar Nova Busca
+          <h3 className="text-xl font-bold mb-2">Nenhuma busca realizada</h3>
+          <p className="text-muted-foreground max-w-sm mb-6">Você ainda não prospectou contatos. Inicie uma busca no Google Maps para extrair leads qualificados.</p>
+          <Button onClick={onCreateNew} variant="outline" className="rounded-xl border-primary/20 text-primary hover:bg-primary/5">
+            Começar Agora
           </Button>
-        </Card>
+        </div>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 stagger-children">
-          {filtered.map((campaign, idx) => {
-            const status = statusConfig[campaign.status] || statusConfig.running;
-            const StatusIcon = status.icon;
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {campaigns.map((campaign) => {
+            const { icon: StatusIcon, color, bg, label } = getStatusConfig(campaign.status);
+
             return (
-              <Card
-                key={campaign.id}
-                className={cn(
-                  "border-white/40 bg-card/60 backdrop-blur-xl shadow-sm rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-elevation-md animate-fade-in",
-                  `stagger-${(idx % 4) + 1}`
-                )}
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-1.5 flex-1 min-w-0 pr-4">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Badge className={cn("text-[9px] font-bold uppercase tracking-[0.1em] px-2 py-0.5", status.className)}>
-                          {status.label}
-                        </Badge>
-                      </div>
-                      <CardTitle className="text-base font-bold tracking-tight leading-tight line-clamp-1 group-hover:text-primary transition-colors">
-                        {campaign.name}
-                      </CardTitle>
-                      
-                      <div className="text-xs font-medium text-muted-foreground/80 mt-2 space-y-1">
-                        <div className="flex items-center gap-1.5">
-                           <Search className="w-3.5 h-3.5 opacity-70" /> {campaign.searchTerms}
-                        </div>
-                        {campaign.places && (
-                          <div className="flex items-center gap-1.5">
-                             <MapPin className="w-3.5 h-3.5 opacity-70" /> {campaign.places}
-                          </div>
-                        )}
-                        <div className="flex items-center gap-1.5 pt-1">
-                          <span className="font-semibold text-foreground/80">Quantidade solicitada:</span> {campaign.quantity}
-                        </div>
-                      </div>
-                      
+              <Card key={campaign.id} className="rounded-2xl border-border/50 shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md hover:border-primary/30 group bg-card/40 backdrop-blur-sm">
+                <CardHeader className="pb-3 relative">
+                  <div className="absolute top-4 right-4 flex items-center gap-2">
+                    <div className={cn("px-2.5 py-1 rounded-full flex items-center gap-1.5 text-[10px] font-bold tracking-wider", bg, color)}>
+                      {label}
                     </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
-                        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-primary/5 transition-all">
-                          <MoreVertical className="h-4.5 w-4.5 text-muted-foreground/60" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-xl border-border/40 bg-background/95 backdrop-blur-xl">
-                        <DropdownMenuItem className="rounded-lg m-1 gap-2.5 font-medium text-destructive cursor-pointer focus:text-destructive focus:bg-destructive/5" onClick={e => { e.stopPropagation(); setDeleteId(campaign.id); }}>
-                          <Trash2 className="h-4 w-4" /> Excluir Histórico
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                  </div>
+                  <CardTitle className="text-lg font-bold pr-28 line-clamp-1 group-hover:text-primary transition-colors">
+                    {campaign.name}
+                  </CardTitle>
+                  
+                  <div className="space-y-2 mt-4">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
+                      <Search className="h-4 w-4 opacity-70 shrink-0" />
+                      <span className="truncate">{campaign.searchTerms}</span>
+                    </div>
+                    {campaign.places && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
+                        <MapPin className="h-4 w-4 opacity-70 shrink-0" />
+                        <span className="truncate">{campaign.places}</span>
+                      </div>
+                    )}
+                    {campaign.category && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
+                        <ListFilter className="h-4 w-4 opacity-70 shrink-0" />
+                        <span className="truncate">{campaign.category}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
+                      <Users className="h-4 w-4 opacity-70 shrink-0" />
+                      <span>Quantidade solicitada: <strong className="text-foreground">{campaign.quantity}</strong></span>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="pt-2">
@@ -165,6 +148,45 @@ export function ProspectingCampaignList({
                       <span className="text-[10px] font-bold uppercase tracking-wider">
                         {format(new Date(campaign.createdAt), "dd MMM yyyy", { locale: ptBR })}
                       </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {campaign.status === "completed" && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          className="h-8 px-2 text-xs font-semibold text-primary/80 hover:text-primary hover:bg-primary/10 rounded-lg"
+                          onClick={() => setViewLeadsCampaign({ id: campaign.id, name: campaign.name })}
+                        >
+                          <Eye className="h-3.5 w-3.5 mr-1" /> Ver Leads
+                        </Button>
+                      )}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-muted/50">
+                            <MoreVertical className="h-4.5 w-4.5 text-muted-foreground/60" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-52 rounded-xl shadow-xl border-border/40 bg-background/95 backdrop-blur-xl p-2 space-y-1">
+                          {campaign.status === "completed" && (
+                            <DropdownMenuItem className="rounded-lg font-medium cursor-pointer" onClick={() => setViewLeadsCampaign({ id: campaign.id, name: campaign.name })}>
+                              <Eye className="h-4 w-4 mr-2" /> Ver Leads
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem className="rounded-lg font-medium cursor-pointer" onClick={() => onRunAgain?.(campaign)}>
+                            <Play className="h-4 w-4 mr-2" /> Executar Novamente
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="rounded-lg font-medium cursor-pointer" onClick={() => onEdit?.(campaign)}>
+                            <Edit className="h-4 w-4 mr-2" /> Editar / Duplicar
+                          </DropdownMenuItem>
+                          
+                          <div className="h-px bg-border/40 my-1 mx-2" />
+                          
+                          <DropdownMenuItem className="rounded-lg font-medium text-destructive cursor-pointer focus:text-destructive focus:bg-destructive/5" onClick={() => setDeleteId(campaign.id)}>
+                            <Trash2 className="h-4 w-4 mr-2" /> Excluir Histórico
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 </CardContent>
@@ -190,6 +212,13 @@ export function ProspectingCampaignList({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ProspectingLeadsDialog
+        campaignId={viewLeadsCampaign?.id || null}
+        campaignName={viewLeadsCampaign?.name || ""}
+        open={!!viewLeadsCampaign}
+        onOpenChange={(open) => !open && setViewLeadsCampaign(null)}
+      />
     </div>
   );
 }

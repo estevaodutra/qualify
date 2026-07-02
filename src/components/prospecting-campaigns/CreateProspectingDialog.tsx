@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +15,7 @@ import { Search, Loader2 } from "lucide-react";
 import { useCallCampaigns } from "@/hooks/useCallCampaigns";
 import { useDispatchCampaigns } from "@/hooks/useDispatchCampaigns";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ProspectingCampaign } from "@/hooks/useProspectingCampaigns";
 
 interface CreateProspectingDialogProps {
   open: boolean;
@@ -29,6 +30,7 @@ interface CreateProspectingDialogProps {
     postActionId?: string;
   }) => Promise<void>;
   isCreating: boolean;
+  initialData?: ProspectingCampaign | null;
 }
 
 export function CreateProspectingDialog({
@@ -36,6 +38,7 @@ export function CreateProspectingDialog({
   onOpenChange,
   onCreate,
   isCreating,
+  initialData,
 }: CreateProspectingDialogProps) {
   const [name, setName] = useState("");
   const [searchTerms, setSearchTerms] = useState("");
@@ -44,6 +47,26 @@ export function CreateProspectingDialog({
   const [exactNames, setExactNames] = useState(false);
   const [places, setPlaces] = useState("");
   const [postActionId, setPostActionId] = useState("none");
+
+  useEffect(() => {
+    if (open && initialData) {
+      setName(initialData.name + " (Cópia)");
+      setSearchTerms(initialData.searchTerms);
+      setQuantity(initialData.quantity.toString());
+      setCategory(initialData.category || "");
+      setExactNames(initialData.exactNames);
+      setPlaces(initialData.places || "");
+      setPostActionId(initialData.postActionId || "none");
+    } else if (open && !initialData) {
+      setName("");
+      setSearchTerms("");
+      setQuantity("50");
+      setCategory("");
+      setExactNames(false);
+      setPlaces("");
+      setPostActionId("none");
+    }
+  }, [open, initialData]);
 
   const { campaigns: callCampaigns } = useCallCampaigns();
   const { campaigns: dispatchCampaigns } = useDispatchCampaigns();
