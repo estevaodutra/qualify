@@ -27,6 +27,7 @@ import {
   UserCircle,
   Activity,
   Layers,
+  Search,
 } from "lucide-react";
 import {
   Sidebar,
@@ -112,6 +113,7 @@ export function AppSidebar() {
       { title: "Grupos", url: "/campaigns/whatsapp/grupos", icon: Users },
       { title: "Pirata", url: "/campaigns/whatsapp/pirata", icon: Skull },
       { title: "Contexto", url: "/campaigns/whatsapp/contexto", icon: Activity },
+      { title: "Prospecção", url: "/campaigns/whatsapp/prospeccao", icon: Search },
     ],
     telefonia: [
       { title: "URA", url: "/campaigns/telefonia/ura", icon: Bot, comingSoon: true },
