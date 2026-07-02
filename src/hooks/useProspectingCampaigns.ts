@@ -118,29 +118,26 @@ export function useProspectingCampaigns() {
       
       const created = transformDbToFrontend(data as DbProspectingCampaign);
 
-      // Trigger Webhook and await response
-      try {
-        const response = await fetch("https://n8n.6ksfuf.easypanel.host/webhook/prospecition", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            campaign_id: created.id,
-            company_id: activeCompanyId,
-            user_id: user.id,
-            search_terms: created.searchTerms,
-            quantity: created.quantity,
-            category: created.category,
-            exact_names: created.exactNames,
-            places: created.places,
-            post_action_id: created.postActionId
-          })
-        });
-
+      // Trigger Webhook in background
+      fetch("https://n8n.6ksfuf.easypanel.host/webhook/prospecition", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          campaign_id: created.id,
+          company_id: activeCompanyId,
+          user_id: user.id,
+          search_terms: created.searchTerms,
+          quantity: created.quantity,
+          category: created.category,
+          exact_names: created.exactNames,
+          places: created.places,
+          post_action_id: created.postActionId
+        })
+      }).then(async (response) => {
         if (response.ok) {
           const results = await response.json();
-          // Assume results is an array of leads coming from n8n
           if (Array.isArray(results) && results.length > 0) {
              const leadsToInsert = results.map((lead: any) => ({
                user_id: user.id,
@@ -160,25 +157,23 @@ export function useProspectingCampaigns() {
 
           // Atualiza status para concluído
           await supabase.from("prospecting_campaigns").update({ status: "completed" }).eq("id", created.id);
-          created.status = "completed";
-          
-          return { created, count: Array.isArray(results) ? results.length : 0 };
+          queryClient.invalidateQueries({ queryKey: ["prospecting_campaigns"] });
+          toast({ title: "Prospecção Concluída!", description: "Sua busca terminou e retornou contatos prontos para uso." });
+        } else {
+          throw new Error("Resposta da webhook com erro.");
         }
-      } catch (e) {
+      }).catch(async (e) => {
         console.error("Erro ao notificar webhook:", e);
         await supabase.from("prospecting_campaigns").update({ status: "error" }).eq("id", created.id);
-        created.status = "error";
-      }
+        queryClient.invalidateQueries({ queryKey: ["prospecting_campaigns"] });
+        toast({ title: "Erro na Prospecção", description: "A prospecção falhou ou não retornou resultados no tempo esperado.", variant: "destructive" });
+      });
 
       return { created, count: 0 };
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["prospecting_campaigns"] });
-      if (data.created.status === "completed") {
-        toast({ title: "Prospecção Concluída!", description: `Sua busca terminou e retornou contatos prontos para uso.` });
-      } else {
-        toast({ title: "Aviso", description: "A prospecção falhou ou não retornou resultados no tempo esperado." });
-      }
+      toast({ title: "Campanha iniciada", description: "Está sendo executado em segundo plano." });
     },
     onError: (error) => {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
