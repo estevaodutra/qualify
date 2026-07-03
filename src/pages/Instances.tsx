@@ -1060,7 +1060,7 @@ export default function Instances() {
                 </SelectContent>
               </Select>
             </div>
-            {newInstance.provider === "Z-API" && <div className="space-y-2">
+            <div className="space-y-2">
                 <Label htmlFor="newPhoneNumber">
                   {t("instances.phoneNumber")}
                   <span className="text-muted-foreground ml-1 text-xs">
@@ -1074,7 +1074,7 @@ export default function Instances() {
                 <p className="text-xs text-muted-foreground">
                   {t("instances.phoneNumberHint")}
                 </p>
-              </div>}
+              </div>
             <div className="space-y-2">
               <Label>{t("instances.function")}</Label>
               <Select value={newInstance.function} onValueChange={(value: InstanceFunction) => setNewInstance(prev => ({
@@ -1181,7 +1181,7 @@ export default function Instances() {
                 </SelectContent>
               </Select>
             </div>
-            {editInstance?.provider === "Z-API" && <div className="space-y-2">
+            <div className="space-y-2">
                 <Label htmlFor="editPhoneNumber">
                   {t("instances.phoneNumber")} ({t("instances.optional")})
                 </Label>
@@ -1190,7 +1190,7 @@ export default function Instances() {
               phoneNumber: formatPhoneNumber(e.target.value)
             } : null)} />
                 <p className="text-xs text-muted-foreground">{t("instances.phoneNumberHint")}</p>
-              </div>}
+              </div>
             <div className="space-y-2">
               <Label>{t("instances.function")}</Label>
               <Select value={editInstance?.function || "dispatcher"} onValueChange={(value: InstanceFunction) => setEditInstance(prev => prev ? {
