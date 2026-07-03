@@ -17,7 +17,7 @@ interface TriggerSequenceDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export function TriggerSequenceDialog({ leadId, leadPhone, leadName, open, onOpenChange }: TriggerSequenceDialogProps) {
+export function TriggerSequenceDialog({ leadPhone, leadName, open, onOpenChange }: TriggerSequenceDialogProps) {
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>("");
   const [selectedSequenceId, setSelectedSequenceId] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);

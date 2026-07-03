@@ -22,7 +22,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Plus, Search, MoreVertical, Trash2, CheckCircle, MapPin, Loader2, AlertCircle, Eye, Play, Edit, Users, ListFilter, Calendar
+  Plus, Search, MoreVertical, Trash2, CheckCircle, MapPin, Loader2, AlertCircle, Eye, Play, Edit
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
