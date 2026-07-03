@@ -26,6 +26,8 @@ import {
   ProspectingCampaigns,
 } from "./pages/campaigns";
 import ProspectingCampaignLeads from "./pages/campaigns/ProspectingCampaignLeads";
+import GroupSequenceBuilderPage from "./pages/campaigns/GroupSequenceBuilderPage";
+import DispatchSequenceBuilderPage from "./pages/campaigns/DispatchSequenceBuilderPage";
 import PhoneNumbers from "./pages/PhoneNumbers";
 import Logs from "./pages/Logs";
 import Instances from "./pages/Instances";
@@ -159,6 +161,24 @@ const App = () => {
                       element={
                         <ProtectedRoute>
                           <OperatorScript />
+                        </ProtectedRoute>
+                      }
+                    />
+
+                    {/* Sequence Builder — fullscreen "Builder Mode", no sidebar/breadcrumb/tabs */}
+                    <Route
+                      path="/campaigns/whatsapp/grupos/:campaignId/sequences/:sequenceId/builder"
+                      element={
+                        <ProtectedRoute>
+                          <GroupSequenceBuilderPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/campaigns/whatsapp/despacho/:campaignId/sequences/:sequenceId/builder"
+                      element={
+                        <ProtectedRoute>
+                          <DispatchSequenceBuilderPage />
                         </ProtectedRoute>
                       }
                     />

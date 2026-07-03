@@ -370,11 +370,19 @@ export function useSequenceNodes(sequenceId: string | undefined) {
         .delete()
         .eq("sequence_id", sequenceId);
 
+      // The canvas-only trigger/start node is a decorative entry-point marker
+      // (its config only carries UI copy for the "Início" box) — it must never
+      // be persisted as a real sequence node, or the execution engine would
+      // process it as the first "node" in the graph. UnifiedSequenceBuilder's
+      // hydration already re-creates and re-wires this node locally whenever
+      // it's missing, so excluding it here is safe.
+      const persistableNodes = nodesToSave.filter(node => node.nodeType !== "trigger");
+
       // Insert new nodes and get generated IDs
-      if (nodesToSave.length > 0) {
+      if (persistableNodes.length > 0) {
         const { data: insertedNodes, error } = await supabase
           .from("sequence_nodes")
-          .insert(nodesToSave.map((node, index) => ({
+          .insert(persistableNodes.map((node, index) => ({
             sequence_id: sequenceId!,
             user_id: user.id,
             node_type: node.nodeType,
@@ -389,7 +397,7 @@ export function useSequenceNodes(sequenceId: string | undefined) {
 
         // Create mapping: localId -> dbId (by insertion order)
         const idMapping: Record<string, string> = {};
-        nodesToSave.forEach((node, index) => {
+        persistableNodes.forEach((node, index) => {
           if (insertedNodes && insertedNodes[index]) {
             idMapping[node.localId] = insertedNodes[index].id;
           }
@@ -429,15 +437,23 @@ export function useSequenceNodes(sequenceId: string | undefined) {
         .delete()
         .eq("sequence_id", sequenceId);
 
+      // Only keep connections whose endpoints were actually persisted as real
+      // nodes (e.g. a connection from the decorative trigger node has no
+      // mapped id, since the trigger itself is never saved to sequence_nodes —
+      // silently drop it instead of inserting the raw local id into a UUID column).
+      const validConnections = connectionsToSave.filter(
+        conn => idMapping[conn.sourceNodeId] !== undefined && idMapping[conn.targetNodeId] !== undefined
+      );
+
       // Insert new connections with mapped IDs
-      if (connectionsToSave.length > 0) {
+      if (validConnections.length > 0) {
         const { error } = await supabase
           .from("sequence_connections")
-          .insert(connectionsToSave.map(conn => ({
+          .insert(validConnections.map(conn => ({
             sequence_id: sequenceId,
             user_id: user.id,
-            source_node_id: idMapping[conn.sourceNodeId] || conn.sourceNodeId,
-            target_node_id: idMapping[conn.targetNodeId] || conn.targetNodeId,
+            source_node_id: idMapping[conn.sourceNodeId],
+            target_node_id: idMapping[conn.targetNodeId],
             condition_path: conn.conditionPath || null,
           })));
 

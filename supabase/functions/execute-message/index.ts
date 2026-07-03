@@ -889,6 +889,24 @@ Deno.serve(async (req) => {
         console.log(`[ExecuteMessage] Processing node: ${node.id} (${node.node_type})`);
         const nodeStartedAt = new Date();
 
+        // ============= TRIGGER (START) NODE =============
+        // The trigger/start node is a canvas entry-point marker, not a sendable
+        // message node — its "config.content" is decorative UI copy only. It must
+        // never reach the generic send branch below (which would otherwise send
+        // that copy as a real WhatsApp message). It just passes the trigger
+        // payload through to the next connected node.
+        if (node.node_type === "trigger" || node.node_type === "start" || node.node_type === "inicio") {
+          await logNodeExecution(supabase, {
+            executionId: workflowExecutionId, userId, nodeId: node.id, nodeType: node.node_type,
+            status: "success", startedAt: nodeStartedAt,
+            input: triggerContext || {}, output: triggerContext || {},
+          });
+          const nextConn = connections.find(c => c.source_node_id === node.id);
+          currentNodeId = nextConn ? nextConn.target_node_id : null;
+          nodesProcessed++;
+          continue;
+        }
+
         // ============= CHANNEL SELECTOR NODES =============
         if (node.node_type === "channel_select") {
           const selectedInstanceId = node.config.instanceId as string;

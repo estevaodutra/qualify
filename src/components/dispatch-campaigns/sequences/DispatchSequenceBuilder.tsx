@@ -92,7 +92,11 @@ function stepsToNodes(steps: ReturnType<typeof useDispatchSteps>["steps"]): Loca
 }
 
 function nodesToSteps(nodes: LocalNode[]) {
-  return nodes.map((node, index) => {
+  // The canvas-only trigger/start node is a decorative entry-point marker, not
+  // a real step — dispatch sequences have no concept of a trigger step, so it
+  // must never be converted (it would otherwise become a step with an empty
+  // message, since its config only carries decorative UI copy).
+  return nodes.filter(node => node.nodeType !== "trigger").map((node, index) => {
     let stepType = "message";
     let messageType: string | null = null;
     let messageContent: string | null = null;

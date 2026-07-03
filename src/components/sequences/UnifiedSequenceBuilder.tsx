@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect, useRef, ReactNode } from "react";
 import { LocalNode, LocalConnection, NodeCategory } from "./shared-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -10,11 +9,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   ArrowLeft, Save, Play, Pause, Trash2, ZoomIn, ZoomOut, Maximize,
-  Plus, Loader2, Info, GitBranch, Info as HelpIcon, Copy, PenLine, History
+  Loader2, Info, GitBranch, Copy, PenLine, History
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { ExecutionsPanel } from "./executions/ExecutionsPanel";
+import { NodePalettePopover, NODE_PALETTE_DND_MIME } from "./NodePalettePopover";
 
 export interface UnifiedSequenceBuilderProps {
   sequenceName: string;
@@ -284,22 +284,35 @@ export function UnifiedSequenceBuilder({
     });
   };
 
-  // Add Node from Palette
-  const handleAddNode = (type: string) => {
+  // Add Node from the floating palette — either at the canvas' current
+  // viewport center (click-to-add) or at an explicit drop point (drag-and-drop
+  // from the palette), converted from screen to flow coordinates the same way
+  // node dragging does.
+  const handleAddNode = (type: string, dropClientPos?: { x: number; y: number }) => {
     const id = generateNodeId();
     const config = getDefaultConfig(type);
-    
+
     const rect = canvasRef.current?.getBoundingClientRect();
-    const canvasCenterX = rect ? (rect.width / 2 - panOffset.x) / zoom : 300;
-    const canvasCenterY = rect ? (rect.height / 2 - panOffset.y) / zoom : 150;
+    let positionX: number;
+    let positionY: number;
+
+    if (dropClientPos && rect) {
+      positionX = Math.round((dropClientPos.x - rect.left - panOffset.x) / zoom);
+      positionY = Math.round((dropClientPos.y - rect.top - panOffset.y) / zoom);
+    } else {
+      const canvasCenterX = rect ? (rect.width / 2 - panOffset.x) / zoom : 300;
+      const canvasCenterY = rect ? (rect.height / 2 - panOffset.y) / zoom : 150;
+      positionX = Math.round(canvasCenterX + (Math.random() - 0.5) * 50);
+      positionY = Math.round(canvasCenterY + (Math.random() - 0.5) * 50);
+    }
 
     const newNode: LocalNode = {
       id,
       nodeType: type,
       nodeOrder: localNodes.length,
       config,
-      positionX: Math.round(canvasCenterX + (Math.random() - 0.5) * 50),
-      positionY: Math.round(canvasCenterY + (Math.random() - 0.5) * 50),
+      positionX,
+      positionY,
     };
 
     updateNodesAndSave(prev => [...prev, newNode]);
@@ -527,40 +540,6 @@ export function UnifiedSequenceBuilder({
           so this stays correct regardless of chrome above it. */
       <div className="flex-1 flex gap-4 min-h-0 overflow-hidden">
 
-        {/* Palette (Menu Lateral de Blocos) */}
-        <Card className="w-56 shrink-0 flex flex-col border-slate-200/60 bg-white rounded-2xl shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-slate-100">
-            <h4 className="text-xs font-bold text-slate-700 uppercase tracking-widest flex items-center gap-1.5">
-              <Plus className="h-4 w-4 text-[#8A3CFF]" />
-              Blocos Básicos
-            </h4>
-          </div>
-          <div className="p-3 space-y-4 overflow-y-auto flex-1">
-            {nodeCategories.map(category => (
-              <div key={category.id} className="space-y-1.5">
-                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider px-1">{category.label}</span>
-                <div className="space-y-1">
-                  {category.nodes.map(node => {
-                    const NodeIcon = node.icon;
-                    return (
-                      <button
-                        key={node.type}
-                        onClick={() => handleAddNode(node.type)}
-                        className="flex items-center gap-2.5 w-full p-2 text-left rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-100/80 hover:border-slate-200 transition-all cursor-pointer group"
-                      >
-                        <div className={cn("p-1.5 rounded-lg text-white shrink-0 group-hover:scale-105 transition-transform", node.color)}>
-                          <NodeIcon className="h-3.5 w-3.5" />
-                        </div>
-                        <span className="text-xs font-semibold text-slate-700">{node.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-
         {/* Builder Canvas Area */}
         <div className="flex-1 border border-slate-200/60 bg-[#F5F6FA] rounded-2xl overflow-hidden relative shadow-inner flex flex-col">
           
@@ -579,10 +558,7 @@ export function UnifiedSequenceBuilder({
             <span className="text-[10px] font-mono text-slate-500 pr-2 font-bold">{Math.round(zoom * 100)}%</span>
           </div>
 
-          <div className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-white px-3 py-1.5 border border-slate-200/80 rounded-xl shadow-sm">
-            <HelpIcon className="h-3.5 w-3.5 text-[#8A3CFF]" />
-            <span className="text-[10px] font-bold text-slate-500">Arraste e conecte os blocos de esquerda para a direita.</span>
-          </div>
+          <NodePalettePopover nodeCategories={nodeCategories} onAddNode={handleAddNode} />
 
           {/* Interactive Canvas Wrapper */}
           <div
@@ -590,6 +566,18 @@ export function UnifiedSequenceBuilder({
             onMouseDown={handleCanvasMouseDown}
             onMouseMove={handleCanvasMouseMove}
             onMouseUp={handleCanvasMouseUp}
+            onDragOver={(e) => {
+              if (e.dataTransfer.types.includes(NODE_PALETTE_DND_MIME)) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "copy";
+              }
+            }}
+            onDrop={(e) => {
+              const type = e.dataTransfer.getData(NODE_PALETTE_DND_MIME);
+              if (!type) return;
+              e.preventDefault();
+              handleAddNode(type, { x: e.clientX, y: e.clientY });
+            }}
             className={cn("flex-1 relative overflow-hidden select-none", isPanning ? "cursor-grabbing" : "cursor-grab")}
             style={{
               backgroundColor: "#F8F9FC",
