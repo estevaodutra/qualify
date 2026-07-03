@@ -3,7 +3,7 @@ import { MessageSequence, useSequenceNodes } from "@/hooks/useSequences";
 import { UnifiedSequenceBuilder } from "@/components/sequences/UnifiedSequenceBuilder";
 import { UnifiedNodeConfigPanel } from "@/components/sequences/UnifiedNodeConfigPanel";
 import { LocalNode, NodeCategory } from "@/components/sequences/shared-types";
-import { TriggerType, TriggerConfig } from "./TriggerConfigCard";
+import { TriggerConfigCard, TriggerType, TriggerConfig } from "./TriggerConfigCard";
 import { MediaUploader } from "./MediaUploader";
 import { PollActionDialog, PollActionConfig, getActionIconColor, getActionLabel } from "./PollActionDialog";
 import { toast } from "sonner";
@@ -94,7 +94,7 @@ const getDefaultConfig = (nodeType: string): Record<string, unknown> => {
 };
 
 export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderProps) {
-  const { nodes, connections, saveNodes, saveConnections, isSaving } = useSequenceNodes(sequence.id);
+  const { nodes, connections, saveNodes, saveConnections, isSaving, isLoading } = useSequenceNodes(sequence.id);
   const [triggerType, setTriggerType] = useState<TriggerType>(sequence.triggerType as TriggerType || "manual");
   const [triggerConfig, setTriggerConfig] = useState<TriggerConfig>((sequence.triggerConfig as TriggerConfig) || {});
 
@@ -164,7 +164,15 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
       sequenceId={sequence.id}
       nodeCategories={NODE_CATEGORIES}
       getDefaultConfig={getDefaultConfig}
-      renderTrigger={() => null}
+      renderTrigger={() => (
+        <TriggerConfigCard
+          triggerType={triggerType}
+          triggerConfig={triggerConfig}
+          onTriggerTypeChange={setTriggerType}
+          onTriggerConfigChange={setTriggerConfig}
+          sequenceId={sequence.id}
+        />
+      )}
       renderConfigPanel={(node, onUpdateConfig, onClose, onManualSend, isSendingManual) => (
         <UnifiedNodeConfigPanel
           node={node}
@@ -205,6 +213,7 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
       initialNodes={initialNodes}
       initialConnections={initialConnections}
       isSaving={isSaving}
+      isLoading={isLoading}
     />
   );
 }

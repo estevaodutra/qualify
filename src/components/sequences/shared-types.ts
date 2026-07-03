@@ -5,6 +5,8 @@ export interface LocalNode {
   nodeType: string;
   nodeOrder: number;
   config: Record<string, unknown>;
+  positionX?: number;
+  positionY?: number;
 }
 
 export interface LocalConnection {

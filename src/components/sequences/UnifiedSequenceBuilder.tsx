@@ -37,6 +37,7 @@ export interface UnifiedSequenceBuilderProps {
   initialNodes: LocalNode[];
   initialConnections: LocalConnection[];
   isSaving: boolean;
+  isLoading?: boolean;
 }
 
 export function UnifiedSequenceBuilder({
@@ -54,6 +55,7 @@ export function UnifiedSequenceBuilder({
   initialNodes,
   initialConnections,
   isSaving,
+  isLoading = false,
 }: UnifiedSequenceBuilderProps) {
   const { toast } = useToast();
   const [localNodes, setLocalNodes] = useState<LocalNode[]>([]);
@@ -88,13 +90,21 @@ export function UnifiedSequenceBuilder({
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hydratedSequenceId = useRef<string | null>(null);
 
-  // Initialize and auto-position if nodes lack coordinates
+  // Initialize and auto-position if nodes lack coordinates.
+  // Runs only once per sequenceId — initialNodes/initialConnections are recreated
+  // with new array references on every parent render (autosave flips isSaving,
+  // query invalidation refetches, etc). Re-running this on every reference change
+  // would stomp over in-progress edits (e.g. snap a node back mid-drag).
   useEffect(() => {
+    if (isLoading || hydratedSequenceId.current === sequenceId) return;
+    hydratedSequenceId.current = sequenceId;
+
     // Ensure we always have a trigger node as the entrypoint
     const hasTrigger = initialNodes.some(node => node.nodeType === "trigger");
     let preparedNodes = [...initialNodes];
-    
+
     if (!hasTrigger) {
       preparedNodes.unshift({
         id: "trigger",
@@ -107,17 +117,22 @@ export function UnifiedSequenceBuilder({
     }
 
     const positionedNodes = preparedNodes.map((node, index) => {
-      const hasPos = (node as any).positionX !== undefined && (node as any).positionY !== undefined && ((node as any).positionX !== 0 || (node as any).positionY !== 0);
+      const hasPos = node.positionX !== undefined && node.positionY !== undefined && (node.positionX !== 0 || node.positionY !== 0);
       return {
         ...node,
-        positionX: hasPos ? (node as any).positionX : (node.nodeType === "trigger" ? 50 : 320 + (index - 1) * 260),
-        positionY: hasPos ? (node as any).positionY : (node.nodeType === "trigger" ? 150 : 150),
+        positionX: hasPos ? node.positionX : (node.nodeType === "trigger" ? 50 : 320 + (index - 1) * 260),
+        positionY: hasPos ? node.positionY : (node.nodeType === "trigger" ? 150 : 150),
       };
     });
     setLocalNodes(positionedNodes);
-    
-    // Auto-connect trigger to first step if no connections exist
+
+    const triggerNode = positionedNodes.find(n => n.nodeType === "trigger");
+    const hasTriggerConnection = triggerNode
+      ? initialConnections.some(c => c.sourceNodeId === triggerNode.id)
+      : true;
+
     if (initialConnections.length === 0 && positionedNodes.length > 1) {
+      // No connections saved yet: chain every node trigger -> 1 -> 2 -> ...
       const autoConns: LocalConnection[] = [];
       for (let i = 0; i < positionedNodes.length - 1; i++) {
         autoConns.push({
@@ -126,10 +141,17 @@ export function UnifiedSequenceBuilder({
         });
       }
       setLocalConnections(autoConns);
+    } else if (triggerNode && !hasTriggerConnection && positionedNodes.length > 1) {
+      // Existing flow saved before the trigger node existed: wire the
+      // newly-injected trigger into the first real step so it isn't orphaned.
+      const firstStep = positionedNodes.find(n => n.id !== triggerNode.id);
+      setLocalConnections(firstStep
+        ? [...initialConnections, { sourceNodeId: triggerNode.id, targetNodeId: firstStep.id }]
+        : initialConnections);
     } else {
       setLocalConnections(initialConnections);
     }
-  }, [initialNodes, initialConnections]);
+  }, [sequenceId, initialNodes, initialConnections, isLoading]);
 
   // Debounced Autosave
   const triggerAutosave = useCallback((nodesToSave: LocalNode[], connsToSave: LocalConnection[], nameToSave: string) => {
@@ -214,7 +236,7 @@ export function UnifiedSequenceBuilder({
 
   // Node drag start
   const handleNodeMouseDown = (e: React.MouseEvent, node: LocalNode) => {
-    if ((e.target as HTMLElement).closest("button") || (e.target as HTMLElement).closest(".h-3.5")) return;
+    if ((e.target as HTMLElement).closest("button") || (e.target as HTMLElement).closest("[data-node-port]")) return;
     
     e.stopPropagation();
     setDraggedNodeId(node.id);
@@ -470,10 +492,10 @@ export function UnifiedSequenceBuilder({
                   const tgtNode = localNodes.find(n => n.id === conn.targetNodeId);
                   if (!srcNode || !tgtNode) return null;
 
-                  const sX = (srcNode as any).positionX || 0;
-                  const sY = (srcNode as any).positionY || 0;
-                  const tX = (tgtNode as any).positionX || 0;
-                  const tY = (tgtNode as any).positionY || 0;
+                  const sX = srcNode.positionX || 0;
+                  const sY = srcNode.positionY || 0;
+                  const tX = tgtNode.positionX || 0;
+                  const tY = tgtNode.positionY || 0;
 
                   // Output port on the right side of the card
                   const portX1 = sX + 220;
@@ -541,8 +563,8 @@ export function UnifiedSequenceBuilder({
                   const NodeIcon = nodeInfo.icon;
                   const isSelected = selectedNodeId === node.id;
                   
-                  const posX = (node as any).positionX || 0;
-                  const posY = (node as any).positionY || 0;
+                  const posX = node.positionX || 0;
+                  const posY = node.positionY || 0;
 
                   const isCondition = node.nodeType === "condition";
                   const isTrigger = node.nodeType === "trigger";
@@ -567,8 +589,9 @@ export function UnifiedSequenceBuilder({
                       {/* Input Port (Left Handle) - Excluded for trigger node */}
                       {!isTrigger && (
                         <div
+                          data-node-port="true"
                           onMouseUp={(e) => handlePortMouseUp(e, node.id, "in")}
-                          className="absolute -left-1.5 top-[38px] h-3.5 w-3.5 rounded-full border-2 border-slate-300 bg-white hover:bg-[#8A3CFF] cursor-crosshair z-25 flex items-center justify-center transition-colors shadow-sm"
+                          className="absolute -left-1.5 top-[38px] h-3.5 w-3.5 rounded-full border-2 border-slate-300 bg-white hover:bg-[#8A3CFF] cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
                           title="Entrada do fluxo"
                         >
                           <div className="h-1.5 w-1.5 rounded-full bg-slate-300 hover:bg-white" />
@@ -578,8 +601,9 @@ export function UnifiedSequenceBuilder({
                       {/* Output Port(s) (Right Handles) */}
                       {!isCondition ? (
                         <div
+                          data-node-port="true"
                           onMouseDown={(e) => handlePortMouseDown(e, node.id, "out")}
-                          className="absolute -right-1.5 top-[38px] h-3.5 w-3.5 rounded-full border-2 border-[#8A3CFF] bg-background hover:bg-[#8A3CFF] cursor-crosshair z-25 flex items-center justify-center transition-colors shadow-sm"
+                          className="absolute -right-1.5 top-[38px] h-3.5 w-3.5 rounded-full border-2 border-[#8A3CFF] bg-background hover:bg-[#8A3CFF] cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
                           title="Saída do fluxo"
                         >
                           <div className="h-1.5 w-1.5 rounded-full bg-[#8A3CFF]" />
@@ -588,8 +612,9 @@ export function UnifiedSequenceBuilder({
                         <>
                           {/* "Sim" (True) output handle */}
                           <div
+                            data-node-port="true"
                             onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", "yes")}
-                            className="absolute -right-1.5 top-[28px] h-3.5 w-3.5 rounded-full border-2 border-emerald-500 bg-background hover:bg-emerald-500 cursor-crosshair z-25 flex items-center justify-center transition-colors shadow-sm"
+                            className="absolute -right-1.5 top-[28px] h-3.5 w-3.5 rounded-full border-2 border-emerald-500 bg-background hover:bg-emerald-500 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
                             title="Verdadeiro (Sim)"
                           >
                             <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
@@ -598,8 +623,9 @@ export function UnifiedSequenceBuilder({
 
                           {/* "Não" (False) output handle */}
                           <div
+                            data-node-port="true"
                             onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", "no")}
-                            className="absolute -right-1.5 top-[58px] h-3.5 w-3.5 rounded-full border-2 border-destructive bg-background hover:bg-destructive cursor-crosshair z-25 flex items-center justify-center transition-colors shadow-sm"
+                            className="absolute -right-1.5 top-[58px] h-3.5 w-3.5 rounded-full border-2 border-destructive bg-background hover:bg-destructive cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
                             title="Falso (Não)"
                           >
                             <div className="h-1.5 w-1.5 rounded-full bg-destructive" />

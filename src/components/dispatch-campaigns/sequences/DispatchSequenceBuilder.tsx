@@ -124,7 +124,7 @@ function nodesToSteps(nodes: LocalNode[]) {
 }
 
 export function DispatchSequenceBuilder({ sequence, onBack, onUpdate }: DispatchSequenceBuilderProps) {
-  const { steps, saveAllSteps, isSaving } = useDispatchSteps(sequence.id);
+  const { steps, saveAllSteps, isSaving, isLoading } = useDispatchSteps(sequence.id);
   const [triggerType, setTriggerType] = useState<DispatchTriggerType>((sequence.triggerType as DispatchTriggerType) || "manual");
   const [triggerConfig, setTriggerConfig] = useState<DispatchTriggerConfig>((sequence.triggerConfig as DispatchTriggerConfig) || {});
 
@@ -191,6 +191,7 @@ export function DispatchSequenceBuilder({ sequence, onBack, onUpdate }: Dispatch
       initialNodes={initialNodes}
       initialConnections={[]}
       isSaving={isSaving}
+      isLoading={isLoading}
     />
   );
 }
