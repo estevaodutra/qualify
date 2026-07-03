@@ -1,14 +1,15 @@
 import { useState, useCallback, useEffect, useRef, ReactNode } from "react";
-import { LocalNode, LocalConnection, NodeCategory, NodeTypeInfo } from "./shared-types";
+import { LocalNode, LocalConnection, NodeCategory } from "./shared-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { 
-  ArrowLeft, Save, Play, Pause, Trash2, HelpCircle, ZoomIn, ZoomOut, Maximize, 
-  Plus, Check, Loader2, Info, GitBranch, ArrowRight, Eye, RefreshCw
+  ArrowLeft, Save, Play, Pause, Trash2, ZoomIn, ZoomOut, Maximize, 
+  Plus, Loader2, Info, GitBranch, Settings2, Info as HelpIcon
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 export interface UnifiedSequenceBuilderProps {
   sequenceName: string;
@@ -25,7 +26,11 @@ export interface UnifiedSequenceBuilderProps {
     onManualSend?: () => void, 
     isSendingManual?: boolean
   ) => ReactNode;
-  onSave: (name: string, nodes: LocalNode[], connections: LocalConnection[]) => Promise<void>;
+  onSave: (
+    name: string, 
+    nodes: LocalNode[], 
+    connections: { sourceNodeId: string; targetNodeId: string; conditionPath?: string }[]
+  ) => Promise<void>;
   onToggleActive: () => Promise<void>;
   onManualSendNode?: (node: LocalNode) => Promise<void>;
   onBack: () => void;
@@ -56,7 +61,7 @@ export function UnifiedSequenceBuilder({
   const [sequenceName, setSequenceName] = useState(initialName);
   
   // Canvas State (Pan & Zoom)
-  const [panOffset, setPanOffset] = useState({ x: 100, y: 50 });
+  const [panOffset, setPanOffset] = useState({ x: 80, y: 80 });
   const [zoom, setZoom] = useState(1);
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
@@ -75,7 +80,9 @@ export function UnifiedSequenceBuilder({
   } | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
+  // Dialog & configuration states
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [showTriggerDialog, setShowTriggerDialog] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [isSendingManual, setIsSendingManual] = useState(false);
 
@@ -84,30 +91,43 @@ export function UnifiedSequenceBuilder({
 
   // Initialize and auto-position if nodes lack coordinates
   useEffect(() => {
-    if (initialNodes.length > 0) {
-      const positionedNodes = initialNodes.map((node, index) => {
-        const hasPos = (node as any).positionX !== undefined && (node as any).positionY !== undefined && ((node as any).positionX !== 0 || (node as any).positionY !== 0);
-        return {
-          ...node,
-          positionX: hasPos ? (node as any).positionX : 300,
-          positionY: hasPos ? (node as any).positionY : 50 + index * 180,
-        };
+    // Ensure we always have a trigger node as the entrypoint
+    const hasTrigger = initialNodes.some(node => node.nodeType === "trigger");
+    let preparedNodes = [...initialNodes];
+    
+    if (!hasTrigger) {
+      preparedNodes.unshift({
+        id: "trigger",
+        nodeType: "trigger",
+        nodeOrder: 0,
+        positionX: 50,
+        positionY: 150,
+        config: { label: "Início", content: "O gatilho é responsável por acionar a automação." }
       });
-      setLocalNodes(positionedNodes);
-      
-      // Auto-connect sequential nodes for legacy sequences without connections
-      if (initialConnections.length === 0 && positionedNodes.length > 1) {
-        const autoConns: LocalConnection[] = [];
-        for (let i = 0; i < positionedNodes.length - 1; i++) {
-          autoConns.push({
-            sourceNodeId: positionedNodes[i].id,
-            targetNodeId: positionedNodes[i + 1].id,
-          });
-        }
-        setLocalConnections(autoConns);
-      } else {
-        setLocalConnections(initialConnections);
+    }
+
+    const positionedNodes = preparedNodes.map((node, index) => {
+      const hasPos = (node as any).positionX !== undefined && (node as any).positionY !== undefined && ((node as any).positionX !== 0 || (node as any).positionY !== 0);
+      return {
+        ...node,
+        positionX: hasPos ? (node as any).positionX : (node.nodeType === "trigger" ? 50 : 320 + (index - 1) * 260),
+        positionY: hasPos ? (node as any).positionY : (node.nodeType === "trigger" ? 150 : 150),
+      };
+    });
+    setLocalNodes(positionedNodes);
+    
+    // Auto-connect trigger to first step if no connections exist
+    if (initialConnections.length === 0 && positionedNodes.length > 1) {
+      const autoConns: LocalConnection[] = [];
+      for (let i = 0; i < positionedNodes.length - 1; i++) {
+        autoConns.push({
+          sourceNodeId: positionedNodes[i].id,
+          targetNodeId: positionedNodes[i + 1].id,
+        });
       }
+      setLocalConnections(autoConns);
+    } else {
+      setLocalConnections(initialConnections);
     }
   }, [initialNodes, initialConnections]);
 
@@ -143,7 +163,12 @@ export function UnifiedSequenceBuilder({
   };
 
   const allNodeTypes = nodeCategories.flatMap(cat => cat.nodes);
-  const getNodeInfo = (type: string) => allNodeTypes.find(n => n.type === type) || allNodeTypes[0];
+  const getNodeInfo = (type: string) => {
+    if (type === "trigger") {
+      return { type: "trigger", label: "Inicio", icon: Play, color: "bg-emerald-500" };
+    }
+    return allNodeTypes.find(n => n.type === type) || allNodeTypes[0];
+  };
 
   const generateNodeId = () => `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
@@ -165,7 +190,6 @@ export function UnifiedSequenceBuilder({
       const rect = canvasRef.current?.getBoundingClientRect();
       if (!rect) return;
       
-      // Calculate mouse position inside canvas considering zoom and pan
       const x = (e.clientX - rect.left - panOffset.x) / zoom - nodeDragOffset.x;
       const y = (e.clientY - rect.top - panOffset.y) / zoom - nodeDragOffset.y;
       
@@ -180,28 +204,26 @@ export function UnifiedSequenceBuilder({
   };
 
   const handleCanvasMouseUp = () => {
-    if (isPanning) {
-      setIsPanning(false);
-    } else if (draggedNodeId) {
+    setIsPanning(false);
+    if (draggedNodeId) {
       setDraggedNodeId(null);
       triggerAutosave(localNodes, localConnections, sequenceName);
-    } else if (activePort) {
-      setActivePort(null);
     }
+    setActivePort(null);
   };
 
-  // Node Drag Handlers
+  // Node drag start
   const handleNodeMouseDown = (e: React.MouseEvent, node: LocalNode) => {
-    e.stopPropagation();
-    setSelectedNodeId(node.id);
-    setDraggedNodeId(node.id);
+    if ((e.target as HTMLElement).closest("button") || (e.target as HTMLElement).closest(".h-3.5")) return;
     
-    // Drag start relative to node top-left
-    const nodeX = (node as any).positionX || 0;
-    const nodeY = (node as any).positionY || 0;
+    e.stopPropagation();
+    setDraggedNodeId(node.id);
     
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
+    
+    const nodeX = node.positionX || 0;
+    const nodeY = node.positionY || 0;
     
     const mouseCanvasX = (e.clientX - rect.left - panOffset.x) / zoom;
     const mouseCanvasY = (e.clientY - rect.top - panOffset.y) / zoom;
@@ -212,185 +234,158 @@ export function UnifiedSequenceBuilder({
     });
   };
 
-  // Adding nodes from palette or clicking Add
-  const handleAddNode = (nodeType: string) => {
-    const newNode: LocalNode = {
-      id: generateNodeId(),
-      nodeType,
-      nodeOrder: localNodes.length,
-      config: getDefaultConfig(nodeType),
-      positionX: -panOffset.x / zoom + 300 + (Math.random() - 0.5) * 50,
-      positionY: -panOffset.y / zoom + 200 + (Math.random() - 0.5) * 50
-    } as any;
+  // Add Node from Palette
+  const handleAddNode = (type: string) => {
+    const id = generateNodeId();
+    const config = getDefaultConfig(type);
     
-    updateNodesAndSave(prev => [...prev, newNode]);
-    setSelectedNodeId(newNode.id);
-  };
+    const rect = canvasRef.current?.getBoundingClientRect();
+    const canvasCenterX = rect ? (rect.width / 2 - panOffset.x) / zoom : 300;
+    const canvasCenterY = rect ? (rect.height / 2 - panOffset.y) / zoom : 150;
 
-  const handleDeleteNode = (nodeId: string) => {
-    updateNodesAndSave(prev => prev.filter(n => n.id !== nodeId));
-    updateConnectionsAndSave(prev => prev.filter(c => c.sourceNodeId !== nodeId && c.targetNodeId !== nodeId));
-    if (selectedNodeId === nodeId) setSelectedNodeId(null);
-  };
-
-  const handleDuplicateNode = (nodeId: string) => {
-    const node = localNodes.find(n => n.id === nodeId);
-    if (!node) return;
     const newNode: LocalNode = {
-      id: generateNodeId(),
-      nodeType: node.nodeType,
+      id,
+      nodeType: type,
       nodeOrder: localNodes.length,
-      config: JSON.parse(JSON.stringify(node.config)),
-      positionX: ((node as any).positionX || 0) + 40,
-      positionY: ((node as any).positionY || 0) + 40
-    } as any;
+      config,
+      positionX: Math.round(canvasCenterX + (Math.random() - 0.5) * 50),
+      positionY: Math.round(canvasCenterY + (Math.random() - 0.5) * 50),
+    };
 
     updateNodesAndSave(prev => [...prev, newNode]);
-    setSelectedNodeId(newNode.id);
+    setSelectedNodeId(id);
+    toast({ title: "Bloco adicionado", description: "Posicione o bloco e puxe os cabos para conectar." });
   };
 
-  // Port connection logic
+  // Delete Node
+  const handleDeleteNode = (id: string) => {
+    if (id === "trigger") {
+      toast({ title: "Ação não permitida", description: "O bloco de início não pode ser removido.", variant: "destructive" });
+      return;
+    }
+    updateNodesAndSave(prev => prev.filter(n => n.id !== id));
+    updateConnectionsAndSave(prev => prev.filter(c => c.sourceNodeId !== id && c.targetNodeId !== id));
+    setSelectedNodeId(null);
+  };
+
+  // Port mouse handlers (connecting nodes)
   const handlePortMouseDown = (e: React.MouseEvent, nodeId: string, portType: "in" | "out", conditionPath?: string) => {
     e.stopPropagation();
-    const node = localNodes.find(n => n.id === nodeId);
-    if (!node) return;
-
-    const nX = (node as any).positionX || 0;
-    const nY = (node as any).positionY || 0;
-
-    // Approximated coordinate of ports based on card height/width
-    const pX = portType === "out" ? nX + 220 : nX;
-    let pY = nY + 45;
-    if (conditionPath === "yes") pY = nY + 35;
-    if (conditionPath === "no") pY = nY + 65;
-
-    setActivePort({
-      nodeId,
-      portType,
-      conditionPath,
-      x: pX,
-      y: pY
-    });
-    setMousePos({ x: pX, y: pY });
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    
+    const x = (e.clientX - rect.left - panOffset.x) / zoom;
+    const y = (e.clientY - rect.top - panOffset.y) / zoom;
+    
+    setActivePort({ nodeId, portType, conditionPath, x, y });
+    setMousePos({ x, y });
   };
 
-  const handlePortMouseUp = (e: React.MouseEvent, targetNodeId: string, portType: "in" | "out") => {
+  const handlePortMouseUp = (e: React.MouseEvent, nodeId: string, portType: "in" | "out") => {
     e.stopPropagation();
-    if (activePort && activePort.nodeId !== targetNodeId && portType === "in" && activePort.portType === "out") {
-      // Check if connection already exists
-      const exists = localConnections.some(c => 
-        c.sourceNodeId === activePort.nodeId && 
-        c.targetNodeId === targetNodeId && 
-        c.conditionPath === activePort.conditionPath
-      );
-
+    if (!activePort) return;
+    
+    // Connect output to input
+    if (activePort.portType === "out" && portType === "in" && activePort.nodeId !== nodeId) {
+      const exists = localConnections.some(c => c.sourceNodeId === activePort.nodeId && c.targetNodeId === nodeId && c.conditionPath === activePort.conditionPath);
+      
       if (!exists) {
-        const newConn: LocalConnection = {
-          sourceNodeId: activePort.nodeId,
-          targetNodeId,
-          conditionPath: activePort.conditionPath
-        };
-        updateConnectionsAndSave(prev => [...prev, newConn]);
+        updateConnectionsAndSave(prev => [
+          ...prev, 
+          { 
+            sourceNodeId: activePort.nodeId, 
+            targetNodeId: nodeId,
+            conditionPath: activePort.conditionPath
+          }
+        ]);
+        toast({ title: "Conexão criada" });
       }
     }
     setActivePort(null);
   };
 
-  const handleDeleteConnection = (sourceId: string, targetId: string, cond?: string) => {
-    updateConnectionsAndSave(prev => prev.filter(c => 
-      !(c.sourceNodeId === sourceId && c.targetNodeId === targetId && c.conditionPath === cond)
-    ));
+  const handleDeleteConnection = (sourceNodeId: string, targetNodeId: string, conditionPath?: string) => {
+    updateConnectionsAndSave(prev => prev.filter(c => !(c.sourceNodeId === sourceNodeId && c.targetNodeId === targetNodeId && c.conditionPath === conditionPath)));
+    toast({ title: "Conexão removida" });
   };
 
-  const handleSaveAll = async () => {
-    await onSave(sequenceName, localNodes, localConnections);
-    toast({ title: "Workflow salvo com sucesso!" });
+  // Zoom management
+  const handleZoom = (factor: number) => {
+    setZoom(prev => Math.min(Math.max(prev + factor, 0.4), 1.8));
   };
-
-  // Zoom controls
-  const handleZoom = (amount: number) => {
-    setZoom(prev => Math.min(Math.max(prev + amount, 0.4), 1.8));
-  };
-
   const handleResetZoom = () => {
     setZoom(1);
-    setPanOffset({ x: 100, y: 50 });
+    setPanOffset({ x: 80, y: 80 });
   };
 
-  const selectedNode = localNodes.find(n => n.id === selectedNodeId);
+  // Save Name change
+  const handleSaveAll = async () => {
+    try {
+      await onSave(sequenceName, localNodes, localConnections);
+      toast({ title: "Workflow salvo com sucesso!" });
+    } catch {
+      toast({ title: "Erro ao salvar", variant: "destructive" });
+    }
+  };
 
-  // SVG Line helper drawing smooth Bezier curves
+  // Draw Bezier Curves between nodes
   const drawBezier = (x1: number, y1: number, x2: number, y2: number) => {
     const dx = Math.abs(x2 - x1) * 0.5;
     return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
   };
 
+  const selectedNode = localNodes.find(n => n.id === selectedNodeId);
+
   return (
-    <div className="space-y-4 h-full flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-border/20 pb-4">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={onBack} className="rounded-xl border border-border/40 hover:bg-muted/30">
-            <ArrowLeft className="h-4.5 w-4.5" />
+    <div className="flex flex-col flex-1 min-h-0 h-full bg-[#F8F9FC] gap-5">
+      
+      {/* Header bar */}
+      <div className="flex justify-between items-center bg-white border border-slate-200/60 p-4 rounded-2xl shadow-sm">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={onBack} className="rounded-xl hover:bg-slate-50">
+            <ArrowLeft className="h-4 w-4" />
           </Button>
           <div className="flex flex-col gap-0.5">
-            <Input
-              value={sequenceName}
-              onChange={e => {
-                setSequenceName(e.target.value);
-                triggerAutosave(localNodes, localConnections, e.target.value);
-              }}
-              className="text-lg font-bold w-64 h-8 bg-transparent border-none focus-visible:ring-0 p-0"
+            <Input 
+              value={sequenceName} 
+              onChange={e => { setSequenceName(e.target.value); triggerAutosave(localNodes, localConnections, e.target.value); }}
+              className="font-bold text-base h-8 border-transparent focus-visible:border-slate-200 focus-visible:ring-0 p-0 w-64 shadow-none bg-transparent hover:bg-slate-50 rounded-lg px-2"
             />
-            <span className="text-[10px] text-muted-foreground">Workflow ID: {sequenceId}</span>
+            <div className="flex items-center gap-2 px-2">
+              <span className="text-[10px] text-slate-400 font-mono">Workflow ID: {sequenceId}</span>
+              {autoSaveStatus === "saving" && <span className="text-[10px] text-amber-500 font-semibold animate-pulse">Autosalvando...</span>}
+              {autoSaveStatus === "saved" && <span className="text-[10px] text-emerald-500 font-semibold">Salvo</span>}
+            </div>
           </div>
-          <Badge variant={isActive ? "default" : "secondary"} className="rounded-full px-2.5 py-0.5 font-semibold text-[10px]">
-            {isActive ? "Ativo" : "Inativo"}
-          </Badge>
-          
-          {autoSaveStatus === "saving" && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground animate-pulse">
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-[#8A3CFF]" />
-              Salvando alterações...
-            </div>
-          )}
-          {autoSaveStatus === "saved" && (
-            <div className="flex items-center gap-1 text-xs text-emerald-500 font-semibold">
-              <Check className="h-3.5 w-3.5" />
-              Workflow salvo
-            </div>
-          )}
         </div>
         
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={onToggleActive} className="rounded-xl border-border/40 gap-2 h-9 px-4 font-semibold cursor-pointer">
-            {isActive ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+          <Button variant="outline" onClick={onToggleActive} className="rounded-xl border-slate-200 hover:bg-slate-50 gap-2 h-9 px-4 font-semibold text-slate-700">
+            {isActive ? <Pause className="h-4 w-4 text-amber-500" /> : <Play className="h-4 w-4 text-emerald-500" />}
             {isActive ? "Pausar" : "Ativar"}
           </Button>
-          <Button onClick={handleSaveAll} disabled={isSaving} className="bg-[#8A3CFF] hover:bg-[#7830E3] text-white rounded-xl gap-2 h-9 px-5 font-semibold cursor-pointer">
+          <Button onClick={handleSaveAll} disabled={isSaving} className="bg-[#8A3CFF] hover:bg-[#7830E3] text-white rounded-xl gap-2 h-9 px-5 font-semibold">
             {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {isSaving ? "Salvando..." : "Salvar"}
           </Button>
         </div>
       </div>
 
-      {/* Trigger selection/config */}
-      {renderTrigger()}
-
       {/* Canvas Layout */}
-      <div className="flex-1 flex gap-4 h-[calc(100vh-280px)] min-h-[450px] overflow-hidden">
+      <div className="flex-1 flex gap-4 h-[calc(100vh-280px)] min-h-[480px] overflow-hidden">
+        
         {/* Palette (Menu Lateral de Blocos) */}
-        <Card className="w-56 shrink-0 flex flex-col border-white/20 bg-card/40 backdrop-blur-md rounded-2xl overflow-y-auto">
-          <div className="p-4 border-b border-border/20">
-            <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
+        <Card className="w-56 shrink-0 flex flex-col border-slate-200/60 bg-white rounded-2xl shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-100">
+            <h4 className="text-xs font-bold text-slate-700 uppercase tracking-widest flex items-center gap-1.5">
               <Plus className="h-4 w-4 text-[#8A3CFF]" />
               Blocos Básicos
             </h4>
           </div>
-          <div className="p-3 space-y-4">
+          <div className="p-3 space-y-4 overflow-y-auto flex-1">
             {nodeCategories.map(category => (
               <div key={category.id} className="space-y-1.5">
-                <span className="text-[10px] font-bold text-muted-foreground/60 px-1">{category.label}</span>
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider px-1">{category.label}</span>
                 <div className="space-y-1">
                   {category.nodes.map(node => {
                     const NodeIcon = node.icon;
@@ -398,12 +393,12 @@ export function UnifiedSequenceBuilder({
                       <button
                         key={node.type}
                         onClick={() => handleAddNode(node.type)}
-                        className="flex items-center gap-2.5 w-full p-2 text-left rounded-xl border border-border/30 bg-background/30 hover:bg-[#8A3CFF]/10 hover:border-[#8A3CFF]/30 transition-all cursor-pointer group"
+                        className="flex items-center gap-2.5 w-full p-2 text-left rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-100/80 hover:border-slate-200 transition-all cursor-pointer group"
                       >
-                        <div className={`p-1.5 rounded-lg ${node.color} text-white shrink-0 group-hover:scale-105 transition-transform`}>
+                        <div className={cn("p-1.5 rounded-lg text-white shrink-0 group-hover:scale-105 transition-transform", node.color)}>
                           <NodeIcon className="h-3.5 w-3.5" />
                         </div>
-                        <span className="text-xs font-semibold text-card-foreground">{node.label}</span>
+                        <span className="text-xs font-semibold text-slate-700">{node.label}</span>
                       </button>
                     );
                   })}
@@ -414,25 +409,26 @@ export function UnifiedSequenceBuilder({
         </Card>
 
         {/* Builder Canvas Area */}
-        <div className="flex-1 border border-white/20 bg-[#0E0E12] rounded-2xl overflow-hidden relative shadow-inner flex flex-col">
+        <div className="flex-1 border border-slate-200/60 bg-[#F5F6FA] rounded-2xl overflow-hidden relative shadow-inner flex flex-col">
+          
           {/* Canvas Toolbar (Zoom & Controls) */}
-          <div className="absolute top-4 right-4 z-10 flex items-center gap-1.5 bg-card/80 backdrop-blur-md p-1 border border-border/40 rounded-xl shadow-md">
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => handleZoom(0.1)} title="Aproximar">
-              <ZoomIn className="h-4 w-4 text-muted-foreground" />
+          <div className="absolute top-4 right-4 z-10 flex items-center gap-1 bg-white p-1 border border-slate-200/80 rounded-xl shadow-sm">
+            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg hover:bg-slate-50" onClick={() => handleZoom(0.1)} title="Aproximar">
+              <ZoomIn className="h-3.5 w-3.5 text-slate-500" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => handleZoom(-0.1)} title="Afastar">
-              <ZoomOut className="h-4 w-4 text-muted-foreground" />
+            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg hover:bg-slate-50" onClick={() => handleZoom(-0.1)} title="Afastar">
+              <ZoomOut className="h-3.5 w-3.5 text-slate-500" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={handleResetZoom} title="Resetar Visualização">
-              <Maximize className="h-4 w-4 text-muted-foreground" />
+            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg hover:bg-slate-50" onClick={handleResetZoom} title="Resetar Visualização">
+              <Maximize className="h-3.5 w-3.5 text-slate-500" />
             </Button>
-            <div className="h-4 w-[1px] bg-border/40 mx-1" />
-            <span className="text-[10px] font-mono text-muted-foreground pr-2">{Math.round(zoom * 100)}%</span>
+            <div className="h-3.5 w-[1px] bg-slate-200 mx-1" />
+            <span className="text-[10px] font-mono text-slate-500 pr-2 font-bold">{Math.round(zoom * 100)}%</span>
           </div>
 
-          <div className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-card/85 backdrop-blur-md px-3 py-1.5 border border-border/40 rounded-xl shadow-sm">
-            <Info className="h-3.5 w-3.5 text-[#8A3CFF]" />
-            <span className="text-[10px] font-semibold text-muted-foreground">Arraste e conecte os blocos de esquerda para a direita.</span>
+          <div className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-white px-3 py-1.5 border border-slate-200/80 rounded-xl shadow-sm">
+            <HelpIcon className="h-3.5 w-3.5 text-[#8A3CFF]" />
+            <span className="text-[10px] font-bold text-slate-500">Arraste e conecte os blocos de esquerda para a direita.</span>
           </div>
 
           {/* Interactive Canvas Wrapper */}
@@ -441,9 +437,10 @@ export function UnifiedSequenceBuilder({
             onMouseDown={handleCanvasMouseDown}
             onMouseMove={handleCanvasMouseMove}
             onMouseUp={handleCanvasMouseUp}
-            className={`flex-1 relative overflow-hidden select-none ${isPanning ? "cursor-grabbing" : "cursor-grab"}`}
+            className={cn("flex-1 relative overflow-hidden select-none", isPanning ? "cursor-grabbing" : "cursor-grab")}
             style={{
-              backgroundImage: "radial-gradient(#ffffff15 1px, transparent 0)",
+              backgroundColor: "#F8F9FC",
+              backgroundImage: "radial-gradient(#CBD5E1 1.5px, transparent 0)",
               backgroundSize: "24px 24px",
               backgroundPosition: `${panOffset.x}px ${panOffset.y}px`,
             }}
@@ -498,15 +495,11 @@ export function UnifiedSequenceBuilder({
                         d={d}
                         fill="none"
                         stroke="#8A3CFF"
-                        strokeWidth="2.5"
+                        strokeWidth="2"
+                        strokeDasharray="4 4"
                         markerEnd="url(#arrow)"
-                        className="hover:stroke-sky-400 hover:stroke-[3.5px] cursor-pointer transition-all duration-300"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteConnection(conn.sourceNodeId, conn.targetNodeId, conn.conditionPath || undefined);
-                        }}
+                        className="hover:stroke-sky-400 hover:stroke-[3px] cursor-pointer transition-all duration-300 animate-[dash_15s_linear_infinite]"
                       />
-                      {/* Delete button indicator on path center */}
                       <circle
                         cx={midX}
                         cy={midY}
@@ -534,7 +527,7 @@ export function UnifiedSequenceBuilder({
                     d={drawBezier(activePort.x, activePort.y, mousePos.x, mousePos.y)}
                     fill="none"
                     stroke="#8A3CFF"
-                    strokeWidth="2.5"
+                    strokeWidth="2"
                     strokeDasharray="4 4"
                     pointerEvents="none"
                   />
@@ -552,6 +545,7 @@ export function UnifiedSequenceBuilder({
                   const posY = (node as any).positionY || 0;
 
                   const isCondition = node.nodeType === "condition";
+                  const isTrigger = node.nodeType === "trigger";
 
                   return (
                     <div
@@ -565,25 +559,27 @@ export function UnifiedSequenceBuilder({
                       }}
                       onMouseDown={(e) => handleNodeMouseDown(e, node)}
                       className={cn(
-                        "rounded-xl border border-white/20 bg-card/85 backdrop-blur-xl shadow-lg flex flex-col p-3 transition-all cursor-grab active:cursor-grabbing",
-                        isSelected && "border-[#8A3CFF] ring-2 ring-[#8A3CFF]/20"
+                        "rounded-xl border border-slate-200 bg-white shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col p-3 transition-all cursor-grab active:cursor-grabbing",
+                        isSelected && "border-[#8A3CFF] ring-2 ring-[#8A3CFF]/10"
                       )}
                     >
                       {/* Node Connection Ports */}
-                      {/* Input Port (Left Handle) */}
-                      <div
-                        onMouseUp={(e) => handlePortMouseUp(e, node.id, "in")}
-                        className="absolute -left-1.5 top-[38px] h-3.5 w-3.5 rounded-full border-2 border-border bg-background hover:bg-[#8A3CFF] cursor-crosshair z-25 flex items-center justify-center transition-colors"
-                        title="Entrada do fluxo"
-                      >
-                        <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30 hover:bg-white" />
-                      </div>
+                      {/* Input Port (Left Handle) - Excluded for trigger node */}
+                      {!isTrigger && (
+                        <div
+                          onMouseUp={(e) => handlePortMouseUp(e, node.id, "in")}
+                          className="absolute -left-1.5 top-[38px] h-3.5 w-3.5 rounded-full border-2 border-slate-300 bg-white hover:bg-[#8A3CFF] cursor-crosshair z-25 flex items-center justify-center transition-colors shadow-sm"
+                          title="Entrada do fluxo"
+                        >
+                          <div className="h-1.5 w-1.5 rounded-full bg-slate-300 hover:bg-white" />
+                        </div>
+                      )}
 
                       {/* Output Port(s) (Right Handles) */}
                       {!isCondition ? (
                         <div
                           onMouseDown={(e) => handlePortMouseDown(e, node.id, "out")}
-                          className="absolute -right-1.5 top-[38px] h-3.5 w-3.5 rounded-full border-2 border-[#8A3CFF] bg-background hover:bg-[#8A3CFF] cursor-crosshair z-25 flex items-center justify-center transition-colors"
+                          className="absolute -right-1.5 top-[38px] h-3.5 w-3.5 rounded-full border-2 border-[#8A3CFF] bg-background hover:bg-[#8A3CFF] cursor-crosshair z-25 flex items-center justify-center transition-colors shadow-sm"
                           title="Saída do fluxo"
                         >
                           <div className="h-1.5 w-1.5 rounded-full bg-[#8A3CFF]" />
@@ -593,7 +589,7 @@ export function UnifiedSequenceBuilder({
                           {/* "Sim" (True) output handle */}
                           <div
                             onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", "yes")}
-                            className="absolute -right-1.5 top-[28px] h-3.5 w-3.5 rounded-full border-2 border-emerald-500 bg-background hover:bg-emerald-500 cursor-crosshair z-25 flex items-center justify-center transition-colors"
+                            className="absolute -right-1.5 top-[28px] h-3.5 w-3.5 rounded-full border-2 border-emerald-500 bg-background hover:bg-emerald-500 cursor-crosshair z-25 flex items-center justify-center transition-colors shadow-sm"
                             title="Verdadeiro (Sim)"
                           >
                             <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
@@ -603,7 +599,7 @@ export function UnifiedSequenceBuilder({
                           {/* "Não" (False) output handle */}
                           <div
                             onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", "no")}
-                            className="absolute -right-1.5 top-[58px] h-3.5 w-3.5 rounded-full border-2 border-destructive bg-background hover:bg-destructive cursor-crosshair z-25 flex items-center justify-center transition-colors"
+                            className="absolute -right-1.5 top-[58px] h-3.5 w-3.5 rounded-full border-2 border-destructive bg-background hover:bg-destructive cursor-crosshair z-25 flex items-center justify-center transition-colors shadow-sm"
                             title="Falso (Não)"
                           >
                             <div className="h-1.5 w-1.5 rounded-full bg-destructive" />
@@ -613,50 +609,68 @@ export function UnifiedSequenceBuilder({
                       )}
 
                       {/* Header/Title */}
-                      <div className="flex items-center gap-2 border-b border-border/20 pb-2">
-                        <div className={cn("p-1.5 rounded-lg text-white shrink-0", nodeInfo.color)}>
+                      <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+                        <div className={cn("p-1.5 rounded-lg text-white shrink-0 shadow-sm", nodeInfo.color)}>
                           <NodeIcon className="h-3.5 w-3.5" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-xs text-card-foreground truncate">
-                            {(node.config.label as string) || nodeInfo.label}
+                          <p className="font-bold text-xs text-slate-800 truncate">
+                            {isTrigger ? "Inicio" : ((node.config.label as string) || nodeInfo.label)}
                           </p>
-                          <p className="text-[9px] text-muted-foreground font-medium">{nodeInfo.label}</p>
+                          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{isTrigger ? "Gatilho" : nodeInfo.label}</p>
                         </div>
                       </div>
 
                       {/* Card Content / Description */}
-                      <div className="pt-2 text-[10px] text-muted-foreground line-clamp-2 min-h-[30px]">
-                        {node.config.content ? (node.config.content as string) : 
-                         node.config.question ? (node.config.question as string) :
-                         node.config.url ? (node.config.url as string) :
-                         node.config.seconds || node.config.minutes || node.config.hours || node.config.days ? 
-                         `Aguardar ${node.config.days || 0}d ${node.config.hours || 0}h ${node.config.minutes || 0}m` :
-                         "Configuração vazia..."}
+                      <div className="pt-2 text-[10px] text-slate-500 font-medium line-clamp-2 min-h-[30px]">
+                        {isTrigger ? "O gatilho é responsável por acionar a automação." : (
+                          node.config.content ? (node.config.content as string) : 
+                          node.config.question ? (node.config.question as string) :
+                          node.config.url ? (node.config.url as string) :
+                          node.config.seconds || node.config.minutes || node.config.hours || node.config.days ? 
+                          `Aguardar ${node.config.days || 0}d ${node.config.hours || 0}h ${node.config.minutes || 0}m` :
+                          "Clique para configurar o bloco..."
+                        )}
+                      </div>
+
+                      {/* Mock Stats (DataCray aesthetic) */}
+                      <div className="flex justify-between items-center text-[9px] font-bold text-slate-400/80 border-t border-slate-100 pt-2 mt-2 select-none">
+                        <span className="flex items-center gap-0.5">🟢 0</span>
+                        <span className="flex items-center gap-0.5">🟡 0</span>
+                        <span className="flex items-center gap-0.5">🔴 0</span>
                       </div>
 
                       {/* Card Actions Footer */}
-                      <div className="flex items-center justify-between border-t border-border/20 pt-2 mt-2">
-                        <span className="text-[8px] font-semibold text-muted-foreground/60">Order: {node.nodeOrder}</span>
+                      <div className="flex items-center justify-between border-t border-slate-100 pt-2 mt-2">
+                        <span className="text-[8px] font-bold text-slate-400/60 font-mono">NODE #{node.nodeOrder + 1}</span>
                         <div className="flex gap-1">
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="h-5 w-5 rounded hover:bg-muted/40" 
+                            className="h-5 w-5 rounded hover:bg-slate-100 text-slate-500" 
                             title="Editar Configuração"
-                            onClick={(e) => { e.stopPropagation(); setSelectedNodeId(node.id); }}
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              if (isTrigger) {
+                                setShowTriggerDialog(true);
+                              } else {
+                                setSelectedNodeId(node.id); 
+                              }
+                            }}
                           >
                             <Settings2 className="h-3 w-3" />
                           </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-5 w-5 rounded text-destructive hover:bg-destructive/10" 
-                            title="Excluir"
-                            onClick={(e) => { e.stopPropagation(); handleDeleteNode(node.id); }}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
+                          {!isTrigger && (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-5 w-5 rounded text-destructive hover:bg-destructive/10" 
+                              title="Excluir"
+                              onClick={(e) => { e.stopPropagation(); handleDeleteNode(node.id); }}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -668,6 +682,25 @@ export function UnifiedSequenceBuilder({
           </div>
         </div>
       </div>
+
+      {/* Trigger selection/config Dialog */}
+      <Dialog open={showTriggerDialog} onOpenChange={setShowTriggerDialog}>
+        <DialogContent className="sm:max-w-[500px] rounded-2xl bg-white border border-slate-200/60 p-6 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-slate-800">Configuração do Gatilho (Início)</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            {renderTrigger ? renderTrigger() : (
+              <p className="text-sm text-slate-500">Este fluxo de automação é acionado conforme a entrada na campanha.</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setShowTriggerDialog(false)} className="bg-[#8A3CFF] hover:bg-[#7830E3] text-white rounded-xl h-9 px-5">
+              Concluir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Config Panel Dialog */}
       {selectedNode && renderConfigPanel(
@@ -687,28 +720,5 @@ export function UnifiedSequenceBuilder({
         isSendingManual
       )}
     </div>
-  );
-}
-
-// Inline custom settings icon
-function Settings2(props: any) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M20 7h-9" />
-      <path d="M14 17H5" />
-      <circle cx="17" cy="17" r="3" />
-      <circle cx="7" cy="7" r="3" />
-    </svg>
   );
 }

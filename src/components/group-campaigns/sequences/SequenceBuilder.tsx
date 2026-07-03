@@ -104,7 +104,7 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
   }, [sequence.id, sequence.triggerType, sequence.triggerConfig]);
 
   const initialNodes: LocalNode[] = nodes.map(n => ({
-    id: n.id, nodeType: n.nodeType, nodeOrder: n.nodeOrder, config: n.config,
+    id: n.id, nodeType: n.nodeType, nodeOrder: n.nodeOrder, config: n.config, positionX: n.positionX, positionY: n.positionY,
   }));
 
   const initialConnections = connections.map(c => ({
@@ -114,7 +114,7 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
   const handleSave = async (name: string, localNodes: LocalNode[], localConnections: { sourceNodeId: string; targetNodeId: string; conditionPath?: string }[]) => {
     await onUpdate({ id: sequence.id, updates: { name, triggerType, triggerConfig: triggerConfig as Record<string, unknown> } });
     const idMapping = await saveNodes(localNodes.map(node => ({
-      localId: node.id, nodeType: node.nodeType, positionX: 0, positionY: node.nodeOrder * 100, nodeOrder: node.nodeOrder, config: node.config,
+      localId: node.id, nodeType: node.nodeType, positionX: node.positionX || 0, positionY: node.positionY || 0, nodeOrder: node.nodeOrder, config: node.config,
     })));
     await saveConnections({ connectionsToSave: localConnections, idMapping });
   };
