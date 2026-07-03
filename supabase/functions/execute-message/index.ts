@@ -61,6 +61,13 @@ interface SequenceNode {
   config: Record<string, unknown>;
 }
 
+interface SequenceConnection {
+  id: string;
+  source_node_id: string;
+  target_node_id: string;
+  condition_path: string | null;
+}
+
 interface LinkedGroup {
   id: string;
   group_jid: string;
@@ -215,6 +222,75 @@ const calculateDelayMs = (config: Record<string, unknown>): number => {
     minutes * 60000 +
     seconds * 1000
   );
+};
+
+const getConditionFieldValue = (field: string, leadData: Record<string, any>): unknown => {
+  if (field === "name" || field === "phone" || field === "email" || field === "pipeline_stage_id") {
+    return leadData[field];
+  }
+  if (field === "tags") {
+    return leadData.tags || [];
+  }
+  const customFields = (leadData.custom_fields as Record<string, unknown>) || {};
+  return customFields[field];
+};
+
+const evaluateCondition = (config: Record<string, unknown>, leadData: Record<string, any>): boolean => {
+  const field = (config.field as string) || "name";
+  const operator = (config.operator as string) || "equals";
+  const fieldValue = getConditionFieldValue(field, leadData);
+
+  if (operator === "is_set") {
+    if (Array.isArray(fieldValue)) return fieldValue.length > 0;
+    return fieldValue !== null && fieldValue !== undefined && String(fieldValue).trim() !== "";
+  }
+  if (operator === "is_empty") {
+    if (Array.isArray(fieldValue)) return fieldValue.length === 0;
+    return fieldValue === null || fieldValue === undefined || String(fieldValue).trim() === "";
+  }
+
+  if (Array.isArray(fieldValue)) {
+    const compareValue = String(config.value ?? "").trim().toLowerCase();
+    const values = fieldValue.map(v => String(v).trim().toLowerCase());
+    if (operator === "not_contains") return !values.includes(compareValue);
+    return values.includes(compareValue); // "contains" and "equals" both mean membership for array fields (e.g. tags)
+  }
+
+  const rawValue = fieldValue === null || fieldValue === undefined ? "" : String(fieldValue);
+  const compareValue = String(config.value ?? "");
+
+  switch (operator) {
+    case "equals":
+      return rawValue.trim().toLowerCase() === compareValue.trim().toLowerCase();
+    case "not_equals":
+      return rawValue.trim().toLowerCase() !== compareValue.trim().toLowerCase();
+    case "contains":
+      return rawValue.toLowerCase().includes(compareValue.toLowerCase());
+    case "not_contains":
+      return !rawValue.toLowerCase().includes(compareValue.toLowerCase());
+    case "starts_with":
+      return rawValue.toLowerCase().startsWith(compareValue.toLowerCase());
+    case "ends_with":
+      return rawValue.toLowerCase().endsWith(compareValue.toLowerCase());
+    case "greater_than": {
+      const num = parseFloat(rawValue);
+      const cmp = parseFloat(compareValue);
+      return !isNaN(num) && !isNaN(cmp) && num > cmp;
+    }
+    case "less_than": {
+      const num = parseFloat(rawValue);
+      const cmp = parseFloat(compareValue);
+      return !isNaN(num) && !isNaN(cmp) && num < cmp;
+    }
+    case "between": {
+      const num = parseFloat(rawValue);
+      const min = parseFloat(String(config.minValue ?? ""));
+      const max = parseFloat(String(config.maxValue ?? ""));
+      return !isNaN(num) && !isNaN(min) && !isNaN(max) && num >= min && num <= max;
+    }
+    default:
+      return false;
+  }
 };
 
 const getActionForNodeType = (nodeType: string): string => {
@@ -484,16 +560,24 @@ Deno.serve(async (req) => {
 
     // Get sequence nodes if sequence is linked
     let sequenceNodes: SequenceNode[] = [];
+    let connections: SequenceConnection[] = [];
     const effectiveSequenceId = sequenceId || typedMessage?.sequence_id;
-    
+
     if (effectiveSequenceId) {
       const { data: nodes } = await supabase
         .from("sequence_nodes")
         .select("id, node_type, node_order, config")
         .eq("sequence_id", effectiveSequenceId)
         .order("node_order", { ascending: true });
-      
+
       sequenceNodes = (nodes || []) as SequenceNode[];
+
+      const { data: nodeConnections } = await supabase
+        .from("sequence_connections")
+        .select("id, source_node_id, target_node_id, condition_path")
+        .eq("sequence_id", effectiveSequenceId);
+
+      connections = (nodeConnections || []) as SequenceConnection[];
     }
 
     // For manual node execution, filter to just that one node
@@ -746,6 +830,10 @@ Deno.serve(async (req) => {
       let activeDestinations = [...effectiveDests];
       const visitCounts = new Map<string, number>();
       let activeInstanceId = instance.id; // local state tracker for active channel selector
+
+      // Resume by node id when available (graph resume), otherwise start at the first node in order
+      let currentNodeId: string | null =
+        isResumedExecution && startFromNodeId ? startFromNodeId : (sortedNodes[0]?.id ?? null);
 
       while (currentNodeId) {
         const node = sortedNodes.find(n => n.id === currentNodeId);
