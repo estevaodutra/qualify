@@ -127,7 +127,8 @@ const App = () => {
                       <Route path="/quiz" element={<QuizFunnelsPage />} />
                       <Route path="/quiz/:id" element={<QuizEditorPage />} />
 
-                      {/* Campaigns routes */}
+                      {/* Campaigns / Workflows routes */}
+                      <Route path="/workflows" element={<CampaignsHub />} />
                       <Route path="/campaigns">
                         <Route index element={<CampaignsHub />} />
                         <Route path="whatsapp/despacho" element={<DispatchCampaigns />} />
