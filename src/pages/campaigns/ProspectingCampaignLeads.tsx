@@ -46,8 +46,8 @@ export default function ProspectingCampaignLeads() {
     enabled: !!id,
   });
 
-  const handleOpenDialog = (leadId: string, leadName: string, leadPhone: string) => {
-    setSelectedLead({ id: leadId, name: leadName, phone: leadPhone });
+  const handleOpenDialog = (leadId: string, leadName: string | null, leadPhone: string | null) => {
+    setSelectedLead({ id: leadId, name: leadName || "", phone: leadPhone || "" });
     setDialogOpen(true);
   };
 
@@ -163,7 +163,6 @@ export default function ProspectingCampaignLeads() {
 
       {selectedLead && (
         <TriggerSequenceDialog
-          leadId={selectedLead.id}
           leadName={selectedLead.name}
           leadPhone={selectedLead.phone}
           open={dialogOpen}

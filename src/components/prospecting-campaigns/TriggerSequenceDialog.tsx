@@ -10,7 +10,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface TriggerSequenceDialogProps {
-  leadId: string;
   leadPhone: string;
   leadName: string;
   open: boolean;
