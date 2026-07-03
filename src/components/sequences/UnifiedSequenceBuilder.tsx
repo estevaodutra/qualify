@@ -843,16 +843,16 @@ export function UnifiedSequenceBuilder({
 
       {/* Trigger selection/config Dialog */}
       <Dialog open={showTriggerDialog} onOpenChange={setShowTriggerDialog}>
-        <DialogContent className="sm:max-w-[500px] rounded-2xl bg-white border border-slate-200/60 p-6 shadow-2xl">
-          <DialogHeader>
+        <DialogContent className="w-[min(650px,calc(100vw-32px))] max-w-[650px] max-h-[calc(100dvh-32px)] !flex !flex-col p-0 gap-0 overflow-hidden rounded-2xl bg-white border border-slate-200/60 shadow-2xl">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b border-slate-100 shrink-0">
             <DialogTitle className="text-lg font-bold text-slate-800">Configuração do Gatilho (Início)</DialogTitle>
           </DialogHeader>
-          <div className="py-4">
+          <div className="flex-1 overflow-y-auto px-6 py-4">
             {renderTrigger ? renderTrigger() : (
               <p className="text-sm text-slate-500">Este fluxo de automação é acionado conforme a entrada na campanha.</p>
             )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="px-6 py-4 border-t border-slate-100 bg-slate-50 shrink-0 flex items-center justify-end rounded-b-2xl">
             <Button onClick={() => setShowTriggerDialog(false)} className="bg-[#8A3CFF] hover:bg-[#7830E3] text-white rounded-xl h-9 px-5">
               Concluir
             </Button>
