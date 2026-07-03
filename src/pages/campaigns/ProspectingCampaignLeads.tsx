@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { User, Phone, MapPin, ArrowLeft, Send } from "lucide-react";
+import { User, Phone, MapPin, ArrowLeft, Send, Globe } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -138,6 +138,15 @@ export default function ProspectingCampaignLeads() {
                             <div className="flex items-start gap-1.5 text-sm text-muted-foreground pt-1">
                               <MapPin className="h-4 w-4 shrink-0 mt-0.5" />
                               <span className="line-clamp-2 leading-snug">{custom.address}</span>
+                            </div>
+                          )}
+
+                          {custom.website && (
+                            <div className="flex items-start gap-1.5 text-sm text-blue-500 hover:text-blue-600 transition-colors pt-0.5">
+                              <Globe className="h-4 w-4 shrink-0 mt-0.5" />
+                              <a href={custom.website} target="_blank" rel="noopener noreferrer" className="line-clamp-1 leading-snug hover:underline">
+                                {custom.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}
+                              </a>
                             </div>
                           )}
                         </div>
