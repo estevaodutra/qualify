@@ -26,6 +26,7 @@ export interface ChatConversation {
     email: string | null;
     tags: string[];
     pipeline_stage_id: string | null;
+    custom_fields: Record<string, any> | null;
   };
   operator?: {
     id: string;
@@ -86,7 +87,7 @@ export function useChat() {
         .from("chat_conversations")
         .select(`
           *,
-          lead:leads!chat_conversations_lead_id_fkey(id, name, phone, email, tags, pipeline_stage_id),
+          lead:leads!chat_conversations_lead_id_fkey(id, name, phone, email, tags, pipeline_stage_id, custom_fields),
           operator:profiles!chat_conversations_operator_id_fkey(id, full_name, email)
         `)
         .eq("company_id", activeCompanyId)

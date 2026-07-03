@@ -8,7 +8,7 @@ import { DispatchTriggerConfigCard, DispatchTriggerType, DispatchTriggerConfig }
 import { MediaUploader } from "@/components/group-campaigns/sequences/MediaUploader";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { MessageSquare, Clock, Image, Video, Music, FileText, MousePointerClick, List as ListIcon, Send } from "lucide-react";
+import { MessageSquare, Clock, Image, Video, Music, FileText, MousePointerClick, List as ListIcon, Send, Tag, Award, Sliders, Sparkles, Code, GitBranch } from "lucide-react";
 
 interface DispatchSequenceBuilderProps {
   sequence: DispatchSequence;
@@ -31,9 +31,21 @@ const NODE_CATEGORIES: NodeCategory[] = [
     { type: "list", label: "Lista", icon: ListIcon, color: "bg-teal-500" },
   ]},
   { id: "flow", label: "Fluxo", nodes: [
-    { type: "delay", label: "Delay", icon: Clock, color: "bg-amber-500" },
-    { type: "webhook_forward", label: "Enviar p/ Webhook", icon: Send, color: "bg-fuchsia-500" },
+    { type: "delay", label: "Delay / Espera", icon: Clock, color: "bg-amber-500" },
+    { type: "condition", label: "Condição", icon: GitBranch, color: "bg-purple-500" },
   ]},
+  { id: "actions_crm", label: "Ações e CRM", nodes: [
+    { type: "tag_add", label: "Adicionar Tag", icon: Tag, color: "bg-orange-600" },
+    { type: "tag_remove", label: "Remover Tag", icon: Tag, color: "bg-rose-600" },
+    { type: "deal_move", label: "Mover Negócio", icon: Award, color: "bg-emerald-600" },
+    { type: "channel_select", label: "Selecionar Canal", icon: Send, color: "bg-indigo-600" },
+  ]},
+  { id: "advanced", label: "Avançado", nodes: [
+    { type: "api_call", label: "Chamada API", icon: Send, color: "bg-sky-600" },
+    { type: "field_op", label: "Operação de Campo", icon: Sliders, color: "bg-teal-600" },
+    { type: "ai_agent", label: "IA Assistente", icon: Sparkles, color: "bg-violet-600" },
+    { type: "js_code", label: "Executar JavaScript", icon: Code, color: "bg-slate-600" },
+  ]}
 ];
 
 const getDefaultConfig = (nodeType: string): Record<string, unknown> => {

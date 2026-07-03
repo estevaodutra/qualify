@@ -22,6 +22,7 @@ interface ExecuteMessageRequest {
   // For resumed executions
   executionId?: string;
   startFromNodeIndex?: number;
+  startFromNodeId?: string;
   // For manual single-node execution
   manualNodeIndex?: number;
   // For private targeting (bulk execution from members tab)
@@ -313,10 +314,10 @@ Deno.serve(async (req) => {
 
     // Parse request body
     const body: ExecuteMessageRequest = await req.json();
-    const { messageId, campaignId, sequenceId, triggerContext, executionId, startFromNodeIndex, manualNodeIndex, targetPhones } = body;
+    const { messageId, campaignId, sequenceId, triggerContext, executionId, startFromNodeIndex, startFromNodeId, manualNodeIndex, targetPhones } = body;
 
     // Check if this is a resumed execution
-    const isResumedExecution = !!executionId && startFromNodeIndex !== undefined;
+    const isResumedExecution = !!executionId && (startFromNodeIndex !== undefined || startFromNodeId !== undefined);
 
     // Check if this is a triggered execution (from poll/webhook) or normal execution
     const isTriggeredExecution = !!triggerContext && !messageId;
@@ -742,19 +743,146 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Determine starting node index
-      const startNodeIndex = isResumedExecution && startFromNodeIndex !== undefined ? startFromNodeIndex : 0;
-
       let activeDestinations = [...effectiveDests];
+      const visitCounts = new Map<string, number>();
+      let activeInstanceId = instance.id; // local state tracker for active channel selector
 
-      for (let nodeIndex = startNodeIndex; nodeIndex < sortedNodes.length; nodeIndex++) {
-        const node = sortedNodes[nodeIndex];
-        
-        console.log(`[ExecuteMessage] Processing node ${nodeIndex + 1}/${sortedNodes.length}: ${node.node_type}`);
+      while (currentNodeId) {
+        const node = sortedNodes.find(n => n.id === currentNodeId);
+        if (!node) {
+          console.warn(`[ExecuteMessage] Node ${currentNodeId} not found in sequence, terminating execution.`);
+          break;
+        }
+
+        // Loop counter prevention (max 5 executions of same node)
+        const visits = (visitCounts.get(node.id) || 0) + 1;
+        if (visits > 5) {
+          console.error(`[ExecuteMessage] Loop limit exceeded at node ${node.id} (${node.node_type}). Terminating execution.`);
+          break;
+        }
+        visitCounts.set(node.id, visits);
+
+        console.log(`[ExecuteMessage] Processing node: ${node.id} (${node.node_type})`);
+
+        // ============= CHANNEL SELECTOR NODES =============
+        if (node.node_type === "channel_select") {
+          const selectedInstanceId = node.config.instanceId as string;
+          if (selectedInstanceId) {
+            activeInstanceId = selectedInstanceId;
+            console.log(`[ExecuteMessage] Channel selector: switching to instance ${activeInstanceId}`);
+          }
+          const nextConn = connections.find(c => c.source_node_id === node.id);
+          currentNodeId = nextConn ? nextConn.target_node_id : null;
+          nodesProcessed++;
+          continue;
+        }
+
+        // ============= ACTION CRM NODES (tags, move stage) =============
+        if (node.node_type === "tag_add" || node.node_type === "tag_remove" || node.node_type === "deal_move") {
+          const tagName = node.config.tag as string;
+          const stageId = node.config.stageId as string;
+
+          for (const dest of activeDestinations) {
+            const phoneClean = dest.group_jid.split("@")[0].replace(/\D/g, "");
+            const { data: leadData } = await supabase
+              .from("leads")
+              .select("id, tags, pipeline_stage_id")
+              .eq("company_id", typedCampaign.company_id)
+              .eq("phone", phoneClean)
+              .maybeSingle();
+
+            if (leadData) {
+              if (node.node_type === "tag_add" && tagName) {
+                const currentTags = leadData.tags || [];
+                if (!currentTags.includes(tagName)) {
+                  await supabase
+                    .from("leads")
+                    .update({ tags: [...currentTags, tagName] })
+                    .eq("id", leadData.id);
+                  console.log(`[ExecuteMessage] Tag VIP/label added to lead ${leadData.id}`);
+                }
+              } else if (node.node_type === "tag_remove" && tagName) {
+                const currentTags = leadData.tags || [];
+                await supabase
+                  .from("leads")
+                  .update({ tags: currentTags.filter(t => t !== tagName) })
+                  .eq("id", leadData.id);
+                console.log(`[ExecuteMessage] Tag VIP/label removed from lead ${leadData.id}`);
+              } else if (node.node_type === "deal_move" && stageId) {
+                await supabase
+                  .from("leads")
+                  .update({ pipeline_stage_id: stageId })
+                  .eq("id", leadData.id);
+                console.log(`[ExecuteMessage] Lead ${leadData.id} moved to pipeline stage ${stageId}`);
+              }
+            }
+          }
+          const nextConn = connections.find(c => c.source_node_id === node.id);
+          currentNodeId = nextConn ? nextConn.target_node_id : null;
+          nodesProcessed++;
+          continue;
+        }
+
+        // ============= FIELD OPERATION NODES =============
+        if (node.node_type === "field_op") {
+          const { field, value } = node.config || {};
+          if (field) {
+            for (const dest of activeDestinations) {
+              const phoneClean = dest.group_jid.split("@")[0].replace(/\D/g, "");
+              const { data: leadData } = await supabase
+                .from("leads")
+                .select("id, custom_fields")
+                .eq("company_id", typedCampaign.company_id)
+                .eq("phone", phoneClean)
+                .maybeSingle();
+
+              if (leadData) {
+                const currentCf = (leadData.custom_fields as Record<string, any>) || {};
+                currentCf[field as string] = replaceVariables(String(value || ""));
+                await supabase
+                  .from("leads")
+                  .update({ custom_fields: currentCf })
+                  .eq("id", leadData.id);
+                console.log(`[ExecuteMessage] Custom field ${field} updated for lead ${leadData.id}`);
+              }
+            }
+          }
+          const nextConn = connections.find(c => c.source_node_id === node.id);
+          currentNodeId = nextConn ? nextConn.target_node_id : null;
+          nodesProcessed++;
+          continue;
+        }
+
+        // ============= CONDITION / FORK NODES =============
+        if (node.node_type === "condition") {
+          let isTrue = false;
+          if (activeDestinations.length > 0) {
+            const dest = activeDestinations[0];
+            const phoneClean = dest.group_jid.split("@")[0].replace(/\D/g, "");
+            const { data: leadData } = await supabase
+              .from("leads")
+              .select("id, name, phone, email, tags, custom_fields, pipeline_stage_id")
+              .eq("company_id", typedCampaign.company_id)
+              .eq("phone", phoneClean)
+              .maybeSingle();
+
+            if (leadData) {
+              isTrue = evaluateCondition(node.config, leadData);
+            }
+          }
+          const branch = isTrue ? "yes" : "no";
+          console.log(`[ExecuteMessage] Condition node ${node.id} evaluated as: ${isTrue} (${branch} branch)`);
+          const matchConn = connections.find(c => c.source_node_id === node.id && c.condition_path === branch);
+          currentNodeId = matchConn ? matchConn.target_node_id : null;
+          nodesProcessed++;
+          continue;
+        }
 
         // Handle DELAY nodes
         if (node.node_type === "delay") {
           const delayMs = calculateDelayMs(node.config);
+          const nextConn = connections.find(c => c.source_node_id === node.id);
+          const nextNodeId = nextConn ? nextConn.target_node_id : null;
           
           if (delayMs > MAX_DELAY_MS) {
             // Long delay - save state and schedule continuation
@@ -771,12 +899,13 @@ Deno.serve(async (req) => {
                 sequence_id: effectiveSequenceId,
                 message_id: typedMessage?.id || null,
                 trigger_context: triggerContext || {},
-                current_node_index: nodeIndex + 1, // Resume from next node
+                current_node_index: 0, // Not index-based anymore, but maintain legacy column
+                current_node_id: nextNodeId, // Resume directly from next node ID!
                 nodes_data: sortedNodes,
                 destinations: effectiveDests,
                 status: "paused",
                 resume_at: resumeAt.toISOString(),
-                nodes_processed: nodesProcessed,
+                nodes_processed: nodesProcessed + 1,
                 nodes_failed: nodesFailed,
               })
               .select()
@@ -799,7 +928,7 @@ Deno.serve(async (req) => {
                   status: "paused",
                   executionId: savedExecution.id,
                   resumeAt: resumeAt.toISOString(),
-                  nodesProcessed,
+                  nodesProcessed: nodesProcessed + 1,
                   nodesFailed,
                   totalTimeMs,
                   message: `Execution paused. Will resume in ${Math.round(delayMs / 60000)} minutes.`,
@@ -813,6 +942,7 @@ Deno.serve(async (req) => {
             await new Promise(resolve => setTimeout(resolve, delayMs));
           }
           
+          currentNodeId = nextNodeId;
           nodesProcessed++;
           continue;
         }
@@ -843,7 +973,7 @@ Deno.serve(async (req) => {
               node: { id: node.id, type: node.node_type, order: node.node_order, config: formattedConfig },
               campaign: { id: typedCampaign.id, name: typedCampaign.name },
               instance: {
-                id: instance.id, name: instance.name, phone: instance.phone || "",
+                id: activeInstanceId, name: instance.name, phone: instance.phone || "",
                 provider: instance.provider, externalId: instance.external_instance_id || "",
                 externalToken: instance.external_instance_token || "",
               },
@@ -858,7 +988,7 @@ Deno.serve(async (req) => {
                 user_id: userId, group_campaign_id: typedCampaign.id,
                 sequence_id: effectiveSequenceId, node_type: node.node_type,
                 node_order: node.node_order, group_jid: dest.group_jid,
-                group_name: dest.group_name, instance_id: instance.id,
+                group_name: dest.group_name, instance_id: activeInstanceId,
                 instance_name: instance.name, campaign_name: typedCampaign.name,
                 status: "sending", payload,
               })
@@ -901,9 +1031,12 @@ Deno.serve(async (req) => {
                   response_time_ms: Date.now() - sendStartTime,
                 }).eq("id", logEntry.id);
               }
+              console.error(`[ExecuteMessage] ❌ Group mgmt error:`, err);
             }
           }
 
+          const nextConn = connections.find(c => c.source_node_id === node.id);
+          currentNodeId = nextConn ? nextConn.target_node_id : null;
           nodesProcessed++;
           continue;
         }
@@ -924,6 +1057,8 @@ Deno.serve(async (req) => {
 
           if (!targetUrl) {
             console.log(`[ExecuteMessage] ⚠️ webhook_forward: no URL configured, skipping`);
+            const nextConn = connections.find(c => c.source_node_id === node.id);
+            currentNodeId = nextConn ? nextConn.target_node_id : null;
             nodesProcessed++;
             continue;
           }
@@ -955,7 +1090,7 @@ Deno.serve(async (req) => {
 
           if (includeInstance) {
             forwardPayload.instance = {
-              id: instance.id,
+              id: activeInstanceId,
               name: instance.name,
               phone: instance.phone || "",
               provider: instance.provider,
@@ -983,7 +1118,7 @@ Deno.serve(async (req) => {
             .insert({
               user_id: userId, group_campaign_id: typedCampaign.id,
               sequence_id: effectiveSequenceId, node_type: node.node_type,
-              node_order: node.node_order, instance_id: instance.id,
+              node_order: node.node_order, instance_id: activeInstanceId,
               instance_name: instance.name, campaign_name: typedCampaign.name,
               status: "sending", payload: forwardPayload,
             })
@@ -1028,6 +1163,8 @@ Deno.serve(async (req) => {
             console.error(`[ExecuteMessage] ❌ webhook_forward error:`, err);
           }
 
+          const nextConn = connections.find(c => c.source_node_id === node.id);
+          currentNodeId = nextConn ? nextConn.target_node_id : null;
           nodesProcessed++;
           continue;
         }
@@ -1061,7 +1198,7 @@ Deno.serve(async (req) => {
               name: typedCampaign.name,
             },
             instance: {
-              id: instance.id,
+              id: activeInstanceId,
               name: instance.name,
               phone: instance.phone || "",
               provider: instance.provider,
@@ -1089,7 +1226,7 @@ Deno.serve(async (req) => {
               group_jid: dest.group_jid,
               group_name: dest.group_name,
               recipient_phone: dest.isPrivate ? triggerContext?.respondentPhone : null,
-              instance_id: instance.id,
+              instance_id: activeInstanceId,
               instance_name: instance.name,
               campaign_name: typedCampaign.name,
               status: "sending",
@@ -1137,22 +1274,17 @@ Deno.serve(async (req) => {
               nextActiveDestinations.push(dest);
 
               // If this is a poll node and send was successful, register in poll_messages
-              // (includes private sends — webhook-triggered sequences use sendPrivate=true and still need lookup by message_id/zaap_id)
               if (node.node_type === "poll" && (zaapId || externalMessageId)) {
-                // Use formattedConfig which has variables already replaced (not node.config which has templates)
+                // Use formattedConfig which has variables already replaced
                 const pollQuestion = (formattedConfig.question as string) || (formattedConfig.title as string) || "";
                 
                 // Also replace variables in options array
                 const rawOptions = (formattedConfig.options as string[]) || [];
                 const pollOptions = rawOptions.map(opt => typeof opt === 'string' ? replaceVariables(opt) : opt);
                 
-                // option_actions still comes from original config (they are action configs, not text)
+                // option_actions still comes from original config
                 const optionActions = ((node.config as Record<string, unknown>).optionActions as Record<string, unknown>) || {};
-                
-                // CRITICAL: message_id has UNIQUE constraint. Never insert empty string.
-                // Use externalMessageId when present, otherwise fall back to zaapId (Z-API always returns one).
                 const messageIdForInsert = externalMessageId || zaapId;
-                
                 if (!messageIdForInsert) {
                   console.error(`[ExecuteMessage] ❌ Cannot register poll: both externalMessageId and zaapId are missing`);
                 } else {

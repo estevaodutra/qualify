@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { supabase } from "@/integrations/supabase/client";
+
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
@@ -402,7 +404,45 @@ export function UnifiedNodeConfigPanel({
   getActionLabel,
 }: UnifiedNodeConfigPanelProps) {
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
-  const [editingOptionIndex, setEditingOptionIndex] = useState<number | null>(null);  // Format is maintained explicitly by the user, so no initialization conversion is needed
+  const [editingOptionIndex, setEditingOptionIndex] = useState<number | null>(null);
+
+  const [customFieldsMetadata, setCustomFieldsMetadata] = useState<any[]>([]);
+  const [pipelineStages, setPipelineStages] = useState<any[]>([]);
+  const [activeInstances, setActiveInstances] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchPanelData = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // Fetch custom fields
+        const { data: fields } = await supabase
+          .from("custom_fields_metadata")
+          .select("*")
+          .order("name", { ascending: true });
+        if (fields) setCustomFieldsMetadata(fields);
+
+        // Fetch pipeline stages
+        const { data: stages } = await supabase
+          .from("pipeline_stages")
+          .select("*")
+          .order("order_index", { ascending: true });
+        if (stages) setPipelineStages(stages);
+
+        // Fetch WhatsApp instances
+        const { data: insts } = await supabase
+          .from("instances")
+          .select("id, name, phone, status")
+          .order("name", { ascending: true });
+        if (insts) setActiveInstances(insts);
+      } catch (err) {
+        console.error("Error loading UnifiedNodeConfigPanel resources:", err);
+      }
+    };
+
+    fetchPanelData();
+  }, [node.nodeType]);
 
   const nodeInfo = NODE_TITLES[node.nodeType] || NODE_TITLES.message;
   const Icon = nodeInfo.icon;
@@ -1183,39 +1223,141 @@ export function UnifiedNodeConfigPanel({
             }
           })()}
 
-          {/* CONDITION - Group only */}
-          {node.nodeType === "condition" && isGroup && (
+          {/* CONDITION - Unified Custom and Standard Fields Mapping */}
+          {node.nodeType === "condition" && (
             <>
               <div className="space-y-2">
-                <Label>Campo</Label>
-                <Select value={(node.config.field as string) || "member_count"} onValueChange={v => updateConfig("field", v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Label>Mapear Campo / Variável</Label>
+                <Select value={(node.config.field as string) || "name"} onValueChange={v => updateConfig("field", v)}>
+                  <SelectTrigger className="rounded-xl border-border/40"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="member_count">Quantidade de membros</SelectItem>
-                    <SelectItem value="member_role">Cargo do membro</SelectItem>
-                    <SelectItem value="message_count">Mensagens enviadas</SelectItem>
-                    <SelectItem value="time_in_group">Tempo no grupo</SelectItem>
+                    <SelectItem value="name">Nome do Lead</SelectItem>
+                    <SelectItem value="phone">Telefone</SelectItem>
+                    <SelectItem value="email">E-mail</SelectItem>
+                    <SelectItem value="tags">Etiquetas / Tags</SelectItem>
+                    <SelectItem value="pipeline_stage_id">Etapa do CRM</SelectItem>
+                    {customFieldsMetadata.map(f => (
+                      <SelectItem key={f.id} value={f.key}>
+                        {f.name} ({f.key})
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Operador</Label>
-                <Select value={(node.config.operator as string) || "greater_than"} onValueChange={v => updateConfig("operator", v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Label>Operador Lógico</Label>
+                <Select value={(node.config.operator as string) || "equals"} onValueChange={v => updateConfig("operator", v)}>
+                  <SelectTrigger className="rounded-xl border-border/40"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="equals">Igual a</SelectItem>
                     <SelectItem value="not_equals">Diferente de</SelectItem>
+                    <SelectItem value="contains">Contém</SelectItem>
+                    <SelectItem value="not_contains">Não contém</SelectItem>
+                    <SelectItem value="starts_with">Começa com</SelectItem>
+                    <SelectItem value="ends_with">Termina com</SelectItem>
+                    <SelectItem value="is_set">Está preenchido</SelectItem>
+                    <SelectItem value="is_empty">Não está preenchido</SelectItem>
+                    <SelectItem value="between">Está entre (Mín / Máx)</SelectItem>
                     <SelectItem value="greater_than">Maior que</SelectItem>
                     <SelectItem value="less_than">Menor que</SelectItem>
-                    <SelectItem value="contains">Contém</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {((node.config.operator as string) !== "is_set" && (node.config.operator as string) !== "is_empty" && (node.config.operator as string) !== "between") && (
+                <div className="space-y-2">
+                  <Label>Valor Comparado</Label>
+                  <Input 
+                    value={(node.config.value as string) || ""} 
+                    onChange={e => updateConfig("value", e.target.value)} 
+                    placeholder="Digite o valor de comparação..." 
+                    className="rounded-xl border-border/40 bg-background/50 text-xs"
+                  />
+                </div>
+              )}
+
+              {(node.config.operator as string) === "between" && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-2">
+                    <Label>Valor Mínimo</Label>
+                    <Input 
+                      type="number"
+                      value={(node.config.minValue as string) || ""} 
+                      onChange={e => updateConfig("minValue", e.target.value)} 
+                      placeholder="Min" 
+                      className="rounded-xl border-border/40 bg-background/50 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Valor Máximo</Label>
+                    <Input 
+                      type="number"
+                      value={(node.config.maxValue as string) || ""} 
+                      onChange={e => updateConfig("maxValue", e.target.value)} 
+                      placeholder="Max" 
+                      className="rounded-xl border-border/40 bg-background/50 text-xs"
+                    />
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ACTION - Add/Remove Tag, Move Deal Stage */}
+          {(node.nodeType === "tag_add" || node.nodeType === "tag_remove") && (
+            <div className="space-y-2">
+              <Label>Nome da Tag / Etiqueta</Label>
+              <Input 
+                value={(node.config.tag as string) || ""} 
+                onChange={e => updateConfig("tag", e.target.value)} 
+                placeholder="Ex: VIP, Frio..." 
+                className="rounded-xl border-border/40 bg-background/50 text-xs"
+              />
+            </div>
+          )}
+
+          {node.nodeType === "deal_move" && (
+            <div className="space-y-2">
+              <Label>Mover para Etapa do CRM</Label>
+              <Select value={(node.config.stageId as string) || ""} onValueChange={v => updateConfig("stageId", v)}>
+                <SelectTrigger className="rounded-xl border-border/40"><SelectValue placeholder="Selecione a etapa..." /></SelectTrigger>
+                <SelectContent>
+                  {pipelineStages.map(s => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {node.nodeType === "channel_select" && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Selecionar Instância de Envio (WhatsApp)</Label>
+                <Select value={(node.config.instanceId as string) || ""} onValueChange={v => updateConfig("instanceId", v)}>
+                  <SelectTrigger className="rounded-xl border-border/40"><SelectValue placeholder="Selecione a instância..." /></SelectTrigger>
+                  <SelectContent>
+                    {activeInstances.map(i => (
+                      <SelectItem key={i.id} value={i.id}>
+                        {i.name} ({i.phone || "Sem número"})
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Valor</Label>
-                <Input value={(node.config.value as string) || ""} onChange={e => updateConfig("value", e.target.value)} placeholder="Digite o valor..." />
+                <Label>Caso a instância falhe (Fallback)</Label>
+                <Select value={(node.config.fallbackType as string) || "last_sender"} onValueChange={v => updateConfig("fallbackType", v)}>
+                  <SelectTrigger className="rounded-xl border-border/40"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="last_sender">🔄 Usar o último canal que enviou com sucesso</SelectItem>
+                    <SelectItem value="default_campaign">🏢 Usar canal padrão da campanha</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            </>
+            </div>
           )}
 
           {/* NOTIFY - Group only */}

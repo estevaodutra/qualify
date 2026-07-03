@@ -424,6 +424,7 @@ Deno.serve(async (req) => {
                 triggerContext: execution.trigger_context,
                 executionId: execution.id,
                 startFromNodeIndex: execution.current_node_index,
+                startFromNodeId: execution.current_node_id,
               };
 
           const response = await fetch(fetchUrl, {

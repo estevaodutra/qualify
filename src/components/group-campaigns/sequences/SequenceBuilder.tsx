@@ -13,6 +13,7 @@ import {
   Image, Video, Music, FileText, Smile,
   BarChart3, MousePointerClick, List, MapPin, Contact, Calendar,
   Pencil, ImageIcon, UserPlus, UserMinus, ShieldPlus, ShieldMinus, Settings, Plus, CircleDot,
+  Tag, Award, Sliders, Sparkles, Code
 } from "lucide-react";
 
 interface SequenceBuilderProps {
@@ -41,27 +42,21 @@ const NODE_CATEGORIES: NodeCategory[] = [
     { type: "event", label: "Evento", icon: Calendar, color: "bg-sky-500" },
   ]},
   { id: "flow", label: "Fluxo", nodes: [
-    { type: "delay", label: "Delay", icon: Clock, color: "bg-amber-500" },
+    { type: "delay", label: "Delay / Espera", icon: Clock, color: "bg-amber-500" },
     { type: "condition", label: "Condição", icon: GitBranch, color: "bg-purple-500" },
-    { type: "notify", label: "Notificar", icon: Bell, color: "bg-green-500" },
-    { type: "webhook", label: "Webhook", icon: Link2, color: "bg-rose-500" },
-    { type: "webhook_forward", label: "Enviar p/ Webhook", icon: Send, color: "bg-fuchsia-500" },
   ]},
-  { id: "status", label: "Status", nodes: [
-    { type: "status_image", label: "Status Imagem", icon: CircleDot, color: "bg-emerald-500" },
-    { type: "status_video", label: "Status Vídeo", icon: CircleDot, color: "bg-cyan-500" },
+  { id: "actions_crm", label: "Ações e CRM", nodes: [
+    { type: "tag_add", label: "Adicionar Tag", icon: Tag, color: "bg-orange-600" },
+    { type: "tag_remove", label: "Remover Tag", icon: Tag, color: "bg-rose-600" },
+    { type: "deal_move", label: "Mover Negócio", icon: Award, color: "bg-emerald-600" },
+    { type: "channel_select", label: "Selecionar Canal", icon: Send, color: "bg-indigo-600" },
   ]},
-  { id: "group_management", label: "Gestão de Grupo", nodes: [
-    { type: "group_create", label: "Criar Grupo", icon: Plus, color: "bg-teal-600" },
-    { type: "group_rename", label: "Renomear Grupo", icon: Pencil, color: "bg-sky-600" },
-    { type: "group_photo", label: "Alterar Foto", icon: ImageIcon, color: "bg-emerald-600" },
-    { type: "group_description", label: "Alterar Descrição", icon: FileText, color: "bg-slate-600" },
-    { type: "group_add_participant", label: "Adicionar Participante", icon: UserPlus, color: "bg-green-600" },
-    { type: "group_remove_participant", label: "Remover Participante", icon: UserMinus, color: "bg-red-600" },
-    { type: "group_promote_admin", label: "Promover Admin", icon: ShieldPlus, color: "bg-violet-600" },
-    { type: "group_remove_admin", label: "Remover Admin", icon: ShieldMinus, color: "bg-orange-600" },
-    { type: "group_settings", label: "Configurações", icon: Settings, color: "bg-zinc-600" },
-  ]},
+  { id: "advanced", label: "Avançado", nodes: [
+    { type: "api_call", label: "Chamada API", icon: Link2, color: "bg-sky-600" },
+    { type: "field_op", label: "Operação de Campo", icon: Sliders, color: "bg-teal-600" },
+    { type: "ai_agent", label: "IA Assistente", icon: Sparkles, color: "bg-violet-600" },
+    { type: "js_code", label: "Executar JavaScript", icon: Code, color: "bg-slate-600" },
+  ]}
 ];
 
 const getDefaultConfig = (nodeType: string): Record<string, unknown> => {
