@@ -37,6 +37,7 @@ export interface UnifiedSequenceBuilderProps {
 export function UnifiedSequenceBuilder({
   sequenceName: initialName,
   isActive,
+  sequenceId,
   nodeCategories,
   getDefaultConfig,
   renderTrigger,
