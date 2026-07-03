@@ -135,6 +135,30 @@ Deno.serve(async (req) => {
     console.log(`[webhook-inbound] Event saved with ID: ${insertedEvent.id}`);
 
     // ==========================================
+    // AUTO-PROCESS CONNECTION STATUS
+    // ==========================================
+    if (classification.eventType === "connection_status" && instance?.id) {
+      const eventBody = rawEvent.body as Record<string, unknown> | undefined;
+      const payloadObj = eventBody?.payload as Record<string, unknown> | undefined;
+      const statusRaw = (eventBody?.status || payloadObj?.status || rawEvent.status) as string | undefined;
+
+      if (statusRaw) {
+        const s = statusRaw.toUpperCase();
+        const newStatus = (s === "WORKING" || s === "CONNECTED" || s === "CONNECTED_TO_WHATSAPP") ? "connected" : "disconnected";
+        
+        console.log(`[webhook-inbound] Updating instance ${instance.id} status to ${newStatus}`);
+        const { error: updateError } = await supabase
+          .from("instances")
+          .update({ status: newStatus })
+          .eq("id", instance.id);
+          
+        if (updateError) {
+          console.error(`[webhook-inbound] Failed to update instance status:`, updateError.message);
+        }
+      }
+    }
+
+    // ==========================================
     // AUTO-PROCESS POLL RESPONSES
     // ==========================================
     let pollProcessingResult: Record<string, unknown> | null = null;
