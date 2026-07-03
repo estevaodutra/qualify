@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useSequences, MessageSequence } from "@/hooks/useSequences";
 import { SequenceList } from "../sequences/SequenceList";
-import { TimelineSequenceBuilder } from "../sequences/TimelineSequenceBuilder";
+import { SequenceBuilder } from "../sequences/SequenceBuilder";
 
 interface SequencesTabProps {
   campaignId: string;
@@ -43,7 +43,7 @@ export function SequencesTab({ campaignId }: SequencesTabProps) {
 
   if (editingSequence) {
     return (
-      <TimelineSequenceBuilder
+      <SequenceBuilder
         sequence={editingSequence}
         onBack={handleBack}
         onUpdate={updateSequence}
