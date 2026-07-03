@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendWhatsAppMessage } from "../_shared/whatsapp-client.ts";
+import { logNodeExecution } from "../_shared/workflow-execution-log.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -835,6 +836,41 @@ Deno.serve(async (req) => {
       let currentNodeId: string | null =
         isResumedExecution && startFromNodeId ? startFromNodeId : (sortedNodes[0]?.id ?? null);
 
+      // Workflow execution history: one row per real run, reused across pause/resume
+      // (via the same executionId) so a single logical run — even one spanning a
+      // multi-day delay — shows up as one entry in the Execuções tab.
+      const workflowTriggerType = isManualNodeExecution ? "manual_node_test"
+        : isResumedExecution ? "resumed"
+        : isTriggeredExecution ? "webhook"
+        : isDirectSequenceExecution ? "manual"
+        : "message";
+
+      let workflowExecutionId: string = crypto.randomUUID();
+      try {
+        if (isResumedExecution && executionId) {
+          workflowExecutionId = executionId;
+          await supabase.from("workflow_executions").update({ status: "running" }).eq("id", workflowExecutionId);
+        } else {
+          const { data: newExecution, error: newExecutionError } = await supabase
+            .from("workflow_executions")
+            .insert({
+              user_id: userId,
+              campaign_id: campaignId,
+              sequence_id: effectiveSequenceId,
+              sequence_type: "message",
+              status: "running",
+              trigger_type: workflowTriggerType,
+              trigger_payload: triggerContext || {},
+            })
+            .select("id")
+            .single();
+          if (newExecutionError) throw newExecutionError;
+          if (newExecution?.id) workflowExecutionId = newExecution.id;
+        }
+      } catch (err) {
+        console.error("[ExecuteMessage] Failed to create/resume workflow_executions row (non-fatal):", err);
+      }
+
       while (currentNodeId) {
         const node = sortedNodes.find(n => n.id === currentNodeId);
         if (!node) {
@@ -851,6 +887,7 @@ Deno.serve(async (req) => {
         visitCounts.set(node.id, visits);
 
         console.log(`[ExecuteMessage] Processing node: ${node.id} (${node.node_type})`);
+        const nodeStartedAt = new Date();
 
         // ============= CHANNEL SELECTOR NODES =============
         if (node.node_type === "channel_select") {
@@ -859,6 +896,11 @@ Deno.serve(async (req) => {
             activeInstanceId = selectedInstanceId;
             console.log(`[ExecuteMessage] Channel selector: switching to instance ${activeInstanceId}`);
           }
+          await logNodeExecution(supabase, {
+            executionId: workflowExecutionId, userId, nodeId: node.id, nodeType: node.node_type,
+            status: "success", startedAt: nodeStartedAt,
+            input: node.config, output: { switchedToInstanceId: selectedInstanceId || null },
+          });
           const nextConn = connections.find(c => c.source_node_id === node.id);
           currentNodeId = nextConn ? nextConn.target_node_id : null;
           nodesProcessed++;
@@ -869,6 +911,7 @@ Deno.serve(async (req) => {
         if (node.node_type === "tag_add" || node.node_type === "tag_remove" || node.node_type === "deal_move") {
           const tagName = node.config.tag as string;
           const stageId = node.config.stageId as string;
+          const affectedLeadIds: string[] = [];
 
           for (const dest of activeDestinations) {
             const phoneClean = dest.group_jid.split("@")[0].replace(/\D/g, "");
@@ -888,6 +931,7 @@ Deno.serve(async (req) => {
                     .update({ tags: [...currentTags, tagName] })
                     .eq("id", leadData.id);
                   console.log(`[ExecuteMessage] Tag VIP/label added to lead ${leadData.id}`);
+                  affectedLeadIds.push(leadData.id);
                 }
               } else if (node.node_type === "tag_remove" && tagName) {
                 const currentTags = leadData.tags || [];
@@ -896,15 +940,23 @@ Deno.serve(async (req) => {
                   .update({ tags: currentTags.filter(t => t !== tagName) })
                   .eq("id", leadData.id);
                 console.log(`[ExecuteMessage] Tag VIP/label removed from lead ${leadData.id}`);
+                affectedLeadIds.push(leadData.id);
               } else if (node.node_type === "deal_move" && stageId) {
                 await supabase
                   .from("leads")
                   .update({ pipeline_stage_id: stageId })
                   .eq("id", leadData.id);
                 console.log(`[ExecuteMessage] Lead ${leadData.id} moved to pipeline stage ${stageId}`);
+                affectedLeadIds.push(leadData.id);
               }
             }
           }
+          await logNodeExecution(supabase, {
+            executionId: workflowExecutionId, userId, nodeId: node.id, nodeType: node.node_type,
+            status: "success", startedAt: nodeStartedAt,
+            input: { tag: tagName || null, stageId: stageId || null },
+            output: { affectedLeadIds },
+          });
           const nextConn = connections.find(c => c.source_node_id === node.id);
           currentNodeId = nextConn ? nextConn.target_node_id : null;
           nodesProcessed++;
@@ -914,6 +966,7 @@ Deno.serve(async (req) => {
         // ============= FIELD OPERATION NODES =============
         if (node.node_type === "field_op") {
           const { field, value } = node.config || {};
+          const affectedLeadIds: string[] = [];
           if (field) {
             for (const dest of activeDestinations) {
               const phoneClean = dest.group_jid.split("@")[0].replace(/\D/g, "");
@@ -932,9 +985,16 @@ Deno.serve(async (req) => {
                   .update({ custom_fields: currentCf })
                   .eq("id", leadData.id);
                 console.log(`[ExecuteMessage] Custom field ${field} updated for lead ${leadData.id}`);
+                affectedLeadIds.push(leadData.id);
               }
             }
           }
+          await logNodeExecution(supabase, {
+            executionId: workflowExecutionId, userId, nodeId: node.id, nodeType: node.node_type,
+            status: "success", startedAt: nodeStartedAt,
+            input: { field: field || null, value: value ?? null },
+            output: { affectedLeadIds },
+          });
           const nextConn = connections.find(c => c.source_node_id === node.id);
           currentNodeId = nextConn ? nextConn.target_node_id : null;
           nodesProcessed++;
@@ -960,6 +1020,11 @@ Deno.serve(async (req) => {
           }
           const branch = isTrue ? "yes" : "no";
           console.log(`[ExecuteMessage] Condition node ${node.id} evaluated as: ${isTrue} (${branch} branch)`);
+          await logNodeExecution(supabase, {
+            executionId: workflowExecutionId, userId, nodeId: node.id, nodeType: node.node_type,
+            status: "success", startedAt: nodeStartedAt,
+            input: node.config, output: { result: isTrue, branch },
+          });
           const matchConn = connections.find(c => c.source_node_id === node.id && c.condition_path === branch);
           currentNodeId = matchConn ? matchConn.target_node_id : null;
           nodesProcessed++;
@@ -982,6 +1047,7 @@ Deno.serve(async (req) => {
             const { data: savedExecution, error: saveError } = await supabase
               .from("sequence_executions")
               .insert({
+                id: workflowExecutionId, // reuse the same id as workflow_executions so resume can correlate them
                 user_id: userId,
                 campaign_id: campaignId,
                 sequence_id: effectiveSequenceId,
@@ -1007,7 +1073,16 @@ Deno.serve(async (req) => {
               await new Promise(resolve => setTimeout(resolve, effectiveDelay));
             } else {
               console.log(`[ExecuteMessage] ✅ Execution ${savedExecution.id} paused, will resume at ${resumeAt.toISOString()}`);
-              
+
+              await logNodeExecution(supabase, {
+                executionId: workflowExecutionId, userId, nodeId: node.id, nodeType: node.node_type,
+                status: "success", startedAt: nodeStartedAt,
+                input: node.config, output: { scheduled: true, resumeAt: resumeAt.toISOString() },
+              });
+              await supabase.from("workflow_executions")
+                .update({ status: "waiting" })
+                .eq("id", workflowExecutionId);
+
               // Return partial response
               const totalTimeMs = Date.now() - startTime;
               return new Response(
@@ -1029,7 +1104,12 @@ Deno.serve(async (req) => {
             console.log(`[ExecuteMessage] ⏱️ Short delay: waiting ${delayMs}ms`);
             await new Promise(resolve => setTimeout(resolve, delayMs));
           }
-          
+
+          await logNodeExecution(supabase, {
+            executionId: workflowExecutionId, userId, nodeId: node.id, nodeType: node.node_type,
+            status: "success", startedAt: nodeStartedAt,
+            input: node.config, output: { waitedMs: Math.min(delayMs, MAX_DELAY_MS) },
+          });
           currentNodeId = nextNodeId;
           nodesProcessed++;
           continue;
@@ -1053,7 +1133,9 @@ Deno.serve(async (req) => {
           };
           const resolvedConfig = replaceDeep(formattedConfig) as Record<string, unknown>;
           Object.assign(formattedConfig, resolvedConfig);
-          
+
+          const nodeResults: Array<{ destination: string; status: string }> = [];
+
           // Group management nodes operate on linked groups (using group_jid)
           for (const dest of effectiveDests) {
             const payload = buildStandardPayload({
@@ -1106,10 +1188,12 @@ Deno.serve(async (req) => {
               if (result.ok) {
                 console.log(`[ExecuteMessage] ✅ Group mgmt ${node.node_type} on ${dest.group_name}`);
                 webhookResponses.push({ nodeType: node.node_type, nodeOrder: node.node_order, destination: dest.group_jid, status: "sent", data: responseData });
+                nodeResults.push({ destination: dest.group_jid, status: "sent" });
               } else {
                 nodesFailed++;
                 console.log(`[ExecuteMessage] ❌ Group mgmt ${node.node_type} failed: HTTP ${result.status}`);
                 webhookResponses.push({ nodeType: node.node_type, nodeOrder: node.node_order, destination: dest.group_jid, status: "failed", data: responseData });
+                nodeResults.push({ destination: dest.group_jid, status: "failed" });
               }
             } catch (err) {
               nodesFailed++;
@@ -1120,9 +1204,15 @@ Deno.serve(async (req) => {
                 }).eq("id", logEntry.id);
               }
               console.error(`[ExecuteMessage] ❌ Group mgmt error:`, err);
+              nodeResults.push({ destination: dest.group_jid, status: "failed" });
             }
           }
 
+          await logNodeExecution(supabase, {
+            executionId: workflowExecutionId, userId, nodeId: node.id, nodeType: node.node_type,
+            status: nodeResults.some(r => r.status === "failed") ? "error" : "success", startedAt: nodeStartedAt,
+            input: formattedConfig, output: { results: nodeResults },
+          });
           const nextConn = connections.find(c => c.source_node_id === node.id);
           currentNodeId = nextConn ? nextConn.target_node_id : null;
           nodesProcessed++;
@@ -1145,6 +1235,11 @@ Deno.serve(async (req) => {
 
           if (!targetUrl) {
             console.log(`[ExecuteMessage] ⚠️ webhook_forward: no URL configured, skipping`);
+            await logNodeExecution(supabase, {
+              executionId: workflowExecutionId, userId, nodeId: node.id, nodeType: node.node_type,
+              status: "not_executed", startedAt: nodeStartedAt,
+              input: node.config, error: { message: "No URL configured" },
+            });
             const nextConn = connections.find(c => c.source_node_id === node.id);
             currentNodeId = nextConn ? nextConn.target_node_id : null;
             nodesProcessed++;
@@ -1212,6 +1307,7 @@ Deno.serve(async (req) => {
             })
             .select().single();
 
+          let webhookNodeError: unknown = null;
           try {
             const response = await fetch(targetUrl, {
               method,
@@ -1239,6 +1335,7 @@ Deno.serve(async (req) => {
               nodesFailed++;
               console.log(`[ExecuteMessage] ❌ webhook_forward failed: HTTP ${response.status}`);
               webhookResponses.push({ nodeType: node.node_type, nodeOrder: node.node_order, destination: targetUrl, status: "failed", data: responseData });
+              webhookNodeError = { message: `HTTP ${response.status}`, details: responseData };
             }
           } catch (err) {
             nodesFailed++;
@@ -1249,8 +1346,15 @@ Deno.serve(async (req) => {
               }).eq("id", logEntry.id);
             }
             console.error(`[ExecuteMessage] ❌ webhook_forward error:`, err);
+            webhookNodeError = { message: err instanceof Error ? err.message : "Unknown error" };
           }
 
+          await logNodeExecution(supabase, {
+            executionId: workflowExecutionId, userId, nodeId: node.id, nodeType: node.node_type,
+            status: webhookNodeError ? "error" : "success", startedAt: nodeStartedAt,
+            input: { url: targetUrl, method, payload: forwardPayload },
+            error: webhookNodeError,
+          });
           const nextConn = connections.find(c => c.source_node_id === node.id);
           currentNodeId = nextConn ? nextConn.target_node_id : null;
           nodesProcessed++;
@@ -1259,6 +1363,7 @@ Deno.serve(async (req) => {
 
         // Send this node to all destinations
         const nextActiveDestinations: DestinationData[] = [];
+        const nodeSendResults: Array<{ destination: string; status: string }> = [];
         for (const dest of activeDestinations) {
           const action = getActionForNodeType(node.node_type);
           
@@ -1357,7 +1462,8 @@ Deno.serve(async (req) => {
             if (result.ok) {
               console.log(`[ExecuteMessage] ✅ Node ${node.node_type} sent to ${dest.group_name}${dest.isPrivate ? ' (private)' : ''}`);
               webhookResponses.push({ nodeType: node.node_type, nodeOrder: node.node_order, destination: dest.group_jid, status: "sent", data: responseData });
-              
+              nodeSendResults.push({ destination: dest.group_jid, status: "sent" });
+
               // Add to next destinations list for subsequent sequence nodes
               nextActiveDestinations.push(dest);
 
@@ -1418,11 +1524,13 @@ Deno.serve(async (req) => {
               nodesFailed++;
               console.log(`[ExecuteMessage] ❌ Node ${node.node_type} failed for ${dest.group_name}: HTTP ${result.status}`);
               webhookResponses.push({ nodeType: node.node_type, nodeOrder: node.node_order, destination: dest.group_jid, status: "failed", data: responseData });
+              nodeSendResults.push({ destination: dest.group_jid, status: "failed" });
             }
           } catch (err) {
             nodesFailed++;
             console.error(`[ExecuteMessage] ❌ Error sending node to ${dest.group_name}:`, err);
-            
+            nodeSendResults.push({ destination: dest.group_jid, status: "failed" });
+
             if (logEntry?.id) {
               await supabase
                 .from("group_message_logs")
@@ -1435,13 +1543,24 @@ Deno.serve(async (req) => {
             }
           }
         }
-        
+
+        await logNodeExecution(supabase, {
+          executionId: workflowExecutionId, userId, nodeId: node.id, nodeType: node.node_type,
+          status: nodeSendResults.some(r => r.status === "failed") ? "error" : "success", startedAt: nodeStartedAt,
+          input: node.config, output: { results: nodeSendResults },
+        });
+
         activeDestinations = nextActiveDestinations;
         if (activeDestinations.length === 0) {
           console.log(`[ExecuteMessage] No active destinations left, stopping sequence`);
           break;
         }
 
+        // Advance to the next connected node — this branch handles every
+        // "sendable" node type that fell through the specific-type checks
+        // above (message/media/poll/buttons/list/etc).
+        const nextConn = connections.find(c => c.source_node_id === node.id);
+        currentNodeId = nextConn ? nextConn.target_node_id : null;
         nodesProcessed++;
       }
 
@@ -1477,6 +1596,20 @@ Deno.serve(async (req) => {
             console.log(`[ExecuteMessage] Marked ${supersededExecutions.length} old executions as superseded`);
           }
         }
+      }
+
+      // Finalize this run's workflow_executions row (observability, non-fatal)
+      try {
+        await supabase.from("workflow_executions")
+          .update({
+            status: nodesFailed === 0 ? "success" : "error",
+            finished_at: new Date().toISOString(),
+            duration_ms: Date.now() - startTime,
+            error_message: nodesFailed > 0 ? `${nodesFailed} node(s) failed` : null,
+          })
+          .eq("id", workflowExecutionId);
+      } catch (err) {
+        console.error("[ExecuteMessage] Failed to finalize workflow_executions row (non-fatal):", err);
       }
     }
 

@@ -4,12 +4,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { 
-  ArrowLeft, Save, Play, Pause, Trash2, ZoomIn, ZoomOut, Maximize, 
-  Plus, Loader2, Info, GitBranch, Settings2, Info as HelpIcon
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  ArrowLeft, Save, Play, Pause, Trash2, ZoomIn, ZoomOut, Maximize,
+  Plus, Loader2, Info, GitBranch, Info as HelpIcon, Copy, PenLine, History
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { ExecutionsPanel } from "./executions/ExecutionsPanel";
 
 export interface UnifiedSequenceBuilderProps {
   sequenceName: string;
@@ -88,9 +93,22 @@ export function UnifiedSequenceBuilder({
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [isSendingManual, setIsSendingManual] = useState(false);
 
+  // Hover toolbar & delete confirmation
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const [nodeIdPendingDelete, setNodeIdPendingDelete] = useState<string | null>(null);
+
+  // Editor vs Execuções (read-only run history) mode
+  const [mode, setMode] = useState<"editor" | "executions">("editor");
+
   const canvasRef = useRef<HTMLDivElement>(null);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydratedSequenceId = useRef<string | null>(null);
+  // Distinguishes a click from a drag without an artificial timeout: a real
+  // pointer movement past this threshold marks the interaction as a drag, so
+  // the node's onClick (fired right after mouseup) knows to skip opening the
+  // edit panel.
+  const dragMovedRef = useRef(false);
+  const mouseDownPosRef = useRef({ x: 0, y: 0 });
 
   // Initialize and auto-position if nodes lack coordinates.
   // Runs only once per sequenceId — initialNodes/initialConnections are recreated
@@ -211,10 +229,18 @@ export function UnifiedSequenceBuilder({
     } else if (draggedNodeId) {
       const rect = canvasRef.current?.getBoundingClientRect();
       if (!rect) return;
-      
+
+      if (!dragMovedRef.current) {
+        const dx = e.clientX - mouseDownPosRef.current.x;
+        const dy = e.clientY - mouseDownPosRef.current.y;
+        if (Math.sqrt(dx * dx + dy * dy) > 3) {
+          dragMovedRef.current = true;
+        }
+      }
+
       const x = (e.clientX - rect.left - panOffset.x) / zoom - nodeDragOffset.x;
       const y = (e.clientY - rect.top - panOffset.y) / zoom - nodeDragOffset.y;
-      
+
       setLocalNodes(prev => prev.map(n => n.id === draggedNodeId ? { ...n, positionX: Math.round(x), positionY: Math.round(y) } : n));
     } else if (activePort) {
       const rect = canvasRef.current?.getBoundingClientRect();
@@ -237,10 +263,12 @@ export function UnifiedSequenceBuilder({
   // Node drag start
   const handleNodeMouseDown = (e: React.MouseEvent, node: LocalNode) => {
     if ((e.target as HTMLElement).closest("button") || (e.target as HTMLElement).closest("[data-node-port]")) return;
-    
+
     e.stopPropagation();
+    dragMovedRef.current = false;
+    mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
     setDraggedNodeId(node.id);
-    
+
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
     
@@ -287,7 +315,52 @@ export function UnifiedSequenceBuilder({
     }
     updateNodesAndSave(prev => prev.filter(n => n.id !== id));
     updateConnectionsAndSave(prev => prev.filter(c => c.sourceNodeId !== id && c.targetNodeId !== id));
-    setSelectedNodeId(null);
+    if (selectedNodeId === id) setSelectedNodeId(null);
+  };
+
+  // Ask for confirmation before removing a node (it may have connections/config attached)
+  const requestDeleteNode = (id: string) => {
+    if (id === "trigger") {
+      toast({ title: "Ação não permitida", description: "O bloco de início não pode ser removido.", variant: "destructive" });
+      return;
+    }
+    setNodeIdPendingDelete(id);
+  };
+
+  const confirmDeleteNode = () => {
+    if (nodeIdPendingDelete) handleDeleteNode(nodeIdPendingDelete);
+    setNodeIdPendingDelete(null);
+  };
+
+  // Duplicate Node: new id, cloned type/config, offset position, no connections copied
+  const handleDuplicateNode = (id: string) => {
+    const source = localNodes.find(n => n.id === id);
+    if (!source || id === "trigger") return;
+
+    const isOccupied = (x: number, y: number) =>
+      localNodes.some(n => Math.abs((n.positionX || 0) - x) < 10 && Math.abs((n.positionY || 0) - y) < 10);
+
+    let offsetX = (source.positionX || 0) + 40;
+    let offsetY = (source.positionY || 0) + 40;
+    let guard = 0;
+    while (isOccupied(offsetX, offsetY) && guard < 20) {
+      offsetX += 40;
+      offsetY += 40;
+      guard++;
+    }
+
+    const newNode: LocalNode = {
+      id: generateNodeId(),
+      nodeType: source.nodeType,
+      nodeOrder: localNodes.length,
+      config: JSON.parse(JSON.stringify(source.config)),
+      positionX: offsetX,
+      positionY: offsetY,
+    };
+
+    updateNodesAndSave(prev => [...prev, newNode]);
+    setSelectedNodeId(newNode.id);
+    toast({ title: "Bloco duplicado" });
   };
 
   // Port mouse handlers (connecting nodes)
@@ -358,6 +431,30 @@ export function UnifiedSequenceBuilder({
 
   const selectedNode = localNodes.find(n => n.id === selectedNodeId);
 
+  // Keyboard shortcuts: Ctrl/Cmd+D duplicates, Delete/Backspace removes the selected node
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isEditableTarget = !!target && (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT" ||
+        target.isContentEditable
+      );
+      if (isEditableTarget || !selectedNodeId) return;
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        handleDuplicateNode(selectedNodeId);
+      } else if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        requestDeleteNode(selectedNodeId);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedNodeId, localNodes]);
+
   return (
     <div className="flex flex-col flex-1 min-h-0 h-full bg-[#F8F9FC] gap-5">
       
@@ -381,21 +478,55 @@ export function UnifiedSequenceBuilder({
           </div>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-0.5 bg-slate-100 rounded-xl p-1">
+            <button
+              onClick={() => setMode("editor")}
+              className={cn(
+                "flex items-center gap-1.5 h-7 px-3 rounded-lg text-xs font-semibold transition-colors",
+                mode === "editor" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              )}
+            >
+              <PenLine className="h-3.5 w-3.5" />
+              Editor
+            </button>
+            <button
+              onClick={() => setMode("executions")}
+              className={cn(
+                "flex items-center gap-1.5 h-7 px-3 rounded-lg text-xs font-semibold transition-colors",
+                mode === "executions" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              )}
+            >
+              <History className="h-3.5 w-3.5" />
+              Execuções
+            </button>
+          </div>
           <Button variant="outline" onClick={onToggleActive} className="rounded-xl border-slate-200 hover:bg-slate-50 gap-2 h-9 px-4 font-semibold text-slate-700">
             {isActive ? <Pause className="h-4 w-4 text-amber-500" /> : <Play className="h-4 w-4 text-emerald-500" />}
             {isActive ? "Pausar" : "Ativar"}
           </Button>
-          <Button onClick={handleSaveAll} disabled={isSaving} className="bg-[#8A3CFF] hover:bg-[#7830E3] text-white rounded-xl gap-2 h-9 px-5 font-semibold">
-            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {isSaving ? "Salvando..." : "Salvar"}
-          </Button>
+          {mode === "editor" && (
+            <Button onClick={handleSaveAll} disabled={isSaving} className="bg-[#8A3CFF] hover:bg-[#7830E3] text-white rounded-xl gap-2 h-9 px-5 font-semibold">
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              {isSaving ? "Salvando..." : "Salvar"}
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Canvas Layout */}
-      <div className="flex-1 flex gap-4 h-[calc(100vh-280px)] min-h-[480px] overflow-hidden">
-        
+      {mode === "executions" ? (
+        <ExecutionsPanel
+          sequenceId={sequenceId}
+          nodes={localNodes}
+          connections={localConnections}
+          nodeCategories={nodeCategories}
+        />
+      ) : (
+      /* Canvas Layout — fills whatever height the page gives this component; the
+          viewport-relative sizing lives one level up (see SequencesTab wrappers),
+          so this stays correct regardless of chrome above it. */
+      <div className="flex-1 flex gap-4 min-h-0 overflow-hidden">
+
         {/* Palette (Menu Lateral de Blocos) */}
         <Card className="w-56 shrink-0 flex flex-col border-slate-200/60 bg-white rounded-2xl shadow-sm overflow-hidden">
           <div className="p-4 border-b border-slate-100">
@@ -520,7 +651,7 @@ export function UnifiedSequenceBuilder({
                         strokeWidth="2"
                         strokeDasharray="4 4"
                         markerEnd="url(#arrow)"
-                        className="hover:stroke-sky-400 hover:stroke-[3px] cursor-pointer transition-all duration-300 animate-[dash_15s_linear_infinite]"
+                        className="hover:stroke-sky-400 hover:stroke-[3px] cursor-pointer transition-[stroke,stroke-width] duration-150"
                       />
                       <circle
                         cx={midX}
@@ -569,6 +700,9 @@ export function UnifiedSequenceBuilder({
                   const isCondition = node.nodeType === "condition";
                   const isTrigger = node.nodeType === "trigger";
 
+                  const isHovered = hoveredNodeId === node.id;
+                  const showHoverToolbar = isHovered && !draggedNodeId && !isTrigger;
+
                   return (
                     <div
                       key={node.id}
@@ -580,11 +714,49 @@ export function UnifiedSequenceBuilder({
                         pointerEvents: "auto"
                       }}
                       onMouseDown={(e) => handleNodeMouseDown(e, node)}
+                      onMouseEnter={() => setHoveredNodeId(node.id)}
+                      onMouseLeave={() => setHoveredNodeId(prev => (prev === node.id ? null : prev))}
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).closest("button") || (e.target as HTMLElement).closest("[data-node-port]")) return;
+                        if (dragMovedRef.current) { dragMovedRef.current = false; return; }
+                        if (isTrigger) {
+                          setShowTriggerDialog(true);
+                        } else {
+                          setSelectedNodeId(node.id);
+                        }
+                      }}
                       className={cn(
-                        "rounded-xl border border-slate-200 bg-white shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col p-3 transition-all cursor-grab active:cursor-grabbing",
+                        "rounded-xl border border-slate-200 bg-white shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col p-3 transition-[border-color,box-shadow] duration-150 cursor-grab active:cursor-grabbing",
                         isSelected && "border-[#8A3CFF] ring-2 ring-[#8A3CFF]/10"
                       )}
                     >
+                      {/* Hover-only floating toolbar (n8n-style): duplicate/delete, hidden during drag and while selected node's dialog owns focus */}
+                      {showHoverToolbar && (
+                        <div
+                          className="absolute -top-9 left-1/2 -translate-x-1/2 z-30 flex items-center gap-0.5 bg-white border border-slate-200 rounded-lg shadow-md p-0.5 animate-in fade-in duration-150"
+                          onMouseDown={(e) => e.stopPropagation()}
+                        >
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 rounded-md hover:bg-slate-100 text-slate-500"
+                            title="Duplicar"
+                            onClick={(e) => { e.stopPropagation(); handleDuplicateNode(node.id); }}
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 rounded-md text-destructive hover:bg-destructive/10"
+                            title="Excluir"
+                            onClick={(e) => { e.stopPropagation(); requestDeleteNode(node.id); }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      )}
+
                       {/* Node Connection Ports */}
                       {/* Input Port (Left Handle) - Excluded for trigger node */}
                       {!isTrigger && (
@@ -666,38 +838,9 @@ export function UnifiedSequenceBuilder({
                         <span className="flex items-center gap-0.5">🔴 0</span>
                       </div>
 
-                      {/* Card Actions Footer */}
+                      {/* Card footer: node order only — editing is now a click on the card body, deletion lives in the hover toolbar */}
                       <div className="flex items-center justify-between border-t border-slate-100 pt-2 mt-2">
                         <span className="text-[8px] font-bold text-slate-400/60 font-mono">NODE #{node.nodeOrder + 1}</span>
-                        <div className="flex gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-5 w-5 rounded hover:bg-slate-100 text-slate-500" 
-                            title="Editar Configuração"
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
-                              if (isTrigger) {
-                                setShowTriggerDialog(true);
-                              } else {
-                                setSelectedNodeId(node.id); 
-                              }
-                            }}
-                          >
-                            <Settings2 className="h-3 w-3" />
-                          </Button>
-                          {!isTrigger && (
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-5 w-5 rounded text-destructive hover:bg-destructive/10" 
-                              title="Excluir"
-                              onClick={(e) => { e.stopPropagation(); handleDeleteNode(node.id); }}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          )}
-                        </div>
                       </div>
                     </div>
                   );
@@ -708,6 +851,7 @@ export function UnifiedSequenceBuilder({
           </div>
         </div>
       </div>
+      )}
 
       {/* Trigger selection/config Dialog */}
       <Dialog open={showTriggerDialog} onOpenChange={setShowTriggerDialog}>
@@ -745,6 +889,24 @@ export function UnifiedSequenceBuilder({
         } : undefined,
         isSendingManual
       )}
+
+      {/* Delete node confirmation */}
+      <AlertDialog open={!!nodeIdPendingDelete} onOpenChange={(open) => { if (!open) setNodeIdPendingDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir este node?</AlertDialogTitle>
+            <AlertDialogDescription>
+              As conexões vinculadas também serão removidas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteNode} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Excluir node
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

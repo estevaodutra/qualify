@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendWhatsAppMessage } from "../_shared/whatsapp-client.ts";
+import { logNodeExecution } from "../_shared/workflow-execution-log.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -306,8 +307,38 @@ Deno.serve(async (req) => {
         .eq("id", executionId);
     }
 
+    // Workflow execution history: one row per real run, reused across pause/resume
+    // (via the same executionId) so a single logical run shows up as one entry
+    // in the Execuções tab.
+    let workflowExecutionId: string = crypto.randomUUID();
+    try {
+      if (isResumed && executionId) {
+        workflowExecutionId = executionId;
+        await supabase.from("workflow_executions").update({ status: "running" }).eq("id", workflowExecutionId);
+      } else {
+        const { data: newExecution, error: newExecutionError } = await supabase
+          .from("workflow_executions")
+          .insert({
+            user_id: userId,
+            campaign_id: campaignId,
+            sequence_id: sequenceId,
+            sequence_type: "dispatch",
+            status: "running",
+            trigger_type: "dispatch",
+            trigger_payload: { contactPhone, contactName: contactName || "", contactId: contactId || null, customFields: customFields || {} },
+          })
+          .select("id")
+          .single();
+        if (newExecutionError) throw newExecutionError;
+        if (newExecution?.id) workflowExecutionId = newExecution.id;
+      }
+    } catch (err) {
+      console.error("[DispatchSequence] Failed to create/resume workflow_executions row (non-fatal):", err);
+    }
+
     for (let i = startIndex; i < typedSteps.length; i++) {
       const step = typedSteps[i];
+      const nodeStartedAt = new Date();
 
       console.log(`[DispatchSequence] Processing step ${i + 1}/${typedSteps.length}: ${step.step_type}`);
 
@@ -323,6 +354,7 @@ Deno.serve(async (req) => {
           const { data: savedExecution, error: saveError } = await supabase
             .from("sequence_executions")
             .insert({
+              id: workflowExecutionId, // reuse the same id as workflow_executions so resume can correlate them
               user_id: userId,
               campaign_id: campaignId,
               sequence_id: sequenceId,
@@ -344,6 +376,12 @@ Deno.serve(async (req) => {
             await new Promise(resolve => setTimeout(resolve, effectiveDelay));
           } else {
             console.log(`[DispatchSequence] ✅ Execution ${savedExecution.id} paused`);
+            await logNodeExecution(supabase, {
+              executionId: workflowExecutionId, userId, nodeId: step.id, nodeType: "delay",
+              status: "success", startedAt: nodeStartedAt,
+              output: { scheduled: true, resumeAt: resumeAt.toISOString() },
+            });
+            await supabase.from("workflow_executions").update({ status: "waiting" }).eq("id", workflowExecutionId);
             return new Response(
               JSON.stringify({ success: true, status: "paused", executionId: savedExecution.id, resumeAt: resumeAt.toISOString(), stepsProcessed }),
               { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -354,6 +392,11 @@ Deno.serve(async (req) => {
           await new Promise(resolve => setTimeout(resolve, delayMs));
         }
 
+        await logNodeExecution(supabase, {
+          executionId: workflowExecutionId, userId, nodeId: step.id, nodeType: "delay",
+          status: "success", startedAt: nodeStartedAt,
+          output: { waitedMs: Math.min(delayMs, MAX_DELAY_MS) },
+        });
         stepsProcessed++;
         continue;
       }
@@ -453,12 +496,22 @@ Deno.serve(async (req) => {
           if (result.ok) {
             console.log(`[DispatchSequence] ✅ Step ${step.step_order} sent to ${contactPhone} (${responseTimeMs}ms)`);
             stepsProcessed++;
-            
+            await logNodeExecution(supabase, {
+              executionId: workflowExecutionId, userId, nodeId: step.id, nodeType: step.message_type || "text",
+              status: "success", startedAt: nodeStartedAt,
+              input: config, output: { status: logStatus, responseTimeMs },
+            });
+
             // Wait for message delivery to ensure sequential receipt
             await waitForMessageDelivery(supabase, result.messageId, result.zaapId);
           } else {
             console.error(`[DispatchSequence] ❌ Step ${step.step_order} failed: HTTP ${result.status}`);
             stepsFailed++;
+            await logNodeExecution(supabase, {
+              executionId: workflowExecutionId, userId, nodeId: step.id, nodeType: step.message_type || "text",
+              status: "error", startedAt: nodeStartedAt,
+              input: config, error: { message: `HTTP ${result.status}`, details: responseData },
+            });
             // Respect the order and stop the sequence on failure
             break;
           }
@@ -467,6 +520,11 @@ Deno.serve(async (req) => {
           console.error(`[DispatchSequence] ❌ Error sending step ${step.step_order}:`, err);
 
           const errMsg = err instanceof Error ? err.message : "Unknown error";
+          await logNodeExecution(supabase, {
+            executionId: workflowExecutionId, userId, nodeId: step.id, nodeType: step.message_type || "text",
+            status: "error", startedAt: nodeStartedAt,
+            input: config, error: { message: errMsg },
+          });
           await Promise.all([
             supabase.from("dispatch_sequence_logs").insert({
               user_id: userId,
@@ -526,6 +584,20 @@ Deno.serve(async (req) => {
           status: "completed",
         })
         .eq("id", contactId);
+    }
+
+    // Finalize this run's workflow_executions row (observability, non-fatal)
+    try {
+      await supabase.from("workflow_executions")
+        .update({
+          status: stepsFailed === 0 ? "success" : "error",
+          finished_at: new Date().toISOString(),
+          duration_ms: Date.now() - startTime,
+          error_message: stepsFailed > 0 ? `${stepsFailed} step(s) failed` : null,
+        })
+        .eq("id", workflowExecutionId);
+    } catch (err) {
+      console.error("[DispatchSequence] Failed to finalize workflow_executions row (non-fatal):", err);
     }
 
     const elapsed = Date.now() - startTime;

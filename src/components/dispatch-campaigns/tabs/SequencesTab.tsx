@@ -35,12 +35,17 @@ export function SequencesTab({ campaignId }: SequencesTabProps) {
   };
 
   if (editingSequence) {
+    // Bounded height so the canvas fills the available space with no page-level
+    // scroll — only this (builder) branch needs it; the list view below stays
+    // free to grow naturally with the page.
     return (
-      <DispatchSequenceBuilder
-        sequence={editingSequence}
-        onBack={() => setEditingSequence(null)}
-        onUpdate={updateSequence}
-      />
+      <div className="h-[calc(100vh-230px)] min-h-[560px] overflow-hidden flex flex-col">
+        <DispatchSequenceBuilder
+          sequence={editingSequence}
+          onBack={() => setEditingSequence(null)}
+          onUpdate={updateSequence}
+        />
+      </div>
     );
   }
 
