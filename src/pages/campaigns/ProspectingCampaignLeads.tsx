@@ -141,18 +141,20 @@ export default function ProspectingCampaignLeads() {
                             </div>
                           )}
 
-                          {custom.website && (
-                            <div className="flex items-start gap-1.5 text-sm text-blue-500 hover:text-blue-600 transition-colors pt-0.5">
-                              <Globe className="h-4 w-4 shrink-0 mt-0.5" />
-                              <a href={custom.website} target="_blank" rel="noopener noreferrer" className="line-clamp-1 leading-snug hover:underline">
-                                {custom.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}
-                              </a>
-                            </div>
-                          )}
                         </div>
                       </div>
                       
-                      <div className="w-full sm:w-auto mt-2 sm:mt-0">
+                      <div className="w-full sm:w-auto mt-2 sm:mt-0 flex flex-col sm:flex-row gap-2">
+                        {custom.website && (
+                          <Button 
+                            variant="outline"
+                            className="w-full sm:w-auto shadow-sm gap-2"
+                            onClick={() => window.open(custom.website, "_blank")}
+                          >
+                            <Globe className="h-4 w-4" />
+                            Ver site
+                          </Button>
+                        )}
                         <Button 
                           className="w-full sm:w-auto shadow-sm gap-2" 
                           onClick={() => handleOpenDialog(lead.id, lead.name, lead.phone)}
