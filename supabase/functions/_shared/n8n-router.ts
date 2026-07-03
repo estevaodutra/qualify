@@ -316,6 +316,7 @@ export async function fetchZApi(
     provider: actualProvider,
     instance_id: instanceId,
     instance_token: instanceToken,
+    internal_db_id: internalDbId,
     instance_name: instanceName,
     api_key: apiKey,
     action: routed.action,

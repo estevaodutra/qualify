@@ -427,7 +427,7 @@ export default function Instances() {
     setIsRefreshing(true);
     try {
       const instancesPayload = instances
-        .filter(i => i.idInstance && i.tokenInstance)
+        .filter(i => i.idInstance && (i.provider === "WAHA" || i.tokenInstance))
         .map(i => ({
           id: i.id,
           name: i.name,

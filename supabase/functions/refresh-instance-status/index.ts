@@ -34,8 +34,7 @@ Deno.serve(async (req) => {
     let query = supabase
       .from("instances")
       .select("id, name, phone, status, provider, external_instance_id, external_instance_token, user_id")
-      .not("external_instance_id", "is", null)
-      .not("external_instance_token", "is", null);
+      .not("external_instance_id", "is", null);
 
     if (instanceIdsToRefresh.length > 0) {
       query = query.in("id", instanceIdsToRefresh);
