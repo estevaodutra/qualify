@@ -138,6 +138,7 @@ export function useWorkflowExecutions(sequenceId: string | undefined, statusFilt
   return {
     executions: query.data || [],
     isLoading: query.isLoading,
+    error: query.error,
     refetch: query.refetch,
   };
 }
@@ -196,6 +197,7 @@ export function useWorkflowExecutionDetail(executionId: string | null) {
     execution: query.data?.execution ?? null,
     nodeExecutions: query.data?.nodeExecutions ?? [],
     isLoading: query.isLoading,
+    error: query.error,
     refetch: query.refetch,
   };
 }

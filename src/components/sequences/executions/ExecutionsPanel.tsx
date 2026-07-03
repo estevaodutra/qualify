@@ -22,7 +22,7 @@ export function ExecutionsPanel({ sequenceId, nodes, connections, nodeCategories
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [isRerunning, setIsRerunning] = useState(false);
 
-  const { executions, isLoading, refetch } = useWorkflowExecutions(sequenceId);
+  const { executions, isLoading, error, refetch } = useWorkflowExecutions(sequenceId);
   const { execution, nodeExecutions, isLoading: isDetailLoading } = useWorkflowExecutionDetail(selectedExecutionId);
 
   // Default to the most recent run once the list loads
@@ -84,12 +84,13 @@ export function ExecutionsPanel({ sequenceId, nodes, connections, nodeCategories
         <ExecutionsList
           executions={executions}
           isLoading={isLoading}
+          error={error}
           selectedExecutionId={selectedExecutionId}
           onSelect={setSelectedExecutionId}
           onRefresh={refetch}
         />
 
-        {isDetailLoading ? (
+        {selectedExecutionId && isDetailLoading ? (
           <div className="flex-1 flex items-center justify-center text-slate-400">
             <Loader2 className="h-5 w-5 animate-spin" />
           </div>
@@ -104,13 +105,17 @@ export function ExecutionsPanel({ sequenceId, nodes, connections, nodeCategories
             onSelectNode={setSelectedNodeId}
           />
         ) : (
-          <div className="flex-1 flex items-center justify-center text-sm text-slate-400">
-            {executions.length === 0 ? "Nenhuma execução registrada ainda para este fluxo." : "Selecione uma execução na lista."}
+          <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
+            Selecione uma execução para ver os detalhes.
           </div>
         )}
 
         {selectedNodeExecution && (
-          <NodeInspector nodeExecution={selectedNodeExecution} onClose={() => setSelectedNodeId(null)} />
+          <NodeInspector
+            node={nodes.find(n => n.id === selectedNodeId)!}
+            nodeExecution={selectedNodeExecution}
+            onClose={() => setSelectedNodeId(null)}
+          />
         )}
       </div>
     </div>

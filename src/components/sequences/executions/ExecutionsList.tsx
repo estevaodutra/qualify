@@ -11,6 +11,7 @@ import { WorkflowExecution, WorkflowExecutionStatus } from "@/hooks/useWorkflowE
 interface ExecutionsListProps {
   executions: WorkflowExecution[];
   isLoading: boolean;
+  error: Error | null;
   selectedExecutionId: string | null;
   onSelect: (id: string) => void;
   onRefresh: () => void;
@@ -32,7 +33,7 @@ function formatDuration(ms: number | null): string {
   return `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`;
 }
 
-export function ExecutionsList({ executions, isLoading, selectedExecutionId, onSelect, onRefresh }: ExecutionsListProps) {
+export function ExecutionsList({ executions, isLoading, error, selectedExecutionId, onSelect, onRefresh }: ExecutionsListProps) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
@@ -83,7 +84,15 @@ export function ExecutionsList({ executions, isLoading, selectedExecutionId, onS
       <ScrollArea className="flex-1">
         {filtered.length === 0 ? (
           <div className="p-6 text-center text-xs text-slate-400">
-            {isLoading ? "Carregando execuções..." : "Nenhuma execução encontrada."}
+            {error ? (
+              <div className="text-destructive p-2 rounded-lg bg-destructive/5 border border-destructive/10 text-left overflow-hidden break-words font-mono text-[10px]">
+                Erro: {error instanceof Error ? error.message : String(error)}
+              </div>
+            ) : isLoading ? (
+              "Carregando execuções..."
+            ) : (
+              "Nenhuma execução encontrada."
+            )}
           </div>
         ) : (
           <div className="p-2 space-y-1">
