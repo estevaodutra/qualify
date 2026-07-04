@@ -215,49 +215,6 @@ export default function Instances() {
     }
   };
 
-  const [showDisconnectOnlyDialog, setShowDisconnectOnlyDialog] = useState(false);
-  const [instanceToDisconnectOnly, setInstanceToDisconnectOnly] = useState<Instance | null>(null);
-
-  const handleDisconnectOnlyClick = (instance: Instance) => {
-    setInstanceToDisconnectOnly(instance);
-    setShowDisconnectOnlyDialog(true);
-  };
-
-  const handleDisconnectOnlyInstance = async () => {
-    if (instanceToDisconnectOnly) {
-      setIsSaving(true);
-      try {
-        await supabase.functions.invoke("connect-instance", {
-          body: { instanceId: instanceToDisconnectOnly.id, method: "disconnect" }
-        });
-
-        await updateInstance({
-          id: instanceToDisconnectOnly.id,
-          updates: {
-            status: "disconnected"
-          }
-        });
-
-        setShowDisconnectOnlyDialog(false);
-        toast({
-          title: "Instância desconectada",
-          description: `A instância ${instanceToDisconnectOnly.name} foi desconectada com sucesso. A associação do ID de sessão foi mantida.`
-        });
-        
-        await refetch();
-      } catch (error: any) {
-        console.error("Error disconnecting instance:", error);
-        toast({
-          title: "Erro",
-          description: error.message || "Falha ao desconectar instância.",
-          variant: "destructive"
-        });
-      } finally {
-        setIsSaving(false);
-        setInstanceToDisconnectOnly(null);
-      }
-    }
-  };
   const [configForm, setConfigForm] = useState({
     apiKey: "",
     webhookUrl: "",
@@ -845,34 +802,45 @@ export default function Instances() {
                   {/* Actions */}
                   <div className="flex items-center gap-2.5 pt-2">
                     {instance.status === "waitingConnection" ? (
-                      <Button className="flex-1 h-11 gap-2.5 rounded-xl gradient-primary glow-primary font-bold shadow-md transition-all active:scale-95" onClick={() => handleConnect(instance)}>
-                        <QrCode className="h-4.5 w-4.5" />
-                        {t("instances.viewQR")}
-                      </Button>
+                      <div className="flex-1 flex gap-2">
+                        <Button className="flex-1 h-11 gap-2.5 rounded-xl gradient-primary glow-primary font-bold shadow-md transition-all active:scale-95" onClick={() => handleConnect(instance)}>
+                          <QrCode className="h-4.5 w-4.5" />
+                          {t("instances.viewQR")}
+                        </Button>
+                        {instance.idInstance && (
+                          <Button variant="outline" className="flex-1 h-11 gap-2 rounded-xl font-bold border-destructive/20 hover:bg-destructive/5 text-destructive active:scale-95 text-xs px-2" onClick={() => handleDisconnectClick(instance)}>
+                            <XCircle className="h-4 w-4" />
+                            Desconectar
+                          </Button>
+                        )}
+                      </div>
                     ) : instance.status === "connected" ? (
                       <div className="flex-1 flex gap-2">
                         <Button variant="outline" className="flex-1 h-11 gap-2 rounded-xl font-bold border-border/50 bg-background/40 hover:bg-background/80 active:scale-95 text-xs px-2" onClick={() => handleConfigure(instance)}>
                           <Settings className="h-4 w-4" />
                           {t("instances.configure")}
                         </Button>
-                        <Button variant="outline" className="flex-1 h-11 gap-2 rounded-xl font-bold border-destructive/20 hover:bg-destructive/5 text-destructive active:scale-95 text-xs px-2" onClick={() => handleDisconnectOnlyClick(instance)}>
+                        <Button variant="outline" className="flex-1 h-11 gap-2 rounded-xl font-bold border-destructive/20 hover:bg-destructive/5 text-destructive active:scale-95 text-xs px-2" onClick={() => handleDisconnectClick(instance)}>
                           <XCircle className="h-4 w-4" />
                           Desconectar
                         </Button>
                       </div>
                     ) : (
-                      <Button variant="outline" className="flex-1 h-11 gap-2.5 rounded-xl font-bold transition-all border-primary text-primary hover:bg-primary/5 shadow-sm active:scale-95" onClick={() => handleConnect(instance)}>
-                        <Phone className="h-4.5 w-4.5" />
-                        {t("instances.connect")}
-                      </Button>
+                      <div className="flex-1 flex gap-2">
+                        <Button variant="outline" className="flex-1 h-11 gap-2.5 rounded-xl font-bold transition-all border-primary text-primary hover:bg-primary/5 shadow-sm active:scale-95" onClick={() => handleConnect(instance)}>
+                          <Phone className="h-4.5 w-4.5" />
+                          {t("instances.connect")}
+                        </Button>
+                        {instance.idInstance && (
+                          <Button variant="outline" className="flex-1 h-11 gap-2 rounded-xl font-bold border-destructive/20 hover:bg-destructive/5 text-destructive active:scale-95 text-xs px-2" onClick={() => handleDisconnectClick(instance)}>
+                            <XCircle className="h-4 w-4" />
+                            Desconectar
+                          </Button>
+                        )}
+                      </div>
                     )}
                     
                     <div className="flex items-center gap-1.5">
-                      {instance.idInstance && (
-                        <Button variant="outline" size="icon" className="h-11 w-11 rounded-xl border-warning/20 bg-warning/5 hover:bg-warning/10 group/disconnect" onClick={() => handleDisconnectClick(instance)} title="Desvincular Instância / WhatsApp">
-                          <XCircle className="h-4 w-4 text-warning/70 transition-colors group-hover/disconnect:text-warning" />
-                        </Button>
-                      )}
                       <Button variant="outline" size="icon" className="h-11 w-11 rounded-xl border-border/40 bg-background/40 hover:bg-background/80" onClick={() => handleEditClick(instance)} title={t("instances.edit")}>
                         <Pencil className="h-4 w-4 text-muted-foreground" />
                       </Button>
@@ -1362,9 +1330,9 @@ export default function Instances() {
       <AlertDialog open={showDisconnectDialog} onOpenChange={setShowDisconnectDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Desvincular Instância?</AlertDialogTitle>
+            <AlertDialogTitle>Desconectar Instância?</AlertDialogTitle>
             <AlertDialogDescription>
-              Isso irá desconectar a instância do WhatsApp e remover a associação do ID de sessão no sistema.
+              Isso irá desconectar a sessão ativa no WhatsApp e remover a associação do ID de sessão nesta instância.
               As campanhas e fluxos continuarão existindo, mas não poderão realizar disparos por esta instância até que ela seja conectada novamente.
               {instanceToDisconnect && <span className="block mt-2 font-medium text-foreground">
                   {instanceToDisconnect.name} (ID: {instanceToDisconnect.idInstance})
@@ -1375,31 +1343,7 @@ export default function Instances() {
             <AlertDialogCancel onClick={() => setInstanceToDisconnect(null)}>
               {t("common.cancel")}
             </AlertDialogCancel>
-            <AlertDialogAction onClick={handleDisconnectInstance} className="bg-warning text-warning-foreground hover:bg-warning/90">
-              Desvincular
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Disconnect Only Confirmation Dialog */}
-      <AlertDialog open={showDisconnectOnlyDialog} onOpenChange={setShowDisconnectOnlyDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Desconectar Instância do WhatsApp?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Isso irá solicitar a desconexão/logout da sessão no WhatsApp.
-              O ID de sessão continuará associado à instância no sistema da Qualify, permitindo que você reconecte o mesmo ID de sessão posteriormente.
-              {instanceToDisconnectOnly && <span className="block mt-2 font-medium text-foreground">
-                  {instanceToDisconnectOnly.name}
-                </span>}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setInstanceToDisconnectOnly(null)}>
-              {t("common.cancel")}
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={handleDisconnectOnlyInstance} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction onClick={handleDisconnectInstance} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Desconectar
             </AlertDialogAction>
           </AlertDialogFooter>
