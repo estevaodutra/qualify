@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useProspectingCampaigns, ProspectingCampaign } from "@/hooks/useProspectingCampaigns";
 import { ProspectingCampaignList, CreateProspectingDialog } from "@/components/prospecting-campaigns";
-import { CampaignBreadcrumb } from "@/components/campaigns";
 import { toast } from "sonner";
+import { Search } from "lucide-react";
 
 export default function ProspectingCampaigns() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -53,8 +53,17 @@ export default function ProspectingCampaigns() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <CampaignBreadcrumb channel="whatsapp" type="Prospecção" />
+    <div className="flex flex-col gap-6 p-8 overflow-y-auto flex-1 min-h-0 bg-background/50 animate-fade-in">
+      {/* Header */}
+      <div>
+        <h1 className="text-[22px] font-semibold text-foreground tracking-tight m-0 font-['Sora'] flex items-center gap-2">
+          <Search className="h-5 w-5 text-[#8A3CFF]" />
+          Prospecção
+        </h1>
+        <p className="text-[14px] text-muted-foreground mt-1">
+          Busque por novos leads no Google Maps e configure ações automáticas pós-prospecção.
+        </p>
+      </div>
 
       <ProspectingCampaignList
         campaigns={campaigns}

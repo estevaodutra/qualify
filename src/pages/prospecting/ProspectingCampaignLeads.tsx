@@ -56,7 +56,7 @@ export default function ProspectingCampaignLeads() {
       <div className="flex items-center justify-between space-y-2">
         <div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/campaigns/whatsapp/prospeccao")}>
+            <Button variant="ghost" size="icon" onClick={() => navigate("/prospeccao")}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <h2 className="text-3xl font-bold tracking-tight">Leads da Prospecção</h2>
@@ -122,7 +122,7 @@ export default function ProspectingCampaignLeads() {
                                 {custom.categoryName}
                               </Badge>
                             )}
-
+ 
                             {custom.totalScore != null && (
                               <div className="flex items-center gap-1.5 text-sm text-amber-500 font-medium whitespace-nowrap">
                                 <span>★</span>
@@ -133,14 +133,14 @@ export default function ProspectingCampaignLeads() {
                               </div>
                             )}
                           </div>
-
+ 
                           {custom.address && (
                             <div className="flex items-start gap-1.5 text-sm text-muted-foreground pt-1">
                               <MapPin className="h-4 w-4 shrink-0 mt-0.5" />
                               <span className="line-clamp-2 leading-snug">{custom.address}</span>
                             </div>
                           )}
-
+ 
                         </div>
                       </div>
                       
@@ -171,7 +171,7 @@ export default function ProspectingCampaignLeads() {
           )}
         </div>
       </Card>
-
+ 
       {selectedLead && (
         <TriggerSequenceDialog
           leadName={selectedLead.name}

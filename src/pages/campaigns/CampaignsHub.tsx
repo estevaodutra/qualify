@@ -5,7 +5,6 @@ import { useDispatchCampaigns } from "@/hooks/useDispatchCampaigns";
 import { useGroupCampaigns } from "@/hooks/useGroupCampaigns";
 import { usePirateCampaigns } from "@/hooks/usePirateCampaigns";
 import { useContextCampaigns } from "@/hooks/useContextCampaigns";
-import { useProspectingCampaigns } from "@/hooks/useProspectingCampaigns";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -27,11 +26,10 @@ export default function CampaignsHub() {
   const { campaigns: groupCampaigns, isLoading: groupLoading } = useGroupCampaigns();
   const { campaigns: pirateCampaigns, isLoading: pirateLoading } = usePirateCampaigns();
   const { campaigns: contextCampaigns, isLoading: contextLoading } = useContextCampaigns();
-  const { campaigns: prospectingCampaigns, isLoading: prospectingLoading } = useProspectingCampaigns();
 
   const isLoading = 
     callLoading || dispatchLoading || groupLoading || 
-    pirateLoading || contextLoading || prospectingLoading;
+    pirateLoading || contextLoading;
 
   // Folder definitions
   const folders = useMemo(() => [
@@ -72,15 +70,6 @@ export default function CampaignsHub() {
       url: "/campaigns/whatsapp/contexto"
     },
     {
-      id: "prospeccao",
-      title: "Prospecção",
-      description: "Fluxos frios de abordagem de novos contatos",
-      count: prospectingCampaigns?.length || 0,
-      icon: Search,
-      color: "from-indigo-500/20 to-indigo-500/5 text-indigo-500 border-indigo-500/20",
-      url: "/campaigns/whatsapp/prospeccao"
-    },
-    {
       id: "ligacao",
       title: "Ligações",
       description: "Campanhas telefônicas integradas ao discador",
@@ -89,7 +78,7 @@ export default function CampaignsHub() {
       color: "from-sky-500/20 to-sky-500/5 text-sky-500 border-sky-500/20",
       url: "/campaigns/telefonia/ligacao"
     }
-  ], [dispatchCampaigns, groupCampaigns, pirateCampaigns, contextCampaigns, prospectingCampaigns, callCampaigns]);
+  ], [dispatchCampaigns, groupCampaigns, pirateCampaigns, contextCampaigns, callCampaigns]);
 
   // Merge all workflows for the recent list
   const allWorkflows = useMemo(() => {
@@ -99,10 +88,9 @@ export default function CampaignsHub() {
       ...(groupCampaigns || []).map((c: any) => ({ ...c, uiCategory: 'Grupos', uiType: 'whatsapp', uiIcon: Users, uiUrl: "/campaigns/whatsapp/grupos" })),
       ...(pirateCampaigns || []).map((c: any) => ({ ...c, uiCategory: 'Pirata', uiType: 'whatsapp', uiIcon: Skull, uiUrl: "/campaigns/whatsapp/pirata" })),
       ...(contextCampaigns || []).map((c: any) => ({ ...c, uiCategory: 'Contexto', uiType: 'whatsapp', uiIcon: Activity, uiUrl: "/campaigns/whatsapp/contexto" })),
-      ...(prospectingCampaigns || []).map((c: any) => ({ ...c, uiCategory: 'Prospecção', uiType: 'whatsapp', uiIcon: Search, uiUrl: "/campaigns/whatsapp/prospeccao" })),
     ];
     return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  }, [callCampaigns, dispatchCampaigns, groupCampaigns, pirateCampaigns, contextCampaigns, prospectingCampaigns]);
+  }, [callCampaigns, dispatchCampaigns, groupCampaigns, pirateCampaigns, contextCampaigns]);
 
   const filteredWorkflows = useMemo(() => {
     if (activeTab === "Todas") return allWorkflows;
@@ -189,7 +177,7 @@ export default function CampaignsHub() {
         <div className="flex justify-between items-center px-1">
           <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Todos os Workflows Recentes</h3>
           <div className="flex gap-1 bg-muted/40 p-0.5 rounded-xl border border-border/20">
-            {['Todas', 'Disparos', 'Grupos', 'Pirata', 'Contexto', 'Prospecção', 'Ligações'].map(tab => (
+            {['Todas', 'Disparos', 'Grupos', 'Pirata', 'Contexto', 'Ligações'].map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}

@@ -63,15 +63,6 @@ const campaignTypes = {
       colorClass: "bg-indigo-500",
       enabled: true,
     },
-    {
-      id: "prospeccao",
-      title: "Prospecção",
-      description: "Busca e extração de leads do Google Maps",
-      icon: Search,
-      href: "/campaigns/whatsapp/prospeccao",
-      colorClass: "bg-yellow-500",
-      enabled: true,
-    },
   ],
   telefonia: [
     {

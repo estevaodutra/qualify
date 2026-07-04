@@ -23,9 +23,9 @@ import {
   CallCampaigns,
   ContextCampaigns,
   ContextCampaignLogs,
-  ProspectingCampaigns,
 } from "./pages/campaigns";
-import ProspectingCampaignLeads from "./pages/campaigns/ProspectingCampaignLeads";
+import ProspectingCampaigns from "./pages/prospecting/ProspectingCampaigns";
+import ProspectingCampaignLeads from "./pages/prospecting/ProspectingCampaignLeads";
 import GroupSequenceBuilderPage from "./pages/campaigns/GroupSequenceBuilderPage";
 import DispatchSequenceBuilderPage from "./pages/campaigns/DispatchSequenceBuilderPage";
 import PhoneNumbers from "./pages/PhoneNumbers";
@@ -129,6 +129,10 @@ const App = () => {
                       <Route path="/quiz" element={<QuizFunnelsPage />} />
                       <Route path="/quiz/:id" element={<QuizEditorPage />} />
 
+                      {/* Prospecting routes */}
+                      <Route path="/prospeccao" element={<ProspectingCampaigns />} />
+                      <Route path="/prospeccao/:id" element={<ProspectingCampaignLeads />} />
+
                       {/* Campaigns / Workflows routes */}
                       <Route path="/workflows" element={<CampaignsHub />} />
                       <Route path="/campaigns">
@@ -140,8 +144,6 @@ const App = () => {
                         <Route path="telefonia/ligacao" element={<CallCampaigns />} />
                         <Route path="whatsapp/contexto" element={<ContextCampaigns />} />
                         <Route path="whatsapp/contexto/logs" element={<ContextCampaignLogs />} />
-                        <Route path="whatsapp/prospeccao" element={<ProspectingCampaigns />} />
-                        <Route path="whatsapp/prospeccao/:id" element={<ProspectingCampaignLeads />} />
                       </Route>
 
                       {/* Scheduling routes */}

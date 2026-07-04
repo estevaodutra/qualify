@@ -159,7 +159,7 @@ export function ProspectingCampaignList({
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-52 rounded-xl shadow-xl border-border/40 bg-background/95 backdrop-blur-xl p-2 space-y-1">
                         {campaign.status === "completed" && (
-                          <DropdownMenuItem className="rounded-lg font-medium cursor-pointer" onClick={() => navigate(`/campaigns/whatsapp/prospeccao/${campaign.id}`)}>
+                          <DropdownMenuItem className="rounded-lg font-medium cursor-pointer" onClick={() => navigate(`/prospeccao/${campaign.id}`)}>
                             <Eye className="h-4 w-4 mr-2" /> Ver Leads
                           </DropdownMenuItem>
                         )}
@@ -194,7 +194,7 @@ export function ProspectingCampaignList({
                           variant="ghost" 
                           size="sm"
                           className="h-8 px-2 text-xs font-semibold text-primary/80 hover:text-primary hover:bg-primary/10 rounded-lg"
-                          onClick={() => navigate(`/campaigns/whatsapp/prospeccao/${campaign.id}`)}
+                          onClick={() => navigate(`/prospeccao/${campaign.id}`)}
                         >
                           <Eye className="h-3.5 w-3.5 mr-1" /> Ver Leads
                         </Button>

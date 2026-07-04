@@ -100,6 +100,7 @@ export function AppSidebar() {
     { title: t("nav.leads") || "Leads", url: "/leads", icon: Users },
     { title: "Chat CRM", url: "/chat", icon: MessageSquare },
     { title: "Funis", url: "/quiz", icon: Layers },
+    { title: "Prospecção", url: "/prospeccao", icon: Search },
     { title: "Agendamentos", url: "/agendamentos/calendarios", icon: CalendarDays },
     { title: t("nav.phoneNumbers"), url: "/numbers", icon: Phone },
   ];
@@ -115,7 +116,6 @@ export function AppSidebar() {
       { title: "Grupos", url: "/campaigns/whatsapp/grupos", icon: Users },
       { title: "Pirata", url: "/campaigns/whatsapp/pirata", icon: Skull },
       { title: "Contexto", url: "/campaigns/whatsapp/contexto", icon: Activity },
-      { title: "Prospecção", url: "/campaigns/whatsapp/prospeccao", icon: Search },
     ],
     telefonia: [
       { title: "URA", url: "/campaigns/telefonia/ura", icon: Bot, comingSoon: true },
