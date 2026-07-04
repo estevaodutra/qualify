@@ -50,6 +50,7 @@ Deno.serve(async (req) => {
       const instanceId = body.instanceId ||
         nestedBody?.instanceId ||
         body.instance ||
+        body.session ||
         nestedBody?.session ||
         nestedBody?.connectedPhone ||
         body.phone ||
@@ -139,9 +140,9 @@ Deno.serve(async (req) => {
     // AUTO-PROCESS CONNECTION STATUS
     // ==========================================
     if (classification.eventType === "connection_status" && instance?.id) {
-      const eventBody = rawEvent.body as Record<string, unknown> | undefined;
+      const eventBody = (rawEvent.body as Record<string, unknown>) || rawEvent;
       const payloadObj = eventBody?.payload as Record<string, unknown> | undefined;
-      const statusRaw = (eventBody?.status || payloadObj?.status || rawEvent.status) as string | undefined;
+      const statusRaw = (eventBody?.status || payloadObj?.status || payloadObj?.state || (rawEvent as any).status) as string | undefined;
 
       if (statusRaw) {
         const s = statusRaw.toUpperCase();
