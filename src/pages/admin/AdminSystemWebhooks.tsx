@@ -196,6 +196,7 @@ export default function AdminSystemWebhooks() {
           .from("webhook_events" as any)
           .select("instance_id, user_id, raw_event")
           .eq("event_type", "connection_status")
+          .not("instance_id", "is", null)
           .order("received_at", { ascending: false })
           .limit(1)
           .maybeSingle();
