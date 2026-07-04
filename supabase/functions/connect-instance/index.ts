@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { fetchZApi } from "../_shared/n8n-router.ts";
-// Trigger deploy retry
+import { triggerSystemWebhook } from "../_shared/system-webhook.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
     const { data: instance, error: instanceError } = await adminClient
       .from("instances")
-      .select("external_instance_id, external_instance_token, user_id")
+      .select("id, name, phone, provider, status, user_id, external_instance_id, external_instance_token")
       .eq("id", instanceId)
       .single();
 
@@ -98,6 +98,45 @@ Deno.serve(async (req) => {
     
     if (method === "disconnect") {
       console.log(`[connect-instance] Disconnecting session ${resolvedId}`);
+      
+      const { error: dbError } = await adminClient
+        .from("instances")
+        .update({
+          status: "disconnected",
+          external_instance_id: null,
+          external_instance_token: null,
+          phone: null
+        })
+        .eq("id", instanceId);
+
+      if (dbError) {
+        console.error("[connect-instance] Failed to unlink instance in database:", dbError);
+      } else {
+        const statusChanged = instance.status !== "disconnected";
+        if (statusChanged) {
+          let userDetails: Record<string, any> | null = null;
+          if (instance.user_id) {
+            const { data: userData } = await adminClient
+              .from("profiles")
+              .select("id, name, email")
+              .eq("id", instance.user_id)
+              .maybeSingle();
+            if (userData) userDetails = userData;
+          }
+
+          await triggerSystemWebhook(adminClient, "instance.disconnected", {
+            instance: {
+              id: instanceId,
+              name: instance.name,
+              phone_number: instance.phone,
+              status: "disconnected",
+              provider: instance.provider || "z-api"
+            },
+            user: userDetails
+          });
+        }
+      }
+
       try {
         zapiResponse = await fetchZApi(
           resolvedId,
