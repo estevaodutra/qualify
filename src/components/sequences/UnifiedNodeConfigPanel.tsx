@@ -14,9 +14,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
-import {
   Plus, Trash2, Zap, Play, Send,
   MessageSquare, Clock, GitBranch, Bell, Link2,
   Image, Video, Music, FileText, Smile,
@@ -482,16 +479,15 @@ export function UnifiedNodeConfigPanel({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
-      <DialogContent className="w-[min(600px,calc(100vw-32px))] max-w-[600px] max-h-[calc(100dvh-32px)] !flex !flex-col p-0 gap-0 overflow-hidden">
-        <DialogHeader className="px-6 pt-6 pb-3 shrink-0">
-          <div className="flex items-center gap-2">
-            <Icon className="h-4 w-4" />
-            <DialogTitle className="text-sm">{nodeInfo.title}</DialogTitle>
-          </div>
-        </DialogHeader>
-        <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-6">
-          <div className="space-y-4">
+    <div className="flex flex-col h-full">
+      <div className="px-6 pt-6 pb-3 shrink-0 border-b border-border">
+        <div className="flex items-center gap-2">
+          <Icon className="h-4 w-4" />
+          <h2 className="text-sm font-semibold">{nodeInfo.title}</h2>
+        </div>
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
+        <div className="space-y-4">
             {/* Node Label/Name */}
             <div className="space-y-2">
               <Label className="text-xs font-medium text-muted-foreground">Nome do componente</Label>
@@ -1795,7 +1791,6 @@ export function UnifiedNodeConfigPanel({
           />
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+    </div>
   );
 }

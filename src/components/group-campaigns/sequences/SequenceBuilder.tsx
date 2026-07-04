@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import { MessageSequence, useSequenceNodes } from "@/hooks/useSequences";
 import { UnifiedSequenceBuilder } from "@/components/sequences/UnifiedSequenceBuilder";
 import { UnifiedNodeConfigPanel } from "@/components/sequences/UnifiedNodeConfigPanel";
@@ -13,8 +12,10 @@ import {
   Image, Video, Music, FileText, Smile,
   BarChart3, MousePointerClick, List, MapPin, Contact, Calendar,
   Pencil, ImageIcon, UserPlus, UserMinus, ShieldPlus, ShieldMinus, Settings, Plus, CircleDot,
-  Tag, Award, Sliders, Sparkles, Code
+  Tag, Award, Sliders, Sparkles, Code, Play
 } from "lucide-react";
+
+const TRIGGER_NODE_TYPE = "trigger";
 
 interface SequenceBuilderProps {
   sequence: MessageSequence;
@@ -95,23 +96,40 @@ const getDefaultConfig = (nodeType: string): Record<string, unknown> => {
 
 export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderProps) {
   const { nodes, connections, saveNodes, saveConnections, isSaving, isLoading } = useSequenceNodes(sequence.id);
-  const [triggerType, setTriggerType] = useState<TriggerType>(sequence.triggerType as TriggerType || "manual");
-  const [triggerConfig, setTriggerConfig] = useState<TriggerConfig>((sequence.triggerConfig as TriggerConfig) || {});
 
-  useEffect(() => {
-    setTriggerType(sequence.triggerType as TriggerType || "manual");
-    setTriggerConfig((sequence.triggerConfig as TriggerConfig) || {});
-  }, [sequence.id, sequence.triggerType, sequence.triggerConfig]);
+  const persistedTrigger = nodes.find(n => n.nodeType === TRIGGER_NODE_TYPE);
 
   const initialNodes: LocalNode[] = nodes.map(n => ({
     id: n.id, nodeType: n.nodeType, nodeOrder: n.nodeOrder, config: n.config, positionX: n.positionX, positionY: n.positionY,
   }));
+
+  // For sequences saved before the Start node existed, seed its config from
+  // the legacy trigger_type/trigger_config columns so the first load already
+  // shows the real trigger instead of a blank "Início" placeholder -- the
+  // node.config becomes the editable source of truth from here on, the
+  // columns are kept as a derived mirror written back on save.
+  if (!persistedTrigger) {
+    initialNodes.unshift({
+      id: "trigger",
+      nodeType: TRIGGER_NODE_TYPE,
+      nodeOrder: 0,
+      positionX: 50,
+      positionY: 150,
+      config: {
+        triggerType: (sequence.triggerType as TriggerType) || "manual",
+        triggerConfig: (sequence.triggerConfig as TriggerConfig) || {},
+      },
+    });
+  }
 
   const initialConnections = connections.map(c => ({
     sourceNodeId: c.sourceNodeId, targetNodeId: c.targetNodeId, conditionPath: c.conditionPath || undefined,
   }));
 
   const handleSave = async (name: string, localNodes: LocalNode[], localConnections: { sourceNodeId: string; targetNodeId: string; conditionPath?: string }[]) => {
+    const triggerNode = localNodes.find(n => n.nodeType === TRIGGER_NODE_TYPE);
+    const triggerType = (triggerNode?.config.triggerType as TriggerType) || "manual";
+    const triggerConfig = (triggerNode?.config.triggerConfig as TriggerConfig) || {};
     await onUpdate({ id: sequence.id, updates: { name, triggerType, triggerConfig: triggerConfig as Record<string, unknown> } });
     const idMapping = await saveNodes(localNodes.map(node => ({
       localId: node.id, nodeType: node.nodeType, positionX: node.positionX || 0, positionY: node.positionY || 0, nodeOrder: node.nodeOrder, config: node.config,
@@ -164,48 +182,64 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
       sequenceId={sequence.id}
       nodeCategories={NODE_CATEGORIES}
       getDefaultConfig={getDefaultConfig}
-      renderTrigger={() => (
-        <TriggerConfigCard
-          triggerType={triggerType}
-          triggerConfig={triggerConfig}
-          onTriggerTypeChange={setTriggerType}
-          onTriggerConfigChange={setTriggerConfig}
-          sequenceId={sequence.id}
-        />
-      )}
-      renderConfigPanel={(node, onUpdateConfig, onClose, onManualSend, isSendingManual) => (
-        <UnifiedNodeConfigPanel
-          node={node}
-          onUpdate={onUpdateConfig}
-          onClose={onClose}
-          open={true}
-          mode="group"
-          onManualSend={onManualSend}
-          isSendingManual={isSendingManual}
-          renderMediaUploader={(props) => (
-            <MediaUploader
-              mediaType={props.mediaType as "image" | "video" | "audio" | "document" | "sticker"}
-              currentUrl={props.currentUrl}
-              onUpload={props.onUpload}
-              onUrlChange={props.onUrlChange}
-              placeholder={props.placeholder}
-            />
-          )}
-          renderPollActionDialog={(props) => (
-            <PollActionDialog
-              open={props.open}
-              onClose={props.onClose}
-              optionIndex={props.optionIndex}
-              optionText={props.optionText}
-              currentAction={props.currentAction as PollActionConfig | null}
-              onSave={props.onSave as (action: PollActionConfig) => void}
-            />
-          )}
-          getOptionAction={getOptionAction}
-          getActionIconColor={getActionIconColor}
-          getActionLabel={getActionLabel}
-        />
-      )}
+      renderConfigPanel={(node, onUpdateConfig, onClose, onManualSend, isSendingManual) => {
+        if (node.nodeType === TRIGGER_NODE_TYPE) {
+          const triggerType = (node.config.triggerType as TriggerType) || "manual";
+          const triggerConfig = (node.config.triggerConfig as TriggerConfig) || {};
+          return (
+            <div className="flex flex-col h-full">
+              <div className="px-6 pt-6 pb-3 shrink-0 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <Play className="h-4 w-4 text-emerald-500" />
+                  <h2 className="text-sm font-semibold">Gatilho (Início)</h2>
+                </div>
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
+                <TriggerConfigCard
+                  triggerType={triggerType}
+                  triggerConfig={triggerConfig}
+                  onTriggerTypeChange={(type) => onUpdateConfig({ ...node.config, triggerType: type })}
+                  onTriggerConfigChange={(config) => onUpdateConfig({ ...node.config, triggerConfig: config })}
+                  sequenceId={sequence.id}
+                />
+              </div>
+            </div>
+          );
+        }
+        return (
+          <UnifiedNodeConfigPanel
+            node={node}
+            onUpdate={onUpdateConfig}
+            onClose={onClose}
+            open={true}
+            mode="group"
+            onManualSend={onManualSend}
+            isSendingManual={isSendingManual}
+            renderMediaUploader={(props) => (
+              <MediaUploader
+                mediaType={props.mediaType as "image" | "video" | "audio" | "document" | "sticker"}
+                currentUrl={props.currentUrl}
+                onUpload={props.onUpload}
+                onUrlChange={props.onUrlChange}
+                placeholder={props.placeholder}
+              />
+            )}
+            renderPollActionDialog={(props) => (
+              <PollActionDialog
+                open={props.open}
+                onClose={props.onClose}
+                optionIndex={props.optionIndex}
+                optionText={props.optionText}
+                currentAction={props.currentAction as PollActionConfig | null}
+                onSave={props.onSave as (action: PollActionConfig) => void}
+              />
+            )}
+            getOptionAction={getOptionAction}
+            getActionIconColor={getActionIconColor}
+            getActionLabel={getActionLabel}
+          />
+        );
+      }}
       onSave={handleSave}
       onToggleActive={handleToggleActive}
       onManualSendNode={handleManualSendNode}

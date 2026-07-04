@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import { DispatchSequence } from "@/hooks/useDispatchSequences";
 import { useDispatchSteps } from "@/hooks/useDispatchSteps";
 import { UnifiedSequenceBuilder } from "@/components/sequences/UnifiedSequenceBuilder";
@@ -8,7 +7,9 @@ import { DispatchTriggerConfigCard, DispatchTriggerType, DispatchTriggerConfig }
 import { MediaUploader } from "@/components/group-campaigns/sequences/MediaUploader";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { MessageSquare, Clock, Image, Video, Music, FileText, MousePointerClick, List as ListIcon, Send, Tag, Award, Sliders, Sparkles, Code, GitBranch } from "lucide-react";
+import { MessageSquare, Clock, Image, Video, Music, FileText, MousePointerClick, List as ListIcon, Send, Tag, Award, Sliders, Sparkles, Code, GitBranch, Play } from "lucide-react";
+
+const TRIGGER_NODE_ID = "trigger";
 
 interface DispatchSequenceBuilderProps {
   sequence: DispatchSequence;
@@ -129,17 +130,28 @@ function nodesToSteps(nodes: LocalNode[]) {
 
 export function DispatchSequenceBuilder({ sequence, onBack, onUpdate }: DispatchSequenceBuilderProps) {
   const { steps, saveAllSteps, isSaving, isLoading } = useDispatchSteps(sequence.id);
-  const [triggerType, setTriggerType] = useState<DispatchTriggerType>((sequence.triggerType as DispatchTriggerType) || "manual");
-  const [triggerConfig, setTriggerConfig] = useState<DispatchTriggerConfig>((sequence.triggerConfig as DispatchTriggerConfig) || {});
 
-  useEffect(() => {
-    setTriggerType((sequence.triggerType as DispatchTriggerType) || "manual");
-    setTriggerConfig((sequence.triggerConfig as DispatchTriggerConfig) || {});
-  }, [sequence.id, sequence.triggerType, sequence.triggerConfig]);
+  // The Start node's config is the single editable source of truth for the
+  // trigger -- dispatch_sequences.trigger_type/trigger_config are written as a
+  // derived mirror on save (see handleSave), never edited independently.
+  const triggerNode: LocalNode = {
+    id: TRIGGER_NODE_ID,
+    nodeType: "trigger",
+    nodeOrder: 0,
+    positionX: 50,
+    positionY: 150,
+    config: {
+      triggerType: (sequence.triggerType as DispatchTriggerType) || "manual",
+      triggerConfig: (sequence.triggerConfig as DispatchTriggerConfig) || {},
+    },
+  };
 
-  const initialNodes = stepsToNodes(steps);
+  const initialNodes = [triggerNode, ...stepsToNodes(steps)];
 
   const handleSave = async (name: string, localNodes: LocalNode[]) => {
+    const savedTriggerNode = localNodes.find((n) => n.id === TRIGGER_NODE_ID);
+    const triggerType = (savedTriggerNode?.config.triggerType as DispatchTriggerType) || "manual";
+    const triggerConfig = (savedTriggerNode?.config.triggerConfig as DispatchTriggerConfig) || {};
     await onUpdate({ id: sequence.id, updates: { name, triggerType, triggerConfig: triggerConfig as Record<string, unknown> } });
     await saveAllSteps(nodesToSteps([...localNodes].sort((a, b) => a.nodeOrder - b.nodeOrder)));
   };
@@ -159,35 +171,51 @@ export function DispatchSequenceBuilder({ sequence, onBack, onUpdate }: Dispatch
       sequenceId={sequence.id}
       nodeCategories={NODE_CATEGORIES}
       getDefaultConfig={getDefaultConfig}
-      renderTrigger={() => (
-        <DispatchTriggerConfigCard
-          triggerType={triggerType}
-          triggerConfig={triggerConfig}
-          onTriggerTypeChange={setTriggerType}
-          onTriggerConfigChange={setTriggerConfig}
-          sequenceId={sequence.id}
-        />
-      )}
-      renderConfigPanel={(node, onUpdateConfig, onClose, onManualSend, isSendingManual) => (
-        <UnifiedNodeConfigPanel
-          node={node}
-          onUpdate={onUpdateConfig}
-          onClose={onClose}
-          open={true}
-          mode="dispatch"
-          onManualSend={onManualSend}
-          isSendingManual={isSendingManual}
-          renderMediaUploader={(props) => (
-            <MediaUploader
-              mediaType={props.mediaType as "image" | "video" | "audio" | "document" | "sticker"}
-              currentUrl={props.currentUrl}
-              onUpload={props.onUpload}
-              onUrlChange={props.onUrlChange}
-              placeholder={props.placeholder}
-            />
-          )}
-        />
-      )}
+      renderConfigPanel={(node, onUpdateConfig, onClose, onManualSend, isSendingManual) => {
+        if (node.id === TRIGGER_NODE_ID) {
+          const triggerType = (node.config.triggerType as DispatchTriggerType) || "manual";
+          const triggerConfig = (node.config.triggerConfig as DispatchTriggerConfig) || {};
+          return (
+            <div className="flex flex-col h-full">
+              <div className="px-6 pt-6 pb-3 shrink-0 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <Play className="h-4 w-4 text-emerald-500" />
+                  <h2 className="text-sm font-semibold">Gatilho (Início)</h2>
+                </div>
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
+                <DispatchTriggerConfigCard
+                  triggerType={triggerType}
+                  triggerConfig={triggerConfig}
+                  onTriggerTypeChange={(type) => onUpdateConfig({ ...node.config, triggerType: type })}
+                  onTriggerConfigChange={(config) => onUpdateConfig({ ...node.config, triggerConfig: config })}
+                  sequenceId={sequence.id}
+                />
+              </div>
+            </div>
+          );
+        }
+        return (
+          <UnifiedNodeConfigPanel
+            node={node}
+            onUpdate={onUpdateConfig}
+            onClose={onClose}
+            open={true}
+            mode="dispatch"
+            onManualSend={onManualSend}
+            isSendingManual={isSendingManual}
+            renderMediaUploader={(props) => (
+              <MediaUploader
+                mediaType={props.mediaType as "image" | "video" | "audio" | "document" | "sticker"}
+                currentUrl={props.currentUrl}
+                onUpload={props.onUpload}
+                onUrlChange={props.onUrlChange}
+                placeholder={props.placeholder}
+              />
+            )}
+          />
+        );
+      }}
       onSave={handleSave}
       onToggleActive={handleToggleActive}
       onManualSendNode={handleManualSendNode}

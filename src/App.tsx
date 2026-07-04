@@ -28,6 +28,8 @@ import ProspectingCampaigns from "./pages/prospecting/ProspectingCampaigns";
 import ProspectingCampaignLeads from "./pages/prospecting/ProspectingCampaignLeads";
 import GroupSequenceBuilderPage from "./pages/campaigns/GroupSequenceBuilderPage";
 import DispatchSequenceBuilderPage from "./pages/campaigns/DispatchSequenceBuilderPage";
+import WorkflowLibrary from "./pages/workflows/WorkflowLibrary";
+import WorkflowBuilderPage from "./pages/workflows/WorkflowBuilderPage";
 import PhoneNumbers from "./pages/PhoneNumbers";
 import Logs from "./pages/Logs";
 import Instances from "./pages/Instances";
@@ -134,7 +136,7 @@ const App = () => {
                       <Route path="/prospeccao/:id" element={<ProspectingCampaignLeads />} />
 
                       {/* Campaigns / Workflows routes */}
-                      <Route path="/workflows" element={<CampaignsHub />} />
+                      <Route path="/workflows" element={<WorkflowLibrary />} />
                       <Route path="/campaigns">
                         <Route index element={<CampaignsHub />} />
                         <Route path="whatsapp/despacho" element={<DispatchCampaigns />} />
@@ -181,6 +183,14 @@ const App = () => {
                       element={
                         <ProtectedRoute>
                           <DispatchSequenceBuilderPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/workflows/:workflowId/builder"
+                      element={
+                        <ProtectedRoute>
+                          <WorkflowBuilderPage />
                         </ProtectedRoute>
                       }
                     />

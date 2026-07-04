@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef, ReactNode } from "react";
 import { LocalNode, LocalConnection, NodeCategory } from "./shared-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -15,6 +15,8 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { ExecutionsPanel } from "./executions/ExecutionsPanel";
 import { NodePalettePopover, NODE_PALETTE_DND_MIME } from "./NodePalettePopover";
+import { buildTriggerSummary } from "./triggers/TriggerSummary";
+import { validateWorkflowActivation } from "@/lib/workflows/validateActivation";
 
 export interface UnifiedSequenceBuilderProps {
   sequenceName: string;
@@ -23,12 +25,11 @@ export interface UnifiedSequenceBuilderProps {
   nodeCategories: NodeCategory[];
   getDefaultConfig: (nodeType: string) => Record<string, unknown>;
   getNodePreview?: (node: LocalNode) => string;
-  renderTrigger: () => ReactNode;
   renderConfigPanel: (
-    node: LocalNode, 
-    onUpdate: (config: Record<string, unknown>) => void, 
-    onClose: () => void, 
-    onManualSend?: () => void, 
+    node: LocalNode,
+    onUpdate: (config: Record<string, unknown>) => void,
+    onClose: () => void,
+    onManualSend?: () => void,
     isSendingManual?: boolean
   ) => ReactNode;
   onSave: (
@@ -51,7 +52,6 @@ export function UnifiedSequenceBuilder({
   sequenceId,
   nodeCategories,
   getDefaultConfig,
-  renderTrigger,
   renderConfigPanel,
   onSave,
   onToggleActive,
@@ -87,9 +87,8 @@ export function UnifiedSequenceBuilder({
   } | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
-  // Dialog & configuration states
+  // Side panel & configuration states
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [showTriggerDialog, setShowTriggerDialog] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [isSendingManual, setIsSendingManual] = useState(false);
 
@@ -130,7 +129,7 @@ export function UnifiedSequenceBuilder({
         nodeOrder: 0,
         positionX: 50,
         positionY: 150,
-        config: { label: "Início", content: "O gatilho é responsável por acionar a automação." }
+        config: { label: "Início" }
       });
     }
 
@@ -426,6 +425,24 @@ export function UnifiedSequenceBuilder({
     setPanOffset({ x: 80, y: 80 });
   };
 
+  // Activating requires a valid flow (configured Start, no isolated nodes,
+  // no invalid cycles, etc). Deactivating is always allowed, unconditionally --
+  // the "turn it off" path must never be blocked by validation.
+  const handleToggleActiveClick = async () => {
+    if (!isActive) {
+      const result = validateWorkflowActivation(localNodes, localConnections);
+      if (!result.valid) {
+        toast({
+          title: "Não é possível ativar esta automação",
+          description: result.errors[0],
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    await onToggleActive();
+  };
+
   // Save Name change
   const handleSaveAll = async () => {
     try {
@@ -514,7 +531,7 @@ export function UnifiedSequenceBuilder({
               Execuções
             </button>
           </div>
-          <Button variant="outline" onClick={onToggleActive} className="rounded-xl border-slate-200 hover:bg-slate-50 gap-2 h-9 px-4 font-semibold text-slate-700">
+          <Button variant="outline" onClick={handleToggleActiveClick} className="rounded-xl border-slate-200 hover:bg-slate-50 gap-2 h-9 px-4 font-semibold text-slate-700">
             {isActive ? <Pause className="h-4 w-4 text-amber-500" /> : <Play className="h-4 w-4 text-emerald-500" />}
             {isActive ? "Pausar" : "Ativar"}
           </Button>
@@ -707,11 +724,7 @@ export function UnifiedSequenceBuilder({
                       onClick={(e) => {
                         if ((e.target as HTMLElement).closest("button") || (e.target as HTMLElement).closest("[data-node-port]")) return;
                         if (dragMovedRef.current) { dragMovedRef.current = false; return; }
-                        if (isTrigger) {
-                          setShowTriggerDialog(true);
-                        } else {
-                          setSelectedNodeId(node.id);
-                        }
+                        setSelectedNodeId(node.id);
                       }}
                       className={cn(
                         "rounded-xl border border-slate-200 bg-white shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col p-3 transition-[border-color,box-shadow] duration-150 cursor-grab active:cursor-grabbing",
@@ -803,17 +816,27 @@ export function UnifiedSequenceBuilder({
                           <p className="font-bold text-xs text-slate-800 truncate">
                             {isTrigger ? "Inicio" : ((node.config.label as string) || nodeInfo.label)}
                           </p>
-                          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{isTrigger ? "Gatilho" : nodeInfo.label}</p>
+                          <p className={cn("text-[9px] font-bold uppercase tracking-wider", isTrigger && !node.config.triggerType ? "text-amber-500" : "text-slate-400")}>
+                            {isTrigger ? (node.config.triggerType ? "Gatilho" : "Gatilho não configurado") : nodeInfo.label}
+                          </p>
                         </div>
                       </div>
 
                       {/* Card Content / Description */}
                       <div className="pt-2 text-[10px] text-slate-500 font-medium line-clamp-2 min-h-[30px]">
-                        {isTrigger ? "O gatilho é responsável por acionar a automação." : (
-                          node.config.content ? (node.config.content as string) : 
+                        {isTrigger ? (
+                          (() => {
+                            const summary = buildTriggerSummary(
+                              node.config.triggerType as string | undefined,
+                              node.config.triggerConfig as Record<string, unknown> | undefined
+                            );
+                            return summary.subtitle ? `${summary.title} · ${summary.subtitle}` : summary.title;
+                          })()
+                        ) : (
+                          node.config.content ? (node.config.content as string) :
                           node.config.question ? (node.config.question as string) :
                           node.config.url ? (node.config.url as string) :
-                          node.config.seconds || node.config.minutes || node.config.hours || node.config.days ? 
+                          node.config.seconds || node.config.minutes || node.config.hours || node.config.days ?
                           `Aguardar ${node.config.days || 0}d ${node.config.hours || 0}h ${node.config.minutes || 0}m` :
                           "Clique para configurar o bloco..."
                         )}
@@ -841,42 +864,28 @@ export function UnifiedSequenceBuilder({
       </div>
       )}
 
-      {/* Trigger selection/config Dialog */}
-      <Dialog open={showTriggerDialog} onOpenChange={setShowTriggerDialog}>
-        <DialogContent className="w-[min(650px,calc(100vw-32px))] max-w-[650px] max-h-[calc(100dvh-32px)] !flex !flex-col p-0 gap-0 overflow-hidden rounded-2xl bg-white border border-slate-200/60 shadow-2xl">
-          <DialogHeader className="px-6 pt-6 pb-4 border-b border-slate-100 shrink-0">
-            <DialogTitle className="text-lg font-bold text-slate-800">Configuração do Gatilho (Início)</DialogTitle>
-          </DialogHeader>
-          <div className="flex-1 overflow-y-auto px-6 py-4">
-            {renderTrigger ? renderTrigger() : (
-              <p className="text-sm text-slate-500">Este fluxo de automação é acionado conforme a entrada na campanha.</p>
-            )}
-          </div>
-          <DialogFooter className="px-6 py-4 border-t border-slate-100 bg-slate-50 shrink-0 flex items-center justify-end rounded-b-2xl">
-            <Button onClick={() => setShowTriggerDialog(false)} className="bg-[#8A3CFF] hover:bg-[#7830E3] text-white rounded-xl h-9 px-5">
-              Concluir
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Config Panel Dialog */}
-      {selectedNode && renderConfigPanel(
-        selectedNode,
-        (config) => {
-          updateNodesAndSave(prev => prev.map(n => n.id === selectedNode.id ? { ...n, config } : n));
-        },
-        () => setSelectedNodeId(null),
-        onManualSendNode ? async () => {
-          setIsSendingManual(true);
-          try {
-            await onManualSendNode(selectedNode);
-          } finally {
-            setIsSendingManual(false);
-          }
-        } : undefined,
-        isSendingManual
-      )}
+      {/* Unified node config side panel — every node, Start included, opens
+          through this same lateral Sheet (no more separate trigger dialog). */}
+      <Sheet open={!!selectedNode} onOpenChange={(open) => { if (!open) setSelectedNodeId(null); }}>
+        <SheetContent side="right" className="w-full sm:max-w-xl p-0 flex flex-col overflow-hidden">
+          {selectedNode && renderConfigPanel(
+            selectedNode,
+            (config) => {
+              updateNodesAndSave(prev => prev.map(n => n.id === selectedNode.id ? { ...n, config } : n));
+            },
+            () => setSelectedNodeId(null),
+            onManualSendNode ? async () => {
+              setIsSendingManual(true);
+              try {
+                await onManualSendNode(selectedNode);
+              } finally {
+                setIsSendingManual(false);
+              }
+            } : undefined,
+            isSendingManual
+          )}
+        </SheetContent>
+      </Sheet>
 
       {/* Delete node confirmation */}
       <AlertDialog open={!!nodeIdPendingDelete} onOpenChange={(open) => { if (!open) setNodeIdPendingDelete(null); }}>
