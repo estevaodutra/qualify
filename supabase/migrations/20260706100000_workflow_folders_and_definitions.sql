@@ -53,7 +53,7 @@ GRANT ALL ON TABLE public.workflow_folders TO authenticated, service_role;
 
 CREATE TABLE public.workflow_definitions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  company_id uuid NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
+  company_id uuid REFERENCES public.companies(id) ON DELETE CASCADE,
   folder_id uuid REFERENCES public.workflow_folders(id) ON DELETE SET NULL,
   name text NOT NULL,
   description text,
@@ -83,20 +83,20 @@ ALTER TABLE public.workflow_definitions ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Members can view company workflow_definitions"
   ON public.workflow_definitions FOR SELECT TO authenticated
-  USING (is_company_member(company_id, auth.uid()));
+  USING ((company_id IS NOT NULL AND is_company_member(company_id, auth.uid())) OR (company_id IS NULL AND created_by = auth.uid()));
 
 CREATE POLICY "Members can create company workflow_definitions"
   ON public.workflow_definitions FOR INSERT TO authenticated
-  WITH CHECK (is_company_member(company_id, auth.uid()));
+  WITH CHECK (created_by = auth.uid() AND (company_id IS NULL OR is_company_member(company_id, auth.uid())));
 
 CREATE POLICY "Members can update company workflow_definitions"
   ON public.workflow_definitions FOR UPDATE TO authenticated
-  USING (is_company_member(company_id, auth.uid()))
-  WITH CHECK (is_company_member(company_id, auth.uid()));
+  USING ((company_id IS NOT NULL AND is_company_member(company_id, auth.uid())) OR (company_id IS NULL AND created_by = auth.uid()))
+  WITH CHECK (created_by = auth.uid() AND (company_id IS NULL OR is_company_member(company_id, auth.uid())));
 
 CREATE POLICY "Admins can delete company workflow_definitions"
   ON public.workflow_definitions FOR DELETE TO authenticated
-  USING (is_company_admin(company_id, auth.uid()));
+  USING ((company_id IS NOT NULL AND is_company_admin(company_id, auth.uid())) OR (company_id IS NULL AND created_by = auth.uid()));
 
 CREATE TRIGGER update_workflow_definitions_updated_at
   BEFORE UPDATE ON public.workflow_definitions

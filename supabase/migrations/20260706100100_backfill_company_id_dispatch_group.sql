@@ -124,6 +124,10 @@ CREATE POLICY "Company admins can delete group_campaigns" ON public.group_campai
 ALTER TABLE public.message_sequences ADD COLUMN IF NOT EXISTS company_id uuid REFERENCES public.companies(id);
 
 UPDATE public.message_sequences ms SET company_id = (
+  SELECT gc.company_id FROM public.group_campaigns gc WHERE gc.id = ms.group_campaign_id
+) WHERE ms.company_id IS NULL;
+
+UPDATE public.message_sequences ms SET company_id = (
   SELECT cm.company_id FROM public.company_members cm WHERE cm.user_id = ms.user_id ORDER BY cm.created_at ASC LIMIT 1
 ) WHERE ms.company_id IS NULL;
 

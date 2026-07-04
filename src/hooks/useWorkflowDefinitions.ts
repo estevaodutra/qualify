@@ -62,7 +62,7 @@ export function useWorkflowDefinitions(filters?: { folderId?: string | null; sta
       let query = supabase
         .from("workflow_definitions" as any)
         .select("*")
-        .eq("company_id", activeCompanyId)
+        .or(`company_id.eq.${activeCompanyId},company_id.is.null`)
         .order("created_at", { ascending: false });
 
       if (filters?.folderId === null) {
