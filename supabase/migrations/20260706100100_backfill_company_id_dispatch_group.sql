@@ -11,7 +11,7 @@
 ALTER TABLE public.dispatch_campaigns ADD COLUMN IF NOT EXISTS company_id uuid REFERENCES public.companies(id);
 
 UPDATE public.dispatch_campaigns dc SET company_id = (
-  SELECT cm.company_id FROM public.company_members cm WHERE cm.user_id = dc.user_id ORDER BY cm.created_at ASC LIMIT 1
+  SELECT cm.company_id FROM public.company_members cm WHERE cm.user_id = dc.user_id ORDER BY cm.joined_at ASC LIMIT 1
 ) WHERE dc.company_id IS NULL;
 
 DROP POLICY IF EXISTS "Users can manage own dispatch_campaigns" ON public.dispatch_campaigns;
@@ -99,7 +99,7 @@ CREATE POLICY "Company admins can delete dispatch_campaign_contacts" ON public.d
 ALTER TABLE public.group_campaigns ADD COLUMN IF NOT EXISTS company_id uuid REFERENCES public.companies(id);
 
 UPDATE public.group_campaigns gc SET company_id = (
-  SELECT cm.company_id FROM public.company_members cm WHERE cm.user_id = gc.user_id ORDER BY cm.created_at ASC LIMIT 1
+  SELECT cm.company_id FROM public.company_members cm WHERE cm.user_id = gc.user_id ORDER BY cm.joined_at ASC LIMIT 1
 ) WHERE gc.company_id IS NULL;
 
 DROP POLICY IF EXISTS "Users can view own group_campaigns" ON public.group_campaigns;
@@ -128,7 +128,7 @@ UPDATE public.message_sequences ms SET company_id = (
 ) WHERE ms.company_id IS NULL;
 
 UPDATE public.message_sequences ms SET company_id = (
-  SELECT cm.company_id FROM public.company_members cm WHERE cm.user_id = ms.user_id ORDER BY cm.created_at ASC LIMIT 1
+  SELECT cm.company_id FROM public.company_members cm WHERE cm.user_id = ms.user_id ORDER BY cm.joined_at ASC LIMIT 1
 ) WHERE ms.company_id IS NULL;
 
 DROP POLICY IF EXISTS "Users can view own message_sequences" ON public.message_sequences;
