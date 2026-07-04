@@ -191,15 +191,68 @@ export default function AdminSystemWebhooks() {
       let specificData = {};
       
       if (eventId.startsWith("instance.")) {
-        specificData = {
-          instance: {
-            id: "inst_123",
-            name: "Atendimento Principal",
-            phone_number: "5511999998888",
-            status: eventId.split('.')[1],
-            action_url: `https://qualify.app/auth/magic?token=temp_abc123&redirect=/instances?id=inst_123`
+        // Try to fetch the last connection status event from the database
+        const { data: lastDbEvent } = await supabase
+          .from("webhook_events" as any)
+          .select("instance_id, user_id, raw_event")
+          .eq("event_type", "connection_status")
+          .order("received_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (lastDbEvent) {
+          console.log("[AdminSystemWebhooks] Found last db event for test:", lastDbEvent);
+          let instanceRow = null;
+          if (lastDbEvent.instance_id) {
+            const { data: inst } = await supabase
+              .from("instances")
+              .select("id, name, phone, provider, status")
+              .eq("id", lastDbEvent.instance_id)
+              .maybeSingle();
+            if (inst) instanceRow = inst;
           }
-        };
+
+          let userRow = null;
+          if (lastDbEvent.user_id) {
+            const { data: usr } = await supabase
+              .from("profiles")
+              .select("id, name, email")
+              .eq("id", lastDbEvent.user_id)
+              .maybeSingle();
+            if (usr) userRow = usr;
+          }
+
+          specificData = {
+            instance: {
+              id: instanceRow?.id || lastDbEvent.instance_id || "inst_123",
+              name: instanceRow?.name || "Atendimento Principal",
+              phone_number: instanceRow?.phone || "5511999998888",
+              status: eventId.split('.')[1],
+              provider: instanceRow?.provider || "z-api"
+            }
+          };
+
+          if (userRow) {
+            baseData.user = {
+              id: userRow.id,
+              name: userRow.name || "Sem nome",
+              email: userRow.email || "sem@email.com",
+              phone: ""
+            };
+          }
+        } else {
+          // Default fallback
+          specificData = {
+            instance: {
+              id: "inst_123",
+              name: "Atendimento Principal",
+              phone_number: "5511999998888",
+              status: eventId.split('.')[1],
+              action_url: `https://qualify.app/auth/magic?token=temp_abc123&redirect=/instances?id=inst_123`
+            }
+          };
+        }
+
         if (eventId === "instance.error" || eventId === "instance.disconnected") {
           specificData = {
             ...specificData,
@@ -242,6 +295,38 @@ export default function AdminSystemWebhooks() {
           }
         };
       } else if (eventId === "company.created") {
+        // Query the last created company
+        const { data: lastCompany } = await supabase
+          .from("companies")
+          .select("id, name, owner_id, created_at")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (lastCompany) {
+          baseData.company = {
+            id: lastCompany.id,
+            name: lastCompany.name,
+            document: "",
+            plan: "Plano Standard"
+          };
+
+          const { data: owner } = await supabase
+            .from("profiles")
+            .select("id, name, email")
+            .eq("id", lastCompany.owner_id)
+            .maybeSingle();
+
+          if (owner) {
+            baseData.user = {
+              id: owner.id,
+              name: owner.name || "Sem nome",
+              email: owner.email || "sem@email.com",
+              phone: ""
+            };
+          }
+        }
+
         specificData = {
           source: "landing_page",
           coupon: "BEMVINDO20"
