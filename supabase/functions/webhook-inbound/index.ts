@@ -172,9 +172,17 @@ Deno.serve(async (req) => {
 
       if (statusResolved) {
         console.log(`[webhook-inbound] Updating instance ${instance.id} status to ${newStatus}`);
+        
+        const updates: Record<string, any> = { status: newStatus };
+        if (newStatus === "disconnected") {
+          updates.external_instance_id = null;
+          updates.external_instance_token = null;
+          updates.phone = null;
+        }
+
         const { error: updateError } = await supabase
           .from("instances")
-          .update({ status: newStatus })
+          .update(updates)
           .eq("id", instance.id);
           
         if (updateError) {

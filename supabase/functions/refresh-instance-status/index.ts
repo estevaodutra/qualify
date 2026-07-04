@@ -117,6 +117,14 @@ Deno.serve(async (req) => {
         updates.phone = result.phone;
       }
 
+      // If the status is disconnected, clear credentials (unlink)
+      if (newStatus === "disconnected") {
+        updates.external_instance_id = null;
+        updates.external_instance_token = null;
+        updates.phone = null;
+        updates.status = "disconnected";
+      }
+
       // Unlink instance if n8n custom response returns empty ID or Token
       if (result.returnedId === "" || result.returnedToken === "") {
         updates.external_instance_id = null;
