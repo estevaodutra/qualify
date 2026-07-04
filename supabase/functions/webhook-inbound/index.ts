@@ -7,6 +7,7 @@ import {
   type EventContext,
 } from "../_shared/event-classifier.ts";
 import { logProspectingEvent } from "../_shared/prospecting-events.ts";
+import { triggerSystemWebhook } from "../_shared/system-webhook.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -83,7 +84,7 @@ Deno.serve(async (req) => {
     // Find internal instance
     const { data: instance } = await supabase
       .from("instances")
-      .select("id, user_id")
+      .select("id, user_id, name, phone, provider, status")
       .eq("external_instance_id", externalInstanceId)
       .maybeSingle();
 
@@ -171,7 +172,8 @@ Deno.serve(async (req) => {
       }
 
       if (statusResolved) {
-        console.log(`[webhook-inbound] Updating instance ${instance.id} status to ${newStatus}`);
+        const statusChanged = newStatus !== instance.status;
+        console.log(`[webhook-inbound] Updating instance ${instance.id} status to ${newStatus} (changed: ${statusChanged})`);
         
         const updates: Record<string, any> = { status: newStatus };
         if (newStatus === "disconnected") {
@@ -187,6 +189,31 @@ Deno.serve(async (req) => {
           
         if (updateError) {
           console.error(`[webhook-inbound] Failed to update instance status:`, updateError.message);
+        }
+
+        if (statusChanged && !updateError) {
+          const eventId = newStatus === "connected" ? "instance.connected" : "instance.disconnected";
+          
+          let userDetails: Record<string, any> | null = null;
+          if (instance.user_id) {
+            const { data: userData } = await supabase
+              .from("profiles")
+              .select("id, name, email")
+              .eq("id", instance.user_id)
+              .maybeSingle();
+            if (userData) userDetails = userData;
+          }
+
+          await triggerSystemWebhook(supabase, eventId, {
+            instance: {
+              id: instance.id,
+              name: instance.name,
+              phone_number: newStatus === "connected" ? (eventBody?.phone || rawEvent.phone || instance.phone) : instance.phone,
+              status: newStatus,
+              provider: instance.provider || "z-api"
+            },
+            user: userDetails
+          });
         }
       }
     }

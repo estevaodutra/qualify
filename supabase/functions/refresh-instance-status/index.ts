@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getInstanceStatus, registerZApiWebhooks } from "../_shared/whatsapp-client.ts";
+import { triggerSystemWebhook } from "../_shared/system-webhook.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -142,6 +143,32 @@ Deno.serve(async (req) => {
       if (updateError) {
         console.error(`Error updating instance ${instance.id}:`, updateError);
         continue;
+      }
+
+      // If status changed, trigger system webhook notification
+      if (newStatus !== previousStatus) {
+        const eventId = newStatus === "connected" ? "instance.connected" : "instance.disconnected";
+        
+        let userDetails: Record<string, any> | null = null;
+        if (instance.user_id) {
+          const { data: userData } = await supabase
+            .from("profiles")
+            .select("id, name, email")
+            .eq("id", instance.user_id)
+            .maybeSingle();
+          if (userData) userDetails = userData;
+        }
+
+        await triggerSystemWebhook(supabase, eventId, {
+          instance: {
+            id: instance.id,
+            name: instance.name,
+            phone_number: newStatus === "connected" ? (result.phone || instance.phone) : instance.phone,
+            status: newStatus,
+            provider: instance.provider || "z-api"
+          },
+          user: userDetails
+        });
       }
 
       updatedCount++;
