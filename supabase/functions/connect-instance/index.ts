@@ -95,7 +95,26 @@ Deno.serve(async (req) => {
 
     let zapiResponse;
     
-    if (method === "phone") {
+    if (method === "disconnect") {
+      console.log(`[connect-instance] Disconnecting session ${resolvedId}`);
+      try {
+        zapiResponse = await fetchZApi(
+          resolvedId,
+          resolvedToken,
+          "/disconnect",
+          "POST",
+          null,
+          {},
+          instanceId
+        );
+      } catch (zapiErr: any) {
+        console.error("Z-API disconnect request failed:", zapiErr);
+        return new Response(
+          JSON.stringify({ success: true, warning: "Z-API disconnect failed, but unlinked in database" }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    } else if (method === "phone") {
       const cleanPhone = phone?.replace(/\D/g, "");
       console.log(`[connect-instance] Generating pairing code for ${cleanPhone}`);
       zapiResponse = await fetchZApi(
@@ -130,6 +149,12 @@ Deno.serve(async (req) => {
 
     if (!zapiResponse.ok) {
       console.error(`[connect-instance] Z-API Error (HTTP ${zapiResponse.status}):`, data || responseText);
+      if (method === "disconnect") {
+        return new Response(
+          JSON.stringify({ success: true, warning: "Provider session already stopped or disconnected" }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       return new Response(
         JSON.stringify({ error: "Z-API request failed", details: data || responseText }),
         { status: zapiResponse.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }

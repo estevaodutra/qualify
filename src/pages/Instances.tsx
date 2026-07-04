@@ -162,12 +162,58 @@ export default function Instances() {
   const [showConfigDialog, setShowConfigDialog] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showDisconnectDialog, setShowDisconnectDialog] = useState(false);
   const [selectedInstance, setSelectedInstance] = useState<Instance | null>(null);
   const [instanceToDelete, setInstanceToDelete] = useState<Instance | null>(null);
+  const [instanceToDisconnect, setInstanceToDisconnect] = useState<Instance | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showDisconnectedAlert, setShowDisconnectedAlert] = useState(true);
   const [profileConfig, setProfileConfig] = useState<ProfileConfigData>(defaultProfileConfig);
+
+  const handleDisconnectClick = (instance: Instance) => {
+    setInstanceToDisconnect(instance);
+    setShowDisconnectDialog(true);
+  };
+
+  const handleDisconnectInstance = async () => {
+    if (instanceToDisconnect) {
+      setIsSaving(true);
+      try {
+        await supabase.functions.invoke("connect-instance", {
+          body: { instanceId: instanceToDisconnect.id, method: "disconnect" }
+        });
+
+        await updateInstance({
+          id: instanceToDisconnect.id,
+          updates: {
+            status: "disconnected",
+            external_instance_id: "",
+            external_instance_token: "",
+            phone: ""
+          }
+        });
+
+        setShowDisconnectDialog(false);
+        toast({
+          title: "Instância desvinculada",
+          description: `A instância ${instanceToDisconnect.name} foi desconectada e desvinculada com sucesso.`
+        });
+        
+        await refetch();
+      } catch (error: any) {
+        console.error("Error disconnecting instance:", error);
+        toast({
+          title: "Erro",
+          description: error.message || "Falha ao desvincular instância.",
+          variant: "destructive"
+        });
+      } finally {
+        setIsSaving(false);
+        setInstanceToDisconnect(null);
+      }
+    }
+  };
   const [configForm, setConfigForm] = useState({
     apiKey: "",
     webhookUrl: "",
@@ -770,6 +816,11 @@ export default function Instances() {
                     )}
                     
                     <div className="flex items-center gap-1.5">
+                      {instance.idInstance && (
+                        <Button variant="outline" size="icon" className="h-11 w-11 rounded-xl border-warning/20 bg-warning/5 hover:bg-warning/10 group/disconnect" onClick={() => handleDisconnectClick(instance)} title="Desvincular Instância / WhatsApp">
+                          <XCircle className="h-4 w-4 text-warning/70 transition-colors group-hover/disconnect:text-warning" />
+                        </Button>
+                      )}
                       <Button variant="outline" size="icon" className="h-11 w-11 rounded-xl border-border/40 bg-background/40 hover:bg-background/80" onClick={() => handleEditClick(instance)} title={t("instances.edit")}>
                         <Pencil className="h-4 w-4 text-muted-foreground" />
                       </Button>
@@ -1254,6 +1305,30 @@ export default function Instances() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Disconnect/Unlink Confirmation Dialog */}
+      <AlertDialog open={showDisconnectDialog} onOpenChange={setShowDisconnectDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desvincular Instância?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso irá desconectar a instância do WhatsApp e remover a associação do ID de sessão no sistema.
+              As campanhas e fluxos continuarão existindo, mas não poderão realizar disparos por esta instância até que ela seja conectada novamente.
+              {instanceToDisconnect && <span className="block mt-2 font-medium text-foreground">
+                  {instanceToDisconnect.name} (ID: {instanceToDisconnect.idInstance})
+                </span>}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setInstanceToDisconnect(null)}>
+              {t("common.cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleDisconnectInstance} className="bg-warning text-warning-foreground hover:bg-warning/90">
+              Desvincular
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
