@@ -403,24 +403,38 @@ export async function getInstanceStatus(instance: any, triggerN8n: boolean = tru
   }
   
   const data = await response.json();
+  const item = Array.isArray(data) ? data[0] : data;
 
-  // Normalize N8N custom webhook response format
-  if (Array.isArray(data)) {
-    if (data[0]?.instance) {
-      return {
-        connected: data[0].instance.connected === true || String(data[0].instance.connected).toLowerCase() === "true",
-        paymentStatus: "ACTIVE",
-        due: null,
-        returnedId: data[0].instance.id,
-        returnedToken: data[0].instance.token
-      };
-    }
+  // Check for Z-API format
+  if (item?.instance) {
+    return {
+      connected: item.instance.connected === true || String(item.instance.connected).toLowerCase() === "true",
+      paymentStatus: "ACTIVE",
+      due: null,
+      returnedId: item.instance.id,
+      returnedToken: item.instance.token,
+      phone: item.instance.connectedPhone || null
+    };
+  }
+
+  // Check for WAHA format
+  const statusStr = String(item?.status || "").toUpperCase();
+  const isConnected = statusStr === "WORKING" || statusStr === "CONNECTED" || statusStr === "CONNECTED_TO_WHATSAPP" || item?.connected === true;
+  
+  let phone = null;
+  if (item?.me?.id) {
+    phone = item.me.id.split("@")[0];
+  } else if (item?.me?.phone) {
+    phone = item.me.phone;
   }
 
   return {
-    ...data,
-    ok: true,
-    status: response.status
+    connected: isConnected,
+    paymentStatus: "ACTIVE",
+    due: null,
+    returnedId: item?.name || id,
+    returnedToken: token,
+    phone: phone
   };
 }
 

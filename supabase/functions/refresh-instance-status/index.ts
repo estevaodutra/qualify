@@ -74,6 +74,7 @@ Deno.serve(async (req) => {
           due: zapiStatus.due || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
           returnedId: zapiStatus.returnedId,
           returnedToken: zapiStatus.returnedToken,
+          phone: zapiStatus.phone || null,
         });
       } catch (err: any) {
         console.error(`[status-refresh] Failed for ${inst.name}:`, err.message);
@@ -111,6 +112,9 @@ Deno.serve(async (req) => {
       }
       if (result.due) {
         updates.expiration_date = new Date(result.due).toISOString();
+      }
+      if (result.phone && (!instance.phone || instance.phone === "")) {
+        updates.phone = result.phone;
       }
 
       // Unlink instance if n8n custom response returns empty ID or Token
