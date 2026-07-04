@@ -54,6 +54,8 @@ const ZAPI_EVENT_MAP: Record<string, string> = {
   "on-message-ack": "message_status",
   "connected": "connection_status",
   "disconnected": "connection_status",
+  "ConnectedCallback": "connection_status",
+  "DisconnectedCallback": "connection_status",
   "qrcode": "qrcode_update",
   "on-chat-presence": "chat_presence",
   "on-participant-changed": "group_update",

@@ -142,12 +142,35 @@ Deno.serve(async (req) => {
     if (classification.eventType === "connection_status" && instance?.id) {
       const eventBody = (rawEvent.body as Record<string, unknown>) || rawEvent;
       const payloadObj = eventBody?.payload as Record<string, unknown> | undefined;
-      const statusRaw = (eventBody?.status || payloadObj?.status || payloadObj?.state || (rawEvent as any).status) as string | undefined;
+      
+      let newStatus: "connected" | "disconnected" = "disconnected";
+      let statusResolved = false;
 
-      if (statusRaw) {
-        const s = statusRaw.toUpperCase();
-        const newStatus = (s === "WORKING" || s === "CONNECTED" || s === "CONNECTED_TO_WHATSAPP") ? "connected" : "disconnected";
-        
+      if (eventBody?.connected !== undefined) {
+        newStatus = eventBody.connected ? "connected" : "disconnected";
+        statusResolved = true;
+      } else if (rawEvent.connected !== undefined) {
+        newStatus = rawEvent.connected ? "connected" : "disconnected";
+        statusResolved = true;
+      } else {
+        const statusRaw = (eventBody?.status || payloadObj?.status || payloadObj?.state || (rawEvent as any).status) as string | undefined;
+        if (statusRaw) {
+          const s = statusRaw.toUpperCase();
+          newStatus = (s === "WORKING" || s === "CONNECTED" || s === "CONNECTED_TO_WHATSAPP") ? "connected" : "disconnected";
+          statusResolved = true;
+        } else {
+          const typeStr = String(eventBody?.type || rawEvent.type || "").toUpperCase();
+          if (typeStr === "CONNECTEDCALLBACK" || typeStr === "CONNECTED") {
+            newStatus = "connected";
+            statusResolved = true;
+          } else if (typeStr === "DISCONNECTEDCALLBACK" || typeStr === "DISCONNECTED") {
+            newStatus = "disconnected";
+            statusResolved = true;
+          }
+        }
+      }
+
+      if (statusResolved) {
         console.log(`[webhook-inbound] Updating instance ${instance.id} status to ${newStatus}`);
         const { error: updateError } = await supabase
           .from("instances")
