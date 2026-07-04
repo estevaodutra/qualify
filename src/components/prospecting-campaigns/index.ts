@@ -1,3 +1,3 @@
 export * from './ProspectingCampaignList';
-export * from './CreateProspectingDialog';
+export * from './wizard/ProspectingWizard';
 export * from './TriggerSequenceDialog';

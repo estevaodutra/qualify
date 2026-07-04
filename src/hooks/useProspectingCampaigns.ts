@@ -1,19 +1,71 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { toast } from "sonner";
+
+export type ProspectingStatus =
+  | "draft"
+  | "queued"
+  | "extracting"
+  | "validating"
+  | "enriching"
+  | "awaiting_approval"
+  | "preparing_queue"
+  | "dispatching"
+  | "paused"
+  | "completed"
+  | "partially_completed"
+  | "failed"
+  | "cancelled";
+
+export type DestinationMode = "save_only" | "review_before_start" | "auto_start";
+
+export interface QueuePolicy {
+  delay_min_seconds: number;
+  delay_max_seconds: number;
+  hourly_limit: number | null;
+  daily_limit: number | null;
+  allowed_days: number[];
+  start_time: string;
+  end_time: string;
+  timezone: string;
+  pause_on_reply: boolean;
+  auto_resume_on_reconnect: boolean;
+  allow_reentry: boolean;
+}
+
+export const DEFAULT_QUEUE_POLICY: QueuePolicy = {
+  delay_min_seconds: 120,
+  delay_max_seconds: 240,
+  hourly_limit: null,
+  daily_limit: null,
+  allowed_days: [1, 2, 3, 4, 5],
+  start_time: "08:00",
+  end_time: "18:00",
+  timezone: "America/Sao_Paulo",
+  pause_on_reply: true,
+  auto_resume_on_reconnect: true,
+  allow_reentry: false,
+};
 
 export interface ProspectingCampaign {
   id: string;
   name: string;
-  status: "running" | "completed" | "error";
+  status: ProspectingStatus;
   searchTerms: string;
   quantity: number;
   category?: string;
   exactNames: boolean;
   places?: string;
   postActionId?: string;
+  enrichmentLayers: string[];
+  destinationMode: DestinationMode;
+  automationCampaignId?: string;
+  automationSequenceId?: string;
+  instanceId?: string;
+  queuePolicy: QueuePolicy;
+  approvedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -30,6 +82,13 @@ interface DbProspectingCampaign {
   exact_names: boolean;
   places: string | null;
   post_action_id: string | null;
+  enrichment_layers: string[] | null;
+  destination_mode: string;
+  automation_campaign_id: string | null;
+  automation_sequence_id: string | null;
+  instance_id: string | null;
+  queue_policy: Record<string, unknown> | null;
+  approved_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -37,19 +96,40 @@ interface DbProspectingCampaign {
 const transformDbToFrontend = (db: DbProspectingCampaign): ProspectingCampaign => ({
   id: db.id,
   name: db.name,
-  status: (db.status as ProspectingCampaign["status"]) || "running",
+  status: (db.status as ProspectingStatus) || "draft",
   searchTerms: db.search_terms,
   quantity: db.quantity,
   category: db.category || undefined,
   exactNames: db.exact_names,
   places: db.places || undefined,
   postActionId: db.post_action_id || undefined,
+  enrichmentLayers: db.enrichment_layers || ["google_maps"],
+  destinationMode: (db.destination_mode as DestinationMode) || "save_only",
+  automationCampaignId: db.automation_campaign_id || undefined,
+  automationSequenceId: db.automation_sequence_id || undefined,
+  instanceId: db.instance_id || undefined,
+  queuePolicy: { ...DEFAULT_QUEUE_POLICY, ...(db.queue_policy || {}) } as QueuePolicy,
+  approvedAt: db.approved_at || undefined,
   createdAt: db.created_at,
   updatedAt: db.updated_at,
 });
 
+export interface CreateProspectingInput {
+  name: string;
+  searchTerms: string;
+  quantity: number;
+  category?: string;
+  exactNames?: boolean;
+  places?: string;
+  enrichmentLayers: string[];
+  destinationMode: DestinationMode;
+  automationCampaignId?: string;
+  automationSequenceId?: string;
+  instanceId?: string;
+  queuePolicy?: Partial<QueuePolicy>;
+}
+
 export function useProspectingCampaigns() {
-  const { toast } = useToast();
   const { user } = useAuth();
   const { activeCompanyId } = useCompany();
   const queryClient = useQueryClient();
@@ -71,10 +151,8 @@ export function useProspectingCampaigns() {
       const { data, error } = await query;
 
       if (error) {
-        // If the table doesn't exist yet, we just return empty array
-        // to not break the frontend while the user hasn't run the migration
-        if (error.code === '42P01') {
-           return [];
+        if (error.code === "42P01") {
+          return [];
         }
         throw error;
       }
@@ -83,16 +161,16 @@ export function useProspectingCampaigns() {
     enabled: !!user,
   });
 
+  const invalidate = (id?: string) => {
+    queryClient.invalidateQueries({ queryKey: ["prospecting_campaigns"] });
+    if (id) {
+      queryClient.invalidateQueries({ queryKey: ["prospecting_queue", id] });
+      queryClient.invalidateQueries({ queryKey: ["prospecting_events", id] });
+    }
+  };
+
   const createMutation = useMutation({
-    mutationFn: async (campaign: { 
-      name: string; 
-      searchTerms: string;
-      quantity: number;
-      category?: string;
-      exactNames?: boolean;
-      places?: string;
-      postActionId?: string;
-    }) => {
+    mutationFn: async (campaign: CreateProspectingInput) => {
       if (!user) throw new Error("Not authenticated");
 
       const dbCampaign = {
@@ -104,8 +182,13 @@ export function useProspectingCampaigns() {
         category: campaign.category || null,
         exact_names: campaign.exactNames || false,
         places: campaign.places || null,
-        post_action_id: campaign.postActionId || null,
-        status: "running",
+        enrichment_layers: campaign.enrichmentLayers,
+        destination_mode: campaign.destinationMode,
+        automation_campaign_id: campaign.automationCampaignId || null,
+        automation_sequence_id: campaign.automationSequenceId || null,
+        instance_id: campaign.instanceId || null,
+        queue_policy: { ...DEFAULT_QUEUE_POLICY, ...(campaign.queuePolicy || {}) },
+        status: "queued",
       };
 
       const { data, error } = await supabase
@@ -115,108 +198,26 @@ export function useProspectingCampaigns() {
         .single();
 
       if (error) throw error;
-      
+
       const created = transformDbToFrontend(data as DbProspectingCampaign);
 
-      // Trigger Webhook in background
-      fetch("https://n8n.6ksfuf.easypanel.host/webhook/prospecition", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          campaign_id: created.id,
-          company_id: activeCompanyId,
-          user_id: user.id,
-          search_terms: created.searchTerms,
-          quantity: created.quantity,
-          category: created.category,
-          exact_names: created.exactNames,
-          places: created.places,
-          post_action_id: created.postActionId
-        })
-      }).then(async (response) => {
-        if (response.ok) {
-          let results = await response.json();
-          
-          // N8n sometimes wraps the response or stringifies it. Let's be robust.
-          if (typeof results === 'string') {
-            try {
-              results = JSON.parse(results);
-            } catch (e) {
-              console.error("Failed to parse stringified JSON from n8n", e);
-            }
-          }
-
-          // Sometimes n8n puts the array inside a property
-          let leadsArray = [];
-          if (Array.isArray(results)) {
-            leadsArray = results;
-          } else if (results && Array.isArray(results.data)) {
-            leadsArray = results.data;
-          } else if (results && Array.isArray(results.body)) {
-            leadsArray = results.body;
-          }
-
-          if (leadsArray.length > 0) {
-             const leadsToInsert = leadsArray.map((lead: any) => ({
-               user_id: user.id,
-               name: lead.name || lead.title || "Sem nome",
-               phone: lead.phone || lead.phoneUnformatted || null,
-               custom_fields: lead,
-               active_campaign_id: created.id,
-               active_campaign_type: "whatsapp",
-               source_name: "Google Maps",
-               source_type: "prospecting"
-             })).filter(l => l.phone); // Apenas insere quem tem telefone
-
-             if (leadsToInsert.length > 0) {
-               // Usa upsert para não dar erro se o telefone já existir na base do usuário
-               const { error: insertError } = await supabase.from("leads").upsert(leadsToInsert, { onConflict: "user_id,phone" });
-               if (insertError) {
-                 console.error("Database insert error:", insertError);
-                 throw new Error("Erro ao salvar os leads: " + insertError.message);
-               }
-             } else {
-               console.warn("No leads with valid phone numbers found in the n8n response.");
-             }
-          } else {
-             console.warn("Webhook responded but no array of leads was found. Response:", results);
-             throw new Error("O N8N não devolveu uma lista válida de contatos. Verifique o nó 'Respond to Webhook'.");
-          }
-
-          // Atualiza status para concluído
-          await supabase.from("prospecting_campaigns").update({ status: "completed" }).eq("id", created.id);
-          queryClient.invalidateQueries({ queryKey: ["prospecting_campaigns"] });
-          toast({ title: "Prospecção Concluída!", description: "Sua busca terminou e retornou contatos prontos para uso." });
-        } else {
-          throw new Error("Resposta da webhook com erro: " + response.statusText);
-        }
-      }).catch(async (e) => {
-        console.error("Erro ao notificar webhook:", e);
-        await supabase.from("prospecting_campaigns").update({ status: "error" }).eq("id", created.id);
-        queryClient.invalidateQueries({ queryKey: ["prospecting_campaigns"] });
-        
-        let errorMessage = e.message || "A prospecção falhou ou não retornou resultados.";
-        if (errorMessage.includes("Failed to fetch")) {
-          errorMessage = "Erro de rede: O N8N demorou muito (Timeout) ou bloqueou a resposta por falta de permissão CORS no nó 'Respond to Webhook'.";
-        }
-
-        toast({ 
-          title: "Erro na Prospecção", 
-          description: errorMessage, 
-          variant: "destructive" 
-        });
+      const { error: invokeError } = await supabase.functions.invoke("prospecting-start", {
+        body: { prospectingCampaignId: created.id },
       });
 
-      return { created, count: 0 };
+      if (invokeError) {
+        await supabase.from("prospecting_campaigns").update({ status: "failed" }).eq("id", created.id);
+        throw invokeError;
+      }
+
+      return created;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["prospecting_campaigns"] });
-      toast({ title: "Campanha iniciada", description: "Está sendo executado em segundo plano." });
+      invalidate();
+      toast.success("Prospecção iniciada", { description: "Está sendo executada em segundo plano." });
     },
-    onError: (error) => {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    onError: (error: Error) => {
+      toast.error("Erro ao iniciar prospecção", { description: error.message });
     },
   });
 
@@ -226,12 +227,91 @@ export function useProspectingCampaigns() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["prospecting_campaigns"] });
-      toast({ title: "Campanha removida" });
+      invalidate();
+      toast.success("Prospecção removida");
     },
-    onError: (error) => {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    onError: (error: Error) => {
+      toast.error("Erro", { description: error.message });
     },
+  });
+
+  const pauseMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("prospecting_campaigns")
+        .update({ status: "paused" })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_data, id) => {
+      invalidate(id);
+      toast.success("Prospecção pausada");
+    },
+    onError: (error: Error) => toast.error("Erro ao pausar", { description: error.message }),
+  });
+
+  const resumeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("prospecting_campaigns")
+        .update({ status: "dispatching" })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_data, id) => {
+      invalidate(id);
+      toast.success("Prospecção retomada");
+    },
+    onError: (error: Error) => toast.error("Erro ao retomar", { description: error.message }),
+  });
+
+  const cancelPendingLeadsMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("prospecting_queue" as any)
+        .update({ status: "cancelled" })
+        .eq("prospecting_campaign_id", id)
+        .in("status", ["pending", "scheduled"]);
+      if (error) throw error;
+    },
+    onSuccess: (_data, id) => {
+      invalidate(id);
+      toast.success("Leads pendentes cancelados");
+    },
+    onError: (error: Error) => toast.error("Erro", { description: error.message }),
+  });
+
+  const reprocessErrorsMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("prospecting_queue" as any)
+        .update({ status: "pending", attempts: 0, scheduled_at: new Date().toISOString(), last_error: null })
+        .eq("prospecting_campaign_id", id)
+        .eq("status", "failed");
+      if (error) throw error;
+    },
+    onSuccess: (_data, id) => {
+      invalidate(id);
+      toast.success("Erros reprocessados");
+    },
+    onError: (error: Error) => toast.error("Erro", { description: error.message }),
+  });
+
+  const changeSendLimitsMutation = useMutation({
+    mutationFn: async ({ id, patch }: { id: string; patch: Partial<QueuePolicy> }) => {
+      const campaign = campaigns.find((c) => c.id === id);
+      const mergedPolicy = { ...(campaign?.queuePolicy || DEFAULT_QUEUE_POLICY), ...patch };
+      const { error } = await supabase
+        .from("prospecting_campaigns")
+        .update({ queue_policy: mergedPolicy })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_data, { id }) => {
+      invalidate(id);
+      toast.success("Configurações da fila atualizadas");
+    },
+    onError: (error: Error) => toast.error("Erro", { description: error.message }),
   });
 
   return {
@@ -239,6 +319,11 @@ export function useProspectingCampaigns() {
     isLoading,
     createCampaign: createMutation.mutateAsync,
     deleteCampaign: deleteMutation.mutateAsync,
+    pauseProspecting: pauseMutation.mutateAsync,
+    resumeProspecting: resumeMutation.mutateAsync,
+    cancelPendingLeads: cancelPendingLeadsMutation.mutateAsync,
+    reprocessErrors: reprocessErrorsMutation.mutateAsync,
+    changeSendLimits: changeSendLimitsMutation.mutateAsync,
     isCreating: createMutation.isPending,
   };
 }

@@ -35,13 +35,8 @@ export function TriggerSequenceDialog({ leadPhone, leadName, open, onOpenChange 
         body: {
           campaignId: selectedCampaignId,
           sequenceId: selectedSequenceId,
-          triggerContext: {
-            respondentPhone: leadPhone,
-            respondentName: leadName,
-            respondentJid: leadPhone.replace(/[^0-9]/g, '') + "@s.whatsapp.net",
-            groupJid: "",
-            sendPrivate: false
-          }
+          contactPhone: leadPhone,
+          contactName: leadName,
         }
       });
 

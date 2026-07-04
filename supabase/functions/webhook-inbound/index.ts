@@ -6,6 +6,7 @@ import {
   type ClassificationResult,
   type EventContext,
 } from "../_shared/event-classifier.ts";
+import { logProspectingEvent } from "../_shared/prospecting-events.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -797,6 +798,86 @@ Deno.serve(async (req) => {
         } // end else (activeCampaigns found)
       } catch (contextErr) {
         console.error("[webhook-inbound] Error processing context trigger:", contextErr);
+      }
+    }
+
+    // ==========================================
+    // PROSPECTING PAUSE-ON-REPLY
+    // ==========================================
+    // A reply from a prospected lead pauses/cancels its remaining automated
+    // steps. Scoped by instance + lead phone (not by instance.company_id or
+    // dispatch_campaigns.company_id -- neither of those legacy tables is
+    // reliably company-scoped -- prospecting_queue.company_id, populated at
+    // enqueue time from prospecting_campaigns.company_id, is the source of
+    // truth here). Wrapped in try/catch: a bug here must never break the
+    // core webhook ingestion above.
+    if (
+      CONTEXT_TRIGGER_TYPES.includes(classification.eventType) &&
+      classification.direction === "inbound" &&
+      context.chatType !== "group" &&
+      context.senderPhone &&
+      instance?.id
+    ) {
+      try {
+        const normalizedPhone = context.senderPhone.replace(/\D/g, "");
+
+        const { data: candidateQueueItems } = await supabase
+          .from("prospecting_queue")
+          .select("id, prospecting_campaign_id, lead_id, company_id, status")
+          .eq("instance_id", instance.id)
+          .in("status", ["pending", "scheduled", "processing", "completed"])
+          .order("created_at", { ascending: false })
+          .limit(50);
+
+        if (candidateQueueItems && candidateQueueItems.length > 0) {
+          const candidateLeadIds = Array.from(new Set(candidateQueueItems.map((q) => q.lead_id)));
+          const { data: matchingLead } = await supabase
+            .from("leads")
+            .select("id, phone")
+            .in("id", candidateLeadIds)
+            .eq("phone", normalizedPhone)
+            .maybeSingle();
+
+          if (matchingLead) {
+            const queueRow = candidateQueueItems.find((q) => q.lead_id === matchingLead.id);
+            if (queueRow && queueRow.status !== "replied") {
+              await supabase
+                .from("prospecting_queue")
+                .update({ status: "replied", replied_at: new Date().toISOString() })
+                .eq("id", queueRow.id);
+
+              const { data: parentCampaign } = await supabase
+                .from("prospecting_campaigns")
+                .select("queue_policy")
+                .eq("id", queueRow.prospecting_campaign_id)
+                .maybeSingle();
+
+              const pauseOnReply = (parentCampaign?.queue_policy as any)?.pause_on_reply !== false;
+
+              if (pauseOnReply) {
+                await supabase
+                  .from("prospecting_queue")
+                  .update({ status: "cancelled" })
+                  .eq("lead_id", matchingLead.id)
+                  .eq("prospecting_campaign_id", queueRow.prospecting_campaign_id)
+                  .in("status", ["pending", "scheduled"]);
+              }
+
+              await logProspectingEvent(supabase, {
+                companyId: queueRow.company_id,
+                campaignId: queueRow.prospecting_campaign_id,
+                leadId: matchingLead.id,
+                eventType: "prospecting.lead_replied",
+                payload: { senderPhone: normalizedPhone, pausedRemaining: pauseOnReply },
+              });
+              // No separate "forward to Chat CRM" step needed here -- webhook_events
+              // already stores this inbound event by sender_phone/instance_id, and
+              // the existing Chat CRM view already reads conversations from there.
+            }
+          }
+        }
+      } catch (pauseErr) {
+        console.error("[webhook-inbound] Error processing prospecting pause-on-reply:", pauseErr);
       }
     }
 

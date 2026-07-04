@@ -28,6 +28,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
+import { STATUS_LABELS, STATUS_COLORS, LIVE_STATUSES } from "@/lib/prospecting-status";
 
 interface ProspectingCampaignListProps {
   campaigns: ProspectingCampaign[];
@@ -37,12 +38,6 @@ interface ProspectingCampaignListProps {
   onRunAgain?: (campaign: ProspectingCampaign) => void;
   onEdit?: (campaign: ProspectingCampaign) => void;
 }
-
-const statusConfig: Record<string, { label: string; className: string; icon: any }> = {
-  running: { label: "Em Andamento", className: "bg-blue-500/12 text-blue-500 border-none", icon: Loader2 },
-  completed: { label: "Concluída", className: "bg-[#22DD4F]/12 text-[#22DD4F] border-none", icon: CheckCircle },
-  error: { label: "Erro", className: "bg-red-500/12 text-red-500 border-none", icon: AlertCircle },
-};
 
 export function ProspectingCampaignList({
   campaigns, isLoading, onDelete, onCreateNew, onRunAgain, onEdit
@@ -111,8 +106,11 @@ export function ProspectingCampaignList({
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 stagger-children">
           {filtered.map((campaign, idx) => {
-            const status = statusConfig[campaign.status] || statusConfig.running;
-            const StatusIcon = status.icon;
+            const statusLabel = STATUS_LABELS[campaign.status] || campaign.status;
+            const statusClassName = STATUS_COLORS[campaign.status] || "bg-muted text-muted-foreground";
+            const isLive = LIVE_STATUSES.includes(campaign.status);
+            const isError = campaign.status === "failed";
+            const StatusIcon = isLive ? Loader2 : isError ? AlertCircle : CheckCircle;
 
             return (
               <Card
@@ -126,8 +124,8 @@ export function ProspectingCampaignList({
                   <div className="flex items-start justify-between">
                     <div className="space-y-1.5 flex-1 min-w-0 pr-4">
                       <div className="flex items-center gap-2 mb-1">
-                        <Badge className={cn("text-[9px] font-bold uppercase tracking-[0.1em] px-2 py-0.5", status.className)}>
-                          {status.label}
+                        <Badge className={cn("text-[9px] font-bold uppercase tracking-[0.1em] px-2 py-0.5 border", statusClassName)}>
+                          {statusLabel}
                         </Badge>
                       </div>
                       <CardTitle className="text-base font-bold tracking-tight leading-tight line-clamp-1 group-hover:text-primary transition-colors">
@@ -158,7 +156,7 @@ export function ProspectingCampaignList({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-52 rounded-xl shadow-xl border-border/40 bg-background/95 backdrop-blur-xl p-2 space-y-1">
-                        {campaign.status === "completed" && (
+                        {campaign.status !== "draft" && (
                           <DropdownMenuItem className="rounded-lg font-medium cursor-pointer" onClick={() => navigate(`/prospeccao/${campaign.id}`)}>
                             <Eye className="h-4 w-4 mr-2" /> Ver Leads
                           </DropdownMenuItem>
@@ -182,16 +180,16 @@ export function ProspectingCampaignList({
                 <CardContent className="pt-auto flex-1 flex flex-col justify-end">
                   <div className="flex items-center justify-between border-t border-border/30 pt-4 mt-2">
                     <div className="flex items-center gap-1.5 text-muted-foreground/40">
-                      <StatusIcon className={cn("h-3 w-3", campaign.status === 'running' && "animate-spin")} />
+                      <StatusIcon className={cn("h-3 w-3", isLive && "animate-spin")} />
                       <span className="text-[10px] font-bold uppercase tracking-wider">
                         {format(new Date(campaign.createdAt), "dd MMM yyyy", { locale: ptBR })}
                       </span>
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {campaign.status === "completed" && (
-                        <Button 
-                          variant="ghost" 
+                      {campaign.status !== "draft" && (
+                        <Button
+                          variant="ghost"
                           size="sm"
                           className="h-8 px-2 text-xs font-semibold text-primary/80 hover:text-primary hover:bg-primary/10 rounded-lg"
                           onClick={() => navigate(`/prospeccao/${campaign.id}`)}

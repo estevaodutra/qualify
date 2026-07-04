@@ -14,7 +14,16 @@ import { useLanguage } from "@/i18n";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { useAlerts } from "@/hooks/useAlerts";
 import { useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
+
+const SEVERITY_DOT: Record<string, string> = {
+  info: "bg-info",
+  success: "bg-success",
+  warning: "bg-warning",
+  error: "bg-destructive",
+};
 
 function SystemClock() {
   const [time, setTime] = useState(new Date());
@@ -36,6 +45,7 @@ export function AppHeader() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { alerts, unreadCount, markAsRead, markAllAsRead } = useAlerts();
 
   const handleSignOut = async () => {
     const { error } = await signOut();
@@ -94,10 +104,50 @@ export function AppHeader() {
           <SystemClock />
 
           {/* Notifications */}
-          <button className="relative h-9 w-9 flex items-center justify-center rounded-xl border border-border/50 bg-muted/30 text-muted-foreground hover:bg-accent hover:text-foreground hover:border-border transition-all duration-200">
-            <Bell className="h-4 w-4" />
-            <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-primary border-2 border-background" />
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="relative h-9 w-9 flex items-center justify-center rounded-xl border border-border/50 bg-muted/30 text-muted-foreground hover:bg-accent hover:text-foreground hover:border-border transition-all duration-200">
+                <Bell className="h-4 w-4" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-primary border-2 border-background" />
+                )}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-80 rounded-2xl shadow-elevation-lg border-border/50 bg-background/95 backdrop-blur-xl p-2 max-h-96 overflow-y-auto">
+              <div className="flex items-center justify-between px-2 py-1.5">
+                <DropdownMenuLabel className="p-0 text-[13px] font-bold">Notificações</DropdownMenuLabel>
+                {unreadCount > 0 && (
+                  <button
+                    onClick={() => markAllAsRead()}
+                    className="text-[11px] font-semibold text-primary hover:underline"
+                  >
+                    Marcar todas como lidas
+                  </button>
+                )}
+              </div>
+              <DropdownMenuSeparator className="bg-border/50 my-1" />
+              {alerts.length === 0 ? (
+                <p className="text-xs text-muted-foreground/60 text-center py-6">Nenhuma notificação por aqui.</p>
+              ) : (
+                alerts.slice(0, 20).map((alert) => (
+                  <DropdownMenuItem
+                    key={alert.id}
+                    onClick={() => !alert.read && markAsRead(alert.id)}
+                    className={cn("rounded-xl gap-2.5 px-3 py-2.5 cursor-pointer items-start", !alert.read && "bg-primary/5")}
+                  >
+                    <span className={cn("h-1.5 w-1.5 rounded-full mt-1.5 shrink-0", SEVERITY_DOT[alert.severity] || "bg-muted-foreground")} />
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-semibold text-foreground truncate">{alert.title}</p>
+                      {alert.description && (
+                        <p className="text-[11px] text-muted-foreground/70 line-clamp-2">{alert.description}</p>
+                      )}
+                      <p className="text-[10px] text-muted-foreground/50 mt-0.5">{alert.timestamp}</p>
+                    </div>
+                  </DropdownMenuItem>
+                ))
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* User menu */}
           <DropdownMenu>

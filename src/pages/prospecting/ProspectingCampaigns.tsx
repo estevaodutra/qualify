@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useProspectingCampaigns, ProspectingCampaign } from "@/hooks/useProspectingCampaigns";
-import { ProspectingCampaignList, CreateProspectingDialog } from "@/components/prospecting-campaigns";
+import { useProspectingCampaigns, ProspectingCampaign, CreateProspectingInput } from "@/hooks/useProspectingCampaigns";
+import { ProspectingCampaignList, ProspectingWizard } from "@/components/prospecting-campaigns";
 import { toast } from "sonner";
 import { Search } from "lucide-react";
 
@@ -16,15 +16,7 @@ export default function ProspectingCampaigns() {
     isCreating,
   } = useProspectingCampaigns();
 
-  const handleCreate = async (data: { 
-    name: string; 
-    searchTerms: string;
-    quantity: number;
-    category?: string;
-    exactNames?: boolean;
-    places?: string;
-    postActionId?: string;
-  }) => {
+  const handleCreate = async (data: CreateProspectingInput) => {
     try {
       await createCampaign(data);
       setShowCreateDialog(false);
@@ -77,7 +69,7 @@ export default function ProspectingCampaigns() {
         onEdit={handleEdit}
       />
 
-      <CreateProspectingDialog
+      <ProspectingWizard
         open={showCreateDialog}
         onOpenChange={(open) => {
           setShowCreateDialog(open);
