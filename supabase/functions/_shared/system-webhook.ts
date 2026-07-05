@@ -78,6 +78,9 @@ export async function triggerSystemWebhook(
 
             if (linkData?.properties?.action_link) {
               actionUrl = linkData.properties.action_link;
+              if (actionUrl.includes("/verify?")) {
+                actionUrl = actionUrl.replace("/verify?", "/auth/v1/verify?");
+              }
             }
           } catch (linkErr: any) {
             console.error("[system-webhook] Failed to generate magic link:", linkErr.message);
