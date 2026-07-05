@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { LocalNode } from "./shared-types";
+import { LocalNode, RandomizerBranch } from "./shared-types";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,6 +20,7 @@ import {
   Image, Video, Music, FileText, Smile,
   BarChart3, MousePointerClick, List, MapPin, Contact, Calendar,
   Pencil, ImageIcon, UserPlus, UserMinus, ShieldPlus, ShieldMinus, Settings, CircleDot,
+  Shuffle,
 } from "lucide-react";
 
 function formatWhatsAppText(text: string) {
@@ -122,6 +124,7 @@ const NODE_TITLES: Record<string, { title: string; icon: React.ElementType }> = 
   event: { title: "Evento", icon: Calendar },
   delay: { title: "Delay", icon: Clock },
   condition: { title: "Condição", icon: GitBranch },
+  randomizer: { title: "Randomizador", icon: Shuffle },
   notify: { title: "Notificar", icon: Bell },
   webhook: { title: "Webhook", icon: Link2 },
   webhook_forward: { title: "Enviar p/ Webhook", icon: Send },
@@ -1298,6 +1301,101 @@ export function UnifiedNodeConfigPanel({
               )}
             </>
           )}
+
+          {/* RANDOMIZER - weighted random or round-robin branching */}
+          {node.nodeType === "randomizer" && (() => {
+            const mode = (node.config.mode as string) || "weighted_random";
+            const branches = ((node.config.branches as RandomizerBranch[]) || []).slice().sort((a, b) => a.position - b.position);
+            const totalWeight = branches.reduce((sum, b) => sum + (Number(b.weight) || 0), 0);
+
+            const updateBranch = (index: number, patch: Partial<RandomizerBranch>) => {
+              const updated = branches.map((b, i) => (i === index ? { ...b, ...patch } : b));
+              updateConfig("branches", updated);
+            };
+
+            return (
+              <>
+                <div className="space-y-2">
+                  <Label>Modo de distribuição</Label>
+                  <Select value={mode} onValueChange={v => updateConfig("mode", v)}>
+                    <SelectTrigger className="rounded-xl border-border/40"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="weighted_random">Aleatório por porcentagem</SelectItem>
+                      <SelectItem value="round_robin">Rodízio sequencial</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Ramificações (2 a 10)</Label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6"
+                      onClick={() => {
+                        if (branches.length >= 10) return;
+                        const nextLetter = String.fromCharCode(65 + branches.length);
+                        updateConfig("branches", [
+                          ...branches,
+                          { id: crypto.randomUUID(), label: nextLetter, weight: 0, position: branches.length },
+                        ]);
+                      }}
+                      disabled={branches.length >= 10}
+                    >
+                      <Plus className="h-3 w-3 mr-1" /> Adicionar
+                    </Button>
+                  </div>
+
+                  {branches.map((branch, i) => (
+                    <div key={branch.id} className="flex gap-1 items-center">
+                      <Input
+                        value={branch.label}
+                        onChange={e => updateBranch(i, { label: e.target.value })}
+                        placeholder={`Ramo ${i + 1}`}
+                        className="flex-1"
+                      />
+                      {mode === "weighted_random" && (
+                        <Input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={branch.weight}
+                          onChange={e => updateBranch(i, { weight: Number(e.target.value) })}
+                          className="w-16 shrink-0"
+                        />
+                      )}
+                      {branches.length > 2 && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 shrink-0"
+                          onClick={() => {
+                            const updated = branches.filter((_, j) => j !== i).map((b, j) => ({ ...b, position: j }));
+                            updateConfig("branches", updated);
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3 text-destructive" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+
+                  {mode === "weighted_random" && (
+                    <p className={cn(
+                      "text-xs font-medium",
+                      totalWeight === 100 ? "text-emerald-600" : totalWeight > 100 ? "text-destructive" : "text-amber-600"
+                    )}>
+                      Total: {totalWeight}% {totalWeight !== 100 && "— os percentuais precisam totalizar 100% para ativar"}
+                    </p>
+                  )}
+                  {mode === "weighted_random" && branches.some(b => Number(b.weight) === 0) && (
+                    <p className="text-xs text-amber-600">Ramo(s) com 0% nunca serão escolhidos.</p>
+                  )}
+                </div>
+              </>
+            );
+          })()}
 
           {/* ACTION - Add/Remove Tag, Move Deal Stage */}
           {(node.nodeType === "tag_add" || node.nodeType === "tag_remove") && (

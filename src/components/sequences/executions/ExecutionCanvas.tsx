@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { LocalNode, LocalConnection, NodeCategory } from "../shared-types";
+import { LocalNode, LocalConnection, NodeCategory, RandomizerBranch } from "../shared-types";
 import { WorkflowExecution, WorkflowNodeExecution } from "@/hooks/useWorkflowExecutions";
 import { ZoomIn, ZoomOut, Maximize, Play, CheckCircle2, XCircle, Loader2, CircleDashed } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,15 @@ const drawBezier = (x1: number, y1: number, x2: number, y2: number) => {
   const dx = Math.abs(x2 - x1) * 0.5;
   return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
 };
+
+const RANDOMIZER_PORT_BASE_Y = 28;
+const RANDOMIZER_PORT_SPACING = 22;
+
+function getSortedRandomizerBranches(node: LocalNode): RandomizerBranch[] {
+  return ((node.config.branches as RandomizerBranch[] | undefined) || [])
+    .slice()
+    .sort((a, b) => a.position - b.position);
+}
 
 const STATUS_STYLES: Record<string, { border: string; ring: string; icon: typeof CheckCircle2; iconColor: string }> = {
   success: { border: "border-emerald-400", ring: "ring-emerald-400/20", icon: CheckCircle2, iconColor: "text-emerald-500" },
@@ -141,6 +150,11 @@ export function ExecutionCanvas({
               let portY1 = sY + 45;
               if (conn.conditionPath === "yes") portY1 = sY + 35;
               if (conn.conditionPath === "no") portY1 = sY + 65;
+              if (srcNode.nodeType === "randomizer") {
+                const branches = getSortedRandomizerBranches(srcNode);
+                const idx = branches.findIndex(b => b.id === conn.conditionPath);
+                if (idx >= 0) portY1 = sY + RANDOMIZER_PORT_BASE_Y + idx * RANDOMIZER_PORT_SPACING;
+              }
               const portX2 = tX;
               const portY2 = tY + 45;
               const d = drawBezier(portX1, portY1, portX2, portY2);

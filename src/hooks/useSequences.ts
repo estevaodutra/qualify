@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useCompany } from "@/contexts/CompanyContext";
 import { Json } from "@/integrations/supabase/types";
 
 export interface SequenceNode {
@@ -105,6 +106,7 @@ const transformConnection = (db: DbConnection): SequenceConnection => ({
 export function useSequences(campaignId: string | undefined) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { activeCompanyId } = useCompany();
 
   const { data: sequences = [], isLoading, error, refetch } = useQuery({
     queryKey: ["message_sequences", campaignId],
@@ -136,6 +138,7 @@ export function useSequences(campaignId: string | undefined) {
         .from("message_sequences")
         .insert({
           user_id: user.id,
+          company_id: activeCompanyId,
           group_campaign_id: campaignId!,
           name: sequence.name,
           description: sequence.description || null,
@@ -234,6 +237,7 @@ export function useSequences(campaignId: string | undefined) {
         .from("message_sequences")
         .insert({
           user_id: user.id,
+          company_id: (original as any).company_id ?? activeCompanyId,
           group_campaign_id: original.group_campaign_id,
           name: `Cópia de ${original.name}`,
           description: original.description,
@@ -260,6 +264,7 @@ export function useSequences(campaignId: string | undefined) {
           .insert(originalNodes.map((n: any) => ({
             sequence_id: newSeq.id,
             user_id: user.id,
+            company_id: (newSeq as any).company_id,
             node_type: n.node_type,
             position_x: n.position_x,
             position_y: n.position_y,
@@ -285,6 +290,7 @@ export function useSequences(campaignId: string | undefined) {
             .insert(originalConns.map((c: any) => ({
               sequence_id: newSeq.id,
               user_id: user.id,
+              company_id: (newSeq as any).company_id,
               source_node_id: idMapping[c.source_node_id] || c.source_node_id,
               target_node_id: idMapping[c.target_node_id] || c.target_node_id,
               condition_path: c.condition_path,
@@ -364,6 +370,13 @@ export function useSequenceNodes(sequenceId: string | undefined) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user || !sequenceId) throw new Error("Not authenticated");
 
+      const { data: parentSequence } = await supabase
+        .from("message_sequences")
+        .select("company_id")
+        .eq("id", sequenceId)
+        .maybeSingle();
+      const companyId = (parentSequence as any)?.company_id ?? null;
+
       // Delete existing nodes
       await supabase
         .from("sequence_nodes")
@@ -385,6 +398,7 @@ export function useSequenceNodes(sequenceId: string | undefined) {
           .insert(persistableNodes.map((node, index) => ({
             sequence_id: sequenceId!,
             user_id: user.id,
+            company_id: companyId,
             node_type: node.nodeType,
             position_x: node.positionX,
             position_y: node.positionY,
@@ -431,6 +445,13 @@ export function useSequenceNodes(sequenceId: string | undefined) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user || !sequenceId) throw new Error("Not authenticated");
 
+      const { data: parentSequence } = await supabase
+        .from("message_sequences")
+        .select("company_id")
+        .eq("id", sequenceId)
+        .maybeSingle();
+      const companyId = (parentSequence as any)?.company_id ?? null;
+
       // Delete existing connections
       await supabase
         .from("sequence_connections")
@@ -452,6 +473,7 @@ export function useSequenceNodes(sequenceId: string | undefined) {
           .insert(validConnections.map(conn => ({
             sequence_id: sequenceId,
             user_id: user.id,
+            company_id: companyId,
             source_node_id: idMapping[conn.sourceNodeId],
             target_node_id: idMapping[conn.targetNodeId],
             condition_path: conn.conditionPath || null,

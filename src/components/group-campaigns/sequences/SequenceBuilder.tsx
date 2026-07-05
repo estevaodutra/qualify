@@ -12,7 +12,7 @@ import {
   Image, Video, Music, FileText, Smile,
   BarChart3, MousePointerClick, List, MapPin, Contact, Calendar,
   Pencil, ImageIcon, UserPlus, UserMinus, ShieldPlus, ShieldMinus, Settings, Plus, CircleDot,
-  Tag, Award, Sliders, Sparkles, Code, Play
+  Tag, Award, Sliders, Sparkles, Code, Play, Shuffle
 } from "lucide-react";
 
 const TRIGGER_NODE_TYPE = "trigger";
@@ -45,6 +45,7 @@ const NODE_CATEGORIES: NodeCategory[] = [
   { id: "flow", label: "Fluxo", nodes: [
     { type: "delay", label: "Delay / Espera", icon: Clock, color: "bg-amber-500" },
     { type: "condition", label: "Condição", icon: GitBranch, color: "bg-purple-500" },
+    { type: "randomizer", label: "Randomizador", icon: Shuffle, color: "bg-fuchsia-500" },
   ]},
   { id: "actions_crm", label: "Ações e CRM", nodes: [
     { type: "tag_add", label: "Adicionar Tag", icon: Tag, color: "bg-orange-600" },
@@ -76,6 +77,13 @@ const getDefaultConfig = (nodeType: string): Record<string, unknown> => {
     case "event": return { name: "", description: "", startDate: "", endDate: "", location: "" };
     case "delay": return { seconds: 0, minutes: 5, hours: 0, days: 0 };
     case "condition": return { field: "member_count", operator: "greater_than", value: 0 };
+    case "randomizer": return {
+      mode: "weighted_random",
+      branches: [
+        { id: crypto.randomUUID(), label: "A", weight: 50, position: 0 },
+        { id: crypto.randomUUID(), label: "B", weight: 50, position: 1 },
+      ],
+    };
     case "notify": return { message: "", notifyAdmins: true };
     case "webhook": return { url: "", method: "POST", body: "" };
     case "webhook_forward": return { url: "", method: "POST", headers: [], includeInstance: true, includeGroups: true, customPayload: "" };

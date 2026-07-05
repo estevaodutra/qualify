@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect, useRef, ReactNode } from "react";
-import { LocalNode, LocalConnection, NodeCategory } from "./shared-types";
+import { useState, useCallback, useEffect, useRef, ReactNode, Fragment } from "react";
+import { LocalNode, LocalConnection, NodeCategory, RandomizerBranch } from "./shared-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -44,6 +44,15 @@ export interface UnifiedSequenceBuilderProps {
   initialConnections: LocalConnection[];
   isSaving: boolean;
   isLoading?: boolean;
+}
+
+const RANDOMIZER_PORT_BASE_Y = 28;
+const RANDOMIZER_PORT_SPACING = 22;
+
+function getSortedRandomizerBranches(node: LocalNode): RandomizerBranch[] {
+  return ((node.config.branches as RandomizerBranch[] | undefined) || [])
+    .slice()
+    .sort((a, b) => a.position - b.position);
 }
 
 export function UnifiedSequenceBuilder({
@@ -638,6 +647,11 @@ export function UnifiedSequenceBuilder({
                   let portY1 = sY + 45;
                   if (conn.conditionPath === "yes") portY1 = sY + 35;
                   if (conn.conditionPath === "no") portY1 = sY + 65;
+                  if (srcNode.nodeType === "randomizer") {
+                    const branches = getSortedRandomizerBranches(srcNode);
+                    const idx = branches.findIndex(b => b.id === conn.conditionPath);
+                    if (idx >= 0) portY1 = sY + RANDOMIZER_PORT_BASE_Y + idx * RANDOMIZER_PORT_SPACING;
+                  }
 
                   // Input port on the left side of target
                   const portX2 = tX;
@@ -703,6 +717,8 @@ export function UnifiedSequenceBuilder({
                   const posY = node.positionY || 0;
 
                   const isCondition = node.nodeType === "condition";
+                  const isRandomizer = node.nodeType === "randomizer";
+                  const randomizerBranches = isRandomizer ? getSortedRandomizerBranches(node) : [];
                   const isTrigger = node.nodeType === "trigger";
 
                   const isHovered = hoveredNodeId === node.id;
@@ -716,6 +732,7 @@ export function UnifiedSequenceBuilder({
                         left: posX,
                         top: posY,
                         width: 220,
+                        minHeight: isRandomizer ? Math.max(140, 40 + randomizerBranches.length * RANDOMIZER_PORT_SPACING) : undefined,
                         pointerEvents: "auto"
                       }}
                       onMouseDown={(e) => handleNodeMouseDown(e, node)}
@@ -772,7 +789,7 @@ export function UnifiedSequenceBuilder({
                       )}
 
                       {/* Output Port(s) (Right Handles) */}
-                      {!isCondition ? (
+                      {!isCondition && !isRandomizer ? (
                         <div
                           data-node-port="true"
                           onMouseDown={(e) => handlePortMouseDown(e, node.id, "out")}
@@ -781,7 +798,7 @@ export function UnifiedSequenceBuilder({
                         >
                           <div className="h-1.5 w-1.5 rounded-full bg-[#8A3CFF]" />
                         </div>
-                      ) : (
+                      ) : isCondition ? (
                         <>
                           {/* "Sim" (True) output handle */}
                           <div
@@ -805,6 +822,30 @@ export function UnifiedSequenceBuilder({
                           </div>
                           <span className="absolute right-2 top-[54px] text-[8px] font-bold text-destructive select-none">Não</span>
                         </>
+                      ) : (
+                        randomizerBranches.map((branch, i) => {
+                          const portY = RANDOMIZER_PORT_BASE_Y + i * RANDOMIZER_PORT_SPACING;
+                          return (
+                            <Fragment key={branch.id}>
+                              <div
+                                data-node-port="true"
+                                onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", branch.id)}
+                                style={{ top: portY }}
+                                className="absolute -right-1.5 h-3.5 w-3.5 rounded-full border-2 border-fuchsia-500 bg-background hover:bg-fuchsia-500 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
+                                title={branch.label}
+                              >
+                                <div className="h-1.5 w-1.5 rounded-full bg-fuchsia-500" />
+                              </div>
+                              <span
+                                style={{ top: portY - 4 }}
+                                className="absolute right-2 text-[8px] font-bold text-fuchsia-500 select-none truncate max-w-[130px]"
+                                title={branch.label}
+                              >
+                                {branch.label}
+                              </span>
+                            </Fragment>
+                          );
+                        })
                       )}
 
                       {/* Header/Title */}
@@ -823,7 +864,10 @@ export function UnifiedSequenceBuilder({
                       </div>
 
                       {/* Card Content / Description */}
-                      <div className="pt-2 text-[10px] text-slate-500 font-medium line-clamp-2 min-h-[30px]">
+                      <div
+                        className="pt-2 text-[10px] text-slate-500 font-medium line-clamp-2 min-h-[30px]"
+                        title={isRandomizer ? randomizerBranches.map(b => b.label).join(node.config.mode === "round_robin" ? " → " : " · ") : undefined}
+                      >
                         {isTrigger ? (
                           (() => {
                             const summary = buildTriggerSummary(
@@ -832,6 +876,11 @@ export function UnifiedSequenceBuilder({
                             );
                             return summary.subtitle ? `${summary.title} · ${summary.subtitle}` : summary.title;
                           })()
+                        ) : isRandomizer ? (
+                          randomizerBranches.length === 0 ? "Clique para configurar as ramificações..." :
+                          node.config.mode === "round_robin"
+                            ? randomizerBranches.map(b => b.label).join(" → ")
+                            : randomizerBranches.map(b => `${b.label} — ${b.weight}%`).join(" · ")
                         ) : (
                           node.config.content ? (node.config.content as string) :
                           node.config.question ? (node.config.question as string) :

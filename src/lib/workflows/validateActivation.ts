@@ -1,4 +1,4 @@
-import type { LocalNode, LocalConnection } from "@/components/sequences/shared-types";
+import type { LocalNode, LocalConnection, RandomizerBranch } from "@/components/sequences/shared-types";
 import { validateTrigger } from "@/components/sequences/triggers/TriggerValidation";
 
 export interface ActivationValidationResult {
@@ -40,6 +40,26 @@ function hasCycle(nodes: LocalNode[], connections: LocalConnection[]): boolean {
     if (color.get(node.id) === WHITE && visit(node.id)) return true;
   }
   return false;
+}
+
+function validateRandomizerNodes(nodes: LocalNode[]): string[] {
+  const errors: string[] = [];
+  for (const node of nodes.filter((n) => n.nodeType === "randomizer")) {
+    const mode = (node.config.mode as string) || "weighted_random";
+    const branches = (node.config.branches as RandomizerBranch[]) || [];
+    const label = (node.config.label as string) || "Randomizador";
+
+    if (branches.length < 2) errors.push(`"${label}": precisa de pelo menos 2 ramificações.`);
+    if (branches.length > 10) errors.push(`"${label}": no máximo 10 ramificações são permitidas.`);
+
+    if (mode === "weighted_random" && branches.length >= 2) {
+      const total = branches.reduce((sum, b) => sum + (Number(b.weight) || 0), 0);
+      if (total !== 100) {
+        errors.push(`"${label}": os percentuais precisam totalizar 100% (atualmente ${total}%).`);
+      }
+    }
+  }
+  return errors;
 }
 
 export function validateWorkflowActivation(
@@ -87,6 +107,8 @@ export function validateWorkflowActivation(
   if (hasCycle(nodes, connections)) {
     errors.push("O fluxo contém um ciclo inválido entre blocos.");
   }
+
+  errors.push(...validateRandomizerNodes(nodes));
 
   if (options.instanceConnected === false) {
     errors.push("A instância selecionada para esta automação não está conectada.");

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
 
 export interface CampaignGroup {
   id: string;
@@ -34,6 +35,7 @@ const transformDbToFrontend = (db: DbCampaignGroup): CampaignGroup => ({
 export function useCampaignGroups(campaignId: string | undefined) {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { activeCompanyId } = useCompany();
   const queryClient = useQueryClient();
 
   const { data: linkedGroups = [], isLoading, error, refetch } = useQuery({
@@ -63,6 +65,7 @@ export function useCampaignGroups(campaignId: string | undefined) {
           groups.map((g) => ({
             campaign_id: campaignId,
             user_id: user.id,
+            company_id: activeCompanyId,
             group_jid: g.jid,
             group_name: g.name,
             instance_id: g.instanceId || null,

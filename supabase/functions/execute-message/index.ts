@@ -1049,6 +1049,64 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // ============= RANDOMIZER NODES =============
+        if (node.node_type === "randomizer") {
+          const randomizerConfig = node.config as { mode?: string; branches?: Array<{ id: string; label: string; weight: number; position: number }> };
+          const mode = randomizerConfig.mode || "weighted_random";
+          const branches = (randomizerConfig.branches || []).slice().sort((a, b) => a.position - b.position);
+
+          let selectedBranchId: string | null = null;
+          let selectedWeight: number | undefined;
+
+          if (branches.length > 0) {
+            if (mode === "round_robin") {
+              const branchIds = branches.map(b => b.id);
+              const { data: rpcResult, error: rpcError } = await supabase.rpc("get_next_randomizer_branch", {
+                p_company_id: typedCampaign.company_id,
+                p_sequence_id: effectiveSequenceId,
+                p_node_id: node.id,
+                p_branch_ids: branchIds,
+              });
+              if (rpcError) {
+                console.error(`[ExecuteMessage] Randomizer RPC failed for node ${node.id}, falling back to first branch:`, rpcError);
+              }
+              selectedBranchId = (rpcResult as string) || branches[0].id;
+            } else {
+              // weighted_random: pure in-memory weighted pick, no persisted state
+              const total = branches.reduce((sum, b) => sum + (Number(b.weight) || 0), 0) || 100;
+              const r = Math.random() * total;
+              let acc = 0;
+              for (const b of branches) {
+                acc += Number(b.weight) || 0;
+                if (r < acc) { selectedBranchId = b.id; break; }
+              }
+              selectedBranchId = selectedBranchId || branches[branches.length - 1].id;
+            }
+            selectedWeight = branches.find(b => b.id === selectedBranchId)?.weight;
+          }
+
+          const selectedBranchLabel = branches.find(b => b.id === selectedBranchId)?.label || null;
+          console.log(`[ExecuteMessage] Randomizer node ${node.id} (${mode}) selected branch: ${selectedBranchId} (${selectedBranchLabel})`);
+
+          await logNodeExecution(supabase, {
+            executionId: workflowExecutionId, userId, nodeId: node.id, nodeType: node.node_type,
+            status: "success", startedAt: nodeStartedAt,
+            input: node.config,
+            output: {
+              mode,
+              selectedBranchId,
+              selectedBranchLabel,
+              branch: selectedBranchId, // mirrors condition node's output.branch field so branch-coloring in ExecutionCanvas works unchanged
+              ...(mode === "weighted_random" ? { selectedWeight } : {}),
+            },
+          });
+
+          const matchConn = connections.find(c => c.source_node_id === node.id && c.condition_path === selectedBranchId);
+          currentNodeId = matchConn ? matchConn.target_node_id : null;
+          nodesProcessed++;
+          continue;
+        }
+
         // Handle DELAY nodes
         if (node.node_type === "delay") {
           const delayMs = calculateDelayMs(node.config);

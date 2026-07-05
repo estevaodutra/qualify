@@ -44,3 +44,15 @@ export interface UnifiedSequenceItem {
   triggerConfig?: Record<string, unknown>;
   isActive: boolean;
 }
+
+export interface RandomizerBranch {
+  id: string;
+  label: string;
+  weight: number;
+  position: number;
+}
+
+export interface RandomizerConfig {
+  mode: "weighted_random" | "round_robin";
+  branches: RandomizerBranch[];
+}
