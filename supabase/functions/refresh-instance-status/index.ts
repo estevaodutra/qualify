@@ -149,25 +149,12 @@ Deno.serve(async (req) => {
       if (newStatus !== previousStatus) {
         const eventId = newStatus === "connected" ? "instance.connected" : "instance.disconnected";
         
-        let userDetails: Record<string, any> | null = null;
-        if (instance.user_id) {
-          const { data: userData } = await supabase
-            .from("profiles")
-            .select("id, name, email")
-            .eq("id", instance.user_id)
-            .maybeSingle();
-          if (userData) userDetails = userData;
-        }
-
         await triggerSystemWebhook(supabase, eventId, {
-          instance: {
-            id: instance.id,
-            name: instance.name,
-            phone_number: newStatus === "connected" ? (result.phone || instance.phone) : instance.phone,
-            status: newStatus,
-            provider: instance.provider || "z-api"
-          },
-          user: userDetails
+          id: instance.id,
+          name: instance.name,
+          phone: newStatus === "connected" ? (result.phone || instance.phone) : instance.phone,
+          provider: instance.provider || "z-api",
+          user_id: instance.user_id
         });
       }
 

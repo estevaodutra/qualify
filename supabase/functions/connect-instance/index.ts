@@ -112,25 +112,12 @@ Deno.serve(async (req) => {
       if (dbError) {
         console.error("[connect-instance] Failed to unlink instance in database:", dbError);
       } else {
-        let userDetails: Record<string, any> | null = null;
-        if (instance.user_id) {
-          const { data: userData } = await adminClient
-            .from("profiles")
-            .select("id, name, email")
-            .eq("id", instance.user_id)
-            .maybeSingle();
-          if (userData) userDetails = userData;
-        }
-
         await triggerSystemWebhook(adminClient, "instance.disconnected", {
-          instance: {
-            id: instanceId,
-            name: instance.name,
-            phone_number: instance.phone,
-            status: "disconnected",
-            provider: instance.provider || "z-api"
-          },
-          user: userDetails
+          id: instanceId,
+          name: instance.name,
+          phone: instance.phone,
+          provider: instance.provider || "z-api",
+          user_id: instance.user_id
         });
       }
 

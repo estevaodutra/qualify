@@ -1,7 +1,13 @@
 export async function triggerSystemWebhook(
   supabase: any,
   eventId: "instance.connected" | "instance.disconnected" | "instance.error",
-  data: Record<string, any>
+  instance: {
+    id: string;
+    name: string;
+    phone: string | null;
+    provider: string;
+    user_id: string | null;
+  }
 ) {
   try {
     const { data: settings, error } = await supabase
@@ -32,10 +38,69 @@ export async function triggerSystemWebhook(
       return;
     }
 
+    // 1. Fetch user profile (using correct column: full_name)
+    let userDetails: Record<string, any> | null = null;
+    let actionUrl = "https://qualifys.app/instances";
+
+    if (instance.user_id) {
+      const { data: userData, error: userQueryError } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .eq("id", instance.user_id)
+        .maybeSingle();
+
+      if (userQueryError) {
+        console.error("[system-webhook] Error fetching user profile:", userQueryError.message);
+      }
+
+      if (userData) {
+        userDetails = {
+          id: userData.id,
+          name: userData.full_name,
+          email: userData.email,
+          phone: ""
+        };
+
+        // 2. Generate Supabase magic link redirecting to instances page
+        if (userData.email) {
+          try {
+            const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+              type: "magiclink",
+              email: userData.email,
+              options: {
+                redirectTo: "https://qualifys.app/instances"
+              }
+            });
+
+            if (linkError) {
+              console.error("[system-webhook] generateLink error:", linkError.message);
+            }
+
+            if (linkData?.properties?.action_link) {
+              actionUrl = linkData.properties.action_link;
+            }
+          } catch (linkErr: any) {
+            console.error("[system-webhook] Failed to generate magic link:", linkErr.message);
+          }
+        }
+      }
+    }
+
+    // 3. Format webhook payload
     const payload = {
       event: eventId,
       timestamp: new Date().toISOString(),
-      data: data
+      data: {
+        instance: {
+          id: instance.id,
+          name: instance.name,
+          phone_number: instance.phone || "",
+          status: eventId.split(".")[1],
+          provider: instance.provider,
+          action_url: actionUrl
+        },
+        user: userDetails
+      }
     };
 
     console.log(`[system-webhook] Dispatching event ${eventId} to URL: ${url}`);
@@ -59,7 +124,7 @@ export async function triggerSystemWebhook(
         status_code: responseStatus,
         request_body: payload,
         response_body: { status: responseStatus, url, response: responseText },
-        user_id: data.user?.id || null
+        user_id: instance.user_id
       });
     } catch (fetchErr: any) {
       console.error(`[system-webhook] Fetch failed:`, fetchErr.message);
@@ -72,7 +137,7 @@ export async function triggerSystemWebhook(
         request_body: payload,
         error_message: fetchErr.message,
         response_body: { error: fetchErr.message, url },
-        user_id: data.user?.id || null
+        user_id: instance.user_id
       });
       throw fetchErr;
     }
