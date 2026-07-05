@@ -179,7 +179,7 @@ Deno.serve(async (req) => {
         if (newStatus === "disconnected") {
           updates.external_instance_id = null;
           updates.external_instance_token = null;
-          updates.phone = null;
+          updates.phone = "";
         }
 
         const { error: updateError } = await supabase

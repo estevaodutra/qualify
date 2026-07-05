@@ -105,7 +105,7 @@ Deno.serve(async (req) => {
           status: "disconnected",
           external_instance_id: null,
           external_instance_token: null,
-          phone: null
+          phone: ""
         })
         .eq("id", instanceId);
 

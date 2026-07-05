@@ -40,13 +40,42 @@ export async function triggerSystemWebhook(
 
     console.log(`[system-webhook] Dispatching event ${eventId} to URL: ${url}`);
     
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    
-    console.log(`[system-webhook] Response status: ${response.status}`);
+    let responseText = "";
+    let responseStatus = 0;
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      responseStatus = response.status;
+      responseText = await response.text();
+      console.log(`[system-webhook] Response status: ${responseStatus}`);
+      
+      // Log success/HTTP outcome to api_logs
+      await supabase.from("api_logs").insert({
+        method: "POST",
+        endpoint: `system-webhook:${eventId}`,
+        status_code: responseStatus,
+        request_body: payload,
+        response_body: { status: responseStatus, url, response: responseText },
+        user_id: data.user?.id || null
+      });
+    } catch (fetchErr: any) {
+      console.error(`[system-webhook] Fetch failed:`, fetchErr.message);
+      
+      // Log network/fetch failure to api_logs
+      await supabase.from("api_logs").insert({
+        method: "POST",
+        endpoint: `system-webhook:${eventId}`,
+        status_code: 599, // Custom code for network/DNS failures
+        request_body: payload,
+        error_message: fetchErr.message,
+        response_body: { error: fetchErr.message, url },
+        user_id: data.user?.id || null
+      });
+      throw fetchErr;
+    }
   } catch (err: any) {
     console.error(`[system-webhook] Error triggering webhook for ${eventId}:`, err.message);
   }
