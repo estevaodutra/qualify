@@ -309,6 +309,7 @@ export function UnifiedSequenceBuilder({
         screenX: e.clientX,
         screenY: e.clientY,
       });
+      setSelectedNodeId(null);
       return;
     }
 
@@ -983,8 +984,8 @@ export function UnifiedSequenceBuilder({
 
       {/* Unified node config side panel — every node, Start included, opens
           through this same lateral Sheet (no more separate trigger dialog). */}
-      <Sheet open={!!selectedNode} onOpenChange={(open) => { if (!open) setSelectedNodeId(null); }}>
-        <SheetContent side="right" className="w-full sm:max-w-xl p-0 flex flex-col overflow-hidden">
+      <Sheet open={!!selectedNode} onOpenChange={(open) => { if (!open) setSelectedNodeId(null); }} modal={false}>
+        <SheetContent side="right" hideOverlay className="w-full sm:max-w-xl p-0 flex flex-col overflow-hidden shadow-2xl border-l border-border/50">
            {selectedNode && (() => {
             const triggerNode = localNodes.find(n => n.nodeType === "trigger");
             const isGroup = (triggerNode?.config.triggerConfig as any)?.isGroup ?? true;
