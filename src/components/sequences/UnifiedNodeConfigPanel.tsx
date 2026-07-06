@@ -23,7 +23,7 @@ import {
   Shuffle, Tag, Award, Sliders, Sparkles, Info, RefreshCw
 } from "lucide-react";
 import { getNodeBlockDefinition } from "./nodeDefinitions";
-
+import { VariablePicker } from "./VariablePicker";
 function formatWhatsAppText(text: string) {
   const escaped = text
     .replace(/&/g, "&amp;")
@@ -576,7 +576,16 @@ export function UnifiedNodeConfigPanel({
           {resolvedNodeType === "message" && (
             <>
               <div className="space-y-2">
-                <Label>Conteúdo da Mensagem</Label>
+                <div className="flex items-center justify-between">
+                  <Label>Conteúdo da Mensagem</Label>
+                  <VariablePicker
+                    isGroup={isGroup}
+                    onSelect={(val) => {
+                      const current = (node.config.content as string) || "";
+                      updateConfig("content", current + val);
+                    }}
+                  />
+                </div>
                 <Textarea value={(node.config.content as string) || ""} onChange={(e) => { e.target.style.height = "auto"; e.target.style.height = `${e.target.scrollHeight + 2}px`; updateConfig("content", e.target.value); }} onFocus={(e) => { e.target.style.height = "auto"; e.target.style.height = `${e.target.scrollHeight + 2}px`; }} placeholder="Digite a mensagem (Use *negrito*, _itálico_, ~riscado~)..." className="resize-none font-mono text-sm overflow-hidden" rows={isGroup ? 6 : 8} />
                 <p className="text-xs text-muted-foreground">
                   {isGroup
@@ -628,7 +637,16 @@ export function UnifiedNodeConfigPanel({
                 {renderMediaField("image", "https://exemplo.com/imagem.jpg")}
               </div>
               <div className="space-y-2">
-                <Label>{isGroup ? "Legenda (opcional)" : "Legenda / Mensagem"}</Label>
+                <div className="flex items-center justify-between">
+                  <Label>{isGroup ? "Legenda (opcional)" : "Legenda / Mensagem"}</Label>
+                  <VariablePicker
+                    isGroup={isGroup}
+                    onSelect={(val) => {
+                      const current = (node.config.caption as string) || "";
+                      updateConfig("caption", current + val);
+                    }}
+                  />
+                </div>
                 <Textarea
                   placeholder={isGroup ? "Descrição da mídia..." : "Texto que acompanha a mídia..."}
                   value={(node.config.caption as string) || ""}
@@ -671,7 +689,16 @@ export function UnifiedNodeConfigPanel({
                 {renderMediaField("video", "https://exemplo.com/video.mp4")}
               </div>
               <div className="space-y-2">
-                <Label>{isGroup ? "Legenda (opcional)" : "Legenda / Mensagem"}</Label>
+                <div className="flex items-center justify-between">
+                  <Label>{isGroup ? "Legenda (opcional)" : "Legenda / Mensagem"}</Label>
+                  <VariablePicker
+                    isGroup={isGroup}
+                    onSelect={(val) => {
+                      const current = (node.config.caption as string) || "";
+                      updateConfig("caption", current + val);
+                    }}
+                  />
+                </div>
                 <Textarea
                   placeholder={isGroup ? "Descrição da mídia..." : "Texto que acompanha a mídia..."}
                   value={(node.config.caption as string) || ""}
@@ -725,7 +752,16 @@ export function UnifiedNodeConfigPanel({
               </div>
               {!isGroup && (
                 <div className="space-y-2">
-                  <Label>Legenda / Mensagem</Label>
+                  <div className="flex items-center justify-between">
+                    <Label>Legenda / Mensagem</Label>
+                    <VariablePicker
+                      isGroup={isGroup}
+                      onSelect={(val) => {
+                        const current = (node.config.caption as string) || "";
+                        updateConfig("caption", current + val);
+                      }}
+                    />
+                  </div>
                   <Textarea
                     placeholder="Texto que acompanha a mídia..."
                     value={(node.config.caption as string) || ""}
@@ -785,7 +821,16 @@ export function UnifiedNodeConfigPanel({
                 />
               </div>
               <div className="space-y-2">
-                <Label>{isGroup ? "Legenda (opcional)" : "Legenda / Mensagem"}</Label>
+                <div className="flex items-center justify-between">
+                  <Label>{isGroup ? "Legenda (opcional)" : "Legenda / Mensagem"}</Label>
+                  <VariablePicker
+                    isGroup={isGroup}
+                    onSelect={(val) => {
+                      const current = (node.config.caption as string) || "";
+                      updateConfig("caption", current + val);
+                    }}
+                  />
+                </div>
                 <Textarea
                   placeholder={isGroup ? "Descrição do documento..." : "Texto que acompanha a mídia..."}
                   value={(node.config.caption as string) || ""}
@@ -2019,7 +2064,16 @@ export function UnifiedNodeConfigPanel({
                 {renderMediaField("image", "https://exemplo.com/imagem.jpg")}
               </div>
               <div className="space-y-2">
-                <Label>Legenda (opcional)</Label>
+                <div className="flex items-center justify-between">
+                  <Label>Legenda (opcional)</Label>
+                  <VariablePicker
+                    isGroup={isGroup}
+                    onSelect={(val) => {
+                      const current = (node.config.caption as string) || "";
+                      updateConfig("caption", current + val);
+                    }}
+                  />
+                </div>
                 <Textarea
                   placeholder="Texto do status..."
                   value={(node.config.caption as string) || ""}
@@ -2038,7 +2092,16 @@ export function UnifiedNodeConfigPanel({
                 {renderMediaField("video", "https://exemplo.com/video.mp4")}
               </div>
               <div className="space-y-2">
-                <Label>Legenda (opcional)</Label>
+                <div className="flex items-center justify-between">
+                  <Label>Legenda (opcional)</Label>
+                  <VariablePicker
+                    isGroup={isGroup}
+                    onSelect={(val) => {
+                      const current = (node.config.caption as string) || "";
+                      updateConfig("caption", current + val);
+                    }}
+                  />
+                </div>
                 <Textarea
                   placeholder="Texto do status..."
                   value={(node.config.caption as string) || ""}
