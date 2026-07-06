@@ -4,10 +4,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Search, Loader2, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCampaignGroups } from "@/hooks/useCampaignGroups";
 import type { TriggerConfig } from "@/components/group-campaigns/sequences/triggerTypes";
+import { toast } from "sonner";
 
 interface WebhookGroupScopeConfigProps {
   campaignId: string;
@@ -15,16 +18,17 @@ interface WebhookGroupScopeConfigProps {
   onChange: (config: TriggerConfig) => void;
 }
 
-// Instance + group-scope config for the "webhook" trigger on group-campaign
-// sequences: which instance the trigger targets, and whether it should fan
-// out to every group linked to the campaign or only a selected subset.
-// Reuses useCampaignGroups (already-imported campaign groups) rather than a
-// live zapi-proxy re-fetch, since we're scoping an existing campaign's
-// already-linked groups, not discovering new ones.
 export function WebhookGroupScopeConfig({ campaignId, config, onChange }: WebhookGroupScopeConfigProps) {
   const [instances, setInstances] = useState<{ id: string; name: string; phone: string | null }[]>([]);
   const [search, setSearch] = useState("");
-  const { linkedGroups, isLoading } = useCampaignGroups(campaignId);
+  const { linkedGroups, isLoading, addGroups, isAdding } = useCampaignGroups(campaignId);
+
+  // Instance groups state
+  const [instanceGroups, setInstanceGroups] = useState<{ jid: string; name: string }[]>([]);
+  const [isFetchingGroups, setIsFetchingGroups] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [importSearch, setImportSearch] = useState("");
+  const [importSelectedJids, setImportSelectedJids] = useState<string[]>([]);
 
   useEffect(() => {
     supabase
@@ -33,6 +37,54 @@ export function WebhookGroupScopeConfig({ campaignId, config, onChange }: Webhoo
       .order("name", { ascending: true })
       .then(({ data }) => { if (data) setInstances(data); });
   }, []);
+
+  const fetchInstanceGroups = async () => {
+    if (!config.instanceId) return;
+    setIsFetchingGroups(true);
+    setInstanceGroups([]);
+    setImportSelectedJids([]);
+    try {
+      const { data, error } = await supabase.functions.invoke("zapi-proxy", {
+        body: {
+          instanceId: config.instanceId,
+          endpoint: "/groups",
+          method: "GET",
+        },
+      });
+      if (error) throw error;
+      const list = (data || [])
+        .filter((item: any) => item.isGroup === true || item.phone?.includes("-") || item.phone?.includes("@g.us") || item.jid?.includes("@g.us"))
+        .map((item: any) => ({
+          jid: item.phone || item.jid,
+          name: item.name || "Grupo sem nome",
+        }));
+      setInstanceGroups(list);
+      toast.success(`${list.length} grupo(s) encontrado(s) na instância.`);
+    } catch (err) {
+      console.error("Error fetching groups from instance:", err);
+      toast.error("Falha ao buscar grupos da instância. Verifique se o WhatsApp está conectado.");
+    } finally {
+      setIsFetchingGroups(false);
+    }
+  };
+
+  const handleImport = async () => {
+    if (importSelectedJids.length === 0 || !config.instanceId) return;
+    const selectedList = instanceGroups
+      .filter(g => importSelectedJids.includes(g.jid))
+      .map(g => ({ jid: g.jid, name: g.name, instanceId: config.instanceId }));
+    
+    try {
+      await addGroups(selectedList);
+      setIsImportOpen(false);
+      // Auto-toggle newly-imported groups in selected list
+      const currentSelected = config.selectedGroupJids || [];
+      const nextSelected = Array.from(new Set([...currentSelected, ...selectedList.map(s => s.jid)]));
+      onChange({ ...config, selectedGroupJids: nextSelected });
+    } catch (err) {
+      console.error("Error importing groups:", err);
+    }
+  };
 
   const groupScope = config.groupScope || "all";
   const selectedGroupJids = config.selectedGroupJids || [];
@@ -46,6 +98,10 @@ export function WebhookGroupScopeConfig({ campaignId, config, onChange }: Webhoo
       : [...selectedGroupJids, jid];
     onChange({ ...config, selectedGroupJids: next });
   };
+
+  const filteredInstanceGroups = instanceGroups.filter(g =>
+    !importSearch.trim() || g.name.toLowerCase().includes(importSearch.trim().toLowerCase())
+  );
 
   return (
     <div className="space-y-3 p-3 rounded-lg bg-background border">
@@ -62,7 +118,22 @@ export function WebhookGroupScopeConfig({ campaignId, config, onChange }: Webhoo
       </div>
 
       <div className="space-y-2">
-        <Label className="text-sm">Grupos de destino</Label>
+        <div className="flex items-center justify-between">
+          <Label className="text-sm">Grupos de destino</Label>
+          {config.instanceId && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                fetchInstanceGroups();
+                setIsImportOpen(true);
+              }}
+              className="h-7 px-2 text-xs font-semibold text-primary hover:text-primary/80"
+            >
+              + Vincular Grupos
+            </Button>
+          )}
+        </div>
         <RadioGroup value={groupScope} onValueChange={(v) => onChange({ ...config, groupScope: v as "all" | "selected" })}>
           <div className="flex items-center gap-2">
             <RadioGroupItem value="all" id="scope-all" />
@@ -111,6 +182,85 @@ export function WebhookGroupScopeConfig({ campaignId, config, onChange }: Webhoo
           )}
         </div>
       )}
+
+      {/* Group Import Dialog */}
+      <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <span>Vincular Grupos da Instância</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={fetchInstanceGroups}
+                disabled={isFetchingGroups}
+                className="h-8 w-8"
+              >
+                <RefreshCw className={`h-4 w-4 ${isFetchingGroups ? "animate-spin" : ""}`} />
+              </Button>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                value={importSearch}
+                onChange={(e) => setImportSearch(e.target.value)}
+                placeholder="Buscar por nome..."
+                className="h-9 pl-8 text-sm"
+              />
+            </div>
+
+            <div className="max-h-64 overflow-y-auto space-y-1 border rounded-lg p-2 bg-slate-50/50">
+              {isFetchingGroups ? (
+                <div className="flex flex-col items-center justify-center py-8 gap-2">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  <p className="text-xs text-muted-foreground">Listando grupos da instância...</p>
+                </div>
+              ) : filteredInstanceGroups.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-6">Nenhum grupo encontrado.</p>
+              ) : (
+                filteredInstanceGroups.map(g => {
+                  const isChecked = importSelectedJids.includes(g.jid);
+                  return (
+                    <div key={g.jid} className="flex items-center gap-2 p-1.5 hover:bg-slate-100/50 rounded-lg">
+                      <Checkbox
+                        id={`import-group-${g.jid}`}
+                        checked={isChecked}
+                        onCheckedChange={() => {
+                          setImportSelectedJids(prev =>
+                            isChecked ? prev.filter(j => j !== g.jid) : [...prev, g.jid]
+                          );
+                        }}
+                      />
+                      <Label
+                        htmlFor={`import-group-${g.jid}`}
+                        className="text-xs font-medium cursor-pointer flex-1 truncate"
+                      >
+                        {g.name}
+                      </Label>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setIsImportOpen(false)} disabled={isAdding}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleImport}
+              disabled={importSelectedJids.length === 0 || isAdding}
+              className="min-w-[120px]"
+            >
+              {isAdding ? <Loader2 className="h-4 w-4 animate-spin" /> : `Vincular (${importSelectedJids.length})`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
