@@ -126,22 +126,21 @@ export function GroupTriggerConfigCard({
             )}
 
             {triggerType === "webhook" && (
-              <>
-                <WebhookFieldMappings
-                  fieldMappings={triggerConfig.fieldMappings || []}
-                  onFieldMappingsChange={(mappings) =>
-                    onTriggerConfigChange({ ...triggerConfig, fieldMappings: mappings })
-                  }
-                  webhookUrl={webhookUrl}
-                />
-                {(triggerConfig.isGroup ?? true) && (
-                  <WebhookGroupScopeConfig
-                    campaignId={campaignId}
-                    config={triggerConfig}
-                    onChange={(scope) => onTriggerConfigChange({ ...triggerConfig, ...scope })}
-                  />
-                )}
-              </>
+              <WebhookFieldMappings
+                fieldMappings={triggerConfig.fieldMappings || []}
+                onFieldMappingsChange={(mappings) =>
+                  onTriggerConfigChange({ ...triggerConfig, fieldMappings: mappings })
+                }
+                webhookUrl={webhookUrl}
+              />
+            )}
+
+            {(triggerConfig.isGroup ?? true) && (
+              <WebhookGroupScopeConfig
+                campaignId={campaignId}
+                config={triggerConfig}
+                onChange={(scope) => onTriggerConfigChange({ ...triggerConfig, ...scope })}
+              />
             )}
 
             {triggerType === "manual" && (
