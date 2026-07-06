@@ -65,7 +65,6 @@ export function useCampaignGroups(campaignId: string | undefined) {
           groups.map((g) => ({
             campaign_id: campaignId,
             user_id: user.id,
-            company_id: activeCompanyId,
             group_jid: g.jid,
             group_name: g.name,
             instance_id: g.instanceId || null,
