@@ -70,9 +70,15 @@ export function WebhookGroupScopeConfig({ campaignId, config, onChange }: Webhoo
 
   const handleImport = async () => {
     if (importSelectedJids.length === 0 || !config.instanceId) return;
+    const alreadyLinkedJids = new Set(linkedGroups.map(g => g.groupJid));
     const selectedList = instanceGroups
-      .filter(g => importSelectedJids.includes(g.jid))
+      .filter(g => importSelectedJids.includes(g.jid) && !alreadyLinkedJids.has(g.jid))
       .map(g => ({ jid: g.jid, name: g.name, instanceId: config.instanceId }));
+    
+    if (selectedList.length === 0) {
+      setIsImportOpen(false);
+      return;
+    }
     
     try {
       await addGroups(selectedList);
@@ -222,12 +228,15 @@ export function WebhookGroupScopeConfig({ campaignId, config, onChange }: Webhoo
                 <p className="text-xs text-muted-foreground text-center py-6">Nenhum grupo encontrado.</p>
               ) : (
                 filteredInstanceGroups.map(g => {
-                  const isChecked = importSelectedJids.includes(g.jid);
+                  const alreadyLinkedJids = new Set(linkedGroups.map(lg => lg.groupJid));
+                  const isLinked = alreadyLinkedJids.has(g.jid);
+                  const isChecked = isLinked || importSelectedJids.includes(g.jid);
                   return (
                     <div key={g.jid} className="flex items-center gap-2 p-1.5 hover:bg-slate-100/50 rounded-lg">
                       <Checkbox
                         id={`import-group-${g.jid}`}
                         checked={isChecked}
+                        disabled={isLinked}
                         onCheckedChange={() => {
                           setImportSelectedJids(prev =>
                             isChecked ? prev.filter(j => j !== g.jid) : [...prev, g.jid]
@@ -236,10 +245,15 @@ export function WebhookGroupScopeConfig({ campaignId, config, onChange }: Webhoo
                       />
                       <Label
                         htmlFor={`import-group-${g.jid}`}
-                        className="text-xs font-medium cursor-pointer flex-1 truncate"
+                        className={`text-xs font-medium cursor-pointer flex-1 truncate ${isLinked ? "text-slate-400" : ""}`}
                       >
                         {g.name}
                       </Label>
+                      {isLinked && (
+                        <span className="text-[10px] text-muted-foreground bg-slate-100 px-1.5 py-0.5 rounded-full shrink-0 ml-auto font-medium">
+                          Já vinculado
+                        </span>
+                      )}
                     </div>
                   );
                 })
