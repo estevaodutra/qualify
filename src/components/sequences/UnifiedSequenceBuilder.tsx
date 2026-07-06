@@ -137,7 +137,14 @@ export function UnifiedSequenceBuilder({
   // query invalidation refetches, etc). Re-running this on every reference change
   // would stomp over in-progress edits (e.g. snap a node back mid-drag).
   useEffect(() => {
-    if (isLoading || hydratedSequenceId.current === sequenceId) return;
+    if (isLoading) return;
+    if (hydratedSequenceId.current === sequenceId) {
+      const hasOnlyTriggerInState = localNodes.length <= 1;
+      const hasStepsInProps = initialNodes.length > 1;
+      if (!(hasOnlyTriggerInState && hasStepsInProps)) {
+        return;
+      }
+    }
     hydratedSequenceId.current = sequenceId;
 
     // Ensure we always have a trigger node as the entrypoint

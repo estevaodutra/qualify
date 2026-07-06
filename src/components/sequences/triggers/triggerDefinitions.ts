@@ -8,11 +8,12 @@ import type { TriggerDefinition } from "./types";
 import { ScheduledTriggerConfig } from "./configs/ScheduledTriggerConfig";
 import { ApiTriggerConfig } from "./configs/ApiTriggerConfig";
 
-const weekdayLabel = (days: number[] | undefined): string => {
-  if (!days || days.length === 0) return "nenhum dia";
+const weekdayLabel = (days: any): string => {
+  if (!Array.isArray(days) || days.length === 0) return "nenhum dia";
   const labels = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-  if (days.length === 5 && [1, 2, 3, 4, 5].every((d) => days.includes(d))) return "Segunda a sexta";
-  return days.map((d) => labels[d]).join(", ");
+  const validDays = days.filter((d) => typeof d === "number" && d >= 0 && d <= 6);
+  if (validDays.length === 5 && [1, 2, 3, 4, 5].every((d) => validDays.includes(d))) return "Segunda a sexta";
+  return validDays.map((d) => labels[d] || `Dia ${d}`).join(", ");
 };
 
 export const TRIGGER_DEFINITIONS: Record<string, TriggerDefinition> = {
@@ -71,10 +72,10 @@ export const TRIGGER_DEFINITIONS: Record<string, TriggerDefinition> = {
     supportedBy: ["dispatch_sequence", "group_sequence"],
     defaultConfig: { scheduledDate: "", scheduledTime: "" },
     summaryBuilder: (config) => {
-      if (config.allowedDays || config.times) {
+      if (config && (Array.isArray(config.allowedDays) || Array.isArray(config.times))) {
         return {
-          title: weekdayLabel(config.allowedDays as number[] | undefined),
-          subtitle: `${(config.times as string[] | undefined)?.[0] || "--:--"} — America/Sao_Paulo`,
+          title: weekdayLabel(config.allowedDays),
+          subtitle: `${Array.isArray(config.times) && config.times.length > 0 ? config.times[0] : "--:--"} — America/Sao_Paulo`,
         };
       }
       const date = config.scheduledDate as string | undefined;
