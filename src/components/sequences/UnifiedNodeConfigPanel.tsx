@@ -904,7 +904,10 @@ export function UnifiedNodeConfigPanel({
           {resolvedNodeType === "poll" && isGroup && (
             <>
               <div className="space-y-2">
-                <Label>Pergunta</Label>
+                <div className="flex items-center justify-between">
+                  <Label>Pergunta</Label>
+                  <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (node.config.question as string) || ""; updateConfig("question", current + val); }} />
+                </div>
                 <Textarea
                   placeholder="Qual sua preferência?"
                   value={(node.config.question as string) || ""}
@@ -1036,16 +1039,25 @@ export function UnifiedNodeConfigPanel({
               return (
                 <>
                   <div className="space-y-2">
-                    <Label>Título (opcional)</Label>
+                    <div className="flex items-center justify-between">
+                      <Label>Título (opcional)</Label>
+                      <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (node.config.title as string) || ""; updateConfig("title", current + val); }} />
+                    </div>
                     <Input placeholder="Título da mensagem" value={(node.config.title as string) || ""} onChange={e => updateConfig("title", e.target.value)} maxLength={60} />
                     <p className="text-xs text-muted-foreground">Até 60 caracteres</p>
                   </div>
                   <div className="space-y-2">
-                    <Label>Texto da Mensagem</Label>
+                    <div className="flex items-center justify-between">
+                      <Label>Texto da Mensagem</Label>
+                      <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (node.config.text as string) || ""; updateConfig("text", current + val); }} />
+                    </div>
                     <Textarea placeholder="Escolha uma opção:" value={(node.config.text as string) || ""} onChange={e => updateConfig("text", e.target.value)} rows={2} />
                   </div>
                   <div className="space-y-2">
-                    <Label>Rodapé (opcional)</Label>
+                    <div className="flex items-center justify-between">
+                      <Label>Rodapé (opcional)</Label>
+                      <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (node.config.footer as string) || ""; updateConfig("footer", current + val); }} />
+                    </div>
                     <Input placeholder="Texto do rodapé" value={(node.config.footer as string) || ""} onChange={e => updateConfig("footer", e.target.value)} maxLength={60} />
                     <p className="text-xs text-muted-foreground">Até 60 caracteres</p>
                   </div>
@@ -1099,7 +1111,10 @@ export function UnifiedNodeConfigPanel({
               return (
                 <>
                   <div className="space-y-2">
-                    <Label>Texto da Mensagem</Label>
+                    <div className="flex items-center justify-between">
+                      <Label>Texto da Mensagem</Label>
+                      <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (node.config.text as string) || ""; updateConfig("text", current + val); }} />
+                    </div>
                     <Textarea placeholder="Texto exibido acima dos botões..." value={(node.config.text as string) || ""} onChange={e => updateConfig("text", e.target.value)} rows={3} />
                   </div>
                   <div className="space-y-2">
@@ -1135,11 +1150,17 @@ export function UnifiedNodeConfigPanel({
               return (
                 <>
                   <div className="space-y-2">
-                    <Label>Título</Label>
+                    <div className="flex items-center justify-between">
+                      <Label>Título</Label>
+                      <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (node.config.title as string) || ""; updateConfig("title", current + val); }} />
+                    </div>
                     <Input placeholder="Menu Principal" value={(node.config.title as string) || ""} onChange={e => updateConfig("title", e.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label>Texto do Botão</Label>
+                    <div className="flex items-center justify-between">
+                      <Label>Texto do Botão</Label>
+                      <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (node.config.buttonText as string) || ""; updateConfig("buttonText", current + val); }} />
+                    </div>
                     <Input placeholder="Ver opções" value={(node.config.buttonText as string) || ""} onChange={e => updateConfig("buttonText", e.target.value)} />
                   </div>
                   <div className="space-y-2">
@@ -1845,7 +1866,10 @@ export function UnifiedNodeConfigPanel({
           {node.nodeType === "group_create" && isGroup && (
             <div className="space-y-3">
               <div className="space-y-2">
-                <Label>Nome do Grupo</Label>
+                <div className="flex items-center justify-between">
+                  <Label>Nome do Grupo</Label>
+                  <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (node.config.groupName as string) || ""; updateConfig("groupName", current + val); }} />
+                </div>
                 <Input
                   placeholder="Nome do novo grupo..."
                   value={(node.config.groupName as string) || ""}
@@ -1897,7 +1921,10 @@ export function UnifiedNodeConfigPanel({
 
           {node.nodeType === "group_rename" && isGroup && (
             <div className="space-y-2">
-              <Label>Novo Nome do Grupo</Label>
+              <div className="flex items-center justify-between">
+                <Label>Novo Nome do Grupo</Label>
+                <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (node.config.newName as string) || ""; updateConfig("newName", current + val); }} />
+              </div>
               <Input
                 placeholder="Nome do grupo..."
                 value={(node.config.newName as string) || ""}
@@ -1929,7 +1956,10 @@ export function UnifiedNodeConfigPanel({
 
           {node.nodeType === "group_description" && isGroup && (
             <div className="space-y-2">
-              <Label>Nova Descrição</Label>
+              <div className="flex items-center justify-between">
+                <Label>Nova Descrição</Label>
+                <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (node.config.description as string) || ""; updateConfig("description", current + val); }} />
+              </div>
               <Textarea
                 placeholder="Descrição do grupo..."
                 value={(node.config.description as string) || ""}
