@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   MessageSquare, Clock, GitBranch, Shuffle, Tag, Award, Send, Link2, Sliders, Sparkles,
   Image, Video, Music, FileText, Smile, BarChart3, MousePointerClick, List, MapPin, Contact, Calendar,
+  Plus, Pencil, UserPlus, UserMinus, ShieldAlert, ShieldCheck, Settings,
 } from "lucide-react";
 import type { NodeCategory, NodeTypeInfo } from "./shared-types";
 
@@ -95,6 +96,19 @@ export function isActionSubType(nodeType: string): boolean {
 // Icon/label/color lookup for the canvas card + palette, resolving through a
 // sub-type when the node is a lifted "content"/"action" node.
 export function getNodeVisual(nodeType: string, contentType?: string, actionType?: string): { label: string; icon: LucideIcon; color: string } | undefined {
+  const groupNodes: Record<string, { label: string; icon: LucideIcon; color: string }> = {
+    group_create: { label: "Criar Grupo", icon: Plus, color: "bg-indigo-600" },
+    group_rename: { label: "Renomear Grupo", icon: Pencil, color: "bg-indigo-600" },
+    group_photo: { label: "Alterar Foto", icon: Image, color: "bg-indigo-600" },
+    group_description: { label: "Alterar Descrição", icon: FileText, color: "bg-indigo-600" },
+    group_add_participant: { label: "Adicionar Membro", icon: UserPlus, color: "bg-indigo-600" },
+    group_remove_participant: { label: "Remover Membro", icon: UserMinus, color: "bg-indigo-600" },
+    group_promote_admin: { label: "Promover Admin", icon: ShieldAlert, color: "bg-indigo-600" },
+    group_remove_admin: { label: "Remover Admin", icon: ShieldCheck, color: "bg-indigo-600" },
+    group_settings: { label: "Configurações", icon: Settings, color: "bg-indigo-600" },
+  };
+  if (groupNodes[nodeType]) return groupNodes[nodeType];
+
   if (nodeType === "content") {
     const sub = getNodeSubTypeInfo("content", contentType);
     if (sub) return sub;
@@ -157,7 +171,7 @@ export function getDefaultConfigForBlock(blockType: string): Record<string, unkn
 // "action" are represented as ONE palette tile each (their sub-type is chosen
 // inside the config panel after the node is created), so the top-level list
 // stays at 8 rows regardless of how many content/action sub-types exist.
-export function toNodeCategories(): NodeCategory[] {
+export function toNodeCategories(isGroup?: boolean): NodeCategory[] {
   const core: NodeTypeInfo[] = NODE_DEFINITIONS
     .filter((b) => ["content", "delay", "condition", "randomizer", "action"].includes(b.blockType))
     .map((b) => ({ type: b.blockType, label: b.label, icon: b.icon, color: b.color, status: b.status }));
@@ -166,8 +180,28 @@ export function toNodeCategories(): NodeCategory[] {
     .filter((b) => ["api_call", "field_op", "ai_agent"].includes(b.blockType))
     .map((b) => ({ type: b.blockType, label: b.label, icon: b.icon, color: b.color, status: b.status }));
 
-  return [
+  const categories: NodeCategory[] = [
     { id: "core", label: "Blocos principais", nodes: core },
     { id: "advanced", label: "Avançado", nodes: advanced },
   ];
+
+  if (isGroup) {
+    categories.push({
+      id: "group_management",
+      label: "Gestão de Grupo",
+      nodes: [
+        { type: "group_create", label: "Criar Grupo", icon: Plus, color: "bg-indigo-600" },
+        { type: "group_rename", label: "Renomear Grupo", icon: Pencil, color: "bg-indigo-600" },
+        { type: "group_photo", label: "Alterar Foto", icon: Image, color: "bg-indigo-600" },
+        { type: "group_description", label: "Alterar Descrição", icon: FileText, color: "bg-indigo-600" },
+        { type: "group_add_participant", label: "Adicionar Membro", icon: UserPlus, color: "bg-indigo-600" },
+        { type: "group_remove_participant", label: "Remover Membro", icon: UserMinus, color: "bg-indigo-600" },
+        { type: "group_promote_admin", label: "Promover Admin", icon: ShieldAlert, color: "bg-indigo-600" },
+        { type: "group_remove_admin", label: "Remover Admin", icon: ShieldCheck, color: "bg-indigo-600" },
+        { type: "group_settings", label: "Configurações", icon: Settings, color: "bg-indigo-600" },
+      ]
+    });
+  }
+
+  return categories;
 }

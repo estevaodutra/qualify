@@ -18,7 +18,7 @@ import { NodePalettePopover, NODE_PALETTE_DND_MIME } from "./NodePalettePopover"
 import { FloatingNodePicker } from "./FloatingNodePicker";
 import { buildTriggerSummary } from "./triggers/TriggerSummary";
 import { validateWorkflowActivation } from "@/lib/workflows/validateActivation";
-import { getNodeVisual } from "./nodeDefinitions";
+import { getNodeVisual, toNodeCategories } from "./nodeDefinitions";
 
 export interface UnifiedSequenceBuilderProps {
   sequenceName: string;
@@ -231,7 +231,11 @@ export function UnifiedSequenceBuilder({
     });
   };
 
-  const allNodeTypes = nodeCategories.flatMap(cat => cat.nodes);
+  const triggerNode = localNodes.find(n => n.nodeType === "trigger");
+  const isGroup = (triggerNode?.config?.triggerConfig as any)?.isGroup ?? true;
+  const categories = toNodeCategories(isGroup);
+
+  const allNodeTypes = categories.flatMap(cat => cat.nodes);
   const getNodeInfo = (node: LocalNode) => {
     if (node.nodeType === "trigger") {
       return { type: "trigger", label: "Inicio", icon: Play, color: "bg-emerald-500" };
@@ -613,7 +617,7 @@ export function UnifiedSequenceBuilder({
           sequenceId={sequenceId}
           nodes={localNodes}
           connections={localConnections}
-          nodeCategories={nodeCategories}
+          nodeCategories={categories}
         />
       ) : (
       /* Canvas Layout — fills whatever height the page gives this component; the
@@ -639,7 +643,7 @@ export function UnifiedSequenceBuilder({
             <span className="text-[10px] font-mono text-slate-500 pr-2 font-bold">{Math.round(zoom * 100)}%</span>
           </div>
 
-          <NodePalettePopover nodeCategories={nodeCategories} onAddNode={handleAddNode} />
+          <NodePalettePopover nodeCategories={categories} onAddNode={handleAddNode} />
 
           {/* Interactive Canvas Wrapper */}
           <div
@@ -970,7 +974,7 @@ export function UnifiedSequenceBuilder({
 
       {pendingConnectionDrop && (
         <FloatingNodePicker
-          nodeCategories={nodeCategories}
+          nodeCategories={categories}
           anchorScreenPos={{ x: pendingConnectionDrop.screenX, y: pendingConnectionDrop.screenY }}
           onPick={handleFloatingPickerPick}
           onCancel={handleFloatingPickerCancel}

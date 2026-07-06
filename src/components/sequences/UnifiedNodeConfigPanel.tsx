@@ -540,7 +540,12 @@ export function UnifiedNodeConfigPanel({
                       {node.nodeType === "content" ? "Tipo de conteúdo" : "Qual ação deseja executar?"}
                     </Label>
                     <div className="grid grid-cols-3 gap-1.5">
-                      {block.subTypes!.map((sub) => {
+                      {block.subTypes!
+                        .filter((sub) => {
+                          if (sub.subType === "poll" && !isGroup) return false;
+                          return true;
+                        })
+                        .map((sub) => {
                         const SubIcon = sub.icon;
                         const isSelected = currentSubType === sub.subType;
                         return (
@@ -592,20 +597,24 @@ export function UnifiedNodeConfigPanel({
                       onCheckedChange={checked => updateConfig("viewOnce", checked)}
                     />
                   </div>
-                  <div className="flex items-center justify-between">
-                    <Label>Enviar no privado</Label>
-                    <Switch
-                      checked={(node.config.sendPrivate as boolean) || false}
-                      onCheckedChange={checked => updateConfig("sendPrivate", checked)}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <Label>Mencionar membro</Label>
-                    <Switch
-                      checked={(node.config.mentionMember as boolean) || false}
-                      onCheckedChange={checked => updateConfig("mentionMember", checked)}
-                    />
-                  </div>
+                  {isGroup && (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <Label>Enviar no privado</Label>
+                        <Switch
+                          checked={(node.config.sendPrivate as boolean) || false}
+                          onCheckedChange={checked => updateConfig("sendPrivate", checked)}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <Label>Mencionar membro</Label>
+                        <Switch
+                          checked={(node.config.mentionMember as boolean) || false}
+                          onCheckedChange={checked => updateConfig("mentionMember", checked)}
+                        />
+                      </div>
+                    </>
+                  )}
                 </>
               )}
             </>
@@ -842,6 +851,11 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {/* POLL - Group only */}
+          {resolvedNodeType === "poll" && !isGroup && (
+            <div className="p-4 bg-yellow-500/10 text-yellow-600 rounded-xl border border-yellow-500/20 text-sm">
+              Enquetes estão disponíveis apenas quando a automação está habilitada para grupos. Ative o modo grupo no gatilho principal.
+            </div>
+          )}
           {resolvedNodeType === "poll" && isGroup && (
             <>
               <div className="space-y-2">
@@ -1693,6 +1707,11 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {/* GROUP MANAGEMENT NODES */}
+          {["group_create", "group_rename", "group_photo", "group_description", "group_add_participant", "group_remove_participant", "group_promote_admin", "group_remove_admin", "group_settings"].includes(node.nodeType) && !isGroup && (
+            <div className="p-4 bg-yellow-500/10 text-yellow-600 rounded-xl border border-yellow-500/20 text-sm">
+              Este bloco de gestão de grupo está disponível apenas quando a automação está habilitada para grupos. Ative o modo grupo no gatilho principal.
+            </div>
+          )}
           {node.nodeType === "group_create" && isGroup && (
             <div className="space-y-3">
               <div className="space-y-2">
