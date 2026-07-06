@@ -1386,6 +1386,17 @@ export function UnifiedNodeConfigPanel({
             const branches = ((node.config.branches as RandomizerBranch[]) || []).slice().sort((a, b) => a.position - b.position);
             const totalWeight = branches.reduce((sum, b) => sum + (Number(b.weight) || 0), 0);
 
+            const distributeEqually = (list: RandomizerBranch[]): RandomizerBranch[] => {
+              const n = list.length;
+              if (n === 0) return list;
+              const base = Math.floor(100 / n);
+              const remainder = 100 % n;
+              return list.map((b, idx) => ({
+                ...b,
+                weight: base + (idx < remainder ? 1 : 0),
+              }));
+            };
+
             const updateBranch = (index: number, patch: Partial<RandomizerBranch>) => {
               const updated = branches.map((b, i) => (i === index ? { ...b, ...patch } : b));
               updateConfig("branches", updated);
@@ -1404,71 +1415,145 @@ export function UnifiedNodeConfigPanel({
                   </Select>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <Label>Ramificações (2 a 10)</Label>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6"
-                      onClick={() => {
-                        if (branches.length >= 10) return;
-                        const nextLetter = String.fromCharCode(65 + branches.length);
-                        updateConfig("branches", [
-                          ...branches,
-                          { id: crypto.randomUUID(), label: nextLetter, weight: 0, position: branches.length },
-                        ]);
-                      }}
-                      disabled={branches.length >= 10}
-                    >
-                      <Plus className="h-3 w-3 mr-1" /> Adicionar
-                    </Button>
-                  </div>
-
-                  {branches.map((branch, i) => (
-                    <div key={branch.id} className="flex gap-1 items-center">
-                      <Input
-                        value={branch.label}
-                        onChange={e => updateBranch(i, { label: e.target.value })}
-                        placeholder={`Ramo ${i + 1}`}
-                        className="flex-1"
-                      />
+                    <Label className="text-sm font-medium">Ramificações (2 a 10)</Label>
+                    <div className="flex gap-2">
                       {mode === "weighted_random" && (
-                        <Input
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={branch.weight}
-                          onChange={e => updateBranch(i, { weight: Number(e.target.value) })}
-                          className="w-16 shrink-0"
-                        />
-                      )}
-                      {branches.length > 2 && (
                         <Button
                           variant="ghost"
-                          size="icon"
-                          className="h-9 w-9 shrink-0"
+                          size="sm"
+                          className="h-6 text-xs text-primary font-semibold hover:bg-slate-100"
                           onClick={() => {
-                            const updated = branches.filter((_, j) => j !== i).map((b, j) => ({ ...b, position: j }));
+                            const updated = distributeEqually(branches);
                             updateConfig("branches", updated);
                           }}
                         >
-                          <Trash2 className="h-3 w-3 text-destructive" />
+                          <RefreshCw className="h-3 w-3 mr-1" /> Distribuir igualmente
                         </Button>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-xs font-semibold"
+                        onClick={() => {
+                          if (branches.length >= 10) return;
+                          const nextLetter = String.fromCharCode(65 + branches.length);
+                          const rawList = [
+                            ...branches,
+                            { id: crypto.randomUUID(), label: nextLetter, weight: 0, position: branches.length },
+                          ];
+                          const updated = distributeEqually(rawList);
+                          updateConfig("branches", updated);
+                        }}
+                        disabled={branches.length >= 10}
+                      >
+                        <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar
+                      </Button>
                     </div>
-                  ))}
+                  </div>
+
+                  <div className="space-y-2">
+                    {(() => {
+                      const sliderColors = [
+                        { class: "slider-blue", hex: "#3b82f6" },
+                        { class: "slider-green", hex: "#22c55e" },
+                        { class: "slider-yellow", hex: "#eab308" },
+                        { class: "slider-red", hex: "#ef4444" },
+                        { class: "slider-purple", hex: "#a855f7" },
+                        { class: "slider-orange", hex: "#f97316" },
+                        { class: "slider-pink", hex: "#ec4899" },
+                        { class: "slider-indigo", hex: "#6366f1" },
+                        { class: "slider-cyan", hex: "#06b6d4" },
+                        { class: "slider-teal", hex: "#14b8a6" },
+                      ];
+
+                      return branches.map((branch, i) => {
+                        const colorObj = sliderColors[i % sliderColors.length];
+                        return (
+                          <div key={branch.id} className="space-y-1.5 p-2 rounded-lg bg-slate-50/50 border border-slate-100">
+                            <div className="flex gap-3 items-center">
+                              <Input
+                                value={branch.label}
+                                onChange={e => updateBranch(i, { label: e.target.value })}
+                                placeholder={`Ramo ${i + 1}`}
+                                className="h-8 text-xs font-bold w-20 shrink-0 bg-white"
+                              />
+
+                              {mode === "weighted_random" ? (
+                                <div className="flex-1 flex items-center gap-3">
+                                  <style>{`
+                                    .${colorObj.class}::-webkit-slider-thumb { border: 2px solid ${colorObj.hex} !important; -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: white; cursor: pointer; transition: transform 0.1s; }
+                                    .${colorObj.class}::-webkit-slider-thumb:hover { transform: scale(1.1); }
+                                    .${colorObj.class}::-moz-range-thumb { border: 2px solid ${colorObj.hex} !important; width: 16px; height: 16px; border-radius: 50%; background: white; cursor: pointer; }
+                                  `}</style>
+                                  <input
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    value={branch.weight}
+                                    onChange={e => {
+                                      updateBranch(i, { weight: Math.round(Number(e.target.value)) });
+                                    }}
+                                    className={cn("w-full h-1.5 rounded-full appearance-none cursor-pointer bg-slate-200/80 accent-transparent", colorObj.class)}
+                                    style={{
+                                      background: `linear-gradient(to right, ${colorObj.hex} 0%, ${colorObj.hex} ${branch.weight}%, #e2e8f0 ${branch.weight}%, #e2e8f0 100%)`
+                                    }}
+                                  />
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      max={100}
+                                      value={branch.weight}
+                                      onChange={e => {
+                                        const val = Math.min(100, Math.max(0, Math.round(Number(e.target.value))));
+                                        updateBranch(i, { weight: val });
+                                      }}
+                                      className="w-14 h-8 text-center text-xs font-bold bg-white"
+                                    />
+                                    <span className="text-xs text-muted-foreground font-semibold">%</span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex-1 text-xs text-muted-foreground font-medium">
+                                  Será selecionado em rodízio sequencial
+                                </div>
+                              )}
+
+                              {branches.length > 2 && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 shrink-0 hover:bg-slate-100"
+                                  onClick={() => {
+                                    const rawList = branches.filter((_, j) => j !== i);
+                                    const updated = distributeEqually(rawList).map((b, j) => ({ ...b, position: j }));
+                                    updateConfig("branches", updated);
+                                  }}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
 
                   {mode === "weighted_random" && (
-                    <p className={cn(
-                      "text-xs font-medium",
-                      totalWeight === 100 ? "text-emerald-600" : totalWeight > 100 ? "text-destructive" : "text-amber-600"
-                    )}>
-                      Total: {totalWeight}% {totalWeight !== 100 && "— os percentuais precisam totalizar 100% para ativar"}
-                    </p>
-                  )}
-                  {mode === "weighted_random" && branches.some(b => Number(b.weight) === 0) && (
-                    <p className="text-xs text-amber-600">Ramo(s) com 0% nunca serão escolhidos.</p>
+                    <div className="space-y-1 mt-1">
+                      <p className={cn(
+                        "text-xs font-semibold",
+                        totalWeight === 100 ? "text-emerald-600" : totalWeight > 100 ? "text-destructive" : "text-amber-600"
+                      )}>
+                        Total: {totalWeight}% {totalWeight !== 100 && "— os percentuais precisam totalizar 100% para salvar"}
+                      </p>
+                      {branches.some(b => Number(b.weight) === 0) && (
+                        <p className="text-xs text-amber-600 font-medium">Ramo(s) com 0% nunca serão escolhidos.</p>
+                      )}
+                    </div>
                   )}
                 </div>
               </>
