@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Plus, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NodeCategory } from "./shared-types";
@@ -70,21 +71,32 @@ export function NodePalettePopover({ nodeCategories, onAddNode }: NodePalettePop
                 <div className="space-y-1">
                   {category.nodes.map(node => {
                     const NodeIcon = node.icon;
+                    const isComingSoon = node.status === "coming_soon";
                     return (
                       <button
                         key={node.type}
-                        draggable
+                        draggable={!isComingSoon}
+                        disabled={isComingSoon}
                         onDragStart={(e) => {
+                          if (isComingSoon) return;
                           e.dataTransfer.setData(NODE_PALETTE_DND_MIME, node.type);
                           e.dataTransfer.effectAllowed = "copy";
                         }}
-                        onClick={() => { onAddNode(node.type); setOpen(false); }}
-                        className="flex items-center gap-2.5 w-full p-2 text-left rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-100/80 hover:border-slate-200 transition-colors cursor-grab active:cursor-grabbing group"
+                        onClick={() => { if (isComingSoon) return; onAddNode(node.type); setOpen(false); }}
+                        className={cn(
+                          "flex items-center gap-2.5 w-full p-2 text-left rounded-xl border border-slate-100 bg-slate-50/50 transition-colors group",
+                          isComingSoon ? "opacity-50 cursor-not-allowed" : "hover:bg-slate-100/80 hover:border-slate-200 cursor-grab active:cursor-grabbing"
+                        )}
                       >
-                        <div className={cn("p-1.5 rounded-lg text-white shrink-0 group-hover:scale-105 transition-transform", node.color)}>
+                        <div className={cn("p-1.5 rounded-lg text-white shrink-0 transition-transform", node.color, !isComingSoon && "group-hover:scale-105")}>
                           <NodeIcon className="h-3.5 w-3.5" />
                         </div>
-                        <span className="text-xs font-semibold text-slate-700">{node.label}</span>
+                        <span className="text-xs font-semibold text-slate-700 flex-1 min-w-0 truncate">{node.label}</span>
+                        {isComingSoon && (
+                          <Badge variant="secondary" className="text-[9px] font-bold uppercase tracking-wider shrink-0">
+                            Em breve
+                          </Badge>
+                        )}
                       </button>
                     );
                   })}

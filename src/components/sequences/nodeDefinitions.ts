@@ -1,0 +1,173 @@
+import type { LucideIcon } from "lucide-react";
+import {
+  MessageSquare, Clock, GitBranch, Shuffle, Tag, Award, Send, Link2, Sliders, Sparkles,
+  Image, Video, Music, FileText, Smile, BarChart3, MousePointerClick, List, MapPin, Contact, Calendar,
+} from "lucide-react";
+import type { NodeCategory, NodeTypeInfo } from "./shared-types";
+
+export type NodeStatus = "available" | "coming_soon";
+
+export interface NodeSubTypeDefinition {
+  subType: string;
+  label: string;
+  icon: LucideIcon;
+  color: string;
+}
+
+export interface NodeBlockDefinition {
+  blockType: string;
+  label: string;
+  icon: LucideIcon;
+  color: string;
+  status?: NodeStatus;
+  subTypes?: NodeSubTypeDefinition[];
+}
+
+// The 8 main blocks the palette now shows for group-campaign sequences,
+// replacing the previous 22 flat node-type entries. "content" and "action"
+// carry sub-types selected inside the node's own config panel (see
+// UnifiedNodeConfigPanel's "content"/"action" blocks) rather than being
+// separate palette entries — this is what keeps the palette short enough to
+// fit without scrolling.
+export const NODE_DEFINITIONS: NodeBlockDefinition[] = [
+  {
+    blockType: "content", label: "Conteúdo", icon: MessageSquare, color: "bg-blue-500",
+    subTypes: [
+      { subType: "message", label: "Texto", icon: MessageSquare, color: "bg-blue-500" },
+      { subType: "image", label: "Imagem", icon: Image, color: "bg-emerald-500" },
+      { subType: "video", label: "Vídeo", icon: Video, color: "bg-cyan-500" },
+      { subType: "audio", label: "Áudio", icon: Music, color: "bg-pink-500" },
+      { subType: "document", label: "Documento", icon: FileText, color: "bg-slate-500" },
+      { subType: "sticker", label: "Figurinha", icon: Smile, color: "bg-yellow-500" },
+      { subType: "poll", label: "Enquete", icon: BarChart3, color: "bg-indigo-500" },
+      { subType: "buttons", label: "Botões", icon: MousePointerClick, color: "bg-orange-500" },
+      { subType: "list", label: "Lista", icon: List, color: "bg-teal-500" },
+      { subType: "location", label: "Localização", icon: MapPin, color: "bg-red-500" },
+      { subType: "contact", label: "Contato", icon: Contact, color: "bg-violet-500" },
+      { subType: "event", label: "Evento", icon: Calendar, color: "bg-sky-500" },
+    ],
+  },
+  { blockType: "delay", label: "Delay / Espera", icon: Clock, color: "bg-amber-500" },
+  { blockType: "condition", label: "Condição", icon: GitBranch, color: "bg-purple-500" },
+  { blockType: "randomizer", label: "Randomizador", icon: Shuffle, color: "bg-fuchsia-500" },
+  {
+    blockType: "action", label: "Ação", icon: Tag, color: "bg-orange-600",
+    subTypes: [
+      { subType: "tag_add", label: "Adicionar Tag", icon: Tag, color: "bg-orange-600" },
+      { subType: "tag_remove", label: "Remover Tag", icon: Tag, color: "bg-rose-600" },
+      { subType: "deal_move", label: "Mover Negócio", icon: Award, color: "bg-emerald-600" },
+      { subType: "channel_select", label: "Selecionar Canal", icon: Send, color: "bg-indigo-600" },
+    ],
+  },
+  { blockType: "api_call", label: "API", icon: Link2, color: "bg-sky-600", status: "coming_soon" },
+  { blockType: "field_op", label: "Mapeamento de Campos", icon: Sliders, color: "bg-teal-600" },
+  { blockType: "ai_agent", label: "AI Assistant", icon: Sparkles, color: "bg-violet-600", status: "coming_soon" },
+];
+
+export function getNodeBlockDefinition(blockType: string): NodeBlockDefinition | undefined {
+  return NODE_DEFINITIONS.find((b) => b.blockType === blockType);
+}
+
+export function getNodeSubTypeInfo(blockType: string, subType: string | undefined): NodeSubTypeDefinition | undefined {
+  const block = getNodeBlockDefinition(blockType);
+  if (!block?.subTypes) return undefined;
+  return block.subTypes.find((s) => s.subType === subType);
+}
+
+// Maps every legacy literal node_type (message/image/.../tag_add/.../field_op)
+// back to the block+subtype it now lives under, driving the lift-on-load side
+// of the legacy adapter (see legacyNodeAdapter.ts).
+const CONTENT_SUBTYPES = new Set(
+  (getNodeBlockDefinition("content")?.subTypes || []).map((s) => s.subType)
+);
+const ACTION_SUBTYPES = new Set(
+  (getNodeBlockDefinition("action")?.subTypes || []).map((s) => s.subType)
+);
+
+export function isContentSubType(nodeType: string): boolean {
+  return CONTENT_SUBTYPES.has(nodeType);
+}
+
+export function isActionSubType(nodeType: string): boolean {
+  return ACTION_SUBTYPES.has(nodeType);
+}
+
+// Icon/label/color lookup for the canvas card + palette, resolving through a
+// sub-type when the node is a lifted "content"/"action" node.
+export function getNodeVisual(nodeType: string, contentType?: string, actionType?: string): { label: string; icon: LucideIcon; color: string } | undefined {
+  if (nodeType === "content") {
+    const sub = getNodeSubTypeInfo("content", contentType);
+    if (sub) return sub;
+    const block = getNodeBlockDefinition("content")!;
+    return { label: block.label, icon: block.icon, color: block.color };
+  }
+  if (nodeType === "action") {
+    const sub = getNodeSubTypeInfo("action", actionType);
+    if (sub) return sub;
+    const block = getNodeBlockDefinition("action")!;
+    return { label: block.label, icon: block.icon, color: block.color };
+  }
+  const block = getNodeBlockDefinition(nodeType);
+  if (block) return { label: block.label, icon: block.icon, color: block.color };
+  return undefined;
+}
+
+export function getDefaultConfigForSubType(blockType: string, subType: string): Record<string, unknown> {
+  switch (subType) {
+    case "message": return { content: "", sendPrivate: false, mentionMember: false, viewOnce: false };
+    case "image": return { url: "", caption: "", sendPrivate: false, viewOnce: false };
+    case "video": return { url: "", caption: "", sendPrivate: false, isVideoNote: false, viewOnce: false };
+    case "audio": return { url: "", isVoiceMessage: true, sendPrivate: false, viewOnce: false };
+    case "document": return { url: "", filename: "", caption: "", sendPrivate: false, viewOnce: false };
+    case "sticker": return { url: "", sendPrivate: false, viewOnce: false };
+    case "poll": return { question: "", options: ["", "", ""], multiSelect: false };
+    case "buttons": return { text: "", buttons: [{ id: "1", label: "", type: "REPLY" }] };
+    case "list": return { title: "", buttonText: "Selecionar", sections: [{ title: "Opções", rows: [{ id: "1", title: "", description: "" }] }] };
+    case "location": return { latitude: "", longitude: "", name: "", address: "" };
+    case "contact": return { fullName: "", phone: "", email: "", organization: "" };
+    case "event": return { name: "", description: "", startDate: "", endDate: "", location: "" };
+    case "tag_add": case "tag_remove": return { tag: "" };
+    case "deal_move": return { stageId: "" };
+    case "channel_select": return { instanceId: "", fallbackType: "last_sender" };
+    default: return {};
+  }
+}
+
+export function getDefaultConfigForBlock(blockType: string): Record<string, unknown> {
+  switch (blockType) {
+    case "content": return { contentType: "message", ...getDefaultConfigForSubType("content", "message") };
+    case "action": return { actionType: "tag_add", ...getDefaultConfigForSubType("action", "tag_add") };
+    case "delay": return { seconds: 0, minutes: 5, hours: 0, days: 0 };
+    case "condition": return { field: "member_count", operator: "greater_than", value: 0 };
+    case "randomizer": return {
+      mode: "weighted_random",
+      branches: [
+        { id: crypto.randomUUID(), label: "A", weight: 50, position: 0 },
+        { id: crypto.randomUUID(), label: "B", weight: 50, position: 1 },
+      ],
+    };
+    case "field_op": return { field: "", operation: "set", value: "" };
+    case "api_call": case "ai_agent": return {};
+    default: return {};
+  }
+}
+
+// Expands NODE_DEFINITIONS into the flat NodeCategory[]/NodeTypeInfo[] shape
+// UnifiedSequenceBuilder/NodePalettePopover already consume — "content" and
+// "action" are represented as ONE palette tile each (their sub-type is chosen
+// inside the config panel after the node is created), so the top-level list
+// stays at 8 rows regardless of how many content/action sub-types exist.
+export function toNodeCategories(): NodeCategory[] {
+  const core: NodeTypeInfo[] = NODE_DEFINITIONS
+    .filter((b) => ["content", "delay", "condition", "randomizer", "action"].includes(b.blockType))
+    .map((b) => ({ type: b.blockType, label: b.label, icon: b.icon, color: b.color, status: b.status }));
+
+  const advanced: NodeTypeInfo[] = NODE_DEFINITIONS
+    .filter((b) => ["api_call", "field_op", "ai_agent"].includes(b.blockType))
+    .map((b) => ({ type: b.blockType, label: b.label, icon: b.icon, color: b.color, status: b.status }));
+
+  return [
+    { id: "core", label: "Blocos principais", nodes: core },
+    { id: "advanced", label: "Avançado", nodes: advanced },
+  ];
+}

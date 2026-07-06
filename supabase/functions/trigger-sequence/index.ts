@@ -242,90 +242,137 @@ Deno.serve(async (req) => {
     console.log(`[TriggerSequence] Applied ${fieldMappings.length} field mappings + fallback keys:`, customFields);
 
     // Check if payload contains destination phone for private sending
-    const destinationPhone = extractField(payload, "destination.phone") || 
+    const destinationPhone = extractField(payload, "destination.phone") ||
                              extractField(payload, "phone") ||
                              extractField(payload, "to");
-    
-    // Build trigger context with custom fields
-    const triggerContext: Record<string, unknown> = {
-      respondentPhone: destinationPhone,
-      respondentName: extractField(payload, "name") || extractField(payload, "user.name") || "",
-      respondentJid: destinationPhone ? `${destinationPhone}@s.whatsapp.net` : "",
-      groupJid: "",
-      sendPrivate: typedSequence.trigger_type === "webhook" || !!triggerConfig.sendPrivate || !!destinationPhone,
-      customFields,
-    };
 
-    // When no phone provided, use first campaign group as single destination
+    // Group scope config (new, additive — instanceId/groupScope/selectedGroupJids
+    // on the webhook trigger's config). Absent for every sequence saved before
+    // this existed, which must keep its exact original behavior: single first
+    // campaign group as the destination.
+    const instanceId = (triggerConfig as Record<string, unknown>).instanceId as string | undefined;
+    const groupScope = (triggerConfig as Record<string, unknown>).groupScope as "all" | "selected" | undefined;
+    const selectedGroupJids = (triggerConfig as Record<string, unknown>).selectedGroupJids as string[] | undefined;
+
+    // Resolve every destination this trigger should fan out to. Private
+    // (phone-based) destinations are always a single target, unchanged from
+    // before. Group destinations fan out to more than one group only when the
+    // trigger was explicitly configured with groupScope "all"/"selected" —
+    // otherwise (groupScope undefined, i.e. every pre-existing sequence)
+    // behavior is exactly as before: a single first campaign group.
+    let targetGroups: { group_jid: string; group_name: string | null }[] = [];
+
     if (!destinationPhone) {
-      const { data: firstGroup } = await supabase
-        .from("campaign_groups")
-        .select("group_jid, group_name")
-        .eq("campaign_id", typedCampaign.id)
-        .limit(1)
-        .single();
+      if (groupScope === "all" || groupScope === "selected") {
+        let query = supabase
+          .from("campaign_groups")
+          .select("group_jid, group_name, instance_id")
+          .eq("campaign_id", typedCampaign.id);
+        if (instanceId) query = query.eq("instance_id", instanceId);
+        const { data: groups } = await query;
+        let resolved = (groups || []) as { group_jid: string; group_name: string | null; instance_id: string | null }[];
+        if (groupScope === "selected" && selectedGroupJids && selectedGroupJids.length > 0) {
+          resolved = resolved.filter((g) => selectedGroupJids.includes(g.group_jid));
+        }
+        targetGroups = resolved.map((g) => ({ group_jid: g.group_jid, group_name: g.group_name }));
+        console.log(`[TriggerSequence] Group scope "${groupScope}" resolved ${targetGroups.length} target group(s)`);
+      } else {
+        const { data: firstGroup } = await supabase
+          .from("campaign_groups")
+          .select("group_jid, group_name")
+          .eq("campaign_id", typedCampaign.id)
+          .limit(1)
+          .single();
 
-      if (firstGroup) {
-        triggerContext.respondentJid = firstGroup.group_jid;
-        triggerContext.respondentName = firstGroup.group_name || "";
-        triggerContext.groupJid = firstGroup.group_jid;
+        if (firstGroup) targetGroups = [firstGroup];
+        console.log(`[TriggerSequence] No phone in payload, using first group as destination: ${firstGroup?.group_jid}`);
       }
-      console.log(`[TriggerSequence] No phone in payload, using first group as destination: ${firstGroup?.group_jid}`);
     }
 
-    console.log(`[TriggerSequence] Trigger context built, sendPrivate: ${triggerContext.sendPrivate}`);
+    // Build the list of (respondentJid, respondentName, groupJid) destinations
+    // to run the sequence for -- exactly 1 for the phone-based/legacy-single-
+    // group paths, N for a group-scope fan-out.
+    const destinations = destinationPhone
+      ? [{ respondentJid: `${destinationPhone}@s.whatsapp.net`, respondentName: extractField(payload, "name") || extractField(payload, "user.name") || "", groupJid: "" }]
+      : targetGroups.map((g) => ({ respondentJid: g.group_jid, respondentName: g.group_name || "", groupJid: g.group_jid }));
 
-    // Call execute-message to run the sequence
-    const executePayload = {
-      campaignId: typedCampaign.id,
-      sequenceId: typedSequence.id,
-      triggerContext,
-    };
-
-    console.log(`[TriggerSequence] Calling execute-message with:`, JSON.stringify(executePayload).substring(0, 500));
+    console.log(`[TriggerSequence] Resolved ${destinations.length} destination(s) for this trigger`);
 
     const executeUrl = `${supabaseUrl}/functions/v1/execute-message`;
-    const executeResponse = await fetch(executeUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${supabaseServiceKey}`
-      },
-      body: JSON.stringify(executePayload)
-    });
+    const results: Array<{ groupJid: string; success: boolean; executeResult?: unknown; error?: unknown }> = [];
 
-    const responseText = await executeResponse.text();
-    let executeResult;
-    try {
-      executeResult = JSON.parse(responseText);
-    } catch {
-      executeResult = { raw: responseText };
+    // Sequential (not Promise.all) to avoid bursting the WhatsApp provider's
+    // rate limits when fanning out to several groups at once.
+    for (const dest of destinations) {
+      const triggerContext: Record<string, unknown> = {
+        respondentPhone: destinationPhone,
+        respondentName: dest.respondentName,
+        respondentJid: dest.respondentJid,
+        groupJid: dest.groupJid,
+        sendPrivate: typedSequence.trigger_type === "webhook" || !!triggerConfig.sendPrivate || !!destinationPhone,
+        customFields,
+      };
+
+      const executePayload = {
+        campaignId: typedCampaign.id,
+        sequenceId: typedSequence.id,
+        triggerContext,
+      };
+
+      console.log(`[TriggerSequence] Calling execute-message with:`, JSON.stringify(executePayload).substring(0, 500));
+
+      const executeResponse = await fetch(executeUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${supabaseServiceKey}`
+        },
+        body: JSON.stringify(executePayload)
+      });
+
+      const responseText = await executeResponse.text();
+      let executeResult;
+      try {
+        executeResult = JSON.parse(responseText);
+      } catch {
+        executeResult = { raw: responseText };
+      }
+
+      if (!executeResponse.ok) {
+        console.error("[TriggerSequence] Failed to execute sequence for", dest.groupJid || "private", "Status:", executeResponse.status, "Body:", responseText);
+        results.push({ groupJid: dest.groupJid, success: false, error: executeResult?.error || responseText });
+        continue;
+      }
+
+      results.push({ groupJid: dest.groupJid, success: true, executeResult });
     }
 
-    if (!executeResponse.ok) {
-      console.error("[TriggerSequence] Failed to execute sequence. Status:", executeResponse.status, "Body:", responseText);
+    console.log(`[TriggerSequence] Sequence executed for ${results.length} destination(s):`, JSON.stringify(results).substring(0, 500));
+
+    const anyFailed = results.some((r) => !r.success);
+    const allFailed = results.length > 0 && results.every((r) => !r.success);
+
+    if (allFailed) {
       return new Response(
-        JSON.stringify({ 
+        JSON.stringify({
           error: "Failed to execute sequence",
-          details: executeResult.error || responseText,
-          status: executeResponse.status
+          details: results[0]?.error,
+          results,
         }),
-        { status: executeResponse.status === 400 ? 400 : 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    console.log(`[TriggerSequence] Sequence executed successfully:`, executeResult);
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: "Sequence triggered successfully",
+        message: anyFailed ? "Sequence triggered with some failures" : "Sequence triggered successfully",
         sequenceId: typedSequence.id,
         sequenceName: typedSequence.name,
         campaignId: typedCampaign.id,
         campaignName: typedCampaign.name,
         customFieldsApplied: Object.keys(customFields),
-        executeResult,
+        results,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

@@ -15,8 +15,10 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { ExecutionsPanel } from "./executions/ExecutionsPanel";
 import { NodePalettePopover, NODE_PALETTE_DND_MIME } from "./NodePalettePopover";
+import { FloatingNodePicker } from "./FloatingNodePicker";
 import { buildTriggerSummary } from "./triggers/TriggerSummary";
 import { validateWorkflowActivation } from "@/lib/workflows/validateActivation";
+import { getNodeVisual } from "./nodeDefinitions";
 
 export interface UnifiedSequenceBuilderProps {
   sequenceName: string;
@@ -95,6 +97,17 @@ export function UnifiedSequenceBuilder({
     y: number;
   } | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+
+  // A connection dragged from an output port and released over empty canvas
+  // (not onto another node's input port) opens FloatingNodePicker at the drop
+  // point instead of discarding the connection — picking a block there
+  // creates the node and auto-connects it to sourceNodeId/conditionPath.
+  const [pendingConnectionDrop, setPendingConnectionDrop] = useState<{
+    sourceNodeId: string;
+    conditionPath?: string;
+    screenX: number;
+    screenY: number;
+  } | null>(null);
 
   // Side panel & configuration states
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -211,11 +224,17 @@ export function UnifiedSequenceBuilder({
   };
 
   const allNodeTypes = nodeCategories.flatMap(cat => cat.nodes);
-  const getNodeInfo = (type: string) => {
-    if (type === "trigger") {
+  const getNodeInfo = (node: LocalNode) => {
+    if (node.nodeType === "trigger") {
       return { type: "trigger", label: "Inicio", icon: Play, color: "bg-emerald-500" };
     }
-    return allNodeTypes.find(n => n.type === type) || allNodeTypes[0];
+    // "content"/"action" nodes resolve their icon/label through the
+    // registry's sub-type (contentType/actionType) so e.g. a content node
+    // showing an image still gets the emerald image icon on its card, not
+    // the generic "Conteúdo" tile.
+    const visual = getNodeVisual(node.nodeType, node.config.contentType as string | undefined, node.config.actionType as string | undefined);
+    if (visual) return { type: node.nodeType, ...visual };
+    return allNodeTypes.find(n => n.type === node.nodeType) || allNodeTypes[0];
   };
 
   const generateNodeId = () => `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -259,12 +278,41 @@ export function UnifiedSequenceBuilder({
     }
   };
 
-  const handleCanvasMouseUp = () => {
+  const handleCanvasMouseUp = (e: React.MouseEvent) => {
     setIsPanning(false);
     if (draggedNodeId) {
       setDraggedNodeId(null);
       triggerAutosave(localNodes, localConnections, sequenceName);
     }
+
+    // Dropping a dragged-out connection on the raw canvas background (not on
+    // a node's input port, which is handled by handlePortMouseUp) opens the
+    // floating node picker instead of discarding the connection. Keep
+    // activePort set so the dashed preview line stays visible while the
+    // picker is open; it's cleared when the picker closes (pick or cancel).
+    if (activePort && activePort.portType === "out" && e.target === canvasRef.current) {
+      setPendingConnectionDrop({
+        sourceNodeId: activePort.nodeId,
+        conditionPath: activePort.conditionPath,
+        screenX: e.clientX,
+        screenY: e.clientY,
+      });
+      return;
+    }
+
+    setActivePort(null);
+  };
+
+  const handleFloatingPickerPick = (type: string) => {
+    if (!pendingConnectionDrop) return;
+    const newNodeId = handleAddNode(type, { x: pendingConnectionDrop.screenX, y: pendingConnectionDrop.screenY });
+    createConnection(pendingConnectionDrop.sourceNodeId, newNodeId, pendingConnectionDrop.conditionPath);
+    setPendingConnectionDrop(null);
+    setActivePort(null);
+  };
+
+  const handleFloatingPickerCancel = () => {
+    setPendingConnectionDrop(null);
     setActivePort(null);
   };
 
@@ -296,7 +344,7 @@ export function UnifiedSequenceBuilder({
   // viewport center (click-to-add) or at an explicit drop point (drag-and-drop
   // from the palette), converted from screen to flow coordinates the same way
   // node dragging does.
-  const handleAddNode = (type: string, dropClientPos?: { x: number; y: number }) => {
+  const handleAddNode = (type: string, dropClientPos?: { x: number; y: number }): string => {
     const id = generateNodeId();
     const config = getDefaultConfig(type);
 
@@ -326,6 +374,17 @@ export function UnifiedSequenceBuilder({
     updateNodesAndSave(prev => [...prev, newNode]);
     setSelectedNodeId(id);
     toast({ title: "Bloco adicionado", description: "Posicione o bloco e puxe os cabos para conectar." });
+    return id;
+  };
+
+  // Shared by manual port-drag connect (handlePortMouseUp) and the floating
+  // node picker's auto-connect, so the duplicate-connection guard and toast
+  // stay in one place regardless of how the connection was created.
+  const createConnection = (sourceNodeId: string, targetNodeId: string, conditionPath?: string) => {
+    const exists = localConnections.some(c => c.sourceNodeId === sourceNodeId && c.targetNodeId === targetNodeId && c.conditionPath === conditionPath);
+    if (exists) return;
+    updateConnectionsAndSave(prev => [...prev, { sourceNodeId, targetNodeId, conditionPath }]);
+    toast({ title: "Conexão criada" });
   };
 
   // Delete Node
@@ -400,22 +459,10 @@ export function UnifiedSequenceBuilder({
   const handlePortMouseUp = (e: React.MouseEvent, nodeId: string, portType: "in" | "out") => {
     e.stopPropagation();
     if (!activePort) return;
-    
+
     // Connect output to input
     if (activePort.portType === "out" && portType === "in" && activePort.nodeId !== nodeId) {
-      const exists = localConnections.some(c => c.sourceNodeId === activePort.nodeId && c.targetNodeId === nodeId && c.conditionPath === activePort.conditionPath);
-      
-      if (!exists) {
-        updateConnectionsAndSave(prev => [
-          ...prev, 
-          { 
-            sourceNodeId: activePort.nodeId, 
-            targetNodeId: nodeId,
-            conditionPath: activePort.conditionPath
-          }
-        ]);
-        toast({ title: "Conexão criada" });
-      }
+      createConnection(activePort.nodeId, nodeId, activePort.conditionPath);
     }
     setActivePort(null);
   };
@@ -709,7 +756,7 @@ export function UnifiedSequenceBuilder({
               {/* Render Workflow Nodes (Cards) */}
               <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
                 {localNodes.map(node => {
-                  const nodeInfo = getNodeInfo(node.nodeType);
+                  const nodeInfo = getNodeInfo(node);
                   const NodeIcon = nodeInfo.icon;
                   const isSelected = selectedNodeId === node.id;
                   
@@ -911,6 +958,15 @@ export function UnifiedSequenceBuilder({
           </div>
         </div>
       </div>
+      )}
+
+      {pendingConnectionDrop && (
+        <FloatingNodePicker
+          nodeCategories={nodeCategories}
+          anchorScreenPos={{ x: pendingConnectionDrop.screenX, y: pendingConnectionDrop.screenY }}
+          onPick={handleFloatingPickerPick}
+          onCancel={handleFloatingPickerCancel}
+        />
       )}
 
       {/* Unified node config side panel — every node, Start included, opens

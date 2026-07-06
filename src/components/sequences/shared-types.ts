@@ -20,6 +20,9 @@ export interface NodeTypeInfo {
   label: string;
   icon: LucideIcon;
   color: string;
+  /** "coming_soon" renders the tile disabled with an "Em breve" badge in the
+   * palette (e.g. API / AI Assistant, which have no executor support yet). */
+  status?: "available" | "coming_soon";
 }
 
 export interface NodeCategory {

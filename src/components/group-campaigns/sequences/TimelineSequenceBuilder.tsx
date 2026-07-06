@@ -6,7 +6,8 @@ import { MessageTimeline } from "./MessageTimeline";
 import { NewMessageDialog } from "./NewMessageDialog";
 import { NodeLogsDialog } from "./NodeLogsDialog";
 import { UnifiedNodeConfigPanel } from "@/components/sequences/UnifiedNodeConfigPanel";
-import { TriggerType, TriggerConfig, TriggerConfigCard } from "./TriggerConfigCard";
+import type { TriggerType, TriggerConfig } from "./triggerTypes";
+import { GroupTriggerConfigCard } from "./GroupTriggerConfigCard";
 import { MediaUploader } from "./MediaUploader";
 import { PollActionDialog, PollActionConfig, getActionIconColor, getActionLabel } from "./PollActionDialog";
 import { MessageStatus } from "./MessageCard";
@@ -334,12 +335,13 @@ export function TimelineSequenceBuilder({ sequence, onBack, onUpdate }: Timeline
         </div>
       </div>
 
-      <TriggerConfigCard
+      <GroupTriggerConfigCard
         triggerType={triggerType}
         triggerConfig={triggerConfig}
         onTriggerTypeChange={(type) => setTriggerType(type)}
         onTriggerConfigChange={(config) => setTriggerConfig(config)}
         sequenceId={sequence.id}
+        campaignId={sequence.groupCampaignId}
       />
 
       {/* Timeline */}

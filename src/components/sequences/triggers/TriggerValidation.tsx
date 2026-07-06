@@ -16,6 +16,9 @@ export function validateTrigger(
   if (!definition) {
     return { valid: false, errors: [`Tipo de gatilho desconhecido: ${triggerType}`] };
   }
+  if (definition.status !== "available") {
+    return { valid: false, errors: [`O gatilho "${definition.label}" ainda não está disponível ("Em breve").`] };
+  }
   const errors = definition.validate(triggerConfig || {});
   return { valid: errors.length === 0, errors };
 }

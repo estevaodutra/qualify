@@ -2,6 +2,7 @@ import {
   Rocket, Plug, Webhook, UserPlus, Kanban,
   Search, Radar, MessageCircle, Hash,
   CalendarClock, ClipboardCheck, CalendarPlus, Zap,
+  Users, LogOut,
 } from "lucide-react";
 import type { TriggerDefinition } from "./types";
 import { ScheduledTriggerConfig } from "./configs/ScheduledTriggerConfig";
@@ -86,6 +87,32 @@ export const TRIGGER_DEFINITIONS: Record<string, TriggerDefinition> = {
       return errors;
     },
     configComponent: ScheduledTriggerConfig,
+  },
+  member_join: {
+    type: "member_join",
+    label: "Membro entrar",
+    description: "Inicia quando um novo membro entra no grupo.",
+    category: "leads_crm",
+    icon: Users,
+    color: "bg-green-500",
+    status: "coming_soon", // sem pipeline de ingestão de eventos de membership do WhatsApp hoje
+    supportedBy: ["group_sequence"],
+    defaultConfig: { sendPrivate: false },
+    summaryBuilder: () => ({ title: "Membro entrar no grupo", subtitle: "Em breve" }),
+    validate: () => [],
+  },
+  member_leave: {
+    type: "member_leave",
+    label: "Membro sair",
+    description: "Inicia quando um membro sai do grupo.",
+    category: "leads_crm",
+    icon: LogOut,
+    color: "bg-red-500",
+    status: "coming_soon", // mesmo motivo do member_join
+    supportedBy: ["group_sequence"],
+    defaultConfig: { sendPrivate: false },
+    summaryBuilder: () => ({ title: "Membro sair do grupo", subtitle: "Em breve" }),
+    validate: () => [],
   },
   on_add: {
     type: "on_add",
@@ -172,8 +199,8 @@ export const TRIGGER_DEFINITIONS: Record<string, TriggerDefinition> = {
     category: "mensagens",
     icon: Hash,
     color: "bg-emerald-700",
-    status: "coming_soon",
-    supportedBy: [],
+    status: "coming_soon", // sem consumidor real para message_sequences (a única lógica de "keyword" existente é de context_campaigns, uma tabela diferente)
+    supportedBy: ["group_sequence"],
     defaultConfig: { keyword: "" },
     summaryBuilder: (config) => ({
       title: "Palavra-chave recebida",

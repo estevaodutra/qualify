@@ -20,8 +20,9 @@ import {
   Image, Video, Music, FileText, Smile,
   BarChart3, MousePointerClick, List, MapPin, Contact, Calendar,
   Pencil, ImageIcon, UserPlus, UserMinus, ShieldPlus, ShieldMinus, Settings, CircleDot,
-  Shuffle,
+  Shuffle, Tag, Award, Sliders, Sparkles, Info,
 } from "lucide-react";
+import { getNodeBlockDefinition } from "./nodeDefinitions";
 
 function formatWhatsAppText(text: string) {
   const escaped = text
@@ -139,6 +140,16 @@ const NODE_TITLES: Record<string, { title: string; icon: React.ElementType }> = 
   group_settings: { title: "Configurações do Grupo", icon: Settings },
   status_image: { title: "Status Imagem", icon: CircleDot },
   status_video: { title: "Status Vídeo", icon: CircleDot },
+  content: { title: "Conteúdo", icon: MessageSquare },
+  action: { title: "Ação", icon: Tag },
+  tag_add: { title: "Adicionar Tag", icon: Tag },
+  tag_remove: { title: "Remover Tag", icon: Tag },
+  deal_move: { title: "Mover Negócio", icon: Award },
+  channel_select: { title: "Selecionar Canal", icon: Send },
+  field_op: { title: "Mapeamento de Campos", icon: Sliders },
+  api_call: { title: "API", icon: Link2 },
+  ai_agent: { title: "AI Assistant", icon: Sparkles },
+  js_code: { title: "Executar JavaScript", icon: Sliders },
 };
 
 const QUICK_DELAYS = [
@@ -444,7 +455,19 @@ export function UnifiedNodeConfigPanel({
     fetchPanelData();
   }, [node.nodeType]);
 
-  const nodeInfo = NODE_TITLES[node.nodeType] || NODE_TITLES.message;
+  // "content"/"action" nodes carry their real sub-type inside config
+  // (contentType/actionType) — resolvedNodeType lets every existing per-type
+  // block below key off the sub-type transparently, whether the node arrived
+  // here as a lifted "content"/"action" node (new canvas) or as a raw legacy
+  // node_type (dispatch builder, timeline builder, or an already-saved node
+  // predating the consolidation).
+  const resolvedNodeType = node.nodeType === "content"
+    ? ((node.config.contentType as string) || "message")
+    : node.nodeType === "action"
+    ? ((node.config.actionType as string) || "tag_add")
+    : node.nodeType;
+
+  const nodeInfo = NODE_TITLES[resolvedNodeType] || NODE_TITLES[node.nodeType] || NODE_TITLES.message;
   const Icon = nodeInfo.icon;
 
   const updateConfig = (key: string, value: unknown) => {
@@ -503,8 +526,47 @@ export function UnifiedNodeConfigPanel({
             </div>
             <Separator />
 
+            {/* CONTENT / ACTION sub-type selector */}
+            {(node.nodeType === "content" || node.nodeType === "action") && (() => {
+              const block = getNodeBlockDefinition(node.nodeType)!;
+              const configKey = node.nodeType === "content" ? "contentType" : "actionType";
+              const currentSubType = (node.config[configKey] as string) || block.subTypes![0].subType;
+              return (
+                <>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium text-muted-foreground">
+                      {node.nodeType === "content" ? "Tipo de conteúdo" : "Qual ação deseja executar?"}
+                    </Label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {block.subTypes!.map((sub) => {
+                        const SubIcon = sub.icon;
+                        const isSelected = currentSubType === sub.subType;
+                        return (
+                          <button
+                            key={sub.subType}
+                            type="button"
+                            onClick={() => updateConfig(configKey, sub.subType)}
+                            className={cn(
+                              "flex flex-col items-center gap-1 p-2 rounded-lg border text-center transition-all",
+                              isSelected ? "border-primary bg-primary/10 ring-2 ring-primary/20" : "border-border hover:border-primary/50"
+                            )}
+                          >
+                            <div className={cn("p-1.5 rounded-lg", sub.color)}>
+                              <SubIcon className="h-3.5 w-3.5 text-white" />
+                            </div>
+                            <span className="text-[10px] font-medium leading-tight">{sub.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <Separator />
+                </>
+              );
+            })()}
+
           {/* MESSAGE */}
-          {node.nodeType === "message" && (
+          {resolvedNodeType === "message" && (
             <>
               <div className="space-y-2">
                 <Label>Conteúdo da Mensagem</Label>
@@ -548,7 +610,7 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {/* IMAGE */}
-          {node.nodeType === "image" && (
+          {resolvedNodeType === "image" && (
             <>
               <div className="space-y-2">
                 <Label>{isGroup ? "Mídia" : "URL da Mídia"}</Label>
@@ -591,7 +653,7 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {/* VIDEO */}
-          {node.nodeType === "video" && (
+          {resolvedNodeType === "video" && (
             <>
               <div className="space-y-2">
                 <Label>{isGroup ? "Mídia" : "URL da Mídia"}</Label>
@@ -644,7 +706,7 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {/* AUDIO */}
-          {node.nodeType === "audio" && (
+          {resolvedNodeType === "audio" && (
             <>
               <div className="space-y-2">
                 <Label>{isGroup ? "Áudio" : "URL da Mídia"}</Label>
@@ -697,7 +759,7 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {/* DOCUMENT */}
-          {node.nodeType === "document" && (
+          {resolvedNodeType === "document" && (
             <>
               <div className="space-y-2">
                 <Label>{isGroup ? "Documento" : "URL da Mídia"}</Label>
@@ -748,7 +810,7 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {/* STICKER */}
-          {node.nodeType === "sticker" && (
+          {resolvedNodeType === "sticker" && (
             <>
               <div className="space-y-2">
                 <Label>Sticker</Label>
@@ -778,7 +840,7 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {/* POLL - Group only */}
-          {node.nodeType === "poll" && isGroup && (
+          {resolvedNodeType === "poll" && isGroup && (
             <>
               <div className="space-y-2">
                 <Label>Pergunta</Label>
@@ -895,7 +957,7 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {/* BUTTONS */}
-          {node.nodeType === "buttons" && (() => {
+          {resolvedNodeType === "buttons" && (() => {
             if (isGroup) {
               type ButtonAction = { id: string; label: string; type: "REPLY" | "CALL" | "URL"; phone?: string; url?: string; };
               const buttons = (node.config.buttons as ButtonAction[]) || [];
@@ -1007,7 +1069,7 @@ export function UnifiedNodeConfigPanel({
           })()}
 
           {/* LIST */}
-          {node.nodeType === "list" && (() => {
+          {resolvedNodeType === "list" && (() => {
             if (isGroup) {
               return (
                 <>
@@ -1083,7 +1145,7 @@ export function UnifiedNodeConfigPanel({
           })()}
 
           {/* LOCATION - Group only */}
-          {node.nodeType === "location" && isGroup && (
+          {resolvedNodeType === "location" && isGroup && (
             <>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-2">
@@ -1107,7 +1169,7 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {/* CONTACT - Group only */}
-          {node.nodeType === "contact" && isGroup && (
+          {resolvedNodeType === "contact" && isGroup && (
             <>
               <div className="space-y-2">
                 <Label>Nome Completo</Label>
@@ -1129,7 +1191,7 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {/* EVENT - Group only */}
-          {node.nodeType === "event" && isGroup && (
+          {resolvedNodeType === "event" && isGroup && (
             <>
               <div className="space-y-2">
                 <Label>Nome do Evento</Label>
@@ -1398,7 +1460,7 @@ export function UnifiedNodeConfigPanel({
           })()}
 
           {/* ACTION - Add/Remove Tag, Move Deal Stage */}
-          {(node.nodeType === "tag_add" || node.nodeType === "tag_remove") && (
+          {(resolvedNodeType === "tag_add" || resolvedNodeType === "tag_remove") && (
             <div className="space-y-2">
               <Label>Nome da Tag / Etiqueta</Label>
               <Input 
@@ -1410,7 +1472,7 @@ export function UnifiedNodeConfigPanel({
             </div>
           )}
 
-          {node.nodeType === "deal_move" && (
+          {resolvedNodeType === "deal_move" && (
             <div className="space-y-2">
               <Label>Mover para Etapa do CRM</Label>
               <Select value={(node.config.stageId as string) || ""} onValueChange={v => updateConfig("stageId", v)}>
@@ -1426,7 +1488,7 @@ export function UnifiedNodeConfigPanel({
             </div>
           )}
 
-          {node.nodeType === "channel_select" && (
+          {resolvedNodeType === "channel_select" && (
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Selecionar Instância de Envio (WhatsApp)</Label>
@@ -1451,6 +1513,140 @@ export function UnifiedNodeConfigPanel({
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+          )}
+
+          {/* FIELD_OP - Mapeamento de Campos */}
+          {node.nodeType === "field_op" && (() => {
+            const operation = (node.config.operation as string) || "set";
+            const parts = (node.config.parts as string[]) || [""];
+            const standardFields = [
+              { key: "name", label: "Nome do Lead" },
+              { key: "phone", label: "Telefone" },
+              { key: "email", label: "E-mail" },
+              { key: "tags", label: "Etiquetas / Tags" },
+              { key: "pipeline_stage_id", label: "Etapa do CRM" },
+            ];
+            return (
+              <>
+                <div className="space-y-2">
+                  <Label>Campo de destino</Label>
+                  <Select value={(node.config.field as string) || ""} onValueChange={v => updateConfig("field", v)}>
+                    <SelectTrigger className="rounded-xl border-border/40"><SelectValue placeholder="Selecione o campo..." /></SelectTrigger>
+                    <SelectContent>
+                      {customFieldsMetadata.map(f => (
+                        <SelectItem key={f.id} value={f.key}>{f.name} ({f.key})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Operação</Label>
+                  <Select value={operation} onValueChange={v => updateConfig("operation", v)}>
+                    <SelectTrigger className="rounded-xl border-border/40"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="set">Definir valor</SelectItem>
+                      <SelectItem value="copy">Copiar de outro campo</SelectItem>
+                      <SelectItem value="clear">Limpar campo</SelectItem>
+                      <SelectItem value="concatenate">Concatenar valores</SelectItem>
+                      <SelectItem value="transform">Transformar valor</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {operation === "set" && (
+                  <div className="space-y-2">
+                    <Label>Valor</Label>
+                    <Input
+                      value={(node.config.value as string) || ""}
+                      onChange={e => updateConfig("value", e.target.value)}
+                      placeholder="Ex: VIP ou {{name}}"
+                      className="rounded-xl border-border/40 bg-background/50 text-xs"
+                    />
+                  </div>
+                )}
+
+                {(operation === "copy" || operation === "transform") && (
+                  <div className="space-y-2">
+                    <Label>Campo de origem</Label>
+                    <Select value={(node.config.sourceField as string) || ""} onValueChange={v => updateConfig("sourceField", v)}>
+                      <SelectTrigger className="rounded-xl border-border/40"><SelectValue placeholder="Selecione o campo de origem..." /></SelectTrigger>
+                      <SelectContent>
+                        {standardFields.map(f => (
+                          <SelectItem key={f.key} value={f.key}>{f.label}</SelectItem>
+                        ))}
+                        {customFieldsMetadata.map(f => (
+                          <SelectItem key={f.id} value={f.key}>{f.name} ({f.key})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {operation === "clear" && (
+                  <p className="text-xs text-muted-foreground">O campo será limpo (definido como vazio).</p>
+                )}
+
+                {operation === "concatenate" && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Partes (texto ou {"{{campo}}"})</Label>
+                      <Button variant="ghost" size="sm" className="h-6" onClick={() => updateConfig("parts", [...parts, ""])}>
+                        <Plus className="h-3 w-3 mr-1" /> Adicionar
+                      </Button>
+                    </div>
+                    {parts.map((part, i) => (
+                      <div key={i} className="flex gap-1">
+                        <Input
+                          value={part}
+                          onChange={e => { const updated = [...parts]; updated[i] = e.target.value; updateConfig("parts", updated); }}
+                          placeholder="Ex: {{name}} ou texto fixo"
+                          className="flex-1"
+                        />
+                        {parts.length > 1 && (
+                          <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => updateConfig("parts", parts.filter((_, j) => j !== i))}>
+                            <Trash2 className="h-3 w-3 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    <div className="space-y-1">
+                      <Label className="text-xs">Separador (opcional)</Label>
+                      <Input
+                        value={(node.config.separator as string) || ""}
+                        onChange={e => updateConfig("separator", e.target.value)}
+                        placeholder="Ex: espaço, vírgula..."
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {operation === "transform" && (
+                  <div className="space-y-2">
+                    <Label>Tipo de transformação</Label>
+                    <Select value={(node.config.transformType as string) || "uppercase"} onValueChange={v => updateConfig("transformType", v)}>
+                      <SelectTrigger className="rounded-xl border-border/40"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="uppercase">MAIÚSCULAS</SelectItem>
+                        <SelectItem value="lowercase">minúsculas</SelectItem>
+                        <SelectItem value="trim">Remover espaços extras</SelectItem>
+                        <SelectItem value="capitalize">Primeira Letra Maiúscula</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </>
+            );
+          })()}
+
+          {/* COMING SOON placeholders - API / AI Assistant / legacy js_code */}
+          {(node.nodeType === "api_call" || node.nodeType === "ai_agent" || node.nodeType === "js_code") && (
+            <div className="p-3 rounded-lg bg-muted/50 border flex gap-2">
+              <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+              <p className="text-xs text-muted-foreground">
+                Este tipo de bloco ainda não está disponível para execução. Você pode mantê-lo no fluxo, mas ele não enviará nada até esta função ser lançada.
+              </p>
             </div>
           )}
 
@@ -1885,7 +2081,7 @@ export function UnifiedNodeConfigPanel({
             onUpdateConfig={updateConfig}
             onManualSend={onManualSend}
             isSendingManual={isSendingManual}
-            nodeType={node.nodeType}
+            nodeType={resolvedNodeType}
           />
           </div>
         </div>

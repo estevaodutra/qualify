@@ -983,26 +983,69 @@ Deno.serve(async (req) => {
 
         // ============= FIELD OPERATION NODES =============
         if (node.node_type === "field_op") {
-          const { field, value } = node.config || {};
+          const { field, value, operation, sourceField, parts, separator, transformType } = (node.config || {}) as {
+            field?: string; value?: string; operation?: string; sourceField?: string;
+            parts?: string[]; separator?: string; transformType?: string;
+          };
+          const op = operation || "set";
           const affectedLeadIds: string[] = [];
+
+          const resolveSourceFieldValue = (leadData: Record<string, any>, srcField: string | undefined): string => {
+            if (!srcField) return "";
+            if (["name", "phone", "email"].includes(srcField)) return String(leadData[srcField] ?? "");
+            if (srcField === "tags") return Array.isArray(leadData.tags) ? leadData.tags.join(", ") : "";
+            if (srcField === "pipeline_stage_id") return String(leadData.pipeline_stage_id ?? "");
+            const cf = (leadData.custom_fields as Record<string, any>) || {};
+            return String(cf[srcField] ?? "");
+          };
+
+          const applyTransform = (input: string, type: string | undefined): string => {
+            switch (type) {
+              case "uppercase": return input.toUpperCase();
+              case "lowercase": return input.toLowerCase();
+              case "trim": return input.replace(/\s+/g, " ").trim();
+              case "capitalize": return input.replace(/\b\w/g, (c) => c.toUpperCase());
+              default: return input;
+            }
+          };
+
           if (field) {
             for (const dest of activeDestinations) {
               const phoneClean = dest.group_jid.split("@")[0].replace(/\D/g, "");
               const { data: leadData } = await supabase
                 .from("leads")
-                .select("id, custom_fields")
+                .select("id, name, phone, email, tags, pipeline_stage_id, custom_fields")
                 .eq("company_id", typedCampaign.company_id)
                 .eq("phone", phoneClean)
                 .maybeSingle();
 
               if (leadData) {
                 const currentCf = (leadData.custom_fields as Record<string, any>) || {};
-                currentCf[field as string] = replaceVariables(String(value || ""));
+                let nextValue: string;
+                switch (op) {
+                  case "clear":
+                    nextValue = "";
+                    break;
+                  case "copy":
+                    nextValue = resolveSourceFieldValue(leadData, sourceField);
+                    break;
+                  case "concatenate":
+                    nextValue = (parts || []).map(p => replaceVariables(String(p || ""))).join(separator || "");
+                    break;
+                  case "transform":
+                    nextValue = applyTransform(resolveSourceFieldValue(leadData, sourceField || field), transformType);
+                    break;
+                  case "set":
+                  default:
+                    nextValue = replaceVariables(String(value || ""));
+                    break;
+                }
+                currentCf[field as string] = nextValue;
                 await supabase
                   .from("leads")
                   .update({ custom_fields: currentCf })
                   .eq("id", leadData.id);
-                console.log(`[ExecuteMessage] Custom field ${field} updated for lead ${leadData.id}`);
+                console.log(`[ExecuteMessage] Custom field ${field} updated (${op}) for lead ${leadData.id}`);
                 affectedLeadIds.push(leadData.id);
               }
             }
@@ -1010,7 +1053,7 @@ Deno.serve(async (req) => {
           await logNodeExecution(supabase, {
             executionId: workflowExecutionId, userId, nodeId: node.id, nodeType: node.node_type,
             status: "success", startedAt: nodeStartedAt,
-            input: { field: field || null, value: value ?? null },
+            input: { field: field || null, operation: op, value: value ?? null },
             output: { affectedLeadIds },
           });
           const nextConn = connections.find(c => c.source_node_id === node.id);
