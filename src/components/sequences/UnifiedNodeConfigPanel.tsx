@@ -88,6 +88,7 @@ interface UnifiedNodeConfigPanelProps {
   onClose: () => void;
   open: boolean;
   mode: "group" | "dispatch";
+  isGroup?: boolean;
   onManualSend?: () => void;
   isSendingManual?: boolean;
   renderMediaUploader?: (props: {
@@ -406,6 +407,7 @@ export function UnifiedNodeConfigPanel({
   onClose,
   open,
   mode,
+  isGroup: isGroupProp,
   onManualSend,
   isSendingManual,
   renderMediaUploader,
@@ -474,7 +476,7 @@ export function UnifiedNodeConfigPanel({
     onUpdate({ ...node.config, [key]: value });
   };
 
-  const isGroup = mode === "group";
+  const isGroup = isGroupProp !== undefined ? isGroupProp : mode === "group";
 
   const openActionDialog = (index: number) => {
     setEditingOptionIndex(index);

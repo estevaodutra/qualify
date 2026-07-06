@@ -133,7 +133,7 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
       sequenceId={sequence.id}
       nodeCategories={NODE_CATEGORIES}
       getDefaultConfig={getDefaultConfig}
-      renderConfigPanel={(node, onUpdateConfig, onClose, onManualSend, isSendingManual) => {
+      renderConfigPanel={(node, onUpdateConfig, onClose, onManualSend, isSendingManual, isGroup) => {
         if (node.nodeType === TRIGGER_NODE_TYPE) {
           const triggerType = (node.config.triggerType as TriggerType) || "manual";
           const triggerConfig = (node.config.triggerConfig as TriggerConfig) || {};
@@ -165,6 +165,7 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
             onClose={onClose}
             open={true}
             mode="group"
+            isGroup={isGroup}
             onManualSend={onManualSend}
             isSendingManual={isSendingManual}
             renderMediaUploader={(props) => (

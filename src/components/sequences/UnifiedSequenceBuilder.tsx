@@ -32,7 +32,8 @@ export interface UnifiedSequenceBuilderProps {
     onUpdate: (config: Record<string, unknown>) => void,
     onClose: () => void,
     onManualSend?: () => void,
-    isSendingManual?: boolean
+    isSendingManual?: boolean,
+    isGroup?: boolean
   ) => ReactNode;
   onSave: (
     name: string, 
@@ -980,22 +981,27 @@ export function UnifiedSequenceBuilder({
           through this same lateral Sheet (no more separate trigger dialog). */}
       <Sheet open={!!selectedNode} onOpenChange={(open) => { if (!open) setSelectedNodeId(null); }}>
         <SheetContent side="right" className="w-full sm:max-w-xl p-0 flex flex-col overflow-hidden">
-          {selectedNode && renderConfigPanel(
-            selectedNode,
-            (config) => {
-              updateNodesAndSave(prev => prev.map(n => n.id === selectedNode.id ? { ...n, config } : n));
-            },
-            () => setSelectedNodeId(null),
-            onManualSendNode ? async () => {
-              setIsSendingManual(true);
-              try {
-                await onManualSendNode(selectedNode);
-              } finally {
-                setIsSendingManual(false);
-              }
-            } : undefined,
-            isSendingManual
-          )}
+           {selectedNode && (() => {
+            const triggerNode = localNodes.find(n => n.nodeType === "trigger");
+            const isGroup = (triggerNode?.config.triggerConfig as any)?.isGroup ?? true;
+            return renderConfigPanel(
+              selectedNode,
+              (config) => {
+                updateNodesAndSave(prev => prev.map(n => n.id === selectedNode.id ? { ...n, config } : n));
+              },
+              () => setSelectedNodeId(null),
+              onManualSendNode ? async () => {
+                setIsSendingManual(true);
+                try {
+                  await onManualSendNode(selectedNode);
+                } finally {
+                  setIsSendingManual(false);
+                }
+              } : undefined,
+              isSendingManual,
+              isGroup
+            );
+          })()}
         </SheetContent>
       </Sheet>
 

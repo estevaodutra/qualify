@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Zap, ChevronDown, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Switch } from "@/components/ui/switch";
 import { TriggerTypeSelector } from "@/components/sequences/triggers/TriggerTypeSelector";
 import { getTriggerDefinition } from "@/components/sequences/triggers/triggerDefinitions";
 import { WebhookGroupScopeConfig } from "@/components/sequences/triggers/configs/WebhookGroupScopeConfig";
@@ -86,10 +87,24 @@ export function GroupTriggerConfigCard({
               />
             </div>
 
+            <div className="flex items-center justify-between p-3 rounded-lg bg-background border">
+              <div className="space-y-0.5">
+                <label className="text-sm font-medium" htmlFor="group-mode-toggle">Habilitar para Grupo</label>
+                <p className="text-xs text-muted-foreground">
+                  Quando ativo, envia para os grupos do WhatsApp configurados. Desative para enviar em conversas individuais.
+                </p>
+              </div>
+              <Switch
+                id="group-mode-toggle"
+                checked={triggerConfig.isGroup ?? true}
+                onCheckedChange={(checked) => onTriggerConfigChange({ ...triggerConfig, isGroup: checked })}
+              />
+            </div>
+
             {(triggerType === "member_join" || triggerType === "member_leave") && (
               <div className="p-3 rounded-lg bg-background border">
                 <p className="text-sm text-muted-foreground">
-                  Este gatilho ainda não possui suporte de execução — configuração preservada, mas a automação não pode ser ativada com ele.
+                  Gatilho acionado por eventos de membros no grupo.
                 </p>
               </div>
             )}
@@ -97,7 +112,7 @@ export function GroupTriggerConfigCard({
             {triggerType === "keyword" && (
               <div className="p-3 rounded-lg bg-background border">
                 <p className="text-sm text-muted-foreground">
-                  Palavra-chave: <span className="font-mono">{triggerConfig.keyword || "(não definida)"}</span> — este gatilho ainda não possui suporte de execução.
+                  Palavra-chave: <span className="font-mono">{triggerConfig.keyword || "(não definida)"}</span>.
                 </p>
               </div>
             )}
@@ -119,11 +134,13 @@ export function GroupTriggerConfigCard({
                   }
                   webhookUrl={webhookUrl}
                 />
-                <WebhookGroupScopeConfig
-                  campaignId={campaignId}
-                  config={triggerConfig}
-                  onChange={(scope) => onTriggerConfigChange({ ...triggerConfig, ...scope })}
-                />
+                {(triggerConfig.isGroup ?? true) && (
+                  <WebhookGroupScopeConfig
+                    campaignId={campaignId}
+                    config={triggerConfig}
+                    onChange={(scope) => onTriggerConfigChange({ ...triggerConfig, ...scope })}
+                  />
+                )}
               </>
             )}
 

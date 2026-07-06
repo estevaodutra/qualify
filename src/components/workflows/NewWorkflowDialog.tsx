@@ -69,27 +69,25 @@ export function NewWorkflowDialog({ open, onOpenChange, defaultFolderId }: NewWo
         resolvedFolderId = folderId;
       }
 
-      // Dispatch sequences are the general-purpose engine for new automations
-      // -- already reused this way by the Prospecting module's queue -- and
-      // require no channel-specific setup at creation time (that's a Campanha
-      // concern, configured later, not an Automação concern).
+      // Group campaigns + message sequences are the unified engine for all workflows.
       const { data: campaign, error: campaignError } = await supabase
-        .from("dispatch_campaigns")
+        .from("group_campaigns")
         .insert({ user_id: user.id, company_id: activeCompanyId, name: name.trim(), description: description.trim() || null, status: "draft" })
         .select()
         .single();
       if (campaignError) throw campaignError;
 
       const { data: sequence, error: sequenceError } = await supabase
-        .from("dispatch_sequences")
+        .from("message_sequences")
         .insert({
           user_id: user.id,
-          campaign_id: campaign.id,
+          company_id: activeCompanyId,
+          group_campaign_id: campaign.id,
           name: name.trim(),
           description: description.trim() || null,
           trigger_type: "manual",
-          trigger_config: {},
-          is_active: false,
+          trigger_config: { isGroup: false }, // default to individual conversation mode
+          active: false,
         })
         .select()
         .single();
@@ -99,14 +97,14 @@ export function NewWorkflowDialog({ open, onOpenChange, defaultFolderId }: NewWo
         name: name.trim(),
         description: description.trim() || undefined,
         folderId: resolvedFolderId,
-        sourceType: "dispatch_sequence",
+        sourceType: "group_sequence",
         sourceId: sequence.id,
         status: "draft",
         triggerType: "manual",
       });
 
-      queryClient.invalidateQueries({ queryKey: ["dispatch_campaigns"] });
-      queryClient.invalidateQueries({ queryKey: ["dispatch_sequences"] });
+      queryClient.invalidateQueries({ queryKey: ["group_campaigns"] });
+      queryClient.invalidateQueries({ queryKey: ["message_sequences"] });
 
       reset();
       onOpenChange(false);

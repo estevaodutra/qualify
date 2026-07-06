@@ -246,6 +246,16 @@ Deno.serve(async (req) => {
                              extractField(payload, "phone") ||
                              extractField(payload, "to");
 
+    const isGroupMode = triggerConfig.isGroup !== false;
+
+    if (!isGroupMode && !destinationPhone) {
+      console.error(`[TriggerSequence] Individual conversation mode, but no destination phone found in payload`);
+      return new Response(
+        JSON.stringify({ error: "No destination phone found in payload for individual conversation mode" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Group scope config (new, additive — instanceId/groupScope/selectedGroupJids
     // on the webhook trigger's config). Absent for every sequence saved before
     // this existed, which must keep its exact original behavior: single first
@@ -262,7 +272,7 @@ Deno.serve(async (req) => {
     // behavior is exactly as before: a single first campaign group.
     let targetGroups: { group_jid: string; group_name: string | null }[] = [];
 
-    if (!destinationPhone) {
+    if (isGroupMode && !destinationPhone) {
       if (groupScope === "all" || groupScope === "selected") {
         let query = supabase
           .from("campaign_groups")

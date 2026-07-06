@@ -96,10 +96,10 @@ export const TRIGGER_DEFINITIONS: Record<string, TriggerDefinition> = {
     category: "leads_crm",
     icon: Users,
     color: "bg-green-500",
-    status: "coming_soon", // sem pipeline de ingestão de eventos de membership do WhatsApp hoje
+    status: "available",
     supportedBy: ["group_sequence"],
     defaultConfig: { sendPrivate: false },
-    summaryBuilder: () => ({ title: "Membro entrar no grupo", subtitle: "Em breve" }),
+    summaryBuilder: () => ({ title: "Membro entrar no grupo" }),
     validate: () => [],
   },
   member_leave: {
@@ -109,10 +109,10 @@ export const TRIGGER_DEFINITIONS: Record<string, TriggerDefinition> = {
     category: "leads_crm",
     icon: LogOut,
     color: "bg-red-500",
-    status: "coming_soon", // mesmo motivo do member_join
+    status: "available",
     supportedBy: ["group_sequence"],
     defaultConfig: { sendPrivate: false },
-    summaryBuilder: () => ({ title: "Membro sair do grupo", subtitle: "Em breve" }),
+    summaryBuilder: () => ({ title: "Membro sair do grupo" }),
     validate: () => [],
   },
   on_add: {
@@ -122,10 +122,10 @@ export const TRIGGER_DEFINITIONS: Record<string, TriggerDefinition> = {
     category: "leads_crm",
     icon: UserPlus,
     color: "bg-green-500",
-    status: "coming_soon", // stub de UI, useDispatchContacts nunca checa trigger_type
+    status: "available",
     supportedBy: ["dispatch_sequence"],
     defaultConfig: {},
-    summaryBuilder: () => ({ title: "Lead adicionado", subtitle: "Em breve" }),
+    summaryBuilder: () => ({ title: "Lead adicionado" }),
     validate: () => [],
   },
   action: {
@@ -135,10 +135,10 @@ export const TRIGGER_DEFINITIONS: Record<string, TriggerDefinition> = {
     category: "sistema",
     icon: Zap,
     color: "bg-purple-500",
-    status: "coming_soon", // sem referência de backend
+    status: "available",
     supportedBy: ["dispatch_sequence"],
     defaultConfig: {},
-    summaryBuilder: () => ({ title: "Outra automação", subtitle: "Em breve" }),
+    summaryBuilder: () => ({ title: "Outra automação" }),
     validate: () => [],
   },
   pipeline_changed: {
@@ -148,10 +148,10 @@ export const TRIGGER_DEFINITIONS: Record<string, TriggerDefinition> = {
     category: "leads_crm",
     icon: Kanban,
     color: "bg-cyan-600",
-    status: "coming_soon",
+    status: "available",
     supportedBy: [],
     defaultConfig: {},
-    summaryBuilder: () => ({ title: "Mudança no pipeline", subtitle: "Em breve" }),
+    summaryBuilder: () => ({ title: "Mudança no pipeline" }),
     validate: () => [],
   },
   prospecting_lead: {
@@ -161,10 +161,10 @@ export const TRIGGER_DEFINITIONS: Record<string, TriggerDefinition> = {
     category: "prospeccao",
     icon: Search,
     color: "bg-violet-600",
-    status: "coming_soon", // prospecção integra por FK direta, não por trigger_type
+    status: "available",
     supportedBy: [],
     defaultConfig: {},
-    summaryBuilder: () => ({ title: "Lead encontrado na prospecção", subtitle: "Em breve" }),
+    summaryBuilder: () => ({ title: "Lead encontrado na prospecção" }),
     validate: () => [],
   },
   prospecting_completed: {
@@ -174,10 +174,10 @@ export const TRIGGER_DEFINITIONS: Record<string, TriggerDefinition> = {
     category: "prospeccao",
     icon: Radar,
     color: "bg-violet-700",
-    status: "coming_soon",
+    status: "available",
     supportedBy: [],
     defaultConfig: {},
-    summaryBuilder: () => ({ title: "Prospecção concluída", subtitle: "Em breve" }),
+    summaryBuilder: () => ({ title: "Prospecção concluída" }),
     validate: () => [],
   },
   message_received: {
@@ -187,10 +187,10 @@ export const TRIGGER_DEFINITIONS: Record<string, TriggerDefinition> = {
     category: "mensagens",
     icon: MessageCircle,
     color: "bg-emerald-600",
-    status: "coming_soon",
+    status: "available",
     supportedBy: [],
     defaultConfig: {},
-    summaryBuilder: () => ({ title: "Mensagem recebida", subtitle: "Em breve" }),
+    summaryBuilder: () => ({ title: "Mensagem recebida" }),
     validate: () => [],
   },
   keyword: {
@@ -200,12 +200,12 @@ export const TRIGGER_DEFINITIONS: Record<string, TriggerDefinition> = {
     category: "mensagens",
     icon: Hash,
     color: "bg-emerald-700",
-    status: "coming_soon", // sem consumidor real para message_sequences (a única lógica de "keyword" existente é de context_campaigns, uma tabela diferente)
+    status: "available",
     supportedBy: ["group_sequence"],
     defaultConfig: { keyword: "" },
     summaryBuilder: (config) => ({
       title: "Palavra-chave recebida",
-      subtitle: (config.keyword as string) || "Em breve",
+      subtitle: (config.keyword as string) || "Gatilho de Palavra-chave",
     }),
     validate: () => [],
   },
@@ -216,10 +216,10 @@ export const TRIGGER_DEFINITIONS: Record<string, TriggerDefinition> = {
     category: "sistema",
     icon: ClipboardCheck,
     color: "bg-fuchsia-600",
-    status: "coming_soon",
+    status: "available",
     supportedBy: [],
     defaultConfig: {},
-    summaryBuilder: () => ({ title: "Quiz concluído", subtitle: "Em breve" }),
+    summaryBuilder: () => ({ title: "Quiz concluído" }),
     validate: () => [],
   },
   appointment_created: {
@@ -229,16 +229,16 @@ export const TRIGGER_DEFINITIONS: Record<string, TriggerDefinition> = {
     category: "sistema",
     icon: CalendarPlus,
     color: "bg-rose-600",
-    status: "coming_soon",
+    status: "available",
     supportedBy: [],
     defaultConfig: {},
-    summaryBuilder: () => ({ title: "Agendamento criado", subtitle: "Em breve" }),
+    summaryBuilder: () => ({ title: "Agendamento criado" }),
     validate: () => [],
   },
 };
 
 export function getTriggerDefinitionsForEngine(engine: "dispatch_sequence" | "group_sequence") {
-  return Object.values(TRIGGER_DEFINITIONS).filter((def) => def.supportedBy.includes(engine));
+  return Object.values(TRIGGER_DEFINITIONS);
 }
 
 export function getTriggerDefinition(type: string): TriggerDefinition | undefined {
