@@ -492,6 +492,44 @@ export function useSequenceNodes(sequenceId: string | undefined) {
     },
   });
 
+  const saveVersionMutation = useMutation({
+    mutationFn: async ({
+      name,
+      nodes,
+      connections
+    }: {
+      name: string;
+      nodes: Array<any>;
+      connections: Array<any>;
+    }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || !sequenceId) throw new Error("Not authenticated");
+
+      const { data, error } = await supabase
+        .from("sequence_versions" as any)
+        .insert({
+          sequence_id: sequenceId,
+          user_id: user.id,
+          name,
+          nodes: nodes as Json,
+          connections: connections as Json
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sequence_versions", sequenceId] });
+      toast({ title: "Versão salva com sucesso!" });
+    },
+    onError: (error) => {
+      console.error("Error saving version:", error);
+      toast({ title: "Erro ao salvar versão", description: error.message, variant: "destructive" });
+    }
+  });
+
   return {
     nodes,
     connections,
@@ -499,5 +537,37 @@ export function useSequenceNodes(sequenceId: string | undefined) {
     saveNodes: saveNodesMutation.mutateAsync,
     saveConnections: saveConnectionsMutation.mutateAsync,
     isSaving: saveNodesMutation.isPending || saveConnectionsMutation.isPending,
+    saveVersion: saveVersionMutation.mutateAsync,
+    isSavingVersion: saveVersionMutation.isPending,
   };
+}
+
+export function useSequenceVersions(sequenceId: string | undefined) {
+  const { data: versions = [], isLoading } = useQuery({
+    queryKey: ["sequence_versions", sequenceId],
+    queryFn: async (): Promise<SequenceVersion[]> => {
+      if (!sequenceId) return [];
+
+      const { data, error } = await supabase
+        .from("sequence_versions" as any)
+        .select("*")
+        .eq("sequence_id", sequenceId)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      return (data || []).map(row => ({
+        id: row.id,
+        sequenceId: row.sequence_id,
+        userId: row.user_id,
+        name: row.name,
+        nodes: row.nodes,
+        connections: row.connections,
+        createdAt: row.created_at,
+      }));
+    },
+    enabled: !!sequenceId,
+  });
+
+  return { versions, isLoading };
 }
