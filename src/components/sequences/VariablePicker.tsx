@@ -1,9 +1,13 @@
 import { useState } from "react";
-import { Braces, Type, Hash, AlignLeft } from "lucide-react";
+import { Braces, Type, Hash, AlignLeft, Plus } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
 
 interface VariablePickerProps {
   onSelect: (variable: string) => void;
@@ -12,8 +16,13 @@ interface VariablePickerProps {
 
 export function VariablePicker({ onSelect, isGroup }: VariablePickerProps) {
   const [open, setOpen] = useState(false);
+  const [newFieldOpen, setNewFieldOpen] = useState(false);
+  const [newFieldName, setNewFieldName] = useState("");
+  
+  // Estado local para armazenar os campos recém-criados na sessão
+  const [localCustomFields, setLocalCustomFields] = useState<Array<{label: string, value: string, icon: any}>>([]);
 
-  const variables = isGroup ? [
+  const baseVariables = isGroup ? [
     {
       category: "Campos do contato",
       items: [
@@ -33,6 +42,7 @@ export function VariablePicker({ onSelect, isGroup }: VariablePickerProps) {
       category: "Campos adicionais",
       items: [
         { label: "Campo personalizado (exemplo)", value: "{{campo_customizado}}", icon: AlignLeft },
+        ...localCustomFields
       ]
     }
   ] : [
@@ -61,59 +71,128 @@ export function VariablePicker({ onSelect, isGroup }: VariablePickerProps) {
       category: "Campos adicionais",
       items: [
         { label: "Campo personalizado (exemplo)", value: "{campo_customizado}", icon: AlignLeft },
+        ...localCustomFields
       ]
     }
   ];
 
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="icon" className="h-8 w-8 bg-blue-600 hover:bg-blue-700 text-white border-0 transition-colors">
-                <Braces className="h-4 w-4" />
-              </Button>
-            </PopoverTrigger>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Inserir variável</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+  const handleCreateField = () => {
+    if (!newFieldName.trim()) return;
+    
+    // Gerar slug (ex: "Meu Campo" -> "meu_campo")
+    const slug = newFieldName
+      .toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/(^_|_$)/g, "");
+      
+    const format = isGroup ? `{{${slug}}}` : `{${slug}}`;
+    
+    setLocalCustomFields(prev => [...prev, {
+      label: newFieldName,
+      value: format,
+      icon: AlignLeft
+    }]);
+    
+    toast.success("Campo personalizado criado!");
+    setNewFieldName("");
+    setNewFieldOpen(false);
+    setOpen(true); // Reabre o popover
+  };
 
-      <PopoverContent className="w-[340px] p-0" align="end">
-        <Command>
-          <CommandInput placeholder="Pesquisar..." />
-          <CommandList className="max-h-[300px]">
-            <CommandEmpty>Nenhuma variável encontrada.</CommandEmpty>
-            {variables.map((group) => (
-              <CommandGroup key={group.category} heading={group.category}>
-                {group.items.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <CommandItem
-                      key={item.value}
-                      value={item.label}
-                      onSelect={() => {
-                        onSelect(item.value);
-                        setOpen(false);
-                      }}
-                      className="cursor-pointer flex items-center justify-between"
-                    >
-                      <div className="flex items-center">
-                        <Icon className="mr-2 h-4 w-4 text-muted-foreground" />
-                        <span>{item.label}</span>
-                      </div>
-                      <span className="text-[10px] text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded shrink-0">{item.value}</span>
-                    </CommandItem>
-                  );
-                })}
-              </CommandGroup>
-            ))}
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+  return (
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="icon" className="h-8 w-8 bg-blue-600 hover:bg-blue-700 text-white border-0 transition-colors">
+                  <Braces className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Inserir variável</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
+        <PopoverContent className="w-[340px] p-0" align="end">
+          <Command>
+            <CommandInput placeholder="Pesquisar..." />
+            <CommandList className="max-h-[300px]">
+              <CommandEmpty>Nenhuma variável encontrada.</CommandEmpty>
+              {baseVariables.map((group) => (
+                <CommandGroup key={group.category} heading={group.category}>
+                  {group.items.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <CommandItem
+                        key={item.value}
+                        value={item.label}
+                        onSelect={() => {
+                          onSelect(item.value);
+                          setOpen(false);
+                        }}
+                        className="cursor-pointer flex items-center justify-between"
+                      >
+                        <div className="flex items-center">
+                          <Icon className="mr-2 h-4 w-4 text-muted-foreground" />
+                          <span>{item.label}</span>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded shrink-0">{item.value}</span>
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              ))}
+              <div className="p-1 border-t border-border/50">
+                <CommandItem
+                  onSelect={() => {
+                    setOpen(false);
+                    setNewFieldOpen(true);
+                  }}
+                  className="cursor-pointer flex items-center justify-center text-primary font-medium bg-primary/5 hover:bg-primary/10 mt-1"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Criar novo campo
+                </CommandItem>
+              </div>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+
+      <Dialog open={newFieldOpen} onOpenChange={setNewFieldOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Criar Novo Campo</DialogTitle>
+            <DialogDescription>
+              Adicione um novo campo personalizado para usar como variável em suas mensagens.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="name">Nome do Campo</Label>
+              <Input 
+                id="name" 
+                placeholder="Ex: Data de Vencimento" 
+                value={newFieldName}
+                onChange={(e) => setNewFieldName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleCreateField()}
+                autoFocus
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNewFieldOpen(false)}>Cancelar</Button>
+            <Button onClick={handleCreateField} disabled={!newFieldName.trim()}>
+              Adicionar Campo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
