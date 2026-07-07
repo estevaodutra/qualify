@@ -94,20 +94,56 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
 
   const handleManualSendNode = async (node: LocalNode) => {
     try {
+      let activeCampaignId = sequence.groupCampaignId;
+
       const { data: campaign } = await supabase
         .from("group_campaigns")
         .select("id")
-        .eq("id", sequence.groupCampaignId)
-        .single();
+        .eq("id", activeCampaignId || "00000000-0000-0000-0000-000000000000")
+        .maybeSingle();
 
       if (!campaign) {
-        toast.error("Campanha não encontrada");
-        return;
+        // Fallback for Workflows: create a dummy campaign with an active instance
+        const { data: instance } = await supabase
+          .from("instances")
+          .select("id")
+          .eq("status", "open")
+          .limit(1)
+          .maybeSingle();
+
+        if (!instance) {
+          toast.error("Nenhuma conexão de WhatsApp ativa foi encontrada para testar.");
+          return;
+        }
+
+        const { data: newCampaign, error: insertErr } = await supabase
+          .from("group_campaigns")
+          .insert({
+            name: "Workflow Dummy Context",
+            status: "active",
+            instance_id: instance.id
+          })
+          .select("id")
+          .single();
+
+        if (insertErr || !newCampaign) {
+          console.error("Erro ao criar contexto de campanha:", insertErr);
+          toast.error("Erro ao preparar o ambiente de teste.");
+          return;
+        }
+
+        activeCampaignId = newCampaign.id;
+
+        // Optionally link it so we don't recreate it next time
+        await supabase
+          .from("message_sequences" as any)
+          .update({ group_campaign_id: activeCampaignId })
+          .eq("id", sequence.id);
       }
 
       const { error } = await supabase.functions.invoke("execute-message", {
         body: {
-          campaignId: sequence.groupCampaignId,
+          campaignId: activeCampaignId,
           sequenceId: sequence.id,
           manualNodeIndex: node.nodeOrder,
         },
