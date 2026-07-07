@@ -6,11 +6,22 @@ import { Deal, Pipeline } from "@/types/crm.types";
 import { DealKanbanCard } from "@/components/crm/kanban/DealKanbanCard";
 import { DealDrawer } from "@/components/crm/deals/DealDrawer";
 import { LeadDrawer } from "@/components/crm/leads/LeadDrawer";
-import { Plus, Search, Filter } from "lucide-react";
+import { Plus, Search, Filter, Kanban, Settings } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
 
-export default function Kanban() {
+export default function Pipelines() {
   const { user } = useAuth();
   
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
@@ -19,6 +30,9 @@ export default function Kanban() {
   
   const [dealDrawerOpen, setDealDrawerOpen] = useState(false);
   const [leadDrawerOpen, setLeadDrawerOpen] = useState(false);
+  
+  const [newPipelineOpen, setNewPipelineOpen] = useState(false);
+  const [newPipelineName, setNewPipelineName] = useState("");
 
   const { data: pipelines, isLoading: loadingPipelines } = useQuery({
     queryKey: ['pipelines'],
@@ -79,7 +93,62 @@ export default function Kanban() {
   };
 
   if (loadingPipelines || loadingDeals) {
-    return <div className="p-8 text-center text-muted-foreground">Carregando Kanban...</div>;
+    return <div className="p-8 text-center text-muted-foreground">Carregando Pipelines...</div>;
+  }
+
+  if (!loadingPipelines && (!pipelines || pipelines.length === 0)) {
+    return (
+      <div className="flex flex-col h-full bg-background overflow-hidden items-center justify-center p-8">
+        <div className="flex flex-col items-center justify-center max-w-md text-center space-y-4">
+          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+            <Kanban className="w-8 h-8 text-primary" />
+          </div>
+          <h2 className="text-2xl font-bold font-['Sora'] text-foreground">Nenhuma Pipeline Encontrada</h2>
+          <p className="text-muted-foreground">
+            Você ainda não possui um funil de vendas configurado. Crie sua primeira pipeline para começar a gerenciar seus negócios.
+          </p>
+
+          <Dialog open={newPipelineOpen} onOpenChange={setNewPipelineOpen}>
+            <DialogTrigger asChild>
+              <Button className="mt-4 gap-2 shadow-none bg-primary text-primary-foreground hover:bg-primary/90" size="lg">
+                <Plus className="w-4 h-4" /> Nova Pipeline
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Criar Nova Pipeline</DialogTitle>
+                <DialogDescription>
+                  Dê um nome para o seu novo funil de vendas. Depois você poderá configurar as etapas.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="name">Nome da Pipeline</Label>
+                  <Input 
+                    id="name" 
+                    placeholder="Ex: Vendas B2B, Captação..." 
+                    value={newPipelineName}
+                    onChange={(e) => setNewPipelineName(e.target.value)}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setNewPipelineOpen(false)}>Cancelar</Button>
+                <Button 
+                  onClick={() => {
+                    toast.success("Pipeline criada! (Simulação)");
+                    setNewPipelineOpen(false);
+                  }}
+                  disabled={!newPipelineName.trim()}
+                >
+                  Continuar
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -87,7 +156,7 @@ export default function Kanban() {
       {/* Header */}
       <div className="flex items-center justify-between p-6 pb-4 border-b border-border/40 shrink-0">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground font-['Sora']">Kanban</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground font-['Sora']">Pipelines</h1>
           <p className="text-sm text-muted-foreground mt-1">Gerencie seus negócios e funil de vendas</p>
         </div>
         

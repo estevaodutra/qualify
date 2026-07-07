@@ -98,7 +98,7 @@ export function AppSidebar() {
     { title: t("nav.dashboard"), url: "/", icon: LayoutDashboard },
     { title: "Workflows", url: "/workflows", icon: GitBranch },
     { title: t("nav.callPanel"), url: "/painel-ligacoes", icon: PhoneCall },
-    { title: "Kanban", url: "/kanban", icon: Kanban },
+    { title: "Pipelines", url: "/pipelines", icon: Kanban },
     { title: t("nav.leads") || "Leads", url: "/leads", icon: Users },
     { title: "Chat CRM", url: "/chat", icon: MessageSquare },
     { title: "Funis", url: "/quiz", icon: Layers },
