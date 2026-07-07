@@ -72,9 +72,9 @@ export default function Pipelines() {
       setNewPipelineName("");
       queryClient.invalidateQueries({ queryKey: ['pipelines'] });
     },
-    onError: (error) => {
-      console.error(error);
-      toast.error("Erro ao criar pipeline.");
+    onError: (error: any) => {
+      console.error("Erro completo:", error);
+      toast.error(`Erro ao criar pipeline: ${error.message || JSON.stringify(error)}`);
     }
   });
 
