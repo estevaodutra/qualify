@@ -4,6 +4,16 @@ import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Json } from "@/integrations/supabase/types";
 
+export interface SequenceVersion {
+  id: string;
+  sequenceId: string;
+  userId: string;
+  name: string;
+  nodes: any;
+  connections: any;
+  createdAt: string;
+}
+
 export interface SequenceNode {
   id: string;
   sequenceId: string;

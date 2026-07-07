@@ -3,6 +3,8 @@ import { LocalNode, LocalConnection, NodeCategory, RandomizerBranch } from "./sh
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { SequenceVersionsDialog } from "./SequenceVersionsDialog";
+import { useSequences } from "@/hooks/useSequences";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -75,6 +77,7 @@ export function UnifiedSequenceBuilder({
   isLoading = false,
 }: UnifiedSequenceBuilderProps) {
   const { toast } = useToast();
+  const { saveVersion, isSavingVersion } = useSequences(sequenceId);
   const [localNodes, setLocalNodes] = useState<LocalNode[]>([]);
   const [localConnections, setLocalConnections] = useState<LocalConnection[]>([]);
   const [sequenceName, setSequenceName] = useState(initialName);
@@ -524,6 +527,24 @@ export function UnifiedSequenceBuilder({
     }
   };
 
+  const handleSaveVersion = async (name: string) => {
+    try {
+      await saveVersion({
+        name,
+        nodes: localNodes,
+        connections: localConnections
+      });
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleRestoreVersion = (restoredNodes: any[], restoredConnections: any[]) => {
+    setLocalNodes(restoredNodes);
+    setLocalConnections(restoredConnections);
+    toast({ title: "Versão restaurada", description: "O fluxo foi revertido para a versão selecionada." });
+  };
+
   // Draw Bezier Curves between nodes
   const drawBezier = (x1: number, y1: number, x2: number, y2: number) => {
     const dx = Math.abs(x2 - x1) * 0.5;
@@ -607,10 +628,18 @@ export function UnifiedSequenceBuilder({
             {isActive ? "Pausar" : "Ativar"}
           </Button>
           {mode === "editor" && (
-            <Button onClick={handleSaveAll} disabled={isSaving} className="bg-[#8A3CFF] hover:bg-[#7830E3] text-white rounded-xl gap-2 h-9 px-5 font-semibold">
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {isSaving ? "Salvando..." : "Salvar"}
-            </Button>
+            <>
+              <SequenceVersionsDialog
+                sequenceId={sequenceId}
+                onSaveVersion={handleSaveVersion}
+                onRestoreVersion={handleRestoreVersion}
+                isSaving={isSavingVersion}
+              />
+              <Button onClick={handleSaveAll} disabled={isSaving} className="bg-[#8A3CFF] hover:bg-[#7830E3] text-white rounded-xl gap-2 h-9 px-5 font-semibold">
+                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {isSaving ? "Salvando..." : "Salvar"}
+              </Button>
+            </>
           )}
         </div>
       </div>
