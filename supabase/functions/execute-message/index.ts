@@ -774,15 +774,36 @@ Deno.serve(async (req) => {
 
       // If this is a manual test execution from the builder and we have no destinations,
       // fallback to sending to the instance's own number to allow preview/testing.
-      if (isManualNodeExecution && destinations.length === 0 && instance.phone) {
-        const cleanPhone = instance.phone.replace(/\D/g, "");
-        if (cleanPhone) {
-          console.log(`[ExecuteMessage] Manual test execution: no destinations found, sending to instance phone: ${cleanPhone}`);
-          destinations = [{
-            group_jid: `${cleanPhone}@s.whatsapp.net`,
-            group_name: `Teste (${instance.name})`,
-            isPrivate: true
-          }];
+      if (isManualNodeExecution && destinations.length === 0) {
+        let testPhone = instance?.phone;
+        let testName = instance?.name;
+        
+        // Peek at the node config to see if it overrides the instance
+        if (sortedNodes.length > 0 && sortedNodes[0].config?.instanceId) {
+          const overrideId = sortedNodes[0].config.instanceId as string;
+          // In Edge Functions we can't use await here without making it async, but this is already inside an async function!
+          const { data: overrideInst } = await supabase
+            .from("instances")
+            .select("phone, name")
+            .eq("id", overrideId)
+            .maybeSingle();
+            
+          if (overrideInst && overrideInst.phone) {
+            testPhone = overrideInst.phone;
+            testName = overrideInst.name;
+          }
+        }
+        
+        if (testPhone) {
+          const cleanPhone = testPhone.replace(/\D/g, "");
+          if (cleanPhone) {
+            console.log(`[ExecuteMessage] Manual test execution: no destinations found, sending to instance phone: ${cleanPhone}`);
+            destinations = [{
+              group_jid: `${cleanPhone}@s.whatsapp.net`,
+              group_name: `Teste (${testName})`,
+              isPrivate: true
+            }];
+          }
         }
       }
 
