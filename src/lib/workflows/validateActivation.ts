@@ -93,16 +93,8 @@ export function validateWorkflowActivation(
     }
   }
 
-  // No isolated non-trigger nodes (every real step should be reachable).
-  const connectedNodeIds = new Set<string>();
-  for (const conn of connections) {
-    connectedNodeIds.add(conn.sourceNodeId);
-    connectedNodeIds.add(conn.targetNodeId);
-  }
-  const isolated = nodes.filter((n) => n.nodeType !== TRIGGER_NODE_TYPE && !connectedNodeIds.has(n.id));
-  if (isolated.length > 0) {
-    errors.push(`${isolated.length} bloco(s) estão isolados, sem conexão com o restante do fluxo.`);
-  }
+  // Removed: We no longer prevent activation if there are isolated nodes,
+  // allowing users to keep disconnected blocks in the workflow as "drafts".
 
   if (hasCycle(nodes, connections)) {
     errors.push("O fluxo contém um ciclo inválido entre blocos.");
