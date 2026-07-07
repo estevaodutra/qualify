@@ -383,19 +383,11 @@ export function useSequenceNodes(sequenceId: string | undefined) {
         .delete()
         .eq("sequence_id", sequenceId);
 
-      // The canvas-only trigger/start node is a decorative entry-point marker
-      // (its config only carries UI copy for the "Início" box) — it must never
-      // be persisted as a real sequence node, or the execution engine would
-      // process it as the first "node" in the graph. UnifiedSequenceBuilder's
-      // hydration already re-creates and re-wires this node locally whenever
-      // it's missing, so excluding it here is safe.
-      const persistableNodes = nodesToSave.filter(node => node.nodeType !== "trigger");
-
       // Insert new nodes and get generated IDs
-      if (persistableNodes.length > 0) {
+      if (nodesToSave.length > 0) {
         const { data: insertedNodes, error } = await supabase
           .from("sequence_nodes")
-          .insert(persistableNodes.map((node, index) => ({
+          .insert(nodesToSave.map((node, index) => ({
             sequence_id: sequenceId!,
             user_id: user.id,
             company_id: companyId,
@@ -411,7 +403,7 @@ export function useSequenceNodes(sequenceId: string | undefined) {
 
         // Create mapping: localId -> dbId (by insertion order)
         const idMapping: Record<string, string> = {};
-        persistableNodes.forEach((node, index) => {
+        nodesToSave.forEach((node, index) => {
           if (insertedNodes && insertedNodes[index]) {
             idMapping[node.localId] = insertedNodes[index].id;
           }

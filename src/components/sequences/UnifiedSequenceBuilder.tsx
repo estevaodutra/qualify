@@ -402,7 +402,8 @@ export function UnifiedSequenceBuilder({
 
   // Delete Node
   const handleDeleteNode = (id: string) => {
-    if (id === "trigger") {
+    const node = localNodes.find(n => n.id === id);
+    if (node?.nodeType === "trigger") {
       toast({ title: "Ação não permitida", description: "O bloco de início não pode ser removido.", variant: "destructive" });
       return;
     }
@@ -413,7 +414,8 @@ export function UnifiedSequenceBuilder({
 
   // Ask for confirmation before removing a node (it may have connections/config attached)
   const requestDeleteNode = (id: string) => {
-    if (id === "trigger") {
+    const node = localNodes.find(n => n.id === id);
+    if (node?.nodeType === "trigger") {
       toast({ title: "Ação não permitida", description: "O bloco de início não pode ser removido.", variant: "destructive" });
       return;
     }
@@ -428,7 +430,7 @@ export function UnifiedSequenceBuilder({
   // Duplicate Node: new id, cloned type/config, offset position, no connections copied
   const handleDuplicateNode = (id: string) => {
     const source = localNodes.find(n => n.id === id);
-    if (!source || id === "trigger") return;
+    if (!source || source.nodeType === "trigger") return;
 
     const isOccupied = (x: number, y: number) =>
       localNodes.some(n => Math.abs((n.positionX || 0) - x) < 10 && Math.abs((n.positionY || 0) - y) < 10);
