@@ -20,7 +20,7 @@ import {
   Image, Video, Music, FileText, Smile,
   BarChart3, MousePointerClick, List, MapPin, Contact, Calendar,
   Pencil, ImageIcon, UserPlus, UserMinus, ShieldPlus, ShieldMinus, Settings, CircleDot,
-  Shuffle, Tag, Award, Sliders, Sparkles, Info, RefreshCw
+  Shuffle, Tag, Award, Sliders, Sparkles, Info, RefreshCw, HelpCircle
 } from "lucide-react";
 import { getNodeBlockDefinition } from "./nodeDefinitions";
 import { VariablePicker } from "./VariablePicker";
