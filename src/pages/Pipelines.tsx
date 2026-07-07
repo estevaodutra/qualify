@@ -1,12 +1,13 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
 import { Deal, Pipeline } from "@/types/crm.types";
 import { DealKanbanCard } from "@/components/crm/kanban/DealKanbanCard";
 import { DealDrawer } from "@/components/crm/deals/DealDrawer";
 import { LeadDrawer } from "@/components/crm/leads/LeadDrawer";
-import { Plus, Search, Filter, Kanban, Settings } from "lucide-react";
+import { Plus, Search, Filter, Kanban, Settings, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -23,6 +24,8 @@ import { toast } from "sonner";
 
 export default function Pipelines() {
   const { user } = useAuth();
+  const { activeCompany } = useCompany();
+  const queryClient = useQueryClient();
   
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
   const [selectedLead, setSelectedLead] = useState<any | null>(null);
@@ -33,6 +36,52 @@ export default function Pipelines() {
   
   const [newPipelineOpen, setNewPipelineOpen] = useState(false);
   const [newPipelineName, setNewPipelineName] = useState("");
+
+  const createPipelineMutation = useMutation({
+    mutationFn: async (name: string) => {
+      if (!activeCompany?.id) throw new Error("Empresa não selecionada");
+      
+      // 1. Criar a pipeline
+      const { data: pipeline, error: pipeError } = await supabase
+        .from('pipelines')
+        .insert({ company_id: activeCompany.id, name })
+        .select()
+        .single();
+        
+      if (pipeError) throw pipeError;
+      
+      // 2. Criar etapas padrões para não ficar vazia
+      const defaultStages = [
+        { pipeline_id: pipeline.id, company_id: activeCompany.id, name: "Novo Lead", color: "#3b82f6", order_index: 0 },
+        { pipeline_id: pipeline.id, company_id: activeCompany.id, name: "Contato Feito", color: "#eab308", order_index: 1 },
+        { pipeline_id: pipeline.id, company_id: activeCompany.id, name: "Ganha", color: "#22c55e", order_index: 2 },
+        { pipeline_id: pipeline.id, company_id: activeCompany.id, name: "Perdida", color: "#ef4444", order_index: 3 },
+      ];
+      
+      const { error: stagesError } = await supabase
+        .from('pipeline_stages')
+        .insert(defaultStages);
+        
+      if (stagesError) throw stagesError;
+      
+      return pipeline;
+    },
+    onSuccess: () => {
+      toast.success("Pipeline criada com sucesso!");
+      setNewPipelineOpen(false);
+      setNewPipelineName("");
+      queryClient.invalidateQueries({ queryKey: ['pipelines'] });
+    },
+    onError: (error) => {
+      console.error(error);
+      toast.error("Erro ao criar pipeline.");
+    }
+  });
+
+  const handleCreatePipeline = () => {
+    if (!newPipelineName.trim()) return;
+    createPipelineMutation.mutate(newPipelineName);
+  };
 
   const { data: pipelines, isLoading: loadingPipelines } = useQuery({
     queryKey: ['pipelines'],
@@ -135,12 +184,10 @@ export default function Pipelines() {
               <DialogFooter>
                 <Button variant="outline" onClick={() => setNewPipelineOpen(false)}>Cancelar</Button>
                 <Button 
-                  onClick={() => {
-                    toast.success("Pipeline criada! (Simulação)");
-                    setNewPipelineOpen(false);
-                  }}
-                  disabled={!newPipelineName.trim()}
+                  onClick={handleCreatePipeline}
+                  disabled={!newPipelineName.trim() || createPipelineMutation.isPending}
                 >
+                  {createPipelineMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                   Continuar
                 </Button>
               </DialogFooter>
