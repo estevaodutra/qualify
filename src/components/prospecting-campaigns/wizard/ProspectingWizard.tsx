@@ -28,9 +28,7 @@ const emptyState = () => ({
   layers: ["google_maps"] as EnrichmentLayerId[],
   destination: {
     destinationMode: "save_only",
-    automationCampaignId: "",
     automationSequenceId: "",
-    instanceId: "",
     queuePolicy: { ...DEFAULT_QUEUE_POLICY },
   } as StepDestinationData,
 });
@@ -57,11 +55,9 @@ export function ProspectingWizard({ open, onOpenChange, onCreate, isCreating, in
       });
       setLayers((initialData.enrichmentLayers as EnrichmentLayerId[]) || ["google_maps"]);
       setDestination({
-        destinationMode: initialData.destinationMode,
-        automationCampaignId: initialData.automationCampaignId || "",
+        destinationMode: initialData.destinationMode || "save_only",
         automationSequenceId: initialData.automationSequenceId || "",
-        instanceId: initialData.instanceId || "",
-        queuePolicy: { ...DEFAULT_QUEUE_POLICY, ...initialData.queuePolicy },
+        queuePolicy: initialData.queuePolicy ? { ...DEFAULT_QUEUE_POLICY, ...initialData.queuePolicy } : DEFAULT_QUEUE_POLICY,
       });
     } else {
       const fresh = emptyState();
@@ -83,9 +79,7 @@ export function ProspectingWizard({ open, onOpenChange, onCreate, isCreating, in
       places: search.places.trim() || undefined,
       enrichmentLayers: layers,
       destinationMode: destination.destinationMode,
-      automationCampaignId: destination.automationCampaignId || undefined,
       automationSequenceId: destination.automationSequenceId || undefined,
-      instanceId: destination.instanceId || undefined,
       queuePolicy: destination.queuePolicy,
     };
     await onCreate(input);
@@ -165,9 +159,7 @@ export function ProspectingWizard({ open, onOpenChange, onCreate, isCreating, in
                 quantity: search.quantity,
                 enrichmentLayers: layers,
                 destinationMode: destination.destinationMode,
-                automationCampaignId: destination.automationCampaignId,
                 automationSequenceId: destination.automationSequenceId,
-                instanceId: destination.instanceId,
                 queuePolicy: destination.queuePolicy,
               }}
               confirmed={confirmed}

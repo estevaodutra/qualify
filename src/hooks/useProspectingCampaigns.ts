@@ -61,9 +61,7 @@ export interface ProspectingCampaign {
   postActionId?: string;
   enrichmentLayers: string[];
   destinationMode: DestinationMode;
-  automationCampaignId?: string;
   automationSequenceId?: string;
-  instanceId?: string;
   queuePolicy: QueuePolicy;
   approvedAt?: string;
   createdAt: string;
@@ -84,9 +82,7 @@ interface DbProspectingCampaign {
   post_action_id: string | null;
   enrichment_layers: string[] | null;
   destination_mode: string;
-  automation_campaign_id: string | null;
   automation_sequence_id: string | null;
-  instance_id: string | null;
   queue_policy: Record<string, unknown> | null;
   approved_at: string | null;
   created_at: string;
@@ -105,9 +101,7 @@ const transformDbToFrontend = (db: DbProspectingCampaign): ProspectingCampaign =
   postActionId: db.post_action_id || undefined,
   enrichmentLayers: db.enrichment_layers || ["google_maps"],
   destinationMode: (db.destination_mode as DestinationMode) || "save_only",
-  automationCampaignId: db.automation_campaign_id || undefined,
   automationSequenceId: db.automation_sequence_id || undefined,
-  instanceId: db.instance_id || undefined,
   queuePolicy: { ...DEFAULT_QUEUE_POLICY, ...(db.queue_policy || {}) } as QueuePolicy,
   approvedAt: db.approved_at || undefined,
   createdAt: db.created_at,
@@ -123,9 +117,7 @@ export interface CreateProspectingInput {
   places?: string;
   enrichmentLayers: string[];
   destinationMode: DestinationMode;
-  automationCampaignId?: string;
   automationSequenceId?: string;
-  instanceId?: string;
   queuePolicy?: Partial<QueuePolicy>;
 }
 
@@ -184,9 +176,7 @@ export function useProspectingCampaigns() {
         places: campaign.places || null,
         enrichment_layers: campaign.enrichmentLayers,
         destination_mode: campaign.destinationMode,
-        automation_campaign_id: campaign.automationCampaignId || null,
         automation_sequence_id: campaign.automationSequenceId || null,
-        instance_id: campaign.instanceId || null,
         queue_policy: { ...DEFAULT_QUEUE_POLICY, ...(campaign.queuePolicy || {}) },
         status: "queued",
       };
