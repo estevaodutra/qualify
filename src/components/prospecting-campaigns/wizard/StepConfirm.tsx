@@ -2,9 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft, Loader2, Rocket } from "lucide-react";
-import { useDispatchCampaigns } from "@/hooks/useDispatchCampaigns";
-import { useDispatchSequences } from "@/hooks/useDispatchSequences";
-import { useInstances } from "@/hooks/useInstances";
+import { useAllSequences } from "@/hooks/useSequences";
 import { ENRICHMENT_LAYERS, type EnrichmentLayerId } from "./enrichmentLayers";
 import type { DestinationMode, QueuePolicy } from "@/hooks/useProspectingCampaigns";
 
@@ -19,10 +17,8 @@ interface SummaryData {
   places: string;
   quantity: string;
   enrichmentLayers: EnrichmentLayerId[];
-  destinationMode: DestinationMode;
-  automationCampaignId: string;
   automationSequenceId: string;
-  instanceId: string;
+  destinationMode: DestinationMode;
   queuePolicy: QueuePolicy;
 }
 
@@ -45,13 +41,9 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 }
 
 export function StepConfirm({ data, confirmed, onConfirmedChange, onBack, onSubmit, isSubmitting }: StepConfirmProps) {
-  const { campaigns } = useDispatchCampaigns();
-  const { sequences } = useDispatchSequences(data.automationCampaignId || undefined);
-  const { instances } = useInstances();
+  const { sequences } = useAllSequences();
 
-  const automationName = campaigns.find((c) => c.id === data.automationCampaignId)?.name;
   const sequenceName = sequences.find((s) => s.id === data.automationSequenceId)?.name;
-  const instanceName = instances.find((i) => i.id === data.instanceId)?.name;
   const layerLabels = data.enrichmentLayers
     .map((id) => ENRICHMENT_LAYERS.find((l) => l.id === id)?.label || id)
     .join(", ");
@@ -67,10 +59,7 @@ export function StepConfirm({ data, confirmed, onConfirmedChange, onBack, onSubm
         <SummaryRow label="Camadas selecionadas" value={layerLabels || "—"} />
         <SummaryRow label="Destino dos leads" value={DESTINATION_LABELS[data.destinationMode]} />
         {data.destinationMode !== "save_only" && (
-          <>
-            <SummaryRow label="Automação" value={automationName ? `${automationName} / ${sequenceName ?? "—"}` : "—"} />
-            <SummaryRow label="Instância" value={instanceName || "—"} />
-          </>
+          <SummaryRow label="Sequência (Workflow)" value={sequenceName || "Nenhuma selecionada"} />
         )}
         {data.destinationMode === "auto_start" && (
           <>

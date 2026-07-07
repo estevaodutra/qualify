@@ -6,9 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ArrowLeft, ArrowRight, Info } from "lucide-react";
-import { useDispatchCampaigns } from "@/hooks/useDispatchCampaigns";
-import { useDispatchSequences } from "@/hooks/useDispatchSequences";
-import { useInstances } from "@/hooks/useInstances";
+import { useAllSequences } from "@/hooks/useSequences";
 import type { DestinationMode, QueuePolicy } from "@/hooks/useProspectingCampaigns";
 
 const WEEKDAYS = [
@@ -37,16 +35,13 @@ interface StepDestinationProps {
 }
 
 export function StepDestination({ data, onChange, onNext, onBack }: StepDestinationProps) {
-  const { campaigns } = useDispatchCampaigns();
-  const activeCampaigns = campaigns.filter((c) => c.status === "active");
-  const { sequences } = useDispatchSequences(data.automationCampaignId || undefined);
-  const activeSequences = sequences.filter((s) => s.isActive);
-  const { instances } = useInstances();
+  const { sequences } = useAllSequences();
+  const activeSequences = sequences.filter((s) => s.isActive !== false);
 
   const needsAutomation = data.destinationMode === "review_before_start" || data.destinationMode === "auto_start";
   const isValid =
     data.destinationMode === "save_only" ||
-    (!!data.automationCampaignId && !!data.automationSequenceId);
+    !!data.automationSequenceId;
 
   const updatePolicy = (patch: Partial<QueuePolicy>) => {
     onChange({ queuePolicy: { ...data.queuePolicy, ...patch } });
@@ -104,64 +99,24 @@ export function StepDestination({ data, onChange, onNext, onBack }: StepDestinat
 
         {needsAutomation && (
           <div className="space-y-4 pt-2 border-t border-border/30">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  Automação
-                </Label>
-                <Select
-                  value={data.automationCampaignId}
-                  onValueChange={(v) => onChange({ automationCampaignId: v, automationSequenceId: "" })}
-                >
-                  <SelectTrigger className="h-11 rounded-xl bg-background/50 border-border/40">
-                    <SelectValue placeholder="Selecione a campanha" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {activeCampaigns.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                    ))}
-                    {activeCampaigns.length === 0 && (
-                      <SelectItem value="none" disabled>Nenhuma campanha ativa</SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  Sequência
-                </Label>
-                <Select
-                  value={data.automationSequenceId}
-                  onValueChange={(v) => onChange({ automationSequenceId: v })}
-                  disabled={!data.automationCampaignId}
-                >
-                  <SelectTrigger className="h-11 rounded-xl bg-background/50 border-border/40">
-                    <SelectValue placeholder="Selecione a sequência" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {activeSequences.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                    ))}
-                    {activeSequences.length === 0 && (
-                      <SelectItem value="none" disabled>Nenhuma sequência ativa</SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
             <div className="space-y-2">
               <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Instância / canal
+                Sequência (Workflow)
               </Label>
-              <Select value={data.instanceId} onValueChange={(v) => onChange({ instanceId: v })}>
+              <Select
+                value={data.automationSequenceId}
+                onValueChange={(v) => onChange({ automationSequenceId: v })}
+              >
                 <SelectTrigger className="h-11 rounded-xl bg-background/50 border-border/40">
-                  <SelectValue placeholder="Selecione a instância" />
+                  <SelectValue placeholder="Selecione o fluxo a ser iniciado" />
                 </SelectTrigger>
                 <SelectContent>
-                  {instances.map((i) => (
-                    <SelectItem key={i.id} value={i.id}>{i.name} ({i.status})</SelectItem>
+                  {activeSequences.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                   ))}
+                  {activeSequences.length === 0 && (
+                    <SelectItem value="none" disabled>Nenhum fluxo ativo</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>

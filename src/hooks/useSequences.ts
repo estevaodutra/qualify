@@ -134,6 +134,28 @@ export function useSequences(campaignId: string | undefined) {
     enabled: !!campaignId,
   });
 
+  return { sequences, isLoading, error, refetch };
+}
+
+export function useAllSequences() {
+  const { activeCompanyId } = useCompany();
+
+  const { data: sequences = [], isLoading, error, refetch } = useQuery({
+    queryKey: ["message_sequences", "all", activeCompanyId],
+    queryFn: async () => {
+      if (!activeCompanyId) return [];
+      const { data, error } = await supabase
+        .from("message_sequences")
+        .select("*")
+        .eq("company_id", activeCompanyId)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return (data as DbSequence[]).map(transformSequence);
+    },
+    enabled: !!activeCompanyId,
+  });
+
   const createSequenceMutation = useMutation({
     mutationFn: async (sequence: {
       name: string;
