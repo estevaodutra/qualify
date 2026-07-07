@@ -169,7 +169,6 @@ export default function Chat() {
         <LeadContextPanel
           conversation={selectedConv}
           stages={pipelineStages}
-          onUpdateStage={updateLeadStage}
         />
       )}
     </div>

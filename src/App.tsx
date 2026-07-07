@@ -14,6 +14,7 @@ import { AppLayout } from "./components/layout/AppLayout";
 // Pages
 import Dashboard from "./pages/Dashboard";
 import Leads from "./pages/Leads";
+import Kanban from "./pages/Kanban";
 import {
   CampaignsHub,
   DispatchCampaigns,
@@ -108,6 +109,7 @@ const App = () => {
                       <Route path="/chat" element={<Chat />} />
                       <Route path="/painel-ligacoes" element={<CallPanel />} />
                       <Route path="/leads" element={<Leads />} />
+                      <Route path="/kanban" element={<Kanban />} />
                       <Route path="/numbers" element={<PhoneNumbers />} />
                       <Route path="/instances" element={<Instances />} />
                       <Route path="/alerts" element={<Alerts />} />

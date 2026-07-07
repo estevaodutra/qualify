@@ -32,6 +32,7 @@ import {
   BulkTagDialog,
   ExtractLeadsDialog,
 } from "@/components/leads";
+import { LeadTableRow } from "@/components/crm/leads/LeadTableRow";
 import {
   Users,
   UserCheck,
@@ -331,104 +332,44 @@ export default function Leads() {
                     className="rounded-sm w-3.5 h-3.5"
                   />
                 </th>
-                <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Nome</th>
-                <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Telefone</th>
-                <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Tag</th>
+                <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Lead</th>
+                <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Contato</th>
+                <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Responsável</th>
+                <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Tags</th>
+                <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-center border-b border-border">Negócios</th>
+                <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-right border-b border-border">Valor</th>
+                <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Última Interação</th>
+                <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Próx. Ativ.</th>
                 <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Origem</th>
-                <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Status</th>
                 <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Data</th>
                 <th className="px-4 py-2.5 border-b border-border w-10"></th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={8} className="text-center py-12 text-sm text-muted-foreground font-medium">Carregando leads...</td></tr>
+                <tr><td colSpan={12} className="text-center py-12 text-sm text-muted-foreground font-medium">Carregando leads...</td></tr>
               ) : leads.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-12">
+                  <td colSpan={12} className="text-center py-12">
                     <p className="text-sm text-muted-foreground font-medium">Nenhum lead encontrado.</p>
                   </td>
                 </tr>
               ) : (
-                leads.map((lead, i) => {
-                  const isEven = i % 2 === 0;
-                  // Map statuses
-                  let statusLabel = "Pendente";
-                  let bgStatus = "hsl(220 10% 96%)";
-                  let textStatus = "hsl(220 10% 45%)";
-                  let dotStatus = "hsl(220 10% 45%)";
-                  
-                  if (lead.status === "active") {
-                    statusLabel = "Ativo";
-                    bgStatus = "hsl(142 71% 45%/0.12)";
-                    textStatus = "hsl(142 61% 35%)";
-                    dotStatus = "hsl(142 61% 35%)";
-                  } else if (lead.status === "inactive" || lead.status === "blocked") {
-                    statusLabel = "Inativo";
-                    bgStatus = "hsl(0 72% 51%/0.1)";
-                    textStatus = "hsl(0 62% 45%)";
-                    dotStatus = "hsl(0 62% 45%)";
-                  }
-
-                  const firstLetter = (lead.name || "?")[0].toUpperCase();
-
-                  return (
-                    <tr key={lead.id} className={cn("border-b border-border/50", isEven ? "bg-transparent" : "bg-muted/30")}>
-                      <td className="px-4 py-3 align-middle">
-                        <Checkbox checked={selectedIds.has(lead.id)} onCheckedChange={() => toggleSelect(lead.id)} className="rounded-sm w-3.5 h-3.5" />
-                      </td>
-                      <td className="px-4 py-3 align-middle">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-full bg-primary/10 text-primary text-[12px] font-semibold flex items-center justify-center shrink-0">
-                            {firstLetter}
-                          </div>
-                          <span className="text-[13px] font-medium text-foreground">{lead.name || "Sem Nome"}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 align-middle text-[12px] font-mono text-muted-foreground">
-                        {lead.phone ? formatPhone(lead.phone) : "—"}
-                      </td>
-                      <td className="px-4 py-3 align-middle">
-                        <div className="flex flex-wrap gap-1">
-                          {(lead.tags || []).slice(0, 1).map((tag) => (
-                            <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 text-primary text-[11px] font-medium">
-                              {tag}
-                            </span>
-                          ))}
-                          {(lead.tags || []).length > 1 && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-secondary text-muted-foreground text-[11px] font-medium">
-                              +{(lead.tags?.length || 0) - 1}
-                            </span>
-                          )}
-                          {(!lead.tags || lead.tags.length === 0) && <span className="text-[12px] text-muted-foreground">—</span>}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 align-middle text-[13px] text-muted-foreground">
-                        {lead.source_name || SOURCE_LABELS[lead.source_type || ""] || "—"}
-                      </td>
-                      <td className="px-4 py-3 align-middle">
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[12px] font-medium" style={{ backgroundColor: bgStatus, color: textStatus }}>
-                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: dotStatus }} />
-                          {statusLabel}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 align-middle text-[12px] font-mono text-muted-foreground">
-                        {new Date(lead.created_at).toLocaleDateString('pt-BR')}
-                      </td>
-                      <td className="px-4 py-3 align-middle text-right">
-                        <LeadActionsMenu
-                          lead={lead}
-                          onEdit={setEditLead}
-                          onHistory={setHistoryLead}
-                          onAddTag={(l) => { setSelectedIds(new Set([l.id])); setTagDialogMode("add"); }}
-                          onAddToCampaign={(l) => { setSelectedIds(new Set([l.id])); setCampaignDialogOpen(true); }}
-                          onBlock={(l) => updateLead.mutate({ id: l.id, status: "blocked" })}
-                          onDelete={(l) => deleteLead.mutate(l.id)}
-                        />
-                      </td>
-                    </tr>
-                  );
-                })
+                leads.map((lead, i) => (
+                  <LeadTableRow
+                    key={lead.id}
+                    lead={lead as any}
+                    isEven={i % 2 === 0}
+                    isSelected={selectedIds.has(lead.id)}
+                    onToggleSelect={toggleSelect}
+                    onEdit={setEditLead}
+                    onHistory={setHistoryLead}
+                    onAddTag={(l) => { setSelectedIds(new Set([l.id])); setTagDialogMode("add"); }}
+                    onAddToCampaign={(l) => { setSelectedIds(new Set([l.id])); setCampaignDialogOpen(true); }}
+                    onBlock={(l) => updateLead.mutate({ id: l.id, status: "blocked" })}
+                    onDelete={(l) => deleteLead.mutate(l.id)}
+                  />
+                ))
               )}
             </tbody>
           </table>

@@ -4,29 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/contexts/CompanyContext";
 import { safeBatchUpsert } from "@/lib/supabase-batch";
 
-export interface Lead {
-  id: string;
-  user_id: string;
-  name: string | null;
-  phone: string | null;
-  lid: string | null;
-  email: string | null;
-  tags: string[];
-  custom_fields: Record<string, string | number | boolean | null>;
-  active_campaign_id: string | null;
-  active_campaign_type: string | null;
-  source_type: string | null;
-  source_name: string | null;
-  source_campaign_id: string | null;
-  source_group_id: string | null;
-  source_group_name: string | null;
-  total_calls: number;
-  total_messages: number;
-  last_contact_at: string | null;
-  status: string;
-  created_at: string;
-  updated_at: string;
-}
+import { Lead } from "@/types/crm.types";
 
 export interface LeadFilters {
   search?: string;

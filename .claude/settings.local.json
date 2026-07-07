@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "Bash(npx tsc:*)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "Bash(npx tsc *)",
+      "PowerShell(npx tsc --noEmit -p . 2>&1)",
+      "PowerShell(Get-Command node,npm -ErrorAction SilentlyContinue)",
+      "Bash(bun --version)",
+      "PowerShell(Get-ChildItem \"C:\\\\Program Files\\\\nodejs\" -ErrorAction SilentlyContinue; Get-ChildItem \"$env:APPDATA\\\\npm\" -ErrorAction SilentlyContinue; where.exe node 2>&1)",
+      "Bash(python3 -c ' *)"
     ]
   }
 }

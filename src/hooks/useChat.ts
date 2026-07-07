@@ -24,8 +24,7 @@ export interface ChatConversation {
     name: string | null;
     phone: string;
     email: string | null;
-    tags: string[];
-    pipeline_stage_id: string | null;
+    custom_fields?: any;
     custom_fields: Record<string, any> | null;
   };
   operator?: {
@@ -87,7 +86,7 @@ export function useChat() {
         .from("chat_conversations")
         .select(`
           *,
-          lead:leads!chat_conversations_lead_id_fkey(id, name, phone, email, tags, pipeline_stage_id, custom_fields),
+          lead:leads!chat_conversations_lead_id_fkey(id, name, phone, email, tags, custom_fields),
           operator:profiles!chat_conversations_operator_id_fkey(id, full_name, email)
         `)
         .eq("company_id", activeCompanyId)
@@ -248,32 +247,6 @@ export function useChat() {
   });
 
   // 7. Update Lead Pipeline Stage
-  const updateLeadStageMutation = useMutation({
-    mutationFn: async ({
-      leadId,
-      stageId,
-    }: {
-      leadId: string;
-      stageId: string | null;
-    }) => {
-      const { data, error } = await supabase
-        .from("leads")
-        .update({ pipeline_stage_id: stageId })
-        .eq("id", leadId)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["chat-conversations", activeCompanyId] });
-    },
-    onError: () => {
-      toast({
-        title: "Erro",
-        description: "Não foi possível alterar a etapa do lead.",
-        variant: "destructive",
       });
     },
   });
