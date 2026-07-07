@@ -4,7 +4,7 @@ export const pt = {
     dashboard: "Dashboard",
     callPanel: "Painel de Ligações",
     leads: "Leads",
-    chat: "Chat CRM",
+    chat: "Chat",
     campaigns: "Campanhas",
     groupCampaigns: "Campanhas de Grupos",
     phoneNumbers: "Números",

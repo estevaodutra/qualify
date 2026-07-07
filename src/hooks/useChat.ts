@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -66,7 +66,15 @@ export interface ChatTemplate {
   body: string;
 }
 
-export function useChat() {
+export interface ChatFilters {
+  status?: string;
+  instanceId?: string;
+  tags?: string[];
+  operatorId?: string;
+  search?: string;
+}
+
+export function useChat(filters?: ChatFilters) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -74,23 +82,81 @@ export function useChat() {
 
   // 1. Fetch Conversations
   const {
-    data: conversations = [],
+    data: conversationsData,
     isLoading: isConversationsLoading,
+    fetchNextPage: fetchNextConversations,
+    hasNextPage: hasNextConversations,
+    isFetchingNextPage: isFetchingNextConversations,
     refetch: refetchConversations,
-  } = useQuery({
-    queryKey: ["chat-conversations", activeCompanyId],
-    queryFn: async () => {
+  } = useInfiniteQuery({
+    queryKey: ["chat-conversations", activeCompanyId, filters],
+    initialPageParam: null as { last_message_at: string; id: string } | null,
+    queryFn: async ({ pageParam }) => {
       if (!activeCompanyId) return [];
 
-      const { data, error } = await supabase
+      let query = supabase
         .from("chat_conversations")
         .select(`
-          *,
+          id,
+          company_id,
+          instance_id,
+          status,
+          operator_id,
+          unread_count,
+          last_message_preview,
+          last_message_at,
+          tags,
+          waiting_since,
+          created_at,
+          updated_at,
           lead:leads!chat_conversations_lead_id_fkey(id, name, phone, email, tags, custom_fields),
           operator:profiles!chat_conversations_operator_id_fkey(id, full_name, email)
         `)
-        .eq("company_id", activeCompanyId)
-        .order("last_message_at", { ascending: false });
+        .eq("company_id", activeCompanyId);
+
+      // Filters
+      if (filters?.status && filters.status !== "all") {
+        if (filters.status === "unread") {
+          query = query.gt("unread_count", 0);
+        } else if (filters.status === "unassigned") {
+          query = query.is("operator_id", null);
+        } else {
+          query = query.eq("status", filters.status);
+        }
+      }
+      
+      if (filters?.instanceId) {
+        query = query.eq("instance_id", filters.instanceId);
+      }
+      
+      if (filters?.operatorId) {
+        if (filters.operatorId === "unassigned") {
+           query = query.is("operator_id", null);
+        } else {
+           query = query.eq("operator_id", filters.operatorId);
+        }
+      }
+
+      if (filters?.tags && filters.tags.length > 0) {
+        query = query.contains("tags", filters.tags);
+      }
+
+      if (filters?.search) {
+        // Simple search on lead name or phone via joined table
+        // This requires an inner join to filter correctly
+        // Or we just do a text search on preview
+        query = query.or(`last_message_preview.ilike.%${filters.search}%`);
+      }
+
+      // Pagination cursor
+      if (pageParam) {
+        query = query.or(`last_message_at.lt.${pageParam.last_message_at},and(last_message_at.eq.${pageParam.last_message_at},id.lt.${pageParam.id})`);
+      }
+
+      const limit = 30;
+      query = query.order("last_message_at", { ascending: false }).order("id", { ascending: false }).limit(limit);
+
+      const { data, error } = await query;
 
       if (error) {
         console.error("Error fetching conversations:", error);
@@ -99,9 +165,17 @@ export function useChat() {
 
       return data as unknown as ChatConversation[];
     },
+    getNextPageParam: (lastPage) => {
+      if (!lastPage || lastPage.length < 30) return undefined;
+      const last = lastPage[lastPage.length - 1];
+      return { last_message_at: last.last_message_at, id: last.id };
+    },
     enabled: !!activeCompanyId && !!user,
-    staleTime: 30000, // 30 seconds stale time since it's updated via realtime
+    staleTime: 30000,
   });
+
+  const conversations = conversationsData?.pages.flat() || [];
+
 
   // 2. Fetch Pipeline Stages
   const {
@@ -246,6 +320,23 @@ export function useChat() {
     },
   });
 
+  // 7. Update Lead Stage Mutation
+  const updateLeadStageMutation = useMutation({
+    mutationFn: async ({ leadId, stageId }: { leadId: string; stageId: string }) => {
+      const { data, error } = await supabase
+        .from("leads")
+        .update({ pipeline_stage_id: stageId })
+        .eq("id", leadId)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["chat-conversations", activeCompanyId] });
+    },
+  });
+
   // 8. Create Chat Template
   const createTemplateMutation = useMutation({
     mutationFn: async (payload: { shortcut: string; title: string; body: string }) => {
@@ -280,13 +371,20 @@ export function useChat() {
       .on(
         "postgres_changes",
         {
-          event: "*",
+          event: "update",
           schema: "public",
           table: "chat_conversations",
           filter: `company_id=eq.${activeCompanyId}`,
         },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ["chat-conversations", activeCompanyId] });
+        (payload) => {
+          const updatedConv = payload.new as ChatConversation;
+          queryClient.setQueriesData({ queryKey: ["chat-conversations", activeCompanyId] }, (oldData: any) => {
+            if (!oldData || !oldData.pages) return oldData;
+            const newPages = oldData.pages.map((page: any[]) => {
+              return page.map((conv) => (conv.id === updatedConv.id ? { ...conv, ...updatedConv } : conv));
+            });
+            return { ...oldData, pages: newPages };
+          });
         }
       )
       .on(
@@ -298,8 +396,37 @@ export function useChat() {
         },
         (payload) => {
           const newMsg = payload.new as ChatMessage;
-          queryClient.invalidateQueries({ queryKey: ["chat-messages", newMsg.conversation_id] });
-          queryClient.invalidateQueries({ queryKey: ["chat-conversations", activeCompanyId] });
+          
+          // Granular update for messages
+          queryClient.setQueryData(["chat-messages", newMsg.conversation_id], (oldData: any) => {
+            if (!oldData || !oldData.pages) return oldData;
+            const newPages = [...oldData.pages];
+            if (newPages.length > 0) {
+              newPages[0] = [newMsg, ...newPages[0]];
+            }
+            return { ...oldData, pages: newPages };
+          });
+
+          // Granular update for conversations
+          // Note: we can't easily know all filter keys, so we invalidate as a fallback 
+          // or we can invalidate after a delay. We will use a soft update for the current active filters.
+          queryClient.setQueriesData({ queryKey: ["chat-conversations", activeCompanyId] }, (oldData: any) => {
+            if (!oldData || !oldData.pages) return oldData;
+            const newPages = oldData.pages.map((page: any[]) => {
+              return page.map((conv) => {
+                if (conv.id === newMsg.conversation_id) {
+                  return {
+                    ...conv,
+                    last_message_preview: newMsg.is_internal ? `[Nota Interna] ${newMsg.body || '[Mídia]'}` : (newMsg.body || '[Mídia]'),
+                    last_message_at: newMsg.created_at,
+                    unread_count: newMsg.sender_type === 'lead' ? conv.unread_count + 1 : conv.unread_count
+                  };
+                }
+                return conv;
+              });
+            });
+            return { ...oldData, pages: newPages };
+          });
         }
       )
       .subscribe();
@@ -312,6 +439,9 @@ export function useChat() {
 
   return {
     conversations,
+    fetchNextConversations,
+    hasNextConversations,
+    isFetchingNextConversations,
     pipelineStages,
     templates,
     isConversationsLoading,
@@ -332,39 +462,64 @@ export function useChatMessages(conversationId?: string) {
 
   // Fetch Messages for Selected Thread
   const {
-    data: messages = [],
+    data: messagesData,
     isLoading: isMessagesLoading,
+    fetchNextPage: fetchNextMessages,
+    hasNextPage: hasNextMessages,
+    isFetchingNextPage: isFetchingNextMessages,
     refetch: refetchMessages,
-  } = useQuery({
+  } = useInfiniteQuery({
     queryKey: ["chat-messages", conversationId],
-    queryFn: async () => {
+    initialPageParam: null as { created_at: string; id: string } | null,
+    queryFn: async ({ pageParam }) => {
       if (!conversationId) return [];
 
-      const { data, error } = await supabase
+      let query = supabase
         .from("chat_messages")
         .select("*")
         .eq("conversation_id", conversationId)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false });
+
+      if (pageParam) {
+        query = query.or(`created_at.lt.${pageParam.created_at},and(created_at.eq.${pageParam.created_at},id.lt.${pageParam.id})`);
+      }
+
+      query = query.limit(50);
+
+      const { data, error } = await query;
 
       if (error) {
         console.error("Error fetching messages:", error);
         throw error;
       }
 
-      // Mark conversation unread count as 0 when thread is opened/refetched
-      await supabase
-        .from("chat_conversations")
-        .update({ unread_count: 0 })
-        .eq("id", conversationId);
+      if (!pageParam) {
+        // Mark conversation unread count as 0 when thread is opened
+        await supabase
+          .from("chat_conversations")
+          .update({ unread_count: 0 })
+          .eq("id", conversationId);
+      }
 
       return data as ChatMessage[];
+    },
+    getNextPageParam: (lastPage) => {
+      if (!lastPage || lastPage.length < 50) return undefined;
+      const last = lastPage[lastPage.length - 1];
+      return { created_at: last.created_at, id: last.id };
     },
     enabled: !!conversationId && !!user,
   });
 
+  const messages = messagesData ? [...messagesData.pages.flat()].reverse() : [];
+
   return {
     messages,
     isMessagesLoading,
+    fetchNextMessages,
+    hasNextMessages,
+    isFetchingNextMessages,
     refetchMessages,
   };
 }

@@ -100,7 +100,7 @@ export function AppSidebar() {
     { title: t("nav.callPanel"), url: "/painel-ligacoes", icon: PhoneCall },
     { title: "Pipelines", url: "/pipelines", icon: Kanban },
     { title: t("nav.leads") || "Leads", url: "/leads", icon: Users },
-    { title: "Chat CRM", url: "/chat", icon: MessageSquare },
+    { title: "Chat", url: "/chat", icon: MessageSquare },
     { title: "Funis", url: "/quiz", icon: Layers },
     { title: "Prospecção", url: "/prospeccao", icon: Search },
     { title: "Agendamentos", url: "/agendamentos/calendarios", icon: CalendarDays },

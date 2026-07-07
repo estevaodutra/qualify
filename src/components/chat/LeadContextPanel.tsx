@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { 
-  User, Plus, X, FileText, Tag, ChevronDown, ChevronRight, Save, Award, Calendar
+  User, Plus, X, FileText, Tag, ChevronDown, ChevronRight, Save, Award, Calendar, ListTodo, Paperclip, LayoutList, Download
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import { LeadAvatar, LeadTags, DealPipelineStage, DealValue } from "../crm/share
 import { useQuery } from "@tanstack/react-query";
 import { Deal } from "@/types/crm.types";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 interface LeadContextPanelProps {
   conversation: ChatConversation;
@@ -34,6 +35,8 @@ export default function LeadContextPanel({ conversation, stages }: LeadContextPa
   const { lead } = conversation;
   const { toast } = useToast();
 
+  const [activeTab, setActiveTab] = useState<"info" | "negocios" | "tarefas" | "arquivos">("info");
+
   const [newTag, setNewTag] = useState("");
   const [localTags, setLocalTags] = useState<string[]>(lead?.tags || []);
   
@@ -45,8 +48,7 @@ export default function LeadContextPanel({ conversation, stages }: LeadContextPa
   
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     perfil: true,
-    notas: true,
-    negocio: true
+    notas: true
   });
 
   const [isSaving, setIsSaving] = useState(false);
@@ -76,7 +78,7 @@ export default function LeadContextPanel({ conversation, stages }: LeadContextPa
     fetchMetadata();
   }, [conversation.company_id]);
 
-  // Fetch active deals for this lead
+  // Fetch active deals
   const { data: activeDeals, isLoading: dealsLoading } = useQuery({
     queryKey: ['lead-active-deals', lead?.id],
     queryFn: async () => {
@@ -90,6 +92,39 @@ export default function LeadContextPanel({ conversation, stages }: LeadContextPa
       return data as Deal[];
     },
     enabled: !!lead?.id
+  });
+
+  // Fetch tasks/activities
+  const { data: activities, isLoading: activitiesLoading } = useQuery({
+    queryKey: ['lead-activities', lead?.id],
+    queryFn: async () => {
+      if (!lead?.id) return [];
+      const { data, error } = await supabase
+        .from('activities')
+        .select('*')
+        .eq('lead_id', lead.id)
+        .order('due_at', { ascending: true });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!lead?.id && activeTab === "tarefas"
+  });
+
+  // Fetch files (from chat media)
+  const { data: files, isLoading: filesLoading } = useQuery({
+    queryKey: ['lead-files', conversation.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select('id, body, media_url, message_type, created_at')
+        .eq('conversation_id', conversation.id)
+        .neq('message_type', 'text')
+        .not('media_url', 'is', null)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: activeTab === "arquivos"
   });
 
   const toggleSection = (section: string) => {
@@ -149,60 +184,199 @@ export default function LeadContextPanel({ conversation, stages }: LeadContextPa
   });
 
   return (
-    <div className="w-[320px] shrink-0 border-l border-border/40 bg-card/20 flex flex-col h-full overflow-y-auto p-4 space-y-4">
+    <div className="w-[340px] shrink-0 border-l border-border/40 bg-card/20 flex flex-col h-full overflow-hidden">
       {/* Contact Profile Header */}
-      <div className="flex flex-col items-center text-center space-y-2 pb-2 border-b border-border/20">
-        <LeadAvatar name={name} className="h-14 w-14 shadow-md" fallbackClassName="text-xl" />
+      <div className="flex flex-col items-center text-center p-4 space-y-2 border-b border-border/20 shrink-0 bg-background/30 backdrop-blur-md">
+        <LeadAvatar name={name} className="h-16 w-16 shadow-lg border-2 border-primary/20" fallbackClassName="text-2xl" />
         <div>
-          <h3 className="font-bold text-sm text-card-foreground">{name || "Sem Nome"}</h3>
-          <span className="text-[9px] text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full uppercase tracking-wider font-semibold">
-            Lead
-          </span>
+          <h3 className="font-bold text-base text-card-foreground leading-tight">{name || "Sem Nome"}</h3>
+          <span className="text-[10px] text-muted-foreground font-mono mt-0.5 inline-block">{phone}</span>
+        </div>
+        
+        {/* Tab Navigation */}
+        <div className="flex bg-muted/40 p-1 rounded-xl mt-3 w-full border border-border/40 shadow-inner">
+          <button 
+            onClick={() => setActiveTab("info")} 
+            className={cn("flex-1 py-1.5 text-[10px] font-bold rounded-lg transition-all flex items-center justify-center gap-1", activeTab === "info" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground")}
+          >
+            <User className="h-3 w-3" /> Info
+          </button>
+          <button 
+            onClick={() => setActiveTab("negocios")} 
+            className={cn("flex-1 py-1.5 text-[10px] font-bold rounded-lg transition-all flex items-center justify-center gap-1", activeTab === "negocios" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground")}
+          >
+            <Award className="h-3 w-3" /> Negócios
+          </button>
+          <button 
+            onClick={() => setActiveTab("tarefas")} 
+            className={cn("flex-1 py-1.5 text-[10px] font-bold rounded-lg transition-all flex items-center justify-center gap-1", activeTab === "tarefas" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground")}
+          >
+            <ListTodo className="h-3 w-3" /> Tarefas
+          </button>
+          <button 
+            onClick={() => setActiveTab("arquivos")} 
+            className={cn("flex-1 py-1.5 text-[10px] font-bold rounded-lg transition-all flex items-center justify-center gap-1", activeTab === "arquivos" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground")}
+          >
+            <Paperclip className="h-3 w-3" /> Mídia
+          </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-1.5 pt-1">
-        <Button variant="outline" className="text-[10px] h-7 px-1.5 border-border/40 font-semibold rounded-lg">+ Negócio</Button>
-        <Button variant="outline" className="text-[10px] h-7 px-1.5 border-border/40 font-semibold rounded-lg">+ Tarefa</Button>
-      </div>
+      {/* Content Area */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
+        
+        {/* TAB: INFO */}
+        {activeTab === "info" && (
+          <div className="space-y-4 animate-in fade-in duration-300">
+            {/* Accordion: Perfil */}
+            <div className="border border-border/40 rounded-2xl overflow-hidden bg-background/40 shadow-sm">
+              <button 
+                onClick={() => toggleSection("perfil")}
+                className="w-full flex items-center justify-between p-3 text-xs font-bold text-card-foreground hover:bg-muted/30 transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <div className="bg-primary/10 p-1.5 rounded-lg"><User className="h-3.5 w-3.5 text-primary" /></div>
+                  Detalhes do Contato
+                </span>
+                {openSections.perfil ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+              </button>
 
-      {/* Accordion: Negócios */}
-      <div className="border border-border/30 rounded-xl overflow-hidden bg-background/20">
-        <button 
-          onClick={() => toggleSection("negocio")}
-          className="w-full flex items-center justify-between p-3 text-xs font-bold text-card-foreground hover:bg-muted/10 transition-colors"
-        >
-          <span className="flex items-center gap-1.5">
-            <Award className="h-4 w-4 text-[#8A3CFF]" />
-            Negócios em Andamento
-          </span>
-          {openSections.negocio ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-        </button>
+              {openSections.perfil && (
+                <div className="p-3 border-t border-border/20 space-y-3 bg-card/10">
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground font-semibold">Nome Completo</Label>
+                    <Input value={name} onChange={e => setName(e.target.value)} className="h-8 text-xs rounded-xl border-border/40 bg-background/80 focus:bg-background" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground font-semibold">E-mail</Label>
+                    <Input type="email" value={email} onChange={e => setEmail(e.target.value)} className="h-8 text-xs rounded-xl border-border/40 bg-background/80 focus:bg-background" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground font-semibold">Telefone / WhatsApp</Label>
+                    <Input value={phone} disabled className="h-8 text-xs rounded-xl border-border/40 bg-muted/30 font-mono text-muted-foreground" />
+                  </div>
+                  
+                  <Button onClick={handleSaveProfile} disabled={isSaving} size="sm" className="w-full h-8 rounded-xl text-[10px] font-bold gap-1 mt-2">
+                    <Save className="h-3.5 w-3.5" />
+                    {isSaving ? "Salvando..." : "Salvar Alterações"}
+                  </Button>
+                </div>
+              )}
+            </div>
 
-        {openSections.negocio && (
-          <div className="p-3 border-t border-border/20 space-y-2 bg-card/10 text-xs">
+            {/* Accordion: Notas */}
+            <div className="border border-border/40 rounded-2xl overflow-hidden bg-background/40 shadow-sm">
+              <button 
+                onClick={() => toggleSection("notas")}
+                className="w-full flex items-center justify-between p-3 text-xs font-bold text-card-foreground hover:bg-muted/30 transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <div className="bg-yellow-500/10 p-1.5 rounded-lg"><FileText className="h-3.5 w-3.5 text-yellow-500" /></div>
+                  Anotações Fixas
+                </span>
+                {openSections.notas ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+              </button>
+
+              {openSections.notas && (
+                <div className="p-3 border-t border-border/20 space-y-2 bg-card/10">
+                  <Textarea 
+                    placeholder="Digite notas importantes sobre o lead que ficarão sempre visíveis..."
+                    value={customFields.notas || ""}
+                    onChange={e => handleCustomFieldChange("notas", e.target.value)}
+                    className="text-xs bg-background/80 border-border/40 focus:bg-background rounded-xl h-24 resize-none leading-relaxed"
+                  />
+                  <Button onClick={handleSaveProfile} size="sm" variant="secondary" className="w-full h-8 rounded-xl text-[10px] font-bold mt-1">
+                    Salvar Notas
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* Dynamic Group Foldouts */}
+            {Object.entries(fieldsByGroup).map(([groupName, groupFields]) => {
+              const sectionKey = groupName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "_");
+              const isOpen = !!openSections[sectionKey];
+              
+              return (
+                <div key={groupName} className="border border-border/40 rounded-2xl overflow-hidden bg-background/40 shadow-sm">
+                  <button onClick={() => toggleSection(sectionKey)} className="w-full flex items-center justify-between p-3 text-xs font-bold text-card-foreground hover:bg-muted/30 transition-colors">
+                    <span className="flex items-center gap-2">
+                      <div className="bg-blue-500/10 p-1.5 rounded-lg"><LayoutList className="h-3.5 w-3.5 text-blue-500" /></div>
+                      {groupName}
+                    </span>
+                    {isOpen ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                  </button>
+                  {isOpen && (
+                    <div className="p-3 border-t border-border/20 space-y-3 bg-card/10">
+                      {groupFields.map(field => (
+                        <div key={field.id} className="space-y-1">
+                          <Label className="text-[10px] text-muted-foreground font-semibold">{field.name}</Label>
+                          <Input 
+                            type={field.type === "date" ? "date" : "text"}
+                            value={customFields[field.key] || ""} 
+                            onChange={e => handleCustomFieldChange(field.key, e.target.value)}
+                            className="h-8 text-xs rounded-xl border-border/40 bg-background/80 focus:bg-background"
+                          />
+                        </div>
+                      ))}
+                      <Button onClick={handleSaveProfile} disabled={isSaving} size="sm" variant="secondary" className="w-full h-8 rounded-xl text-[10px] font-bold mt-2">
+                        Salvar {groupName}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Etiquetas / Tags (Always open at bottom) */}
+            <div className="pt-2">
+              <h4 className="flex items-center gap-2 px-1 text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-3">
+                <Tag className="h-3.5 w-3.5" />
+                Etiquetas do Lead
+              </h4>
+              <div className="space-y-3 bg-background/40 border border-border/40 p-3 rounded-2xl shadow-sm">
+                <LeadTags tags={localTags} maxVisible={20} />
+                <div className="flex gap-2">
+                  <Input placeholder="Nova etiqueta..." value={newTag} onChange={(e) => setNewTag(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleAddTag()} className="h-8 text-[11px] bg-background/80 focus:bg-background rounded-xl flex-1" />
+                  <Button size="icon" onClick={handleAddTag} className="h-8 w-8 shrink-0 rounded-xl bg-primary/20 text-primary hover:bg-primary/30 shadow-none">
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: NEGÓCIOS */}
+        {activeTab === "negocios" && (
+          <div className="space-y-3 animate-in fade-in duration-300">
+            <Button className="w-full rounded-xl text-xs font-bold gap-1.5 h-9 bg-primary hover:bg-primary/90 shadow-md">
+              <Plus className="h-4 w-4" /> Novo Negócio
+            </Button>
+            
             {dealsLoading ? (
-              <p className="text-center text-muted-foreground text-[10px] py-2">Carregando negócios...</p>
+              <p className="text-center text-muted-foreground text-[10px] py-4">Carregando negócios...</p>
             ) : !activeDeals || activeDeals.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-3 px-2 text-center border border-dashed border-border/50 rounded-lg bg-background/50">
-                <p className="text-[10px] text-muted-foreground mb-2">Nenhum negócio ativo encontrado.</p>
-                <Button size="sm" variant="secondary" className="h-6 text-[10px] px-2">Criar Negócio</Button>
+              <div className="flex flex-col items-center justify-center py-10 px-4 text-center border-2 border-dashed border-border/50 rounded-2xl bg-background/50">
+                <Award className="h-10 w-10 text-muted-foreground/30 mb-3" />
+                <p className="text-sm font-bold">Nenhum negócio ativo</p>
+                <p className="text-[10px] text-muted-foreground mt-1 max-w-[200px]">Crie um negócio para acompanhar oportunidades financeiras com este lead.</p>
               </div>
             ) : (
               activeDeals.map(deal => {
                 const stage = stages.find(s => s.id === deal.stage_id);
                 return (
-                  <div key={deal.id} className="p-2 border border-border/40 rounded-lg bg-background shadow-sm hover:border-primary/30 transition-colors cursor-pointer flex flex-col gap-1.5">
+                  <div key={deal.id} className="p-3 border border-border/40 rounded-2xl bg-background/80 shadow-sm hover:shadow-md hover:border-primary/30 transition-all cursor-pointer flex flex-col gap-2">
                     <div className="flex justify-between items-start">
-                      <span className="font-semibold text-[11px] truncate">{deal.title || "Sem título"}</span>
-                      <DealValue value={deal.value} currency={deal.currency} className="text-[11px]" />
+                      <span className="font-bold text-sm text-card-foreground leading-tight">{deal.title || "Sem título"}</span>
+                      <DealValue value={deal.value} currency={deal.currency} className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold" />
                     </div>
                     <div className="flex justify-between items-center mt-1">
-                      <DealPipelineStage stageName={stage?.name || "Sem etapa"} stageColor={stage?.color} className="text-[10px]" />
+                      <DealPipelineStage stageName={stage?.name || "Sem etapa"} stageColor={stage?.color} className="text-[10px] font-bold" />
                       {deal.expected_close_date && (
-                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                          <Calendar className="w-3 h-3" />
-                          {format(new Date(deal.expected_close_date), 'dd/MM/yy')}
+                        <div className="flex items-center gap-1.5 text-[10px] font-semibold text-muted-foreground bg-muted/50 px-2 py-1 rounded-md">
+                          <Calendar className="w-3 h-3 text-primary/70" />
+                          {format(new Date(deal.expected_close_date), 'dd/MM/yyyy')}
                         </div>
                       )}
                     </div>
@@ -212,123 +386,97 @@ export default function LeadContextPanel({ conversation, stages }: LeadContextPa
             )}
           </div>
         )}
-      </div>
 
-      {/* Accordion: Perfil (Static standard profile fields) */}
-      <div className="border border-border/30 rounded-xl overflow-hidden bg-background/20">
-        <button 
-          onClick={() => toggleSection("perfil")}
-          className="w-full flex items-center justify-between p-3 text-xs font-bold text-card-foreground hover:bg-muted/10 transition-colors"
-        >
-          <span className="flex items-center gap-1.5">
-            <User className="h-4 w-4 text-[#8A3CFF]" />
-            Perfil
-          </span>
-          {openSections.perfil ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-        </button>
-
-        {openSections.perfil && (
-          <div className="p-3 border-t border-border/20 space-y-3 bg-card/10">
-            <div className="space-y-1">
-              <Label className="text-[10px] text-muted-foreground font-semibold">Nome</Label>
-              <Input value={name} onChange={e => setName(e.target.value)} className="h-7 text-xs rounded-lg border-border/40 bg-background/50" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[10px] text-muted-foreground font-semibold">E-mail</Label>
-              <Input type="email" value={email} onChange={e => setEmail(e.target.value)} className="h-7 text-xs rounded-lg border-border/40 bg-background/50" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[10px] text-muted-foreground font-semibold">Telefone</Label>
-              <Input value={phone} disabled className="h-7 text-xs rounded-lg border-border/40 bg-muted/30 font-mono text-muted-foreground" />
-            </div>
+        {/* TAB: TAREFAS */}
+        {activeTab === "tarefas" && (
+          <div className="space-y-3 animate-in fade-in duration-300">
+            <Button className="w-full rounded-xl text-xs font-bold gap-1.5 h-9 bg-primary hover:bg-primary/90 shadow-md">
+              <Plus className="h-4 w-4" /> Nova Tarefa
+            </Button>
             
-            <Button onClick={handleSaveProfile} disabled={isSaving} size="sm" className="w-full h-7 bg-[#8A3CFF] hover:bg-[#7830E3] text-white rounded-lg text-[10px] gap-1 mt-1">
-              <Save className="h-3 w-3" />
-              {isSaving ? "Salvando..." : "Salvar Perfil"}
-            </Button>
-          </div>
-        )}
-      </div>
-
-      {/* Accordion: Notas */}
-      <div className="border border-border/30 rounded-xl overflow-hidden bg-background/20">
-        <button 
-          onClick={() => toggleSection("notas")}
-          className="w-full flex items-center justify-between p-3 text-xs font-bold text-card-foreground hover:bg-muted/10 transition-colors"
-        >
-          <span className="flex items-center gap-1.5">
-            <FileText className="h-4 w-4 text-[#8A3CFF]" />
-            Notas
-          </span>
-          {openSections.notas ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-        </button>
-
-        {openSections.notas && (
-          <div className="p-3 border-t border-border/20 space-y-2 bg-card/10">
-            <Textarea 
-              placeholder="Digite notas e observações sobre o lead..."
-              value={customFields.notas || ""}
-              onChange={e => handleCustomFieldChange("notas", e.target.value)}
-              className="text-xs bg-background/50 border-border/40 rounded-lg h-20 resize-none"
-            />
-            <Button onClick={handleSaveProfile} size="sm" className="w-full h-7 bg-muted/40 hover:bg-muted/60 text-foreground border border-border/40 rounded-lg text-[10px]">
-              Salvar Nota
-            </Button>
-          </div>
-        )}
-      </div>
-
-      {/* Dynamic Group Foldouts */}
-      {Object.entries(fieldsByGroup).map(([groupName, groupFields]) => {
-        const sectionKey = groupName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "_");
-        const isOpen = !!openSections[sectionKey];
-        
-        return (
-          <div key={groupName} className="border border-border/30 rounded-xl overflow-hidden bg-background/20">
-            <button onClick={() => toggleSection(sectionKey)} className="w-full flex items-center justify-between p-3 text-xs font-bold text-card-foreground hover:bg-muted/10">
-              <span className="flex items-center gap-1.5">
-                <Tag className="h-4 w-4 text-[#8A3CFF]" />
-                {groupName}
-              </span>
-              {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-            </button>
-            {isOpen && (
-              <div className="p-3 border-t border-border/20 space-y-3 bg-card/10">
-                {groupFields.map(field => (
-                  <div key={field.id} className="space-y-1">
-                    <Label className="text-[10px] text-muted-foreground font-semibold">{field.name}</Label>
-                    <Input 
-                      type={field.type === "date" ? "date" : "text"}
-                      value={customFields[field.key] || ""} 
-                      onChange={e => handleCustomFieldChange(field.key, e.target.value)}
-                      className="h-7 text-xs rounded-lg border-border/40 bg-background/50"
-                    />
+            {activitiesLoading ? (
+              <p className="text-center text-muted-foreground text-[10px] py-4">Carregando tarefas...</p>
+            ) : !activities || activities.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 px-4 text-center border-2 border-dashed border-border/50 rounded-2xl bg-background/50">
+                <ListTodo className="h-10 w-10 text-muted-foreground/30 mb-3" />
+                <p className="text-sm font-bold">Nenhuma tarefa agendada</p>
+                <p className="text-[10px] text-muted-foreground mt-1 max-w-[200px]">Crie lembretes, reuniões ou ligações para interagir com este lead.</p>
+              </div>
+            ) : (
+              activities.map(activity => (
+                <div key={activity.id} className={cn(
+                  "p-3 border rounded-2xl shadow-sm transition-all flex flex-col gap-1.5",
+                  activity.completed_at ? "bg-muted/30 border-border/30 opacity-70" : "bg-background/80 border-border/50 hover:border-primary/30"
+                )}>
+                  <div className="flex justify-between items-start gap-2">
+                    <span className={cn("font-bold text-xs leading-tight", activity.completed_at ? "line-through text-muted-foreground" : "text-card-foreground")}>
+                      {activity.title}
+                    </span>
+                    <span className="text-[9px] uppercase font-bold tracking-wider bg-muted/60 px-1.5 py-0.5 rounded text-muted-foreground shrink-0">
+                      {activity.type}
+                    </span>
                   </div>
+                  {activity.description && (
+                    <p className="text-[10px] text-muted-foreground line-clamp-2">{activity.description}</p>
+                  )}
+                  {activity.due_at && (
+                    <div className="flex items-center gap-1.5 text-[10px] font-semibold text-muted-foreground mt-1">
+                      <Calendar className="w-3 h-3 text-primary/70" />
+                      {format(new Date(activity.due_at), "dd/MM/yyyy 'às' HH:mm")}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* TAB: ARQUIVOS */}
+        {activeTab === "arquivos" && (
+          <div className="space-y-3 animate-in fade-in duration-300">
+            {filesLoading ? (
+              <p className="text-center text-muted-foreground text-[10px] py-4">Carregando mídia...</p>
+            ) : !files || files.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 px-4 text-center border-2 border-dashed border-border/50 rounded-2xl bg-background/50">
+                <Paperclip className="h-10 w-10 text-muted-foreground/30 mb-3" />
+                <p className="text-sm font-bold">Nenhum arquivo anexado</p>
+                <p className="text-[10px] text-muted-foreground mt-1 max-w-[200px]">Os arquivos e mídias enviados na conversa aparecerão aqui.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {files.map(file => (
+                  <a 
+                    key={file.id} 
+                    href={file.media_url} 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="group border border-border/50 bg-background/60 rounded-xl overflow-hidden hover:border-primary/40 hover:shadow-md transition-all flex flex-col relative"
+                  >
+                    {file.message_type === 'image' ? (
+                      <div className="aspect-square bg-muted/40 relative">
+                        <img src={file.media_url} alt="Mídia" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                          <Download className="text-white opacity-0 group-hover:opacity-100 h-6 w-6 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300" />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="aspect-square bg-muted/20 flex flex-col items-center justify-center gap-2 p-2 relative group-hover:bg-primary/5 transition-colors">
+                        <FileText className="h-8 w-8 text-primary/70" />
+                        <span className="text-[9px] font-bold text-center uppercase text-muted-foreground">{file.message_type}</span>
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors flex items-center justify-center">
+                          <Download className="text-primary opacity-0 group-hover:opacity-100 h-6 w-6 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300 drop-shadow-sm" />
+                        </div>
+                      </div>
+                    )}
+                    <div className="p-2 border-t border-border/40">
+                      <p className="text-[9px] text-muted-foreground font-mono truncate">{format(new Date(file.created_at), "dd/MM/yyyy")}</p>
+                    </div>
+                  </a>
                 ))}
-                <Button onClick={handleSaveProfile} disabled={isSaving} size="sm" className="w-full h-7 bg-muted/40 hover:bg-muted/60 text-foreground border border-border/40 rounded-lg text-[10px]">
-                  Salvar {groupName}
-                </Button>
               </div>
             )}
           </div>
-        );
-      })}
-
-      {/* Accordion: Etiquetas / Tags */}
-      <div className="border border-border/30 rounded-xl overflow-hidden bg-background/20">
-        <h4 className="flex items-center gap-1.5 p-3 text-xs font-bold text-card-foreground">
-          <Tag className="h-4 w-4 text-[#8A3CFF]" />
-          Etiquetas / Tags
-        </h4>
-        <div className="p-3 border-t border-border/20 space-y-3 bg-card/10">
-          <LeadTags tags={localTags} maxVisible={10} />
-          <div className="flex gap-1 pt-1">
-            <Input placeholder="Nova tag..." value={newTag} onChange={(e) => setNewTag(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleAddTag()} className="h-7 text-[10px] bg-background/50 rounded-lg" />
-            <Button size="sm" onClick={handleAddTag} className="h-7 px-2 shrink-0 bg-[#8A3CFF] hover:bg-[#7830E3] rounded-lg">
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

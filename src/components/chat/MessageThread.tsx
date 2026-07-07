@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, FileText, Lock, MapPin, Check, CheckCheck, User } from "lucide-react";
 import { ChatMessage, ChatConversation } from "@/hooks/useChat";
 import { cn } from "@/lib/utils";
@@ -7,15 +7,67 @@ interface MessageThreadProps {
   conversation: ChatConversation;
   messages: ChatMessage[];
   isLoading: boolean;
+  fetchNextMessages?: () => void;
+  hasNextMessages?: boolean;
+  isFetchingNextMessages?: boolean;
 }
 
-export default function MessageThread({ conversation, messages, isLoading }: MessageThreadProps) {
+export default function MessageThread({ 
+  conversation, 
+  messages, 
+  isLoading,
+  fetchNextMessages,
+  hasNextMessages,
+  isFetchingNextMessages
+}: MessageThreadProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const topRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const [hasInitialScrolled, setHasInitialScrolled] = useState(false);
 
-  // Auto-scroll to bottom of conversation
+  // Auto-scroll to bottom of conversation initially or when sending new message
+  // We avoid scrolling if we are just loading older messages
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading]);
+    if (isLoading) return;
+    
+    // Simple heuristic: if we load the very first time, scroll down
+    if (!hasInitialScrolled && messages.length > 0) {
+      bottomRef.current?.scrollIntoView();
+      setHasInitialScrolled(true);
+    }
+  }, [messages, isLoading, hasInitialScrolled]);
+
+  // If messages array shrinks (change conversation), reset scroll flag
+  useEffect(() => {
+    setHasInitialScrolled(false);
+  }, [conversation.id]);
+
+  // Intersection Observer for top of list (load older messages)
+  useEffect(() => {
+    if (isFetchingNextMessages || !hasNextMessages || !fetchNextMessages) return;
+
+    if (observerRef.current) observerRef.current.disconnect();
+
+    observerRef.current = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        // Save scroll position relative to bottom so we can preserve it
+        const container = containerRef.current;
+        if (container) {
+           // We might need a small timeout if React hasn't rendered it yet, 
+           // but normally the react-query handles cache update seamlessly
+           fetchNextMessages();
+        }
+      }
+    }, { root: containerRef.current, threshold: 0.1 });
+
+    if (topRef.current) {
+      observerRef.current.observe(topRef.current);
+    }
+
+    return () => observerRef.current?.disconnect();
+  }, [hasNextMessages, isFetchingNextMessages, fetchNextMessages]);
+
 
   // Group messages by date helper
   const groupedMessages = messages.reduce<Record<string, ChatMessage[]>>((groups, msg) => {
@@ -37,7 +89,7 @@ export default function MessageThread({ conversation, messages, isLoading }: Mes
     });
   };
 
-  if (isLoading) {
+  if (isLoading && !isFetchingNextMessages && messages.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-background/30 backdrop-blur-sm">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -47,7 +99,15 @@ export default function MessageThread({ conversation, messages, isLoading }: Mes
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-background/20 scrollbar-thin">
+    <div ref={containerRef} className="flex-1 overflow-y-auto p-4 space-y-6 bg-background/20 scrollbar-thin">
+      
+      {/* Top intersection target for loading older messages */}
+      <div ref={topRef} className="w-full flex justify-center py-2 h-10">
+        {isFetchingNextMessages && (
+          <Loader2 className="h-5 w-5 animate-spin text-primary opacity-50" />
+        )}
+      </div>
+
       {Object.entries(groupedMessages).map(([date, msgs]) => (
         <div key={date} className="space-y-4">
           {/* Date separator */}

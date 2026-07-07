@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { MessageSquare, RefreshCw, Loader2, Info } from "lucide-react";
+import { MessageSquare, RefreshCw, Loader2, Info, ChevronLeft } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
-import { useChat, useChatMessages } from "@/hooks/useChat";
+import { useChat, useChatMessages, ChatFilters } from "@/hooks/useChat";
+import { cn } from "@/lib/utils";
 
 import InboxList from "@/components/chat/InboxList";
 import MessageThread from "@/components/chat/MessageThread";
@@ -14,9 +15,18 @@ export default function Chat() {
   const { activeCompanyId } = useCompany();
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
 
+  const [filters, setFilters] = useState<ChatFilters>({
+    status: "all",
+    operatorId: "all",
+    search: "",
+  });
+
   // Hook state logic
   const {
     conversations,
+    fetchNextConversations,
+    hasNextConversations,
+    isFetchingNextConversations,
     pipelineStages,
     templates,
     isConversationsLoading,
@@ -26,7 +36,7 @@ export default function Chat() {
     updateConversationStatus,
     assignOperator,
     updateLeadStage,
-  } = useChat();
+  } = useChat(filters);
 
   // Load selected conversation messages
   const {
@@ -84,35 +94,57 @@ export default function Chat() {
   return (
     <div className="flex h-[calc(100vh-4rem)] overflow-hidden bg-background/30 backdrop-blur-md border border-border/10 rounded-2xl m-4 shadow-xl">
       {/* 1. Unified Inbox Column (Left) */}
-      {isConversationsLoading || isOperatorsLoading ? (
-        <div className="w-[320px] shrink-0 border-r border-border/40 flex items-center justify-center bg-card/5">
-          <div className="text-center space-y-2">
-            <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" />
-            <p className="text-xs text-muted-foreground font-semibold">Carregando Inbox...</p>
+      <div className={cn(
+        "shrink-0 border-r border-border/40 h-full",
+        "w-full md:w-[320px]",
+        selectedConvId ? "hidden md:block" : "block"
+      )}>
+        {isConversationsLoading || isOperatorsLoading ? (
+          <div className="h-full flex items-center justify-center bg-card/5">
+            <div className="text-center space-y-2">
+              <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" />
+              <p className="text-xs text-muted-foreground font-semibold">Carregando Inbox...</p>
+            </div>
           </div>
-        </div>
-      ) : (
-        <InboxList
-          conversations={conversations}
-          selectedId={selectedConvId}
-          onSelect={(id) => setSelectedConvId(id)}
-          operators={operators}
-        />
-      )}
+        ) : (
+          <InboxList
+            conversations={conversations}
+            selectedId={selectedConvId}
+            onSelect={(id) => setSelectedConvId(id)}
+            operators={operators}
+            filters={filters}
+            setFilters={setFilters}
+            fetchNextPage={fetchNextConversations}
+            hasNextPage={hasNextConversations}
+            isFetchingNextPage={isFetchingNextConversations}
+          />
+        )}
+      </div>
 
       {/* 2. Chat Stream Column (Middle) */}
-      <div className="flex-1 flex flex-col h-full bg-card/5 overflow-hidden">
+      <div className={cn(
+        "flex-1 flex flex-col h-full bg-card/5 overflow-hidden relative",
+        !selectedConvId ? "hidden md:flex" : "flex"
+      )}>
         {selectedConv ? (
           <>
             {/* Header info */}
             <div className="p-4 border-b border-border/40 bg-card/10 flex justify-between items-center shrink-0">
-              <div>
-                <h3 className="font-bold text-sm text-card-foreground leading-snug">
-                  {selectedConv.lead?.name || selectedConv.lead?.phone || "Lead Sem Nome"}
-                </h3>
-                <p className="text-[10px] text-muted-foreground font-mono leading-none mt-0.5">
-                  {selectedConv.lead?.phone}
-                </p>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setSelectedConvId(null)}
+                  className="md:hidden p-1.5 -ml-2 rounded-lg text-muted-foreground hover:bg-muted transition-colors"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <div>
+                  <h3 className="font-bold text-sm text-card-foreground leading-snug">
+                    {selectedConv.lead?.name || selectedConv.lead?.phone || "Lead Sem Nome"}
+                  </h3>
+                  <p className="text-[10px] text-muted-foreground font-mono leading-none mt-0.5">
+                    {selectedConv.lead?.phone}
+                  </p>
+                </div>
               </div>
 
               {/* Status toggles */}
@@ -140,6 +172,9 @@ export default function Chat() {
               conversation={selectedConv}
               messages={messages}
               isLoading={isMessagesLoading}
+              fetchNextMessages={fetchNextMessages}
+              hasNextMessages={hasNextMessages}
+              isFetchingNextMessages={isFetchingNextMessages}
             />
 
             {/* Message composer */}
@@ -166,10 +201,12 @@ export default function Chat() {
 
       {/* 3. Lead Details Panel Column (Right) */}
       {selectedConv && (
-        <LeadContextPanel
-          conversation={selectedConv}
-          stages={pipelineStages}
-        />
+        <div className="hidden lg:block h-full shrink-0">
+          <LeadContextPanel
+            conversation={selectedConv}
+            stages={pipelineStages}
+          />
+        </div>
       )}
     </div>
   );

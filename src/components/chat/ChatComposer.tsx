@@ -1,8 +1,11 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Lock, MessageSquare, Paperclip, Smile, Loader2, Sparkles, X } from "lucide-react";
+import { Send, Lock, MessageSquare, Paperclip, Smile, Loader2, Sparkles, X, File, Image as ImageIcon, Video, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ChatTemplate } from "@/hooks/useChat";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useCompany } from "@/contexts/CompanyContext";
+import { toast } from "sonner";
 
 interface ChatComposerProps {
   onSend: (text: string, isInternal: boolean, mediaUrl?: string, mediaType?: string) => Promise<any>;
@@ -11,16 +14,22 @@ interface ChatComposerProps {
 }
 
 export default function ChatComposer({ onSend, isSending, templates }: ChatComposerProps) {
+  const { activeCompanyId } = useCompany();
   const [text, setText] = useState("");
   const [isInternal, setIsInternal] = useState(false);
+  
+  // Quick Replies (Slash Commands)
   const [showTemplates, setShowTemplates] = useState(false);
   const [filteredTemplates, setFilteredTemplates] = useState<ChatTemplate[]>([]);
   const [templateSearch, setTemplateSearch] = useState("");
-  const [mediaUrl, setMediaUrl] = useState("");
-  const [mediaType, setMediaType] = useState<"image" | "audio" | "video" | "document">("image");
-  const [showMediaInput, setShowMediaInput] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(0);
 
+  // File Upload State
+  const [isUploading, setIsUploading] = useState(false);
+  const [attachedFile, setAttachedFile] = useState<{ url: string; type: string; name: string } | null>(null);
+  
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Resize text area automatically
   useEffect(() => {
@@ -34,9 +43,9 @@ export default function ChatComposer({ onSend, isSending, templates }: ChatCompo
   const handleTextChange = (val: string) => {
     setText(val);
     
-    // Check if user typed / followed by keyword
+    // Check if user typed / followed by keyword at the end
     const match = val.match(/\/(\w*)$/);
-    if (match) {
+    if (match && !isInternal) { // Slash commands are mainly for public replies
       const query = match[1].toLowerCase();
       setTemplateSearch(query);
       const filtered = templates.filter(
@@ -44,6 +53,7 @@ export default function ChatComposer({ onSend, isSending, templates }: ChatCompo
       );
       setFilteredTemplates(filtered);
       setShowTemplates(filtered.length > 0);
+      setSelectedIndex(0);
     } else {
       setShowTemplates(false);
     }
@@ -57,76 +67,155 @@ export default function ChatComposer({ onSend, isSending, templates }: ChatCompo
     textareaRef.current?.focus();
   };
 
+  // Upload handler
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `chat/${activeCompanyId}/${fileName}`;
+
+      const { error: uploadError, data } = await supabase.storage
+        .from("media")
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from("media")
+        .getPublicUrl(filePath);
+
+      // Determine type
+      let type = "document";
+      if (file.type.startsWith("image/")) type = "image";
+      else if (file.type.startsWith("video/")) type = "video";
+      else if (file.type.startsWith("audio/")) type = "audio";
+
+      setAttachedFile({
+        url: publicUrl,
+        type,
+        name: file.name
+      });
+      
+      toast.success("Arquivo anexado com sucesso!");
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      toast.error("Erro ao fazer upload do arquivo");
+    } finally {
+      setIsUploading(false);
+      // Reset input
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   const handleSend = async () => {
-    if (!text.trim() && !mediaUrl.trim()) return;
+    if (!text.trim() && !attachedFile) return;
 
     try {
-      await onSend(text, isInternal, mediaUrl ? mediaUrl : undefined, mediaUrl ? mediaType : undefined);
+      await onSend(text, isInternal, attachedFile?.url, attachedFile?.type);
       setText("");
-      setMediaUrl("");
-      setShowMediaInput(false);
+      setAttachedFile(null);
     } catch (error) {
       // Handled by query mutation onError
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (showTemplates && filteredTemplates.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSelectedIndex((prev) => Math.min(prev + 1, filteredTemplates.length - 1));
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSelectedIndex((prev) => Math.max(prev - 1, 0));
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        selectTemplate(filteredTemplates[selectedIndex]);
+        return;
+      }
+      if (e.key === "Escape") {
+        setShowTemplates(false);
+        return;
+      }
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
   };
 
+  // File icon helper
+  const getFileIcon = (type: string) => {
+    switch(type) {
+      case "image": return <ImageIcon className="h-4 w-4" />;
+      case "video": return <Video className="h-4 w-4" />;
+      case "audio": return <Mic className="h-4 w-4" />;
+      default: return <File className="h-4 w-4" />;
+    }
+  };
+
   return (
-    <div className="p-4 border-t border-border/40 bg-card/5 space-y-3 shrink-0 relative">
+    <div className="p-4 border-t border-border/40 bg-card/10 space-y-3 shrink-0 relative flex flex-col">
       {/* Templates Dropdown Popover */}
       {showTemplates && (
-        <div className="absolute bottom-full left-4 mb-2 w-72 max-h-56 bg-popover border border-border/80 rounded-xl shadow-2xl overflow-y-auto z-50 divide-y divide-border/40 animate-in slide-in-from-bottom-2 duration-200">
-          <div className="p-2 bg-muted/40 text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-            <Sparkles className="h-3 w-3 text-primary" />
-            Respostas Rápidas
+        <div className="absolute bottom-full left-4 mb-3 w-80 max-h-64 bg-popover/95 backdrop-blur-xl border border-border/80 rounded-2xl shadow-2xl overflow-y-auto z-50 divide-y divide-border/40 animate-in slide-in-from-bottom-3 fade-in duration-200">
+          <div className="sticky top-0 bg-popover/80 backdrop-blur-sm p-2.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center justify-between border-b border-border/40">
+            <span className="flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-primary" /> Respostas Rápidas</span>
+            <span className="bg-muted px-1.5 py-0.5 rounded text-[8px]">Use ↑↓ para navegar</span>
           </div>
-          {filteredTemplates.map((t) => (
+          {filteredTemplates.map((t, i) => (
             <div
               key={t.id}
               onClick={() => selectTemplate(t)}
-              className="p-2.5 hover:bg-primary/5 cursor-pointer text-xs transition-colors flex flex-col gap-0.5"
+              onMouseEnter={() => setSelectedIndex(i)}
+              className={cn(
+                "p-3 cursor-pointer text-xs transition-colors flex flex-col gap-1",
+                selectedIndex === i ? "bg-primary/10 border-l-2 border-primary" : "hover:bg-primary/5 border-l-2 border-transparent"
+              )}
             >
               <div className="flex justify-between items-center font-bold">
                 <span className="text-foreground">/{t.shortcut}</span>
-                <span className="text-[10px] text-muted-foreground font-medium">{t.title}</span>
+                <span className="text-[10px] text-muted-foreground font-medium truncate ml-2">{t.title}</span>
               </div>
-              <p className="text-muted-foreground truncate">{t.body}</p>
+              <p className="text-muted-foreground/80 line-clamp-2 leading-relaxed">{t.body}</p>
             </div>
           ))}
         </div>
       )}
 
-      {/* Mode Selectors Tabs */}
-      <div className="flex justify-between items-center">
-        <div className="flex gap-2">
+      {/* Mode Selectors */}
+      <div className="flex justify-between items-center mb-1">
+        <div className="flex gap-1.5 bg-background/50 p-1 rounded-xl border border-border/40 shadow-sm">
           {/* Public response Mode tab */}
           <button
             onClick={() => setIsInternal(false)}
             className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all duration-300 border cursor-pointer",
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-300",
               !isInternal
-                ? "bg-primary/10 border-primary/20 text-primary"
-                : "bg-transparent border-transparent text-muted-foreground hover:text-foreground"
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "bg-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"
             )}
           >
             <MessageSquare className="h-3.5 w-3.5" />
-            Enviar Mensagem
+            Cliente
           </button>
 
           {/* Internal Team note Mode tab */}
           <button
             onClick={() => setIsInternal(true)}
             className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all duration-300 border cursor-pointer",
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-300",
               isInternal
-                ? "bg-yellow-500/10 border-yellow-500/20 text-yellow-600 dark:text-yellow-400"
-                : "bg-transparent border-transparent text-muted-foreground hover:text-foreground"
+                ? "bg-yellow-500 text-white shadow-sm shadow-yellow-500/20"
+                : "bg-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"
             )}
           >
             <Lock className="h-3.5 w-3.5" />
@@ -134,46 +223,55 @@ export default function ChatComposer({ onSend, isSending, templates }: ChatCompo
           </button>
         </div>
 
-        {/* Media Toggle Button */}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setShowMediaInput(!showMediaInput)}
-          className="h-8 text-xs font-bold text-muted-foreground hover:text-foreground cursor-pointer"
-        >
-          <Paperclip className="h-4 w-4 mr-1" />
-          Anexar Mídia
-        </Button>
+        {/* Hidden File Input */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          className="hidden"
+          onChange={handleFileUpload}
+        />
       </div>
 
-      {/* Media URL Input Area */}
-      {showMediaInput && (
-        <div className="flex gap-2 p-2.5 bg-muted/40 border border-border/30 rounded-xl items-center animate-in slide-in-from-top-2 duration-200">
-          <select
-            value={mediaType}
-            onChange={(e) => setMediaType(e.target.value as any)}
-            className="bg-background border border-border/40 rounded px-1.5 py-1 text-xs outline-none focus:border-primary"
-          >
-            <option value="image">Imagem</option>
-            <option value="audio">Áudio</option>
-            <option value="video">Vídeo</option>
-            <option value="document">Documento</option>
-          </select>
-          <Input
-            placeholder="URL direta da mídia..."
-            value={mediaUrl}
-            onChange={(e) => setMediaUrl(e.target.value)}
-            className="flex-1 h-8 text-xs bg-background/50"
-          />
-          <Button variant="ghost" size="icon" onClick={() => { setMediaUrl(""); setShowMediaInput(false); }} className="h-8 w-8">
+      {/* Attachment Preview Area */}
+      {attachedFile && (
+        <div className="flex items-center gap-3 p-2 bg-primary/5 border border-primary/20 rounded-xl max-w-sm animate-in slide-in-from-top-2 duration-200">
+          <div className="h-10 w-10 shrink-0 bg-primary/10 rounded-lg flex items-center justify-center text-primary">
+            {getFileIcon(attachedFile.type)}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-foreground truncate">{attachedFile.name}</p>
+            <p className="text-[10px] text-muted-foreground capitalize">{attachedFile.type}</p>
+          </div>
+          <Button variant="ghost" size="icon" onClick={() => setAttachedFile(null)} className="h-8 w-8 text-muted-foreground hover:text-destructive">
             <X className="h-4 w-4" />
           </Button>
         </div>
       )}
 
-      {/* Textarea Composer & Send Action */}
-      <div className="flex items-end gap-2">
-        <div className="flex-1 relative">
+      {isUploading && (
+        <div className="flex items-center gap-2 p-2 bg-muted/50 border border-border/40 rounded-xl max-w-sm">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          <span className="text-xs text-muted-foreground font-medium">Enviando arquivo...</span>
+        </div>
+      )}
+
+      {/* Textarea Composer & Actions */}
+      <div className={cn(
+        "flex items-end gap-2 bg-background border rounded-2xl p-2 shadow-sm transition-colors duration-300 focus-within:border-primary/40 focus-within:shadow-md",
+        isInternal ? "border-yellow-500/30 focus-within:border-yellow-500/50 bg-yellow-500/[0.02]" : "border-border/60"
+      )}>
+        {/* Attachment Button */}
+        <Button
+          variant="ghost"
+          size="icon"
+          disabled={isUploading}
+          onClick={() => fileInputRef.current?.click()}
+          className="h-9 w-9 shrink-0 text-muted-foreground hover:text-primary hover:bg-primary/10 mb-0.5 rounded-xl cursor-pointer"
+        >
+          <Paperclip className="h-4.5 w-4.5" />
+        </Button>
+
+        <div className="flex-1 relative flex items-center">
           <textarea
             ref={textareaRef}
             rows={1}
@@ -182,34 +280,41 @@ export default function ChatComposer({ onSend, isSending, templates }: ChatCompo
             onKeyDown={handleKeyDown}
             placeholder={
               isInternal
-                ? "Adicionar nota privada ao lead... (apenas visível para operadores)"
-                : "Digite uma mensagem ou digite '/' para respostas rápidas..."
+                ? "Adicionar nota privada ao lead..."
+                : "Digite uma mensagem ou '/' para respostas rápidas..."
             }
             className={cn(
-              "w-full bg-background/60 hover:bg-background/80 focus:bg-background border border-primary/5 focus:border-primary/20 rounded-xl px-4.5 py-3 text-xs outline-none resize-none transition-all duration-300 min-h-[44px] max-h-[160px] scrollbar-thin scrollbar-track-transparent pr-10 leading-relaxed shadow-inner",
-              isInternal && "focus:border-yellow-500/40"
+              "w-full bg-transparent px-2 py-2.5 text-sm outline-none resize-none transition-all duration-300 min-h-[40px] max-h-[160px] scrollbar-thin scrollbar-track-transparent leading-relaxed",
+              isInternal && "placeholder:text-yellow-600/40 text-yellow-700 dark:text-yellow-400"
             )}
           />
-          <button className="absolute right-3.5 bottom-3 text-muted-foreground hover:text-primary transition-colors cursor-pointer">
-            <Smile className="h-5 w-5" />
-          </button>
         </div>
+
+        {/* Emoji Button (Placeholder UI) */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9 shrink-0 text-muted-foreground hover:text-primary hover:bg-primary/10 mb-0.5 rounded-xl cursor-pointer"
+        >
+          <Smile className="h-4.5 w-4.5" />
+        </Button>
 
         {/* Send Button */}
         <Button
           onClick={handleSend}
-          disabled={isSending || (!text.trim() && !mediaUrl.trim())}
+          disabled={isSending || isUploading || (!text.trim() && !attachedFile)}
           className={cn(
-            "h-11 w-11 rounded-xl shrink-0 shadow-lg cursor-pointer",
+            "h-10 w-10 rounded-xl shrink-0 shadow-lg cursor-pointer transition-all duration-300",
             isInternal
-              ? "bg-yellow-500 hover:bg-yellow-600 text-white shadow-yellow-500/10"
-              : "bg-primary hover:bg-primary/90 text-primary-foreground shadow-primary/10"
+              ? "bg-yellow-500 hover:bg-yellow-600 text-white shadow-yellow-500/20"
+              : "bg-primary hover:bg-primary/90 text-primary-foreground shadow-primary/20",
+            (!text.trim() && !attachedFile) && "opacity-50 scale-95 shadow-none"
           )}
         >
           {isSending ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
+            <Loader2 className="h-4.5 w-4.5 animate-spin" />
           ) : (
-            <Send className="h-4 w-4" />
+            <Send className="h-4.5 w-4.5 translate-x-[-1px] translate-y-[1px]" />
           )}
         </Button>
       </div>
