@@ -103,10 +103,17 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
         .maybeSingle();
 
       if (!campaign) {
+        // Obter usuário logado para o insert obrigatório
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          toast.error("Sessão de usuário não encontrada.");
+          return;
+        }
+
         // Fallback for Workflows: create a dummy campaign with an active instance
         const { data: instance } = await supabase
           .from("instances")
-          .select("id")
+          .select("id, company_id")
           .eq("status", "connected")
           .limit(1)
           .maybeSingle();
@@ -121,7 +128,9 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
           .insert({
             name: "Workflow Dummy Context",
             status: "active",
-            instance_id: instance.id
+            instance_id: instance.id,
+            user_id: user.id,
+            company_id: instance.company_id
           })
           .select("id")
           .single();
