@@ -246,11 +246,6 @@ export function useChat() {
     },
   });
 
-  // 7. Update Lead Pipeline Stage
-      });
-    },
-  });
-
   // 8. Create Chat Template
   const createTemplateMutation = useMutation({
     mutationFn: async (payload: { shortcut: string; title: string; body: string }) => {
