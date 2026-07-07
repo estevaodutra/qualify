@@ -889,6 +889,26 @@ Deno.serve(async (req) => {
         console.log(`[ExecuteMessage] Processing node: ${node.id} (${node.node_type})`);
         const nodeStartedAt = new Date();
 
+        // Check if node overrides the WhatsApp instance
+        if (node.config && node.config.instanceId && node.config.instanceId !== activeInstanceId) {
+          const overrideId = node.config.instanceId as string;
+          console.log(`[ExecuteMessage] Node ${node.id} requested instance override: ${overrideId}`);
+          
+          const { data: overrideInst } = await supabase
+            .from("instances")
+            .select("id, name, phone, provider, external_instance_id, external_instance_token, status")
+            .eq("id", overrideId)
+            .maybeSingle();
+            
+          if (overrideInst && overrideInst.status === "connected") {
+            instance = overrideInst as any;
+            activeInstanceId = overrideInst.id;
+            console.log(`[ExecuteMessage] Successfully switched active instance to: ${instance.name}`);
+          } else {
+            console.warn(`[ExecuteMessage] Override instance ${overrideId} not found or not connected. Continuing with current.`);
+          }
+        }
+
         // ============= TRIGGER (START) NODE =============
         // The trigger/start node is a canvas entry-point marker, not a sendable
         // message node — its "config.content" is decorative UI copy only. It must

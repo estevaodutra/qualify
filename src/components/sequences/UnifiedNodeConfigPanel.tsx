@@ -529,12 +529,50 @@ export function UnifiedNodeConfigPanel({
             <Separator />
 
             {/* CONTENT / ACTION sub-type selector */}
+            {/* CONTENT / ACTION sub-type selector */}
             {(node.nodeType === "content" || node.nodeType === "action") && (() => {
               const block = getNodeBlockDefinition(node.nodeType)!;
               const configKey = node.nodeType === "content" ? "contentType" : "actionType";
               const currentSubType = (node.config[configKey] as string) || block.subTypes![0].subType;
               return (
                 <>
+                  {node.nodeType === "content" && (
+                    <div className="space-y-2 mb-4">
+                      <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                        Conexão
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <HelpCircle className="h-3 w-3" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="w-48 text-xs">Deixe em branco para usar a conexão dos blocos anteriores ou da campanha padrão.</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </Label>
+                      <Select
+                        value={(node.config.instanceId as string) || "default"}
+                        onValueChange={(val) => updateConfig("instanceId", val === "default" ? "" : val)}
+                      >
+                        <SelectTrigger className="w-full bg-white">
+                          <SelectValue placeholder="Selecionar" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="default">Selecionar (Padrão)</SelectItem>
+                          {activeInstances.map(inst => (
+                            <SelectItem key={inst.id} value={inst.id}>
+                              <div className="flex items-center gap-2">
+                                <MessageSquare className="h-3.5 w-3.5 text-success" />
+                                {inst.name}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Separator className="mt-4" />
+                    </div>
+                  )}
                   <div className="space-y-2">
                     <Label className="text-xs font-medium text-muted-foreground">
                       {node.nodeType === "content" ? "Tipo de conteúdo" : "Qual ação deseja executar?"}
