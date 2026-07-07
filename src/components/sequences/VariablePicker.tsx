@@ -15,28 +15,52 @@ export function VariablePicker({ onSelect, isGroup }: VariablePickerProps) {
 
   const variables = isGroup ? [
     {
-      category: "Campos do grupo",
+      category: "Campos do contato",
       items: [
-        { label: "Nome", value: "{{name}}", icon: Type },
-        { label: "Telefone", value: "{{phone}}", icon: Hash },
-        { label: "Grupo", value: "{{group}}", icon: AlignLeft },
+        { label: "Nome completo do lead", value: "{{name}}", icon: Type },
+        { label: "Telefone do lead", value: "{{phone}}", icon: Hash },
+      ]
+    },
+    {
+      category: "Informações do grupo",
+      items: [
+        { label: "Nome do grupo", value: "{{group_name}}", icon: AlignLeft },
+        { label: "ID do grupo", value: "{{group_id}}", icon: Hash },
+        { label: "Descrição do grupo", value: "{{group_description}}", icon: AlignLeft },
+      ]
+    },
+    {
+      category: "Campos adicionais",
+      items: [
+        { label: "Campo personalizado (exemplo)", value: "{{campo_customizado}}", icon: AlignLeft },
       ]
     }
   ] : [
     {
       category: "Campos do lead",
       items: [
-        { label: "Nome do lead", value: "{nome}", icon: Type },
+        { label: "Nome completo do lead", value: "{nome}", icon: Type },
         { label: "Primeiro nome do lead", value: "{primeiro_nome}", icon: Type },
         { label: "Telefone do lead", value: "{telefone}", icon: Hash },
         { label: "Email do lead", value: "{email}", icon: AlignLeft },
         { label: "CPF do lead", value: "{cpf}", icon: Hash },
+      ]
+    },
+    {
+      category: "Endereço do lead",
+      items: [
         { label: "CEP do lead", value: "{cep}", icon: Hash },
         { label: "Endereço do lead", value: "{endereco}", icon: AlignLeft },
         { label: "Bairro do lead", value: "{bairro}", icon: AlignLeft },
         { label: "Número de residência do lead", value: "{numero}", icon: Hash },
         { label: "Cidade do lead", value: "{cidade}", icon: AlignLeft },
         { label: "Complemento do lead", value: "{complemento}", icon: AlignLeft },
+      ]
+    },
+    {
+      category: "Campos adicionais",
+      items: [
+        { label: "Campo personalizado (exemplo)", value: "{campo_customizado}", icon: AlignLeft },
       ]
     }
   ];

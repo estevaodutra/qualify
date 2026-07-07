@@ -589,7 +589,7 @@ export function UnifiedNodeConfigPanel({
                 <Textarea value={(node.config.content as string) || ""} onChange={(e) => { e.target.style.height = "auto"; e.target.style.height = `${e.target.scrollHeight + 2}px`; updateConfig("content", e.target.value); }} onFocus={(e) => { e.target.style.height = "auto"; e.target.style.height = `${e.target.scrollHeight + 2}px`; }} placeholder="Digite a mensagem (Use *negrito*, _itálico_, ~riscado~)..." className="resize-none font-mono text-sm overflow-hidden" rows={isGroup ? 6 : 8} />
                 <p className="text-xs text-muted-foreground">
                   {isGroup
-                    ? <>Variáveis: {"{{name}}"}, {"{{phone}}"}, {"{{group}}"}</>
+                    ? <>Variáveis: {"{{name}}"}, {"{{phone}}"}, {"{{group_name}}"}</>
                     : <>Variáveis: {"{nome}"}, {"{telefone}"}, {"{email}"}</>
                   }
                 </p>
