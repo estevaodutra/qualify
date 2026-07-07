@@ -107,7 +107,7 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
         const { data: instance } = await supabase
           .from("instances")
           .select("id")
-          .eq("status", "open")
+          .eq("status", "connected")
           .limit(1)
           .maybeSingle();
 
