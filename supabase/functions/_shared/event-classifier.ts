@@ -441,6 +441,7 @@ export function classifyWahaEvent(rawEvent: Record<string, unknown>): Classifica
     "message": "text_message",
     "message.any": "text_message",
     "message.ack": "message_status",
+    "message.ack.group": "message_status",
     "message.revoked": "message_deleted",
     "message.reaction": "message_reaction",
     "session.status": "connection_status",

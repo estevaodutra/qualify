@@ -93,7 +93,63 @@ Deno.serve(async (req) => {
     }
 
     // Classify using shared classifier
-    const classification: ClassificationResult = classifyEvent(source, rawEvent);
+    let classification: ClassificationResult = classifyEvent(source, rawEvent);
+    
+    // Auto-correct unknown using dynamic mappings
+    if (classification.eventType === "unknown" && classification.eventSubtype) {
+      const { data: dynamicMapping } = await supabase
+        .from("dynamic_event_mappings")
+        .select("mapped_type")
+        .eq("source", source)
+        .eq("event_subtype", classification.eventSubtype)
+        .eq("status", "active")
+        .maybeSingle();
+        
+      if (dynamicMapping) {
+        classification.eventType = dynamicMapping.mapped_type;
+        classification.classification = "identified";
+        classification.matchedRule = "dynamic_mapping";
+        classification.confidence = "medium";
+        console.log(`[webhook-inbound] Dynamically reclassified as: ${classification.eventType} via mapping`);
+      } else {
+        // SYNCHRONOUS AI CLASSIFICATION
+        console.log(`[webhook-inbound] Event still unknown. Requesting sync AI classification for: ${classification.eventSubtype}`);
+        try {
+          const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+          const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+          
+          const aiRes = await fetch(`${supabaseUrl}/functions/v1/auto-classify-event`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${supabaseServiceKey}`,
+            },
+            body: JSON.stringify({
+              source,
+              event_subtype: classification.eventSubtype,
+              raw_event: rawEvent,
+              user_id: instance?.user_id
+            }),
+          });
+          
+          if (aiRes.ok) {
+            const aiData = await aiRes.json();
+            if (aiData.success && aiData.mapped_type) {
+              classification.eventType = aiData.mapped_type;
+              classification.classification = "identified";
+              classification.matchedRule = "ai_auto_correction";
+              classification.confidence = "medium";
+              console.log(`[webhook-inbound] Synchronously reclassified as: ${classification.eventType} via AI`);
+            }
+          } else {
+             console.error("[webhook-inbound] AI returned status:", aiRes.status);
+          }
+        } catch (err) {
+          console.error("[webhook-inbound] Sync AI classification failed:", err);
+        }
+      }
+    }
+
     console.log(`[webhook-inbound] Classified as: ${classification.eventType} (${classification.classification}, rule: ${classification.matchedRule}, confidence: ${classification.confidence})`);
 
     // Extract context using shared extractor
@@ -524,7 +580,7 @@ Deno.serve(async (req) => {
             user_id: instance.user_id,
             severity: "warning",
             title: "Evento não identificado",
-            description: `Recebido payload do tipo '${classification.eventSubtype || "desconhecido"}' sem mapeamento técnico.`,
+            description: `Recebido payload do tipo '${classification.eventSubtype || "desconhecido"}' sem mapeamento técnico. A IA não conseguiu classificá-lo.`,
             entity: "webhook",
             read: false
           });

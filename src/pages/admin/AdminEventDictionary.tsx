@@ -70,11 +70,28 @@ const eventCategories = [
 
 export default function AdminEventDictionary() {
   const [pendingEvents, setPendingEvents] = useState<any[]>([]);
+  const [dynamicMappings, setDynamicMappings] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     fetchPendingEvents();
+    fetchDynamicMappings();
   }, []);
+
+  const fetchDynamicMappings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("dynamic_event_mappings")
+        .select("*")
+        .order("created_at", { ascending: false });
+      
+      if (!error && data) {
+        setDynamicMappings(data);
+      }
+    } catch (err) {
+      console.error("Error fetching dynamic mappings:", err);
+    }
+  };
 
   const fetchPendingEvents = async () => {
     setLoading(true);
@@ -107,9 +124,10 @@ export default function AdminEventDictionary() {
       <Tabs defaultValue="categories" className="space-y-4">
         <TabsList>
           <TabsTrigger value="categories">Categorias</TabsTrigger>
-          <TabsTrigger value="providers">Mapeamento por Provedor</TabsTrigger>
+          <TabsTrigger value="providers">Provedores</TabsTrigger>
+          <TabsTrigger value="dynamic">Mapeamentos Dinâmicos</TabsTrigger>
           <TabsTrigger value="rules">Regras Especiais</TabsTrigger>
-          <TabsTrigger value="pending" className="text-destructive">Reclassificação</TabsTrigger>
+          <TabsTrigger value="pending" className="text-destructive">Fila de Reclassificação</TabsTrigger>
         </TabsList>
 
         <TabsContent value="categories" className="space-y-4">
@@ -209,10 +227,10 @@ export default function AdminEventDictionary() {
 
               <div>
                 <h4 className="font-semibold mb-3 flex items-center gap-2">
-                  <Badge variant="outline">Evolution & Meta</Badge>
+                  <Badge variant="outline">WAHA</Badge>
                 </h4>
                 <p className="text-xs text-muted-foreground mb-4">
-                  Ambos utilizam mapeamentos similares baseados nos campos <code className="text-primary">event</code> ou <code className="text-primary">changes.field</code>.
+                  Classificação baseada diretamente no campo <code className="text-primary">event</code> ou tipo da mensagem aninhada.
                 </p>
               </div>
             </CardContent>
@@ -263,6 +281,81 @@ export default function AdminEventDictionary() {
                   </div>
                 </li>
               </ul>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="dynamic">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Mapeamentos Dinâmicos (IA / Manual)</CardTitle>
+                <CardDescription>
+                  Regras criadas dinamicamente pela IA para eventos desconhecidos.
+                </CardDescription>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={fetchDynamicMappings}
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Atualizar
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Data</TableHead>
+                      <TableHead>Provedor</TableHead>
+                      <TableHead>Subtipo Original</TableHead>
+                      <TableHead>Classificação Final</TableHead>
+                      <TableHead>Gerado por IA</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {dynamicMappings.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                          Nenhum mapeamento dinâmico criado ainda.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      dynamicMappings.map((mapping) => (
+                        <TableRow key={mapping.id}>
+                          <TableCell className="text-xs">
+                            {format(new Date(mapping.created_at), "dd/MM/yyyy HH:mm")}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="capitalize">{mapping.source}</Badge>
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {mapping.event_subtype}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs text-primary">
+                            {mapping.mapped_type}
+                          </TableCell>
+                          <TableCell>
+                            {mapping.is_ai_generated ? (
+                              <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">Sim</Badge>
+                            ) : (
+                              <Badge variant="outline">Não</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={mapping.status === 'active' ? 'default' : 'secondary'}>
+                              {mapping.status}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
