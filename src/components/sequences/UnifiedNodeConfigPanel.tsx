@@ -9,8 +9,7 @@ import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-
-
+import { useCompany } from "@/contexts/CompanyContext";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -419,6 +418,8 @@ export function UnifiedNodeConfigPanel({
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
   const [editingOptionIndex, setEditingOptionIndex] = useState<number | null>(null);
 
+  const { activeCompanyId } = useCompany();
+
   const [customFieldsMetadata, setCustomFieldsMetadata] = useState<any[]>([]);
   const [pipelineStages, setPipelineStages] = useState<any[]>([]);
   const [activeInstances, setActiveInstances] = useState<any[]>([]);
@@ -444,10 +445,18 @@ export function UnifiedNodeConfigPanel({
         if (stages) setPipelineStages(stages);
 
         // Fetch WhatsApp instances
-        const { data: insts } = await supabase
+        let instancesQuery = supabase
           .from("instances")
           .select("id, name, phone, status")
           .order("name", { ascending: true });
+
+        if (activeCompanyId) {
+          instancesQuery = instancesQuery.eq("company_id", activeCompanyId);
+        } else {
+          instancesQuery = instancesQuery.eq("user_id", user.id).is("company_id", null);
+        }
+
+        const { data: insts } = await instancesQuery;
         if (insts) setActiveInstances(insts);
       } catch (err) {
         console.error("Error loading UnifiedNodeConfigPanel resources:", err);
@@ -455,7 +464,7 @@ export function UnifiedNodeConfigPanel({
     };
 
     fetchPanelData();
-  }, [node.nodeType]);
+  }, [node.nodeType, activeCompanyId]);
 
   // "content"/"action" nodes carry their real sub-type inside config
   // (contentType/actionType) — resolvedNodeType lets every existing per-type

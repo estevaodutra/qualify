@@ -1141,9 +1141,11 @@ export type Database = {
           invite_link: string | null
           message_permission: string | null
           name: string
+          description: string | null
           status: string | null
           updated_at: string | null
           user_id: string
+          company_id: string | null
         }
         Insert: {
           config?: Json | null
@@ -1158,9 +1160,11 @@ export type Database = {
           invite_link?: string | null
           message_permission?: string | null
           name: string
+          description?: string | null
           status?: string | null
           updated_at?: string | null
           user_id: string
+          company_id?: string | null
         }
         Update: {
           config?: Json | null
@@ -1175,9 +1179,11 @@ export type Database = {
           invite_link?: string | null
           message_permission?: string | null
           name?: string
+          description?: string | null
           status?: string | null
           updated_at?: string | null
           user_id?: string
+          company_id?: string | null
         }
         Relationships: [
           {
@@ -1702,10 +1708,9 @@ export type Database = {
           name: string
           payment_status: string | null
           phone: string
-          profile_config: Json | null
-          provider: string
           status: string
           user_id: string | null
+          company_id: string | null
         }
         Insert: {
           created_at?: string | null
@@ -1739,6 +1744,7 @@ export type Database = {
           provider?: string
           status?: string
           user_id?: string | null
+          company_id?: string | null
         }
         Relationships: []
       }
