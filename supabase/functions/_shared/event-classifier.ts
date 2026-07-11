@@ -620,6 +620,8 @@ function extractZApiContext(rawEvent: Record<string, unknown>): EventContext {
 
   // senderPhone
   let senderPhone = (
+    wahaPayload?._data?.key?.remoteJidAlt ||
+    rawEvent._data?.key?.remoteJidAlt ||
     sender?.phone ||
     rawEvent.senderPhone ||
     body?.senderPhone ||
@@ -628,6 +630,10 @@ function extractZApiContext(rawEvent: Record<string, unknown>): EventContext {
     wahaPayload?.author ||
     rawEvent.participant as string
   ) as string | null;
+
+  if (senderPhone && senderPhone.includes("@")) {
+    senderPhone = senderPhone.split("@")[0];
+  }
 
   if (!senderPhone && chatJid) {
     senderPhone = chatJid.split("@")[0];
@@ -692,6 +698,8 @@ function extractZApiContext(rawEvent: Record<string, unknown>): EventContext {
 
   // senderName
   const senderName = (
+    wahaPayload?._data?.pushname ||
+    rawEvent._data?.pushname ||
     data?.pushName ||
     rawEvent.senderName ||
     body?.senderName ||
