@@ -49,20 +49,25 @@ export default function Chat() {
     queryKey: ["company-members-profiles", activeCompanyId],
     queryFn: async () => {
       if (!activeCompanyId) return [];
-      const { data, error } = await supabase
+      const { data: members, error: memErr } = await supabase
         .from("company_members")
-        .select(`
-          user_id,
-          profiles:profiles(id, full_name, email)
-        `)
+        .select("user_id")
         .eq("company_id", activeCompanyId)
         .eq("is_active", true);
 
-      if (error) throw error;
-      return (data || [])
-        .map((m: any) => m.profiles)
-        .filter(Boolean)
-        .map((p: any) => ({ id: p.id, name: p.full_name || p.email }));
+      if (memErr) throw memErr;
+      if (!members || members.length === 0) return [];
+
+      const userIds = members.map((m: any) => m.user_id);
+      
+      const { data: profiles, error: profErr } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("id", userIds);
+        
+      if (profErr) throw profErr;
+
+      return (profiles || []).map((p: any) => ({ id: p.id, name: p.full_name || p.email }));
     },
     enabled: !!activeCompanyId,
     staleTime: 300000, // 5 minutes stale time

@@ -109,8 +109,8 @@ export function useChat(filters?: ChatFilters) {
           waiting_since,
           created_at,
           updated_at,
-          lead:leads!chat_conversations_lead_id_fkey(id, name, phone, email, tags, custom_fields),
-          operator:profiles!chat_conversations_operator_id_fkey(id, full_name, email)
+          lead:leads(id, name, phone, email, tags, custom_fields),
+          operator:profiles(id, full_name, email)
         `)
         .eq("company_id", activeCompanyId);
 
