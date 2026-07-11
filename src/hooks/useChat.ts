@@ -401,6 +401,13 @@ export function useChat(filters?: ChatFilters) {
           // Granular update for messages
           queryClient.setQueryData(["chat-messages", newMsg.conversation_id], (oldData: any) => {
             if (!oldData || !oldData.pages) return oldData;
+
+            // Previne duplicação na tela caso cheguem dois webhooks
+            const exists = oldData.pages.some((page: any[]) => 
+              page.some((m) => m.id === newMsg.id || (m.message_id && m.message_id === newMsg.message_id))
+            );
+            if (exists) return oldData;
+
             const newPages = [...oldData.pages];
             if (newPages.length > 0) {
               newPages[0] = [newMsg, ...newPages[0]];

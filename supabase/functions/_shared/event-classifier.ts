@@ -698,8 +698,8 @@ function extractZApiContext(rawEvent: Record<string, unknown>): EventContext {
 
   // senderName
   const senderName = (
-    wahaPayload?._data?.pushname ||
-    rawEvent._data?.pushname ||
+    wahaPayload?._data?.pushName ||
+    rawEvent._data?.pushName ||
     data?.pushName ||
     rawEvent.senderName ||
     body?.senderName ||

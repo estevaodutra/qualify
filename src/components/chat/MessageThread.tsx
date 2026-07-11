@@ -25,18 +25,20 @@ export default function MessageThread({
   const containerRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const [hasInitialScrolled, setHasInitialScrolled] = useState(false);
+  const lastMessageId = messages[messages.length - 1]?.id;
 
-  // Auto-scroll to bottom of conversation initially or when sending new message
-  // We avoid scrolling if we are just loading older messages
+  // Auto-scroll to bottom of conversation initially or when sending/receiving new message
   useEffect(() => {
     if (isLoading) return;
     
-    // Simple heuristic: if we load the very first time, scroll down
     if (!hasInitialScrolled && messages.length > 0) {
       bottomRef.current?.scrollIntoView();
       setHasInitialScrolled(true);
+    } else if (hasInitialScrolled && lastMessageId) {
+      // Scroll smooth para novas mensagens
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, isLoading, hasInitialScrolled]);
+  }, [lastMessageId, isLoading, hasInitialScrolled, messages.length]);
 
   // If messages array shrinks (change conversation), reset scroll flag
   useEffect(() => {
