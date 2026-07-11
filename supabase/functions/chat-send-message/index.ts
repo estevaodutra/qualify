@@ -155,59 +155,31 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Determine target WhatsApp action and construct node config
-    let action = "message.send_text";
-    const nodeConfig: Record<string, any> = {};
-
-    if (mediaUrl) {
-      action = "message.send_media";
-      nodeConfig.url = mediaUrl;
-      nodeConfig.mediaType = mediaType || "image";
-      nodeConfig.caption = body || "";
-    } else {
-      nodeConfig.text = body || "";
-    }
-
-    // Map standardized payload structure expected by whatsapp-client
-    const payload: StandardizedPayload = {
-      action,
-      node: {
-        id: "chat-crm-node",
-        type: mediaUrl ? "media" : "text",
-        order: 1,
-        config: nodeConfig,
-      },
-      campaign: {
-        id: "chat-crm-direct",
-        name: "CRM Chat Outbox",
-      },
-      instance: {
-        id: inst.id,
-        name: inst.name,
-        phone: inst.phone,
-        provider: inst.provider,
-        externalId: inst.external_instance_id,
-        externalToken: inst.external_instance_token,
-      },
-      destination: {
+    // 5. Insert message into global queue with HIGH priority (100)
+    const { data: queueItem, error: queueErr } = await adminClient
+      .from("message_queue")
+      .insert({
+        company_id: conv.company_id,
+        instance_id: conv.instance_id,
         phone: lead.phone,
-        jid: lead.phone.includes("@") ? lead.phone : `${lead.phone}@s.whatsapp.net`,
-        name: lead.name || "",
-      },
-    };
+        message_type: mediaUrl ? (mediaType || "image") : "text",
+        body,
+        media_url: mediaUrl || null,
+        media_type: mediaType || null,
+        source_type: "chat",
+        conversation_id: conversationId,
+        lead_id: lead.id,
+        priority: 100, // Chat priority
+        status: "pending",
+      })
+      .select("id")
+      .single();
 
-    // Trigger Z-API dispatch
-    const zapiResult = await sendWhatsAppMessage(payload);
-
-    if (!zapiResult.ok) {
-      console.error("[chat-send-message] Z-API dispatch failed:", zapiResult.details);
-      return new Response(
-        JSON.stringify({ error: "Failed to dispatch message to WhatsApp via Z-API", details: zapiResult.details }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (queueErr || !queueItem) {
+      throw new Error(`Failed to queue message: ${queueErr?.message}`);
     }
 
-    // 6. Record outbound message in DB on successful send
+    // 6. Record outbound message in DB immediately (Optimistic UI)
     const { data: outboundMsg, error: outErr } = await adminClient
       .from("chat_messages")
       .insert({
@@ -219,15 +191,13 @@ Deno.serve(async (req) => {
         media_url: mediaUrl || null,
         media_type: mediaType || null,
         is_internal: false,
-        status: "sent",
-        zaap_id: zapiResult.zaapId || null,
-        message_id: zapiResult.messageId || null,
+        status: "pending", // Now actually pending queue processing
       })
       .select()
       .single();
 
     if (outErr) {
-      throw new Error(`Failed to persist sent message to database: ${outErr.message}`);
+      throw new Error(`Failed to persist pending message to database: ${outErr.message}`);
     }
 
     // 7. Update conversation preview

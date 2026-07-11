@@ -19,7 +19,9 @@ import { useWebhookConfigs, getWebhookUrlForCategory } from "@/hooks/useWebhookC
 import { buildInstancePayload } from "@/lib/webhook-utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
 import { InstanceProfileConfig, ProfileConfigData, defaultProfileConfig } from "@/components/instances/InstanceProfileConfig";
+import { InstanceQueueConfig } from "@/components/instances/InstanceQueueConfig";
 
 // Função para formatar número de telefone brasileiro
 const formatPhoneNumber = (value: string): string => {
@@ -145,8 +147,9 @@ const ExpirationCountdown = ({ expirationDate }: { expirationDate: string }) => 
 };
 
 export default function Instances() {
-  const { toast } = useToast();
   const { t } = useLanguage();
+  const { activeCompanyId } = useCompany();
+  const { toast } = useToast();
   const { configs } = useWebhookConfigs();
   const { 
     instances, 
@@ -902,11 +905,20 @@ export default function Instances() {
 
           {/* Configure Mode - Show technical fields */}
           {selectedInstance?.status === "connected" && (
-            <div className="py-2">
+            <div className="py-2 max-h-[70vh] overflow-y-auto overflow-x-hidden p-1">
               <InstanceProfileConfig 
                 config={profileConfig} 
                 onChange={setProfileConfig} 
               />
+              
+              {activeCompanyId && (
+                <div className="mt-4">
+                  <InstanceQueueConfig 
+                    instanceId={selectedInstance.id} 
+                    companyId={activeCompanyId} 
+                  />
+                </div>
+              )}
             </div>
           )}
 
