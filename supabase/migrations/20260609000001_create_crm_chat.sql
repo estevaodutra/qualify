@@ -254,21 +254,16 @@ BEGIN
   END IF;
 
   -- Find or create Lead
-  SELECT id INTO v_lead_id
-  FROM public.leads
-  WHERE user_id = NEW.user_id AND phone = NEW.sender_phone;
-
-  IF v_lead_id IS NULL THEN
-    INSERT INTO public.leads (user_id, company_id, phone, name, status)
-    VALUES (
-      NEW.user_id,
-      v_company_id,
-      NEW.sender_phone,
-      COALESCE(NEW.sender_name, NEW.sender_phone),
-      'active'
-    )
-    RETURNING id INTO v_lead_id;
-  END IF;
+  INSERT INTO public.leads (user_id, company_id, phone, name, status)
+  VALUES (
+    NEW.user_id,
+    v_company_id,
+    NEW.sender_phone,
+    COALESCE(NEW.sender_name, NEW.sender_phone),
+    'active'
+  )
+  ON CONFLICT (user_id, phone) DO UPDATE SET phone = EXCLUDED.phone
+  RETURNING id INTO v_lead_id;
 
   -- Find or create Conversation
   SELECT id INTO v_conv_id
@@ -292,13 +287,21 @@ BEGIN
       'open',
       COALESCE(NEW.event_timestamp, NEW.received_at)
     )
-    RETURNING id INTO v_conv_id;
+    ON CONFLICT DO NOTHING;
+    
+    -- Retrieve again in case of race condition during conversation creation
+    SELECT id INTO v_conv_id
+    FROM public.chat_conversations
+    WHERE company_id = v_company_id
+      AND lead_id = v_lead_id
+      AND instance_id = NEW.instance_id;
   END IF;
 
   -- Extract message details
   v_msg_type := SPLIT_PART(NEW.event_type, '_', 1);
   
   v_body := COALESCE(
+    NEW.raw_event->'payload'->>'body',
     NEW.raw_event->'body'->'text'->>'message',
     NEW.raw_event->'body'->>'message',
     NEW.raw_event->'body'->>'caption',
