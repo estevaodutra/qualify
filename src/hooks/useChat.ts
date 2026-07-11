@@ -129,7 +129,7 @@ export function useChat(filters?: ChatFilters) {
         query = query.eq("instance_id", filters.instanceId);
       }
       
-      if (filters?.operatorId) {
+      if (filters?.operatorId && filters.operatorId !== "all") {
         if (filters.operatorId === "unassigned") {
            query = query.is("operator_id", null);
         } else {

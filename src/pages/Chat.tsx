@@ -42,6 +42,9 @@ export default function Chat() {
   const {
     messages,
     isMessagesLoading,
+    fetchNextMessages,
+    hasNextMessages,
+    isFetchingNextMessages,
   } = useChatMessages(selectedConvId || undefined);
 
   // Load operator/team profiles from company_members
