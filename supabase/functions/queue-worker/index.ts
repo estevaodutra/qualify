@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
         // Fetch instance details
         const { data: inst, error: instErr } = await adminClient
           .from("instances")
-          .select("id, name, phone, provider, external_instance_id, external_instance_token")
+          .select("id, name, phone, provider, external_instance_id, external_instance_token, company_id")
           .eq("id", item.instance_id)
           .single();
 
@@ -70,6 +70,7 @@ Deno.serve(async (req) => {
             const { data: dbMsg, error: dbErr } = await adminClient
             .from("chat_messages")
             .insert({
+                company_id: inst.company_id,
                 conversation_id: item.conversation_id,
                 sender_type: "operator",
                 message_type: item.message_type,

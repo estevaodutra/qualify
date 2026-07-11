@@ -458,6 +458,7 @@ export function useChat(filters?: ChatFilters, activeConversationId?: string | n
           event: "insert",
           schema: "public",
           table: "chat_messages",
+          filter: `company_id=eq.${activeCompanyId}`,
         },
         (payload) => {
           const newMsg = payload.new as ChatMessage;
