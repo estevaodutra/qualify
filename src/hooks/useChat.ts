@@ -386,6 +386,12 @@ export function useChat(filters?: ChatFilters) {
             });
             return { ...oldData, pages: newPages };
           });
+          
+          // Fallback robusto: se a mensagem não chegar pelo realtime de chat_messages (devido ao RLS complexo),
+          // o update da conversa garante que vamos buscar a nova mensagem.
+          if (activeConversationId === updatedConv.id) {
+            queryClient.invalidateQueries(["chat-messages", activeConversationId]);
+          }
         }
       )
       .on(
