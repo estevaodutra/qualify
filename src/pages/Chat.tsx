@@ -36,7 +36,7 @@ export default function Chat() {
     updateConversationStatus,
     assignOperator,
     updateLeadStage,
-  } = useChat(filters);
+  } = useChat(filters, selectedConvId);
 
   // Load selected conversation messages
   const {

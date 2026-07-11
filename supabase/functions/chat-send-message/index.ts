@@ -111,6 +111,15 @@ Deno.serve(async (req) => {
         throw new Error(`Failed to insert internal note: ${noteErr.message}`);
       }
 
+      await adminClient
+        .from("chat_conversations")
+        .update({
+          last_message_preview: `[Nota Interna] ${body || (mediaUrl ? "[Mídia]" : "")}`,
+          last_message_at: noteMsg.created_at,
+          updated_at: noteMsg.created_at,
+        })
+        .eq("id", conversationId);
+
       return new Response(
         JSON.stringify({ success: true, message: noteMsg }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -220,6 +229,16 @@ Deno.serve(async (req) => {
     if (outErr) {
       throw new Error(`Failed to persist sent message to database: ${outErr.message}`);
     }
+
+    // 7. Update conversation preview
+    await adminClient
+      .from("chat_conversations")
+      .update({
+        last_message_preview: body || (mediaUrl ? "[Mídia]" : ""),
+        last_message_at: outboundMsg.created_at,
+        updated_at: outboundMsg.created_at,
+      })
+      .eq("id", conversationId);
 
     return new Response(
       JSON.stringify({ success: true, message: outboundMsg }),

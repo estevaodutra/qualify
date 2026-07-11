@@ -25,24 +25,38 @@ export default function MessageThread({
   const containerRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const [hasInitialScrolled, setHasInitialScrolled] = useState(false);
+  const [showNewMessageButton, setShowNewMessageButton] = useState(false);
   const lastMessageId = messages[messages.length - 1]?.id;
+  const prevLastMessageIdRef = useRef(lastMessageId);
 
-  // Auto-scroll to bottom of conversation initially or when sending/receiving new message
+  // Auto-scroll to bottom of conversation initially or when receiving new message
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || messages.length === 0) return;
     
-    if (!hasInitialScrolled && messages.length > 0) {
+    if (!hasInitialScrolled) {
       bottomRef.current?.scrollIntoView();
       setHasInitialScrolled(true);
-    } else if (hasInitialScrolled && lastMessageId) {
-      // Scroll smooth para novas mensagens
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      prevLastMessageIdRef.current = lastMessageId;
+    } else if (lastMessageId && prevLastMessageIdRef.current !== lastMessageId) {
+      // Chegou nova mensagem no final
+      prevLastMessageIdRef.current = lastMessageId;
+      
+      const container = containerRef.current;
+      if (container) {
+        const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+        if (isNearBottom) {
+          bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+        } else {
+          setShowNewMessageButton(true);
+        }
+      }
     }
   }, [lastMessageId, isLoading, hasInitialScrolled, messages.length]);
 
-  // If messages array shrinks (change conversation), reset scroll flag
+  // If conversation changes, reset scroll flags
   useEffect(() => {
     setHasInitialScrolled(false);
+    setShowNewMessageButton(false);
   }, [conversation.id]);
 
   // Intersection Observer for top of list (load older messages)
@@ -261,6 +275,20 @@ export default function MessageThread({
         </div>
       ))}
       <div ref={bottomRef} />
+      
+      {showNewMessageButton && (
+        <div className="sticky bottom-4 left-0 right-0 flex justify-center z-10">
+          <button 
+            onClick={() => {
+              setShowNewMessageButton(false);
+              bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            className="bg-primary text-primary-foreground shadow-lg px-4 py-2 rounded-full text-sm font-semibold flex items-center gap-2 animate-bounce cursor-pointer hover:bg-primary/90 transition-colors"
+          >
+            Novas mensagens <span className="text-lg leading-none">↓</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

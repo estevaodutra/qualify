@@ -74,11 +74,18 @@ export interface ChatFilters {
   search?: string;
 }
 
-export function useChat(filters?: ChatFilters) {
+import { useRef } from "react";
+
+export function useChat(filters?: ChatFilters, activeConversationId?: string | null) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { activeCompanyId } = useCompany();
+
+  const activeConversationIdRef = useRef(activeConversationId);
+  useEffect(() => {
+    activeConversationIdRef.current = activeConversationId;
+  }, [activeConversationId]);
 
   // 1. Fetch Conversations
   const {
@@ -241,10 +248,61 @@ export function useChat(filters?: ChatFilters) {
 
       return data.message as ChatMessage;
     },
-    onSuccess: (data) => {
-      // Optimistically update conversation and messages list
-      queryClient.invalidateQueries({ queryKey: ["chat-messages", data.conversation_id] });
-      queryClient.invalidateQueries({ queryKey: ["chat-conversations", activeCompanyId] });
+    onSuccess: (message) => {
+      if (!message?.conversation_id) return;
+
+      // Inserir a mensagem imediatamente no cache
+      queryClient.setQueryData(["chat-messages", message.conversation_id], (oldData: any) => {
+        if (!oldData || !oldData.pages) return oldData;
+
+        const exists = oldData.pages.some((page: any[]) =>
+          page.some((m) =>
+            m.id === message.id ||
+            (message.message_id && m.message_id === message.message_id) ||
+            (message.zaap_id && m.zaap_id === message.zaap_id)
+          )
+        );
+
+        if (exists) return oldData;
+
+        const newPages = [...oldData.pages];
+        if (newPages.length === 0) {
+          newPages.push([message]);
+        } else {
+          newPages[0] = [message, ...newPages[0]];
+        }
+
+        return { ...oldData, pages: newPages };
+      });
+
+      // Atualizar a Inbox imediatamente no cache
+      queryClient.setQueriesData(
+        { queryKey: ["chat-conversations", activeCompanyId] },
+        (oldData: any) => {
+          if (!oldData || !oldData.pages) return oldData;
+
+          const newPages = oldData.pages.map((page: any[]) =>
+            page.map((conv) => {
+              if (conv.id !== message.conversation_id) return conv;
+
+              return {
+                ...conv,
+                last_message_preview: message.is_internal
+                  ? `[Nota Interna] ${message.body || "[Mídia]"}`
+                  : message.body || "[Mídia]",
+                last_message_at: message.created_at,
+                updated_at: message.created_at,
+              };
+            })
+          );
+
+          return { ...oldData, pages: newPages };
+        }
+      );
+
+      // Fallback leve para consistência
+      queryClient.invalidateQueries({ queryKey: ["chat-messages", message.conversation_id], refetchType: "inactive" } as any);
+      queryClient.invalidateQueries({ queryKey: ["chat-conversations", activeCompanyId], refetchType: "inactive" } as any);
     },
     onError: (error) => {
       toast({
@@ -389,8 +447,8 @@ export function useChat(filters?: ChatFilters) {
           
           // Fallback robusto: se a mensagem não chegar pelo realtime de chat_messages (devido ao RLS complexo),
           // o update da conversa garante que vamos buscar a nova mensagem.
-          if (activeConversationId === updatedConv.id) {
-            queryClient.invalidateQueries(["chat-messages", activeConversationId]);
+          if (activeConversationIdRef.current === updatedConv.id) {
+            queryClient.invalidateQueries({ queryKey: ["chat-messages", updatedConv.id] });
           }
         }
       )
@@ -508,14 +566,6 @@ export function useChatMessages(conversationId?: string) {
         throw error;
       }
 
-      if (!pageParam) {
-        // Mark conversation unread count as 0 when thread is opened
-        await supabase
-          .from("chat_conversations")
-          .update({ unread_count: 0 })
-          .eq("id", conversationId);
-      }
-
       return data as ChatMessage[];
     },
     getNextPageParam: (lastPage) => {
@@ -526,14 +576,27 @@ export function useChatMessages(conversationId?: string) {
     enabled: !!conversationId && !!user,
   });
 
+  const markConversationAsReadMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("chat_conversations")
+        .update({ unread_count: 0 })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_, id) => {
+      // Opcional: atualizar o cache local para refletir imediatamente sem refetch
+    }
+  });
+
   const messages = messagesData ? [...messagesData.pages.flat()].reverse() : [];
 
-  return {
     messages,
     isMessagesLoading,
     fetchNextMessages,
     hasNextMessages,
     isFetchingNextMessages,
     refetchMessages,
+    markAsRead: markConversationAsReadMutation.mutateAsync,
   };
 }
