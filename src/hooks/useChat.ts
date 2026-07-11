@@ -160,6 +160,7 @@ export function useChat(filters?: ChatFilters) {
 
       if (error) {
         console.error("Error fetching conversations:", error);
+        toast({ title: "Erro ao buscar conversas", description: error.message, variant: "destructive" });
         throw error;
       }
 
