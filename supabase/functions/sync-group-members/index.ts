@@ -165,10 +165,13 @@ Deno.serve(async (req) => {
         status: "active",
       }));
 
-      for (let i = 0; i < leadRecords.length; i += 100) {
+      // Deduplicate leadRecords by phone to prevent Postgres throwing unique constraint inside the same bulk insert
+      const uniqueLeadRecords = Array.from(new Map(leadRecords.map(item => [item.phone, item])).values());
+
+      for (let i = 0; i < uniqueLeadRecords.length; i += 100) {
         await supabase
           .from("leads")
-          .upsert(leadRecords.slice(i, i + 100), { onConflict: "phone,user_id", ignoreDuplicates: false });
+          .upsert(uniqueLeadRecords.slice(i, i + 100), { onConflict: "user_id,phone", ignoreDuplicates: false });
       }
     }
 
