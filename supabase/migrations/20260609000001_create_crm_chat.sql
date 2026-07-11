@@ -301,6 +301,7 @@ BEGIN
   v_msg_type := SPLIT_PART(NEW.event_type, '_', 1);
   
   v_body := COALESCE(
+    NEW.raw_event->'body'->'payload'->>'body',
     NEW.raw_event->'payload'->>'body',
     NEW.raw_event->'body'->'text'->>'message',
     NEW.raw_event->'body'->>'message',
