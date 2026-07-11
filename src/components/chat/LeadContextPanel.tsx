@@ -10,7 +10,7 @@ import { ChatConversation, PipelineStage } from "@/hooks/useChat";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { LeadAvatar, LeadTags, DealPipelineStage, DealValue } from "../crm/shared";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Deal } from "@/types/crm.types";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -34,6 +34,7 @@ interface CustomFieldMetadata {
 export default function LeadContextPanel({ conversation, stages }: LeadContextPanelProps) {
   const { lead } = conversation;
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<"info" | "negocios" | "tarefas" | "arquivos">("info");
 
@@ -138,6 +139,7 @@ export default function LeadContextPanel({ conversation, stages }: LeadContextPa
     setLocalTags(updatedTags);
     setNewTag("");
     await supabase.from("leads").update({ tags: updatedTags }).eq("id", lead.id);
+    queryClient.invalidateQueries({ queryKey: ["chat-conversations"] });
     toast({ title: "Tag adicionada" });
   };
 
@@ -145,6 +147,7 @@ export default function LeadContextPanel({ conversation, stages }: LeadContextPa
     const updatedTags = localTags.filter((t) => t !== tagToRemove);
     setLocalTags(updatedTags);
     await supabase.from("leads").update({ tags: updatedTags }).eq("id", lead.id);
+    queryClient.invalidateQueries({ queryKey: ["chat-conversations"] });
     toast({ title: "Tag removida" });
   };
 
@@ -161,6 +164,7 @@ export default function LeadContextPanel({ conversation, stages }: LeadContextPa
         .eq("id", lead.id);
 
       if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ["chat-conversations"] });
       toast({ title: "Perfil salvo com sucesso!" });
     } catch (err: any) {
       toast({ title: "Erro ao salvar", description: err.message, variant: "destructive" });
