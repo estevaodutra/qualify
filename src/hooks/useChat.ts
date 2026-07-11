@@ -575,6 +575,7 @@ export function useChatMessages(conversationId?: string) {
       return { created_at: last.created_at, id: last.id };
     },
     enabled: !!conversationId && !!user,
+    refetchInterval: 3000, // Fallback garantido: atualiza mensagens do chat aberto a cada 3 segundos
   });
 
   const markConversationAsReadMutation = useMutation({
