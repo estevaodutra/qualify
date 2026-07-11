@@ -591,6 +591,7 @@ export function useChatMessages(conversationId?: string) {
 
   const messages = messagesData ? [...messagesData.pages.flat()].reverse() : [];
 
+  return {
     messages,
     isMessagesLoading,
     fetchNextMessages,

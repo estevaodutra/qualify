@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MessageSquare, RefreshCw, Loader2, Info, ChevronLeft } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -45,7 +45,15 @@ export default function Chat() {
     fetchNextMessages,
     hasNextMessages,
     isFetchingNextMessages,
+    markAsRead,
   } = useChatMessages(selectedConvId || undefined);
+
+  // Mark as read when conversation is opened
+  useEffect(() => {
+    if (selectedConvId) {
+      markAsRead(selectedConvId).catch(console.error);
+    }
+  }, [selectedConvId, markAsRead]);
 
   // Load operator/team profiles from company_members
   const { data: operators = [], isLoading: isOperatorsLoading } = useQuery({
