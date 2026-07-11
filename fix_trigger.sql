@@ -63,7 +63,12 @@ BEGIN
       COALESCE(NEW.sender_name, NEW.sender_phone),
       'active'
     )
-    ON CONFLICT (user_id, phone) DO UPDATE SET phone = EXCLUDED.phone
+    ON CONFLICT (user_id, phone) DO UPDATE SET 
+      phone = EXCLUDED.phone,
+      name = CASE 
+               WHEN public.leads.name = public.leads.phone AND EXCLUDED.name != EXCLUDED.phone THEN EXCLUDED.name 
+               ELSE public.leads.name 
+             END
     RETURNING id INTO v_lead_id;
   ELSE
     SELECT id INTO v_lead_id
@@ -81,6 +86,12 @@ BEGIN
         NEW.chat_jid,
         'active'
       )
+      ON CONFLICT (user_id, phone) DO UPDATE SET 
+        phone = EXCLUDED.phone,
+        name = CASE 
+                 WHEN public.leads.name = public.leads.phone AND EXCLUDED.name != EXCLUDED.phone THEN EXCLUDED.name 
+                 ELSE public.leads.name 
+               END
       RETURNING id INTO v_lead_id;
     END IF;
   END IF;

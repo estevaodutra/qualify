@@ -699,13 +699,24 @@ function extractZApiContext(rawEvent: Record<string, unknown>): EventContext {
   // senderName
   const senderName = (
     wahaPayload?._data?.pushName ||
+    wahaPayload?._data?.pushname ||
+    wahaPayload?.pushName ||
+    wahaPayload?.pushname ||
     rawEvent._data?.pushName ||
+    rawEvent._data?.pushname ||
     data?.pushName ||
+    data?.pushname ||
     rawEvent.senderName ||
     body?.senderName ||
     body?.pushName ||
+    body?.pushname ||
     rawEvent.pushName ||
-    sender?.name
+    rawEvent.pushname ||
+    sender?.name ||
+    sender?.pushName ||
+    sender?.pushname ||
+    wahaPayload?._data?.notifyName ||
+    rawEvent._data?.notifyName
   ) as string | null;
 
   // chatName
