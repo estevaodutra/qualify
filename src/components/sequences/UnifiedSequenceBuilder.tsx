@@ -11,9 +11,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   ArrowLeft, Save, Play, Pause, Trash2, ZoomIn, ZoomOut, Maximize,
-  Loader2, Info, GitBranch, Copy, PenLine, History
+  Loader2, Info, GitBranch, Copy, PenLine, History, Sliders
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { NodeEditorModal } from "../workflows/node-editor/NodeEditorModal";
 import { cn } from "@/lib/utils";
 import { ExecutionsPanel } from "./executions/ExecutionsPanel";
 import { NodePalettePopover, NODE_PALETTE_DND_MIME } from "./NodePalettePopover";
@@ -118,6 +119,8 @@ export function UnifiedSequenceBuilder({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [isSendingManual, setIsSendingManual] = useState(false);
+  const [nodeEditorOpen, setNodeEditorOpen] = useState(false);
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
 
   // Hover toolbar & delete confirmation
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
@@ -838,8 +841,13 @@ export function UnifiedSequenceBuilder({
                         if (dragMovedRef.current) { dragMovedRef.current = false; return; }
                         setSelectedNodeId(node.id);
                       }}
+                      onDoubleClick={(e) => {
+                        if ((e.target as HTMLElement).closest("button") || (e.target as HTMLElement).closest("[data-node-port]")) return;
+                        setEditingNodeId(node.id);
+                        setNodeEditorOpen(true);
+                      }}
                       className={cn(
-                        "rounded-xl border border-slate-200 bg-white shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col p-3 transition-[border-color,box-shadow] duration-150 cursor-grab active:cursor-grabbing",
+                        "rounded-xl border border-slate-200 bg-white shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col p-3 transition-[border-color,box-shadow] duration-150 cursor-grab active:cursor-grabbing select-none",
                         isSelected && "border-[#8A3CFF] ring-2 ring-[#8A3CFF]/10"
                       )}
                     >
@@ -849,6 +857,19 @@ export function UnifiedSequenceBuilder({
                           className="absolute -top-9 left-1/2 -translate-x-1/2 z-30 flex items-center gap-0.5 bg-white border border-slate-200 rounded-lg shadow-md p-0.5 animate-in fade-in duration-150"
                           onMouseDown={(e) => e.stopPropagation()}
                         >
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 rounded-md hover:bg-slate-100 text-slate-500"
+                            title="Configurar"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingNodeId(node.id);
+                              setNodeEditorOpen(true);
+                            }}
+                          >
+                            <Sliders className="h-3.5 w-3.5" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -1063,6 +1084,28 @@ export function UnifiedSequenceBuilder({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Central n8n-style Node Editor Modal */}
+      {editingNodeId && (
+        <NodeEditorModal
+          isOpen={nodeEditorOpen}
+          onClose={() => {
+            setNodeEditorOpen(false);
+            setEditingNodeId(null);
+          }}
+          nodeId={editingNodeId}
+          nodes={localNodes}
+          connections={localConnections}
+          onUpdateNodeConfig={(id, config) => {
+            updateNodesAndSave(prev => prev.map(n => n.id === id ? { ...n, config } : n));
+          }}
+          onSaveWorkflow={handleSaveAll}
+          isSavingWorkflow={isSaving}
+          isUnsavedWorkflow={autoSaveStatus === "idle"}
+          mode={mode === "executions" ? "dispatch" : (localNodes.find(n => n.nodeType === "trigger")?.config.triggerConfig as any)?.isGroup ?? true ? "group" : "dispatch"}
+          isGroup={(localNodes.find(n => n.nodeType === "trigger")?.config.triggerConfig as any)?.isGroup ?? true}
+        />
+      )}
     </div>
   );
 }
