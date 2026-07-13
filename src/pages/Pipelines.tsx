@@ -1,5 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { DndContext, DragEndEvent, PointerSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
+import { SortableContext, horizontalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Deal, Pipeline, PipelineGroup } from "@/types/crm.types";
@@ -8,9 +10,12 @@ import { LeadDrawer } from "@/components/crm/leads/LeadDrawer";
 import { PipelineSidebar } from "@/components/crm/pipelines/PipelineSidebar";
 import { PipelineHeader } from "@/components/crm/pipelines/PipelineHeader";
 import { PipelineStageColumn } from "@/components/crm/pipelines/PipelineStageColumn";
+import { EditStageDialog } from "@/components/crm/pipelines/EditStageDialog";
+import { EditPipelineDialog } from "@/components/crm/pipelines/EditPipelineDialog";
 
 export default function Pipelines() {
   const { activeCompany } = useCompany();
+  const queryClient = useQueryClient();
   
   const [activePipelineId, setActivePipelineId] = useState<string | null>(null);
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
@@ -19,6 +24,11 @@ export default function Pipelines() {
   
   const [dealDrawerOpen, setDealDrawerOpen] = useState(false);
   const [leadDrawerOpen, setLeadDrawerOpen] = useState(false);
+  
+  const [editStageOpen, setEditStageOpen] = useState(false);
+  const [selectedStageToEdit, setSelectedStageToEdit] = useState<any>(null);
+  
+  const [editPipelineOpen, setEditPipelineOpen] = useState(false);
 
   // Initialize active pipeline from localStorage
   useEffect(() => {
@@ -118,6 +128,52 @@ export default function Pipelines() {
     return [...activePipeline.stages].sort((a, b) => a.order_index - b.order_index);
   }, [activePipeline]);
 
+  const [orderedStages, setOrderedStages] = useState(stages);
+
+  useEffect(() => {
+    setOrderedStages(stages);
+  }, [stages]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    })
+  );
+
+  const reorderStagesMutation = useMutation({
+    mutationFn: async (newStages: PipelineStage[]) => {
+      const updates = newStages.map((stage, index) => ({
+        id: stage.id,
+        order_index: index,
+        // Since we are updating multiple rows, we can do it via a loop or RPC.
+        // For simplicity, we'll do individual updates, or you could do bulk update.
+      }));
+      
+      for (const update of updates) {
+        await supabase.from("pipeline_stages").update({ order_index: update.order_index }).eq("id", update.id);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pipeline", activePipelineId] });
+    }
+  });
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    if (active.id !== over.id) {
+      const oldIndex = orderedStages.findIndex((s) => s.id === active.id);
+      const newIndex = orderedStages.findIndex((s) => s.id === over.id);
+      
+      const newOrdered = arrayMove(orderedStages, oldIndex, newIndex);
+      setOrderedStages(newOrdered);
+      reorderStagesMutation.mutate(newOrdered);
+    }
+  };
+
   const dealsByStage = useMemo(() => {
     const acc: Record<string, any[]> = {};
     stages.forEach(s => acc[s.id] = []);
@@ -141,7 +197,7 @@ export default function Pipelines() {
       acc[key].sort((a, b) => (a.position || 0) - (b.position || 0));
     });
     return acc;
-  }, [deals, stages, search]);
+  }, [deals, orderedStages, search]);
 
   const handleOpenDeal = (deal: any) => {
     setSelectedDeal(deal as Deal);
@@ -172,29 +228,43 @@ export default function Pipelines() {
               group={activeGroup || undefined}
               search={search}
               setSearch={setSearch}
-              onOpenSettings={() => console.log("Open pipeline settings")}
+              onOpenSettings={() => setEditPipelineOpen(true)}
             />
             
             <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 pb-8 bg-muted/10">
               <div className="flex h-full items-start gap-4" style={{ minWidth: "max-content" }}>
-                {stages.map(stage => (
-                  <PipelineStageColumn 
-                    key={stage.id}
-                    stage={stage}
-                    deals={dealsByStage[stage.id] || []}
-                    onOpenDeal={handleOpenDeal}
-                    onEditStage={(s) => console.log("Edit stage", s)}
-                  />
-                ))}
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={orderedStages.map(s => s.id)}
+                    strategy={horizontalListSortingStrategy}
+                  >
+                    {orderedStages.map(stage => (
+                      <PipelineStageColumn 
+                        key={stage.id}
+                        stage={stage}
+                        deals={dealsByStage[stage.id] || []}
+                        onOpenDeal={handleOpenDeal}
+                        onEditStage={(s) => {
+                          setSelectedStageToEdit(s);
+                          setEditStageOpen(true);
+                        }}
+                      />
+                    ))}
+                  </SortableContext>
+                </DndContext>
                 
-                {stages.length === 0 && (
+                {orderedStages.length === 0 && (
                   <div className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-border rounded-xl text-center p-8 space-y-4 text-muted-foreground max-w-md mx-auto mt-20">
                     <p>Esta pipeline ainda não possui etapas.</p>
                     <button className="text-primary font-medium hover:underline">Adicionar Primeira Etapa</button>
                   </div>
                 )}
                 
-                {stages.length > 0 && (
+                {orderedStages.length > 0 && (
                   <button className="flex-shrink-0 w-[300px] h-[48px] rounded-xl border-2 border-dashed border-border/60 hover:border-primary/50 hover:bg-primary/5 text-muted-foreground flex items-center justify-center text-sm font-medium transition-colors">
                     + Nova Etapa
                   </button>
@@ -227,6 +297,18 @@ export default function Pipelines() {
         open={leadDrawerOpen} 
         onOpenChange={setLeadDrawerOpen}
         leadId={selectedLead?.id}
+      />
+      
+      <EditStageDialog
+        open={editStageOpen}
+        onOpenChange={setEditStageOpen}
+        stage={selectedStageToEdit}
+      />
+      
+      <EditPipelineDialog
+        open={editPipelineOpen}
+        onOpenChange={setEditPipelineOpen}
+        pipeline={activePipeline || null}
       />
     </div>
   );
