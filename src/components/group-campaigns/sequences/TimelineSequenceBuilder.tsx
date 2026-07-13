@@ -392,6 +392,7 @@ export function TimelineSequenceBuilder({ sequence, onBack, onUpdate }: Timeline
           mode="group"
           onManualSend={handleManualSendNode}
           isSendingManual={isSendingManual}
+          nodes={localNodes}
           renderMediaUploader={(props) => (
             <MediaUploader
               mediaType={props.mediaType as "image" | "video" | "audio" | "document" | "sticker"}

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useToast } from "@/hooks/use-toast";
 import { LocalNode, RandomizerBranch } from "./shared-types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -19,8 +20,24 @@ import {
   Image, Video, Music, FileText, Smile,
   BarChart3, MousePointerClick, List, MapPin, Contact, Calendar,
   Pencil, ImageIcon, UserPlus, UserMinus, ShieldPlus, ShieldMinus, Settings, CircleDot,
-  Shuffle, Tag, Award, Sliders, Sparkles, Info, RefreshCw, HelpCircle
+  Shuffle, Tag, Award, Sliders, Sparkles, Info, RefreshCw, HelpCircle,
+  ChevronDown, CheckCircle2
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { getNodeBlockDefinition } from "./nodeDefinitions";
 import { VariablePicker } from "./VariablePicker";
 function formatWhatsAppText(text: string) {
@@ -90,6 +107,7 @@ interface UnifiedNodeConfigPanelProps {
   isGroup?: boolean;
   onManualSend?: () => void;
   isSendingManual?: boolean;
+  nodes?: LocalNode[];
   renderMediaUploader?: (props: {
     mediaType: string;
     currentUrl: string;
@@ -400,6 +418,36 @@ function NodeScheduleSection({
   );
 }
 
+function extractPaths(obj: any, prefix = ""): string[] {
+  if (!obj || typeof obj !== "object") return [];
+  let paths: string[] = [];
+  for (const [key, value] of Object.entries(obj)) {
+    const currentPath = prefix ? `${prefix}.${key}` : key;
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      paths.push(...extractPaths(value, currentPath));
+    } else {
+      paths.push(currentPath);
+    }
+  }
+  return paths;
+}
+
+function getValueFromPath(obj: any, path: string): string {
+  if (!obj || !path) return "";
+  const parts = path.split(".");
+  let current = obj;
+  for (const part of parts) {
+    if (current && typeof current === "object" && part in current) {
+      current = current[part];
+    } else {
+      return "";
+    }
+  }
+  if (current === undefined || current === null) return "";
+  if (typeof current === "object") return JSON.stringify(current);
+  return String(current);
+}
+
 export function UnifiedNodeConfigPanel({
   node,
   onUpdate,
@@ -414,7 +462,9 @@ export function UnifiedNodeConfigPanel({
   getOptionAction,
   getActionIconColor,
   getActionLabel,
+  nodes,
 }: UnifiedNodeConfigPanelProps) {
+  const { toast } = useToast();
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
   const [editingOptionIndex, setEditingOptionIndex] = useState<number | null>(null);
 
@@ -1732,125 +1782,456 @@ export function UnifiedNodeConfigPanel({
 
           {/* FIELD_OP - Mapeamento de Campos */}
           {node.nodeType === "field_op" && (() => {
-            const operation = (node.config.operation as string) || "set";
-            const parts = (node.config.parts as string[]) || [""];
-            const standardFields = [
-              { key: "name", label: "Nome do Lead" },
-              { key: "phone", label: "Telefone" },
-              { key: "email", label: "E-mail" },
-              { key: "tags", label: "Etiquetas / Tags" },
-              { key: "pipeline_stage_id", label: "Etapa do CRM" },
-            ];
+            const mappings = (node.config.mappings as Array<{
+              source: string;
+              targetType: string;
+              targetField: string;
+              transform?: string;
+            }>) || [];
+
+            // Upgrade legacy config if any
+            const activeMappings = mappings.length > 0 ? mappings : (node.config.field ? [{
+              source: (node.config.sourceField as string) || (node.config.value as string) || "",
+              targetType: "lead",
+              targetField: node.config.field as string,
+              transform: node.config.operation === "transform" ? (node.config.transformType as string) : undefined
+            }] : []);
+
+            const triggerNode = nodes?.find(n => n.nodeType === "trigger");
+            const referencePayload = triggerNode?.config?.triggerConfig?.referencePayload || triggerNode?.config?.referencePayload;
+            const availablePaths = referencePayload ? extractPaths(referencePayload) : [];
+
+            // State for rapid field creation
+            const [isCreateFieldOpen, setIsCreateFieldOpen] = useState(false);
+            const [newFieldName, setNewFieldName] = useState("");
+            const [newFieldKey, setNewFieldKey] = useState("");
+            const [newFieldEntity, setNewFieldEntity] = useState<"lead" | "deal">("lead");
+            const [newFieldType, setNewFieldType] = useState<"text" | "number" | "date" | "boolean" | "select">("text");
+
+            const handleCreateField = async () => {
+              if (!newFieldName.trim() || !newFieldKey.trim()) {
+                toast({ title: "Erro", description: "Nome e chave são obrigatórios.", variant: "destructive" });
+                return;
+              }
+              try {
+                const { data, error } = await supabase
+                  .from("custom_fields_metadata")
+                  .insert({
+                    company_id: activeCompanyId,
+                    name: newFieldName.trim(),
+                    key: newFieldKey.trim().replace(/\s+/g, "_").toLowerCase(),
+                    type: newFieldType,
+                    category: newFieldEntity,
+                  })
+                  .select()
+                  .single();
+
+                if (error) throw error;
+                toast({ title: "Sucesso", description: "Campo personalizado criado." });
+                setCustomFieldsMetadata(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
+                setIsCreateFieldOpen(false);
+                setNewFieldName("");
+                setNewFieldKey("");
+              } catch (err) {
+                console.error(err);
+                toast({ title: "Erro", description: err instanceof Error ? err.message : "Erro ao criar campo", variant: "destructive" });
+              }
+            };
+
+            const updateMappings = (newMappings: typeof activeMappings) => {
+              onUpdate({
+                ...node.config,
+                mappings: newMappings
+              });
+            };
+
+            const addMapping = () => {
+              updateMappings([
+                ...activeMappings,
+                { source: "", targetType: "lead", targetField: "name" }
+              ]);
+            };
+
+            const removeMapping = (index: number) => {
+              updateMappings(activeMappings.filter((_, i) => i !== index));
+            };
+
+            const getSimulatedPreview = () => {
+              if (!referencePayload) return null;
+              const preview: any = { lead: {}, deal: {}, conversation: {}, variables: {} };
+              for (const m of activeMappings) {
+                if (!m.source || !m.targetField) continue;
+                
+                // Resolve value
+                let rawVal = getValueFromPath(referencePayload, m.source);
+                
+                // Apply transform
+                if (m.transform === "uppercase") rawVal = rawVal.toUpperCase();
+                else if (m.transform === "lowercase") rawVal = rawVal.toLowerCase();
+                else if (m.transform === "trim") rawVal = rawVal.replace(/\s+/g, " ").trim();
+                else if (m.transform === "capitalize") rawVal = rawVal.replace(/\b\w/g, (c) => c.toUpperCase());
+                
+                if (m.targetField === "phone" || m.targetField.endsWith(".phone")) {
+                  rawVal = rawVal.replace(/\D/g, "");
+                }
+
+                if (m.targetType === "lead") {
+                  if (m.targetField.startsWith("custom_fields.")) {
+                    const key = m.targetField.substring("custom_fields.".length);
+                    if (!preview.lead.custom_fields) preview.lead.custom_fields = {};
+                    preview.lead.custom_fields[key] = rawVal;
+                  } else {
+                    preview.lead[m.targetField] = rawVal;
+                  }
+                } else if (m.targetType === "deal") {
+                  const key = m.targetField.replace("deal.", "");
+                  preview.deal[key] = key === "value" ? (Number(rawVal) || 0) : rawVal;
+                } else if (m.targetType === "conversation") {
+                  const key = m.targetField.replace("conversation.", "");
+                  preview.conversation[key] = rawVal;
+                } else if (m.targetType === "variable") {
+                  preview.variables[m.targetField] = rawVal;
+                }
+              }
+              return preview;
+            };
+
+            const previewData = getSimulatedPreview();
+
             return (
-              <>
-                <div className="space-y-2">
-                  <Label>Campo de destino</Label>
-                  <Select value={(node.config.field as string) || ""} onValueChange={v => updateConfig("field", v)}>
-                    <SelectTrigger className="rounded-xl border-border/40"><SelectValue placeholder="Selecione o campo..." /></SelectTrigger>
-                    <SelectContent>
-                      {customFieldsMetadata.map(f => (
-                        <SelectItem key={f.id} value={f.key}>{f.name} ({f.key})</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Operação</Label>
-                  <Select value={operation} onValueChange={v => updateConfig("operation", v)}>
-                    <SelectTrigger className="rounded-xl border-border/40"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="set">Definir valor</SelectItem>
-                      <SelectItem value="copy">Copiar de outro campo</SelectItem>
-                      <SelectItem value="clear">Limpar campo</SelectItem>
-                      <SelectItem value="concatenate">Concatenar valores</SelectItem>
-                      <SelectItem value="transform">Transformar valor</SelectItem>
-                    </SelectContent>
-                  </Select>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b pb-2">
+                  <div className="space-y-0.5">
+                    <h3 className="text-sm font-semibold">Mapeamento de Múltiplos Campos</h3>
+                    <p className="text-[11px] text-muted-foreground">Associe campos do webhook de origem a entidades do sistema.</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-xs rounded-xl h-8"
+                    onClick={() => setIsCreateFieldOpen(true)}
+                  >
+                    + Criar Campo
+                  </Button>
                 </div>
 
-                {operation === "set" && (
-                  <div className="space-y-2">
-                    <Label>Valor</Label>
-                    <Input
-                      value={(node.config.value as string) || ""}
-                      onChange={e => updateConfig("value", e.target.value)}
-                      placeholder="Ex: VIP ou {{name}}"
-                      className="rounded-xl border-border/40 bg-background/50 text-xs"
-                    />
+                {/* Reference payload status banner */}
+                {referencePayload ? (
+                  <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-start gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <div className="text-[11px] text-emerald-800 leading-normal">
+                      <strong>Payload de referência ativo.</strong> Autocomplete disponível para {availablePaths.length} caminhos JSON.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-2">
+                    <Info className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="text-[11px] text-amber-800 leading-normal">
+                      Nenhum payload de referência ativo. Mapeie os caminhos manualmente (ex: <code>body.nome</code>) ou defina um payload na aba Execuções/Gatilho.
+                    </div>
                   </div>
                 )}
 
-                {(operation === "copy" || operation === "transform") && (
-                  <div className="space-y-2">
-                    <Label>Campo de origem</Label>
-                    <Select value={(node.config.sourceField as string) || ""} onValueChange={v => updateConfig("sourceField", v)}>
-                      <SelectTrigger className="rounded-xl border-border/40"><SelectValue placeholder="Selecione o campo de origem..." /></SelectTrigger>
-                      <SelectContent>
-                        {standardFields.map(f => (
-                          <SelectItem key={f.key} value={f.key}>{f.label}</SelectItem>
-                        ))}
-                        {customFieldsMetadata.map(f => (
-                          <SelectItem key={f.id} value={f.key}>{f.name} ({f.key})</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                {operation === "clear" && (
-                  <p className="text-xs text-muted-foreground">O campo será limpo (definido como vazio).</p>
-                )}
-
-                {operation === "concatenate" && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label>Partes (texto ou {"{{campo}}"})</Label>
-                      <Button variant="ghost" size="sm" className="h-6" onClick={() => updateConfig("parts", [...parts, ""])}>
-                        <Plus className="h-3 w-3 mr-1" /> Adicionar
+                {/* Mappings list */}
+                <div className="space-y-3">
+                  {activeMappings.length === 0 ? (
+                    <div className="text-center py-6 border border-dashed rounded-xl bg-muted/30">
+                      <p className="text-xs text-muted-foreground italic">Nenhum mapeamento adicionado ainda.</p>
+                      <Button type="button" variant="link" size="sm" onClick={addMapping} className="text-xs mt-1">
+                        + Adicionar primeiro mapeamento
                       </Button>
                     </div>
-                    {parts.map((part, i) => (
-                      <div key={i} className="flex gap-1">
-                        <Input
-                          value={part}
-                          onChange={e => { const updated = [...parts]; updated[i] = e.target.value; updateConfig("parts", updated); }}
-                          placeholder="Ex: {{name}} ou texto fixo"
-                          className="flex-1"
-                        />
-                        {parts.length > 1 && (
-                          <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => updateConfig("parts", parts.filter((_, j) => j !== i))}>
-                            <Trash2 className="h-3 w-3 text-destructive" />
+                  ) : (
+                    <div className="space-y-3">
+                      {activeMappings.map((mapping, i) => (
+                        <div key={i} className="p-3 border rounded-xl bg-slate-50/50 space-y-2.5 relative">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-1 top-1 h-7 w-7 text-slate-400 hover:text-destructive rounded-lg"
+                            onClick={() => removeMapping(i)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
                           </Button>
-                        )}
-                      </div>
-                    ))}
-                    <div className="space-y-1">
-                      <Label className="text-xs">Separador (opcional)</Label>
-                      <Input
-                        value={(node.config.separator as string) || ""}
-                        onChange={e => updateConfig("separator", e.target.value)}
-                        placeholder="Ex: espaço, vírgula..."
-                        className="h-8 text-xs"
-                      />
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {/* Source path */}
+                            <div className="space-y-1">
+                              <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Origem (JSON Path)</Label>
+                              <div className="relative">
+                                <Input
+                                  value={mapping.source}
+                                  onChange={(e) => {
+                                    const next = [...activeMappings];
+                                    next[i] = { ...next[i], source: e.target.value };
+                                    updateMappings(next);
+                                  }}
+                                  placeholder="Ex: body.nome"
+                                  className="font-mono text-xs pr-7 h-8 rounded-lg"
+                                />
+                                {availablePaths.length > 0 && (
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="absolute right-0 top-0 h-8 w-8 text-slate-400 hover:text-slate-600 rounded-lg">
+                                        <ChevronDown className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="max-h-48 overflow-y-auto">
+                                      {availablePaths.map((p) => (
+                                        <DropdownMenuItem
+                                          key={p}
+                                          onClick={() => {
+                                            const next = [...activeMappings];
+                                            next[i] = { ...next[i], source: p };
+                                            updateMappings(next);
+                                          }}
+                                          className="font-mono text-[10px]"
+                                        >
+                                          {p}
+                                        </DropdownMenuItem>
+                                      ))}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Target Entity Type */}
+                            <div className="space-y-1">
+                              <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Entidade de Destino</Label>
+                              <Select
+                                value={mapping.targetType || "lead"}
+                                onValueChange={(type) => {
+                                  const next = [...activeMappings];
+                                  next[i] = { 
+                                    ...next[i], 
+                                    targetType: type, 
+                                    targetField: type === "lead" ? "name" : type === "deal" ? "title" : type === "conversation" ? "phone" : "variavel_nova" 
+                                  };
+                                  updateMappings(next);
+                                }}
+                              >
+                                <SelectTrigger className="h-8 rounded-lg text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="text-xs">
+                                  <SelectItem value="lead">Lead</SelectItem>
+                                  <SelectItem value="deal">Negócio (CRM)</SelectItem>
+                                  <SelectItem value="conversation">Conversa</SelectItem>
+                                  <SelectItem value="variable">Variável Temporária</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {/* Target Field */}
+                            <div className="space-y-1">
+                              <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Campo de Destino</Label>
+                              {mapping.targetType === "lead" && (
+                                <Select
+                                  value={mapping.targetField}
+                                  onValueChange={(field) => {
+                                    const next = [...activeMappings];
+                                    next[i] = { ...next[i], targetField: field };
+                                    updateMappings(next);
+                                  }}
+                                >
+                                  <SelectTrigger className="h-8 rounded-lg text-xs">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent className="text-xs">
+                                    <SelectItem value="name">Nome</SelectItem>
+                                    <SelectItem value="phone">Telefone</SelectItem>
+                                    <SelectItem value="email">E-mail</SelectItem>
+                                    <SelectItem value="company_name">Empresa</SelectItem>
+                                    <SelectItem value="document">Documento</SelectItem>
+                                    <SelectItem value="source">Origem</SelectItem>
+                                    <SelectItem value="tags">Tags (Separadas por vírgula)</SelectItem>
+                                    {customFieldsMetadata.filter(f => f.category === "lead").map(f => (
+                                      <SelectItem key={f.id} value={`custom_fields.${f.key}`}>Custom: {f.name}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              )}
+
+                              {mapping.targetType === "deal" && (
+                                <Select
+                                  value={mapping.targetField}
+                                  onValueChange={(field) => {
+                                    const next = [...activeMappings];
+                                    next[i] = { ...next[i], targetField: field };
+                                    updateMappings(next);
+                                  }}
+                                >
+                                  <SelectTrigger className="h-8 rounded-lg text-xs">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent className="text-xs">
+                                    <SelectItem value="title">Título do Negócio</SelectItem>
+                                    <SelectItem value="value">Valor</SelectItem>
+                                    <SelectItem value="pipeline_id">Pipeline</SelectItem>
+                                    <SelectItem value="stage_id">Etapa</SelectItem>
+                                    {customFieldsMetadata.filter(f => f.category === "deal").map(f => (
+                                      <SelectItem key={f.id} value={`custom_fields.${f.key}`}>Custom: {f.name}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              )}
+
+                              {mapping.targetType === "conversation" && (
+                                <Select
+                                  value={mapping.targetField}
+                                  onValueChange={(field) => {
+                                    const next = [...activeMappings];
+                                    next[i] = { ...next[i], targetField: field };
+                                    updateMappings(next);
+                                  }}
+                                >
+                                  <SelectTrigger className="h-8 rounded-lg text-xs">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent className="text-xs">
+                                    <SelectItem value="phone">Telefone</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              )}
+
+                              {mapping.targetType === "variable" && (
+                                <Input
+                                  value={mapping.targetField}
+                                  onChange={(e) => {
+                                    const next = [...activeMappings];
+                                    next[i] = { ...next[i], targetField: e.target.value.replace(/[^a-zA-Z0-9_]/g, "") };
+                                    updateMappings(next);
+                                  }}
+                                  placeholder="nome_da_variavel"
+                                  className="h-8 rounded-lg text-xs font-mono"
+                                />
+                              )}
+                            </div>
+
+                            {/* Transform selection */}
+                            <div className="space-y-1">
+                              <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Transformar</Label>
+                              <Select
+                                value={mapping.transform || "none"}
+                                onValueChange={(val) => {
+                                  const next = [...activeMappings];
+                                  next[i] = { ...next[i], transform: val === "none" ? undefined : val };
+                                  updateMappings(next);
+                                }}
+                              >
+                                <SelectTrigger className="h-8 rounded-lg text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="text-xs">
+                                  <SelectItem value="none">Nenhuma</SelectItem>
+                                  <SelectItem value="uppercase">MAIÚSCULAS</SelectItem>
+                                  <SelectItem value="lowercase">minúsculas</SelectItem>
+                                  <SelectItem value="trim">Remover espaços extras</SelectItem>
+                                  <SelectItem value="capitalize">Capitalizar palavras</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
+                  )}
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full text-xs h-9 rounded-xl border-dashed"
+                    onClick={addMapping}
+                  >
+                    + Adicionar novo mapeamento
+                  </Button>
+                </div>
+
+                {/* Simulated preview collapsible */}
+                {previewData && (
+                  <div className="pt-2 border-t">
+                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Simulação do Output (Resultado)</Label>
+                    <pre className="text-[10px] font-mono bg-slate-50 border p-3 rounded-xl overflow-x-auto max-h-48 mt-2">
+                      {JSON.stringify(previewData, null, 2)}
+                    </pre>
                   </div>
                 )}
 
-                {operation === "transform" && (
-                  <div className="space-y-2">
-                    <Label>Tipo de transformação</Label>
-                    <Select value={(node.config.transformType as string) || "uppercase"} onValueChange={v => updateConfig("transformType", v)}>
-                      <SelectTrigger className="rounded-xl border-border/40"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="uppercase">MAIÚSCULAS</SelectItem>
-                        <SelectItem value="lowercase">minúsculas</SelectItem>
-                        <SelectItem value="trim">Remover espaços extras</SelectItem>
-                        <SelectItem value="capitalize">Primeira Letra Maiúscula</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-              </>
+                {/* Fast field creation Dialog */}
+                <Dialog open={isCreateFieldOpen} onOpenChange={setIsCreateFieldOpen}>
+                  <DialogContent className="sm:max-w-md rounded-2xl p-6">
+                    <DialogHeader>
+                      <DialogTitle className="text-sm font-semibold">Criar Campo Personalizado</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3 py-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Nome do Campo</Label>
+                        <Input
+                          value={newFieldName}
+                          onChange={(e) => {
+                            setNewFieldName(e.target.value);
+                            // Auto generate key
+                            const key = e.target.value
+                              .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                              .replace(/[^a-zA-Z0-9\s]/g, "")
+                              .replace(/\s+/g, "_")
+                              .toLowerCase();
+                            setNewFieldKey(key);
+                          }}
+                          placeholder="Ex: CPF do Comprador"
+                          className="h-9 text-xs rounded-xl"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Chave do Campo (Sem espaços, minúsculas)</Label>
+                        <Input
+                          value={newFieldKey}
+                          onChange={(e) => setNewFieldKey(e.target.value.replace(/[^a-z0-9_]/g, ""))}
+                          placeholder="ex: cpf_do_comprador"
+                          className="h-9 text-xs font-mono rounded-xl"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Entidade</Label>
+                          <Select value={newFieldEntity} onValueChange={(v: any) => setNewFieldEntity(v)}>
+                            <SelectTrigger className="h-9 rounded-xl text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent className="text-xs">
+                              <SelectItem value="lead">Lead</SelectItem>
+                              <SelectItem value="deal">Negócio</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Tipo de Dado</Label>
+                          <Select value={newFieldType} onValueChange={(v: any) => setNewFieldType(v)}>
+                            <SelectTrigger className="h-9 rounded-xl text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent className="text-xs">
+                              <SelectItem value="text">Texto</SelectItem>
+                              <SelectItem value="number">Número</SelectItem>
+                              <SelectItem value="date">Data</SelectItem>
+                              <SelectItem value="boolean">Booleano</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
+                    <DialogFooter className="mt-4 gap-2">
+                      <Button type="button" variant="ghost" onClick={() => setIsCreateFieldOpen(false)} className="rounded-xl text-xs h-9">
+                        Cancelar
+                      </Button>
+                      <Button type="button" onClick={handleCreateField} className="rounded-xl text-xs h-9">
+                        Criar e Usar
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
             );
           })()}
 

@@ -171,7 +171,7 @@ export function DispatchSequenceBuilder({ sequence, onBack, onUpdate }: Dispatch
       sequenceId={sequence.id}
       nodeCategories={NODE_CATEGORIES}
       getDefaultConfig={getDefaultConfig}
-      renderConfigPanel={(node, onUpdateConfig, onClose, onManualSend, isSendingManual) => {
+      renderConfigPanel={(node, onUpdateConfig, onClose, onManualSend, isSendingManual, isGroup, nodes) => {
         if (node.id === TRIGGER_NODE_ID) {
           const triggerType = (node.config.triggerType as DispatchTriggerType) || "manual";
           const triggerConfig = (node.config.triggerConfig as DispatchTriggerConfig) || {};
@@ -204,6 +204,7 @@ export function DispatchSequenceBuilder({ sequence, onBack, onUpdate }: Dispatch
             mode="dispatch"
             onManualSend={onManualSend}
             isSendingManual={isSendingManual}
+            nodes={nodes}
             renderMediaUploader={(props) => (
               <MediaUploader
                 mediaType={props.mediaType as "image" | "video" | "audio" | "document" | "sticker"}

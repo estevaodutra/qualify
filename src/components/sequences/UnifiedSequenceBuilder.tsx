@@ -35,7 +35,8 @@ export interface UnifiedSequenceBuilderProps {
     onClose: () => void,
     onManualSend?: () => void,
     isSendingManual?: boolean,
-    isGroup?: boolean
+    isGroup?: boolean,
+    nodes?: LocalNode[]
   ) => ReactNode;
   onSave: (
     name: string, 
@@ -650,6 +651,9 @@ export function UnifiedSequenceBuilder({
           nodes={localNodes}
           connections={localConnections}
           nodeCategories={categories}
+          onUpdateNodeConfig={(nodeId, config) => {
+            setLocalNodes(prev => prev.map(n => n.id === nodeId ? { ...n, config } : n));
+          }}
         />
       ) : (
       /* Canvas Layout — fills whatever height the page gives this component; the
@@ -1035,7 +1039,8 @@ export function UnifiedSequenceBuilder({
                 }
               } : undefined,
               isSendingManual,
-              isGroup
+              isGroup,
+              localNodes
             );
           })()}
         </SheetContent>

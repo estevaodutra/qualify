@@ -8,6 +8,7 @@ interface ExecutionHeaderProps {
   execution: WorkflowExecution;
   onRerun?: () => void;
   isRerunning?: boolean;
+  onUseAsReference?: () => void;
 }
 
 const STATUS_LABEL: Record<string, { label: string; icon: typeof CheckCircle2; className: string }> = {
@@ -26,7 +27,7 @@ function formatDuration(ms: number | null): string {
   return `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`;
 }
 
-export function ExecutionHeader({ execution, onRerun, isRerunning }: ExecutionHeaderProps) {
+export function ExecutionHeader({ execution, onRerun, isRerunning, onUseAsReference }: ExecutionHeaderProps) {
   const { toast } = useToast();
   const meta = STATUS_LABEL[execution.status];
   const StatusIcon = meta.icon;
@@ -58,18 +59,30 @@ export function ExecutionHeader({ execution, onRerun, isRerunning }: ExecutionHe
         )}
       </div>
 
-      {canRerun && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="rounded-xl border-slate-200 hover:bg-slate-50 gap-1.5 h-8 px-3 text-xs font-semibold shrink-0"
-          onClick={onRerun}
-          disabled={isRerunning}
-        >
-          {isRerunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-          Reexecutar
-        </Button>
-      )}
+      <div className="flex items-center gap-2 shrink-0">
+        {execution.triggerType === "webhook" && onUseAsReference && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-xl border-[#8A3CFF]/30 hover:bg-[#8A3CFF]/5 text-[#8A3CFF] gap-1.5 h-8 px-3 text-xs font-semibold"
+            onClick={onUseAsReference}
+          >
+            Usar como referência
+          </Button>
+        )}
+        {canRerun && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-xl border-slate-200 hover:bg-slate-50 gap-1.5 h-8 px-3 text-xs font-semibold"
+            onClick={onRerun}
+            disabled={isRerunning}
+          >
+            {isRerunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+            Reexecutar
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

@@ -14,9 +14,10 @@ interface ExecutionsPanelProps {
   nodes: LocalNode[];
   connections: LocalConnection[];
   nodeCategories: NodeCategory[];
+  onUpdateNodeConfig?: (nodeId: string, config: Record<string, unknown>) => void;
 }
 
-export function ExecutionsPanel({ sequenceId, nodes, connections, nodeCategories }: ExecutionsPanelProps) {
+export function ExecutionsPanel({ sequenceId, nodes, connections, nodeCategories, onUpdateNodeConfig }: ExecutionsPanelProps) {
   const { toast } = useToast();
   const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -76,9 +77,58 @@ export function ExecutionsPanel({ sequenceId, nodes, connections, nodeCategories
     }
   };
 
+  const handleUseAsReference = async () => {
+    if (!execution) return;
+    const triggerNode = nodes.find(n => n.nodeType === "trigger");
+    if (!triggerNode) {
+      toast({ title: "Gatilho não encontrado", variant: "destructive" });
+      return;
+    }
+    const currentConfig = triggerNode.config || {};
+    const currentTriggerConfig = (currentConfig.triggerConfig as Record<string, any>) || {};
+    
+    // Save the raw webhook payload (or full trigger payload) as reference
+    const payload = execution.triggerPayload || {};
+    const referencePayload = payload.webhookPayload || payload;
+
+    const newTriggerConfig = {
+      ...currentTriggerConfig,
+      referencePayload
+    };
+    
+    const newConfig = {
+      ...currentConfig,
+      triggerConfig: newTriggerConfig
+    };
+
+    if (onUpdateNodeConfig) {
+      onUpdateNodeConfig(triggerNode.id, newConfig);
+    }
+
+    try {
+      const { error } = await supabase
+        .from("sequence_nodes")
+        .update({ config: newConfig })
+        .eq("id", triggerNode.id);
+      
+      if (error) throw error;
+      toast({ title: "Sucesso", description: "Payload definido como referência para mapeamento." });
+    } catch (err) {
+      console.error("Failed to save reference payload:", err);
+      toast({ title: "Erro ao salvar referência", description: err instanceof Error ? err.message : undefined, variant: "destructive" });
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col gap-3 min-h-0 overflow-hidden">
-      {execution && <ExecutionHeader execution={execution} onRerun={handleRerun} isRerunning={isRerunning} />}
+      {execution && (
+        <ExecutionHeader 
+          execution={execution} 
+          onRerun={handleRerun} 
+          isRerunning={isRerunning} 
+          onUseAsReference={handleUseAsReference}
+        />
+      )}
 
       <div className="flex-1 flex gap-4 min-h-0 overflow-hidden">
         <ExecutionsList
