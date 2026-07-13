@@ -479,6 +479,37 @@ Deno.serve(async (req) => {
 
     const typedCampaign = campaign as unknown as CampaignData;
     let instance = typedCampaign.instances;
+    const effectiveSequenceId = sequenceId || typedMessage?.sequence_id;
+
+    // Fallback: resolve instance from sequence trigger config if not linked to campaign
+    if ((!instance || instance.status !== "connected") && effectiveSequenceId) {
+      console.log(`[ExecuteMessage] Campaign instance not connected or null, attempting to resolve from sequence ${effectiveSequenceId} trigger config...`);
+      const { data: triggerNode } = await supabase
+        .from("sequence_nodes")
+        .select("config")
+        .eq("sequence_id", effectiveSequenceId)
+        .eq("node_type", "trigger")
+        .maybeSingle();
+
+      const triggerConfig = triggerNode?.config?.triggerConfig as Record<string, any> | undefined;
+      const configInstanceId = triggerConfig?.instanceId;
+
+      if (configInstanceId) {
+        const { data: inst } = await supabase
+          .from("instances")
+          .select("id, name, phone, provider, external_instance_id, external_instance_token, status")
+          .eq("id", configInstanceId)
+          .maybeSingle();
+
+        if (inst && inst.status === "connected") {
+          instance = inst as any;
+          console.log(`[ExecuteMessage] Resolved connected instance from sequence trigger config: ${instance.name}`);
+        } else if (inst && !instance) {
+          instance = inst as any;
+          console.log(`[ExecuteMessage] Resolved instance from sequence trigger config (disconnected): ${instance.name}`);
+        }
+      }
+    }
 
     // Pool selection: pick randomly from config.instance_ids if no instance, or if the default instance is not connected
     if (!instance || instance.status !== "connected") {
@@ -562,7 +593,6 @@ Deno.serve(async (req) => {
     // Get sequence nodes if sequence is linked
     let sequenceNodes: SequenceNode[] = [];
     let connections: SequenceConnection[] = [];
-    const effectiveSequenceId = sequenceId || typedMessage?.sequence_id;
 
     if (effectiveSequenceId) {
       const { data: nodes } = await supabase
