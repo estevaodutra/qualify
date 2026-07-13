@@ -17,6 +17,8 @@ ON public.pipeline_groups(company_id, order_index);
 
 ALTER TABLE public.pipeline_groups ENABLE ROW LEVEL SECURITY;
 
+GRANT ALL ON TABLE public.pipeline_groups TO authenticated, service_role, anon;
+
 CREATE POLICY "Company members can view pipeline groups" ON public.pipeline_groups
   FOR SELECT TO authenticated USING (public.is_company_member(company_id, auth.uid()));
 
