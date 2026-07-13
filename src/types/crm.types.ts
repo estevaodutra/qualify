@@ -1,9 +1,27 @@
-export interface Pipeline {
+export interface PipelineGroup {
   id: string;
   company_id: string;
   name: string;
+  color: string | null;
+  order_index: number;
+  is_collapsed: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface Pipeline {
+  id: string;
+  company_id: string;
+  group_id: string | null;
+  name: string;
+  description: string | null;
+  color: string | null;
+  status: 'active' | 'archived';
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+  
+  stages?: PipelineStage[];
 }
 
 export interface PipelineStage {
@@ -13,6 +31,7 @@ export interface PipelineStage {
   name: string;
   color: string;
   order_index: number;
+  stage_type: 'open' | 'won' | 'lost';
   created_at: string;
 }
 

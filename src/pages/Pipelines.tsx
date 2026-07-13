@@ -1,112 +1,116 @@
-import { useState, useMemo } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useMemo, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
-import { Deal, Pipeline } from "@/types/crm.types";
-import { DealKanbanCard } from "@/components/crm/kanban/DealKanbanCard";
+import { Deal, Pipeline, PipelineGroup } from "@/types/crm.types";
 import { DealDrawer } from "@/components/crm/deals/DealDrawer";
 import { LeadDrawer } from "@/components/crm/leads/LeadDrawer";
-import { Plus, Search, Filter, Kanban, Settings, Loader2 } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { toast } from "sonner";
+import { PipelineSidebar } from "@/components/crm/pipelines/PipelineSidebar";
+import { PipelineHeader } from "@/components/crm/pipelines/PipelineHeader";
+import { PipelineStageColumn } from "@/components/crm/pipelines/PipelineStageColumn";
 
 export default function Pipelines() {
-  const { user } = useAuth();
   const { activeCompany } = useCompany();
-  const queryClient = useQueryClient();
   
+  const [activePipelineId, setActivePipelineId] = useState<string | null>(null);
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
   const [selectedLead, setSelectedLead] = useState<any | null>(null);
   const [search, setSearch] = useState("");
   
   const [dealDrawerOpen, setDealDrawerOpen] = useState(false);
   const [leadDrawerOpen, setLeadDrawerOpen] = useState(false);
-  
-  const [newPipelineOpen, setNewPipelineOpen] = useState(false);
-  const [newPipelineName, setNewPipelineName] = useState("");
 
-  const createPipelineMutation = useMutation({
-    mutationFn: async (name: string) => {
-      if (!activeCompany?.id) throw new Error("Empresa não selecionada");
-      
-      // 1. Criar a pipeline
-      const { data: pipeline, error: pipeError } = await supabase
-        .from('pipelines')
-        .insert({ company_id: activeCompany.id, name })
-        .select()
-        .single();
-        
-      if (pipeError) throw pipeError;
-      
-      // 2. Criar etapas padrões para não ficar vazia
-      const defaultStages = [
-        { pipeline_id: pipeline.id, company_id: activeCompany.id, name: "Novo Lead", color: "#3b82f6", order_index: 0 },
-        { pipeline_id: pipeline.id, company_id: activeCompany.id, name: "Contato Feito", color: "#eab308", order_index: 1 },
-        { pipeline_id: pipeline.id, company_id: activeCompany.id, name: "Ganha", color: "#22c55e", order_index: 2 },
-        { pipeline_id: pipeline.id, company_id: activeCompany.id, name: "Perdida", color: "#ef4444", order_index: 3 },
-      ];
-      
-      const { error: stagesError } = await supabase
-        .from('pipeline_stages')
-        .insert(defaultStages);
-        
-      if (stagesError) throw stagesError;
-      
-      return pipeline;
-    },
-    onSuccess: () => {
-      toast.success("Pipeline criada com sucesso!");
-      setNewPipelineOpen(false);
-      setNewPipelineName("");
-      queryClient.invalidateQueries({ queryKey: ['pipelines'] });
-    },
-    onError: (error: any) => {
-      console.error("Erro completo:", error);
-      toast.error(`Erro ao criar pipeline: ${error.message || JSON.stringify(error)}`);
+  // Initialize active pipeline from localStorage
+  useEffect(() => {
+    if (!activeCompany?.id) return;
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlPipelineId = urlParams.get("pipelineId");
+    
+    const stored = localStorage.getItem(`qualify-active-pipeline:${activeCompany.id}`);
+    
+    if (urlPipelineId) {
+      setActivePipelineId(urlPipelineId);
+    } else if (stored) {
+      setActivePipelineId(stored);
     }
-  });
+  }, [activeCompany?.id]);
 
-  const handleCreatePipeline = () => {
-    if (!newPipelineName.trim()) return;
-    createPipelineMutation.mutate(newPipelineName);
-  };
+  // Persist active pipeline
+  useEffect(() => {
+    if (activeCompany?.id && activePipelineId) {
+      localStorage.setItem(`qualify-active-pipeline:${activeCompany.id}`, activePipelineId);
+      
+      const url = new URL(window.location.href);
+      url.searchParams.set("pipelineId", activePipelineId);
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, [activePipelineId, activeCompany?.id]);
 
-  const { data: pipelines, isLoading: loadingPipelines } = useQuery({
-    queryKey: ['pipelines'],
+  // Fallback to first pipeline if none selected
+  const { data: pipelines } = useQuery({
+    queryKey: ["pipelines", activeCompany?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from('pipelines').select('*, stages:pipeline_stages(*)');
+      if (!activeCompany?.id) return [];
+      const { data, error } = await supabase.from("pipelines").select("*").eq("company_id", activeCompany.id).eq("status", "active").order("order_index", { ascending: true });
       if (error) throw error;
       return data as Pipeline[];
-    }
+    },
+    enabled: !!activeCompany?.id
   });
 
-  const activePipeline = pipelines?.[0]; // Get the first pipeline for now
+  useEffect(() => {
+    if (pipelines && pipelines.length > 0 && !activePipelineId) {
+      setActivePipelineId(pipelines[0].id);
+    }
+  }, [pipelines, activePipelineId]);
 
-  const { data: deals, isLoading: loadingDeals } = useQuery({
-    queryKey: ['deals', activePipeline?.id],
+  // Fetch active pipeline with stages
+  const { data: activePipeline } = useQuery({
+    queryKey: ["pipeline", activePipelineId],
     queryFn: async () => {
-      if (!activePipeline?.id) return [];
+      if (!activePipelineId) return null;
+      const { data, error } = await supabase
+        .from("pipelines")
+        .select("*, stages:pipeline_stages(*)")
+        .eq("id", activePipelineId)
+        .single();
+      if (error) throw error;
+      return data as Pipeline;
+    },
+    enabled: !!activePipelineId
+  });
+
+  // Fetch active pipeline's group
+  const { data: activeGroup } = useQuery({
+    queryKey: ["pipeline-groups", activeCompany?.id, activePipeline?.group_id],
+    queryFn: async () => {
+      if (!activePipeline?.group_id) return null;
+      const { data, error } = await supabase
+        .from("pipeline_groups")
+        .select("*")
+        .eq("id", activePipeline.group_id)
+        .single();
+      if (error) throw error;
+      return data as PipelineGroup;
+    },
+    enabled: !!activePipeline?.group_id
+  });
+
+  // Fetch deals for active pipeline
+  const { data: deals, isLoading: loadingDeals } = useQuery({
+    queryKey: ['deals', activePipelineId],
+    queryFn: async () => {
+      if (!activePipelineId) return [];
       const { data, error } = await supabase
         .from('deals')
         .select('*, lead:leads(*)')
-        .eq('pipeline_id', activePipeline.id)
+        .eq('pipeline_id', activePipelineId)
         .eq('status', 'open');
       if (error) throw error;
       return data;
     },
-    enabled: !!activePipeline?.id
+    enabled: !!activePipelineId
   });
 
   const stages = useMemo(() => {
@@ -119,13 +123,25 @@ export default function Pipelines() {
     stages.forEach(s => acc[s.id] = []);
     if (deals) {
       deals.forEach(deal => {
+        // Simple search filter
+        if (search) {
+          const s = search.toLowerCase();
+          const matchTitle = deal.title?.toLowerCase().includes(s);
+          const matchLead = deal.lead?.name?.toLowerCase().includes(s) || deal.lead?.phone?.includes(s);
+          if (!matchTitle && !matchLead) return;
+        }
+
         if (acc[deal.stage_id]) {
           acc[deal.stage_id].push(deal);
         }
       });
     }
+    // Sort deals by position
+    Object.keys(acc).forEach(key => {
+      acc[key].sort((a, b) => (a.position || 0) - (b.position || 0));
+    });
     return acc;
-  }, [deals, stages]);
+  }, [deals, stages, search]);
 
   const handleOpenDeal = (deal: any) => {
     setSelectedDeal(deal as Deal);
@@ -141,136 +157,76 @@ export default function Pipelines() {
     }
   };
 
-  if (loadingPipelines || loadingDeals) {
-    return <div className="p-8 text-center text-muted-foreground">Carregando Pipelines...</div>;
-  }
-
-  if (!loadingPipelines && (!pipelines || pipelines.length === 0)) {
-    return (
-      <div className="flex flex-col h-full bg-background overflow-hidden items-center justify-center p-8">
-        <div className="flex flex-col items-center justify-center max-w-md text-center space-y-4">
-          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-            <Kanban className="w-8 h-8 text-primary" />
-          </div>
-          <h2 className="text-2xl font-bold font-['Sora'] text-foreground">Nenhuma Pipeline Encontrada</h2>
-          <p className="text-muted-foreground">
-            Você ainda não possui um funil de vendas configurado. Crie sua primeira pipeline para começar a gerenciar seus negócios.
-          </p>
-
-          <Dialog open={newPipelineOpen} onOpenChange={setNewPipelineOpen}>
-            <DialogTrigger asChild>
-              <Button className="mt-4 gap-2 shadow-none bg-primary text-primary-foreground hover:bg-primary/90" size="lg">
-                <Plus className="w-4 h-4" /> Nova Pipeline
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Criar Nova Pipeline</DialogTitle>
-                <DialogDescription>
-                  Dê um nome para o seu novo funil de vendas. Depois você poderá configurar as etapas.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="name">Nome da Pipeline</Label>
-                  <Input 
-                    id="name" 
-                    placeholder="Ex: Vendas B2B, Captação..." 
-                    value={newPipelineName}
-                    onChange={(e) => setNewPipelineName(e.target.value)}
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setNewPipelineOpen(false)}>Cancelar</Button>
-                <Button 
-                  onClick={handleCreatePipeline}
-                  disabled={!newPipelineName.trim() || createPipelineMutation.isPending}
-                >
-                  {createPipelineMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  Continuar
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col h-full bg-background overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between p-6 pb-4 border-b border-border/40 shrink-0">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground font-['Sora']">Pipelines</h1>
-          <p className="text-sm text-muted-foreground mt-1">Gerencie seus negócios e funil de vendas</p>
-        </div>
-        
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input 
-              placeholder="Buscar negócio..." 
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 h-9 w-[250px] bg-secondary/50 border-transparent focus-visible:ring-1 focus-visible:border-border"
+    <div className="flex h-full bg-background overflow-hidden">
+      <PipelineSidebar 
+        activePipelineId={activePipelineId} 
+        onSelectPipeline={setActivePipelineId} 
+      />
+      
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
+        {activePipeline ? (
+          <>
+            <PipelineHeader 
+              pipeline={activePipeline} 
+              group={activeGroup || undefined}
+              search={search}
+              setSearch={setSearch}
+              onOpenSettings={() => console.log("Open pipeline settings")}
             />
-          </div>
-          <Button variant="outline" className="h-9 gap-2 shadow-none">
-            <Filter className="w-4 h-4" /> Filtros
-          </Button>
-          <Button className="h-9 gap-2 shadow-none bg-primary text-primary-foreground hover:bg-primary/90">
-            <Plus className="w-4 h-4" /> Novo Negócio
-          </Button>
-        </div>
-      </div>
-
-      {/* Board */}
-      <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 pb-8">
-        <div className="flex h-full items-start gap-4" style={{ minWidth: "max-content" }}>
-          {stages.map(stage => (
-            <div key={stage.id} className="flex flex-col h-full w-[300px] shrink-0 bg-muted/20 rounded-xl border border-border/40">
-              {/* Stage Header */}
-              <div className="p-3.5 border-b border-border/40 flex items-center justify-between sticky top-0 bg-background/50 backdrop-blur-sm z-10 rounded-t-xl">
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: stage.color || "#94a3b8" }} />
-                  <span className="font-semibold text-sm text-foreground">{stage.name}</span>
-                  <span className="bg-secondary text-muted-foreground text-[10px] font-bold px-2 py-0.5 rounded-full">
-                    {dealsByStage[stage.id]?.length || 0}
-                  </span>
-                </div>
-                <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md hover:bg-secondary">
-                  <Plus className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-
-              {/* Deals List */}
-              <div className="flex-1 overflow-y-auto p-3 space-y-3 pb-6 custom-scrollbar">
-                {dealsByStage[stage.id]?.map(deal => (
-                  <DealKanbanCard 
-                    key={deal.id}
-                    deal={deal as any}
-                    onClick={() => handleOpenDeal(deal)}
-                    onOpenLead={() => handleOpenLead(deal.lead_id)}
+            
+            <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 pb-8 bg-muted/10">
+              <div className="flex h-full items-start gap-4" style={{ minWidth: "max-content" }}>
+                {stages.map(stage => (
+                  <PipelineStageColumn 
+                    key={stage.id}
+                    stage={stage}
+                    deals={dealsByStage[stage.id] || []}
+                    onOpenDeal={handleOpenDeal}
+                    onEditStage={(s) => console.log("Edit stage", s)}
                   />
                 ))}
+                
+                {stages.length === 0 && (
+                  <div className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-border rounded-xl text-center p-8 space-y-4 text-muted-foreground max-w-md mx-auto mt-20">
+                    <p>Esta pipeline ainda não possui etapas.</p>
+                    <button className="text-primary font-medium hover:underline">Adicionar Primeira Etapa</button>
+                  </div>
+                )}
+                
+                {stages.length > 0 && (
+                  <button className="flex-shrink-0 w-[300px] h-[48px] rounded-xl border-2 border-dashed border-border/60 hover:border-primary/50 hover:bg-primary/5 text-muted-foreground flex items-center justify-center text-sm font-medium transition-colors">
+                    + Nova Etapa
+                  </button>
+                )}
               </div>
             </div>
-          ))}
-        </div>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center p-8">
+            <div className="text-center space-y-4 max-w-md text-muted-foreground">
+              <h2 className="text-xl font-semibold text-foreground">Bem-vindo aos Pipelines</h2>
+              <p>Selecione uma pipeline no menu lateral ou crie uma nova para começar a organizar seus negócios.</p>
+            </div>
+          </div>
+        )}
       </div>
 
       <DealDrawer 
         open={dealDrawerOpen} 
-        onOpenChange={setDealDrawerOpen} 
-        deal={selectedDeal} 
-        lead={selectedLead} 
+        onOpenChange={setDealDrawerOpen}
+        deal={selectedDeal}
+        lead={selectedLead}
+        onOpenLead={() => {
+          setDealDrawerOpen(false);
+          setLeadDrawerOpen(true);
+        }}
       />
+      
       <LeadDrawer 
         open={leadDrawerOpen} 
-        onOpenChange={setLeadDrawerOpen} 
-        lead={selectedLead} 
+        onOpenChange={setLeadDrawerOpen}
+        leadId={selectedLead?.id}
       />
     </div>
   );
