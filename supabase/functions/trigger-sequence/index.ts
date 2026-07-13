@@ -238,8 +238,7 @@ Deno.serve(async (req) => {
     };
 
     // Apply field mappings from trigger_config
-    const triggerConfig = typedSequence.trigger_config || {};
-    const fieldMappings = triggerConfig.fieldMappings || [];
+    const fieldMappings = (triggerConfig as any).fieldMappings || [];
     const customFields = applyFieldMappings(payload, fieldMappings);
 
     // Fallback: auto-map simple top-level payload keys that aren't already mapped
