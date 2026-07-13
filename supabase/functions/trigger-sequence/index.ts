@@ -174,7 +174,9 @@ Deno.serve(async (req) => {
     // Pre-check: verify campaign has an instance configured before calling execute-message
     const campaignConfig = typedCampaign.config as Record<string, unknown> | null;
     const poolIds = (campaignConfig?.instance_ids as string[]) || [];
-    const hasInstance = !!typedCampaign.instance_id || poolIds.length > 0;
+    const triggerConfig = typedSequence.trigger_config as Record<string, unknown> || {};
+    const triggerInstanceId = triggerConfig.instanceId as string | undefined;
+    const hasInstance = !!typedCampaign.instance_id || poolIds.length > 0 || !!triggerInstanceId;
 
     if (!hasInstance) {
       console.error(`[TriggerSequence] Campaign ${typedCampaign.id} has no instance configured`);
