@@ -339,6 +339,48 @@ export async function fetchZApi(
       signal: controller.signal
     });
     clearTimeout(timeoutId);
+
+    if (response.ok && actualProvider === "waha") {
+      const responseText = await response.text();
+      let data: any = null;
+      try {
+        data = responseText ? JSON.parse(responseText) : null;
+      } catch (e) {
+        return new Response(responseText, {
+          status: response.status,
+          headers: response.headers,
+        });
+      }
+
+      const cleanEndpoint = endpoint.split("?")[0].toLowerCase();
+      if (cleanEndpoint === "/groups" || cleanEndpoint === "/chats") {
+        const normalizedGroups = normalizeWahaGroups(data);
+        return new Response(JSON.stringify(normalizedGroups), {
+          status: response.status,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+      }
+
+      if (cleanEndpoint === "/group-members") {
+        const normalizedMembers = normalizeWahaGroupMembers(data);
+        return new Response(JSON.stringify(normalizedMembers), {
+          status: response.status,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+      }
+
+      return new Response(JSON.stringify(data), {
+        status: response.status,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+    }
+
     return response;
   } catch (err: any) {
     clearTimeout(timeoutId);
@@ -347,5 +389,117 @@ export async function fetchZApi(
     }
     throw err;
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WAHA RESPONSE NORMALIZERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function normalizeWahaGroups(wahaData: any): any[] {
+  let raw = wahaData;
+  if (Array.isArray(raw) && raw.length === 1 && raw[0] && typeof raw[0] === "object") {
+    if (raw[0].body) raw = raw[0].body;
+    else if (raw[0].data) raw = raw[0].data;
+  }
+  
+  const normalized: any[] = [];
+  const processGroupObj = (key: string, groupVal: any) => {
+    const phone = key.includes("@g.us") 
+      ? key.replace("@g.us", "-group") 
+      : key;
+    
+    normalized.push({
+      phone: phone,
+      name: groupVal.subject || groupVal.name || "",
+      isGroup: true,
+      pinned: String(groupVal.pinned || false),
+      archived: String(groupVal.archived || false),
+      messagesUnread: String(groupVal.unreadCount || 0),
+      isMuted: String(groupVal.isMuted || false),
+      communityId: groupVal.isCommunity ? (groupVal.id || "") : "",
+      lastMessageTime: String(groupVal.creation || "")
+    });
+  };
+
+  if (Array.isArray(raw)) {
+    for (const item of raw) {
+      if (item && typeof item === "object") {
+        if (item.id && (item.subject !== undefined || item.name !== undefined)) {
+          processGroupObj(item.id, item);
+        } else {
+          for (const [key, val] of Object.entries(item)) {
+            if (val && typeof val === "object" && key.includes("@g.us")) {
+              processGroupObj(key, val);
+            }
+          }
+        }
+      }
+    }
+  } else if (raw && typeof raw === "object") {
+    for (const [key, val] of Object.entries(raw)) {
+      if (val && typeof val === "object") {
+        processGroupObj(key, val);
+      }
+    }
+  }
+  
+  return normalized;
+}
+
+function normalizeWahaGroupMembers(wahaData: any): any {
+  let raw = wahaData;
+  if (Array.isArray(raw) && raw.length === 1 && raw[0] && typeof raw[0] === "object") {
+    if (raw[0].body) raw = raw[0].body;
+    else if (raw[0].data) raw = raw[0].data;
+  }
+
+  let participantsList: any[] = [];
+  const extractParticipants = (obj: any) => {
+    const list = obj.participants || obj.members || [];
+    if (Array.isArray(list)) {
+      for (const p of list) {
+        if (p) {
+          let phoneRaw = p.phoneNumber || p.phone || p.id || "";
+          if (phoneRaw.includes("@")) {
+            phoneRaw = phoneRaw.split("@")[0];
+          }
+          if (phoneRaw) {
+            participantsList.push({
+              phone: phoneRaw,
+              name: p.name || "",
+              isAdmin: p.admin === "admin" || p.admin === "superadmin" || p.admin === true || p.isAdmin === true
+            });
+          }
+        }
+      }
+    }
+  };
+
+  if (Array.isArray(raw)) {
+    const first = raw[0];
+    if (first && (first.participants || first.members)) {
+      extractParticipants(first);
+    } else {
+      for (const item of raw) {
+        if (item) {
+          let phoneRaw = item.phoneNumber || item.phone || item.id || "";
+          if (phoneRaw.includes("@")) {
+            phoneRaw = phoneRaw.split("@")[0];
+          }
+          if (phoneRaw) {
+            participantsList.push({
+              phone: phoneRaw,
+              name: item.name || "",
+              isAdmin: item.admin === "admin" || item.admin === "superadmin" || item.admin === true || item.isAdmin === true
+            });
+          }
+        }
+      }
+    }
+  } else if (raw && typeof raw === "object") {
+    extractParticipants(raw);
+  }
+
+  return [{ participants: participantsList }];
 }
 // Trigger
