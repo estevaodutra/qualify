@@ -817,8 +817,8 @@ Deno.serve(async (req) => {
       // Membership validation: private phone destinations must be active group members
       let effectiveDests = destinations;
       
-      // Skip membership validation for webhook triggers to allow external leads
-      if (!isTriggeredExecution) {
+      // Skip membership validation for webhook triggers and manual node tests to allow external/test leads
+      if (!isTriggeredExecution && !isManualNodeExecution) {
         const privatePhoneDests = destinations.filter(
           (d: DestinationData) => d.isPrivate && d.group_jid?.endsWith("@s.whatsapp.net")
         );
