@@ -279,9 +279,10 @@ Deno.serve(async (req) => {
     // trigger was explicitly configured with groupScope "all"/"selected" —
     // otherwise (groupScope undefined, i.e. every pre-existing sequence)
     // behavior is exactly as before: a single first campaign group.
+    const shouldSendToGroup = isGroupMode && !triggerConfig.sendPrivate;
     let targetGroups: { group_jid: string; group_name: string | null }[] = [];
 
-    if (isGroupMode && !destinationPhone) {
+    if (shouldSendToGroup) {
       if (groupScope === "all" || groupScope === "selected") {
         let query = supabase
           .from("campaign_groups")
@@ -311,9 +312,9 @@ Deno.serve(async (req) => {
     // Build the list of (respondentJid, respondentName, groupJid) destinations
     // to run the sequence for -- exactly 1 for the phone-based/legacy-single-
     // group paths, N for a group-scope fan-out.
-    const destinations = destinationPhone
-      ? [{ respondentJid: `${destinationPhone}@s.whatsapp.net`, respondentName: extractField(payload, "name") || extractField(payload, "user.name") || "", groupJid: "" }]
-      : targetGroups.map((g) => ({ respondentJid: g.group_jid, respondentName: g.group_name || "", groupJid: g.group_jid }));
+    const destinations = shouldSendToGroup
+      ? targetGroups.map((g) => ({ respondentJid: g.group_jid, respondentName: g.group_name || "", groupJid: g.group_jid }))
+      : [{ respondentJid: `${destinationPhone}@s.whatsapp.net`, respondentName: extractField(payload, "name") || extractField(payload, "user.name") || "", groupJid: "" }];
 
     console.log(`[TriggerSequence] Resolved ${destinations.length} destination(s) for this trigger`);
 
@@ -328,7 +329,7 @@ Deno.serve(async (req) => {
         respondentName: dest.respondentName,
         respondentJid: dest.respondentJid,
         groupJid: dest.groupJid,
-        sendPrivate: typedSequence.trigger_type === "webhook" || !!triggerConfig.sendPrivate || !!destinationPhone,
+        sendPrivate: !shouldSendToGroup,
         customFields,
         webhookPayload,
       };
