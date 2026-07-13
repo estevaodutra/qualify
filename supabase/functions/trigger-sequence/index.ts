@@ -288,7 +288,6 @@ Deno.serve(async (req) => {
           .from("campaign_groups")
           .select("group_jid, group_name, instance_id")
           .eq("campaign_id", typedCampaign.id);
-        if (instanceId) query = query.eq("instance_id", instanceId);
         const { data: groups } = await query;
         let resolved = (groups || []) as { group_jid: string; group_name: string | null; instance_id: string | null }[];
         if (groupScope === "selected" && selectedGroupJids && selectedGroupJids.length > 0) {
