@@ -164,6 +164,22 @@ function buildStandardPayload(params: {
   };
 }
 
+function getValueFromPath(obj: any, path: string): string {
+  if (!obj || !path) return "";
+  const parts = path.split(".");
+  let current = obj;
+  for (const part of parts) {
+    if (current && typeof current === "object" && part in current) {
+      current = current[part];
+    } else {
+      return "";
+    }
+  }
+  if (current === undefined || current === null) return "";
+  if (typeof current === "object") return JSON.stringify(current);
+  return String(current);
+}
+
 // ============= Formatting helpers =============
 
 const formatLineBreaks = (text: string | null | undefined): string | null => {
@@ -1054,78 +1070,189 @@ Deno.serve(async (req) => {
 
         // ============= FIELD OPERATION NODES =============
         if (node.node_type === "field_op") {
-          const { field, value, operation, sourceField, parts, separator, transformType } = (node.config || {}) as {
-            field?: string; value?: string; operation?: string; sourceField?: string;
-            parts?: string[]; separator?: string; transformType?: string;
-          };
-          const op = operation || "set";
-          const affectedLeadIds: string[] = [];
+          const nodeConfig = node.config || {};
+          let mappings = nodeConfig.mappings as Array<{
+            source: string;
+            targetType: string;
+            targetField: string;
+            transform?: string;
+          }> | undefined;
 
-          const resolveSourceFieldValue = (leadData: Record<string, any>, srcField: string | undefined): string => {
-            if (!srcField) return "";
-            if (["name", "phone", "email"].includes(srcField)) return String(leadData[srcField] ?? "");
-            if (srcField === "tags") return Array.isArray(leadData.tags) ? leadData.tags.join(", ") : "";
-            if (srcField === "pipeline_stage_id") return String(leadData.pipeline_stage_id ?? "");
-            const cf = (leadData.custom_fields as Record<string, any>) || {};
-            return String(cf[srcField] ?? "");
-          };
-
-          const applyTransform = (input: string, type: string | undefined): string => {
-            switch (type) {
-              case "uppercase": return input.toUpperCase();
-              case "lowercase": return input.toLowerCase();
-              case "trim": return input.replace(/\s+/g, " ").trim();
-              case "capitalize": return input.replace(/\b\w/g, (c) => c.toUpperCase());
-              default: return input;
+          // Backward compatibility check: if no new mappings but old field config exists
+          if (!mappings && nodeConfig.field) {
+            const op = nodeConfig.operation || "set";
+            let sourceVal = "";
+            if (op === "set") {
+              sourceVal = String(nodeConfig.value || "");
+            } else if (op === "copy" || op === "transform") {
+              sourceVal = String(nodeConfig.sourceField || "");
+            } else if (op === "concatenate") {
+              sourceVal = (nodeConfig.parts as string[] || []).join(nodeConfig.separator as string || "");
             }
-          };
+            
+            mappings = [{
+              source: sourceVal,
+              targetType: "lead",
+              targetField: nodeConfig.field as string,
+              transform: op === "transform" ? (nodeConfig.transformType as string) : undefined
+            }];
+          }
 
-          if (field) {
+          const affectedLeadIds: string[] = [];
+          const affectedDealIds: string[] = [];
+          const webhookPayload = triggerContext?.webhookPayload as Record<string, any> | undefined;
+
+          if (mappings && mappings.length > 0) {
             for (const dest of activeDestinations) {
               const phoneClean = dest.group_jid.split("@")[0].replace(/\D/g, "");
+              
+              // Load the lead
               const { data: leadData } = await supabase
                 .from("leads")
-                .select("id, name, phone, email, tags, pipeline_stage_id, custom_fields")
+                .select("id, name, phone, email, company_name, document, source, tags, custom_fields")
                 .eq("company_id", typedCampaign.company_id)
                 .eq("phone", phoneClean)
                 .maybeSingle();
 
               if (leadData) {
-                const currentCf = (leadData.custom_fields as Record<string, any>) || {};
-                let nextValue: string;
-                switch (op) {
-                  case "clear":
-                    nextValue = "";
-                    break;
-                  case "copy":
-                    nextValue = resolveSourceFieldValue(leadData, sourceField);
-                    break;
-                  case "concatenate":
-                    nextValue = (parts || []).map(p => replaceVariables(String(p || ""))).join(separator || "");
-                    break;
-                  case "transform":
-                    nextValue = applyTransform(resolveSourceFieldValue(leadData, sourceField || field), transformType);
-                    break;
-                  case "set":
-                  default:
-                    nextValue = replaceVariables(String(value || ""));
-                    break;
-                }
-                currentCf[field as string] = nextValue;
-                await supabase
-                  .from("leads")
-                  .update({ custom_fields: currentCf })
-                  .eq("id", leadData.id);
-                console.log(`[ExecuteMessage] Custom field ${field} updated (${op}) for lead ${leadData.id}`);
                 affectedLeadIds.push(leadData.id);
+                let leadUpdated = false;
+                const leadUpdates: Record<string, any> = {};
+                const currentCf = { ...((leadData.custom_fields as Record<string, any>) || {}) };
+
+                for (const mapping of mappings) {
+                  // Resolve source value
+                  let rawVal = "";
+                  if (webhookPayload && mapping.source && (mapping.source.startsWith("body.") || mapping.source.startsWith("headers.") || mapping.source.startsWith("query_params.") || mapping.source === "method")) {
+                    rawVal = getValueFromPath(webhookPayload, mapping.source);
+                  } else {
+                    rawVal = replaceVariables(mapping.source || "");
+                  }
+
+                  // Apply transformations
+                  if (mapping.transform === "uppercase") {
+                    rawVal = rawVal.toUpperCase();
+                  } else if (mapping.transform === "lowercase") {
+                    rawVal = rawVal.toLowerCase();
+                  } else if (mapping.transform === "trim") {
+                    rawVal = rawVal.replace(/\s+/g, " ").trim();
+                  } else if (mapping.transform === "capitalize") {
+                    rawVal = rawVal.replace(/\b\w/g, (c) => c.toUpperCase());
+                  }
+
+                  // Normalization for phone
+                  if (mapping.targetField === "phone" || mapping.targetField.endsWith(".phone")) {
+                    rawVal = rawVal.replace(/\D/g, "");
+                  }
+
+                  // Process target updates
+                  if (mapping.targetType === "lead") {
+                    const fieldKey = mapping.targetField;
+                    if (fieldKey.startsWith("custom_fields.")) {
+                      const cfKey = fieldKey.substring("custom_fields.".length);
+                      currentCf[cfKey] = rawVal;
+                      leadUpdated = true;
+                      
+                      if (!triggerContext.customFields) triggerContext.customFields = {};
+                      (triggerContext.customFields as Record<string, string>)[cfKey] = rawVal;
+                    } else if (["name", "phone", "email", "company_name", "document", "source"].includes(fieldKey)) {
+                      leadUpdates[fieldKey] = rawVal;
+                      leadUpdated = true;
+                      
+                      if (!triggerContext.customFields) triggerContext.customFields = {};
+                      (triggerContext.customFields as Record<string, string>)[`lead.${fieldKey}`] = rawVal;
+                      if (fieldKey === "name") {
+                        triggerContext.respondentName = rawVal;
+                        (triggerContext.customFields as Record<string, string>)["name"] = rawVal;
+                      }
+                      if (fieldKey === "phone") {
+                        triggerContext.respondentPhone = rawVal;
+                        (triggerContext.customFields as Record<string, string>)["phone"] = rawVal;
+                      }
+                    } else if (fieldKey === "tags") {
+                      const existingTags = Array.isArray(leadData.tags) ? leadData.tags : [];
+                      const newTags = rawVal.split(",").map(t => t.trim()).filter(Boolean);
+                      leadUpdates.tags = Array.from(new Set([...existingTags, ...newTags]));
+                      leadUpdated = true;
+                    } else {
+                      currentCf[fieldKey] = rawVal;
+                      leadUpdated = true;
+                      if (!triggerContext.customFields) triggerContext.customFields = {};
+                      (triggerContext.customFields as Record<string, string>)[fieldKey] = rawVal;
+                    }
+                  } else if (mapping.targetType === "deal") {
+                    // Update or create CRM Deal
+                    const { data: existingDeal } = await supabase
+                      .from("deals")
+                      .select("id, title, value, pipeline_id, stage_id")
+                      .eq("lead_id", leadData.id)
+                      .eq("company_id", typedCampaign.company_id)
+                      .eq("status", "open")
+                      .order("created_at", { ascending: false })
+                      .limit(1)
+                      .maybeSingle();
+
+                    const dealField = mapping.targetField;
+                    const dealUpdates: Record<string, any> = {};
+                    
+                    if (dealField === "title") dealUpdates.title = rawVal;
+                    else if (dealField === "value") dealUpdates.value = Number(rawVal) || 0;
+                    else if (dealField === "pipeline_id") dealUpdates.pipeline_id = rawVal || null;
+                    else if (dealField === "stage_id") dealUpdates.stage_id = rawVal || null;
+
+                    if (existingDeal) {
+                      await supabase
+                        .from("deals")
+                        .update(dealUpdates)
+                        .eq("id", existingDeal.id);
+                      affectedDealIds.push(existingDeal.id);
+                    } else {
+                      const { data: newDeal } = await supabase
+                        .from("deals")
+                        .insert({
+                          company_id: typedCampaign.company_id,
+                          lead_id: leadData.id,
+                          title: dealUpdates.title || `Negócio ${leadData.name || leadData.phone}`,
+                          value: dealUpdates.value || 0,
+                          pipeline_id: dealUpdates.pipeline_id || null,
+                          stage_id: dealUpdates.stage_id || null,
+                          status: "open"
+                        })
+                        .select("id")
+                        .single();
+                      if (newDeal) {
+                        affectedDealIds.push(newDeal.id);
+                      }
+                    }
+                  } else if (mapping.targetType === "conversation") {
+                    if (mapping.targetField === "phone") {
+                      triggerContext.respondentPhone = rawVal;
+                    }
+                  } else if (mapping.targetType === "variable") {
+                    if (!triggerContext.customFields) triggerContext.customFields = {};
+                    (triggerContext.customFields as Record<string, string>)[mapping.targetField] = rawVal;
+                  }
+                }
+
+                if (leadUpdated) {
+                  const finalLeadUpdates = { ...leadUpdates };
+                  if (Object.keys(currentCf).length > 0) {
+                    finalLeadUpdates.custom_fields = currentCf;
+                  }
+                  await supabase
+                    .from("leads")
+                    .update(finalLeadUpdates)
+                    .eq("id", leadData.id);
+                }
               }
             }
           }
+
           await logNodeExecution(supabase, {
             executionId: workflowExecutionId, userId, nodeId: node.id, nodeType: node.node_type,
             status: "success", startedAt: nodeStartedAt,
-            input: { field: field || null, operation: op, value: value ?? null },
-            output: { affectedLeadIds },
+            input: { mappings },
+            output: { affectedLeadIds, affectedDealIds },
           });
           const nextConn = connections.find(c => c.source_node_id === node.id);
           currentNodeId = nextConn ? nextConn.target_node_id : null;

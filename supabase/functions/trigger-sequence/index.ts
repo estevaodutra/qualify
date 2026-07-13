@@ -227,6 +227,14 @@ Deno.serve(async (req) => {
     }
     // ── End deduplication guard ──────────────────────────────────────────────
 
+    const webhookPayload = {
+      received_at: new Date().toISOString(),
+      method: req.method,
+      headers: Object.fromEntries(req.headers.entries()),
+      query_params: Object.fromEntries(url.searchParams.entries()),
+      body: payload,
+    };
+
     // Apply field mappings from trigger_config
     const triggerConfig = typedSequence.trigger_config || {};
     const fieldMappings = triggerConfig.fieldMappings || [];
@@ -321,6 +329,7 @@ Deno.serve(async (req) => {
         groupJid: dest.groupJid,
         sendPrivate: typedSequence.trigger_type === "webhook" || !!triggerConfig.sendPrivate || !!destinationPhone,
         customFields,
+        webhookPayload,
       };
 
       const executePayload = {
