@@ -180,6 +180,7 @@ export function useChat(filters?: ChatFilters, activeConversationId?: string | n
     },
     enabled: !!activeCompanyId && !!user,
     staleTime: 30000,
+    refetchInterval: 5000, // Fallback garantido para atualizar a barra lateral
   });
 
   const conversations = conversationsData?.pages.flat() || [];
