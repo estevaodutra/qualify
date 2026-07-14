@@ -1173,7 +1173,6 @@ export function UnifiedSequenceBuilder({
                               <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Erros</p>
                             </div>
                           </div>
-                          </div>
                         </div>
                       ) : isFieldOp ? (
                         <div className="flex flex-col w-full text-left">

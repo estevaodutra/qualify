@@ -4,7 +4,7 @@ import { ValueInputSelector } from "./ValueInputSelector";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { ArrowDown } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/integrations/supabase/client";
 
 interface FieldMappingEditorProps {
   mapping: any;
