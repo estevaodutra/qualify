@@ -87,6 +87,27 @@ export function useChat(filters?: ChatFilters, activeConversationId?: string | n
     activeConversationIdRef.current = activeConversationId;
   }, [activeConversationId]);
 
+  // Forçar atualização quando o usuário volta para a aba do navegador
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        console.log("Tab returned to focus, forcefully refetching chat queries...");
+        queryClient.invalidateQueries({ queryKey: ["chat-conversations", activeCompanyId] });
+        if (activeConversationIdRef.current) {
+          queryClient.invalidateQueries({ queryKey: ["chat-messages", activeConversationIdRef.current] });
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleVisibilityChange);
+    };
+  }, [activeCompanyId, queryClient]);
+
   // 1. Fetch Conversations
   const {
     data: conversationsData,
