@@ -166,7 +166,11 @@ export const webhookCategories: WebhookCategory[] = [
     description: "Eventos e envios de status do WhatsApp",
     defaultUrl: "https://n8n.6ksfuf.easypanel.host/webhook/manager_status",
     actions: [
-      { id: "status.send", name: "status.send", description: "Enviar status/stories", type: "request" },
+      { id: "status.text", name: "status.text", description: "Enviar status de texto", type: "request" },
+      { id: "status.image", name: "status.image", description: "Enviar status de imagem", type: "request" },
+      { id: "status.video", name: "status.video", description: "Enviar status de vídeo", type: "request" },
+      { id: "status.voice", name: "status.voice", description: "Enviar status de áudio/voz", type: "request" },
+      { id: "status.delete", name: "status.delete", description: "Deletar status", type: "request" },
       { id: "status.list", name: "status.list", description: "Listar status recebidos", type: "request" },
     ],
   },
