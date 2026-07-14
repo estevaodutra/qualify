@@ -901,7 +901,9 @@ export function UnifiedSequenceBuilder({
 
                   const isCondition = node.nodeType === "condition";
                   const isRandomizer = node.nodeType === "randomizer";
-                  const randomizerBranches = isRandomizer ? getSortedRandomizerBranches(node) : [];
+                  const randomizerBranches = (node.config.branches as RandomizerBranch[]) || [];
+                  const isFieldOp = node.nodeType === "field_op";
+                  const fieldOpMappings = (node.config.mappings as any[]) || [];
                   const isTrigger = node.nodeType === "trigger";
 
                   const isHovered = hoveredNodeId === node.id;
@@ -999,7 +1001,7 @@ export function UnifiedSequenceBuilder({
                       )}
 
                       {/* Output Port(s) (Right Handles) */}
-                      {!isCondition && !isRandomizer ? (
+                      {!isCondition && !isRandomizer && !isFieldOp ? (
                         <>
                           <div
                             data-node-port="true"
@@ -1036,6 +1038,30 @@ export function UnifiedSequenceBuilder({
                             <div className="h-1.5 w-1.5 rounded-full bg-destructive" />
                           </div>
                           <span className="absolute right-2 top-[54px] text-[8px] font-bold text-destructive select-none">Não</span>
+                        </>
+                      ) : isFieldOp ? (
+                        <>
+                          {/* "Caso ocorrer erro" output handle */}
+                          <div
+                            data-node-port="true"
+                            onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", "error")}
+                            className="absolute -right-1.5 top-[110px] h-3.5 w-3.5 rounded-full border-2 border-destructive bg-background hover:bg-destructive cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
+                            title="Caso ocorrer erro"
+                          >
+                            <div className="h-1.5 w-1.5 rounded-full bg-destructive" />
+                          </div>
+                          <span className="absolute right-2 top-[106px] text-[8px] font-bold text-slate-500 select-none text-right">Caso ocorrer erro na operação de campo</span>
+
+                          {/* "Próximo passo" output handle */}
+                          <div
+                            data-node-port="true"
+                            onMouseDown={(e) => handlePortMouseDown(e, node.id, "out")}
+                            className="absolute -right-1.5 top-[130px] h-3.5 w-3.5 rounded-full border-2 border-blue-500 bg-background hover:bg-blue-500 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
+                            title="Próximo passo"
+                          >
+                            <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                          </div>
+                          <span className="absolute right-2 top-[126px] text-[8px] font-bold text-slate-500 select-none text-right">Próximo passo</span>
                         </>
                       ) : (
                         randomizerBranches.map((branch, i) => {
@@ -1147,6 +1173,92 @@ export function UnifiedSequenceBuilder({
                               <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Erros</p>
                             </div>
                           </div>
+                          </div>
+                        </div>
+                      ) : isFieldOp ? (
+                        <div className="flex flex-col w-full text-left">
+                          <div className="flex items-center gap-2 mb-2">
+                            <GitBranch className="h-5 w-5 text-emerald-500 stroke-[1.5]" fill="currentColor" />
+                            <h2 className="text-xl font-bold text-slate-800 tracking-tight">Operações de campos</h2>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mb-4 leading-relaxed font-medium">
+                            Realize operações com campos do sistema, campos adicionais ou fontes de dados. Clique para adicionar uma operação de campo:
+                          </p>
+                          
+                          {fieldOpMappings.map((mapping, idx) => (
+                            <div 
+                              key={mapping.id || idx} 
+                              className="group relative flex flex-col gap-2 p-3 border border-slate-200 rounded-xl bg-white shadow-sm mb-3 cursor-pointer hover:border-[#8A3CFF]/50 transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingTriggerId(mapping.id); // Reusando o state de triggerId temporariamente como activeMappingId
+                                setEditingNodeId(node.id);
+                                setNodeEditorOpen(true);
+                              }}
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                  <ArrowRight className="h-4 w-4 text-slate-600 shrink-0" />
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-bold text-slate-800 truncate">Mapeamento de campo</p>
+                                    <p className="text-[10px] text-slate-500 truncate">
+                                      {mapping.source ? `${mapping.source} → ${mapping.targetField || 'Destino'}` : "Realiza operações de mapeamento..."}
+                                    </p>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateNodesAndSave(prev => prev.map(n => 
+                                      n.id === node.id ? { 
+                                        ...n, 
+                                        config: { 
+                                          ...n.config, 
+                                          mappings: (n.config.mappings as any[]).filter(m => m.id !== mapping.id) 
+                                        } 
+                                      } : n
+                                    ));
+                                  }}
+                                  className="p-1.5 text-slate-400 hover:text-destructive hover:bg-destructive/10 rounded-md opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                  title="Remover mapeamento"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+
+                          <button 
+                             type="button"
+                             onClick={(e) => {
+                               e.stopPropagation();
+                               const newMappingId = crypto.randomUUID();
+                               updateNodesAndSave(prev => prev.map(n => 
+                                 n.id === node.id ? { 
+                                   ...n, 
+                                   config: { 
+                                     ...n.config, 
+                                     mappings: [...((n.config.mappings as any[]) || []), { id: newMappingId }] 
+                                   } 
+                                 } : n
+                               ));
+                               setEditingTriggerId(newMappingId);
+                               setEditingNodeId(node.id);
+                               setNodeEditorOpen(true);
+                             }}
+                             className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-[#8A3CFF]/50 rounded-xl text-[#8A3CFF] font-semibold hover:bg-[#8A3CFF]/5 transition-colors mb-2 text-xs"
+                          >
+                            <Plus className="h-3.5 w-3.5" /> Adicionar mapeamento de campo
+                          </button>
+                          
+                          <button 
+                             type="button"
+                             onClick={(e) => e.stopPropagation()}
+                             className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-[#8A3CFF]/50 rounded-xl text-[#8A3CFF] font-semibold hover:bg-[#8A3CFF]/5 transition-colors mb-4 text-xs"
+                          >
+                            <Plus className="h-3.5 w-3.5" /> Adicionar outra operação de campo
+                          </button>
                         </div>
                       ) : (
                         <>
@@ -1200,11 +1312,28 @@ export function UnifiedSequenceBuilder({
                       )}
 
                       {/* Mock Stats (DataCray aesthetic) */}
-                      {!isTrigger && (
+                      {!isTrigger && !isFieldOp && (
                         <div className="flex justify-between items-center text-[9px] font-bold text-slate-400/80 border-t border-slate-100 pt-2 mt-2 select-none">
                           <span className="flex items-center gap-0.5">🟢 0</span>
                           <span className="flex items-center gap-0.5">🟡 0</span>
                           <span className="flex items-center gap-0.5">🔴 0</span>
+                        </div>
+                      )}
+                      
+                      {isFieldOp && (
+                        <div className="flex items-center justify-between pt-4 border-t border-slate-100 px-2 mt-auto">
+                          <div className="text-center">
+                            <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
+                            <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Sucessos</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
+                            <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Alertas</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
+                            <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Erros</p>
+                          </div>
                         </div>
                       )}
 

@@ -9,6 +9,7 @@ import { NodeOutputPanel } from "./NodeOutputPanel";
 import { toast } from "sonner";
 import { toCanonicalPayload } from "@/lib/workflows/canonicalPayload";
 import { WebhookFieldMappings } from "@/components/group-campaigns/sequences/WebhookFieldMappings";
+import { FieldMappingEditor } from "@/components/workflows/nodes/field-mapping/FieldMappingEditor";
 import { Sliders, Database, Play, Clock, UserPlus } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -93,6 +94,10 @@ export function NodeEditorModal({
     ? ((node.config.triggers as any[]).find(t => t.id === activeTriggerId) || (node.config.triggers as any[])[0])
     : null;
 
+  const activeMapping = node?.nodeType === "field_op" && node.config.mappings
+    ? ((node.config.mappings as any[]).find(m => m.id === activeTriggerId) || (node.config.mappings as any[])[0])
+    : null;
+
   const handleRequestClose = () => {
     if (hasUnsavedChanges) {
       handleSave();
@@ -165,12 +170,14 @@ export function NodeEditorModal({
     if (isOpen && node) {
       if (node.nodeType === "trigger" && activeTrigger) {
         setLocalConfig(activeTrigger.config || {});
+      } else if (node.nodeType === "field_op" && activeMapping) {
+        setLocalConfig(activeMapping || {});
       } else {
         setLocalConfig(node.config || {});
       }
       setHasUnsavedChanges(false);
     }
-  }, [isOpen, node, activeTrigger]);
+  }, [isOpen, node, activeTrigger, activeMapping]);
 
   if (!isOpen || !currentNodeId || !node) return null;
 
@@ -547,6 +554,32 @@ export function NodeEditorModal({
                   })()}
                 </div>
               </div>
+            </div>
+          ) : node.nodeType === "field_op" ? (
+            <div className="flex-1 flex flex-col overflow-hidden bg-white">
+              {(() => {
+                const triggerNode = nodes?.find(n => n.nodeType === "trigger");
+                const triggerConfig = triggerNode?.config?.triggerConfig as Record<string, any> | undefined;
+                const activeRef = triggerConfig?.referencePayload;
+                const referencePayload = activeRef ? toCanonicalPayload(activeRef) : null;
+                
+                const handleMappingChange = (updatedMapping: any) => {
+                  setLocalConfig(updatedMapping);
+                  setHasUnsavedChanges(true);
+                  // Update the mapping array directly in the node config state if we want to save it later
+                  const currentMappings = (node.config.mappings as any[]) || [];
+                  const newMappings = currentMappings.map(m => m.id === activeTriggerId ? updatedMapping : m);
+                  onUpdateNodeConfig(node.id, { ...node.config, mappings: newMappings });
+                };
+
+                return (
+                  <FieldMappingEditor
+                    mapping={localConfig}
+                    onChange={handleMappingChange}
+                    referencePayload={referencePayload}
+                  />
+                );
+              })()}
             </div>
           ) : (
             <Tabs value={activeMainTab} onValueChange={(v: any) => setActiveMainTab(v)} className="flex-1 flex flex-col min-h-0">
