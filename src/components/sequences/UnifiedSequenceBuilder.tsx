@@ -22,6 +22,8 @@ import { FloatingNodePicker } from "./FloatingNodePicker";
 import { buildTriggerSummary } from "./triggers/TriggerSummary";
 import { validateWorkflowActivation } from "@/lib/workflows/validateActivation";
 import { getNodeVisual, toNodeCategories } from "./nodeDefinitions";
+import { TriggerTypeSelector } from "./triggers/TriggerTypeSelector";
+import { getTriggerDefinition } from "./triggers/triggerDefinitions";
 
 export interface UnifiedSequenceBuilderProps {
   sequenceName: string;
@@ -100,10 +102,21 @@ export function UnifiedSequenceBuilder({
   const [activePort, setActivePort] = useState<{
     nodeId: string;
     portType: "in" | "out";
-    conditionPath?: string;
+    branchId?: string;
     x: number;
     y: number;
   } | null>(null);
+
+  // Trigger Selector Modal State
+  const [triggerSelectorOpen, setTriggerSelectorOpen] = useState(false);
+
+  useEffect(() => {
+    const handleOpenTriggerSelector = () => setTriggerSelectorOpen(true);
+    document.addEventListener("open-trigger-selector", handleOpenTriggerSelector);
+    return () => {
+      document.removeEventListener("open-trigger-selector", handleOpenTriggerSelector);
+    };
+  }, []);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
   // A connection dragged from an output port and released over empty canvas
@@ -705,6 +718,21 @@ export function UnifiedSequenceBuilder({
 
           <NodePalettePopover nodeCategories={categories} onAddNode={handleAddNode} />
 
+          <TriggerTypeSelector
+            engine="group_sequence"
+            open={triggerSelectorOpen}
+            onOpenChange={setTriggerSelectorOpen}
+            value={localNodes.find(n => n.nodeType === "trigger")?.config.triggerType as string || ""}
+            onChange={(type) => {
+              const triggerNode = localNodes.find(n => n.nodeType === "trigger");
+              if (triggerNode) {
+                updateNodesAndSave(prev => prev.map(n => 
+                  n.id === triggerNode.id ? { ...n, config: { ...n.config, triggerType: type } } : n
+                ));
+              }
+            }}
+          />
+
           {/* Interactive Canvas Wrapper */}
           <div
             ref={canvasRef}
@@ -850,7 +878,7 @@ export function UnifiedSequenceBuilder({
                         position: "absolute",
                         left: posX,
                         top: posY,
-                        width: 220,
+                        width: isTrigger ? 320 : 220,
                         minHeight: isRandomizer ? Math.max(140, 40 + randomizerBranches.length * RANDOMIZER_PORT_SPACING) : undefined,
                         pointerEvents: "auto"
                       }}
@@ -870,7 +898,8 @@ export function UnifiedSequenceBuilder({
                         setNodeEditorOpen(true);
                       }}
                       className={cn(
-                        "rounded-xl border border-slate-200 bg-white shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col p-3 transition-[border-color,box-shadow] duration-150 cursor-grab active:cursor-grabbing select-none",
+                        "rounded-xl border border-slate-200 bg-white shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col transition-[border-color,box-shadow] duration-150 cursor-grab active:cursor-grabbing select-none",
+                        isTrigger ? "p-5" : "p-3",
                         isSelected && "border-[#8A3CFF] ring-2 ring-[#8A3CFF]/10"
                       )}
                     >
@@ -943,6 +972,10 @@ export function UnifiedSequenceBuilder({
                         >
                           <div className="h-1.5 w-1.5 rounded-full bg-[#8A3CFF]" />
                         </div>
+                        {isTrigger && (
+                          <span className="absolute right-2 top-[34px] text-[8px] font-bold text-[#8A3CFF] select-none text-right">Quando o<br/>evento ocorrer, então</span>
+                        )}
+                      </>
                       ) : isCondition ? (
                         <>
                           {/* "Sim" (True) output handle */}
@@ -993,67 +1026,108 @@ export function UnifiedSequenceBuilder({
                         })
                       )}
 
-                      {/* Header/Title */}
-                      <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
-                        <div className={cn("p-1.5 rounded-lg text-white shrink-0 shadow-sm", nodeInfo.color)}>
-                          <NodeIcon className="h-3.5 w-3.5" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-xs text-slate-800 truncate">
-                            {isTrigger ? "Inicio" : ((node.config.label as string) || nodeInfo.label)}
+                      {isTrigger ? (
+                        <div className="flex flex-col w-full text-left">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Play className="h-5 w-5 text-emerald-500 stroke-[1.5]" fill="currentColor" />
+                            <h2 className="text-xl font-bold text-slate-800 tracking-tight">Início</h2>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mb-4 leading-relaxed font-medium">
+                            O gatilho é responsável por acionar a automação. Clique para adicionar um gatilho:
                           </p>
-                          <p className={cn("text-[9px] font-bold uppercase tracking-wider", isTrigger && !node.config.triggerType ? "text-amber-500" : "text-slate-400")}>
-                            {isTrigger ? (node.config.triggerType ? "Gatilho" : "Gatilho não configurado") : nodeInfo.label}
-                          </p>
-                        </div>
-                      </div>
+                          
+                          {node.config.triggerType && (
+                            <div className="flex items-center gap-3 p-3 border border-slate-200 rounded-xl bg-white shadow-sm mb-3">
+                              <ArrowRight className="h-4 w-4 text-slate-600 shrink-0" />
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-slate-800 truncate">{getTriggerDefinition(node.config.triggerType as string)?.label || node.config.triggerType as string}</p>
+                                <p className="text-[10px] text-slate-500 truncate">{getTriggerDefinition(node.config.triggerType as string)?.description}</p>
+                              </div>
+                            </div>
+                          )}
 
-                      {/* Card Content / Description */}
-                      <div
-                        className="pt-2 text-[10px] text-slate-500 font-medium line-clamp-2 min-h-[30px]"
-                        title={isRandomizer ? randomizerBranches.map(b => b.label).join(node.config.mode === "round_robin" ? " → " : " · ") : undefined}
-                      >
-                        {isTrigger ? (
-                          (() => {
-                            const summary = buildTriggerSummary(
-                              node.config.triggerType as string | undefined,
-                              node.config.triggerConfig as Record<string, unknown> | undefined
-                            );
-                            return summary.subtitle ? `${summary.title} · ${summary.subtitle}` : summary.title;
-                          })()
-                        ) : isRandomizer ? (
-                          randomizerBranches.length === 0 ? "Clique para configurar as ramificações..." :
-                          node.config.mode === "round_robin"
-                            ? randomizerBranches.map(b => b.label).join(" → ")
-                            : randomizerBranches.map(b => `${b.label} — ${b.weight}%`).join(" · ")
-                        ) : node.nodeType === "status" ? (
-                          (() => {
-                            const statusType = (node.config.statusType as string) || "text";
-                            const isScheduled = node.config.scheduleType === "schedule";
-                            const scheduleLabel = isScheduled ? " (Agendado)" : "";
-                            if (statusType === "text") {
-                              return `[Texto] ${node.config.content || "Sem texto"}${scheduleLabel}`;
-                            } else {
-                              const label = statusType === "image" ? "Imagem" : "Vídeo";
-                              return `[${label}] ${node.config.caption || node.config.url || "Sem mídia"}${scheduleLabel}`;
-                            }
-                          })()
-                        ) : (
-                          node.config.content ? (node.config.content as string) :
-                          node.config.question ? (node.config.question as string) :
-                          node.config.url ? (node.config.url as string) :
-                          node.config.seconds || node.config.minutes || node.config.hours || node.config.days ?
-                          `Aguardar ${node.config.days || 0}d ${node.config.hours || 0}h ${node.config.minutes || 0}m` :
-                          "Clique para configurar o bloco..."
-                        )}
-                      </div>
+                          <button 
+                             type="button"
+                             onClick={(e) => { e.stopPropagation(); setTriggerSelectorOpen(true); }}
+                             className="w-full flex items-center justify-center gap-1.5 py-2.5 border-2 border-dashed border-[#8A3CFF]/30 rounded-xl text-[#8A3CFF] font-semibold hover:bg-[#8A3CFF]/5 transition-colors mb-4 text-xs"
+                          >
+                            <Plus className="h-3.5 w-3.5" /> Adicionar gatilho
+                          </button>
+                          
+                          <div className="flex items-center justify-between pt-4 border-t border-slate-100 px-2 mt-auto">
+                            <div className="text-center">
+                              <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
+                              <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Sucessos</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
+                              <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Alertas</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
+                              <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Erros</p>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          {/* Header/Title */}
+                          <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+                            <div className={cn("p-1.5 rounded-lg text-white shrink-0 shadow-sm", nodeInfo.color)}>
+                              <NodeIcon className="h-3.5 w-3.5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-bold text-xs text-slate-800 truncate">
+                                {(node.config.label as string) || nodeInfo.label}
+                              </p>
+                              <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                {nodeInfo.label}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Card Content / Description */}
+                          <div
+                            className="pt-2 text-[10px] text-slate-500 font-medium line-clamp-2 min-h-[30px]"
+                            title={isRandomizer ? randomizerBranches.map(b => b.label).join(node.config.mode === "round_robin" ? " → " : " · ") : undefined}
+                          >
+                            {isRandomizer ? (
+                              randomizerBranches.length === 0 ? "Clique para configurar as ramificações..." :
+                              node.config.mode === "round_robin"
+                                ? randomizerBranches.map(b => b.label).join(" → ")
+                                : randomizerBranches.map(b => `${b.label} — ${b.weight}%`).join(" · ")
+                            ) : node.nodeType === "status" ? (
+                              (() => {
+                                const statusType = (node.config.statusType as string) || "text";
+                                const isScheduled = node.config.scheduleType === "schedule";
+                                const scheduleLabel = isScheduled ? " (Agendado)" : "";
+                                if (statusType === "text") {
+                                  return `[Texto] ${node.config.content || "Sem texto"}${scheduleLabel}`;
+                                } else {
+                                  const label = statusType === "image" ? "Imagem" : "Vídeo";
+                                  return `[${label}] ${node.config.caption || node.config.url || "Sem mídia"}${scheduleLabel}`;
+                                }
+                              })()
+                            ) : (
+                              node.config.content ? (node.config.content as string) :
+                              node.config.question ? (node.config.question as string) :
+                              node.config.url ? (node.config.url as string) :
+                              node.config.seconds || node.config.minutes || node.config.hours || node.config.days ?
+                              `Aguardar ${node.config.days || 0}d ${node.config.hours || 0}h ${node.config.minutes || 0}m` :
+                              "Clique para configurar o bloco..."
+                            )}
+                          </div>
+                        </>
+                      )}
 
                       {/* Mock Stats (DataCray aesthetic) */}
-                      <div className="flex justify-between items-center text-[9px] font-bold text-slate-400/80 border-t border-slate-100 pt-2 mt-2 select-none">
-                        <span className="flex items-center gap-0.5">🟢 0</span>
-                        <span className="flex items-center gap-0.5">🟡 0</span>
-                        <span className="flex items-center gap-0.5">🔴 0</span>
-                      </div>
+                      {!isTrigger && (
+                        <div className="flex justify-between items-center text-[9px] font-bold text-slate-400/80 border-t border-slate-100 pt-2 mt-2 select-none">
+                          <span className="flex items-center gap-0.5">🟢 0</span>
+                          <span className="flex items-center gap-0.5">🟡 0</span>
+                          <span className="flex items-center gap-0.5">🔴 0</span>
+                        </div>
+                      )}
 
                       {/* Card footer: node order only — editing is now a click on the card body, deletion lives in the hover toolbar */}
                       <div className="flex items-center justify-between border-t border-slate-100 pt-2 mt-2">

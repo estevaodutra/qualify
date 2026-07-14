@@ -474,13 +474,24 @@ export function NodeEditorModal({
                     return (
                       <div className="space-y-6 pb-4">
                         {/* Selector Section */}
-                        <div className="space-y-2">
-                          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tipo de Gatilho</label>
-                          <TriggerTypeSelector
-                            engine="group_sequence"
-                            value={selectorValue}
-                            onChange={(type) => handleTriggerTypeChange(type as any)}
-                          />
+                        <div className="space-y-3">
+                          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tipo de Gatilho Selecionado</label>
+                          <div className="flex items-center justify-between p-4 border rounded-xl bg-slate-50">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-primary/10 rounded-lg">
+                                <Database className="h-5 w-5 text-primary" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-slate-800">
+                                  {triggerType === "manual" ? "Execução manual" : triggerType}
+                                </p>
+                                <p className="text-xs text-muted-foreground">Clique em alterar para escolher outro gatilho</p>
+                              </div>
+                            </div>
+                            <Button type="button" variant="outline" size="sm" onClick={() => document.dispatchEvent(new CustomEvent('open-trigger-selector'))}>
+                              Alterar Gatilho
+                            </Button>
+                          </div>
                         </div>
 
                         {/* Enable for Group Toggle */}

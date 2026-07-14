@@ -5,19 +5,22 @@ export type TriggerEngine = "dispatch_sequence" | "group_sequence";
 export type TriggerStatus = "available" | "coming_soon";
 
 export type TriggerCategory =
-  | "entrada" | "leads_crm" | "prospeccao" | "mensagens" | "tempo" | "sistema";
+  | "leads" | "mensagens" | "negocios" | "instagram" | "facebook" | "campos" | "http" | "sistema" | "atividades";
 
 export const TRIGGER_CATEGORY_LABELS: Record<TriggerCategory, string> = {
-  entrada: "Entrada",
-  leads_crm: "Leads e CRM",
-  prospeccao: "Prospecção",
+  negocios: "Negócios",
+  leads: "Leads",
   mensagens: "Mensagens",
-  tempo: "Tempo",
+  instagram: "Instagram",
+  facebook: "Facebook",
+  campos: "Campos",
+  http: "HTTP",
   sistema: "Sistema",
+  atividades: "Atividades"
 };
 
 export const TRIGGER_CATEGORY_ORDER: TriggerCategory[] = [
-  "entrada", "leads_crm", "prospeccao", "mensagens", "tempo", "sistema",
+  "negocios", "leads", "mensagens", "instagram", "facebook", "campos", "http", "sistema", "atividades"
 ];
 
 export interface TriggerConfigComponentProps {
