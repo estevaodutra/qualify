@@ -42,7 +42,7 @@ export function NodeInputPanel({
   const displayData = inputData;
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 border rounded-2xl bg-white shadow-sm overflow-hidden">
+    <div className="flex flex-col border rounded-2xl bg-white shadow-sm overflow-hidden">
       <div className="px-4 py-3 border-b bg-slate-50/50 flex items-center justify-between shrink-0">
         <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
           <Database className="h-4 w-4 text-[#8A3CFF]" /> Entrada (Input)
@@ -58,7 +58,7 @@ export function NodeInputPanel({
         </Tabs>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col justify-stretch">
+      <div className="p-4 flex flex-col justify-stretch min-h-[300px]">
         {!hasIncomingConnections && activeTab !== "mock" ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center p-6 bg-slate-50 border border-dashed rounded-xl gap-3">
             <Database className="h-8 w-8 text-amber-500 stroke-[1.5]" />
@@ -94,12 +94,12 @@ export function NodeInputPanel({
             </div>
           </div>
         ) : (
-          <div className="flex-1 flex flex-col min-h-0">
+          <div className="flex flex-col">
             {activeTab === "json" && <NodeJsonViewer data={displayData} />}
             {activeTab === "table" && <NodeTableViewer data={displayData} />}
             {activeTab === "schema" && <NodeSchemaViewer data={displayData} />}
             {activeTab === "mock" && (
-              <div className="flex-1 flex flex-col gap-2 min-h-0">
+              <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
                   <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Payload de Mock (Webhook)</Label>
                   {isEditingMock ? (
@@ -112,12 +112,12 @@ export function NodeInputPanel({
                     </Button>
                   )}
                 </div>
-                <div className="flex-1 min-h-0">
+                <div>
                   <Textarea
                     disabled={!isEditingMock}
                     value={mockInputText}
                     onChange={(e) => setMockInputText(e.target.value)}
-                    className="font-mono text-[10px] h-full min-h-[300px] bg-slate-50 rounded-xl leading-normal resize-none focus-visible:ring-1"
+                    className="font-mono text-[10px] w-full min-h-[300px] bg-slate-50 rounded-xl leading-normal resize-none focus-visible:ring-1"
                   />
                 </div>
               </div>

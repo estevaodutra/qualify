@@ -17,7 +17,7 @@ export function NodeOutputPanel({ outputData, status, errorText, onRunNode }: No
   const [activeTab, setActiveTab] = useState<"json" | "table" | "schema">("json");
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 border rounded-2xl bg-white shadow-sm overflow-hidden">
+    <div className="flex flex-col border rounded-2xl bg-white shadow-sm overflow-hidden">
       <div className="px-4 py-3 border-b bg-slate-50/50 flex items-center justify-between shrink-0">
         <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
           <Network className="h-4 w-4 text-[#8A3CFF]" /> Saída (Output)
@@ -53,9 +53,9 @@ export function NodeOutputPanel({ outputData, status, errorText, onRunNode }: No
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col justify-stretch">
+      <div className="p-4 flex flex-col justify-stretch min-h-[300px]">
         {status === "not_run" ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-6 bg-slate-50 border border-dashed rounded-xl gap-3">
+          <div className="flex flex-col items-center justify-center text-center p-6 bg-slate-50 border border-dashed rounded-xl gap-3 min-h-[250px]">
             <HelpCircle className="h-8 w-8 text-slate-300 stroke-[1.5]" />
             <div className="space-y-1">
               <p className="text-xs font-semibold text-slate-700">Nenhum output disponível</p>
@@ -68,7 +68,7 @@ export function NodeOutputPanel({ outputData, status, errorText, onRunNode }: No
             </Button>
           </div>
         ) : (
-          <div className="flex-1 flex flex-col min-h-0">
+          <div className="flex flex-col">
             {status === "error" && errorText && (
               <div className="p-3 rounded-xl bg-destructive/5 border border-destructive/10 text-destructive text-[11px] mb-3 leading-relaxed">
                 <p className="font-semibold mb-0.5">Erro na Execução:</p>
@@ -77,7 +77,7 @@ export function NodeOutputPanel({ outputData, status, errorText, onRunNode }: No
             )}
             
             {outputData ? (
-              <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex flex-col">
                 {activeTab === "json" && <NodeJsonViewer data={outputData} />}
                 {activeTab === "table" && <NodeTableViewer data={outputData} />}
                 {activeTab === "schema" && <NodeSchemaViewer data={outputData} />}

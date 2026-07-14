@@ -409,8 +409,8 @@ export function NodeEditorModal({
       <Dialog open={isOpen} onOpenChange={handleOpenChange}>
         <DialogContent 
           className={cn(
-            "w-[calc(100vw-16px)] md:w-[calc(100vw-48px)] h-[calc(100vh-24px)] md:h-[calc(100vh-80px)] max-h-[calc(100vh-80px)] p-0 gap-0 overflow-hidden flex flex-col rounded-2xl border bg-white shadow-2xl transition-all outline-none",
-            node.nodeType === "field_mapping" || node.nodeType === "api" ? "max-w-[1040px]" : "max-w-[800px]"
+            "w-[calc(100vw-16px)] md:w-[calc(100vw-48px)] max-h-[calc(100vh-24px)] md:max-h-[calc(100vh-80px)] p-0 gap-0 overflow-hidden flex flex-col rounded-2xl border bg-white shadow-2xl transition-all outline-none",
+            node.nodeType === "field_mapping" || node.nodeType === "api" ? "max-w-[1040px]" : "max-w-[860px]"
           )}
           onPointerDownOutside={(e) => {
             e.preventDefault();
@@ -436,8 +436,8 @@ export function NodeEditorModal({
           />
 
           {node.nodeType === "trigger" ? (
-            <div className="flex-1 flex justify-center overflow-y-auto px-6 py-4 bg-slate-50/30">
-              <div className="w-full max-w-3xl bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col min-h-0">
+            <div className="flex-1 flex justify-center overflow-y-auto px-6 py-6 bg-slate-50/30">
+              <div className="w-full max-w-3xl bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col">
                 <div className="pb-4 mb-4 border-b shrink-0">
                   <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
                     ⚡ Gatilho de Entrada
@@ -447,7 +447,7 @@ export function NodeEditorModal({
                   </p>
                 </div>
 
-                <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-6">
+                <div className="space-y-6 pb-4">
                   {(() => {
                     const triggerType = (node.config?.triggerType as any) || "webhook";
                     const triggerConfig = (node.config?.triggerConfig as any) || {};
@@ -596,8 +596,8 @@ export function NodeEditorModal({
                 </TabsList>
               </div>
 
-              <div className="flex-1 min-h-0 overflow-y-auto p-6 bg-slate-50/30">
-                <TabsContent value="config" className="h-full m-0 p-0 focus-visible:ring-0">
+              <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
+                <TabsContent value="config" className="m-0 p-0 focus-visible:ring-0">
                   <NodeParametersPanel
                     node={node}
                     onUpdate={handleUpdateConfig}
@@ -608,7 +608,7 @@ export function NodeEditorModal({
                     isSendingManual={isSendingManual}
                   />
                 </TabsContent>
-                <TabsContent value="input" className="h-full m-0 p-0 focus-visible:ring-0">
+                <TabsContent value="input" className="m-0 p-0 focus-visible:ring-0">
                   <NodeInputPanel
                     inputData={currentSimData.input ? toCanonicalPayload(currentSimData.input) : null}
                     mockData={toCanonicalPayload(mockData)}
@@ -617,7 +617,7 @@ export function NodeEditorModal({
                     hasIncomingConnections={hasIncomingConnections}
                   />
                 </TabsContent>
-                <TabsContent value="output" className="h-full m-0 p-0 focus-visible:ring-0">
+                <TabsContent value="output" className="m-0 p-0 focus-visible:ring-0">
                   <NodeOutputPanel
                     outputData={currentSimData.output}
                     status={currentSimData.status}

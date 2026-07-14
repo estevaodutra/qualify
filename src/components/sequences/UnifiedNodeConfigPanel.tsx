@@ -567,14 +567,14 @@ export function UnifiedNodeConfigPanel({
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col">
       <div className="px-6 pt-6 pb-3 shrink-0 border-b border-border">
         <div className="flex items-center gap-2">
           <Icon className="h-4 w-4" />
           <h2 className="text-sm font-semibold">{nodeInfo.title}</h2>
         </div>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
+      <div className="px-6 py-6">
         <div className="space-y-4">
             {/* Node Label/Name */}
             <div className="space-y-2">
