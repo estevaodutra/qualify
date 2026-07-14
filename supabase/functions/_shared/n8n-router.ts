@@ -9,9 +9,18 @@ export function routeZApiRequest(endpoint: string, method: string, requestBody: 
   const cleanEndpoint = endpoint.split("?")[0].toLowerCase();
 
   // 1. Status Management (evaluated first to prevent /send- shadowing)
-  if (cleanEndpoint.includes("/status-") || cleanEndpoint.includes("/send-status")) {
+  if (
+    cleanEndpoint.includes("-status") ||
+    cleanEndpoint.includes("/status-") ||
+    cleanEndpoint.includes("/send-status")
+  ) {
     let action = "status.send";
-    if (cleanEndpoint.includes("/status-message") || cleanEndpoint.includes("/list-status")) action = "status.list";
+    if (cleanEndpoint.includes("/send-text-status")) action = "status.text";
+    else if (cleanEndpoint.includes("/send-image-status")) action = "status.image";
+    else if (cleanEndpoint.includes("/send-video-status")) action = "status.video";
+    else if (cleanEndpoint.includes("/send-voice-status") || cleanEndpoint.includes("/send-audio-status")) action = "status.voice";
+    else if (cleanEndpoint.includes("/delete-status")) action = "status.delete";
+    else if (cleanEndpoint.includes("/list-status")) action = "status.list";
 
     return {
       url: "https://n8n.6ksfuf.easypanel.host/webhook/manager_status",

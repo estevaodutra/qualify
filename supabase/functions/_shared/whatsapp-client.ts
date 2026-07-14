@@ -292,6 +292,11 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
           video: config.url,
           caption: config.caption || ""
         };
+      } else if (statusType === "voice" || statusType === "audio") {
+        endpoint = "/send-voice-status";
+        body = {
+          audio: config.url
+        };
       }
       break;
     }
