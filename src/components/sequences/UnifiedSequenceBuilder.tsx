@@ -1164,6 +1164,7 @@ export function UnifiedSequenceBuilder({
           isUnsavedWorkflow={autoSaveStatus === "idle"}
           mode={mode === "executions" ? "dispatch" : (localNodes.find(n => n.nodeType === "trigger")?.config.triggerConfig as any)?.isGroup ?? true ? "group" : "dispatch"}
           isGroup={(localNodes.find(n => n.nodeType === "trigger")?.config.triggerConfig as any)?.isGroup ?? true}
+          sequenceId={sequenceId}
         />
       )}
     </div>

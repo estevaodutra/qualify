@@ -7,6 +7,7 @@ import { NodeParametersPanel } from "./NodeParametersPanel";
 import { NodeOutputPanel } from "./NodeOutputPanel";
 import { toast } from "sonner";
 import { toCanonicalPayload } from "@/lib/workflows/canonicalPayload";
+import { WebhookFieldMappings } from "@/components/group-campaigns/sequences/WebhookFieldMappings";
 
 interface NodeEditorModalProps {
   isOpen: boolean;
@@ -20,6 +21,7 @@ interface NodeEditorModalProps {
   isUnsavedWorkflow: boolean;
   mode: "group" | "dispatch";
   isGroup?: boolean;
+  sequenceId: string;
 }
 
 export function NodeEditorModal({
@@ -34,6 +36,7 @@ export function NodeEditorModal({
   isUnsavedWorkflow,
   mode,
   isGroup,
+  sequenceId,
 }: NodeEditorModalProps) {
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(nodeId);
   const [simulatedData, setSimulatedData] = useState<Record<string, { input: any; output: any; status: "success" | "error" | "not_run"; error?: string }>>({});
@@ -337,27 +340,56 @@ export function NodeEditorModal({
         />
 
         <div className="flex-1 flex gap-4 p-4 min-h-0 overflow-hidden">
-          <NodeInputPanel
-            inputData={currentSimData.input ? toCanonicalPayload(currentSimData.input) : null}
-            mockData={toCanonicalPayload(mockData)}
-            onMockDataChange={(data) => setMockData(toCanonicalPayload(data))}
-            onRunPrevious={handleRunPrevious}
-          />
+          {node.nodeType === "trigger" ? (
+            <div className="flex-1 flex justify-center overflow-y-auto px-4 py-2">
+              <div className="w-full max-w-3xl bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col min-h-0">
+                <div className="pb-4 mb-4 border-b">
+                  <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                    ⚡ Gatilho: Via API / Webhook
+                  </h2>
+                  <p className="text-xs text-muted-foreground font-medium">
+                    Receba payloads reais via webhook para iniciar a execução do seu workflow automaticamente.
+                  </p>
+                </div>
+                <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+                  <WebhookFieldMappings
+                    triggerConfig={node.config?.triggerConfig || {}}
+                    onTriggerConfigChange={(newTriggerConfig) => {
+                      handleUpdateConfig({
+                        ...node.config,
+                        triggerConfig: newTriggerConfig
+                      });
+                    }}
+                    sequenceId={sequenceId}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <NodeInputPanel
+                inputData={currentSimData.input ? toCanonicalPayload(currentSimData.input) : null}
+                mockData={toCanonicalPayload(mockData)}
+                onMockDataChange={(data) => setMockData(toCanonicalPayload(data))}
+                onRunPrevious={handleRunPrevious}
+              />
 
-          <NodeParametersPanel
-            node={node}
-            onUpdate={handleUpdateConfig}
-            mode={mode}
-            isGroup={isGroup}
-            nodes={nodes}
-          />
+              <NodeParametersPanel
+                node={node}
+                onUpdate={handleUpdateConfig}
+                mode={mode}
+                isGroup={isGroup}
+                nodes={nodes}
+              />
 
-          <NodeOutputPanel
-            outputData={currentSimData.output}
-            status={currentSimData.status}
-            errorText={currentSimData.error}
-            onRunNode={handleRunStep}
-          />
+              <NodeOutputPanel
+                outputData={currentSimData.output}
+                status={currentSimData.status}
+                errorText={currentSimData.error}
+                onRunNode={handleRunStep}
+              />
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>
