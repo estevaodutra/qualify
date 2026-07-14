@@ -8,6 +8,8 @@ interface NodeParametersPanelProps {
   mode: "group" | "dispatch";
   isGroup?: boolean;
   nodes?: LocalNode[];
+  onManualSend?: () => void;
+  isSendingManual?: boolean;
 }
 
 export function NodeParametersPanel({
@@ -15,7 +17,9 @@ export function NodeParametersPanel({
   onUpdate,
   mode,
   isGroup,
-  nodes
+  nodes,
+  onManualSend,
+  isSendingManual
 }: NodeParametersPanelProps) {
   return (
     <div className="flex-1 flex flex-col min-h-0 border rounded-2xl bg-white shadow-sm overflow-hidden">
@@ -33,6 +37,8 @@ export function NodeParametersPanel({
           mode={mode}
           isGroup={isGroup}
           nodes={nodes}
+          onManualSend={onManualSend}
+          isSendingManual={isSendingManual}
         />
       </div>
     </div>

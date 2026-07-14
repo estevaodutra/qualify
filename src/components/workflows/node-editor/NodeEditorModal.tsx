@@ -40,6 +40,7 @@ interface NodeEditorModalProps {
   isGroup?: boolean;
   sequenceId: string;
   campaignId?: string;
+  onManualSendNode?: (node: LocalNode) => Promise<void>;
 }
 
 export function NodeEditorModal({
@@ -56,6 +57,7 @@ export function NodeEditorModal({
   isGroup,
   sequenceId,
   campaignId,
+  onManualSendNode,
 }: NodeEditorModalProps) {
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(nodeId);
   const [simulatedData, setSimulatedData] = useState<Record<string, { input: any; output: any; status: "success" | "error" | "not_run"; error?: string }>>({});
@@ -108,6 +110,20 @@ export function NodeEditorModal({
 
   const handleCancelExit = () => {
     setShowExitConfirm(false);
+  };
+
+  const [isSendingManual, setIsSendingManual] = useState(false);
+
+  const handleManualSend = async () => {
+    if (!onManualSendNode) return;
+    setIsSendingManual(true);
+    try {
+      await onManualSendNode(node);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsSendingManual(false);
+    }
   };
 
   // Reset tab when active node changes
@@ -588,6 +604,8 @@ export function NodeEditorModal({
                     mode={mode}
                     isGroup={isGroup}
                     nodes={nodes}
+                    onManualSend={handleManualSend}
+                    isSendingManual={isSendingManual}
                   />
                 </TabsContent>
                 <TabsContent value="input" className="h-full m-0 p-0 focus-visible:ring-0">

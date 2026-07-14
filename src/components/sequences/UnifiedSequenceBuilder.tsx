@@ -1168,6 +1168,7 @@ export function UnifiedSequenceBuilder({
           isGroup={(localNodes.find(n => n.nodeType === "trigger")?.config.triggerConfig as any)?.isGroup ?? true}
           sequenceId={sequenceId}
           campaignId={campaignId}
+          onManualSendNode={onManualSendNode}
         />
       )}
     </div>
