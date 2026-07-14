@@ -170,8 +170,7 @@ Deno.serve(async (req) => {
     }
 
     const typedCampaign = campaign as GroupCampaign;
-
-
+    const triggerConfig = typedSequence.trigger_config as Record<string, unknown> || {};
 
     // ── Deduplication guard (best-effort) ───────────────────────────────────
     // Prevent the same sequence from firing multiple times within 15 seconds.
