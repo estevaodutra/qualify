@@ -89,18 +89,42 @@ export default function Chat() {
 
   const selectedConv = conversations.find((c) => c.id === selectedConvId);
 
-  // Auto-select conversation if phoneParam is present
+  const [isCreatingConv, setIsCreatingConv] = useState(false);
+
+  // Auto-select conversation if leadIdParam or phoneParam is present
   useEffect(() => {
-    if (phoneParam && !selectedConvId && conversations.length > 0) {
-      const match = conversations.find(c => {
-        const p = c.lead?.phone || "";
-        return p.includes(phoneParam) || phoneParam.includes(p);
-      });
-      if (match) {
-        setSelectedConvId(match.id);
+    if (!selectedConvId && !isConversationsLoading && !isCreatingConv) {
+      if (leadIdParam) {
+        const match = conversations.find(c => c.lead?.id === leadIdParam);
+        if (match) {
+          setSelectedConvId(match.id);
+        } else {
+          setIsCreatingConv(true);
+          createConversation({ leadId: leadIdParam })
+            .then((newConv) => {
+              setSelectedConvId(newConv.id);
+            })
+            .catch((err) => {
+              console.error("Erro ao criar conversa:", err);
+              // Fallback se falhar
+              if (phoneParam) {
+                const phoneMatch = conversations.find(c => c.lead?.phone?.includes(phoneParam));
+                if (phoneMatch) setSelectedConvId(phoneMatch.id);
+              }
+            })
+            .finally(() => setIsCreatingConv(false));
+        }
+      } else if (phoneParam) {
+        const match = conversations.find(c => {
+          const p = c.lead?.phone || "";
+          return p.includes(phoneParam) || phoneParam.includes(p);
+        });
+        if (match) {
+          setSelectedConvId(match.id);
+        }
       }
     }
-  }, [phoneParam, selectedConvId, conversations]);
+  }, [leadIdParam, phoneParam, selectedConvId, isConversationsLoading, conversations, createConversation, isCreatingConv]);
 
   // Send message coordinator
   const handleSendMessage = async (text: string, isInternal: boolean, mediaUrl?: string, mediaType?: string) => {

@@ -396,7 +396,40 @@ export function useChat(filters?: ChatFilters, activeConversationId?: string | n
     },
   });
 
-  // 8. Create Chat Template
+  // 8. Create Conversation
+  const createConversationMutation = useMutation({
+    mutationFn: async ({ leadId }: { leadId: string }) => {
+      if (!activeCompanyId) throw new Error("Sem empresa ativa");
+      
+      const { data: existing } = await supabase
+        .from("chat_conversations")
+        .select("id")
+        .eq("company_id", activeCompanyId)
+        .eq("lead_id", leadId)
+        .maybeSingle();
+
+      if (existing) return existing as ChatConversation;
+
+      const { data, error } = await supabase
+        .from("chat_conversations")
+        .insert({
+          company_id: activeCompanyId,
+          lead_id: leadId,
+          status: "open",
+          unread_count: 0,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data as ChatConversation;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["chat-conversations", activeCompanyId] });
+    },
+  });
+
+  // 9. Create Chat Template
   const createTemplateMutation = useMutation({
     mutationFn: async (payload: { shortcut: string; title: string; body: string }) => {
       const { data, error } = await supabase
@@ -527,6 +560,7 @@ export function useChat(filters?: ChatFilters, activeConversationId?: string | n
     assignOperator: assignOperatorMutation.mutateAsync,
     updateLeadStage: updateLeadStageMutation.mutateAsync,
     createTemplate: createTemplateMutation.mutateAsync,
+    createConversation: createConversationMutation.mutateAsync,
   };
 }
 

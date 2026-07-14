@@ -113,7 +113,7 @@ export function LeadTableRow({
               variant="ghost"
               size="icon"
               className="h-8 w-8 text-[#22c55e] hover:text-[#16a34a] hover:bg-green-50"
-              onClick={() => navigate(`/chat?phone=${lead.phone.replace(/\D/g, '')}`)}
+              onClick={() => navigate(`/chat?leadId=${lead.id}&phone=${lead.phone.replace(/\D/g, '')}`)}
               title="Abrir no Chat"
             >
               <WhatsappIcon className="h-5 w-5" />
