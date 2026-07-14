@@ -164,10 +164,16 @@ BEGIN
             attempts := msg_rec.attempts;
             max_attempts := msg_rec.max_attempts;
             scheduled_at := msg_rec.scheduled_at;
-            RETURN NEXT;
+            
+            -- O status da mensagem será setado para 'processing' aqui
+            UPDATE public.message_queue SET status = 'processing' WHERE id = msg_rec.id;
 
-            -- 3. Atualizar a instância: setar novo next_available_at somando o delay aleatório
-            new_delay_seconds := inst_rec.min_delay_seconds + floor(random() * (inst_rec.max_delay_seconds - inst_rec.min_delay_seconds + 1))::integer;
+            -- 3. Calcular Delay. Se a mensagem for CHAT (Prioridade 100+), NÃO tem delay!
+            IF msg_rec.priority >= 100 THEN
+                new_delay_seconds := 0;
+            ELSE
+                new_delay_seconds := inst_rec.min_delay_seconds + floor(random() * (inst_rec.max_delay_seconds - inst_rec.min_delay_seconds + 1))::integer;
+            END IF;
             
             UPDATE public.instance_queue_settings
             SET 
@@ -175,10 +181,7 @@ BEGIN
                 messages_sent_today = messages_sent_today + 1
             WHERE instance_queue_settings.instance_id = inst_rec.instance_id;
 
-            -- O status da mensagem será setado para 'processing' aqui
-            UPDATE public.message_queue
-            SET status = 'processing'
-            WHERE id = msg_rec.id;
+            RETURN NEXT;
         END IF;
     END LOOP;
 END;
