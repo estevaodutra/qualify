@@ -16,6 +16,7 @@ export default function Chat() {
   const { activeCompanyId } = useCompany();
   const [searchParams] = useSearchParams();
   const phoneParam = searchParams.get("phone");
+  const leadIdParam = searchParams.get("leadId");
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
 
   const [filters, setFilters] = useState<ChatFilters>({
