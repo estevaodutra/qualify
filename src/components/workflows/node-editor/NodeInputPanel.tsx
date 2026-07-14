@@ -14,9 +14,16 @@ interface NodeInputPanelProps {
   onRunPrevious: () => void;
   mockData: any;
   onMockDataChange: (data: any) => void;
+  hasIncomingConnections: boolean;
 }
 
-export function NodeInputPanel({ inputData, onRunPrevious, mockData, onMockDataChange }: NodeInputPanelProps) {
+export function NodeInputPanel({ 
+  inputData, 
+  onRunPrevious, 
+  mockData, 
+  onMockDataChange,
+  hasIncomingConnections
+}: NodeInputPanelProps) {
   const [activeTab, setActiveTab] = useState<"json" | "table" | "schema" | "mock">("json");
   const [mockInputText, setMockInputText] = useState(JSON.stringify(mockData || {}, null, 2));
   const [isEditingMock, setIsEditingMock] = useState(false);
@@ -32,7 +39,7 @@ export function NodeInputPanel({ inputData, onRunPrevious, mockData, onMockDataC
     }
   };
 
-  const displayData = inputData || (Object.keys(mockData || {}).length > 0 ? mockData : null);
+  const displayData = inputData;
 
   return (
     <div className="flex-1 flex flex-col min-h-0 border rounded-2xl bg-white shadow-sm overflow-hidden">
@@ -52,13 +59,23 @@ export function NodeInputPanel({ inputData, onRunPrevious, mockData, onMockDataC
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col justify-stretch">
-        {!displayData && activeTab !== "mock" ? (
+        {!hasIncomingConnections && activeTab !== "mock" ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-center p-6 bg-slate-50 border border-dashed rounded-xl gap-3">
+            <Database className="h-8 w-8 text-amber-500 stroke-[1.5]" />
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-slate-700">Etapa desconectada</p>
+              <p className="text-[10px] text-muted-foreground max-w-[200px] leading-normal mx-auto">
+                Esta etapa não possui conexões de entrada no Canvas. Conecte-a a um Gatilho ou etapa anterior para receber dados.
+              </p>
+            </div>
+          </div>
+        ) : !displayData && activeTab !== "mock" ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center p-6 bg-slate-50 border border-dashed rounded-xl gap-3">
             <Database className="h-8 w-8 text-slate-300 stroke-[1.5]" />
             <div className="space-y-1">
               <p className="text-xs font-semibold text-slate-700">Nenhum input disponível</p>
               <p className="text-[10px] text-muted-foreground max-w-[200px] leading-normal mx-auto">
-                Execute os nodes anteriores ou defina dados mockados para popular esta entrada.
+                Execute as etapas anteriores no botão abaixo para capturar os dados de entrada reais, ou use dados de teste.
               </p>
             </div>
             <div className="flex flex-col gap-1.5 w-full max-w-[180px]">

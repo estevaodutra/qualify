@@ -321,6 +321,8 @@ export function NodeEditorModal({
   };
 
   const currentSimData = simulatedData[currentNodeId] || { input: null, output: null, status: "not_run" };
+  const incomingConnections = connections.filter((c) => c.target_node_id === currentNodeId || c.to === currentNodeId);
+  const hasIncomingConnections = incomingConnections.length > 0;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -380,6 +382,7 @@ export function NodeEditorModal({
                 mockData={toCanonicalPayload(mockData)}
                 onMockDataChange={(data) => setMockData(toCanonicalPayload(data))}
                 onRunPrevious={handleRunPrevious}
+                hasIncomingConnections={hasIncomingConnections}
               />
 
               <NodeParametersPanel
