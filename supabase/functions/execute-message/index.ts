@@ -655,6 +655,58 @@ Deno.serve(async (req) => {
       }
       
       console.log(`[ExecuteMessage] Manual node execution: filtered to node order ${manualNodeIndex} (${sequenceNodes[0].node_type})`);
+      
+      // SHORT-CIRCUIT FOR MANUAL STATUS NODE EXECUTION (Directly send and return)
+      if (sequenceNodes[0].node_type === "status") {
+        console.log(`[ExecuteMessage] ⚡ SHORT-CIRCUIT: Executing status node manually without destination checks`);
+        const node = sequenceNodes[0];
+        const payload = {
+          action: "status.post",
+          node: {
+            id: node.id,
+            type: node.node_type,
+            order: node.node_order,
+            config: node.config,
+          },
+          campaign: { id: typedCampaign.id, name: typedCampaign.name },
+          instance: {
+            id: instance.id,
+            name: instance.name,
+            phone: instance.phone || "",
+            provider: instance.provider,
+            externalId: instance.external_instance_id || "",
+            externalToken: instance.external_instance_token || "",
+          },
+          destination: {
+            jid: `status@s.whatsapp.net`,
+            name: "Status",
+          },
+        };
+        
+        const sendStartTime = Date.now();
+        try {
+          const result = await sendWhatsAppMessage(payload);
+          return new Response(
+            JSON.stringify({
+              success: result.ok,
+              status: "completed",
+              nodesProcessed: 1,
+              nodesFailed: result.ok ? 0 : 1,
+              totalTimeMs: Date.now() - sendStartTime,
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        } catch (err: any) {
+          return new Response(
+            JSON.stringify({ 
+              error: err.message || "Error posting status",
+              success: false,
+              totalTimeMs: Date.now() - sendStartTime
+            }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
     }
 
     console.log(`[ExecuteMessage] ${sequenceNodes.length} sequence nodes, triggered: ${isTriggeredExecution}, sendPrivate: ${sendToPrivate}, webhook: ${webhookUrl}`);
