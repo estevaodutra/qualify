@@ -85,7 +85,7 @@ export function ChatExpressSessionView({ session }: ChatExpressSessionViewProps)
                 <SelectTrigger className="h-5 p-0 border-0 bg-transparent text-[11px] font-medium text-muted-foreground hover:text-foreground shadow-none focus:ring-0 gap-1 min-w-0 w-auto">
                   <SelectValue placeholder="Selecione uma instância" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-[150]">
                   {connectedInstances.map(inst => (
                     <SelectItem key={inst.id} value={inst.id} className="text-xs">{inst.name}</SelectItem>
                   ))}
