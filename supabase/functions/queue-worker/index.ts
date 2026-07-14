@@ -49,24 +49,50 @@ Deno.serve(async (req) => {
         }
 
         // Prepare payload for Z-API
+        let action = "message.send_text";
+        const nodeConfig: Record<string, any> = {};
+
+        if (item.media_url) {
+          action = "message.send_media";
+          nodeConfig.url = item.media_url;
+          nodeConfig.mediaType = item.media_type || "image";
+          nodeConfig.caption = item.body || "";
+        } else {
+          nodeConfig.text = item.body || "";
+        }
+
         const payload: StandardizedPayload = {
-          phone: item.phone,
-          messageType: (item.message_type as any) || "text",
-          body: item.body,
-          mediaUrl: item.media_url,
-          mediaType: item.media_type,
+          action,
+          node: {
+            id: "queue-worker-node",
+            type: item.media_url ? "media" : "text",
+            order: 1,
+            config: nodeConfig,
+          },
+          campaign: {
+            id: "queue-worker-direct",
+            name: "Queue Worker Outbox",
+          },
+          instance: {
+            id: inst.id,
+            name: inst.name,
+            phone: inst.phone,
+            provider: inst.provider,
+            externalId: inst.external_instance_id,
+            externalToken: inst.external_instance_token,
+          },
+          destination: {
+            phone: item.phone,
+            jid: item.phone.includes("@") ? item.phone : `${item.phone}@s.whatsapp.net`,
+            name: "",
+          },
         };
 
         // Enviar a mensagem para a Z-API
-        const waResult = await sendWhatsAppMessage(
-          inst.provider,
-          inst.external_instance_id,
-          inst.external_instance_token,
-          payload
-        );
+        const waResult = await sendWhatsAppMessage(payload);
 
-        if (!waResult.success) {
-          throw new Error(`Provider Error: ${waResult.error}`);
+        if (!waResult.ok) {
+          throw new Error(`Provider Error: ${JSON.stringify(waResult.details || waResult)}`);
         }
 
         // Criar o registro na tabela chat_messages se for do chat
@@ -83,7 +109,7 @@ Deno.serve(async (req) => {
                 media_type: item.media_type,
                 is_internal: false,
                 status: "sent",
-                message_id: waResult.messageId || null,
+                message_id: waResult.messageId || waResult.zaapId || null,
             })
             .select()
             .single();
