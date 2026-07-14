@@ -964,18 +964,19 @@ export function UnifiedSequenceBuilder({
 
                       {/* Output Port(s) (Right Handles) */}
                       {!isCondition && !isRandomizer ? (
-                        <div
-                          data-node-port="true"
-                          onMouseDown={(e) => handlePortMouseDown(e, node.id, "out")}
-                          className="absolute -right-1.5 top-[38px] h-3.5 w-3.5 rounded-full border-2 border-[#8A3CFF] bg-background hover:bg-[#8A3CFF] cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
-                          title="Saída do fluxo"
-                        >
-                          <div className="h-1.5 w-1.5 rounded-full bg-[#8A3CFF]" />
-                        </div>
-                        {isTrigger && (
-                          <span className="absolute right-2 top-[34px] text-[8px] font-bold text-[#8A3CFF] select-none text-right">Quando o<br/>evento ocorrer, então</span>
-                        )}
-                      </>
+                        <>
+                          <div
+                            data-node-port="true"
+                            onMouseDown={(e) => handlePortMouseDown(e, node.id, "out")}
+                            className="absolute -right-1.5 top-[38px] h-3.5 w-3.5 rounded-full border-2 border-[#8A3CFF] bg-background hover:bg-[#8A3CFF] cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
+                            title="Saída do fluxo"
+                          >
+                            <div className="h-1.5 w-1.5 rounded-full bg-[#8A3CFF]" />
+                          </div>
+                          {isTrigger && (
+                            <span className="absolute right-2 top-[34px] text-[8px] font-bold text-[#8A3CFF] select-none text-right">Quando o<br/>evento ocorrer, então</span>
+                          )}
+                        </>
                       ) : isCondition ? (
                         <>
                           {/* "Sim" (True) output handle */}
