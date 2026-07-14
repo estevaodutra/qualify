@@ -8,7 +8,7 @@ import { NodeOutputPanel } from "./NodeOutputPanel";
 import { toast } from "sonner";
 import { toCanonicalPayload } from "@/lib/workflows/canonicalPayload";
 import { WebhookFieldMappings } from "@/components/group-campaigns/sequences/WebhookFieldMappings";
-import { Sliders, Database } from "lucide-react";
+import { Sliders, Database, Play, Clock, UserPlus } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
