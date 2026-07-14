@@ -191,6 +191,9 @@ function getCategoryKeyForEndpoint(endpoint: string): string {
   ) {
     return "groups";
   }
+  if (cleanEndpoint.includes("-status") || cleanEndpoint.includes("/status")) {
+    return "status";
+  }
   if (
     cleanEndpoint.includes("/send-") ||
     cleanEndpoint.includes("/delete-message") ||
@@ -213,9 +216,6 @@ function getCategoryKeyForEndpoint(endpoint: string): string {
     cleanEndpoint.includes("/pin-chat")
   ) {
     return "chat";
-  }
-  if (cleanEndpoint.includes("-status") || cleanEndpoint.includes("/status")) {
-    return "status";
   }
   if (
     cleanEndpoint.includes("/product") ||
