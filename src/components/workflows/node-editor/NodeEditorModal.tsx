@@ -21,6 +21,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { TriggerTypeSelector } from "@/components/sequences/triggers/TriggerTypeSelector";
+import { WebhookGroupScopeConfig } from "@/components/sequences/triggers/configs/WebhookGroupScopeConfig";
+import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
 
 interface NodeEditorModalProps {
   isOpen: boolean;
@@ -35,6 +39,7 @@ interface NodeEditorModalProps {
   mode: "group" | "dispatch";
   isGroup?: boolean;
   sequenceId: string;
+  campaignId?: string;
 }
 
 export function NodeEditorModal({
@@ -50,6 +55,7 @@ export function NodeEditorModal({
   mode,
   isGroup,
   sequenceId,
+  campaignId,
 }: NodeEditorModalProps) {
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(nodeId);
   const [simulatedData, setSimulatedData] = useState<Record<string, { input: any; output: any; status: "success" | "error" | "not_run"; error?: string }>>({});
@@ -418,29 +424,141 @@ export function NodeEditorModal({
               <div className="w-full max-w-3xl bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col min-h-0">
                 <div className="pb-4 mb-4 border-b shrink-0">
                   <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                    ⚡ Gatilho: Via API / Webhook
+                    ⚡ Gatilho de Entrada
                   </h2>
                   <p className="text-xs text-muted-foreground font-medium">
-                    Receba payloads reais via webhook para iniciar a execução do seu workflow automaticamente.
+                    Configure como os contatos ou eventos acionam este fluxo de automação.
                   </p>
                 </div>
-                <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+
+                <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-6">
                   {(() => {
+                    const triggerType = (node.config?.triggerType as any) || "webhook";
+                    const triggerConfig = (node.config?.triggerConfig as any) || {};
+
+                    const handleTriggerTypeChange = (newType: string) => {
+                      handleUpdateConfig({
+                        ...node.config,
+                        triggerType: newType,
+                      });
+                    };
+
+                    const handleTriggerConfigChange = (newConfig: any) => {
+                      handleUpdateConfig({
+                        ...node.config,
+                        triggerConfig: newConfig,
+                      });
+                    };
+
+                    const selectorValue = triggerType === "scheduled_recurring" || triggerType === "scheduled_once" ? "scheduled" : triggerType;
                     const webhookUrl = sequenceId
                       ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/trigger-sequence/${sequenceId}`
                       : "";
 
                     return (
-                      <WebhookFieldMappings
-                        triggerConfig={node.config?.triggerConfig || {}}
-                        onTriggerConfigChange={(newTriggerConfig) => {
-                          handleUpdateConfig({
-                            ...node.config,
-                            triggerConfig: newTriggerConfig
-                          });
-                        }}
-                        webhookUrl={webhookUrl}
-                      />
+                      <div className="space-y-6 pb-4">
+                        {/* Selector Section */}
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tipo de Gatilho</label>
+                          <TriggerTypeSelector
+                            engine="group_sequence"
+                            value={selectorValue}
+                            onChange={(type) => handleTriggerTypeChange(type as any)}
+                          />
+                        </div>
+
+                        {/* Enable for Group Toggle */}
+                        <div className="flex items-center justify-between p-4 rounded-xl bg-slate-50/50 border border-slate-200/80">
+                          <div className="space-y-0.5">
+                            <label className="text-xs font-bold text-slate-700" htmlFor="group-mode-toggle">Habilitar para Grupo</label>
+                            <p className="text-[10px] text-muted-foreground leading-normal max-w-[380px]">
+                              Quando ativo, envia para os grupos do WhatsApp configurados. Desative para enviar em conversas individuais.
+                            </p>
+                          </div>
+                          <Switch
+                            id="group-mode-toggle"
+                            checked={triggerConfig.isGroup ?? true}
+                            onCheckedChange={(checked) => handleTriggerConfigChange({ ...triggerConfig, isGroup: checked })}
+                          />
+                        </div>
+
+                        {/* Specific Trigger Sub-Panels */}
+                        {selectorValue === "webhook" && (
+                          <WebhookFieldMappings
+                            triggerConfig={triggerConfig}
+                            onTriggerConfigChange={handleTriggerConfigChange}
+                            webhookUrl={webhookUrl}
+                          />
+                        )}
+
+                        {selectorValue === "keyword" && (
+                          <div className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 space-y-4">
+                            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Configuração de Palavra-chave</h3>
+                            <div className="space-y-3">
+                              <div className="space-y-1.5">
+                                <label className="text-[11px] font-semibold text-slate-600">Palavra-chave</label>
+                                <Input
+                                  placeholder="Ex: #queroafiliar"
+                                  value={triggerConfig.keyword || ""}
+                                  onChange={(e) => handleTriggerConfigChange({ ...triggerConfig, keyword: e.target.value })}
+                                  className="rounded-xl h-9 bg-white"
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <label className="text-[11px] font-semibold text-slate-600">Tipo de Correspondência</label>
+                                <select
+                                  value={triggerConfig.matchType || "exact"}
+                                  onChange={(e) => handleTriggerConfigChange({ ...triggerConfig, matchType: e.target.value })}
+                                  className="w-full rounded-xl border border-slate-200 bg-white h-9 px-3 text-xs outline-none focus:ring-1 focus:ring-[#8A3CFF]"
+                                >
+                                  <option value="exact">Correspondência Exata</option>
+                                  <option value="contains">Contém a palavra</option>
+                                  <option value="starts_with">Começa com a palavra</option>
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {selectorValue === "scheduled" && (
+                          <div className="p-6 rounded-xl border border-slate-200/80 bg-slate-50/50 text-center space-y-2">
+                            <Clock className="h-8 w-8 text-[#8A3CFF] mx-auto stroke-[1.5]" />
+                            <p className="text-xs font-bold text-slate-700">Disparo Agendado</p>
+                            <p className="text-[11px] text-muted-foreground max-w-[340px] mx-auto leading-normal">
+                              Cada mensagem define seus próprios dias e horários de execução nas opções de agendamento do bloco correspondente.
+                            </p>
+                          </div>
+                        )}
+
+                        {selectorValue === "manual" && (
+                          <div className="p-6 rounded-xl border border-slate-200/80 bg-slate-50/50 text-center space-y-2">
+                            <Play className="h-8 w-8 text-[#8A3CFF] mx-auto stroke-[1.5]" />
+                            <p className="text-xs font-bold text-slate-700">Disparo Manual</p>
+                            <p className="text-[11px] text-muted-foreground max-w-[340px] mx-auto leading-normal">
+                              Esta sequência só será executada quando você clicar no botão "Enviar" manualmente no painel da campanha.
+                            </p>
+                          </div>
+                        )}
+
+                        {(selectorValue === "member_join" || selectorValue === "member_leave") && (
+                          <div className="p-6 rounded-xl border border-slate-200/80 bg-slate-50/50 text-center space-y-2">
+                            <UserPlus className="h-8 w-8 text-[#8A3CFF] mx-auto stroke-[1.5]" />
+                            <p className="text-xs font-bold text-slate-700">Membro Entrou / Saiu do Grupo</p>
+                            <p className="text-[11px] text-muted-foreground max-w-[340px] mx-auto leading-normal">
+                              Gatilho acionado automaticamente por eventos de entrada ou saída de participantes nos grupos do WhatsApp.
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Group scope config */}
+                        {(triggerConfig.isGroup ?? true) && campaignId && (
+                          <WebhookGroupScopeConfig
+                            campaignId={campaignId}
+                            config={triggerConfig}
+                            onChange={(scope) => handleTriggerConfigChange({ ...triggerConfig, ...scope })}
+                          />
+                        )}
+                      </div>
                     );
                   })()}
                 </div>

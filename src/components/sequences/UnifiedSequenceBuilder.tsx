@@ -27,6 +27,7 @@ export interface UnifiedSequenceBuilderProps {
   sequenceName: string;
   isActive: boolean;
   sequenceId: string;
+  campaignId?: string;
   nodeCategories: NodeCategory[];
   getDefaultConfig: (nodeType: string) => Record<string, unknown>;
   getNodePreview?: (node: LocalNode) => string;
@@ -66,6 +67,7 @@ export function UnifiedSequenceBuilder({
   sequenceName: initialName,
   isActive,
   sequenceId,
+  campaignId,
   nodeCategories,
   getDefaultConfig,
   renderConfigPanel,
@@ -76,7 +78,7 @@ export function UnifiedSequenceBuilder({
   initialNodes,
   initialConnections,
   isSaving,
-  isLoading = false,
+  isLoading = false
 }: UnifiedSequenceBuilderProps) {
   const { toast } = useToast();
   const { saveVersion, isSavingVersion } = useSequences(sequenceId);
@@ -1165,6 +1167,7 @@ export function UnifiedSequenceBuilder({
           mode={mode === "executions" ? "dispatch" : (localNodes.find(n => n.nodeType === "trigger")?.config.triggerConfig as any)?.isGroup ?? true ? "group" : "dispatch"}
           isGroup={(localNodes.find(n => n.nodeType === "trigger")?.config.triggerConfig as any)?.isGroup ?? true}
           sequenceId={sequenceId}
+          campaignId={campaignId}
         />
       )}
     </div>

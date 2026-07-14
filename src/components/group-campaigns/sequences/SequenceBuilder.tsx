@@ -176,6 +176,7 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
       sequenceName={sequence.name}
       isActive={sequence.active}
       sequenceId={sequence.id}
+      campaignId={sequence.groupCampaignId}
       nodeCategories={NODE_CATEGORIES}
       getDefaultConfig={getDefaultConfig}
       renderConfigPanel={(node, onUpdateConfig, onClose, onManualSend, isSendingManual, isGroup, nodes) => {
