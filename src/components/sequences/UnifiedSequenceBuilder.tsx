@@ -1175,32 +1175,38 @@ export function UnifiedSequenceBuilder({
                           </div>
                         </div>
                       ) : isFieldOp ? (
-                        <div className="flex flex-col w-full text-left">
-                          <div className="flex items-center gap-2 mb-2">
-                            <GitBranch className="h-5 w-5 text-emerald-500 stroke-[1.5]" fill="currentColor" />
-                            <h2 className="text-xl font-bold text-slate-800 tracking-tight">Operações de campos</h2>
+                        <div className="flex flex-col w-full text-left h-full">
+                          {/* Header/Title padrão */}
+                          <div className="flex items-center gap-2 border-b border-slate-100 pb-2 mb-2">
+                            <div className={cn("p-1.5 rounded-lg text-white shrink-0 shadow-sm bg-emerald-500")}>
+                              <GitBranch className="h-3.5 w-3.5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-bold text-xs text-slate-800 truncate">Operações de campos</p>
+                            </div>
                           </div>
-                          <p className="text-[11px] text-slate-500 mb-4 leading-relaxed font-medium">
-                            Realize operações com campos do sistema, campos adicionais ou fontes de dados. Clique para adicionar uma operação de campo:
+                          
+                          <p className="text-[9px] text-slate-500 mb-2 leading-tight">
+                            Realize operações de mapeamento de campos (do sistema, fonte de dados,...)
                           </p>
                           
                           {fieldOpMappings.map((mapping, idx) => (
                             <div 
                               key={mapping.id || idx} 
-                              className="group relative flex flex-col gap-2 p-3 border border-slate-200 rounded-xl bg-white shadow-sm mb-3 cursor-pointer hover:border-[#8A3CFF]/50 transition-colors"
+                              className="group relative flex flex-col gap-1 p-2 border border-slate-200 rounded-lg bg-white shadow-sm mb-2 cursor-pointer hover:border-[#8A3CFF]/50 transition-colors"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setEditingTriggerId(mapping.id); // Reusando o state de triggerId temporariamente como activeMappingId
+                                setEditingTriggerId(mapping.id);
                                 setEditingNodeId(node.id);
                                 setNodeEditorOpen(true);
                               }}
                             >
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="flex items-center gap-3 min-w-0 flex-1">
-                                  <ArrowRight className="h-4 w-4 text-slate-600 shrink-0" />
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                  <ArrowRight className="h-3 w-3 text-slate-600 shrink-0" />
                                   <div className="min-w-0">
-                                    <p className="text-xs font-bold text-slate-800 truncate">Mapeamento de campo</p>
-                                    <p className="text-[10px] text-slate-500 truncate">
+                                    <p className="text-[10px] font-bold text-slate-800 truncate">Mapeamento de campo</p>
+                                    <p className="text-[8px] text-slate-500 truncate">
                                       {mapping.source ? `${mapping.source} → ${mapping.targetField || 'Destino'}` : "Realiza operações de mapeamento..."}
                                     </p>
                                   </div>
@@ -1219,10 +1225,10 @@ export function UnifiedSequenceBuilder({
                                       } : n
                                     ));
                                   }}
-                                  className="p-1.5 text-slate-400 hover:text-destructive hover:bg-destructive/10 rounded-md opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                  className="p-1 text-slate-400 hover:text-destructive hover:bg-destructive/10 rounded-md opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                                   title="Remover mapeamento"
                                 >
-                                  <Trash2 className="h-3.5 w-3.5" />
+                                  <Trash2 className="h-3 w-3" />
                                 </button>
                               </div>
                             </div>
@@ -1246,17 +1252,17 @@ export function UnifiedSequenceBuilder({
                                setEditingNodeId(node.id);
                                setNodeEditorOpen(true);
                              }}
-                             className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-[#8A3CFF]/50 rounded-xl text-[#8A3CFF] font-semibold hover:bg-[#8A3CFF]/5 transition-colors mb-2 text-xs"
+                             className="w-full flex items-center justify-center gap-1.5 py-1.5 border border-dashed border-[#8A3CFF]/50 rounded-lg text-[#8A3CFF] font-semibold hover:bg-[#8A3CFF]/5 transition-colors mb-2 text-[9px]"
                           >
-                            <Plus className="h-3.5 w-3.5" /> Adicionar mapeamento de campo
+                            <Plus className="h-3 w-3" /> Adicionar mapeamento
                           </button>
                           
                           <button 
                              type="button"
                              onClick={(e) => e.stopPropagation()}
-                             className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-[#8A3CFF]/50 rounded-xl text-[#8A3CFF] font-semibold hover:bg-[#8A3CFF]/5 transition-colors mb-4 text-xs"
+                             className="w-full flex items-center justify-center gap-1.5 py-1.5 border border-dashed border-[#8A3CFF]/50 rounded-lg text-[#8A3CFF] font-semibold hover:bg-[#8A3CFF]/5 transition-colors text-[9px]"
                           >
-                            <Plus className="h-3.5 w-3.5" /> Adicionar outra operação de campo
+                            <Plus className="h-3 w-3" /> Adicionar outra operação
                           </button>
                         </div>
                       ) : (
