@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useChatMessages } from "@/hooks/useChat";
 import { useChatExpress } from "@/hooks/useChatExpress";
 import { useChatExpressStore, ChatExpressSession } from "@/stores/chatExpress.store";
 import { useInstances } from "@/hooks/useInstances";
@@ -33,21 +33,13 @@ export function ChatExpressSessionView({ session }: ChatExpressSessionViewProps)
     }
   }, [session.instanceId]);
 
-  const { data: messages = [], isLoading: isLoadingMessages } = useQuery({
-    queryKey: ["chat-messages", session.conversationId],
-    queryFn: async () => {
-      if (!session.conversationId) return [];
-      const { data, error } = await supabase
-        .from("chat_messages")
-        .select("*")
-        .eq("conversation_id", session.conversationId)
-        .order("created_at", { ascending: true });
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!session.conversationId,
-  });
+  const {
+    messages,
+    isLoading: isLoadingMessages,
+    fetchNextMessages,
+    hasNextMessages,
+    isFetchingNextMessages
+  } = useChatMessages(session.conversationId || undefined);
 
   const handleSend = async (text: string, isInternal: boolean, mediaUrl?: string, mediaType?: string) => {
     await sendMessage({
@@ -116,11 +108,14 @@ export function ChatExpressSessionView({ session }: ChatExpressSessionViewProps)
              <span className="text-xs text-muted-foreground">Resolvendo conversa...</span>
            </div>
         ) : session.hasExistingConversation && session.conversationId ? (
-           <MessageThread
-             conversation={{ id: session.conversationId, lead_id: session.leadId, status: "open", company_id: "", unread_count: 0, instance_id: localInstanceId, channel: "whatsapp" } as any}
-             messages={messages as any}
-             isLoading={isLoadingMessages}
-           />
+            <MessageThread
+              conversation={{ id: session.conversationId, lead_id: session.leadId, status: "open", company_id: "", unread_count: 0, instance_id: localInstanceId, channel: "whatsapp" } as any}
+              messages={messages as any}
+              isLoading={isLoadingMessages}
+              onLoadMore={fetchNextMessages}
+              hasNextPage={hasNextMessages}
+              isFetchingNextPage={isFetchingNextMessages}
+            />
         ) : (
            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
              <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary mb-4">
