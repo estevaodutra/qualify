@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   ArrowLeft, Save, Play, Pause, Trash2, ZoomIn, ZoomOut, Maximize,
-  Loader2, Info, GitBranch, Copy, PenLine, History, Sliders
+  Loader2, Info, GitBranch, Copy, PenLine, History, Sliders, ArrowRight, Plus
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { NodeEditorModal } from "../workflows/node-editor/NodeEditorModal";
