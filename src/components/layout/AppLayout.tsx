@@ -5,6 +5,7 @@ import { AppHeader } from "./AppHeader";
 import { InstanceStatusBanner } from "./InstanceStatusBanner";
 import { ImpersonationBanner } from "../admin/ImpersonationBanner";
 import { useCallQueue } from "@/hooks/useCallQueue";
+import { ChatExpressDock } from "@/components/chat/express/ChatExpressDock";
 
 interface AppLayoutProps {
   children?: React.ReactNode;
@@ -29,6 +30,8 @@ export function AppLayout({ children }: AppLayoutProps) {
             {children || <Outlet />}
           </main>
         </div>
+        
+        <ChatExpressDock />
       </div>
     </SidebarProvider>
   );

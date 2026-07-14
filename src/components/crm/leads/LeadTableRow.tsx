@@ -113,7 +113,16 @@ export function LeadTableRow({
               variant="ghost"
               size="icon"
               className="h-8 w-8 text-[#22c55e] hover:text-[#16a34a] hover:bg-green-50"
-              onClick={() => navigate(`/chat?leadId=${lead.id}&phone=${lead.phone.replace(/\D/g, '')}`)}
+              onClick={() => {
+                import("@/stores/chatExpress.store").then(({ useChatExpressStore }) => {
+                  useChatExpressStore.getState().openLeadSession({
+                    leadId: lead.id,
+                    leadName: lead.name,
+                    phone: lead.phone,
+                    // we don't have avatar_url in the default type but pass it if available
+                  });
+                });
+              }}
               title="Abrir no Chat"
             >
               <WhatsappIcon className="h-5 w-5" />
