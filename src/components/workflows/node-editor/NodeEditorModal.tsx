@@ -65,6 +65,16 @@ export function NodeEditorModal({
   activeTriggerId,
 }: NodeEditorModalProps) {
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(nodeId);
+  const node = nodes.find((n) => n.id === currentNodeId);
+  
+  const activeTrigger = node?.nodeType === "trigger" && node.config.triggers 
+    ? ((node.config.triggers as any[]).find(t => t.id === activeTriggerId) || (node.config.triggers as any[])[0])
+    : null;
+
+  const activeMapping = node?.nodeType === "field_op" && node.config.mappings
+    ? ((node.config.mappings as any[]).find(m => m.id === activeTriggerId) || (node.config.mappings as any[])[0])
+    : null;
+
   const [latestPayload, setLatestPayload] = useState<any>(null);
 
   useEffect(() => {
@@ -116,14 +126,7 @@ export function NodeEditorModal({
   const [activeMainTab, setActiveMainTab] = useState<"config" | "input" | "output">("config");
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 
-  const node = nodes.find((n) => n.id === currentNodeId);
-  const activeTrigger = node?.nodeType === "trigger" && node.config.triggers 
-    ? ((node.config.triggers as any[]).find(t => t.id === activeTriggerId) || (node.config.triggers as any[])[0])
-    : null;
 
-  const activeMapping = node?.nodeType === "field_op" && node.config.mappings
-    ? ((node.config.mappings as any[]).find(m => m.id === activeTriggerId) || (node.config.mappings as any[])[0])
-    : null;
 
   const handleRequestClose = () => {
     if (hasUnsavedChanges) {
