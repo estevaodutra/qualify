@@ -7,6 +7,7 @@ import { NodeInputPanel } from "./NodeInputPanel";
 import { NodeParametersPanel } from "./NodeParametersPanel";
 import { NodeOutputPanel } from "./NodeOutputPanel";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import { toCanonicalPayload } from "@/lib/workflows/canonicalPayload";
 import { WebhookFieldMappings } from "@/components/group-campaigns/sequences/WebhookFieldMappings";
 import { FieldMappingEditor } from "@/components/workflows/nodes/field-mapping/FieldMappingEditor";
@@ -64,6 +65,32 @@ export function NodeEditorModal({
   activeTriggerId,
 }: NodeEditorModalProps) {
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(nodeId);
+  const [latestPayload, setLatestPayload] = useState<any>(null);
+
+  useEffect(() => {
+    if (isOpen && node?.nodeType === "field_op" && sequenceId) {
+      const fetchLatestPayload = async () => {
+        try {
+          const { data, error } = await supabase
+            .from("sequence_executions")
+            .select("trigger_payload")
+            .eq("sequence_id", sequenceId)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+            
+          if (!error && data?.trigger_payload) {
+            setLatestPayload(toCanonicalPayload(data.trigger_payload));
+          } else {
+            setLatestPayload(null);
+          }
+        } catch (e) {
+          console.error("Failed to fetch latest payload:", e);
+        }
+      };
+      fetchLatestPayload();
+    }
+  }, [isOpen, node?.nodeType, sequenceId]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [localConfig, setLocalConfig] = useState<Record<string, unknown>>({});
   const [simulatedData, setSimulatedData] = useState<Record<string, { input: any; output: any; status: "success" | "error" | "not_run"; error?: string }>>({});
@@ -224,7 +251,8 @@ export function NodeEditorModal({
 
     if (type === "trigger" || type === "webhook") {
       const triggerNode = nodes.find(n => n.nodeType === "trigger");
-      const triggerConfig = triggerNode?.config?.triggerConfig as Record<string, any> || {};
+      const webhookTrigger = (triggerNode?.config?.triggers as any[])?.find(t => t.type === "webhook") || (triggerNode?.config?.triggers as any[])?.[0];
+      const triggerConfig = webhookTrigger?.config || (triggerNode?.config?.triggerConfig as Record<string, any> || {});
       const activeRef = triggerConfig?.referencePayload;
       const basePayload = toCanonicalPayload(activeRef || mockData);
       
@@ -559,9 +587,11 @@ export function NodeEditorModal({
             <div className="flex-1 flex flex-col overflow-hidden bg-white">
               {(() => {
                 const triggerNode = nodes?.find(n => n.nodeType === "trigger");
-                const triggerConfig = triggerNode?.config?.triggerConfig as Record<string, any> | undefined;
+                const webhookTrigger = (triggerNode?.config?.triggers as any[])?.find(t => t.type === "webhook") || (triggerNode?.config?.triggers as any[])?.[0];
+                const triggerConfig = webhookTrigger?.config || (triggerNode?.config?.triggerConfig as Record<string, any> | undefined);
                 const activeRef = triggerConfig?.referencePayload;
                 const referencePayload = activeRef ? toCanonicalPayload(activeRef) : null;
+                const finalPayload = latestPayload || referencePayload;
                 
                 const handleMappingChange = (updatedMapping: any) => {
                   setLocalConfig(updatedMapping);
@@ -576,7 +606,7 @@ export function NodeEditorModal({
                   <FieldMappingEditor
                     mapping={localConfig}
                     onChange={handleMappingChange}
-                    referencePayload={referencePayload}
+                    referencePayload={finalPayload}
                   />
                 );
               })()}
