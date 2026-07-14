@@ -8,7 +8,18 @@ export interface RoutedRequest {
 export function routeZApiRequest(endpoint: string, method: string, requestBody: any): RoutedRequest {
   const cleanEndpoint = endpoint.split("?")[0].toLowerCase();
 
-  // 1. Group Management
+  // 1. Status Management (evaluated first to prevent /send- shadowing)
+  if (cleanEndpoint.includes("/status-") || cleanEndpoint.includes("/send-status")) {
+    let action = "status.list";
+    if (cleanEndpoint.includes("/status-") || cleanEndpoint.includes("/send-status")) action = "status.send";
+
+    return {
+      url: "https://n8n.6ksfuf.easypanel.host/webhook/manager_status",
+      action
+    };
+  }
+
+  // 2. Group Management
   if (
     cleanEndpoint.includes("/group") ||
     cleanEndpoint.includes("/update-group") ||
@@ -112,17 +123,6 @@ export function routeZApiRequest(endpoint: string, method: string, requestBody: 
 
     return {
       url: "https://n8n.6ksfuf.easypanel.host/webhook/manager_chats",
-      action
-    };
-  }
-
-  // 5. Status Management
-  if (cleanEndpoint.includes("/status-") || cleanEndpoint.includes("/send-status")) {
-    let action = "status.list";
-    if (cleanEndpoint.includes("/status-") || cleanEndpoint.includes("/send-status")) action = "status.send";
-
-    return {
-      url: "https://n8n.6ksfuf.easypanel.host/webhook/manager_status",
       action
     };
   }

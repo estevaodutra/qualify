@@ -272,6 +272,7 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
         phones: config.phones || [config.phone],
         action: "DEMOTE",
       };
+      break;
     case "status.post": {
       const statusType = (config.statusType as string) || "text";
       if (statusType === "text") {
