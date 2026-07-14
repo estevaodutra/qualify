@@ -134,9 +134,16 @@ Deno.serve(async (req) => {
       .eq("id", conv.instance_id)
       .single();
 
-    if (instErr || !inst?.external_instance_id || !inst?.external_instance_token) {
+    if (instErr || !inst?.external_instance_id) {
       return new Response(
-        JSON.stringify({ error: "Instance configuration or credentials not found" }),
+        JSON.stringify({ error: "Instance configuration or credentials not found (Missing ID)" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (inst.provider?.toLowerCase() !== 'waha' && !inst?.external_instance_token) {
+      return new Response(
+        JSON.stringify({ error: "Instance configuration or credentials not found (Missing Token)" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

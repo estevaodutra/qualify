@@ -118,8 +118,24 @@ export function useChatExpress() {
         },
       });
 
-      if (error || !data.success) {
-        throw new Error(error?.message || data?.error || "Erro ao enviar mensagem.");
+      if (error) {
+        if (error instanceof Error && 'context' in error) {
+            try {
+                // supabase-js FunctionsHttpError has a context property with the Response
+                const response = (error as any).context as Response;
+                if (response && typeof response.json === 'function') {
+                    const errorData = await response.clone().json();
+                    throw new Error(errorData?.error || errorData?.message || "Erro na Edge Function: " + response.status);
+                }
+            } catch (e) {
+                // ignore parsing error
+            }
+        }
+        throw new Error(error.message || "Erro ao invocar Edge Function.");
+      }
+      
+      if (!data?.success) {
+        throw new Error(data?.error || "Erro desconhecido ao enviar mensagem.");
       }
 
       return { message: data.message as ChatMessage, convId, leadId: payload.leadId };
