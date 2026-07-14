@@ -276,18 +276,18 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
     case "status.post": {
       const statusType = (config.statusType as string) || "text";
       if (statusType === "text") {
-        endpoint = "/send-status-text";
+        endpoint = "/send-text-status";
         body = {
           message: config.content || config.text || ""
         };
       } else if (statusType === "image") {
-        endpoint = "/send-status-image";
+        endpoint = "/send-image-status";
         body = {
           image: config.url,
           caption: config.caption || ""
         };
       } else if (statusType === "video") {
-        endpoint = "/send-status-video";
+        endpoint = "/send-video-status";
         body = {
           video: config.url,
           caption: config.caption || ""
@@ -297,7 +297,7 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
     }
 
     case "status.send_image":
-      endpoint = "/send-status-image";
+      endpoint = "/send-image-status";
       body = {
         image: config.url,
         caption: config.caption || ""
@@ -305,7 +305,7 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
       break;
 
     case "status.send_video":
-      endpoint = "/send-status-video";
+      endpoint = "/send-video-status";
       body = {
         video: config.url,
         caption: config.caption || ""

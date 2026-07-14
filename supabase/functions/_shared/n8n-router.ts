@@ -214,7 +214,7 @@ function getCategoryKeyForEndpoint(endpoint: string): string {
   ) {
     return "chat";
   }
-  if (cleanEndpoint.includes("/status-") || cleanEndpoint.includes("/send-status")) {
+  if (cleanEndpoint.includes("-status") || cleanEndpoint.includes("/status")) {
     return "status";
   }
   if (
