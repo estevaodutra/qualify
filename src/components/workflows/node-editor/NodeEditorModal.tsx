@@ -352,16 +352,24 @@ export function NodeEditorModal({
                   </p>
                 </div>
                 <div className="flex-1 min-h-0 overflow-y-auto pr-1">
-                  <WebhookFieldMappings
-                    triggerConfig={node.config?.triggerConfig || {}}
-                    onTriggerConfigChange={(newTriggerConfig) => {
-                      handleUpdateConfig({
-                        ...node.config,
-                        triggerConfig: newTriggerConfig
-                      });
-                    }}
-                    sequenceId={sequenceId}
-                  />
+                  {(() => {
+                    const webhookUrl = sequenceId
+                      ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/trigger-sequence/${sequenceId}`
+                      : "";
+
+                    return (
+                      <WebhookFieldMappings
+                        triggerConfig={node.config?.triggerConfig || {}}
+                        onTriggerConfigChange={(newTriggerConfig) => {
+                          handleUpdateConfig({
+                            ...node.config,
+                            triggerConfig: newTriggerConfig
+                          });
+                        }}
+                        webhookUrl={webhookUrl}
+                      />
+                    );
+                  })()}
                 </div>
               </div>
             </div>

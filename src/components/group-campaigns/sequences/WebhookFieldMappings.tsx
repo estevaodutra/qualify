@@ -25,8 +25,8 @@ interface FieldMapping {
 }
 
 interface WebhookFieldMappingsProps {
-  fieldMappings: FieldMapping[];
-  onFieldMappingsChange: (mappings: FieldMapping[]) => void;
+  fieldMappings?: FieldMapping[];
+  onFieldMappingsChange?: (mappings: FieldMapping[]) => void;
   webhookUrl: string;
   triggerConfig: any;
   onTriggerConfigChange: (config: any) => void;
