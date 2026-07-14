@@ -6,6 +6,7 @@ import { NodeInputPanel } from "./NodeInputPanel";
 import { NodeParametersPanel } from "./NodeParametersPanel";
 import { NodeOutputPanel } from "./NodeOutputPanel";
 import { toast } from "sonner";
+import { toCanonicalPayload } from "@/lib/workflows/canonicalPayload";
 
 interface NodeEditorModalProps {
   isOpen: boolean;
@@ -37,6 +38,13 @@ export function NodeEditorModal({
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(nodeId);
   const [simulatedData, setSimulatedData] = useState<Record<string, { input: any; output: any; status: "success" | "error" | "not_run"; error?: string }>>({});
   const [mockData, setMockData] = useState<any>({
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    query_params: {
+      source: "facebook_ads",
+    },
     body: {
       nome: "Estevão Dutra",
       phone: "5512983195531",
@@ -44,13 +52,8 @@ export function NodeEditorModal({
       valor: "150.00",
       produto: "Curso N8N Avançado",
     },
-    headers: {
-      host: "qualify.app",
-      "content-type": "application/json",
-    },
-    query_params: {
-      source: "facebook_ads",
-    },
+    received_at: new Date().toISOString(),
+    raw: {}
   });
   const [isSimulating, setIsSimulating] = useState(false);
 
@@ -105,20 +108,17 @@ export function NodeEditorModal({
     const config = targetNode.config || {};
 
     if (type === "trigger" || type === "webhook") {
-      const webhookPayload = {
-        received_at: new Date().toISOString(),
-        method: "POST",
-        headers: mockData.headers || {},
-        query_params: mockData.query_params || {},
-        body: mockData.body || {},
-      };
+      const triggerNode = nodes.find(n => n.nodeType === "trigger");
+      const triggerConfig = triggerNode?.config?.triggerConfig as Record<string, any> || {};
+      const activeRef = triggerConfig?.referencePayload;
+      const basePayload = toCanonicalPayload(activeRef || mockData);
       
       return {
-        webhook: webhookPayload,
+        webhook: basePayload,
         lead: {
-          name: mockData.body?.nome || mockData.body?.name || "",
-          phone: mockData.body?.phone || "",
-          email: mockData.body?.email || "",
+          name: basePayload.body?.nome || basePayload.body?.name || "",
+          phone: basePayload.body?.phone || "",
+          email: basePayload.body?.email || "",
           custom_fields: {},
         },
         deal: {},
@@ -328,9 +328,9 @@ export function NodeEditorModal({
 
         <div className="flex-1 flex gap-4 p-4 min-h-0 overflow-hidden">
           <NodeInputPanel
-            inputData={currentSimData.input}
-            mockData={mockData}
-            onMockDataChange={(data) => setMockData(data)}
+            inputData={currentSimData.input ? toCanonicalPayload(currentSimData.input) : null}
+            mockData={toCanonicalPayload(mockData)}
+            onMockDataChange={(data) => setMockData(toCanonicalPayload(data))}
             onRunPrevious={handleRunPrevious}
           />
 

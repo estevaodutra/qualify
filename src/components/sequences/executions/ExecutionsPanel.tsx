@@ -8,6 +8,7 @@ import { NodeInspector } from "./NodeInspector";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { toCanonicalPayload } from "@/lib/workflows/canonicalPayload";
 
 interface ExecutionsPanelProps {
   sequenceId: string;
@@ -87,9 +88,8 @@ export function ExecutionsPanel({ sequenceId, nodes, connections, nodeCategories
     const currentConfig = triggerNode.config || {};
     const currentTriggerConfig = (currentConfig.triggerConfig as Record<string, any>) || {};
     
-    // Save the raw webhook payload (or full trigger payload) as reference
-    const payload = execution.triggerPayload || {};
-    const referencePayload = payload.webhookPayload || payload;
+    // Save normalized canonical payload
+    const referencePayload = toCanonicalPayload(execution.triggerPayload);
 
     const newTriggerConfig = {
       ...currentTriggerConfig,

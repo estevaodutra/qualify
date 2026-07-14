@@ -575,6 +575,10 @@ export function UnifiedSequenceBuilder({
       } else if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
         requestDeleteNode(selectedNodeId);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        setEditingNodeId(selectedNodeId);
+        setNodeEditorOpen(true);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -1041,29 +1045,50 @@ export function UnifiedSequenceBuilder({
       {/* Unified node config side panel — every node, Start included, opens
           through this same lateral Sheet (no more separate trigger dialog). */}
       <Sheet open={!!selectedNode} onOpenChange={(open) => { if (!open) setSelectedNodeId(null); }} modal={false}>
-        <SheetContent side="right" hideOverlay className="w-full sm:max-w-xl p-0 flex flex-col overflow-hidden shadow-2xl border-l border-border/50">
-           {selectedNode && (() => {
-            const triggerNode = localNodes.find(n => n.nodeType === "trigger");
-            const isGroup = (triggerNode?.config.triggerConfig as any)?.isGroup ?? true;
-            return renderConfigPanel(
-              selectedNode,
-              (config) => {
-                updateNodesAndSave(prev => prev.map(n => n.id === selectedNode.id ? { ...n, config } : n));
-              },
-              () => setSelectedNodeId(null),
-              onManualSendNode ? async () => {
-                setIsSendingManual(true);
-                try {
-                  await onManualSendNode(selectedNode);
-                } finally {
-                  setIsSendingManual(false);
-                }
-              } : undefined,
-              isSendingManual,
-              isGroup,
-              localNodes
-            );
-          })()}
+        <SheetContent side="right" hideOverlay className="w-full sm:max-w-xs p-4 flex flex-col overflow-hidden shadow-2xl border-l border-border/50 bg-white">
+           {selectedNode && (
+             <div className="flex flex-col h-full justify-between py-2">
+               <div className="space-y-4">
+                 <div className="flex items-center gap-2 pb-3 border-b">
+                   <div className="h-7 w-7 rounded-lg bg-[#8A3CFF]/10 flex items-center justify-center text-[#8A3CFF] font-bold text-xs shrink-0">
+                     {selectedNode.nodeType.substring(0, 2).toUpperCase()}
+                   </div>
+                   <div>
+                     <h3 className="font-semibold text-xs text-slate-800">Resumo da Etapa</h3>
+                     <p className="text-[10px] text-muted-foreground">Etapa selecionada no Canvas</p>
+                   </div>
+                 </div>
+
+                 <div className="space-y-3.5 text-xs text-slate-600">
+                   <div>
+                     <span className="font-medium text-[9px] text-slate-400 uppercase tracking-wider block mb-0.5">Nome do Componente</span>
+                     <span className="font-semibold text-slate-800">{(selectedNode.config.label as string) || selectedNode.nodeType}</span>
+                   </div>
+                   <div>
+                     <span className="font-medium text-[9px] text-slate-400 uppercase tracking-wider block mb-0.5">Tipo de Nó</span>
+                     <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-100 font-semibold text-slate-700">{selectedNode.nodeType}</span>
+                   </div>
+                   <div>
+                     <span className="font-medium text-[9px] text-slate-400 uppercase tracking-wider block mb-0.5">Status</span>
+                     <span className="inline-flex items-center text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                       Pronto
+                     </span>
+                   </div>
+                 </div>
+               </div>
+
+               <Button 
+                 type="button" 
+                 onClick={() => {
+                   setEditingNodeId(selectedNode.id);
+                   setNodeEditorOpen(true);
+                 }} 
+                 className="w-full bg-[#8A3CFF] hover:bg-[#8A3CFF]/90 text-white rounded-xl text-xs font-semibold gap-1.5 h-9"
+               >
+                 Abrir Editor Completo
+               </Button>
+             </div>
+           )}
         </SheetContent>
       </Sheet>
 

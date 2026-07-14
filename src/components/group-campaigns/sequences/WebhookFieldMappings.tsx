@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { Copy, Check, Info, Loader2, CheckCircle2, AlertTriangle, RefreshCw, Eye, Code2 } from "lucide-react";
 import { toast } from "sonner";
+import { toCanonicalPayload } from "@/lib/workflows/canonicalPayload";
 import {
   Collapsible,
   CollapsibleContent,
@@ -101,8 +102,7 @@ export function WebhookFieldMappings({
             fetchHistory();
 
             // Set the new payload as reference automatically
-            const payload = data[0].trigger_payload || {};
-            const referencePayload = payload.webhookPayload || payload;
+            const referencePayload = toCanonicalPayload(data[0].trigger_payload);
             
             onTriggerConfigChange({
               ...triggerConfig,
@@ -131,8 +131,7 @@ export function WebhookFieldMappings({
   };
 
   const handleSelectReference = (execution: any) => {
-    const payload = execution.trigger_payload || {};
-    const referencePayload = payload.webhookPayload || payload;
+    const referencePayload = toCanonicalPayload(execution.trigger_payload);
     
     onTriggerConfigChange({
       ...triggerConfig,
@@ -141,7 +140,7 @@ export function WebhookFieldMappings({
     toast.success("Payload selecionado como referência para mapeamentos!");
   };
 
-  const activeReference = triggerConfig?.referencePayload;
+  const activeReference = triggerConfig?.referencePayload ? toCanonicalPayload(triggerConfig.referencePayload) : null;
 
   const examplePayload = `{
   "method": "POST",
@@ -280,9 +279,8 @@ export function WebhookFieldMappings({
         ) : (
           <div className="space-y-1.5 max-h-56 overflow-y-auto">
             {recentExecutions.map((exec) => {
-              const payload = exec.trigger_payload || {};
-              const webPayload = payload.webhookPayload || payload;
-              const hasWebhookData = !!webPayload && Object.keys(webPayload).length > 0;
+              const webPayload = toCanonicalPayload(exec.trigger_payload);
+              const hasWebhookData = !!webPayload && Object.keys(webPayload.body || {}).length > 0;
               const isRef = activeReference && JSON.stringify(activeReference) === JSON.stringify(webPayload);
 
               return (

@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
+import { toCanonicalPayload } from "@/lib/workflows/canonicalPayload";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -1798,7 +1799,8 @@ export function UnifiedNodeConfigPanel({
             }] : []);
 
             const triggerNode = nodes?.find(n => n.nodeType === "trigger");
-            const referencePayload = triggerNode?.config?.triggerConfig?.referencePayload || triggerNode?.config?.referencePayload;
+            const rawRef = triggerNode?.config?.triggerConfig?.referencePayload || triggerNode?.config?.referencePayload;
+            const referencePayload = rawRef ? toCanonicalPayload(rawRef) : null;
             const availablePaths = referencePayload ? extractPaths(referencePayload) : [];
 
             // State for rapid field creation
@@ -1920,15 +1922,17 @@ export function UnifiedNodeConfigPanel({
                 {referencePayload ? (
                   <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-start gap-2">
                     <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <div className="text-[11px] text-emerald-800 leading-normal">
-                      <strong>Payload de referência ativo.</strong> Autocomplete disponível para {availablePaths.length} caminhos JSON.
+                    <div className="text-[11px] text-emerald-800 leading-normal whitespace-pre-line">
+                      <strong>Payload de referência ativo.</strong>
+                      {"\n"}Recebido em: {referencePayload.received_at && !isNaN(Date.parse(referencePayload.received_at)) ? new Date(referencePayload.received_at).toLocaleString("pt-BR") : "Simulação/Mock"}
                     </div>
                   </div>
                 ) : (
                   <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-2">
                     <Info className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                    <div className="text-[11px] text-amber-800 leading-normal">
-                      Nenhum payload de referência ativo. Mapeie os caminhos manualmente (ex: <code>body.nome</code>) ou defina um payload na aba Execuções/Gatilho.
+                    <div className="text-[11px] text-amber-800 leading-normal whitespace-pre-line">
+                      Nenhum payload de referência ativo.
+                      {"\n"}Envie um POST para o Webhook, abra a execução e clique em “Usar como referência”.
                     </div>
                   </div>
                 )}
