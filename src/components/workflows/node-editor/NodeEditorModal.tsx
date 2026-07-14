@@ -8,6 +8,19 @@ import { NodeOutputPanel } from "./NodeOutputPanel";
 import { toast } from "sonner";
 import { toCanonicalPayload } from "@/lib/workflows/canonicalPayload";
 import { WebhookFieldMappings } from "@/components/group-campaigns/sequences/WebhookFieldMappings";
+import { Sliders, Database } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/utils";
 
 interface NodeEditorModalProps {
   isOpen: boolean;
@@ -59,6 +72,42 @@ export function NodeEditorModal({
     raw: {}
   });
   const [isSimulating, setIsSimulating] = useState(false);
+  const [activeMainTab, setActiveMainTab] = useState<"config" | "input" | "output">("config");
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+
+  const handleRequestClose = () => {
+    if (isUnsavedWorkflow) {
+      setShowExitConfirm(true);
+    } else {
+      onClose();
+    }
+  };
+
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
+      handleRequestClose();
+    }
+  };
+
+  const handleDiscardAndClose = () => {
+    setShowExitConfirm(false);
+    onClose();
+  };
+
+  const handleSaveAndClose = async () => {
+    await onSaveWorkflow();
+    setShowExitConfirm(false);
+    onClose();
+  };
+
+  const handleCancelExit = () => {
+    setShowExitConfirm(false);
+  };
+
+  // Reset tab when active node changes
+  useEffect(() => {
+    setActiveMainTab("config");
+  }, [currentNodeId]);
 
   useEffect(() => {
     if (nodeId) setCurrentNodeId(nodeId);
@@ -285,6 +334,13 @@ export function NodeEditorModal({
         stepInput = simulatedData[prevNodeId]?.output || null;
       }
 
+      if (hasIncomingConnections && !stepInput) {
+        toast.warning("Falta de dados de entrada. Selecione 'Input' para verificar.");
+        setActiveMainTab("input");
+        setIsSimulating(false);
+        return;
+      }
+
       const stepOutput = runNodeSimulation(node, stepInput);
       setSimulatedData((prev) => ({
         ...prev,
@@ -295,6 +351,7 @@ export function NodeEditorModal({
         },
       }));
       toast.success("Esta etapa foi executada com sucesso!");
+      setActiveMainTab("output");
     } catch (err: any) {
       console.error(err);
       setSimulatedData((prev) => ({
@@ -307,6 +364,7 @@ export function NodeEditorModal({
         },
       }));
       toast.error(`Erro ao executar etapa: ${err.message}`);
+      setActiveMainTab("output");
     } finally {
       setIsSimulating(false);
     }
@@ -325,27 +383,40 @@ export function NodeEditorModal({
   const hasIncomingConnections = incomingConnections.length > 0;
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-[95vw] w-[95vw] h-[90vh] max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col rounded-2xl border bg-slate-50/50 shadow-2xl">
-        <NodeEditorHeader
-          node={node}
-          previousNodes={prevNodes}
-          nextNodes={nextNodes}
-          onNavigate={handleNavigate}
-          onRunStep={handleRunStep}
-          onRunPrevious={handleRunPrevious}
-          onClose={onClose}
-          onSave={onSaveWorkflow}
-          isSaving={isSavingWorkflow}
-          isUnsaved={isUnsavedWorkflow}
-          isSimulating={isSimulating}
-        />
+    <>
+      <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+        <DialogContent 
+          className={cn(
+            "w-[calc(100vw-16px)] md:w-[calc(100vw-48px)] h-[calc(100vh-24px)] md:h-[calc(100vh-80px)] max-h-[calc(100vh-80px)] p-0 gap-0 overflow-hidden flex flex-col rounded-2xl border bg-white shadow-2xl transition-all outline-none",
+            node.nodeType === "field_mapping" || node.nodeType === "api" ? "max-w-[1040px]" : "max-w-[800px]"
+          )}
+          onPointerDownOutside={(e) => {
+            e.preventDefault();
+            handleRequestClose();
+          }}
+          onEscapeKeyDown={(e) => {
+            e.preventDefault();
+            handleRequestClose();
+          }}
+        >
+          <NodeEditorHeader
+            node={node}
+            previousNodes={prevNodes}
+            nextNodes={nextNodes}
+            onNavigate={handleNavigate}
+            onRunStep={handleRunStep}
+            onRunPrevious={handleRunPrevious}
+            onClose={handleRequestClose}
+            onSave={onSaveWorkflow}
+            isSaving={isSavingWorkflow}
+            isUnsaved={isUnsavedWorkflow}
+            isSimulating={isSimulating}
+          />
 
-        <div className="flex-1 flex gap-4 p-4 min-h-0 overflow-hidden">
           {node.nodeType === "trigger" ? (
-            <div className="flex-1 flex justify-center overflow-y-auto px-4 py-2">
+            <div className="flex-1 flex justify-center overflow-y-auto px-6 py-4 bg-slate-50/30">
               <div className="w-full max-w-3xl bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col min-h-0">
-                <div className="pb-4 mb-4 border-b">
+                <div className="pb-4 mb-4 border-b shrink-0">
                   <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
                     ⚡ Gatilho: Via API / Webhook
                   </h2>
@@ -376,33 +447,83 @@ export function NodeEditorModal({
               </div>
             </div>
           ) : (
-            <>
-              <NodeInputPanel
-                inputData={currentSimData.input ? toCanonicalPayload(currentSimData.input) : null}
-                mockData={toCanonicalPayload(mockData)}
-                onMockDataChange={(data) => setMockData(toCanonicalPayload(data))}
-                onRunPrevious={handleRunPrevious}
-                hasIncomingConnections={hasIncomingConnections}
-              />
+            <Tabs value={activeMainTab} onValueChange={(v: any) => setActiveMainTab(v)} className="flex-1 flex flex-col min-h-0">
+              <div className="px-6 py-2 border-b bg-slate-50/50 flex items-center justify-between shrink-0">
+                <TabsList className="h-8 p-0.5 rounded-xl bg-slate-100 border">
+                  <TabsTrigger value="config" className="h-7 text-xs rounded-lg px-4 gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                    <Sliders className="h-3.5 w-3.5 text-[#8A3CFF]" /> Configuração
+                  </TabsTrigger>
+                  <TabsTrigger value="input" className="h-7 text-xs rounded-lg px-4 gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                    <Database className="h-3.5 w-3.5 text-[#8A3CFF]" /> Entrada (Input)
+                  </TabsTrigger>
+                  <TabsTrigger value="output" className="h-7 text-xs rounded-lg px-4 gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                    <Database className="h-3.5 w-3.5 text-[#8A3CFF]" /> Saída (Output)
+                  </TabsTrigger>
+                </TabsList>
+              </div>
 
-              <NodeParametersPanel
-                node={node}
-                onUpdate={handleUpdateConfig}
-                mode={mode}
-                isGroup={isGroup}
-                nodes={nodes}
-              />
-
-              <NodeOutputPanel
-                outputData={currentSimData.output}
-                status={currentSimData.status}
-                errorText={currentSimData.error}
-                onRunNode={handleRunStep}
-              />
-            </>
+              <div className="flex-1 min-h-0 overflow-y-auto p-6 bg-slate-50/30">
+                <TabsContent value="config" className="h-full m-0 p-0 focus-visible:ring-0">
+                  <NodeParametersPanel
+                    node={node}
+                    onUpdate={handleUpdateConfig}
+                    mode={mode}
+                    isGroup={isGroup}
+                    nodes={nodes}
+                  />
+                </TabsContent>
+                <TabsContent value="input" className="h-full m-0 p-0 focus-visible:ring-0">
+                  <NodeInputPanel
+                    inputData={currentSimData.input ? toCanonicalPayload(currentSimData.input) : null}
+                    mockData={toCanonicalPayload(mockData)}
+                    onMockDataChange={(data) => setMockData(toCanonicalPayload(data))}
+                    onRunPrevious={handleRunPrevious}
+                    hasIncomingConnections={hasIncomingConnections}
+                  />
+                </TabsContent>
+                <TabsContent value="output" className="h-full m-0 p-0 focus-visible:ring-0">
+                  <NodeOutputPanel
+                    outputData={currentSimData.output}
+                    status={currentSimData.status}
+                    errorText={currentSimData.error}
+                    onRunNode={handleRunStep}
+                  />
+                </TabsContent>
+              </div>
+            </Tabs>
           )}
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={showExitConfirm} onOpenChange={setShowExitConfirm}>
+        <AlertDialogContent className="max-w-[400px] rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-sm font-bold text-slate-800">
+              Alterações não salvas
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-muted-foreground">
+              Você possui alterações não salvas no workflow. Deseja salvar antes de sair ou descartar as alterações?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex flex-col gap-1.5 sm:flex-row">
+            <AlertDialogCancel onClick={handleCancelExit} className="text-xs rounded-xl h-8">
+              Continuar editando
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDiscardAndClose}
+              className="text-xs rounded-xl h-8 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Descartar
+            </AlertDialogAction>
+            <AlertDialogAction
+              onClick={handleSaveAndClose}
+              className="text-xs rounded-xl h-8 bg-[#8A3CFF] text-white hover:bg-[#8A3CFF]/90"
+            >
+              Salvar e sair
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
