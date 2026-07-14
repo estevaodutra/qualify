@@ -49,7 +49,24 @@ export function CreateLeadDialog({ open, onOpenChange, onSubmit, isLoading }: Cr
           </div>
           <div>
             <Label>Telefone *</Label>
-            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+5511999999999" />
+            <Input 
+              value={phone} 
+              onChange={(e) => {
+                let val = e.target.value.replace(/\D/g, "");
+                let formatted = "";
+                if (val.length > 0) {
+                  formatted = "+" + val.substring(0, 2);
+                  if (val.length > 2) {
+                    formatted += " (" + val.substring(2, 4);
+                    if (val.length > 4) {
+                      formatted += ") " + val.substring(4, 13);
+                    }
+                  }
+                }
+                setPhone(formatted);
+              }} 
+              placeholder="+55 (12) 987654321" 
+            />
           </div>
           <div>
             <Label>Email</Label>

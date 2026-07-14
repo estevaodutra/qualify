@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { MessageSquare, RefreshCw, Loader2, Info, ChevronLeft } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,12 +14,14 @@ import LeadContextPanel from "@/components/chat/LeadContextPanel";
 
 export default function Chat() {
   const { activeCompanyId } = useCompany();
+  const [searchParams] = useSearchParams();
+  const phoneParam = searchParams.get("phone");
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
 
   const [filters, setFilters] = useState<ChatFilters>({
     status: "all",
     operatorId: "all",
-    search: "",
+    search: phoneParam || "",
   });
 
   // Hook state logic
@@ -85,6 +88,19 @@ export default function Chat() {
   });
 
   const selectedConv = conversations.find((c) => c.id === selectedConvId);
+
+  // Auto-select conversation if phoneParam is present
+  useEffect(() => {
+    if (phoneParam && !selectedConvId && conversations.length > 0) {
+      const match = conversations.find(c => {
+        const p = c.lead?.phone || "";
+        return p.includes(phoneParam) || phoneParam.includes(p);
+      });
+      if (match) {
+        setSelectedConvId(match.id);
+      }
+    }
+  }, [phoneParam, selectedConvId, conversations]);
 
   // Send message coordinator
   const handleSendMessage = async (text: string, isInternal: boolean, mediaUrl?: string, mediaType?: string) => {
