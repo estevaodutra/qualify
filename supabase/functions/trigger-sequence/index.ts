@@ -171,24 +171,7 @@ Deno.serve(async (req) => {
 
     const typedCampaign = campaign as GroupCampaign;
 
-    // Pre-check: verify campaign has an instance configured before calling execute-message
-    const campaignConfig = typedCampaign.config as Record<string, unknown> | null;
-    const poolIds = (campaignConfig?.instance_ids as string[]) || [];
-    const triggerConfig = typedSequence.trigger_config as Record<string, unknown> || {};
-    const triggerInstanceId = triggerConfig.instanceId as string | undefined;
-    const hasInstance = !!typedCampaign.instance_id || poolIds.length > 0 || !!triggerInstanceId;
 
-    if (!hasInstance) {
-      console.error(`[TriggerSequence] Campaign ${typedCampaign.id} has no instance configured`);
-      return new Response(
-        JSON.stringify({
-          error: "Campanha sem instância configurada. Abra a aba Configuração da campanha, selecione ao menos uma instância e salve.",
-          campaignId: typedCampaign.id,
-          campaignName: typedCampaign.name,
-        }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
 
     // ── Deduplication guard (best-effort) ───────────────────────────────────
     // Prevent the same sequence from firing multiple times within 15 seconds.
