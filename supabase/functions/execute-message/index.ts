@@ -1750,8 +1750,7 @@ Deno.serve(async (req) => {
                 .update({
                   status: result.ok ? "sent" : "failed",
                   error_message: result.ok ? null : result.details ? JSON.stringify(result.details) : "Unknown error",
-                  response_data: result || {},
-                  updated_at: new Date().toISOString(),
+                  provider_response: result || {},
                 })
                 .eq("id", logEntry.id);
             }
@@ -1766,7 +1765,6 @@ Deno.serve(async (req) => {
                 .update({
                   status: "failed",
                   error_message: err.message || String(err),
-                  updated_at: new Date().toISOString(),
                 })
                 .eq("id", logEntry.id);
             }

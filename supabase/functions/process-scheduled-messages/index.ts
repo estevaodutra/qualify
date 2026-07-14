@@ -884,7 +884,7 @@ Deno.serve(async (req) => {
                   status: result.ok ? "sent" : "failed",
                   error_message: result.ok ? null : result.details ? JSON.stringify(result.details) : "Unknown error",
                   payload: payload,
-                  response_data: responseData,
+                  provider_response: responseData,
                 });
 
                 if (!result.ok) {
