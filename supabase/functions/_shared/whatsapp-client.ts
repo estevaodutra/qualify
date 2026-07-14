@@ -368,15 +368,16 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
 
     const zaapId = normalizedData.zaapId || normalizedData.id || null;
     const messageId = normalizedData.messageId || normalizedData.id || null;
+    const wahaMessageId = normalizedData?.key?.id || null;
     const isMessageAction = action.startsWith("message.");
-    const hasId = !!(zaapId || messageId);
+    const hasId = !!(zaapId || messageId || wahaMessageId);
     const isSuccess = isMessageAction ? hasId : true;
 
     return {
       ok: isSuccess,
       status: response.status,
       zaapId,
-      messageId,
+      messageId: messageId || wahaMessageId,
       details: normalizedData,
       requestUrl: url,
       requestBody: body,
