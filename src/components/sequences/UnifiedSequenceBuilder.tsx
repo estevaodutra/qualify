@@ -125,6 +125,21 @@ export function UnifiedSequenceBuilder({
   // Hover toolbar & delete confirmation
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [nodeIdPendingDelete, setNodeIdPendingDelete] = useState<string | null>(null);
+  const hoverTimeoutRef = useRef<number | null>(null);
+
+  const handleMouseEnterNode = (nodeId: string) => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    setHoveredNodeId(nodeId);
+  };
+
+  const handleMouseLeaveNode = (nodeId: string) => {
+    hoverTimeoutRef.current = window.setTimeout(() => {
+      setHoveredNodeId(prev => (prev === nodeId ? null : prev));
+    }, 200);
+  };
 
   // Editor vs Execuções (read-only run history) mode
   const [mode, setMode] = useState<"editor" | "executions">("editor");
@@ -838,12 +853,14 @@ export function UnifiedSequenceBuilder({
                         pointerEvents: "auto"
                       }}
                       onMouseDown={(e) => handleNodeMouseDown(e, node)}
-                      onMouseEnter={() => setHoveredNodeId(node.id)}
-                      onMouseLeave={() => setHoveredNodeId(prev => (prev === node.id ? null : prev))}
+                      onMouseEnter={() => handleMouseEnterNode(node.id)}
+                      onMouseLeave={() => handleMouseLeaveNode(node.id)}
                       onClick={(e) => {
                         if ((e.target as HTMLElement).closest("button") || (e.target as HTMLElement).closest("[data-node-port]")) return;
                         if (dragMovedRef.current) { dragMovedRef.current = false; return; }
                         setSelectedNodeId(node.id);
+                        setEditingNodeId(node.id);
+                        setNodeEditorOpen(true);
                       }}
                       onDoubleClick={(e) => {
                         if ((e.target as HTMLElement).closest("button") || (e.target as HTMLElement).closest("[data-node-port]")) return;
@@ -860,6 +877,12 @@ export function UnifiedSequenceBuilder({
                         <div
                           className="absolute -top-9 left-1/2 -translate-x-1/2 z-30 flex items-center gap-0.5 bg-white border border-slate-200 rounded-lg shadow-md p-0.5 animate-in fade-in duration-150"
                           onMouseDown={(e) => e.stopPropagation()}
+                          onMouseEnter={() => {
+                            if (hoverTimeoutRef.current) {
+                              clearTimeout(hoverTimeoutRef.current);
+                              hoverTimeoutRef.current = null;
+                            }
+                          }}
                         >
                           <Button
                             variant="ghost"
