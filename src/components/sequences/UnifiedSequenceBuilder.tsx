@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef, ReactNode, Fragment } from "react";
-import { LocalNode, LocalConnection, NodeCategory, RandomizerBranch } from "./shared-types";
+import { LocalNode, LocalConnection, NodeCategory, RandomizerBranch, TriggerItem } from "./shared-types";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -158,6 +159,7 @@ export function UnifiedSequenceBuilder({
 
   // Editor vs Execuções (read-only run history) mode
   const [mode, setMode] = useState<"editor" | "executions">("editor");
+  const [editingTriggerId, setEditingTriggerId] = useState<string | undefined>(undefined);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -202,8 +204,29 @@ export function UnifiedSequenceBuilder({
 
     const positionedNodes = preparedNodes.map((node, index) => {
       const hasPos = node.positionX !== undefined && node.positionY !== undefined && (node.positionX !== 0 || node.positionY !== 0);
+      
+      let migratedNode = { ...node };
+      // Migrate trigger nodes from singular triggerType to triggers array
+      if (node.nodeType === "trigger") {
+        if (!node.config.triggers) {
+           const triggers = [];
+           if (node.config.triggerType) {
+              triggers.push({
+                 id: crypto.randomUUID(),
+                 type: node.config.triggerType,
+                 dataSource: node.config.triggerType === "webhook" ? "Webhook-1" : "Source-1",
+                 config: node.config.triggerConfig || {}
+              });
+           }
+           migratedNode = {
+             ...node,
+             config: { ...node.config, triggers }
+           };
+        }
+      }
+
       return {
-        ...node,
+        ...migratedNode,
         positionX: hasPos ? node.positionX : (node.nodeType === "trigger" ? 50 : 320 + (index - 1) * 260),
         positionY: hasPos ? node.positionY : (node.nodeType === "trigger" ? 150 : 150),
       };
@@ -722,12 +745,25 @@ export function UnifiedSequenceBuilder({
             engine="group_sequence"
             open={triggerSelectorOpen}
             onOpenChange={setTriggerSelectorOpen}
-            value={localNodes.find(n => n.nodeType === "trigger")?.config.triggerType as string || ""}
+            value={""} // Pass empty so no trigger is pre-selected
             onChange={(type) => {
               const triggerNode = localNodes.find(n => n.nodeType === "trigger");
               if (triggerNode) {
+                const currentTriggers = (triggerNode.config.triggers as TriggerItem[]) || [];
+                const newTrigger: TriggerItem = {
+                  id: crypto.randomUUID(),
+                  type,
+                  dataSource: type === "webhook" ? `Webhook-${currentTriggers.filter(t => t.type === "webhook").length + 1}` : `Fonte-${currentTriggers.length + 1}`,
+                  config: {}
+                };
                 updateNodesAndSave(prev => prev.map(n => 
-                  n.id === triggerNode.id ? { ...n, config: { ...n.config, triggerType: type } } : n
+                  n.id === triggerNode.id ? { 
+                    ...n, 
+                    config: { 
+                      ...n.config, 
+                      triggers: [...currentTriggers, newTrigger]
+                    } 
+                  } : n
                 ));
               }
             }}
@@ -1037,15 +1073,57 @@ export function UnifiedSequenceBuilder({
                             O gatilho é responsável por acionar a automação. Clique para adicionar um gatilho:
                           </p>
                           
-                          {node.config.triggerType && (
-                            <div className="flex items-center gap-3 p-3 border border-slate-200 rounded-xl bg-white shadow-sm mb-3">
-                              <ArrowRight className="h-4 w-4 text-slate-600 shrink-0" />
-                              <div className="min-w-0">
-                                <p className="text-xs font-bold text-slate-800 truncate">{getTriggerDefinition(node.config.triggerType as string)?.label || node.config.triggerType as string}</p>
-                                <p className="text-[10px] text-slate-500 truncate">{getTriggerDefinition(node.config.triggerType as string)?.description}</p>
+                          {(node.config.triggers as TriggerItem[] || []).map((trigger, idx) => {
+                            const def = getTriggerDefinition(trigger.type);
+                            return (
+                              <div 
+                                key={trigger.id} 
+                                className="group relative flex flex-col gap-2 p-3 border border-slate-200 rounded-xl bg-white shadow-sm mb-3 cursor-pointer hover:border-[#8A3CFF]/50 transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingTriggerId(trigger.id);
+                                  setEditingNodeId(node.id);
+                                  setNodeEditorOpen(true);
+                                }}
+                              >
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                                    <ArrowRight className="h-4 w-4 text-slate-600 shrink-0" />
+                                    <div className="min-w-0">
+                                      <p className="text-xs font-bold text-slate-800 truncate">{def?.label || trigger.type}</p>
+                                      <p className="text-[10px] text-slate-500 truncate">{def?.description}</p>
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      updateNodesAndSave(prev => prev.map(n => 
+                                        n.id === node.id ? { 
+                                          ...n, 
+                                          config: { 
+                                            ...n.config, 
+                                            triggers: (n.config.triggers as TriggerItem[]).filter(t => t.id !== trigger.id) 
+                                          } 
+                                        } : n
+                                      ));
+                                    }}
+                                    className="p-1.5 text-slate-400 hover:text-destructive hover:bg-destructive/10 rounded-md opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                    title="Remover gatilho"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                                {trigger.dataSource && (
+                                  <div className="self-end mt-1">
+                                    <Badge className="bg-blue-500 hover:bg-blue-600 text-[9px] px-2 py-0 rounded-md font-bold text-white">
+                                      {trigger.dataSource}
+                                    </Badge>
+                                  </div>
+                                )}
                               </div>
-                            </div>
-                          )}
+                            );
+                          })}
 
                           <button 
                              type="button"
@@ -1229,8 +1307,10 @@ export function UnifiedSequenceBuilder({
           onClose={() => {
             setNodeEditorOpen(false);
             setEditingNodeId(null);
+            setEditingTriggerId(undefined);
           }}
           nodeId={editingNodeId}
+          activeTriggerId={editingTriggerId}
           nodes={localNodes}
           connections={localConnections}
           onUpdateNodeConfig={(id, config) => {

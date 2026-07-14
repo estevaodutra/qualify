@@ -39,6 +39,13 @@ export interface TriggerTypeInfo {
   color?: string;
 }
 
+export interface TriggerItem {
+  id: string;
+  type: string;
+  dataSource: string;
+  config?: Record<string, unknown>;
+}
+
 export interface UnifiedSequenceItem {
   id: string;
   name: string;

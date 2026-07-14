@@ -42,6 +42,7 @@ interface NodeEditorModalProps {
   sequenceId: string;
   campaignId?: string;
   onManualSendNode?: (node: LocalNode) => Promise<void>;
+  activeTriggerId?: string;
 }
 
 export function NodeEditorModal({
@@ -55,12 +56,15 @@ export function NodeEditorModal({
   isSavingWorkflow,
   isUnsavedWorkflow,
   mode,
-  isGroup,
+  isGroup = false,
   sequenceId,
   campaignId,
   onManualSendNode,
+  activeTriggerId,
 }: NodeEditorModalProps) {
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(nodeId);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [localConfig, setLocalConfig] = useState<Record<string, unknown>>({});
   const [simulatedData, setSimulatedData] = useState<Record<string, { input: any; output: any; status: "success" | "error" | "not_run"; error?: string }>>({});
   const [mockData, setMockData] = useState<any>({
     method: "POST",
@@ -84,8 +88,13 @@ export function NodeEditorModal({
   const [activeMainTab, setActiveMainTab] = useState<"config" | "input" | "output">("config");
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 
+  const node = nodes.find((n) => n.id === currentNodeId);
+  const activeTrigger = node?.nodeType === "trigger" && node.config.triggers 
+    ? ((node.config.triggers as any[]).find(t => t.id === activeTriggerId) || (node.config.triggers as any[])[0])
+    : null;
+
   const handleRequestClose = () => {
-    if (isUnsavedWorkflow) {
+    if (isUnsavedWorkflow || hasUnsavedChanges) {
       setShowExitConfirm(true);
     } else {
       onClose();
@@ -103,6 +112,23 @@ export function NodeEditorModal({
     onClose();
   };
 
+  const handleSave = () => {
+    if (!currentNodeId) return;
+
+    if (node?.nodeType === "trigger" && activeTrigger) {
+      const currentTriggers = (node.config.triggers as any[]) || [];
+      const updatedTriggers = currentTriggers.map(t => 
+        t.id === activeTrigger.id ? { ...t, config: localConfig } : t
+      );
+      onUpdateNodeConfig(currentNodeId, { ...node.config, triggers: updatedTriggers });
+    } else {
+      onUpdateNodeConfig(currentNodeId, localConfig);
+    }
+    
+    setHasUnsavedChanges(false);
+    onClose();
+  };
+
   const handleSaveAndClose = async () => {
     await onSaveWorkflow();
     setShowExitConfirm(false);
@@ -116,7 +142,7 @@ export function NodeEditorModal({
   const [isSendingManual, setIsSendingManual] = useState(false);
 
   const handleManualSend = async () => {
-    if (!onManualSendNode) return;
+    if (!onManualSendNode || !node) return;
     setIsSendingManual(true);
     try {
       await onManualSendNode(node);
@@ -127,7 +153,6 @@ export function NodeEditorModal({
     }
   };
 
-  // Reset tab when active node changes
   useEffect(() => {
     setActiveMainTab("config");
   }, [currentNodeId]);
@@ -136,10 +161,18 @@ export function NodeEditorModal({
     if (nodeId) setCurrentNodeId(nodeId);
   }, [nodeId]);
 
-  if (!isOpen || !currentNodeId) return null;
+  useEffect(() => {
+    if (isOpen && node) {
+      if (node.nodeType === "trigger" && activeTrigger) {
+        setLocalConfig(activeTrigger.config || {});
+      } else {
+        setLocalConfig(node.config || {});
+      }
+      setHasUnsavedChanges(false);
+    }
+  }, [isOpen, node, activeTrigger]);
 
-  const node = nodes.find((n) => n.id === currentNodeId);
-  if (!node) return null;
+  if (!isOpen || !currentNodeId || !node) return null;
 
   const prevConnections = connections.filter((c) => c.to === currentNodeId);
   const prevNodes = nodes.filter((n) => prevConnections.some((c) => c.from === n.id));
@@ -394,7 +427,8 @@ export function NodeEditorModal({
   };
 
   const handleUpdateConfig = (updates: Record<string, unknown>) => {
-    onUpdateNodeConfig(currentNodeId, updates);
+    setLocalConfig(updates);
+    setHasUnsavedChanges(true);
   };
 
   const handleNavigate = (targetId: string) => {
@@ -430,9 +464,9 @@ export function NodeEditorModal({
             onRunStep={handleRunStep}
             onRunPrevious={handleRunPrevious}
             onClose={handleRequestClose}
-            onSave={onSaveWorkflow}
+            onSave={handleSave}
             isSaving={isSavingWorkflow}
-            isUnsaved={isUnsavedWorkflow}
+            isUnsaved={hasUnsavedChanges}
             isSimulating={isSimulating}
           />
 
@@ -443,28 +477,16 @@ export function NodeEditorModal({
                   <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
                     ⚡ Gatilho de Entrada
                   </h2>
-                  <p className="text-xs text-muted-foreground font-medium">
-                    Configure como os contatos ou eventos acionam este fluxo de automação.
-                  </p>
                 </div>
 
                 <div className="space-y-6 pb-4">
                   {(() => {
-                    const triggerType = (node.config?.triggerType as any) || "webhook";
-                    const triggerConfig = (node.config?.triggerConfig as any) || {};
-
-                    const handleTriggerTypeChange = (newType: string) => {
-                      handleUpdateConfig({
-                        ...node.config,
-                        triggerType: newType,
-                      });
-                    };
+                    const triggerType = activeTrigger?.type || localConfig.triggerType || "webhook";
+                    const triggerConfig = localConfig;
 
                     const handleTriggerConfigChange = (newConfig: any) => {
-                      handleUpdateConfig({
-                        ...node.config,
-                        triggerConfig: newConfig,
-                      });
+                      setLocalConfig(newConfig);
+                      setHasUnsavedChanges(true);
                     };
 
                     const selectorValue = triggerType === "scheduled_recurring" || triggerType === "scheduled_once" ? "scheduled" : triggerType;
@@ -474,28 +496,6 @@ export function NodeEditorModal({
 
                     return (
                       <div className="space-y-6 pb-4">
-                        {/* Selector Section */}
-                        <div className="space-y-3">
-                          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tipo de Gatilho Selecionado</label>
-                          <div className="flex items-center justify-between p-4 border rounded-xl bg-slate-50">
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 bg-primary/10 rounded-lg">
-                                <Database className="h-5 w-5 text-primary" />
-                              </div>
-                              <div>
-                                <p className="text-sm font-bold text-slate-800">
-                                  {triggerType === "manual" ? "Execução manual" : triggerType}
-                                </p>
-                                <p className="text-xs text-muted-foreground">Clique em alterar para escolher outro gatilho</p>
-                              </div>
-                            </div>
-                            <Button type="button" variant="outline" size="sm" onClick={() => document.dispatchEvent(new CustomEvent('open-trigger-selector'))}>
-                              Alterar Gatilho
-                            </Button>
-                          </div>
-                        </div>
-
-                        {/* Enable for Group Toggle */}
                         <div className="flex items-center justify-between p-4 rounded-xl bg-slate-50/50 border border-slate-200/80">
                           <div className="space-y-0.5">
                             <label className="text-xs font-bold text-slate-700" htmlFor="group-mode-toggle">Habilitar para Grupo</label>
@@ -505,12 +505,11 @@ export function NodeEditorModal({
                           </div>
                           <Switch
                             id="group-mode-toggle"
-                            checked={triggerConfig.isGroup ?? true}
+                            checked={(triggerConfig.isGroup as boolean) ?? true}
                             onCheckedChange={(checked) => handleTriggerConfigChange({ ...triggerConfig, isGroup: checked })}
                           />
                         </div>
 
-                        {/* Specific Trigger Sub-Panels */}
                         {selectorValue === "webhook" && (
                           <WebhookFieldMappings
                             triggerConfig={triggerConfig}
@@ -527,58 +526,15 @@ export function NodeEditorModal({
                                 <label className="text-[11px] font-semibold text-slate-600">Palavra-chave</label>
                                 <Input
                                   placeholder="Ex: #queroafiliar"
-                                  value={triggerConfig.keyword || ""}
+                                  value={(triggerConfig.keyword as string) || ""}
                                   onChange={(e) => handleTriggerConfigChange({ ...triggerConfig, keyword: e.target.value })}
                                   className="rounded-xl h-9 bg-white"
                                 />
-                              </div>
-                              <div className="space-y-1.5">
-                                <label className="text-[11px] font-semibold text-slate-600">Tipo de Correspondência</label>
-                                <select
-                                  value={triggerConfig.matchType || "exact"}
-                                  onChange={(e) => handleTriggerConfigChange({ ...triggerConfig, matchType: e.target.value })}
-                                  className="w-full rounded-xl border border-slate-200 bg-white h-9 px-3 text-xs outline-none focus:ring-1 focus:ring-[#8A3CFF]"
-                                >
-                                  <option value="exact">Correspondência Exata</option>
-                                  <option value="contains">Contém a palavra</option>
-                                  <option value="starts_with">Começa com a palavra</option>
-                                </select>
                               </div>
                             </div>
                           </div>
                         )}
 
-                        {selectorValue === "scheduled" && (
-                          <div className="p-6 rounded-xl border border-slate-200/80 bg-slate-50/50 text-center space-y-2">
-                            <Clock className="h-8 w-8 text-[#8A3CFF] mx-auto stroke-[1.5]" />
-                            <p className="text-xs font-bold text-slate-700">Disparo Agendado</p>
-                            <p className="text-[11px] text-muted-foreground max-w-[340px] mx-auto leading-normal">
-                              Cada mensagem define seus próprios dias e horários de execução nas opções de agendamento do bloco correspondente.
-                            </p>
-                          </div>
-                        )}
-
-                        {selectorValue === "manual" && (
-                          <div className="p-6 rounded-xl border border-slate-200/80 bg-slate-50/50 text-center space-y-2">
-                            <Play className="h-8 w-8 text-[#8A3CFF] mx-auto stroke-[1.5]" />
-                            <p className="text-xs font-bold text-slate-700">Disparo Manual</p>
-                            <p className="text-[11px] text-muted-foreground max-w-[340px] mx-auto leading-normal">
-                              Esta sequência só será executada quando você clicar no botão "Enviar" manualmente no painel da campanha.
-                            </p>
-                          </div>
-                        )}
-
-                        {(selectorValue === "member_join" || selectorValue === "member_leave") && (
-                          <div className="p-6 rounded-xl border border-slate-200/80 bg-slate-50/50 text-center space-y-2">
-                            <UserPlus className="h-8 w-8 text-[#8A3CFF] mx-auto stroke-[1.5]" />
-                            <p className="text-xs font-bold text-slate-700">Membro Entrou / Saiu do Grupo</p>
-                            <p className="text-[11px] text-muted-foreground max-w-[340px] mx-auto leading-normal">
-                              Gatilho acionado automaticamente por eventos de entrada ou saída de participantes nos grupos do WhatsApp.
-                            </p>
-                          </div>
-                        )}
-
-                        {/* Group scope config */}
                         {(triggerConfig.isGroup ?? true) && campaignId && (
                           <WebhookGroupScopeConfig
                             campaignId={campaignId}
