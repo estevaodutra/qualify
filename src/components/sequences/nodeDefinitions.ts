@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   MessageSquare, Clock, GitBranch, Shuffle, Tag, Award, Send, Link2, Sliders, Sparkles,
   Image, Video, Music, FileText, Smile, BarChart3, MousePointerClick, List, MapPin, Contact, Calendar,
-  Plus, Pencil, UserPlus, UserMinus, ShieldAlert, ShieldCheck, Settings,
+  Plus, Pencil, UserPlus, UserMinus, ShieldAlert, ShieldCheck, Settings, Radio
 } from "lucide-react";
 import type { NodeCategory, NodeTypeInfo } from "./shared-types";
 
@@ -60,6 +60,7 @@ export const NODE_DEFINITIONS: NodeBlockDefinition[] = [
       { subType: "channel_select", label: "Selecionar Canal", icon: Send, color: "bg-indigo-600" },
     ],
   },
+  { blockType: "status", label: "Status", icon: Radio, color: "bg-pink-600" },
   { blockType: "api_call", label: "API", icon: Link2, color: "bg-sky-600", status: "coming_soon" },
   { blockType: "field_op", label: "Mapeamento de Campos", icon: Sliders, color: "bg-teal-600" },
   { blockType: "ai_agent", label: "AI Assistant", icon: Sparkles, color: "bg-violet-600", status: "coming_soon" },
@@ -161,6 +162,20 @@ export function getDefaultConfigForBlock(blockType: string): Record<string, unkn
       ],
     };
     case "field_op": return { field: "", operation: "set", value: "" };
+    case "status": return {
+      statusType: "text",
+      content: "",
+      url: "",
+      caption: "",
+      instanceId: "",
+      scheduleType: "now",
+      scheduling: {
+        type: "single",
+        recount: "daily",
+        days: [],
+        times: ["12:00"]
+      }
+    };
     case "api_call": case "ai_agent": return {};
     default: return {};
   }
@@ -176,12 +191,17 @@ export function toNodeCategories(isGroup?: boolean): NodeCategory[] {
     .filter((b) => ["content", "delay", "condition", "randomizer", "action"].includes(b.blockType))
     .map((b) => ({ type: b.blockType, label: b.label, icon: b.icon, color: b.color, status: b.status }));
 
+  const channels: NodeTypeInfo[] = NODE_DEFINITIONS
+    .filter((b) => ["status"].includes(b.blockType))
+    .map((b) => ({ type: b.blockType, label: b.label, icon: b.icon, color: b.color, status: b.status }));
+
   const advanced: NodeTypeInfo[] = NODE_DEFINITIONS
     .filter((b) => ["api_call", "field_op", "ai_agent"].includes(b.blockType))
     .map((b) => ({ type: b.blockType, label: b.label, icon: b.icon, color: b.color, status: b.status }));
 
   const categories: NodeCategory[] = [
     { id: "core", label: "Blocos principais", nodes: core },
+    { id: "channels", label: "Canais", nodes: channels },
     { id: "advanced", label: "Avançado", nodes: advanced },
   ];
 

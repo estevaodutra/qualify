@@ -218,6 +218,7 @@ const getActionForNodeType = (nodeType: string): string => {
     poll: "message.send_poll",
     reaction: "message.send_reaction",
     media: "message.send_media",
+    status: "status.post",
     status_image: "status.send_image",
     status_video: "status.send_video",
   };
@@ -815,6 +816,103 @@ Deno.serve(async (req) => {
               
               nodesProcessed++;
               continue; // Don't send delay to webhook
+            }
+
+            // If it's a STATUS node, publish once and continue
+            if (node.node_type === "status") {
+              const action = getActionForNodeType(node.node_type);
+              const formattedConfig = formatNodeConfig(node.config, node.node_type);
+
+              // Check if node overrides the WhatsApp instance
+              let activeInstanceId = instance.id;
+              let activeInstance = instance;
+              if (node.config && node.config.instanceId && node.config.instanceId !== instance.id) {
+                const overrideId = node.config.instanceId as string;
+                const { data: overrideInst } = await supabase
+                  .from("instances")
+                  .select("id, name, phone, provider, external_instance_id, external_instance_token, status")
+                  .eq("id", overrideId)
+                  .maybeSingle();
+                if (overrideInst && overrideInst.status === "connected") {
+                  activeInstance = overrideInst as any;
+                  activeInstanceId = overrideInst.id;
+                }
+              }
+
+              const payload = buildStandardPayload({
+                action,
+                node: {
+                  id: node.id,
+                  type: node.node_type,
+                  order: node.node_order,
+                  config: formattedConfig,
+                },
+                campaign: {
+                  id: campaign.id,
+                  name: campaign.name,
+                },
+                instance: {
+                  id: activeInstanceId,
+                  name: activeInstance.name,
+                  phone: activeInstance.phone || "",
+                  provider: activeInstance.provider,
+                  externalId: activeInstance.external_instance_id || "",
+                  externalToken: activeInstance.external_instance_token || "",
+                },
+                destination: {
+                  jid: `${activeInstance.phone || "status"}@s.whatsapp.net`,
+                  name: "Status",
+                },
+              });
+
+              try {
+                const result = await sendWhatsAppMessage(payload as any);
+                const responseData = result.details || result;
+
+                await supabase.from("group_message_logs").insert({
+                  user_id: message.user_id,
+                  group_campaign_id: message.group_campaign_id,
+                  message_id: message.id,
+                  sequence_id: message.sequence_id,
+                  node_type: node.node_type,
+                  node_order: node.node_order,
+                  group_jid: `${activeInstance.phone || "status"}@s.whatsapp.net`,
+                  group_name: "Status",
+                  instance_id: activeInstanceId,
+                  instance_name: activeInstance.name,
+                  campaign_name: campaign.name,
+                  status: result.ok ? "sent" : "failed",
+                  error_message: result.ok ? null : result.details ? JSON.stringify(result.details) : "Unknown error",
+                  payload: payload,
+                  response_data: responseData,
+                });
+
+                if (!result.ok) {
+                  nodesFailed++;
+                }
+              } catch (err: any) {
+                console.error(`[Scheduler] Status post failed:`, err);
+                nodesFailed++;
+                await supabase.from("group_message_logs").insert({
+                  user_id: message.user_id,
+                  group_campaign_id: message.group_campaign_id,
+                  message_id: message.id,
+                  sequence_id: message.sequence_id,
+                  node_type: node.node_type,
+                  node_order: node.node_order,
+                  group_jid: `${activeInstance.phone || "status"}@s.whatsapp.net`,
+                  group_name: "Status",
+                  instance_id: activeInstanceId,
+                  instance_name: activeInstance.name,
+                  campaign_name: campaign.name,
+                  status: "failed",
+                  error_message: err.message || String(err),
+                  payload: payload,
+                });
+              }
+
+              nodesProcessed++;
+              continue;
             }
 
             // For each group - send this node to all active groups (Node-First strategy)

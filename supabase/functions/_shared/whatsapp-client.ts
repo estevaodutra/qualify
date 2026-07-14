@@ -272,7 +272,28 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
         phones: config.phones || [config.phone],
         action: "DEMOTE",
       };
+    case "status.post": {
+      const statusType = (config.statusType as string) || "text";
+      if (statusType === "text") {
+        endpoint = "/send-status-text";
+        body = {
+          message: config.content || config.text || ""
+        };
+      } else if (statusType === "image") {
+        endpoint = "/send-status-image";
+        body = {
+          image: config.url,
+          caption: config.caption || ""
+        };
+      } else if (statusType === "video") {
+        endpoint = "/send-status-video";
+        body = {
+          video: config.url,
+          caption: config.caption || ""
+        };
+      }
       break;
+    }
 
     default:
       console.warn(`[whatsapp-client] Unknown action mapping: ${action}. Trying to fallback to send-text.`);

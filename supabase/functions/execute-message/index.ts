@@ -326,6 +326,7 @@ const getActionForNodeType = (nodeType: string): string => {
     poll: "message.send_poll",
     reaction: "message.send_reaction",
     media: "message.send_media",
+    status: "status.post",
     status_image: "status.send_image",
     status_video: "status.send_video",
     group_create: "group.create",
@@ -1672,6 +1673,117 @@ Deno.serve(async (req) => {
             input: { url: targetUrl, method, payload: forwardPayload },
             error: webhookNodeError,
           });
+          const nextConn = connections.find(c => c.source_node_id === node.id);
+          currentNodeId = nextConn ? nextConn.target_node_id : null;
+          nodesProcessed++;
+          continue;
+        }
+
+        // ============= STATUS NODES =============
+        if (node.node_type === "status") {
+          const config = node.config || {};
+          const statusType = (config.statusType as string) || "text";
+          
+          // Clone and format config, applying variable replacement
+          const formattedConfig = formatNodeConfig(node.config, node.node_type);
+          const textFields = ["text", "content", "message", "caption", "url"];
+          textFields.forEach((field) => {
+            if (typeof formattedConfig[field] === "string") {
+              formattedConfig[field] = replaceVariables(formattedConfig[field] as string);
+            }
+          });
+
+          // Build standardized payload for WAHA status posting
+          const payload = {
+            action: "status.post",
+            node: {
+              id: node.id,
+              type: node.node_type,
+              order: node.node_order,
+              config: formattedConfig,
+            },
+            campaign: {
+              id: typedCampaign.id,
+              name: typedCampaign.name,
+            },
+            instance: {
+              id: activeInstanceId,
+              name: instance.name,
+              phone: instance.phone || "",
+              provider: instance.provider,
+              externalId: instance.external_instance_id || "",
+              externalToken: instance.external_instance_token || "",
+            },
+            destination: {
+              jid: `${instance.phone || "status"}@s.whatsapp.net`,
+              name: "Status",
+            },
+          };
+
+          // Create log entry in group_message_logs for execution history
+          const { data: logEntry } = await supabase
+            .from("group_message_logs")
+            .insert({
+              user_id: userId,
+              group_campaign_id: typedCampaign.id,
+              message_id: typedMessage?.id || null,
+              sequence_id: effectiveSequenceId,
+              node_type: node.node_type,
+              node_order: node.node_order,
+              group_jid: `${instance.phone || "status"}@s.whatsapp.net`,
+              group_name: "Status",
+              instance_id: activeInstanceId,
+              instance_name: instance.name,
+              campaign_name: typedCampaign.name,
+              status: "sending",
+              payload,
+            })
+            .select().single();
+
+          try {
+            // Publish status via WAHA/Zapi dispatcher
+            const result = await sendWhatsAppMessage(payload);
+            
+            if (logEntry) {
+              await supabase
+                .from("group_message_logs")
+                .update({
+                  status: result.ok ? "sent" : "failed",
+                  error_message: result.ok ? null : result.details ? JSON.stringify(result.details) : "Unknown error",
+                  response_data: result || {},
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", logEntry.id);
+            }
+            if (!result.ok) {
+              nodesFailed++;
+            }
+          } catch (err: any) {
+            console.error(`[ExecuteMessage] Failed to post status:`, err);
+            if (logEntry) {
+              await supabase
+                .from("group_message_logs")
+                .update({
+                  status: "failed",
+                  error_message: err.message || String(err),
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", logEntry.id);
+            }
+            nodesFailed++;
+          }
+
+          await logNodeExecution(supabase, {
+            executionId: workflowExecutionId,
+            userId,
+            nodeId: node.id,
+            nodeType: node.node_type,
+            status: nodesFailed === 0 ? "success" : "failed",
+            startedAt: nodeStartedAt,
+            input: formattedConfig,
+            output: { status: "queued", type: statusType, instance_id: activeInstanceId },
+          });
+
           const nextConn = connections.find(c => c.source_node_id === node.id);
           currentNodeId = nextConn ? nextConn.target_node_id : null;
           nodesProcessed++;

@@ -2574,6 +2574,205 @@ export function UnifiedNodeConfigPanel({
             </>
           )}
 
+          {/* STATUS */}
+          {node.nodeType === "status" && (
+            <>
+              {/* Select Status Type */}
+              <div className="space-y-2">
+                <Label>Tipo de Status</Label>
+                <Select 
+                  value={(node.config.statusType as string) || "text"} 
+                  onValueChange={v => {
+                    updateConfig("statusType", v);
+                    if (v === "text") {
+                      updateConfig("url", "");
+                    }
+                  }}
+                >
+                  <SelectTrigger className="rounded-xl border-border/40">
+                    <SelectValue placeholder="Selecione o tipo..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="text">Texto</SelectItem>
+                    <SelectItem value="image">Imagem</SelectItem>
+                    <SelectItem value="video">Vídeo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Select Connection/Instance */}
+              <div className="space-y-2">
+                <Label>Conexão / Instância</Label>
+                <Select value={(node.config.instanceId as string) || ""} onValueChange={v => updateConfig("instanceId", v)}>
+                  <SelectTrigger className="rounded-xl border-border/40">
+                    <SelectValue placeholder="Selecione a instância..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activeInstances.map(i => (
+                      <SelectItem key={i.id} value={i.id}>
+                        {i.name} ({i.phone || "Sem número"})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Status Content Fields */}
+              {((node.config.statusType as string) || "text") === "text" ? (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Texto do Status</Label>
+                    <VariablePicker
+                      isGroup={isGroup}
+                      onSelect={(val) => {
+                        const current = (node.config.content as string) || "";
+                        updateConfig("content", current + val);
+                      }}
+                    />
+                  </div>
+                  <Textarea
+                    placeholder="Escreva a mensagem do status..."
+                    value={(node.config.content as string) || ""}
+                    onChange={e => updateConfig("content", e.target.value)}
+                    rows={4}
+                  />
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label>Mídia do Status</Label>
+                    {renderMediaField((node.config.statusType as "image" | "video") || "image", "https://exemplo.com/media")}
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Legenda (opcional)</Label>
+                      <VariablePicker
+                        isGroup={isGroup}
+                        onSelect={(val) => {
+                          const current = (node.config.caption as string) || "";
+                          updateConfig("caption", current + val);
+                        }}
+                      />
+                    </div>
+                    <Textarea
+                      placeholder="Texto da legenda..."
+                      value={(node.config.caption as string) || ""}
+                      onChange={e => updateConfig("caption", e.target.value)}
+                      rows={2}
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Scheduling Options */}
+              <div className="space-y-2 pt-3 border-t">
+                <Label>Envio / Agendamento</Label>
+                <Select 
+                  value={(node.config.scheduleType as string) || "now"} 
+                  onValueChange={v => updateConfig("scheduleType", v)}
+                >
+                  <SelectTrigger className="rounded-xl border-border/40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="now">Disparar agora</SelectItem>
+                    <SelectItem value="schedule">Agendar envio</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {((node.config.scheduleType as string) || "now") === "schedule" && (
+                <div className="space-y-3 p-3 rounded-xl bg-slate-50 border border-slate-100 animate-in fade-in slide-in-from-top-1 duration-150">
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] uppercase font-bold text-slate-400">Tipo de agendamento</Label>
+                    <Select 
+                      value={((node.config.scheduling as any)?.type as string) || "single"} 
+                      onValueChange={v => {
+                        const sched = (node.config.scheduling as any) || {};
+                        updateConfig("scheduling", { ...sched, type: v });
+                      }}
+                    >
+                      <SelectTrigger className="h-8 rounded-lg text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="single">Único</SelectItem>
+                        <SelectItem value="recurrent">Recorrente</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {((node.config.scheduling as any)?.type as string) === "recurrent" && (
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] uppercase font-bold text-slate-400">Recorrência</Label>
+                      <Select 
+                        value={((node.config.scheduling as any)?.recount as string) || "daily"} 
+                        onValueChange={v => {
+                          const sched = (node.config.scheduling as any) || {};
+                          updateConfig("scheduling", { ...sched, recount: v });
+                        }}
+                      >
+                        <SelectTrigger className="h-8 rounded-lg text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="daily">Diário</SelectItem>
+                          <SelectItem value="weekly">Semanal</SelectItem>
+                          <SelectItem value="monthly">Dia do mês</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] uppercase font-bold text-slate-400">Horários</Label>
+                    <div className="space-y-1">
+                      {(((node.config.scheduling as any)?.times as string[]) || ["12:00"]).map((time, idx) => (
+                        <div key={idx} className="flex items-center gap-1">
+                          <Input 
+                            type="time" 
+                            value={time} 
+                            onChange={e => {
+                              const sched = (node.config.scheduling as any) || {};
+                              const times = [...(sched.times || ["12:00"])];
+                              times[idx] = e.target.value;
+                              updateConfig("scheduling", { ...sched, times });
+                            }}
+                            className="h-8 rounded-lg text-xs"
+                          />
+                          {idx > 0 && (
+                            <Button 
+                              type="button" 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => {
+                                const sched = (node.config.scheduling as any) || {};
+                                const times = (sched.times || ["12:00"]).filter((_: any, i: any) => i !== idx);
+                                updateConfig("scheduling", { ...sched, times });
+                              }}
+                              className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                      <Button 
+                        type="button" 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => {
+                          const sched = (node.config.scheduling as any) || {};
+                          const times = [...(sched.times || ["12:00"]), "12:00"];
+                          updateConfig("scheduling", { ...sched, times });
+                        }}
+                        className="text-[10px] h-6 px-2 hover:bg-slate-100 text-[#8A3CFF] font-semibold"
+                      >
+                        + Adicionar horário
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
           {/* WEBHOOK FORWARD */}
           {node.nodeType === "webhook_forward" && (
             <>

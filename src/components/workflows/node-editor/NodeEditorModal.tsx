@@ -125,6 +125,16 @@ export function NodeEditorModal({
         variables: {},
       };
     }
+    if (type === "status") {
+      const statusType = (config.statusType as string) || "text";
+      return {
+        status: "queued",
+        type: statusType,
+        instance_id: config.instanceId || "fallback-instance",
+        media_url: config.url || null,
+        caption: config.caption || null,
+      };
+    }
 
     const outputContext = JSON.parse(JSON.stringify(inputContext || {
       webhook: {},

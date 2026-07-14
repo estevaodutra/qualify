@@ -1001,6 +1001,18 @@ export function UnifiedSequenceBuilder({
                           node.config.mode === "round_robin"
                             ? randomizerBranches.map(b => b.label).join(" → ")
                             : randomizerBranches.map(b => `${b.label} — ${b.weight}%`).join(" · ")
+                        ) : node.nodeType === "status" ? (
+                          (() => {
+                            const statusType = (node.config.statusType as string) || "text";
+                            const isScheduled = node.config.scheduleType === "schedule";
+                            const scheduleLabel = isScheduled ? " (Agendado)" : "";
+                            if (statusType === "text") {
+                              return `[Texto] ${node.config.content || "Sem texto"}${scheduleLabel}`;
+                            } else {
+                              const label = statusType === "image" ? "Imagem" : "Vídeo";
+                              return `[${label}] ${node.config.caption || node.config.url || "Sem mídia"}${scheduleLabel}`;
+                            }
+                          })()
                         ) : (
                           node.config.content ? (node.config.content as string) :
                           node.config.question ? (node.config.question as string) :
