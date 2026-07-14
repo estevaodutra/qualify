@@ -1040,29 +1040,7 @@ export function UnifiedSequenceBuilder({
                           <span className="absolute right-2 top-[54px] text-[8px] font-bold text-destructive select-none">Não</span>
                         </>
                       ) : isFieldOp ? (
-                        <>
-                          {/* "Caso ocorrer erro" output handle */}
-                          <div
-                            data-node-port="true"
-                            onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", "error")}
-                            className="absolute -right-1.5 top-[110px] h-3.5 w-3.5 rounded-full border-2 border-destructive bg-background hover:bg-destructive cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
-                            title="Caso ocorrer erro"
-                          >
-                            <div className="h-1.5 w-1.5 rounded-full bg-destructive" />
-                          </div>
-                          <span className="absolute right-2 top-[106px] text-[8px] font-bold text-slate-500 select-none text-right">Caso ocorrer erro na operação de campo</span>
-
-                          {/* "Próximo passo" output handle */}
-                          <div
-                            data-node-port="true"
-                            onMouseDown={(e) => handlePortMouseDown(e, node.id, "out")}
-                            className="absolute -right-1.5 top-[130px] h-3.5 w-3.5 rounded-full border-2 border-blue-500 bg-background hover:bg-blue-500 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
-                            title="Próximo passo"
-                          >
-                            <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-                          </div>
-                          <span className="absolute right-2 top-[126px] text-[8px] font-bold text-slate-500 select-none text-right">Próximo passo</span>
-                        </>
+                        <>{/* Handles moved to inline flow inside the node body to prevent overlapping */}</>
                       ) : (
                         randomizerBranches.map((branch, i) => {
                           const portY = RANDOMIZER_PORT_BASE_Y + i * RANDOMIZER_PORT_SPACING;
@@ -1264,6 +1242,31 @@ export function UnifiedSequenceBuilder({
                           >
                             <Plus className="h-3 w-3" /> Adicionar outra operação
                           </button>
+                          
+                          <div className="flex flex-col mt-3 gap-2 w-full text-right relative">
+                            <div className="relative flex items-center justify-end w-full">
+                              <span className="text-[8px] font-bold text-slate-500 select-none mr-2">Caso ocorrer erro na operação de campo</span>
+                              <div
+                                data-node-port="true"
+                                onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", "error")}
+                                className="absolute -right-[19.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-destructive bg-background hover:bg-destructive cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
+                                title="Caso ocorrer erro"
+                              >
+                                <div className="h-1.5 w-1.5 rounded-full bg-destructive" />
+                              </div>
+                            </div>
+                            <div className="relative flex items-center justify-end w-full">
+                              <span className="text-[8px] font-bold text-slate-500 select-none mr-2">Próximo passo</span>
+                              <div
+                                data-node-port="true"
+                                onMouseDown={(e) => handlePortMouseDown(e, node.id, "out")}
+                                className="absolute -right-[19.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-blue-500 bg-background hover:bg-blue-500 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
+                                title="Próximo passo"
+                              >
+                                <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       ) : (
                         <>
