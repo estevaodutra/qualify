@@ -503,8 +503,7 @@ Deno.serve(async (req) => {
     const effectiveSequenceId = sequenceId || typedMessage?.sequence_id;
 
     // HIGH PRIORITY: For manual testing, the user might have selected a different instance in the UI
-    const { manualNodeOverride, manualNodeIndex } = (body as ExecuteMessageRequest);
-    const isManualNodeExecution = manualNodeIndex !== undefined;
+    const { manualNodeOverride } = (body as ExecuteMessageRequest);
     if (isManualNodeExecution && manualNodeOverride?.config?.instanceId) {
       const overrideInstanceId = manualNodeOverride.config.instanceId as string;
       const { data: manualInst } = await supabase
