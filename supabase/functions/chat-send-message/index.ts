@@ -212,20 +212,25 @@ Deno.serve(async (req) => {
     await adminClient
       .from("chat_conversations")
       .update({
-        last_message_preview: body || (mediaUrl ? "[Mídia]" : ""),
+        last_message_preview: body || "[Mídia]",
         last_message_at: outboundMsg.created_at,
         updated_at: outboundMsg.created_at,
       })
       .eq("id", conversationId);
 
+    // 8. Trigger worker immediately (Fire and forget) to bypass Cron delay
+    const workerUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/queue-worker`;
+    fetch(workerUrl, { method: "POST" }).catch(err => console.error("Failed to trigger worker:", err));
+
     return new Response(
       JSON.stringify({ success: true, message: outboundMsg }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (err: any) {
-    console.error("[chat-send-message] Error processing send:", err.message);
+
+  } catch (error: any) {
+    console.error("Error sending message:", error);
     return new Response(
-      JSON.stringify({ error: err.message || "Internal server error" }),
+      JSON.stringify({ success: false, error: error.message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
