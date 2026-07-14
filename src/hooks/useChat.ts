@@ -632,6 +632,7 @@ export function useChatMessages(conversationId?: string) {
     },
     enabled: !!conversationId && !!user,
     refetchInterval: 3000, // Fallback garantido: atualiza mensagens do chat aberto a cada 3 segundos
+    refetchIntervalInBackground: true, // Força a busca mesmo se a aba estiver sem foco (split screen)
   });
 
   const markConversationAsReadMutation = useMutation({
