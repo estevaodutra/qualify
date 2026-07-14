@@ -52,12 +52,12 @@ export function useChatExpress() {
       let convId = sessions.find(s => s.leadId === payload.leadId)?.conversationId;
       let targetInstanceId = payload.instanceId || sessions.find(s => s.leadId === payload.leadId)?.instanceId;
 
-      if (!convId) {
-        if (!targetInstanceId) {
-           const connectedInstances = instances.filter(i => i.status === "connected");
-           targetInstanceId = connectedInstances[0]?.id;
-        }
+      if (!targetInstanceId) {
+         const connectedInstances = instances.filter(i => i.status === "connected");
+         targetInstanceId = connectedInstances[0]?.id;
+      }
 
+      if (!convId) {
         const { data: newConv, error: createError } = await supabase
           .from("chat_conversations")
           .insert({
@@ -80,6 +80,8 @@ export function useChatExpress() {
             
             if (existing) {
                 convId = existing.id;
+                // Since we found an existing one concurrently, ensure it has the right instance
+                await supabase.from("chat_conversations").update({ instance_id: targetInstanceId }).eq("id", convId);
             } else {
                 throw createError;
             }
@@ -94,6 +96,16 @@ export function useChatExpress() {
         });
         
         queryClient.invalidateQueries({ queryKey: ["chat-conversations", activeCompanyId] });
+      } else {
+        // Conversation already exists, ensure the DB has the selected instance_id
+        await supabase
+          .from("chat_conversations")
+          .update({ instance_id: targetInstanceId || null })
+          .eq("id", convId);
+      }
+
+      if (!targetInstanceId) {
+        throw new Error("Nenhuma instância conectada ou selecionada para enviar a mensagem.");
       }
 
       const { data, error } = await supabase.functions.invoke("chat-send-message", {
