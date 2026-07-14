@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { LocalNode } from "@/components/sequences/shared-types";
 import { NodeEditorHeader } from "./NodeEditorHeader";
 import { NodeInputPanel } from "./NodeInputPanel";
