@@ -502,6 +502,21 @@ Deno.serve(async (req) => {
     let instance = typedCampaign.instances;
     const effectiveSequenceId = sequenceId || typedMessage?.sequence_id;
 
+    // HIGH PRIORITY: For manual testing, the user might have selected a different instance in the UI
+    const { manualNodeOverride, manualNodeIndex } = (body as ExecuteMessageRequest);
+    const isManualNodeExecution = manualNodeIndex !== undefined;
+    if (isManualNodeExecution && manualNodeOverride?.config?.instanceId) {
+      const overrideInstanceId = manualNodeOverride.config.instanceId as string;
+      const { data: manualInst } = await supabase
+        .from("instances")
+        .select("id, name, phone, provider, external_instance_id, external_instance_token, status")
+        .eq("id", overrideInstanceId)
+        .maybeSingle();
+      if (manualInst) {
+        instance = manualInst as any;
+        console.log(`[ExecuteMessage] Resolved instance from manual node override: ${instance.name}`);
+      }
+    }
     // Fallback: resolve instance from sequence trigger config if not linked to campaign
     if ((!instance || instance.status !== "connected") && effectiveSequenceId) {
       console.log(`[ExecuteMessage] Campaign instance not connected or null, attempting to resolve from sequence ${effectiveSequenceId} trigger config...`);
