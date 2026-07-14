@@ -40,6 +40,7 @@ export default function Chat() {
     updateConversationStatus,
     assignOperator,
     updateLeadStage,
+    createConversation,
   } = useChat(filters, selectedConvId);
 
   // Load selected conversation messages
