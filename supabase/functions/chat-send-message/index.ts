@@ -190,6 +190,7 @@ Deno.serve(async (req) => {
     const { data: outboundMsg, error: outErr } = await adminClient
       .from("chat_messages")
       .insert({
+        company_id: conv.company_id,
         conversation_id: conversationId,
         sender_type: "operator",
         sender_id: user.id,
