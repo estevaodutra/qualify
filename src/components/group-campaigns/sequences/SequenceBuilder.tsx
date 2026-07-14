@@ -155,6 +155,10 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
           campaignId: activeCampaignId,
           sequenceId: sequence.id,
           manualNodeIndex: node.nodeOrder,
+          manualNodeOverride: {
+            type: node.nodeType,
+            config: node.config,
+          }
         },
       });
 

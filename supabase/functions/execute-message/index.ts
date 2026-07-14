@@ -26,6 +26,10 @@ interface ExecuteMessageRequest {
   startFromNodeId?: string;
   // For manual single-node execution
   manualNodeIndex?: number;
+  manualNodeOverride?: {
+    type: string;
+    config: Record<string, unknown>;
+  };
   // For private targeting (bulk execution from members tab)
   targetPhones?: string[];
 }
@@ -643,6 +647,13 @@ Deno.serve(async (req) => {
         );
       }
       sequenceNodes = manualNode;
+      
+      const { manualNodeOverride } = (body as ExecuteMessageRequest);
+      if (manualNodeOverride) {
+        sequenceNodes[0].node_type = manualNodeOverride.type;
+        sequenceNodes[0].config = manualNodeOverride.config;
+      }
+      
       console.log(`[ExecuteMessage] Manual node execution: filtered to node order ${manualNodeIndex} (${sequenceNodes[0].node_type})`);
     }
 
