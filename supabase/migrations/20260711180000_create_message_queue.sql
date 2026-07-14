@@ -94,7 +94,7 @@ CREATE TRIGGER on_instance_created_init_queue
 
 -- Backfill para instâncias existentes
 INSERT INTO public.instance_queue_settings (instance_id, company_id)
-SELECT id, company_id FROM public.instances
+SELECT id, company_id FROM public.instances WHERE company_id IS NOT NULL
 ON CONFLICT (instance_id) DO NOTHING;
 
 -- Função para processar a fila com concorrência segura (LOCK) e calcular delay

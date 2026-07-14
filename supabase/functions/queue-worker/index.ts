@@ -40,8 +40,12 @@ Deno.serve(async (req) => {
           .eq("id", item.instance_id)
           .single();
 
-        if (instErr || !inst?.external_instance_id || !inst?.external_instance_token) {
-          throw new Error("Instance configuration or credentials not found");
+        if (instErr || !inst?.external_instance_id) {
+          throw new Error("Instance configuration or credentials not found (Missing ID)");
+        }
+
+        if (inst.provider?.toLowerCase() !== 'waha' && !inst?.external_instance_token) {
+          throw new Error("Instance configuration or credentials not found (Missing Token)");
         }
 
         // Prepare payload for Z-API
