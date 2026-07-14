@@ -10,8 +10,8 @@ export function routeZApiRequest(endpoint: string, method: string, requestBody: 
 
   // 1. Status Management (evaluated first to prevent /send- shadowing)
   if (cleanEndpoint.includes("/status-") || cleanEndpoint.includes("/send-status")) {
-    let action = "status.list";
-    if (cleanEndpoint.includes("/status-") || cleanEndpoint.includes("/send-status")) action = "status.send";
+    let action = "status.send";
+    if (cleanEndpoint.includes("/status-message") || cleanEndpoint.includes("/list-status")) action = "status.list";
 
     return {
       url: "https://n8n.6ksfuf.easypanel.host/webhook/manager_status",

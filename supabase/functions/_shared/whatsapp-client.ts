@@ -296,6 +296,22 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
       break;
     }
 
+    case "status.send_image":
+      endpoint = "/send-status-image";
+      body = {
+        image: config.url,
+        caption: config.caption || ""
+      };
+      break;
+
+    case "status.send_video":
+      endpoint = "/send-status-video";
+      body = {
+        video: config.url,
+        caption: config.caption || ""
+      };
+      break;
+
     default:
       console.warn(`[whatsapp-client] Unknown action mapping: ${action}. Trying to fallback to send-text.`);
       endpoint = "/send-text";
