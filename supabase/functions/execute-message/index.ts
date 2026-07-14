@@ -866,10 +866,22 @@ Deno.serve(async (req) => {
       }
 
       if (destinations.length === 0) {
-        return new Response(
-          JSON.stringify({ error: "Nenhum destino configurado para esta campanha. Vincule grupos ou configure instâncias." }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        const isStatusNodeOverride = isManualNodeExecution && sequenceNodes.length > 0 && sequenceNodes[0].node_type === "status";
+        
+        if (!isStatusNodeOverride) {
+          return new Response(
+            JSON.stringify({ error: "Nenhum destino configurado para esta campanha. Vincule grupos ou configure instâncias." }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        } else {
+          // Provide a dummy destination so the execution loop runs at least once for the status node
+          console.log(`[ExecuteMessage] Manual test execution for status node: providing dummy destination`);
+          destinations = [{
+            group_jid: `status@s.whatsapp.net`,
+            group_name: `Status`,
+            isPrivate: true
+          }];
+        }
       }
 
       // Membership validation: private phone destinations must be active group members
