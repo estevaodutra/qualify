@@ -95,33 +95,35 @@ Deno.serve(async (req) => {
           throw new Error(`Provider Error: ${JSON.stringify(waResult.details || waResult)}`);
         }
 
-        // Criar o registro na tabela chat_messages se for do chat
+        // Atualizar o registro pendente na tabela chat_messages se for do chat
         if (item.source_type === 'chat' && item.conversation_id) {
-            const { data: dbMsg, error: dbErr } = await adminClient
-            .from("chat_messages")
-            .insert({
-                company_id: inst.company_id,
-                conversation_id: item.conversation_id,
-                sender_type: "operator",
-                message_type: item.message_type,
-                body: item.body,
-                media_url: item.media_url,
-                media_type: item.media_type,
-                is_internal: false,
-                status: "sent",
-                message_id: waResult.messageId || waResult.zaapId || null,
-            })
-            .select()
-            .single();
+            // Find the pending message to update
+            const { data: pendingMsgs } = await adminClient
+              .from("chat_messages")
+              .select("id")
+              .eq("conversation_id", item.conversation_id)
+              .eq("status", "pending")
+              .eq("body", item.body || "")
+              .order("created_at", { ascending: true })
+              .limit(1);
 
-            if (!dbErr && dbMsg) {
-                // Atualizar o preview da conversa
-                await adminClient
+            if (pendingMsgs && pendingMsgs.length > 0) {
+              const pendingId = pendingMsgs[0].id;
+              await adminClient
+                .from("chat_messages")
+                .update({
+                    status: "sent",
+                    message_id: waResult.messageId || waResult.zaapId || null,
+                })
+                .eq("id", pendingId);
+                
+              // Atualizar o preview da conversa
+              await adminClient
                 .from("chat_conversations")
                 .update({
-                    last_message_preview: dbMsg.body || "[Mídia]",
-                    last_message_at: dbMsg.created_at,
-                    updated_at: dbMsg.created_at,
+                    last_message_preview: item.body || "[Mídia]",
+                    last_message_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
                 })
                 .eq("id", item.conversation_id);
             }
