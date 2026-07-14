@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Copy, ArrowLeft, AlertTriangle } from "lucide-react";
+import { Copy, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
 interface WebhookFieldMappingsProps {
@@ -28,7 +27,6 @@ export function WebhookFieldMappings({
   return (
     <div className="flex flex-col h-full bg-white">
       <div className="flex items-center gap-3 px-6 py-5 border-b border-slate-100">
-        <ArrowLeft className="h-5 w-5 text-slate-500" />
         <h2 className="text-lg font-bold text-slate-800">Requisição HTTP (Webhook)</h2>
       </div>
 
@@ -66,12 +64,9 @@ export function WebhookFieldMappings({
         <div className="space-y-2">
           <label className="text-xs font-semibold text-slate-700">Fonte de dados</label>
           <div>
-            <Input
-              value={triggerConfig.dataSource || ""}
-              onChange={(e) => onTriggerConfigChange({ ...triggerConfig, dataSource: e.target.value })}
-              placeholder="Ex: Webhook-1"
-              className="max-w-[200px] h-8 bg-blue-500 text-white font-semibold text-xs rounded-full border-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 placeholder:text-blue-200"
-            />
+            <div className="inline-flex items-center px-4 py-1.5 bg-blue-500 text-white font-semibold text-xs rounded-full">
+              Ex: {triggerConfig.dataSource || "Webhook"}
+            </div>
           </div>
           <p className="text-[10px] text-slate-400 mt-1">Identificador único para este gatilho.</p>
         </div>

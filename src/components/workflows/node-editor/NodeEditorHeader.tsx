@@ -137,26 +137,6 @@ export function NodeEditorHeader({
           )
         )}
 
-        <div className="h-4 w-[1px] bg-slate-200 mx-1 shrink-0" />
-
-        {/* Save button */}
-        <Button
-          variant={isUnsaved ? "default" : "ghost"}
-          size="sm"
-          onClick={onSave}
-          disabled={isSaving}
-          className={`h-8 text-xs rounded-xl ${isUnsaved ? "bg-[#8A3CFF] hover:bg-[#8A3CFF]/90 text-white" : "text-slate-500"}`}
-        >
-          {isSaving ? (
-            <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />
-          ) : isUnsaved ? (
-            <Save className="h-3.5 w-3.5 mr-1" />
-          ) : (
-            <Check className="h-3.5 w-3.5 mr-1 text-emerald-500" />
-          )}
-          {isSaving ? "Salvando..." : isUnsaved ? "Salvar" : "Salvo"}
-        </Button>
-
         {/* Close Button */}
         <Button
           variant="ghost"

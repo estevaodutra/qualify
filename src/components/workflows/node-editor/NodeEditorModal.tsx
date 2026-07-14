@@ -94,8 +94,8 @@ export function NodeEditorModal({
     : null;
 
   const handleRequestClose = () => {
-    if (isUnsavedWorkflow || hasUnsavedChanges) {
-      setShowExitConfirm(true);
+    if (hasUnsavedChanges) {
+      handleSave();
     } else {
       onClose();
     }
@@ -444,7 +444,7 @@ export function NodeEditorModal({
       <Dialog open={isOpen} onOpenChange={handleOpenChange}>
         <DialogContent 
           className={cn(
-            "w-[calc(100vw-16px)] md:w-[calc(100vw-48px)] max-h-[calc(100vh-24px)] md:max-h-[calc(100vh-80px)] p-0 gap-0 overflow-hidden flex flex-col rounded-2xl border bg-white shadow-2xl transition-all outline-none",
+            "w-[calc(100vw-16px)] md:w-[calc(100vw-48px)] max-h-[calc(100vh-24px)] md:max-h-[calc(100vh-80px)] p-0 gap-0 overflow-hidden flex flex-col rounded-2xl border bg-white shadow-2xl transition-all outline-none [&>button]:hidden",
             node.nodeType === "field_mapping" || node.nodeType === "api" ? "max-w-[1040px]" : "max-w-[860px]"
           )}
           onPointerDownOutside={(e) => {
