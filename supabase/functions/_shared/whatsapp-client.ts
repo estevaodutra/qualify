@@ -194,7 +194,7 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
       body.reaction = config.reaction;
       break;
 
-    case "message.send_media":
+    case "message.send_media": {
       // Dynamic fallback for media node
       const mediaUrl = config.url || "";
       const mediaType = config.mediaType || "image";
@@ -223,6 +223,7 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
         body.fileName = config.filename || "file";
       }
       break;
+    }
 
     // Group management:
     case "group.create":
