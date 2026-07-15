@@ -16,9 +16,10 @@ interface ExecutionsPanelProps {
   connections: LocalConnection[];
   nodeCategories: NodeCategory[];
   onUpdateNodeConfig?: (nodeId: string, config: Record<string, unknown>) => void;
+  onSwitchToEditor?: () => void;
 }
 
-export function ExecutionsPanel({ sequenceId, nodes, connections, nodeCategories, onUpdateNodeConfig }: ExecutionsPanelProps) {
+export function ExecutionsPanel({ sequenceId, nodes, connections, nodeCategories, onUpdateNodeConfig, onSwitchToEditor }: ExecutionsPanelProps) {
   const { toast } = useToast();
   const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -112,10 +113,18 @@ export function ExecutionsPanel({ sequenceId, nodes, connections, nodeCategories
         .eq("id", triggerNode.id);
       
       if (error) throw error;
-      toast({ title: "Sucesso", description: "Payload definido como referência para mapeamento." });
     } catch (err) {
       console.error("Failed to save reference payload:", err);
       toast({ title: "Erro ao salvar referência", description: err instanceof Error ? err.message : undefined, variant: "destructive" });
+    } finally {
+      toast({ title: "Referência atualizada", description: "O payload desta execução foi carregado no gatilho." });
+    }
+  };
+
+  const handleEdit = async () => {
+    await handleUseAsReference();
+    if (onSwitchToEditor) {
+      onSwitchToEditor();
     }
   };
 
@@ -127,6 +136,7 @@ export function ExecutionsPanel({ sequenceId, nodes, connections, nodeCategories
           onRerun={handleRerun} 
           isRerunning={isRerunning} 
           onUseAsReference={handleUseAsReference}
+          onEdit={handleEdit}
         />
       )}
 

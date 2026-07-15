@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Copy, RotateCcw, Loader2, CheckCircle2, XCircle, Clock, Ban } from "lucide-react";
+import { Copy, RotateCcw, Loader2, CheckCircle2, XCircle, Clock, Ban, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { WorkflowExecution } from "@/hooks/useWorkflowExecutions";
 import { useToast } from "@/hooks/use-toast";
@@ -9,6 +9,7 @@ interface ExecutionHeaderProps {
   onRerun?: () => void;
   isRerunning?: boolean;
   onUseAsReference?: () => void;
+  onEdit?: () => void;
 }
 
 const STATUS_LABEL: Record<string, { label: string; icon: typeof CheckCircle2; className: string }> = {
@@ -27,7 +28,7 @@ function formatDuration(ms: number | null): string {
   return `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`;
 }
 
-export function ExecutionHeader({ execution, onRerun, isRerunning, onUseAsReference }: ExecutionHeaderProps) {
+export function ExecutionHeader({ execution, onRerun, isRerunning, onUseAsReference, onEdit }: ExecutionHeaderProps) {
   const { toast } = useToast();
   const meta = STATUS_LABEL[execution.status];
   const StatusIcon = meta.icon;
@@ -61,14 +62,27 @@ export function ExecutionHeader({ execution, onRerun, isRerunning, onUseAsRefere
 
       <div className="flex items-center gap-2 shrink-0">
         {execution.triggerType === "webhook" && onUseAsReference && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="rounded-xl border-[#8A3CFF]/30 hover:bg-[#8A3CFF]/5 text-[#8A3CFF] gap-1.5 h-8 px-3 text-xs font-semibold"
-            onClick={onUseAsReference}
-          >
-            Usar como referência
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-xl border-[#8A3CFF]/30 hover:bg-[#8A3CFF]/5 text-[#8A3CFF] gap-1.5 h-8 px-3 text-xs font-semibold"
+              onClick={onUseAsReference}
+            >
+              Usar como referência
+            </Button>
+            {onEdit && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-xl border-[#8A3CFF]/30 hover:bg-[#8A3CFF]/5 text-[#8A3CFF] gap-1.5 h-8 px-3 text-xs font-semibold"
+                onClick={onEdit}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Editar
+              </Button>
+            )}
+          </div>
         )}
         {canRerun && (
           <Button

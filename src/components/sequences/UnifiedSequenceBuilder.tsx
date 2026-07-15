@@ -714,6 +714,7 @@ export function UnifiedSequenceBuilder({
           onUpdateNodeConfig={(nodeId, config) => {
             setLocalNodes(prev => prev.map(n => n.id === nodeId ? { ...n, config } : n));
           }}
+          onSwitchToEditor={() => setMode("editor")}
         />
       ) : (
       /* Canvas Layout — fills whatever height the page gives this component; the
