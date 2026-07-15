@@ -64,6 +64,13 @@ export function FieldMappingEditor({ mapping, onChange, referencePayload }: Fiel
       if (transform === "capitalize") finalValue = finalValue.charAt(0).toUpperCase() + finalValue.slice(1);
       if (transform === "numbers_only") finalValue = finalValue.replace(/\D/g, '');
       if (transform === "trim") finalValue = finalValue.trim();
+      if (transform === "format_phone_br") {
+        let onlyNums = finalValue.replace(/\D/g, '');
+        if (onlyNums.length >= 10 && !onlyNums.startsWith("55")) {
+          onlyNums = "55" + onlyNums;
+        }
+        finalValue = onlyNums;
+      }
 
       setPreviewResult(finalValue || "Vazio");
     } catch (e) {
@@ -121,6 +128,7 @@ export function FieldMappingEditor({ mapping, onChange, referencePayload }: Fiel
               <SelectItem value="capitalize">Apenas a primeira letra maiúscula</SelectItem>
               <SelectItem value="numbers_only">Remover tudo que não for número</SelectItem>
               <SelectItem value="trim">Remover espaços nas extremidades</SelectItem>
+              <SelectItem value="format_phone_br">Formatar telefone BR (+55)</SelectItem>
             </SelectContent>
           </Select>
         </section>

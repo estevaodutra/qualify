@@ -1228,6 +1228,14 @@ Deno.serve(async (req) => {
                     rawVal = rawVal.replace(/\s+/g, " ").trim();
                   } else if (mapping.transform === "capitalize") {
                     rawVal = rawVal.replace(/\b\w/g, (c) => c.toUpperCase());
+                  } else if (mapping.transform === "numbers_only") {
+                    rawVal = rawVal.replace(/\D/g, "");
+                  } else if (mapping.transform === "format_phone_br") {
+                    let onlyNums = rawVal.replace(/\D/g, "");
+                    if (onlyNums.length >= 10 && !onlyNums.startsWith("55")) {
+                      onlyNums = "55" + onlyNums;
+                    }
+                    rawVal = onlyNums;
                   }
 
                   // Normalization for phone
