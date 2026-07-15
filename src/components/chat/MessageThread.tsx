@@ -274,6 +274,28 @@ export default function MessageThread({
                     isInternal={isInternal} 
                     timeString={formatTime(msg.created_at)} 
                   />
+                ) : msg.message_type === "ptv" ? (
+                  <div className="flex flex-col items-center gap-1 relative group">
+                    <video 
+                      src={msg.media_url || ""} 
+                      controls 
+                      className={cn(
+                        "w-56 h-56 rounded-full object-cover shadow-sm transition-transform duration-300",
+                        isOperator && !isInternal ? "border-4 border-primary/20" : "border-4 border-card"
+                      )} 
+                    />
+                    <div className={cn(
+                      "absolute bottom-4 right-4 bg-background/60 backdrop-blur-md px-2 py-0.5 rounded-full text-[9px] flex items-center gap-1 shadow-sm font-medium",
+                      isOperator && !isInternal ? "text-primary-foreground/90" : "text-muted-foreground"
+                    )}>
+                      {formatTime(msg.created_at)}
+                      {isOperator && (
+                        <span className="ml-0.5">
+                          {msg.status === "sent" ? <Check className="h-3 w-3" /> : <CheckCheck className="h-3 w-3 text-blue-400" />}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 ) : (
                   <div
                     className={cn(
@@ -314,6 +336,8 @@ export default function MessageThread({
                       {msg.body && <p className="mt-1.5 whitespace-pre-wrap break-words leading-relaxed">{msg.body}</p>}
                     </div>
                   )}
+
+                  
 
                   
 
