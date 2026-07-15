@@ -837,7 +837,6 @@ export function UnifiedSequenceBuilder({
                     if (idx >= 0) portY1 = sY + RANDOMIZER_PORT_BASE_Y + idx * RANDOMIZER_PORT_SPACING;
                   }
                   if (srcNode.nodeType === "field_op") {
-                    portX1 = sX + 300; // field_op has w-[300px]
                     const mappingsCount = (srcNode.config.mappings as any[])?.length || 0;
                     if (conn.conditionPath === "error") {
                       portY1 = sY + 146 + (mappingsCount * 53);
