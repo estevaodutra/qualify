@@ -83,14 +83,16 @@ export function NodeEditorModal({
         try {
           const { data, error } = await supabase
             .from("sequence_executions")
-            .select("trigger_payload")
+            .select("trigger_context")
             .eq("sequence_id", sequenceId)
             .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle();
             
-          if (!error && data?.trigger_payload) {
-            setLatestPayload(toCanonicalPayload(data.trigger_payload));
+          if (!error && data?.trigger_context) {
+            const contextData = data.trigger_context as Record<string, any>;
+            const payload = contextData.webhookPayload || contextData;
+            setLatestPayload(toCanonicalPayload(payload));
           } else {
             setLatestPayload(null);
           }
