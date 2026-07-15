@@ -87,20 +87,27 @@ export function ExecutionsPanel({ sequenceId, nodes, connections, nodeCategories
       return;
     }
     const currentConfig = triggerNode.config || {};
-    const currentTriggerConfig = (currentConfig.triggerConfig as Record<string, any>) || {};
-    
-    // Save normalized canonical payload
     const referencePayload = toCanonicalPayload(execution.triggerPayload);
-
-    const newTriggerConfig = {
-      ...currentTriggerConfig,
-      referencePayload
-    };
     
-    const newConfig = {
-      ...currentConfig,
-      triggerConfig: newTriggerConfig
-    };
+    const newConfig = { ...currentConfig };
+    
+    if (newConfig.triggerConfig) {
+      newConfig.triggerConfig = { ...newConfig.triggerConfig, referencePayload };
+    } else {
+      newConfig.triggerConfig = { referencePayload };
+    }
+    
+    if (Array.isArray(newConfig.triggers)) {
+      newConfig.triggers = newConfig.triggers.map((t: any) => {
+        if (t.type === "webhook") {
+          return {
+            ...t,
+            config: { ...(t.config || {}), referencePayload }
+          };
+        }
+        return t;
+      });
+    }
 
     if (onUpdateNodeConfig) {
       onUpdateNodeConfig(triggerNode.id, newConfig);
