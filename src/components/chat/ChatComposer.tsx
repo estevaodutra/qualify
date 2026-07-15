@@ -34,6 +34,21 @@ export default function ChatComposer({ onSend, isSending, templates }: ChatCompo
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (audioBlob) {
+      const url = URL.createObjectURL(audioBlob);
+      setAudioUrl(url);
+      return () => {
+        URL.revokeObjectURL(url);
+      };
+    } else {
+      setAudioUrl(null);
+    }
+  }, [audioBlob]);
+
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -496,10 +511,10 @@ export default function ChatComposer({ onSend, isSending, templates }: ChatCompo
                <span className="text-xs font-medium text-muted-foreground tabular-nums mr-2">{formatTime(recordingTime)}</span>
                <span className="text-[10px] font-bold bg-background px-1.5 py-0.5 rounded text-muted-foreground">1x</span>
                
-               {audioBlob && (
+               {audioUrl && (
                  <audio 
                    ref={audioPlayerRef} 
-                   src={URL.createObjectURL(audioBlob)} 
+                   src={audioUrl}
                    onEnded={() => setIsPlaying(false)} 
                    className="hidden" 
                  />

@@ -13,7 +13,7 @@ interface MessageThreadProps {
 }
 
 
-function CustomAudioPlayer({ src, isOperator, isInternal }: { src: string; isOperator: boolean; isInternal: boolean }) {
+function CustomAudioPlayer({ src, isOperator, isInternal, timeString }: { src: string; isOperator: boolean; isInternal: boolean; timeString: string }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -53,43 +53,61 @@ function CustomAudioPlayer({ src, isOperator, isInternal }: { src: string; isOpe
 
   return (
     <div className={cn(
-      "flex items-center gap-2 px-3 py-2 rounded-full min-w-[220px] shadow-sm",
-      isOperator && !isInternal ? "bg-primary-foreground/10 text-primary-foreground" : "bg-background/60 text-foreground",
-      isInternal && "bg-yellow-600/10 text-yellow-700 dark:text-yellow-400"
+      "flex flex-col gap-1 p-2 rounded-2xl min-w-[220px] shadow-sm relative overflow-hidden",
+      !isOperator && "bg-card border border-border/40 text-card-foreground rounded-tl-none",
+      isOperator && !isInternal && "bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-tr-none",
+      isOperator && isInternal && "bg-yellow-500/10 border border-yellow-500/20 text-yellow-700 dark:text-yellow-400 rounded-tr-none"
     )}>
-      <button onClick={togglePlay} className={cn(
-        "h-8 w-8 flex items-center justify-center rounded-full shrink-0 transition-colors",
-        isOperator && !isInternal ? "bg-primary-foreground text-primary hover:bg-primary-foreground/90" : "bg-primary text-primary-foreground hover:bg-primary/90"
-      )}>
-        {isPlaying ? <Pause className="h-4 w-4" fill="currentColor" /> : <Play className="h-4 w-4 ml-0.5" fill="currentColor" />}
-      </button>
+      {isInternal && (
+        <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider mb-1 opacity-85 px-1">
+          <Lock className="h-3 w-3 shrink-0" />
+          Nota Interna
+        </div>
+      )}
       
-      <div className="flex flex-col flex-1 mx-1 gap-1">
-        <div className="flex justify-between items-center text-[10px] font-medium opacity-80 px-0.5">
-          <span>{formatTime(audioRef.current?.currentTime || 0)}</span>
-          <span>{formatTime(duration)}</span>
+      <div className="flex items-center gap-2">
+        <button onClick={togglePlay} className={cn(
+          "h-10 w-10 flex items-center justify-center rounded-full shrink-0 transition-colors shadow-sm",
+          isOperator && !isInternal ? "bg-primary-foreground text-primary hover:bg-primary-foreground/90" : "bg-primary text-primary-foreground hover:bg-primary/90"
+        )}>
+          {isPlaying ? <Pause className="h-5 w-5" fill="currentColor" /> : <Play className="h-5 w-5 ml-1" fill="currentColor" />}
+        </button>
+        
+        <div className="flex flex-col flex-1 mx-1 gap-1">
+          <div className="flex justify-between items-center text-[10px] font-bold opacity-90 px-0.5">
+            <span>{formatTime(audioRef.current?.currentTime || 0)}</span>
+            <span>{formatTime(duration)}</span>
+          </div>
+          {/* Fake Progress */}
+          <div className="h-1.5 bg-foreground/20 rounded-full overflow-hidden relative cursor-pointer group" onClick={(e) => {
+             if(audioRef.current && audioRef.current.duration) {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const pos = (e.clientX - rect.left) / rect.width;
+                audioRef.current.currentTime = pos * audioRef.current.duration;
+             }
+          }}>
+            <div className={cn(
+              "h-full absolute top-0 left-0 transition-all duration-75",
+              isOperator && !isInternal ? "bg-primary-foreground" : "bg-primary"
+            )} style={{ width: `${progress}%` }} />
+          </div>
         </div>
-        {/* Fake Progress */}
-        <div className="h-1.5 bg-foreground/20 rounded-full overflow-hidden relative cursor-pointer group" onClick={(e) => {
-           if(audioRef.current && audioRef.current.duration) {
-              const rect = e.currentTarget.getBoundingClientRect();
-              const pos = (e.clientX - rect.left) / rect.width;
-              audioRef.current.currentTime = pos * audioRef.current.duration;
-           }
-        }}>
-          <div className={cn(
-            "h-full absolute top-0 left-0 transition-all duration-75",
-            isOperator && !isInternal ? "bg-primary-foreground" : "bg-primary"
-          )} style={{ width: `${progress}%` }} />
-        </div>
-      </div>
 
-      <button onClick={toggleSpeed} className={cn(
-        "text-[10px] font-bold px-1.5 py-1 rounded-md shrink-0 w-8 text-center transition-colors",
-        isOperator && !isInternal ? "hover:bg-primary-foreground/20" : "hover:bg-foreground/10"
+        <button onClick={toggleSpeed} className={cn(
+          "text-xs font-bold px-1.5 py-1 rounded-md shrink-0 w-8 text-center transition-colors",
+          isOperator && !isInternal ? "hover:bg-primary-foreground/20" : "hover:bg-foreground/10"
+        )}>
+          {speed}x
+        </button>
+      </div>
+      
+      {/* Time string in corner */}
+      <div className={cn(
+        "text-[9px] flex justify-end px-1 opacity-70",
+        isOperator && !isInternal ? "text-primary-foreground/90" : "text-muted-foreground"
       )}>
-        {speed}x
-      </button>
+        {timeString}
+      </div>
 
       <audio 
         ref={audioRef} 
@@ -102,6 +120,7 @@ function CustomAudioPlayer({ src, isOperator, isInternal }: { src: string; isOpe
     </div>
   );
 }
+
 
 export default function MessageThread({ 
   conversation, 
@@ -248,18 +267,25 @@ export default function MessageThread({
                   isOperator ? "ml-auto items-end" : "mr-auto items-start"
                 )}
               >
-                {/* Bubble Container */}
-                <div
-                  className={cn(
-                    "p-3 rounded-2xl shadow-sm text-sm relative overflow-hidden",
-                    // Lead messages (received)
-                    !isOperator && "bg-card border border-border/40 text-card-foreground rounded-tl-none",
-                    // Operator public messages (sent)
-                    isOperator && !isInternal && "bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-tr-none",
-                    // Operator internal notes
-                    isOperator && isInternal && "bg-yellow-500/10 border border-yellow-500/20 text-yellow-600 dark:text-yellow-400 rounded-tr-none"
-                  )}
-                >
+                {msg.message_type === "audio" ? (
+                  <CustomAudioPlayer 
+                    src={msg.media_url || ""} 
+                    isOperator={isOperator} 
+                    isInternal={isInternal} 
+                    timeString={formatTime(msg.created_at)} 
+                  />
+                ) : (
+                  <div
+                    className={cn(
+                      "p-3 rounded-2xl shadow-sm text-sm relative overflow-hidden",
+                      // Lead messages (received)
+                      !isOperator && "bg-card border border-border/40 text-card-foreground rounded-tl-none",
+                      // Operator public messages (sent)
+                      isOperator && !isInternal && "bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-tr-none",
+                      // Operator internal notes
+                      isOperator && isInternal && "bg-yellow-500/10 border border-yellow-500/20 text-yellow-600 dark:text-yellow-400 rounded-tr-none"
+                    )}
+                  >
                   {/* Internal note header */}
                   {isInternal && (
                     <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider mb-1 opacity-85">
@@ -289,11 +315,7 @@ export default function MessageThread({
                     </div>
                   )}
 
-                  {msg.message_type === "audio" && (
-                    <div className="py-1 min-w-[200px]">
-                      <CustomAudioPlayer src={msg.media_url || ""} isOperator={isOperator} isInternal={isInternal} />
-                    </div>
-                  )}
+                  
 
                   {msg.message_type === "document" && (
                     <div className="flex items-center gap-3 bg-background/20 p-2.5 rounded-lg border border-border/10 max-w-[240px]">
@@ -341,18 +363,15 @@ export default function MessageThread({
                       isOperator && !isInternal ? "text-primary-foreground/90" : "text-muted-foreground"
                     )}
                   >
-                    <span>{formatTime(msg.created_at)}</span>
-                    {isOperator && !isInternal && (
-                      <span>
-                        {msg.status === "pending" && <span className="animate-pulse">...</span>}
-                        {msg.status === "sent" && <Check className="h-3 w-3 text-primary-foreground/80" />}
-                        {(msg.status === "delivered" || msg.status === "read") && (
-                          <CheckCheck className={cn("h-3 w-3", msg.status === "read" ? "text-sky-300" : "text-primary-foreground/80")} />
-                        )}
+                    {formatTime(msg.created_at)}
+                    {isOperator && (
+                      <span className="ml-0.5">
+                        {msg.status === "sent" ? <Check className="h-3 w-3" /> : <CheckCheck className="h-3 w-3 text-blue-400" />}
                       </span>
                     )}
                   </div>
                 </div>
+                )}
 
                 {/* Operator signature (for notes or multiple operator identification) */}
                 {isOperator && isInternal && (
