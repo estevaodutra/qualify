@@ -204,8 +204,12 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
         endpoint = "/send-image";
         body.image = mediaUrl;
       } else if (mediaType === "video") {
-        endpoint = "/send-video";
-        body.video = mediaUrl;
+          endpoint = "/send-video";
+          body.video = mediaUrl;
+        } else if (mediaType === "ptv") {
+          endpoint = "/send-video";
+          body.video = mediaUrl;
+          body.PTV = true;
       } else if (mediaType === "audio") {
         endpoint = "/send-audio";
         body.audio = mediaUrl;
