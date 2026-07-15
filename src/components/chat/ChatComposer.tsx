@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Lock, MessageSquare, Paperclip, Smile, Loader2, Sparkles, X, File, Image as ImageIcon, Video, Mic, Play, Pause, Trash2, Square } from "lucide-react";
+import {  Send, Lock, MessageSquare, Paperclip, Smile, Loader2, Sparkles, X, File, Image as ImageIcon, Video, Mic, Play, Pause, Trash2, Square  } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { ChatTemplate } from "@/hooks/useChat";
 import { cn } from "@/lib/utils";
@@ -34,6 +36,9 @@ export default function ChatComposer({ onSend, isSending, templates }: ChatCompo
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  
+  const [isVideoNote, setIsVideoNote] = useState(false);
 
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
 
@@ -242,6 +247,10 @@ export default function ChatComposer({ onSend, isSending, templates }: ChatCompo
       let mediaUrl = attachedFile?.url;
       let mediaType = attachedFile?.type;
 
+      if (mediaType === 'video' && isVideoNote) {
+        mediaType = 'ptv';
+      }
+
       // Handle audio blob upload
       if (audioBlob) {
         setIsUploading(true);
@@ -267,6 +276,7 @@ export default function ChatComposer({ onSend, isSending, templates }: ChatCompo
       // reset states
       setText("");
       setAttachedFile(null);
+      setIsVideoNote(false);
       setAudioBlob(null);
       setRecordingState('idle');
       setRecordingTime(0);
@@ -389,17 +399,27 @@ export default function ChatComposer({ onSend, isSending, templates }: ChatCompo
 
       {/* Attachment Preview Area */}
       {attachedFile && (
-        <div className="flex items-center gap-3 p-2 bg-primary/5 border border-primary/20 rounded-xl max-w-sm animate-in slide-in-from-top-2 duration-200">
-          <div className="h-10 w-10 shrink-0 bg-primary/10 rounded-lg flex items-center justify-center text-primary">
-            {getFileIcon(attachedFile.type)}
+        <div className="flex flex-col gap-2 p-2 bg-primary/5 border border-primary/20 rounded-xl max-w-sm animate-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 shrink-0 bg-primary/10 rounded-lg flex items-center justify-center text-primary">
+              {getFileIcon(attachedFile.type)}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-foreground truncate">{attachedFile.name}</p>
+              <p className="text-[10px] text-muted-foreground capitalize">{attachedFile.type}</p>
+            </div>
+            <Button variant="ghost" size="icon" onClick={() => { setAttachedFile(null); setIsVideoNote(false); }} className="h-8 w-8 text-muted-foreground hover:text-destructive">
+              <X className="h-4 w-4" />
+            </Button>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-foreground truncate">{attachedFile.name}</p>
-            <p className="text-[10px] text-muted-foreground capitalize">{attachedFile.type}</p>
-          </div>
-          <Button variant="ghost" size="icon" onClick={() => setAttachedFile(null)} className="h-8 w-8 text-muted-foreground hover:text-destructive">
-            <X className="h-4 w-4" />
-          </Button>
+          {attachedFile.type === 'video' && (
+            <div className="flex items-center gap-2 pl-1 pt-1 border-t border-primary/10 mt-1">
+              <Switch id="video-note-toggle" checked={isVideoNote} onCheckedChange={setIsVideoNote} />
+              <Label htmlFor="video-note-toggle" className="text-xs font-medium cursor-pointer text-muted-foreground">
+                Enviar como Vídeo Recado
+              </Label>
+            </div>
+          )}
         </div>
       )}
 
