@@ -108,6 +108,12 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
       if (config.viewOnce !== undefined) body.viewOnce = config.viewOnce;
       break;
 
+    case "message.send_ptv":
+      endpoint = "/send-video";
+      body.video = config.url;
+      body.PTV = true;
+      break;
+
     case "message.send_audio":
       endpoint = "/send-audio";
       body.audio = config.url;

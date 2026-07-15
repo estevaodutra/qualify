@@ -219,9 +219,10 @@ export default function ChatComposer({ onSend, isSending, templates }: ChatCompo
 
       // Determine type
       let type = "document";
-      if (file.type.startsWith("image/")) type = "image";
-      else if (file.type.startsWith("video/")) type = "video";
-      else if (file.type.startsWith("audio/")) type = "audio";
+      const ext = file.name.split('.').pop()?.toLowerCase() || "";
+      if (file.type.startsWith("image/") || ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) type = "image";
+      else if (file.type.startsWith("video/") || ['mp4', 'webm', 'ogg', 'mov', 'avi'].includes(ext)) type = "video";
+      else if (file.type.startsWith("audio/") || ['mp3', 'wav', 'ogg', 'm4a'].includes(ext)) type = "audio";
 
       setAttachedFile({
         url: publicUrl,

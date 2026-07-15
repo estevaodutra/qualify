@@ -320,6 +320,7 @@ const getActionForNodeType = (nodeType: string): string => {
     text: "message.send_text",
     image: "message.send_image",
     video: "message.send_video",
+    ptv: "message.send_ptv",
     audio: "message.send_audio",
     document: "message.send_document",
     sticker: "message.send_sticker",

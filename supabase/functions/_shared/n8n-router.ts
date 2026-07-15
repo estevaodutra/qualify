@@ -66,7 +66,9 @@ export function routeZApiRequest(endpoint: string, method: string, requestBody: 
   ) {
     let action = "message.send_text"; // default fallback for messages
     if (cleanEndpoint.includes("/send-image")) action = "message.send_image";
-    else if (cleanEndpoint.includes("/send-video")) action = "message.send_video";
+    else if (cleanEndpoint.includes("/send-video")) {
+      action = (content?.PTV || content?.isVideoNote) ? "message.send_ptv" : "message.send_video";
+    }
     else if (cleanEndpoint.includes("/send-audio")) action = "message.send_audio";
     else if (cleanEndpoint.includes("/send-document")) action = "message.send_document";
     else if (cleanEndpoint.includes("/send-sticker")) action = "message.send_sticker";
