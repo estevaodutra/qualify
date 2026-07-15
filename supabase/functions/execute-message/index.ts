@@ -573,23 +573,22 @@ Deno.serve(async (req) => {
     }
 
     if (!instance) {
-      console.error("[ExecuteMessage] Campaign has no instance linked:", campaignId);
-      return new Response(
-        JSON.stringify({
-          error: "Campaign has no WhatsApp instance linked. Open the campaign config and select an instance.",
-          campaignId,
-          campaignName: typedCampaign.name,
-        }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      console.warn(`[ExecuteMessage] Campaign ${campaignId} has no instance linked. Creating dummy context for execution.`);
+      instance = {
+        id: "no-instance",
+        name: "Sem Instância (Execução Offline)",
+        phone: "",
+        provider: "none",
+        external_instance_id: "",
+        external_instance_token: "",
+        status: "disconnected"
+      } as any;
     }
 
     if (instance.status !== "connected") {
-      return new Response(
-        JSON.stringify({ error: "Instance is not connected" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      console.warn(`[ExecuteMessage] Warning: Instance ${instance.id} is not connected. Messaging nodes may fail.`);
     }
+
 
     // Determine user_id for logging and webhook lookup
     const userId = typedMessage?.user_id || typedCampaign.user_id;
