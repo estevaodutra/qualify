@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Lock, MessageSquare, Paperclip, Smile, Loader2, Sparkles, X, File, Image as ImageIcon, Video, Mic } from "lucide-react";
+import { Send, Lock, MessageSquare, Paperclip, Smile, Loader2, Sparkles, X, File, Image as ImageIcon, Video, Mic, Play, Pause, Trash2, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ChatTemplate } from "@/hooks/useChat";
 import { cn } from "@/lib/utils";
@@ -28,6 +28,115 @@ export default function ChatComposer({ onSend, isSending, templates }: ChatCompo
   const [isUploading, setIsUploading] = useState(false);
   const [attachedFile, setAttachedFile] = useState<{ url: string; type: string; name: string } | null>(null);
   
+  
+  // Audio Recording State
+  const [recordingState, setRecordingState] = useState<'idle' | 'recording' | 'paused' | 'recorded'>('idle');
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
+
+  // Audio Recording Handlers
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        setAudioBlob(audioBlob);
+      };
+
+      mediaRecorder.start();
+      setRecordingState('recording');
+      setRecordingTime(0);
+
+      timerIntervalRef.current = setInterval(() => {
+        setRecordingTime((prev) => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.error('Error accessing microphone:', err);
+      toast.error('Erro ao acessar microfone. Verifique as permissões.');
+    }
+  };
+
+  const pauseRecording = () => {
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.pause();
+      setRecordingState('paused');
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    }
+  };
+
+  const resumeRecording = () => {
+    if (mediaRecorderRef.current?.state === 'paused') {
+      mediaRecorderRef.current.resume();
+      setRecordingState('recording');
+      timerIntervalRef.current = setInterval(() => {
+        setRecordingTime((prev) => prev + 1);
+      }, 1000);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && (mediaRecorderRef.current.state === 'recording' || mediaRecorderRef.current.state === 'paused')) {
+      mediaRecorderRef.current.stop();
+      // stop tracks
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      setRecordingState('recorded');
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    }
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current) {
+      if (mediaRecorderRef.current.state !== 'inactive') mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+    }
+    setRecordingState('idle');
+    setRecordingTime(0);
+    setAudioBlob(null);
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+  };
+
+  const togglePlayback = () => {
+    if (audioPlayerRef.current) {
+      if (isPlaying) {
+        audioPlayerRef.current.pause();
+      } else {
+        audioPlayerRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  // cleanup
+  useEffect(() => {
+    return () => {
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -112,14 +221,45 @@ export default function ChatComposer({ onSend, isSending, templates }: ChatCompo
   };
 
   const handleSend = async () => {
-    if (!text.trim() && !attachedFile) return;
+    if (!text.trim() && !attachedFile && !audioBlob) return;
 
     try {
-      await onSend(text, isInternal, attachedFile?.url, attachedFile?.type);
+      let mediaUrl = attachedFile?.url;
+      let mediaType = attachedFile?.type;
+
+      // Handle audio blob upload
+      if (audioBlob) {
+        setIsUploading(true);
+        const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.webm`;
+        const filePath = `chat/${activeCompanyId}/${fileName}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from("media")
+          .upload(filePath, audioBlob);
+          
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from("media")
+          .getPublicUrl(filePath);
+          
+        mediaUrl = publicUrl;
+        mediaType = 'audio';
+      }
+
+      await onSend(text, isInternal, mediaUrl, mediaType);
+      
+      // reset states
       setText("");
       setAttachedFile(null);
+      setAudioBlob(null);
+      setRecordingState('idle');
+      setRecordingTime(0);
     } catch (error) {
-      // Handled by query mutation onError
+      console.error(error);
+      toast.error('Erro ao enviar mensagem');
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -264,51 +404,131 @@ export default function ChatComposer({ onSend, isSending, templates }: ChatCompo
         <Button
           variant="ghost"
           size="icon"
-          disabled={isUploading}
+          disabled={isUploading || recordingState !== 'idle'}
           onClick={() => fileInputRef.current?.click()}
           className="h-9 w-9 shrink-0 text-muted-foreground hover:text-primary hover:bg-primary/10 mb-0.5 rounded-xl cursor-pointer"
         >
           <Paperclip className="h-4.5 w-4.5" />
         </Button>
 
-        <div className="flex-1 relative flex items-center">
-          <textarea
-            ref={textareaRef}
-            rows={1}
-            value={text}
-            onChange={(e) => handleTextChange(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={
-              isInternal
-                ? "Adicionar nota privada ao lead..."
-                : "Digite uma mensagem ou '/' para respostas rápidas..."
-            }
-            className={cn(
-              "w-full bg-transparent px-2 py-2.5 text-sm outline-none resize-none transition-all duration-300 min-h-[40px] max-h-[160px] scrollbar-thin scrollbar-track-transparent leading-relaxed",
-              isInternal && "placeholder:text-yellow-600/40 text-yellow-700 dark:text-yellow-400"
-            )}
-          />
+        <div className="flex-1 relative flex items-center min-h-[40px]">
+          {recordingState === 'idle' ? (
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              value={text}
+              onChange={(e) => handleTextChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={
+                isInternal
+                  ? "Adicionar nota privada ao lead..."
+                  : "Digite uma mensagem ou '/' para respostas rápidas..."
+              }
+              className={cn(
+                "w-full bg-transparent px-2 py-2.5 text-sm outline-none resize-none transition-all duration-300 min-h-[40px] max-h-[160px] scrollbar-thin scrollbar-track-transparent leading-relaxed",
+                isInternal && "placeholder:text-yellow-600/40 text-yellow-700 dark:text-yellow-400"
+              )}
+            />
+          ) : recordingState === 'recording' || recordingState === 'paused' ? (
+            <div className="flex-1 flex items-center justify-between bg-primary/5 rounded-full px-4 py-1.5 h-10 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex items-center gap-3">
+                <div className={cn("h-2.5 w-2.5 rounded-full bg-destructive transition-opacity duration-500", recordingState === 'paused' ? "opacity-50" : "animate-pulse")} />
+                <span className="text-sm font-medium text-foreground min-w-[45px] tabular-nums">{formatTime(recordingTime)}</span>
+              </div>
+              
+              {/* Fake Waveform */}
+              <div className="flex items-center gap-1 flex-1 mx-4 justify-center">
+                {Array.from({ length: 20 }).map((_, i) => (
+                  <div 
+                    key={i} 
+                    className={cn(
+                      "w-1 bg-primary/40 rounded-full transition-all duration-150", 
+                      recordingState === 'recording' ? "animate-pulse" : "h-1 opacity-50"
+                    )}
+                    style={{ 
+                      height: recordingState === 'recording' ? `${Math.random() * 16 + 4}px` : '4px',
+                      animationDelay: `${i * 0.05}s`
+                    }}
+                  />
+                ))}
+              </div>
+              
+              <div className="flex items-center gap-1">
+                {recordingState === 'recording' ? (
+                  <Button variant="ghost" size="icon" onClick={pauseRecording} className="h-8 w-8 text-primary hover:bg-primary/20 hover:text-primary rounded-full">
+                    <Pause className="h-4 w-4" fill="currentColor" />
+                  </Button>
+                ) : (
+                  <Button variant="ghost" size="icon" onClick={resumeRecording} className="h-8 w-8 text-primary hover:bg-primary/20 hover:text-primary rounded-full">
+                    <Mic className="h-4 w-4" />
+                  </Button>
+                )}
+                <Button variant="ghost" size="icon" onClick={stopRecording} className="h-8 w-8 text-primary hover:bg-primary/20 hover:text-primary rounded-full">
+                  <Square className="h-4 w-4" fill="currentColor" />
+                </Button>
+                <Button variant="ghost" size="icon" onClick={cancelRecording} className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive rounded-full">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex-1 flex items-center justify-between bg-secondary/30 border border-border/50 rounded-full px-4 py-1 h-10 animate-in fade-in zoom-in-95 duration-200">
+               <Button variant="ghost" size="icon" onClick={cancelRecording} className="h-8 w-8 shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive rounded-full mr-2">
+                  <Trash2 className="h-4 w-4" />
+               </Button>
+               <Button variant="ghost" size="icon" onClick={togglePlayback} className="h-8 w-8 shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 rounded-full shadow-sm">
+                  {isPlaying ? <Pause className="h-4 w-4" fill="currentColor" /> : <Play className="h-4 w-4" fill="currentColor" className="ml-0.5" />}
+               </Button>
+               
+               {/* Static Waveform */}
+               <div className="flex items-center gap-1 flex-1 mx-4">
+                  {Array.from({ length: 30 }).map((_, i) => (
+                    <div 
+                      key={i} 
+                      className="w-1 bg-primary/40 rounded-full h-3"
+                      style={{ 
+                        height: `${Math.random() * 12 + 4}px`
+                      }}
+                    />
+                  ))}
+               </div>
+               
+               <span className="text-xs font-medium text-muted-foreground tabular-nums mr-2">{formatTime(recordingTime)}</span>
+               <span className="text-[10px] font-bold bg-background px-1.5 py-0.5 rounded text-muted-foreground">1x</span>
+               
+               {audioBlob && (
+                 <audio 
+                   ref={audioPlayerRef} 
+                   src={URL.createObjectURL(audioBlob)} 
+                   onEnded={() => setIsPlaying(false)} 
+                   className="hidden" 
+                 />
+               )}
+            </div>
+          )}
         </div>
 
-        {/* Emoji Button (Placeholder UI) */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-9 w-9 shrink-0 text-muted-foreground hover:text-primary hover:bg-primary/10 mb-0.5 rounded-xl cursor-pointer"
-        >
-          <Smile className="h-4.5 w-4.5" />
-        </Button>
+        {recordingState === 'idle' && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={startRecording}
+            className="h-9 w-9 shrink-0 text-muted-foreground hover:text-primary hover:bg-primary/10 mb-0.5 rounded-xl cursor-pointer"
+          >
+            <Mic className="h-4.5 w-4.5" />
+          </Button>
+        )}
 
         {/* Send Button */}
         <Button
           onClick={handleSend}
-          disabled={isSending || isUploading || (!text.trim() && !attachedFile)}
+          disabled={isSending || isUploading || (!text.trim() && !attachedFile && !audioBlob) || recordingState === 'recording' || recordingState === 'paused'}
           className={cn(
             "h-10 w-10 rounded-xl shrink-0 shadow-lg cursor-pointer transition-all duration-300",
             isInternal
               ? "bg-yellow-500 hover:bg-yellow-600 text-white shadow-yellow-500/20"
               : "bg-primary hover:bg-primary/90 text-primary-foreground shadow-primary/20",
-            (!text.trim() && !attachedFile) && "opacity-50 scale-95 shadow-none"
+            (!text.trim() && !attachedFile && !audioBlob) && "opacity-50 scale-95 shadow-none"
           )}
         >
           {isSending ? (
