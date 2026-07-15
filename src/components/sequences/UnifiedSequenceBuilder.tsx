@@ -836,6 +836,15 @@ export function UnifiedSequenceBuilder({
                     const idx = branches.findIndex(b => b.id === conn.conditionPath);
                     if (idx >= 0) portY1 = sY + RANDOMIZER_PORT_BASE_Y + idx * RANDOMIZER_PORT_SPACING;
                   }
+                  if (srcNode.nodeType === "field_op") {
+                    const mappingsCount = (srcNode.config.mappings as any[])?.length || 0;
+                    if (conn.conditionPath === "error") {
+                      portY1 = sY + 146 + (mappingsCount * 53);
+                    } else {
+                      // Default "Próximo passo" out port
+                      portY1 = sY + 166 + (mappingsCount * 53);
+                    }
+                  }
 
                   // Input port on the left side of target
                   const portX2 = tX;
