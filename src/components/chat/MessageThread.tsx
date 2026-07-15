@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, FileText, Lock, MapPin, Check, CheckCheck, User } from "lucide-react";
+import {  Loader2, FileText, Lock, MapPin, Check, CheckCheck, User , Play, Pause } from "lucide-react";
 import { ChatMessage, ChatConversation } from "@/hooks/useChat";
 import { cn } from "@/lib/utils";
 
@@ -10,6 +10,97 @@ interface MessageThreadProps {
   fetchNextMessages?: () => void;
   hasNextMessages?: boolean;
   isFetchingNextMessages?: boolean;
+}
+
+
+function CustomAudioPlayer({ src, isOperator, isInternal }: { src: string; isOperator: boolean; isInternal: boolean }) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [speed, setSpeed] = useState(1);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  const togglePlay = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  const toggleSpeed = () => {
+    const nextSpeed = speed === 1 ? 2 : 1;
+    setSpeed(nextSpeed);
+    if (audioRef.current) audioRef.current.playbackRate = nextSpeed;
+  };
+
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      const p = (audioRef.current.currentTime / (audioRef.current.duration || 1)) * 100;
+      setProgress(p || 0);
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    if (!seconds || isNaN(seconds)) return "0:00";
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
+
+  return (
+    <div className={cn(
+      "flex items-center gap-2 px-3 py-2 rounded-full min-w-[220px] shadow-sm",
+      isOperator && !isInternal ? "bg-primary-foreground/10 text-primary-foreground" : "bg-background/60 text-foreground",
+      isInternal && "bg-yellow-600/10 text-yellow-700 dark:text-yellow-400"
+    )}>
+      <button onClick={togglePlay} className={cn(
+        "h-8 w-8 flex items-center justify-center rounded-full shrink-0 transition-colors",
+        isOperator && !isInternal ? "bg-primary-foreground text-primary hover:bg-primary-foreground/90" : "bg-primary text-primary-foreground hover:bg-primary/90"
+      )}>
+        {isPlaying ? <Pause className="h-4 w-4" fill="currentColor" /> : <Play className="h-4 w-4 ml-0.5" fill="currentColor" />}
+      </button>
+      
+      <div className="flex flex-col flex-1 mx-1 gap-1">
+        <div className="flex justify-between items-center text-[10px] font-medium opacity-80 px-0.5">
+          <span>{formatTime(audioRef.current?.currentTime || 0)}</span>
+          <span>{formatTime(duration)}</span>
+        </div>
+        {/* Fake Progress */}
+        <div className="h-1.5 bg-foreground/20 rounded-full overflow-hidden relative cursor-pointer group" onClick={(e) => {
+           if(audioRef.current && audioRef.current.duration) {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const pos = (e.clientX - rect.left) / rect.width;
+              audioRef.current.currentTime = pos * audioRef.current.duration;
+           }
+        }}>
+          <div className={cn(
+            "h-full absolute top-0 left-0 transition-all duration-75",
+            isOperator && !isInternal ? "bg-primary-foreground" : "bg-primary"
+          )} style={{ width: `${progress}%` }} />
+        </div>
+      </div>
+
+      <button onClick={toggleSpeed} className={cn(
+        "text-[10px] font-bold px-1.5 py-1 rounded-md shrink-0 w-8 text-center transition-colors",
+        isOperator && !isInternal ? "hover:bg-primary-foreground/20" : "hover:bg-foreground/10"
+      )}>
+        {speed}x
+      </button>
+
+      <audio 
+        ref={audioRef} 
+        src={src} 
+        onTimeUpdate={handleTimeUpdate} 
+        onEnded={() => setIsPlaying(false)} 
+        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+        className="hidden" 
+      />
+    </div>
+  );
 }
 
 export default function MessageThread({ 
@@ -200,7 +291,7 @@ export default function MessageThread({
 
                   {msg.message_type === "audio" && (
                     <div className="py-1 min-w-[200px]">
-                      <audio src={msg.media_url || ""} controls className="w-full h-8 outline-none filter dark:invert" />
+                      <CustomAudioPlayer src={msg.media_url || ""} isOperator={isOperator} isInternal={isInternal} />
                     </div>
                   )}
 
