@@ -44,17 +44,33 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ value, onChange, l
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
       const filePath = `branding/${funnel?.id || "global"}/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from("quiz-media")
-        .upload(filePath, file, { upsert: true });
+      const bucketsToTry = ["quiz-media", "group-photos"];
+      let uploadSuccess = false;
+      let lastErrorMessage = "";
 
-      if (uploadError) throw uploadError;
+      for (const bucketName of bucketsToTry) {
+        const { error: uploadError } = await supabase.storage
+          .from(bucketName)
+          .upload(filePath, file, { upsert: true });
 
-      const { data } = supabase.storage.from("quiz-media").getPublicUrl(filePath);
-      const publicUrl = data.publicUrl;
+        if (!uploadError) {
+          const { data } = supabase.storage.from(bucketName).getPublicUrl(filePath);
+          onChange(data.publicUrl);
+          toast({ title: "Upload realizado com sucesso!" });
+          uploadSuccess = true;
+          break;
+        } else {
+          lastErrorMessage = uploadError.message;
+          // If error is bucket not found, try next bucket in list
+          if (!uploadError.message.toLowerCase().includes("not found")) {
+            throw uploadError;
+          }
+        }
+      }
 
-      onChange(publicUrl);
-      toast({ title: "Upload realizado com sucesso!" });
+      if (!uploadSuccess) {
+        throw new Error(lastErrorMessage || "Não foi possível enviar a imagem para o storage.");
+      }
     } catch (err: any) {
       toast({ title: "Erro no upload", description: err.message, variant: "destructive" });
     } finally {
