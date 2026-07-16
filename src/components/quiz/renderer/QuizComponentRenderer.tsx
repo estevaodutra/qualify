@@ -18,6 +18,30 @@ import { RichTextRenderer } from "./RichTextRenderer";
 import { normalizeLegacyTextConfig } from "@/utils/quiz/quizTextSanitizer";
 import { useQuizBuilderStore } from "@/stores/quiz/useQuizBuilderStore";
 
+function formatPhone(value: string, mask: string): string {
+  if (!mask || mask === "no_mask") return value;
+  const digits = value.replace(/\D/g, "");
+  let formatted = "";
+  let digitIdx = 0;
+
+  for (let i = 0; i < mask.length; i++) {
+    const maskChar = mask[i];
+    if (maskChar === "9") {
+      if (digitIdx < digits.length) {
+        formatted += digits[digitIdx];
+        digitIdx++;
+      } else {
+        break;
+      }
+    } else {
+      if (digitIdx < digits.length) {
+        formatted += maskChar;
+      }
+    }
+  }
+  return formatted;
+}
+
 interface ComponentRendererProps {
   component: QuizComponent;
   formValue?: string;
@@ -337,7 +361,14 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
               disabled={isEditor}
               placeholder={placeholder}
               value={formValue}
-              onChange={(e) => onFormChange?.(e.target.value)}
+              onChange={(e) => {
+                let val = e.target.value;
+                if (type === "field_phone") {
+                  const mask = (config.mask as string) || "(99) 99999-9999";
+                  val = formatPhone(val, mask);
+                }
+                onFormChange?.(val);
+              }}
               style={inputInputStyle}
               className={cn(
                 "w-full px-3.5 py-2.5 border-2 text-sm bg-transparent outline-none focus:border-primary transition-colors",

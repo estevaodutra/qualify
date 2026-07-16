@@ -462,7 +462,25 @@ export const PropertiesPanel: React.FC = () => {
                     className="h-8 text-xs"
                   />
                 </div>
-                <label className="flex items-center gap-2 cursor-pointer">
+
+                {activeComponent.componentType === "field_phone" && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Máscara</Label>
+                    <select
+                      value={(activeComponent.config.mask as string) || "(99) 99999-9999"}
+                      onChange={(e) => handleConfigChange("mask", e.target.value)}
+                      className="w-full h-8 px-2 border rounded-md text-xs bg-background"
+                    >
+                      <option value="(99) 99999-9999">(99) 99999-9999</option>
+                      <option value="+55 (99) 99999-9999">+55 (99) 99999-9999 → Brasil</option>
+                      <option value="+1 (999) 999-9999">+1 (999) 999-9999 → Estados Unidos</option>
+                      <option value="+99 999 999 999">+99 999 999 999 → Europa</option>
+                      <option value="no_mask">Sem Máscara</option>
+                    </select>
+                  </div>
+                )}
+
+                <label className="flex items-center gap-2 cursor-pointer pt-1">
                   <input
                     type="checkbox"
                     checked={!!activeComponent.config.required}
