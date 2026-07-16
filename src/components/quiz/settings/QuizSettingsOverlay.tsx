@@ -27,6 +27,48 @@ import { supabase } from "@/integrations/supabase/client";
 import { QuizDesignConfig } from "@/types/quiz";
 import { ImageUploader } from "../media/ImageUploader";
 
+interface CodeEditorTextareaProps {
+  label: string;
+  value: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+}
+
+const CodeEditorTextarea: React.FC<CodeEditorTextareaProps> = ({
+  label,
+  value,
+  onChange,
+  placeholder = "Digite seu script...",
+}) => {
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">{label}</Label>
+      <div className="border border-border rounded-lg overflow-hidden bg-slate-950 font-mono text-xs flex flex-col shadow-xs">
+        <div className="bg-slate-900 border-b border-slate-800 px-3 py-1.5 flex items-center justify-between text-slate-400 text-[10px]">
+          <span>{label} Scripts</span>
+          <span className="opacity-60">HTML / JS</span>
+        </div>
+        <div className="flex flex-1 min-h-[120px] relative">
+          {/* Line number gutter */}
+          <div className="w-9 bg-slate-900 border-r border-slate-800 text-slate-600 text-right pr-2.5 py-3 select-none leading-relaxed text-[10px]">
+            {Array.from({ length: Math.max(6, value.split("\n").length) }).map((_, idx) => (
+              <div key={idx}>{idx + 1}</div>
+            ))}
+          </div>
+          {/* Actual textarea */}
+          <textarea
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            className="flex-1 bg-transparent text-slate-100 p-3 outline-none resize-y border-0 focus:ring-0 leading-relaxed min-h-[120px] text-xs"
+            spellCheck={false}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
 interface SettingsOverlayProps {
   isOpen: boolean;
   onClose: () => void;
@@ -38,7 +80,6 @@ type SettingsSection =
   | "progress"
   | "seo"
   | "pixels"
-  | "scripts"
   | "domain"
   | "integrations"
   | "advanced";
@@ -48,8 +89,7 @@ const SECTIONS: { id: SettingsSection; label: string; icon: any; desc: string }[
   { id: "appearance", label: "Aparência & Cor Base", icon: Palette, desc: "Cor principal, fundo, cartões e tipografia" },
   { id: "progress", label: "Barra de Progresso", icon: Sliders, desc: "Estilos, vínculo com cor base e posições" },
   { id: "seo", label: "SEO & Compartilhamento", icon: Share2, desc: "Meta tags, título, descrição e social preview" },
-  { id: "pixels", label: "Pixels & Rastreamento", icon: Activity, desc: "Meta Pixel, GA4, GTM, TikTok, LinkedIn, Clarity" },
-  { id: "scripts", label: "Scripts Personalizados", icon: Code2, desc: "Injeção de scripts no Head, Body Start e Footer" },
+  { id: "pixels", label: "Pixels & Scripts", icon: Code2, desc: "Configuração de Meta Pixel, Google Analytics, GTM e scripts customizados" },
   { id: "domain", label: "Domínio & Publicação", icon: Globe, desc: "Slug público, status e segurança" },
   { id: "integrations", label: "Integrações & Webhooks", icon: Webhook, desc: "Endpoints Webhook, tokens e gatilhos CRM" },
   { id: "advanced", label: "Configurações Avançadas", icon: ShieldCheck, desc: "Sessão, anti-spam, idioma e restauração" },
@@ -394,59 +434,105 @@ export const QuizSettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, on
             </div>
           )}
 
-          {/* 5. PIXELS E RASTREAMENTO */}
+          {/* 5. PIXELS E SCRIPTS UNIFICADOS */}
           {activeSection === "pixels" && (
-            <div className="space-y-6">
+            <div className="space-y-6 max-h-[80vh] overflow-y-auto pr-1">
               <div>
-                <h3 className="text-lg font-bold">Pixels e Rastreamento de Conversão</h3>
-                <p className="text-xs text-muted-foreground">Insira apenas os IDs das ferramentas. Os scripts serão injetados de forma oficial.</p>
+                <h3 className="text-lg font-bold">Pixels & Scripts</h3>
+                <p className="text-xs text-muted-foreground">Configuração de códigos de rastreamento e injeção de scripts personalizados.</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 border p-4 rounded-lg bg-card">
-                <div className="space-y-2">
-                  <Label className="text-xs font-semibold">Meta Pixel ID (Facebook)</Label>
-                  <Input
-                    value={pixel.fbPixelId || ""}
-                    onChange={(e) => setPixel({ ...pixel, fbPixelId: e.target.value })}
-                    placeholder="ex: 1234567890"
-                    className="text-xs font-mono"
-                  />
-                </div>
+              {/* Attention Panel */}
+              <div className="bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 p-4 rounded-lg text-xs space-y-2">
+                <p className="font-bold">Atenção!</p>
+                <p>
+                  Esta seção é dedicada à configuração global de códigos de acompanhamento e integrações, que serão ativados assim que a página for carregada. Cada plataforma possui instruções específicas, portanto, é essencial seguir os passos indicados em cada uma delas.
+                </p>
+                <p>
+                  Para configurações em momentos específicos de navegação do usuário, utilize o campo "Script" nos componentes de botão e opções.
+                </p>
+              </div>
 
-                <div className="space-y-2">
-                  <Label className="text-xs font-semibold">Google Analytics 4 (GA4 ID)</Label>
+              {/* ID Inputs Grid */}
+              <div className="grid grid-cols-2 gap-4 border p-4 rounded-lg bg-card">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Google Analytics ID</Label>
                   <Input
                     value={pixel.gaId || ""}
                     onChange={(e) => setPixel({ ...pixel, gaId: e.target.value })}
-                    placeholder="ex: G-XXXXXXXXXX"
+                    placeholder="G-XXXXXXXXXX"
                     className="text-xs font-mono"
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label className="text-xs font-semibold">Google Tag Manager (GTM ID)</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Google Tag Manager ID</Label>
                   <Input
                     value={pixel.gtmId || ""}
                     onChange={(e) => setPixel({ ...pixel, gtmId: e.target.value })}
-                    placeholder="ex: GTM-XXXXXXX"
+                    placeholder="GTM-XXXXXX"
+                    className="text-xs font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Google Site Verification</Label>
+                  <Input
+                    value={pixel.googleSiteVerification || ""}
+                    onChange={(e) => setPixel({ ...pixel, googleSiteVerification: e.target.value })}
+                    placeholder="XXXXXXXXXXXXXXXX"
+                    className="text-xs font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Facebook Pixel ID</Label>
+                  <Input
+                    value={pixel.fbPixelId || ""}
+                    onChange={(e) => setPixel({ ...pixel, fbPixelId: e.target.value })}
+                    placeholder="XXXXXXXXXXXXXXXX"
                     className="text-xs font-mono"
                   />
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* 6. SCRIPTS PERSONALIZADOS */}
-          {activeSection === "scripts" && (
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-bold">Scripts Personalizados (Head / Body / Footer)</h3>
-                <p className="text-xs text-muted-foreground">Injete códigos customizados com execução segura e isolada.</p>
+              {/* Code Editors */}
+              <div className="space-y-4">
+                <CodeEditorTextarea
+                  label="Head"
+                  value={pixel.headScript || ""}
+                  onChange={(val) => setPixel({ ...pixel, headScript: val })}
+                  placeholder="Digite seu script do Head aqui..."
+                />
+
+                <CodeEditorTextarea
+                  label="Body"
+                  value={pixel.bodyScript || ""}
+                  onChange={(val) => setPixel({ ...pixel, bodyScript: val })}
+                  placeholder="Digite seu script do Body aqui..."
+                />
+
+                <CodeEditorTextarea
+                  label="Footer"
+                  value={pixel.footerScript || ""}
+                  onChange={(val) => setPixel({ ...pixel, footerScript: val })}
+                  placeholder="Digite seu script do Footer aqui..."
+                />
               </div>
 
-              <div className="border p-4 rounded-lg bg-card space-y-4">
-                <p className="text-xs text-muted-foreground">
-                  Você pode salvar os scripts na tabela de custom scripts do Supabase para injeção no runtime público.
+              {/* Bottom Help Box */}
+              <div className="bg-muted/40 border border-border p-4 rounded-lg text-center text-xs space-y-1">
+                <p className="font-bold text-muted-foreground uppercase tracking-wide">Ainda precisa de ajuda?</p>
+                <p>
+                  Aprenda{" "}
+                  <a
+                    href="#"
+                    onClick={(e) => e.preventDefault()}
+                    className="underline text-indigo-600 font-semibold hover:text-indigo-500"
+                  >
+                    "Como configurar Facebook Pixel e Scripts"
+                  </a>{" "}
+                  em nossa Central de Ajuda.
                 </p>
               </div>
             </div>

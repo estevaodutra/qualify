@@ -168,6 +168,155 @@ export default function QuizPublicPage() {
     loadPublicData();
   }, [slug]);
 
+  // Inject tracking pixels and custom scripts
+  React.useEffect(() => {
+    if (!funnel) return;
+
+    const pc = funnel.pixelConfig as Record<string, string> || {};
+    const elementsToCleanup: HTMLElement[] = [];
+
+    // Helper to append script
+    const injectScript = (content: string, target: HTMLElement, position: "append" | "prepend" = "append") => {
+      if (!content || !content.trim()) return;
+      
+      const tempDiv = document.createElement("div");
+      tempDiv.innerHTML = content.trim();
+
+      const children = Array.from(tempDiv.childNodes);
+      children.forEach((child) => {
+        if (child.nodeType === Node.ELEMENT_NODE) {
+          const el = child as HTMLElement;
+          const tagName = el.tagName.toLowerCase();
+
+          if (tagName === "script") {
+            const scriptEl = document.createElement("script");
+            Array.from(el.attributes).forEach((attr) => {
+              scriptEl.setAttribute(attr.name, attr.value);
+            });
+            if (el.innerHTML) {
+              scriptEl.innerHTML = el.innerHTML;
+            }
+            scriptEl.setAttribute("data-quiz-script", funnel.id);
+            if (position === "prepend" && target.firstChild) {
+              target.insertBefore(scriptEl, target.firstChild);
+            } else {
+              target.appendChild(scriptEl);
+            }
+            elementsToCleanup.push(scriptEl);
+          } else {
+            const newEl = el.cloneNode(true) as HTMLElement;
+            newEl.setAttribute("data-quiz-script", funnel.id);
+            if (position === "prepend" && target.firstChild) {
+              target.insertBefore(newEl, target.firstChild);
+            } else {
+              target.appendChild(newEl);
+            }
+            elementsToCleanup.push(newEl);
+          }
+        }
+      });
+    };
+
+    // 1. Google Site Verification
+    if (pc.googleSiteVerification) {
+      const meta = document.createElement("meta");
+      meta.name = "google-site-verification";
+      meta.content = pc.googleSiteVerification;
+      meta.setAttribute("data-quiz-script", funnel.id);
+      document.head.appendChild(meta);
+      elementsToCleanup.push(meta);
+    }
+
+    // 2. Google Analytics 4 (GA4)
+    if (pc.gaId) {
+      const gaScript = document.createElement("script");
+      gaScript.async = true;
+      gaScript.src = `https://www.googletagmanager.com/gtag/js?id=${pc.gaId}`;
+      gaScript.setAttribute("data-quiz-script", funnel.id);
+      document.head.appendChild(gaScript);
+      elementsToCleanup.push(gaScript);
+
+      const gaInit = document.createElement("script");
+      gaInit.innerHTML = `
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', '${pc.gaId}');
+      `;
+      gaInit.setAttribute("data-quiz-script", funnel.id);
+      document.head.appendChild(gaInit);
+      elementsToCleanup.push(gaInit);
+    }
+
+    // 3. Google Tag Manager (GTM)
+    if (pc.gtmId) {
+      const gtmHead = document.createElement("script");
+      gtmHead.innerHTML = `
+        (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+        new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+        j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+        'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+        })(window,document,'script','dataLayer','${pc.gtmId}');
+      `;
+      gtmHead.setAttribute("data-quiz-script", funnel.id);
+      document.head.appendChild(gtmHead);
+      elementsToCleanup.push(gtmHead);
+
+      const gtmNoscript = document.createElement("noscript");
+      gtmNoscript.innerHTML = `<iframe src="https://www.googletagmanager.com/ns.html?id=${pc.gtmId}" height="0" width="0" style="display:none;visibility:hidden"></iframe>`;
+      gtmNoscript.setAttribute("data-quiz-script", funnel.id);
+      document.body.insertBefore(gtmNoscript, document.body.firstChild);
+      elementsToCleanup.push(gtmNoscript);
+    }
+
+    // 4. Facebook Pixel
+    if (pc.fbPixelId) {
+      const fbScript = document.createElement("script");
+      fbScript.innerHTML = `
+        !function(f,b,e,v,n,t,s)
+        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+        n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s)}(window, document,'script',
+        'https://connect.facebook.net/en_US/fbevents.js');
+        fbq('init', '${pc.fbPixelId}');
+        fbq('track', 'PageView');
+      `;
+      fbScript.setAttribute("data-quiz-script", funnel.id);
+      document.head.appendChild(fbScript);
+      elementsToCleanup.push(fbScript);
+
+      const fbNoscript = document.createElement("noscript");
+      fbNoscript.innerHTML = `<img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=${pc.fbPixelId}&ev=PageView&noscript=1" />`;
+      fbNoscript.setAttribute("data-quiz-script", funnel.id);
+      document.body.appendChild(fbNoscript);
+      elementsToCleanup.push(fbNoscript);
+    }
+
+    // 5. Custom Head Script
+    if (pc.headScript) {
+      injectScript(pc.headScript, document.head);
+    }
+
+    // 6. Custom Body Script (prepend to body start)
+    if (pc.bodyScript) {
+      injectScript(pc.bodyScript, document.body, "prepend");
+    }
+
+    // 7. Custom Footer Script (append to body end)
+    if (pc.footerScript) {
+      injectScript(pc.footerScript, document.body);
+    }
+
+    return () => {
+      elementsToCleanup.forEach((el) => {
+        el.parentNode?.removeChild(el);
+      });
+    };
+  }, [funnel]);
+
   const ensureSubmission = async (): Promise<string> => {
     if (submissionId) return submissionId;
     if (!funnel) return "";
