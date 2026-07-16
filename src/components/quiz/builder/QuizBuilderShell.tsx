@@ -208,7 +208,7 @@ export const QuizBuilderShell: React.FC<QuizBuilderShellProps> = ({ funnelId }) 
   };
 
   return (
-    <div className="fixed inset-0 h-screen w-screen flex flex-col overflow-hidden bg-background">
+    <div className="h-full w-full flex flex-col overflow-hidden bg-background">
       <QuizBuilderTopbar
         onSave={handleSave}
         onPublish={handlePublish}

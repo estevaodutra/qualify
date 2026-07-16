@@ -1,4 +1,5 @@
-import { Outlet } from "react-router-dom";
+// src/components/layout/AppLayout.tsx
+import { Outlet, useLocation } from "react-router-dom";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { AppHeader } from "./AppHeader";
@@ -14,24 +15,27 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   // Global queue tick loop — runs on all pages
   useCallQueue({ globalLoop: true });
+  const location = useLocation();
+
+  // Check if current route is the Quiz Editor builder
+  const isQuizEditor = location.pathname.startsWith("/quiz/") && location.pathname !== "/quiz";
 
   return (
     <SidebarProvider defaultOpen>
       <div className="flex min-h-screen w-full bg-background relative overflow-hidden">
-        {/* Design Clean e Solid */}
-
+        {/* System Sidebar */}
         <AppSidebar />
 
         <div className="flex flex-1 flex-col relative z-10 min-w-0">
           <ImpersonationBanner />
-          <AppHeader />
-          <InstanceStatusBanner />
-          <main className="flex-1 overflow-auto p-5 md:p-8 scrollbar-thin">
+          {!isQuizEditor && <AppHeader />}
+          {!isQuizEditor && <InstanceStatusBanner />}
+          <main className={isQuizEditor ? "flex-1 overflow-hidden p-0 h-screen" : "flex-1 overflow-auto p-5 md:p-8 scrollbar-thin"}>
             {children || <Outlet />}
           </main>
         </div>
-        
-        <ChatExpressDock />
+
+        {!isQuizEditor && <ChatExpressDock />}
       </div>
     </SidebarProvider>
   );
