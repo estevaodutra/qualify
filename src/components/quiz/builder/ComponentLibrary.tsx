@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { COMPONENT_REGISTRY, ComponentDefinition } from "../registry/componentRegistry";
 import { useQuizBuilderStore } from "@/stores/quiz/useQuizBuilderStore";
 import { QuizComponent, QuizComponentType, QuizComponentCategory } from "@/types/quiz";
+import { useToast } from "@/hooks/use-toast";
 
 const CATEGORY_LABELS: Record<QuizComponentCategory, string> = {
   content: "Conteúdo & Mídia",
