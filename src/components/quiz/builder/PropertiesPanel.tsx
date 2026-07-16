@@ -7,8 +7,89 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useQuizBuilderStore, InspectorTab } from "@/stores/quiz/useQuizBuilderStore";
 import { COMPONENT_REGISTRY } from "../registry/componentRegistry";
-import { ImageUploader } from "../media/ImageUploader";
-import { EditableRichText } from "../editor/EditableRichText";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { X } from "lucide-react";
+import { TEXT_COLOR_PRESETS } from "@/utils/quiz/quizTextSanitizer";
+
+interface ColorPickerProps {
+  label: string;
+  value: string;
+  onChange: (color: string) => void;
+  defaultColor?: string;
+}
+
+const ColorPickerPopover: React.FC<ColorPickerProps> = ({
+  label,
+  value,
+  onChange,
+  defaultColor = "#ec4899",
+}) => {
+  const currentColor = value || defaultColor;
+
+  return (
+    <div className="space-y-1">
+      <Label className="text-[11px]">{label}</Label>
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="flex items-center justify-between w-full border border-border rounded-md p-1.5 bg-background h-8 text-xs hover:border-indigo-400 transition-colors"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <span
+                className="w-4 h-4 rounded border border-border/80 shrink-0 shadow-xs"
+                style={{ backgroundColor: currentColor }}
+              />
+              <span className="font-mono text-[10px] uppercase truncate">{currentColor}</span>
+            </div>
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-52 p-3 text-xs space-y-3" side="top">
+          <p className="font-semibold text-xs text-foreground/80">{label}</p>
+
+          <div className="grid grid-cols-6 gap-1.5">
+            {TEXT_COLOR_PRESETS.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => onChange(item.value || defaultColor)}
+                title={item.label}
+                className={`w-6 h-6 rounded-full border border-border flex items-center justify-center hover:scale-110 transition-transform ${
+                  item.value && item.value.toLowerCase() === currentColor.toLowerCase()
+                    ? "ring-2 ring-indigo-600 ring-offset-1"
+                    : ""
+                }`}
+                style={{ backgroundColor: item.value || "#ffffff" }}
+              >
+                {!item.value && <X className="w-3 h-3 text-red-500" />}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2 pt-1 border-t border-border/60">
+            <span className="text-[10px] text-muted-foreground">Personalizada:</span>
+            <input
+              type="color"
+              value={currentColor.startsWith("#") ? currentColor : "#000000"}
+              onChange={(e) => onChange(e.target.value)}
+              className="w-6 h-6 rounded cursor-pointer border-0 p-0 bg-transparent"
+            />
+            <span className="font-mono text-[10px] uppercase">{currentColor}</span>
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full h-7 text-[11px]"
+            onClick={() => onChange(defaultColor)}
+          >
+            Restaurar Padrão
+          </Button>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+};
 
 interface WidthSliderProps {
   value: string;
@@ -253,37 +334,20 @@ export const PropertiesPanel: React.FC = () => {
                   />
                 </div>
 
-                {/* Colors */}
+                {/* Colors with Swatch Palette Popover */}
                 <div className="grid grid-cols-2 gap-2 pt-1">
-                  <div className="space-y-1">
-                    <Label className="text-[11px]">Cor do Botão</Label>
-                    <div className="flex items-center gap-2 border border-border rounded-md p-1 bg-background h-8">
-                      <input
-                        type="color"
-                        value={(activeComponent.config.buttonColor as string) || "#ec4899"}
-                        onChange={(e) => handleConfigChange("buttonColor", e.target.value)}
-                        className="w-5 h-5 rounded cursor-pointer border-0 p-0 bg-transparent"
-                      />
-                      <span className="text-[10px] uppercase font-mono truncate">
-                        {(activeComponent.config.buttonColor as string) || "#ec4899"}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-[11px]">Cor do Texto</Label>
-                    <div className="flex items-center gap-2 border border-border rounded-md p-1 bg-background h-8">
-                      <input
-                        type="color"
-                        value={(activeComponent.config.textColor as string) || "#ffffff"}
-                        onChange={(e) => handleConfigChange("textColor", e.target.value)}
-                        className="w-5 h-5 rounded cursor-pointer border-0 p-0 bg-transparent"
-                      />
-                      <span className="text-[10px] uppercase font-mono truncate">
-                        {(activeComponent.config.textColor as string) || "#ffffff"}
-                      </span>
-                    </div>
-                  </div>
+                  <ColorPickerPopover
+                    label="Cor do Botão"
+                    value={(activeComponent.config.buttonColor as string) || ""}
+                    onChange={(color) => handleConfigChange("buttonColor", color)}
+                    defaultColor="#ec4899"
+                  />
+                  <ColorPickerPopover
+                    label="Cor do Texto"
+                    value={(activeComponent.config.textColor as string) || ""}
+                    onChange={(color) => handleConfigChange("textColor", color)}
+                    defaultColor="#ffffff"
+                  />
                 </div>
 
                 {/* Navigation Type Box */}
