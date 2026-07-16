@@ -13,6 +13,10 @@ import {
   Trash2,
   GripVertical
 } from "lucide-react";
+import { EditableRichText } from "../editor/EditableRichText";
+import { RichTextRenderer } from "./RichTextRenderer";
+import { normalizeLegacyTextConfig } from "@/utils/quiz/quizTextSanitizer";
+import { useQuizBuilderStore } from "@/stores/quiz/useQuizBuilderStore";
 
 interface ComponentRendererProps {
   component: QuizComponent;
@@ -68,17 +72,24 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
   };
 
   const renderComponentBody = () => {
-    // ─── Text / Heading ────────────────────────────────────────────────────────
-    if (type === "text" || type === "heading") {
-      const align = (config.align as any) || "center";
-      const content = (config.content as string) || (type === "heading" ? "Título em Destaque" : "Texto informativo");
+    // ─── Rich Text / Text / Heading (Unified) ───────────────────────────
+    if (type === "rich_text" || type === "text" || type === "heading") {
+      const normalized = normalizeLegacyTextConfig(type, config);
 
       return (
-        <div
-          style={{ textAlign: align }}
-          className="w-full py-1 text-sm transition-all"
-          dangerouslySetInnerHTML={{ __html: content }}
-        />
+        <div className="w-full py-1 transition-all">
+          <EditableRichText
+            value={normalized.content}
+            onChange={(newContent) => {
+              if (isEditor) {
+                useQuizBuilderStore.getState().updateComponentConfig(component.id, { content: newContent });
+              }
+            }}
+            alignment={normalized.alignment}
+            editable={isEditor}
+            preset="full"
+          />
+        </div>
       );
     }
 

@@ -53,12 +53,20 @@ export const ComponentConditionGroupSchema = z.object({
 });
 
 // Component Specific Config Schemas
-export const TextComponentSchema = z.object({
-  content: z.string().default("<p>Texto informativo</p>"),
-  align: z.enum(["left", "center", "right"]).default("center"),
-  fontSize: z.number().optional(),
-  color: z.string().optional(),
+export const RichTextComponentSchema = z.object({
+  content: z.string().default("<p>Digite seu texto...</p>"),
+  defaultBlockStyle: z.enum(["heading_1", "heading_2", "heading_3", "paragraph"]).default("paragraph"),
+  defaultTextSize: z.enum(["small", "normal", "large"]).default("normal"),
+  alignment: z.enum(["left", "center", "right"]).default("center"),
+  textColor: z.string().optional(),
+  backgroundColor: z.string().optional(),
+  width: z.string().default("100%"),
+  showOnMobile: z.boolean().default(true),
+  showOnTablet: z.boolean().default(true),
+  showOnDesktop: z.boolean().default(true),
 });
+
+export const TextComponentSchema = RichTextComponentSchema;
 
 export const ImageComponentSchema = z.object({
   url: z.string().default(""),

@@ -18,6 +18,7 @@ export type QuizComponentType =
   | "spacer"
   | "divider"
   // Content
+  | "rich_text"
   | "heading"
   | "text"
   | "image"

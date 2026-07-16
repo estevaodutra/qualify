@@ -75,7 +75,9 @@ export const ComponentLibrary: React.FC = () => {
     toast({ title: "Componente adicionado", description: `${def.label} adicionado com sucesso.` });
   };
 
-  const allDefinitions = Object.values(COMPONENT_REGISTRY) as ComponentDefinition[];
+  const allDefinitions = (Object.values(COMPONENT_REGISTRY) as ComponentDefinition[]).filter(
+    (def) => def.type !== "text" && def.type !== "heading"
+  );
   const filtered = allDefinitions.filter(
     (def) =>
       def.label.toLowerCase().includes(search.toLowerCase()) ||

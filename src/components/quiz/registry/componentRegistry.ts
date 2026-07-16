@@ -51,15 +51,37 @@ export interface ComponentDefinition<T = any> {
 
 export const COMPONENT_REGISTRY: Record<QuizComponentType, ComponentDefinition> = {
   // ─── Content ──────────────────────────────────────────────────────────────
-  text: {
-    type: "text",
-    label: "Texto / Parágrafo",
-    description: "Instruções, explicações e textos ricos formatados.",
+  rich_text: {
+    type: "rich_text",
+    label: "Texto",
+    description: "Títulos, parágrafos e textos ricos formatados.",
     category: "content",
     icon: Type,
     defaultConfig: {
-      content: "<h2>Título em Destaque</h2><p>Forneça instruções claras e objetivas para o usuário responder ao quiz.</p>",
-      align: "center",
+      content: "<p>Digite seu texto...</p>",
+      defaultBlockStyle: "paragraph",
+      defaultTextSize: "normal",
+      alignment: "center",
+      width: "100%",
+      showOnMobile: true,
+      showOnTablet: true,
+      showOnDesktop: true,
+    },
+    schema: TextComponentSchema,
+    supportsConditions: true,
+    supportsResponsive: true,
+    supportsDataBinding: true,
+    migrationVersion: 1,
+  },
+  text: {
+    type: "text",
+    label: "Texto",
+    description: "Títulos, parágrafos e textos ricos formatados.",
+    category: "content",
+    icon: Type,
+    defaultConfig: {
+      content: "<p>Digite seu texto...</p>",
+      alignment: "center",
     },
     schema: TextComponentSchema,
     supportsConditions: true,
@@ -69,13 +91,13 @@ export const COMPONENT_REGISTRY: Record<QuizComponentType, ComponentDefinition> 
   },
   heading: {
     type: "heading",
-    label: "Título Principal",
-    description: "Headline em destaque para início de etapas.",
+    label: "Texto",
+    description: "Títulos, parágrafos e textos ricos formatados.",
     category: "content",
-    icon: Heading,
+    icon: Type,
     defaultConfig: {
-      content: "Descubra o Perfil Ideal",
-      align: "center",
+      content: "<h2>Descubra o Perfil Ideal</h2>",
+      alignment: "center",
     },
     schema: TextComponentSchema,
     supportsConditions: true,

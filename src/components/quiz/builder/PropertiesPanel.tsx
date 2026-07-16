@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useQuizBuilderStore, InspectorTab } from "@/stores/quiz/useQuizBuilderStore";
 import { COMPONENT_REGISTRY } from "../registry/componentRegistry";
 import { ImageUploader } from "../media/ImageUploader";
+import { EditableRichText } from "../editor/EditableRichText";
 
 export const PropertiesPanel: React.FC = () => {
   const activeComponentId = useQuizBuilderStore((s) => s.activeComponentId);
@@ -136,14 +137,29 @@ export const PropertiesPanel: React.FC = () => {
         <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
           {/* Content Tab */}
           <TabsContent value="content" className="space-y-4 m-0">
-            {activeComponent.componentType === "text" || activeComponent.componentType === "heading" ? (
-              <div className="space-y-1.5">
-                <Label className="text-xs">Conteúdo HTML / Texto</Label>
-                <textarea
-                  value={(activeComponent.config.content as string) || ""}
-                  onChange={(e) => handleConfigChange("content", e.target.value)}
-                  className="w-full min-h-[120px] p-2 text-xs border rounded-md font-mono"
-                />
+            {activeComponent.componentType === "rich_text" || activeComponent.componentType === "text" || activeComponent.componentType === "heading" ? (
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Conteúdo de Texto (Edição Visual)</Label>
+                  <EditableRichText
+                    value={(activeComponent.config.content as string) || ""}
+                    onChange={(val) => handleConfigChange("content", val)}
+                    editable={true}
+                    preset="full"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Alinhamento do Bloco</Label>
+                  <select
+                    value={(activeComponent.config.alignment as string) || (activeComponent.config.align as string) || "center"}
+                    onChange={(e) => handleConfigChange("alignment", e.target.value)}
+                    className="w-full h-8 px-2 border rounded-md text-xs bg-background"
+                  >
+                    <option value="left">Esquerda</option>
+                    <option value="center">Centralizado</option>
+                    <option value="right">Direita</option>
+                  </select>
+                </div>
               </div>
             ) : null}
 
