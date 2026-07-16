@@ -178,42 +178,36 @@ export default function QuizPublicPage() {
     const injectScript = (content: string, target: HTMLElement, position: "append" | "prepend" = "append") => {
       if (!content || !content.trim()) return;
       
-      const tempDiv = document.createElement("div");
-      tempDiv.innerHTML = content.trim();
-
-      const children = Array.from(tempDiv.childNodes);
-      children.forEach((child) => {
-        if (child.nodeType === Node.ELEMENT_NODE) {
-          const el = child as HTMLElement;
-          const tagName = el.tagName.toLowerCase();
-
-          if (tagName === "script") {
-            const scriptEl = document.createElement("script");
-            Array.from(el.attributes).forEach((attr) => {
-              scriptEl.setAttribute(attr.name, attr.value);
-            });
-            if (el.innerHTML) {
-              scriptEl.innerHTML = el.innerHTML;
-            }
-            scriptEl.setAttribute("data-quiz-script", funnel.id);
-            if (position === "prepend" && target.firstChild) {
-              target.insertBefore(scriptEl, target.firstChild);
-            } else {
-              target.appendChild(scriptEl);
-            }
-            elementsToCleanup.push(scriptEl);
+      try {
+        const range = document.createRange();
+        const fragment = range.createContextualFragment(content.trim());
+        
+        // Add data-quiz-script attribute to track and cleanup
+        const children = Array.from(fragment.childNodes);
+        children.forEach((child) => {
+          if (child.nodeType === Node.ELEMENT_NODE) {
+            const el = child as HTMLElement;
+            el.setAttribute("data-quiz-script", funnel.id);
+            elementsToCleanup.push(el);
           } else {
-            const newEl = el.cloneNode(true) as HTMLElement;
-            newEl.setAttribute("data-quiz-script", funnel.id);
-            if (position === "prepend" && target.firstChild) {
-              target.insertBefore(newEl, target.firstChild);
-            } else {
-              target.appendChild(newEl);
-            }
-            elementsToCleanup.push(newEl);
+            // Wrap text/comments in a wrapper so they can be cleaned up
+            const span = document.createElement("span");
+            span.style.display = "none";
+            span.setAttribute("data-quiz-script", funnel.id);
+            span.appendChild(child.cloneNode(true));
+            child.parentNode?.replaceChild(span, child);
+            elementsToCleanup.push(span);
           }
+        });
+
+        if (position === "prepend" && target.firstChild) {
+          target.insertBefore(fragment, target.firstChild);
+        } else {
+          target.appendChild(fragment);
         }
-      });
+      } catch (err) {
+        console.warn("createContextualFragment script injection failed:", err);
+      }
     };
 
     // 1. Google Site Verification
@@ -236,7 +230,7 @@ export default function QuizPublicPage() {
       elementsToCleanup.push(gaScript);
 
       const gaInit = document.createElement("script");
-      gaInit.innerHTML = `
+      gaInit.text = `
         window.dataLayer = window.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
         gtag('js', new Date());
@@ -250,7 +244,7 @@ export default function QuizPublicPage() {
     // 3. Google Tag Manager (GTM)
     if (pc.gtmId) {
       const gtmHead = document.createElement("script");
-      gtmHead.innerHTML = `
+      gtmHead.text = `
         (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
         new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
         j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
@@ -271,7 +265,7 @@ export default function QuizPublicPage() {
     // 4. Facebook Pixel
     if (pc.fbPixelId) {
       const fbScript = document.createElement("script");
-      fbScript.innerHTML = `
+      fbScript.text = `
         !function(f,b,e,v,n,t,s)
         {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
         n.callMethod.apply(n,arguments):n.queue.push(arguments)};
@@ -311,6 +305,11 @@ export default function QuizPublicPage() {
 
     return () => {
       elementsToCleanup.forEach((el) => {
+        el.parentNode?.removeChild(el);
+      });
+      // Fallback query selector cleanup for elements in head or body
+      const queryElements = document.querySelectorAll(`[data-quiz-script="${funnel.id}"]`);
+      queryElements.forEach((el) => {
         el.parentNode?.removeChild(el);
       });
     };
