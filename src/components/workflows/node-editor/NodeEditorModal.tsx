@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { LocalNode } from "@/components/sequences/shared-types";
 import { NodeEditorHeader } from "./NodeEditorHeader";
@@ -481,12 +481,11 @@ export function NodeEditorModal({
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-        <DialogContent 
-          className={cn(
-            "w-[calc(100vw-16px)] md:w-[calc(100vw-48px)] max-h-[calc(100vh-24px)] md:max-h-[calc(100vh-80px)] p-0 gap-0 overflow-hidden flex flex-col rounded-2xl border bg-white shadow-2xl transition-all outline-none [&>button]:hidden",
-            node.nodeType === "field_mapping" || node.nodeType === "api" ? "max-w-[1040px]" : "max-w-[860px]"
-          )}
+      <Sheet open={isOpen} onOpenChange={handleOpenChange}>
+        <SheetContent 
+          side="left"
+          hideOverlay={true}
+          className="w-full sm:max-w-[450px] p-0 gap-0 flex flex-col border-r bg-white shadow-2xl transition-transform duration-300 outline-none [&>button]:hidden z-[100]"
           onPointerDownOutside={(e) => {
             e.preventDefault();
             handleRequestClose();
@@ -618,16 +617,16 @@ export function NodeEditorModal({
             </div>
           ) : (
             <Tabs value={activeMainTab} onValueChange={(v: any) => setActiveMainTab(v)} className="flex-1 flex flex-col min-h-0">
-              <div className="px-6 py-2 border-b bg-slate-50/50 flex items-center justify-between shrink-0">
-                <TabsList className="h-8 p-0.5 rounded-xl bg-slate-100 border">
-                  <TabsTrigger value="config" className="h-7 text-xs rounded-lg px-4 gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                    <Sliders className="h-3.5 w-3.5 text-[#8A3CFF]" /> Configuração
+              <div className="px-4 py-2 border-b bg-slate-50/50 flex items-center shrink-0 w-full overflow-hidden">
+                <TabsList className="h-auto p-1 rounded-xl bg-slate-100 border flex flex-wrap justify-start w-full gap-1">
+                  <TabsTrigger value="config" className="h-7 text-[10px] sm:text-xs rounded-lg px-2 sm:px-3 gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                    <Sliders className="h-3 w-3 text-[#8A3CFF]" /> Configuração
                   </TabsTrigger>
-                  <TabsTrigger value="input" className="h-7 text-xs rounded-lg px-4 gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                    <Database className="h-3.5 w-3.5 text-[#8A3CFF]" /> Entrada (Input)
+                  <TabsTrigger value="input" className="h-7 text-[10px] sm:text-xs rounded-lg px-2 sm:px-3 gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                    <Database className="h-3 w-3 text-[#8A3CFF]" /> Entrada (Input)
                   </TabsTrigger>
-                  <TabsTrigger value="output" className="h-7 text-xs rounded-lg px-4 gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                    <Database className="h-3.5 w-3.5 text-[#8A3CFF]" /> Saída (Output)
+                  <TabsTrigger value="output" className="h-7 text-[10px] sm:text-xs rounded-lg px-2 sm:px-3 gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                    <Database className="h-3 w-3 text-[#8A3CFF]" /> Saída (Output)
                   </TabsTrigger>
                 </TabsList>
               </div>
@@ -664,8 +663,8 @@ export function NodeEditorModal({
               </div>
             </Tabs>
           )}
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
 
       <AlertDialog open={showExitConfirm} onOpenChange={setShowExitConfirm}>
         <AlertDialogContent className="max-w-[400px] rounded-2xl">
