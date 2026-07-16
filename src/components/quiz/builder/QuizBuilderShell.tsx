@@ -1,0 +1,222 @@
+// src/components/quiz/builder/QuizBuilderShell.tsx
+import React, { useEffect, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuizBuilderStore } from "@/stores/quiz/useQuizBuilderStore";
+import { QuizBuilderTopbar } from "./QuizBuilderTopbar";
+import { StepSidebar } from "./StepSidebar";
+import { ComponentLibrary } from "./ComponentLibrary";
+import { BuilderCanvas } from "./BuilderCanvas";
+import { PropertiesPanel } from "./PropertiesPanel";
+import { QuizFunnel, QuizStep, QuizComponent, QuizDesignConfig } from "@/types/quiz";
+import { DEFAULT_DESIGN_CONFIG } from "@/components/quiz/design/DesignTab";
+import { useToast } from "@/hooks/use-toast";
+
+interface QuizBuilderShellProps {
+  funnelId: string;
+}
+
+export const QuizBuilderShell: React.FC<QuizBuilderShellProps> = ({ funnelId }) => {
+  const { toast } = useToast();
+
+  const funnel = useQuizBuilderStore((s) => s.funnel);
+  const steps = useQuizBuilderStore((s) => s.steps);
+  const components = useQuizBuilderStore((s) => s.components);
+  const designConfig = useQuizBuilderStore((s) => s.designConfig);
+  const activeComponentId = useQuizBuilderStore((s) => s.activeComponentId);
+
+  const setFunnel = useQuizBuilderStore((s) => s.setFunnel);
+  const setSteps = useQuizBuilderStore((s) => s.setSteps);
+  const setComponents = useQuizBuilderStore((s) => s.setComponents);
+  const setSaveStatus = useQuizBuilderStore((s) => s.setSaveStatus);
+  const undo = useQuizBuilderStore((s) => s.undo);
+  const redo = useQuizBuilderStore((s) => s.redo);
+  const deleteComponent = useQuizBuilderStore((s) => s.deleteComponent);
+  const saveStatus = useQuizBuilderStore((s) => s.saveStatus);
+
+  // Load Funnel, Steps and Components from Supabase
+  useEffect(() => {
+    async function loadData() {
+      const { data: f } = await (supabase as any)
+        .from("quiz_funnels")
+        .select("*")
+        .eq("id", funnelId)
+        .single();
+
+      if (!f) return;
+
+      const [{ data: sList }, { data: cList }] = await Promise.all([
+        (supabase as any)
+          .from("quiz_steps")
+          .select("*")
+          .eq("funnel_id", funnelId)
+          .order("step_order", { ascending: true }),
+        (supabase as any)
+          .from("quiz_components")
+          .select("*")
+          .eq("funnel_id", funnelId)
+          .order("component_order", { ascending: true }),
+      ]);
+
+      const loadedDesignConfig: QuizDesignConfig = {
+        ...DEFAULT_DESIGN_CONFIG,
+        ...(f.design_config || {}),
+      };
+
+      const formattedFunnel: QuizFunnel = {
+        id: f.id,
+        companyId: f.company_id,
+        userId: f.user_id,
+        name: f.name,
+        slug: f.slug,
+        status: f.status,
+        designConfig: loadedDesignConfig,
+        seoConfig: f.seo_config || {},
+        pixelConfig: f.pixel_config || {},
+        webhookConfig: f.webhook_config || {},
+        visitsCount: f.visits_count || 0,
+        responsesCount: f.responses_count || 0,
+        leadsCount: f.leads_count || 0,
+        completionsCount: f.completions_count || 0,
+        version: f.version || 1,
+        createdAt: f.created_at,
+        updatedAt: f.updated_at,
+      };
+
+      const formattedSteps: QuizStep[] = (sList || []).map((s: any) => ({
+        id: s.id,
+        funnelId: s.funnel_id,
+        name: s.name,
+        stepOrder: s.step_order,
+        type: s.type || "content",
+        showLogo: s.show_logo ?? true,
+        showProgress: s.show_progress ?? true,
+        allowBack: s.allow_back ?? true,
+        settings: s.settings || {},
+      }));
+
+      const formattedComponents: QuizComponent[] = (cList || []).map((c: any) => ({
+        id: c.id,
+        stepId: c.step_id,
+        funnelId: c.funnel_id,
+        componentType: c.component_type,
+        componentOrder: c.component_order,
+        config: c.config || {},
+        schemaVersion: c.schema_version || 1,
+      }));
+
+      setFunnel(formattedFunnel);
+      setSteps(formattedSteps);
+      setComponents(formattedComponents);
+      setSaveStatus("saved");
+    }
+
+    loadData();
+  }, [funnelId]);
+
+  // Persist Changes to Supabase
+  const handleSave = useCallback(async () => {
+    if (!funnel || saveStatus === "saved") return;
+
+    setSaveStatus("saving");
+    try {
+      // 1. Update Funnel design config
+      await (supabase as any)
+        .from("quiz_funnels")
+        .update({
+          design_config: designConfig,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", funnel.id);
+
+      // 2. Sync steps
+      for (const st of steps) {
+        await (supabase as any).from("quiz_steps").upsert({
+          id: st.id,
+          funnel_id: funnel.id,
+          user_id: funnel.userId,
+          name: st.name,
+          step_order: st.stepOrder,
+          show_logo: st.showLogo,
+          show_progress: st.showProgress,
+          allow_back: st.allowBack,
+          type: st.type,
+          settings: st.settings || {},
+        });
+      }
+
+      // 3. Sync components
+      for (const comp of components) {
+        await (supabase as any).from("quiz_components").upsert({
+          id: comp.id,
+          step_id: comp.stepId,
+          funnel_id: funnel.id,
+          user_id: funnel.userId,
+          component_type: comp.componentType,
+          component_order: comp.componentOrder,
+          config: comp.config,
+          schema_version: comp.schemaVersion,
+        });
+      }
+
+      setSaveStatus("saved");
+      toast({ title: "Funil salvo com sucesso!" });
+    } catch (e: any) {
+      setSaveStatus("error");
+      toast({ title: "Erro ao salvar", description: e.message, variant: "destructive" });
+    }
+  }, [funnel, steps, components, designConfig, saveStatus]);
+
+  // Auto-save debounce effect (1000ms)
+  useEffect(() => {
+    if (saveStatus !== "dirty") return;
+    const timer = setTimeout(() => {
+      handleSave();
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [saveStatus, handleSave]);
+
+  // Keyboard Shortcuts (Ctrl+Z, Ctrl+Y, Delete)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "z") {
+        e.preventDefault();
+        undo();
+      } else if ((e.metaKey || e.ctrlKey) && e.key === "y") {
+        e.preventDefault();
+        redo();
+      } else if (e.key === "Delete" && activeComponentId) {
+        deleteComponent(activeComponentId);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [undo, redo, activeComponentId, deleteComponent]);
+
+  const handlePublish = async () => {
+    if (!funnel) return;
+    await handleSave();
+    const { error } = await (supabase as any)
+      .from("quiz_funnels")
+      .update({ status: "published" })
+      .eq("id", funnel.id);
+
+    if (error) {
+      toast({ title: "Erro ao publicar", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Funil Publicado!", description: `Disponível em /q/${funnel.slug}` });
+    }
+  };
+
+  return (
+    <div className="h-screen w-screen flex flex-col overflow-hidden bg-background">
+      <QuizBuilderTopbar onSave={handleSave} onPublish={handlePublish} />
+      <div className="flex-1 flex overflow-hidden">
+        <StepSidebar />
+        <ComponentLibrary />
+        <BuilderCanvas />
+        <PropertiesPanel />
+      </div>
+    </div>
+  );
+};

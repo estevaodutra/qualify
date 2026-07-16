@@ -1,82 +1,50 @@
+// src/pages/public/QuizPublicPage.tsx
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
-import { Loader2, ArrowLeft, ArrowRight, CheckCircle } from "lucide-react";
+import { Loader2, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
-import { DEFAULT_DESIGN_CONFIG, DesignConfig } from "@/components/quiz/design/DesignTab";
-import { FIELD_TYPES, QuizComponentType } from "@/hooks/useQuizComponents";
+import { QuizStepRenderer } from "@/components/quiz/renderer/QuizStepRenderer";
+import { QuizFunnel, QuizStep, QuizComponent, QuizDesignConfig } from "@/types/quiz";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-interface FunnelData {
-  id: string;
-  name: string;
-  slug: string;
-  company_id: string;
-  design_config: Record<string, unknown>;
-  seo_config: Record<string, string>;
-  pixel_config: Record<string, string>;
-  webhook_config: Record<string, string>;
-}
-
-interface StepData {
-  id: string;
-  name: string;
-  step_order: number;
-  show_logo: boolean;
-  show_progress: boolean;
-  allow_back: boolean;
-}
-
-interface ComponentData {
-  id: string;
-  step_id: string;
-  component_type: string;
-  component_order: number;
-  config: Record<string, unknown>;
-}
-
-interface QuizOption {
-  id: string;
-  text: string;
-  value: string;
-  points: number;
-  destination: string | null;
-  image: string | null;
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-async function fetchPublicFunnel(slug: string) {
-  const { data: funnel } = await (supabase as any)
-    .from("quiz_funnels")
-    .select("id, name, slug, company_id, design_config, seo_config, pixel_config, webhook_config")
-    .eq("slug", slug)
-    .eq("status", "published")
-    .single();
-  if (!funnel) return null;
-
-  const [{ data: steps }, { data: components }] = await Promise.all([
-    (supabase as any)
-      .from("quiz_steps")
-      .select("*")
-      .eq("funnel_id", funnel.id)
-      .order("step_order", { ascending: true }),
-    (supabase as any)
-      .from("quiz_components")
-      .select("*")
-      .eq("funnel_id", funnel.id)
-      .order("component_order", { ascending: true }),
-  ]);
-
-  return {
-    funnel: funnel as FunnelData,
-    steps: (steps || []) as StepData[],
-    components: (components || []) as ComponentData[],
-  };
-}
+const DEFAULT_DESIGN: QuizDesignConfig = {
+  primaryColor: "#6366f1",
+  secondaryColor: "#4f46e5",
+  accentColor: "#10b981",
+  backgroundType: "solid",
+  backgroundColor: "#f8fafc",
+  textColor: "#0f172a",
+  headingColor: "#0f172a",
+  mutedTextColor: "#64748b",
+  successColor: "#10b981",
+  warningColor: "#f59e0b",
+  errorColor: "#ef4444",
+  fontFamily: "Inter",
+  baseFontSize: 16,
+  headingScale: 1.25,
+  lineHeight: 1.5,
+  pageMaxWidth: 640,
+  contentMaxWidth: 540,
+  minHeight: "100vh",
+  verticalAlignment: "top",
+  pagePaddingDesktop: 32,
+  pagePaddingMobile: 16,
+  componentGap: 16,
+  borderRadius: "12px",
+  inputBorderRadius: "8px",
+  buttonBorderRadius: "10px",
+  inputBackgroundColor: "#ffffff",
+  inputBorderColor: "#cbd5e1",
+  inputTextColor: "#0f172a",
+  inputPlaceholderColor: "#94a3b8",
+  inputFocusColor: "#6366f1",
+  cardEnabled: true,
+  cardBackgroundColor: "#ffffff",
+  cardBorderColor: "#e2e8f0",
+  cardShadow: "md",
+  cardPadding: 24,
+  logo: { width: "140px", alignment: "center", showLogo: true },
+  progress: { style: "line", color: "#6366f1", trackColor: "#e2e8f0", height: 6, position: "top" },
+};
 
 function getOrCreateSessionId(): string {
   const key = "quiz_session_id";
@@ -96,833 +64,214 @@ function maskPhone(value: string): string {
   return `(${clean.slice(0, 2)}) ${clean.slice(2, 7)}-${clean.slice(7, 11)}`;
 }
 
-const RADIUS: Record<string, string> = { square: "4px", medium: "12px", rounded: "24px" };
-
-// ─── Main Component ───────────────────────────────────────────────────────────
-
 export default function QuizPublicPage() {
   const { slug } = useParams<{ slug: string }>();
   const [loading, setLoading] = useState(true);
-  const [funnel, setFunnel] = useState<FunnelData | null>(null);
-  const [steps, setSteps] = useState<StepData[]>([]);
-  const [components, setComponents] = useState<ComponentData[]>([]);
+  const [funnel, setFunnel] = useState<QuizFunnel | null>(null);
+  const [steps, setSteps] = useState<QuizStep[]>([]);
+  const [components, setComponents] = useState<QuizComponent[]>([]);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string[]>>({});
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
-  // Accumulated lead data across all steps (persists across step navigation)
   const accumulatedLead = useRef<Record<string, string>>({});
 
   useEffect(() => {
     if (!slug) return;
-    fetchPublicFunnel(slug).then((result) => {
-      if (result) {
-        setFunnel(result.funnel);
-        setSteps(result.steps);
-        setComponents(result.components);
-        injectPixels(result.funnel.pixel_config || {});
-        injectSeoMeta(result.funnel.seo_config || {}, result.funnel.name);
-        recordVisit(result.funnel.id);
+
+    async function loadPublicData() {
+      const { data: dbFunnel } = await (supabase as any)
+        .from("quiz_funnels")
+        .select("*")
+        .eq("slug", slug)
+        .eq("status", "published")
+        .single();
+
+      if (!dbFunnel) {
+        setLoading(false);
+        return;
       }
+
+      const [{ data: dbSteps }, { data: dbComponents }] = await Promise.all([
+        (supabase as any)
+          .from("quiz_steps")
+          .select("*")
+          .eq("funnel_id", dbFunnel.id)
+          .order("step_order", { ascending: true }),
+        (supabase as any)
+          .from("quiz_components")
+          .select("*")
+          .eq("funnel_id", dbFunnel.id)
+          .order("component_order", { ascending: true }),
+      ]);
+
+      const formattedFunnel: QuizFunnel = {
+        id: dbFunnel.id,
+        companyId: dbFunnel.company_id,
+        userId: dbFunnel.user_id,
+        name: dbFunnel.name,
+        slug: dbFunnel.slug,
+        status: dbFunnel.status,
+        designConfig: { ...DEFAULT_DESIGN, ...(dbFunnel.design_config || {}) },
+        seoConfig: dbFunnel.seo_config || {},
+        pixelConfig: dbFunnel.pixel_config || {},
+        webhookConfig: dbFunnel.webhook_config || {},
+        visitsCount: dbFunnel.visits_count || 0,
+        responsesCount: dbFunnel.responses_count || 0,
+        leadsCount: dbFunnel.leads_count || 0,
+        completionsCount: dbFunnel.completions_count || 0,
+        version: dbFunnel.version || 1,
+        createdAt: dbFunnel.created_at,
+        updatedAt: dbFunnel.updated_at,
+      };
+
+      const formattedSteps: QuizStep[] = (dbSteps || []).map((s: any) => ({
+        id: s.id,
+        funnelId: s.funnel_id,
+        name: s.name,
+        stepOrder: s.step_order,
+        type: s.type || "content",
+        showLogo: s.show_logo ?? true,
+        showProgress: s.show_progress ?? true,
+        allowBack: s.allow_back ?? true,
+        settings: s.settings || {},
+      }));
+
+      const formattedComponents: QuizComponent[] = (dbComponents || []).map((c: any) => ({
+        id: c.id,
+        stepId: c.step_id,
+        funnelId: c.funnel_id,
+        componentType: c.component_type,
+        componentOrder: c.component_order,
+        config: c.config || {},
+        schemaVersion: c.schema_version || 1,
+      }));
+
+      setFunnel(formattedFunnel);
+      setSteps(formattedSteps);
+      setComponents(formattedComponents);
+
+      // Record Visit & Setup Pixels
+      await (supabase as any).rpc("quiz_funnel_increment", { p_funnel_id: formattedFunnel.id, p_field: "visits" });
       setLoading(false);
-    });
+    }
+
+    loadPublicData();
   }, [slug]);
 
-  // ─── Pixel injection ─────────────────────────────────────────────────────
-
-  function injectPixels(pixel: Record<string, string>) {
-    if (pixel.gaId) {
-      const s = document.createElement("script");
-      s.src = `https://www.googletagmanager.com/gtag/js?id=${pixel.gaId}`;
-      s.async = true;
-      document.head.appendChild(s);
-      const s2 = document.createElement("script");
-      s2.text = `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${pixel.gaId}');`;
-      document.head.appendChild(s2);
-    }
-    if (pixel.gtmId) {
-      const s = document.createElement("script");
-      s.text = `(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','${pixel.gtmId}');`;
-      document.head.appendChild(s);
-    }
-    if (pixel.fbPixelId) {
-      const s = document.createElement("script");
-      s.text = `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','${pixel.fbPixelId}');fbq('track','PageView');`;
-      document.head.appendChild(s);
-    }
-  }
-
-  function injectSeoMeta(seo: Record<string, string>, funnelName: string) {
-    const setMeta = (name: string, content: string, prop = false) => {
-      if (!content) return;
-      const existing = document.querySelector(prop ? `meta[property="${name}"]` : `meta[name="${name}"]`);
-      if (existing) {
-        existing.setAttribute("content", content);
-      } else {
-        const m = document.createElement("meta");
-        if (prop) m.setAttribute("property", name);
-        else m.setAttribute("name", name);
-        m.setAttribute("content", content);
-        document.head.appendChild(m);
-      }
-    };
-
-    document.title = seo.title || funnelName;
-    setMeta("description", seo.description);
-    setMeta("og:title", seo.title || funnelName, true);
-    setMeta("og:description", seo.description, true);
-    setMeta("og:image", seo.ogImage, true);
-  }
-
-  // ─── Supabase helpers ────────────────────────────────────────────────────
-
-  const recordVisit = async (funnelId: string) => {
-    await (supabase as any).rpc("quiz_funnel_increment", { p_funnel_id: funnelId, p_field: "visits" });
-  };
-
-  const ensureSubmission = async (funnelId: string): Promise<string> => {
+  const ensureSubmission = async (): Promise<string> => {
     if (submissionId) return submissionId;
+    if (!funnel) return "";
+
     const sessionId = getOrCreateSessionId();
     const { data } = await (supabase as any)
       .from("quiz_submissions")
-      .insert({ funnel_id: funnelId, session_id: sessionId, status: "started" })
-      .select("id")
-      .single();
-    const id = data.id as string;
-    setSubmissionId(id);
-    await (supabase as any).rpc("quiz_funnel_increment", { p_funnel_id: funnelId, p_field: "responses" });
-    return id;
-  };
-
-  const saveAnswer = async (componentId: string, stepId: string, value: unknown) => {
-    if (!funnel) return;
-    const sid = await ensureSubmission(funnel.id);
-    await (supabase as any).from("quiz_answers").insert({
-      submission_id: sid,
-      funnel_id: funnel.id,
-      step_id: stepId,
-      component_id: componentId,
-      answer_value: value,
-    });
-  };
-
-  const saveLeadData = async (data: { name?: string; email?: string; phone?: string }) => {
-    if (!funnel || (!data.email && !data.phone)) return;
-    const sid = submissionId || (await ensureSubmission(funnel.id));
-
-    const { data: lead } = await (supabase as any)
-      .from("leads")
-      .upsert(
-        {
-          phone: data.phone || null,
-          name: data.name || null,
-          email: data.email || null,
-        },
-        { onConflict: "phone", ignoreDuplicates: false }
-      )
+      .insert({ funnel_id: funnel.id, session_id: sessionId, status: "started" })
       .select("id")
       .single();
 
-    if (lead?.id) {
-      await (supabase as any).from("quiz_submissions").update({ lead_id: lead.id }).eq("id", sid);
-      await (supabase as any).rpc("quiz_funnel_increment", { p_funnel_id: funnel.id, p_field: "leads" });
-    }
-  };
-
-  const fireWebhook = async (leadData: Record<string, string>, allAnswers: Record<string, unknown>) => {
-    if (!funnel) return;
-    const wh = funnel.webhook_config;
-    if (!wh?.url) return;
-    try {
-      await fetch(wh.url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(wh.token ? { Authorization: `Bearer ${wh.token}` } : {}),
-        },
-        body: JSON.stringify({
-          funnelSlug: funnel.slug,
-          funnelId: funnel.id,
-          ...leadData,
-          answers: allAnswers,
-        }),
-      });
-    } catch {
-      // Webhook errors don't block the user
-    }
-  };
-
-  // ─── Navigation ──────────────────────────────────────────────────────────
-
-  const shouldShowComponent = (comp: ComponentData) => {
-    const rules = (comp.config.displayRules as any[]) || [];
-    if (rules.length === 0) return true;
-
-    for (const rule of rules) {
-      if (!rule.fieldId) continue;
-      
-      const fieldVal = formValues[rule.fieldId] || "";
-      const selectedOpts = selectedOptions[rule.fieldId] || [];
-
-      const refComp = components.find((c) => c.id === rule.fieldId);
-      const refOptions = (refComp?.config.options as any[]) || [];
-
-      let isMatch = false;
-
-      const checkMatch = (valToCompare: string) => {
-        const rVal = (rule.value || "").toLowerCase().trim();
-        const cVal = (valToCompare || "").toLowerCase().trim();
-        if (rule.operator === "equals") return cVal === rVal;
-        if (rule.operator === "not_equals") return cVal !== rVal;
-        if (rule.operator === "contains") return cVal.includes(rVal);
-        return false;
-      };
-
-      if (refComp?.component_type === "options") {
-        isMatch = selectedOpts.some(optId => {
-          const opt = refOptions.find(o => o.id === optId);
-          return checkMatch(optId) || (opt && (checkMatch(opt.value) || checkMatch(opt.text)));
-        });
-      } else {
-        isMatch = checkMatch(fieldVal);
-      }
-
-      if (!isMatch) return false;
-    }
-
-    return true;
-  };
-
-  const currentStep = steps[currentStepIndex] || null;
-  const currentComponents = components
-    .filter((c) => c.step_id === currentStep?.id)
-    .filter(shouldShowComponent);
-
-  const handleOptionSelect = (componentId: string, optionId: string, multiple: boolean, destination: string | null) => {
-    if (multiple) {
-      const current = selectedOptions[componentId] || [];
-      const next = current.includes(optionId)
-        ? current.filter((id) => id !== optionId)
-        : [...current, optionId];
-      setSelectedOptions({ ...selectedOptions, [componentId]: next });
-    } else {
-      setSelectedOptions({ ...selectedOptions, [componentId]: [optionId] });
-      setTimeout(() => handleNextStep(destination), 350);
-    }
+    const newId = data.id as string;
+    setSubmissionId(newId);
+    await (supabase as any).rpc("quiz_funnel_increment", { p_funnel_id: funnel.id, p_field: "responses" });
+    return newId;
   };
 
   const handleNextStep = async (forcedDestination?: string | null) => {
-    if (!currentStep || !funnel) return;
-
-    // ─── Validation of required fields ───────────────────────────────────────
-    const errors: Record<string, string> = {};
-    for (const comp of currentComponents) {
-      if (FIELD_TYPES.includes(comp.component_type as QuizComponentType)) {
-        const val = (formValues[comp.id] || "").toString().trim();
-        if (comp.config.required && !val) {
-          errors[comp.id] = "Este campo é obrigatório.";
-        } else if (val) {
-          if (comp.component_type === "field_email") {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(val)) {
-              errors[comp.id] = "E-mail inválido. Digite um e-mail válido (ex: nome@email.com).";
-            }
-          } else if (comp.component_type === "field_phone") {
-            const digits = val.replace(/\D/g, "");
-            if (digits.length !== 10 && digits.length !== 11) {
-              errors[comp.id] = "Telefone inválido. Digite um número com DDD (ex: 11999999999).";
-            }
-          }
-        }
-      }
-      if (comp.component_type === "options" && comp.config.required) {
-        if (!selectedOptions[comp.id]?.length) {
-          errors[comp.id] = "Selecione pelo menos uma opção.";
-        }
-      }
-    }
-    if (Object.keys(errors).length > 0) {
-      setValidationErrors(errors);
-      return;
-    }
-    setValidationErrors({});
+    if (!funnel || !steps[currentStepIndex]) return;
 
     setSubmitting(true);
+    const sid = await ensureSubmission();
 
-    // Collect all field values for lead + webhook payload
-    const stepLeadData: Record<string, string> = {};
-    const allAnswers: Record<string, unknown> = {};
-
-    for (const comp of currentComponents) {
-      if (FIELD_TYPES.includes(comp.component_type as QuizComponentType)) {
-        const val = formValues[comp.id] || "";
-        if (val) {
-          await saveAnswer(comp.id, currentStep.id, val);
-          // Only specific fields go to the main lead table
-          if (comp.component_type === "field_name") stepLeadData.name = val;
-          if (comp.component_type === "field_email") stepLeadData.email = val;
-          if (comp.component_type === "field_phone") stepLeadData.phone = val.replace(/\D/g, "");
-          // All go to allAnswers
-          allAnswers[comp.id] = val;
-        }
-      }
-      if (comp.component_type === "options") {
-        const selected = selectedOptions[comp.id];
-        if (selected?.length) {
-          await saveAnswer(comp.id, currentStep.id, selected);
-          allAnswers[comp.id] = selected;
-        }
-      }
-    }
-
-    // Accumulate lead data across all steps
-    Object.assign(accumulatedLead.current, stepLeadData);
-    const leadData = accumulatedLead.current;
-
-    // Persist lead data when we have identifying info
-    if (leadData.email || leadData.phone) {
-      await ensureSubmission(funnel.id);
-      await saveLeadData(leadData);
-    }
-
-    // Webhook for "each_step" trigger
-    const wh = funnel.webhook_config;
-    if (wh?.trigger === "each_step") await fireWebhook(leadData, allAnswers);
-
-    // Update steps_completed
-    const sid = submissionId || (await ensureSubmission(funnel.id));
-    await (supabase as any)
-      .from("quiz_submissions")
-      .update({ steps_completed: currentStepIndex + 1 })
-      .eq("id", sid);
-
-    // Navigate
+    // Navigation logic
     if (forcedDestination) {
-      const targetIndex = steps.findIndex((s) => s.id === forcedDestination);
-      if (targetIndex >= 0) {
-        setCurrentStepIndex(targetIndex);
+      const targetIdx = steps.findIndex((s) => s.id === forcedDestination);
+      if (targetIdx >= 0) {
+        setCurrentStepIndex(targetIdx);
         setSubmitting(false);
         return;
       }
     }
 
     if (currentStepIndex >= steps.length - 1) {
-      // Complete
       await (supabase as any)
         .from("quiz_submissions")
         .update({ status: "completed", completed_at: new Date().toISOString() })
         .eq("id", sid);
       await (supabase as any).rpc("quiz_funnel_increment", { p_funnel_id: funnel.id, p_field: "completions" });
-      if (wh?.trigger === "completion" || !wh?.trigger) await fireWebhook(leadData, allAnswers);
-
-      // Fetch all answers for this submission to sync to the CRM chat conversation
-      try {
-        const [{ data: answersData }, { data: subData }] = await Promise.all([
-          (supabase as any)
-            .from("quiz_answers")
-            .select("component_id, answer_value")
-            .eq("submission_id", sid),
-          (supabase as any)
-            .from("quiz_submissions")
-            .select("lead_id")
-            .eq("id", sid)
-            .single()
-        ]);
-
-        if (answersData && answersData.length > 0 && subData?.lead_id && funnel.company_id) {
-          const fullAnswersMap: Record<string, unknown> = {};
-          answersData.forEach((row: any) => {
-            fullAnswersMap[row.component_id] = row.answer_value;
-          });
-
-          // Find or create conversation in CRM Chat
-          const { data: existingConv } = await (supabase as any)
-            .from("chat_conversations")
-            .select("id")
-            .eq("company_id", funnel.company_id)
-            .eq("lead_id", subData.lead_id)
-            .maybeSingle();
-
-          let convId = existingConv?.id;
-          if (!convId) {
-            const { data: newConv } = await (supabase as any)
-              .from("chat_conversations")
-              .insert({
-                company_id: funnel.company_id,
-                lead_id: subData.lead_id,
-                status: "open",
-              })
-              .select("id")
-              .single();
-            convId = newConv?.id;
-          }
-
-          if (convId) {
-            const summaryText = `📋 Lead concluiu o Quiz: *${funnel.name}*\n\n` +
-              Object.entries(fullAnswersMap)
-                .map(([compId, value]) => {
-                  const comp = components.find((c) => c.id === compId);
-                  const question = comp?.config.label || comp?.config.question || comp?.component_type;
-                  const cleanQuestion = question ? String(question).replace(/<[^>]*>/g, "").trim() : "Pergunta";
-                  const valStr = Array.isArray(value)
-                    ? value.map(valId => {
-                        const opt = (comp?.config.options as any[])?.find(o => o.id === valId);
-                        return opt ? opt.text : valId;
-                      }).join(", ")
-                    : String(value);
-                  return `*${cleanQuestion}:* ${valStr}`;
-                })
-                .join("\n");
-
-            // Insert as system internal note
-            await (supabase as any).from("chat_messages").insert({
-              conversation_id: convId,
-              sender_type: "system",
-              message_type: "text",
-              body: summaryText,
-              is_internal: true,
-            });
-          }
-        }
-      } catch (e) {
-        console.error("Error syncing quiz answers to CRM chat:", e);
-      }
-
       setCompleted(true);
     } else {
-      setCurrentStepIndex((i) => i + 1);
+      setCurrentStepIndex((prev) => prev + 1);
     }
+
     setSubmitting(false);
   };
 
-  // ─── Design ──────────────────────────────────────────────────────────────
-
-  
-  const d: DesignConfig = { ...DEFAULT_DESIGN_CONFIG, ...(funnel?.design_config as Partial<DesignConfig> || {}) };
-  const borderRadius = RADIUS[d.borderRadius] || "12px";
-  const redirectConfig = (funnel?.design_config as Record<string, any>)?.redirect_config || {};
-
-  const cssVars = {
-    "--quiz-primary": d.primaryColor,
-    "--quiz-bg": d.backgroundColor,
-    "--quiz-text": d.textColor,
-    fontFamily: d.fontFamily + ", sans-serif",
-    backgroundColor: d.backgroundColor,
-    color: d.textColor,
-  } as React.CSSProperties;
-
-  const progressPercent = steps.length > 0 ? Math.round(((currentStepIndex + 1) / steps.length) * 100) : 0;
-
-
-  // ─── Render ───────────────────────────────────────────────────────────────
-
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen" style={cssVars}>
-        <Loader2 className="w-8 h-8 animate-spin opacity-40" />
+      <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white">
+        <Loader2 className="w-8 h-8 animate-spin opacity-60" />
       </div>
     );
   }
 
   if (!funnel || steps.length === 0) {
     return (
-      <div className="flex items-center justify-center min-h-screen text-muted-foreground">
-        Funil não encontrado ou não publicado.
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 text-sm">
+        Funil não encontrado ou indisponível.
       </div>
     );
   }
 
   if (completed) {
-    if (redirectConfig.type === "url" && redirectConfig.url) {
-      window.location.href = redirectConfig.url;
-      return (
-        <div className="flex items-center justify-center min-h-screen" style={cssVars}>
-          <div className="w-8 h-8 animate-spin opacity-40 border-4 border-current border-t-transparent rounded-full" />
-        </div>
-      );
-    }
-
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-4 p-4 text-center" style={cssVars}>
-        <CheckCircle className="w-16 h-16" style={{ color: d.primaryColor }} />
-        <h2 className="text-2xl font-bold">{redirectConfig.title || "Obrigado!"}</h2>
-        <p className="opacity-60 max-w-md">{redirectConfig.message || "Suas respostas foram registradas com sucesso."}</p>
+      <div
+        style={{ backgroundColor: funnel.designConfig.backgroundColor, color: funnel.designConfig.textColor }}
+        className="min-h-screen flex flex-col items-center justify-center p-4 text-center space-y-4"
+      >
+        <CheckCircle2 className="w-16 h-16" style={{ color: funnel.designConfig.primaryColor }} />
+        <h2 className="text-2xl font-bold">Obrigado!</h2>
+        <p className="text-sm opacity-70 max-w-md">Suas respostas foram salvas com sucesso!</p>
       </div>
     );
   }
 
-  if (!currentStep) return null;
-
-  const progress = ((currentStepIndex + 1) / steps.length) * 100;
+  const currentStep = steps[currentStepIndex];
+  const stepComponents = components.filter((c) => c.stepId === currentStep.id);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-start py-8 px-4" style={cssVars}>
-      <div
-        className="w-full max-w-lg shadow-lg overflow-hidden"
-        style={{ borderRadius, backgroundColor: d.backgroundColor, color: d.textColor }}
-      >
-        {/* Progress */}
-        {currentStep.show_progress && (
-          <div className="h-1.5" style={{ backgroundColor: d.primaryColor + "30" }}>
-            <div
-              className="h-full transition-all duration-500"
-              style={{ width: `${progress}%`, backgroundColor: d.primaryColor }}
-            />
-          </div>
-        )}
-
-        <div key={currentStepIndex} className="p-6 space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-          {/* Logo */}
-          {currentStep.show_logo && d.logoUrl && (
-            <div className="flex justify-center mb-2">
-              <img
-                src={d.logoUrl}
-                alt="Logo"
-                className="h-8 object-contain"
-                onError={(e) => (e.currentTarget.style.display = "none")}
-              />
-            </div>
-          )}
-
-          {/* Back button */}
-          {currentStep.allow_back && currentStepIndex > 0 && (
-            <button
-              className="flex items-center gap-1 text-sm opacity-50 hover:opacity-80"
-              onClick={() => setCurrentStepIndex((i) => i - 1)}
-            >
-              <ArrowLeft className="w-4 h-4" /> Voltar
-            </button>
-          )}
-
-          {/* Components */}
-          {currentComponents.map((comp) => (
-            <PublicComponent
-              key={comp.id}
-              component={comp}
-              formValue={formValues[comp.id] || ""}
-              selectedOptions={selectedOptions[comp.id] || []}
-              primaryColor={d.primaryColor}
-              borderRadius={borderRadius}
-              validationError={validationErrors[comp.id]}
-              onFormChange={(val) => {
-                setFormValues({ ...formValues, [comp.id]: val });
-                if (validationErrors[comp.id]) setValidationErrors((e) => { const n = { ...e }; delete n[comp.id]; return n; });
-              }}
-              onOptionSelect={(optId, destination) =>
-                handleOptionSelect(comp.id, optId, !!(comp.config.multiple as boolean), destination)
-              }
-              onNext={() => handleNextStep()}
-              submitting={submitting}
-            />
-          ))}
-
-          {/* Auto next button — only if no button component in this step */}
-          {!currentComponents.some((c) => c.component_type === "button") && (
-            <button
-              disabled={submitting}
-              onClick={() => handleNextStep()}
-              className="w-full py-3 text-sm font-semibold flex items-center justify-center gap-2 transition-opacity disabled:opacity-60"
-              style={{
-                borderRadius,
-                backgroundColor: d.primaryColor,
-                color: "#fff",
-              }}
-            >
-              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-              {currentStepIndex >= steps.length - 1 ? "Concluir" : "Continuar"}
-              {!submitting && <ArrowRight className="w-4 h-4" />}
-            </button>
-          )}
-        </div>
-
-        <div className="px-6 pb-4 text-center text-xs opacity-40">
-          {currentStepIndex + 1} / {steps.length}
-        </div>
-      </div>
+    <div
+      style={{
+        backgroundColor: funnel.designConfig.backgroundColor,
+        fontFamily: `${funnel.designConfig.fontFamily}, sans-serif`,
+      }}
+      className="min-h-screen flex flex-col items-center justify-start py-8 px-4"
+    >
+      <QuizStepRenderer
+        step={currentStep}
+        components={stepComponents}
+        designConfig={funnel.designConfig}
+        currentStepIndex={currentStepIndex}
+        totalSteps={steps.length}
+        formValues={formValues}
+        selectedOptions={selectedOptions}
+        validationErrors={validationErrors}
+        submitting={submitting}
+        onFormChange={(compId, val) => {
+          const formattedVal = compId.includes("phone") ? maskPhone(val) : val;
+          setFormValues((prev) => ({ ...prev, [compId]: formattedVal }));
+        }}
+        onOptionSelect={(compId, optId, dest) => {
+          setSelectedOptions((prev) => ({ ...prev, [compId]: [optId] }));
+          setTimeout(() => handleNextStep(dest), 350);
+        }}
+        onNextStep={() => handleNextStep()}
+        onPrevStep={() => setCurrentStepIndex((prev) => Math.max(0, prev - 1))}
+      />
     </div>
   );
-}
-
-// ─── Public Component Renderer ────────────────────────────────────────────────
-
-function PublicComponent({
-  component,
-  formValue,
-  selectedOptions,
-  primaryColor,
-  borderRadius,
-  validationError,
-  onFormChange,
-  onOptionSelect,
-  onNext,
-  submitting,
-}: {
-  component: ComponentData;
-  formValue: string;
-  selectedOptions: string[];
-  primaryColor: string;
-  borderRadius: string;
-  validationError?: string;
-  onFormChange: (val: string) => void;
-  onOptionSelect: (optId: string, destination: string | null) => void;
-  onNext: () => void;
-  submitting: boolean;
-}) {
-  const { component_type: type, config } = component;
-
-  if (type === "text") {
-    return (
-      <div
-        className="text-sm"
-        style={{ textAlign: (config.align as any) || "center" }}
-        dangerouslySetInnerHTML={{ __html: (config.content as string) || "" }}
-      />
-    );
-  }
-
-  if (type === "image" && config.url) {
-    return (
-      <img
-        src={config.url as string}
-        alt={(config.alt as string) || ""}
-        className="w-full"
-        style={{ borderRadius }}
-      />
-    );
-  }
-
-  if (type === "button") {
-    const style = config.style as string || "primary";
-    return (
-      <button
-        disabled={submitting}
-        onClick={onNext}
-        className="w-full py-3 text-sm font-semibold transition-opacity disabled:opacity-60"
-        style={{
-          borderRadius,
-          backgroundColor: style === "primary" ? primaryColor : "transparent",
-          color: style === "primary" ? "#fff" : primaryColor,
-          border: style !== "primary" ? `2px solid ${primaryColor}` : "none",
-        }}
-      >
-        {(config.text as string) || "Continuar"}
-      </button>
-    );
-  }
-
-  if (type === "options") {
-    const options = (config.options as QuizOption[]) || [];
-    const multiple = !!(config.multiple as boolean);
-    const hasImages = options.some((opt) => opt.image);
-
-    return (
-      <div className="space-y-2">
-        {config.question && (
-          <p className="text-base font-semibold text-center mb-4">{config.question as string}</p>
-        )}
-        
-        {hasImages ? (
-          <div className="grid grid-cols-2 gap-3">
-            {options.map((opt) => {
-              const isSelected = selectedOptions.includes(opt.id);
-              return (
-                <button
-                  key={opt.id}
-                  onClick={() => onOptionSelect(opt.id, opt.destination)}
-                  className="flex flex-col items-center p-2 text-sm text-center transition-all border-2 h-full"
-                  style={{
-                    borderRadius,
-                    borderColor: isSelected ? primaryColor : "currentColor",
-                    opacity: isSelected ? 1 : 0.7,
-                    backgroundColor: isSelected ? primaryColor + "10" : "transparent",
-                  }}
-                >
-                  {opt.image ? (
-                    <img
-                      src={opt.image}
-                      alt={opt.text}
-                      className="w-full h-28 object-cover mb-2 rounded-md"
-                    />
-                  ) : (
-                    <div className="w-full h-28 bg-current/5 rounded-md flex items-center justify-center mb-2 text-xs opacity-40">
-                      Sem Imagem
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 mt-auto">
-                    <span
-                      className="w-5 h-5 flex items-center justify-center text-[9px] font-bold shrink-0 border-2"
-                      style={{
-                        borderRadius: "50%",
-                        borderColor: isSelected ? primaryColor : "currentColor",
-                        color: isSelected ? primaryColor : "currentColor",
-                      }}
-                    >
-                      {opt.value}
-                    </span>
-                    <span className="font-medium text-xs truncate max-w-[120px]">{opt.text}</span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {options.map((opt) => {
-              const isSelected = selectedOptions.includes(opt.id);
-              return (
-                <button
-                  key={opt.id}
-                  onClick={() => onOptionSelect(opt.id, opt.destination)}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-all border-2"
-                  style={{
-                    borderRadius,
-                    borderColor: isSelected ? primaryColor : "currentColor",
-                    opacity: isSelected ? 1 : 0.7,
-                    backgroundColor: isSelected ? primaryColor + "10" : "transparent",
-                  }}
-                >
-                  <span
-                    className="w-6 h-6 flex items-center justify-center text-[10px] font-bold shrink-0 border-2"
-                    style={{
-                      borderRadius: "50%",
-                      borderColor: isSelected ? primaryColor : "currentColor",
-                      color: isSelected ? primaryColor : "currentColor",
-                    }}
-                  >
-                    {opt.value}
-                  </span>
-                  {opt.text}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {multiple && selectedOptions.length > 0 && (
-          <button
-            className="w-full py-3 text-sm font-semibold mt-2"
-            style={{ borderRadius, backgroundColor: primaryColor, color: "#fff" }}
-            onClick={onNext}
-            disabled={submitting}
-          >
-            Continuar
-          </button>
-        )}
-      </div>
-    );
-  }
- 
-  if (FIELD_TYPES.includes(type as QuizComponentType)) {
-    const isSlider = type === "field_height" || type === "field_weight";
-    const isTextarea = type === "field_textarea";
-    const hasError = !!validationError;
-    const width = (config.width as string) || "100%";
-    const showLabel = config.label && (config.labelStyle as string) !== "none";
-
-    // Sliders
-    if (isSlider) {
-      const unit = (config.unit as string) || (type === "field_height" ? "cm" : "kg");
-      const defVal = (config.defaultValue as number) ?? (type === "field_height" ? 180 : 70);
-      const min = (config.min as number) ?? (type === "field_height" ? 100 : 30);
-      const max = (config.max as number) ?? (type === "field_height" ? 250 : 300);
-      
-      const currentVal = formValue ? Number(formValue) : defVal;
-      const pct = ((currentVal - min) / (max - min)) * 100;
-
-      // Initialize form value with default on first render if empty
-      if (!formValue) {
-        setTimeout(() => onFormChange(String(defVal)), 0);
-      }
-
-      return (
-        <div className="space-y-2 py-1" style={{ width }}>
-          {showLabel && <label className="text-sm font-medium">{config.label as string}</label>}
-          <div className="flex justify-between text-xs opacity-70">
-            <span>{min} {unit}</span>
-            <span className="font-semibold text-sm" style={{ color: primaryColor }}>{currentVal} {unit}</span>
-            <span>{max} {unit}</span>
-          </div>
-          <div className="relative h-2 rounded-full bg-current/10 w-full mt-2">
-            <div
-              className="absolute inset-y-0 left-0 rounded-full pointer-events-none"
-              style={{ width: `${pct}%`, backgroundColor: primaryColor }}
-            />
-            <input
-              type="range"
-              min={min}
-              max={max}
-              value={currentVal}
-              onChange={(e) => onFormChange(e.target.value)}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            />
-            <div
-              className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-white shadow-sm pointer-events-none"
-              style={{ left: `calc(${pct}% - 8px)`, backgroundColor: primaryColor }}
-            />
-          </div>
-          {hasError && <p className="text-xs text-red-500">{validationError}</p>}
-        </div>
-      );
-    }
-
-    // Common styling for text-like inputs
-    const inputStyle = {
-      borderRadius,
-      borderColor: hasError ? "#ef4444" : "currentColor",
-      opacity: hasError ? 1 : 0.7,
-      backgroundColor: "transparent",
-      color: "inherit",
-    };
-
-    if (isTextarea) {
-      return (
-        <div className="space-y-1.5" style={{ width }}>
-          {showLabel && <label className="text-sm font-medium">{config.label as string}</label>}
-          <textarea
-            placeholder={(config.placeholder as string) || ""}
-            value={formValue}
-            onChange={(e) => onFormChange(e.target.value)}
-            className="w-full px-3 py-2.5 border-2 text-sm outline-none transition-colors min-h-[80px]"
-            style={inputStyle}
-            onFocus={(e) => (e.currentTarget.style.opacity = "1")}
-            onBlur={(e) => (e.currentTarget.style.opacity = hasError ? "1" : "0.7")}
-          />
-          {hasError && <p className="text-xs text-red-500">{validationError}</p>}
-        </div>
-      );
-    }
-
-    // Normal inputs
-    let inputType = "text";
-    if (type === "field_email") inputType = "email";
-    else if (type === "field_phone") inputType = "tel";
-    else if (type === "field_number") inputType = "number";
-    else if (type === "field_date") inputType = "date";
-
-    return (
-      <div className="space-y-1.5" style={{ width }}>
-        {showLabel && <label className="text-sm font-medium">{config.label as string}</label>}
-        <input
-          type={inputType}
-          placeholder={(config.placeholder as string) || ""}
-          value={formValue}
-          onChange={(e) => {
-            const val = type === "field_phone" ? maskPhone(e.target.value) : e.target.value;
-            onFormChange(val);
-          }}
-          className="w-full px-3 py-2.5 border-2 text-sm outline-none transition-colors"
-          style={inputStyle}
-          onFocus={(e) => (e.currentTarget.style.opacity = "1")}
-          onBlur={(e) => (e.currentTarget.style.opacity = hasError ? "1" : "0.7")}
-        />
-        {hasError && <p className="text-xs text-red-500">{validationError}</p>}
-      </div>
-    );
-  }
-
-  return null;
 }
