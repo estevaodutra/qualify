@@ -123,6 +123,49 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     fetchCompanies();
   }, [fetchCompanies]);
 
+  // Ensure superadmin has active membership in the impersonated company to satisfy RLS policies
+  useEffect(() => {
+    if (!user || !isSuperadmin || !impersonatedCompanyId) return;
+
+    async function ensureMembership() {
+      try {
+        const { data, error } = await supabase
+          .from("company_members")
+          .select("id")
+          .eq("company_id", impersonatedCompanyId)
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (error) {
+          console.error("Error checking membership for superadmin:", error);
+          return;
+        }
+
+        if (!data) {
+          const { error: insertError } = await supabase
+            .from("company_members")
+            .insert({
+              company_id: impersonatedCompanyId,
+              user_id: user.id,
+              role: "admin",
+              is_active: true,
+            });
+
+          if (insertError) {
+            console.error("Error inserting membership for superadmin:", insertError);
+          } else {
+            console.log("Automatically added superadmin membership to company:", impersonatedCompanyId);
+            fetchCompanies();
+          }
+        }
+      } catch (err) {
+        console.error("Failed to ensure membership for superadmin:", err);
+      }
+    }
+
+    ensureMembership();
+  }, [user, isSuperadmin, impersonatedCompanyId, fetchCompanies]);
+
   const setActiveCompany = (id: string) => {
     if (isSuperadmin) {
       // For superadmin, switching through the dropdown also triggers impersonation
