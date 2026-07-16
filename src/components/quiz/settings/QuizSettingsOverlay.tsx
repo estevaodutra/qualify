@@ -25,6 +25,7 @@ import { useQuizBuilderStore } from "@/stores/quiz/useQuizBuilderStore";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { QuizDesignConfig } from "@/types/quiz";
+import { ImageUploader } from "../media/ImageUploader";
 
 interface SettingsOverlayProps {
   isOpen: boolean;
@@ -205,34 +206,67 @@ export const QuizSettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, on
                 <p className="text-xs text-muted-foreground">Gerencie o logotipo principal, favicon e marcas da empresa.</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 border p-4 rounded-lg bg-card">
-                <div className="space-y-2">
-                  <Label className="text-xs font-semibold">URL da Logo Principal</Label>
-                  <Input
+              <div className="grid grid-cols-2 gap-6 border p-6 rounded-lg bg-card">
+                <div className="space-y-4">
+                  <ImageUploader
+                    label="Logotipo Principal"
                     value={design.logo?.url || ""}
-                    onChange={(e) =>
+                    onChange={(url) =>
                       setDesign({
                         ...design,
-                        logo: { ...(design.logo || {}), url: e.target.value },
+                        logo: { ...(design.logo || {}), url },
                       })
                     }
-                    placeholder="https://exemplo.com/logo.png"
-                    className="text-xs"
                   />
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">URL da Logo (ou cole o link)</Label>
+                    <Input
+                      value={design.logo?.url || ""}
+                      onChange={(e) =>
+                        setDesign({
+                          ...design,
+                          logo: { ...(design.logo || {}), url: e.target.value },
+                        })
+                      }
+                      placeholder="https://exemplo.com/logo.png"
+                      className="text-xs"
+                    />
+                  </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label className="text-xs font-semibold">Largura da Logo</Label>
-                  <Input
-                    value={design.logo?.width || "140px"}
-                    onChange={(e) =>
-                      setDesign({
-                        ...design,
-                        logo: { ...(design.logo || {}), width: e.target.value },
-                      })
-                    }
-                    className="text-xs"
-                  />
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Largura da Logo no Cabeçalho</Label>
+                    <Input
+                      value={design.logo?.width || "140px"}
+                      onChange={(e) =>
+                        setDesign({
+                          ...design,
+                          logo: { ...(design.logo || {}), width: e.target.value },
+                        })
+                      }
+                      placeholder="140px"
+                      className="text-xs"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Alinhamento da Logo</Label>
+                    <select
+                      value={design.logo?.alignment || "center"}
+                      onChange={(e) =>
+                        setDesign({
+                          ...design,
+                          logo: { ...(design.logo || {}), alignment: e.target.value as any },
+                        })
+                      }
+                      className="w-full h-9 px-3 border rounded-md text-xs bg-background"
+                    >
+                      <option value="left">Esquerda</option>
+                      <option value="center">Centralizado</option>
+                      <option value="right">Direita</option>
+                    </select>
+                  </div>
                 </div>
               </div>
             </div>

@@ -19,11 +19,14 @@ const CATEGORY_LABELS: Record<QuizComponentCategory, string> = {
 export const ComponentLibrary: React.FC = () => {
   const [search, setSearch] = useState("");
   const activeStepId = useQuizBuilderStore((s) => s.activeStepId);
+  const setActiveStepId = useQuizBuilderStore((s) => s.setActiveStepId);
+  const steps = useQuizBuilderStore((s) => s.steps);
   const funnel = useQuizBuilderStore((s) => s.funnel);
   const components = useQuizBuilderStore((s) => s.components);
   const addComponent = useQuizBuilderStore((s) => s.addComponent);
   const isOpen = useQuizBuilderStore((s) => s.isLibraryOpen);
   const toggleLibrary = useQuizBuilderStore((s) => s.toggleLibrary);
+  const { toast } = useToast();
 
   if (!isOpen) {
     return (
@@ -42,15 +45,24 @@ export const ComponentLibrary: React.FC = () => {
   }
 
   const handleAddComponent = (type: QuizComponentType) => {
-    if (!activeStepId || !funnel) return;
+    let targetStepId = activeStepId;
+    if (!targetStepId && steps.length > 0) {
+      targetStepId = steps[0].id;
+      setActiveStepId(targetStepId);
+    }
+
+    if (!targetStepId || !funnel) {
+      toast({ title: "Nenhuma etapa selecionada", description: "Crie ou selecione uma etapa antes de adicionar um componente.", variant: "destructive" });
+      return;
+    }
 
     const def = COMPONENT_REGISTRY[type];
-    const stepComponents = components.filter((c) => c.stepId === activeStepId);
+    const stepComponents = components.filter((c) => c.stepId === targetStepId);
     const maxOrder = stepComponents.reduce((m, c) => Math.max(m, c.componentOrder), -1);
 
     const newComponent: QuizComponent = {
       id: crypto.randomUUID(),
-      stepId: activeStepId,
+      stepId: targetStepId,
       funnelId: funnel.id,
       componentType: type,
       componentOrder: maxOrder + 1,
@@ -59,6 +71,7 @@ export const ComponentLibrary: React.FC = () => {
     };
 
     addComponent(newComponent);
+    toast({ title: "Componente adicionado", description: `${def.label} adicionado com sucesso.` });
   };
 
   const allDefinitions = Object.values(COMPONENT_REGISTRY) as ComponentDefinition[];

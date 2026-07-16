@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useQuizBuilderStore, InspectorTab } from "@/stores/quiz/useQuizBuilderStore";
 import { COMPONENT_REGISTRY } from "../registry/componentRegistry";
+import { ImageUploader } from "../media/ImageUploader";
 
 export const PropertiesPanel: React.FC = () => {
   const activeComponentId = useQuizBuilderStore((s) => s.activeComponentId);
@@ -147,9 +148,14 @@ export const PropertiesPanel: React.FC = () => {
             ) : null}
 
             {activeComponent.componentType === "image" || activeComponent.componentType === "logo" ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
+                <ImageUploader
+                  label="Upload de Foto / Logo"
+                  value={(activeComponent.config.url as string) || ""}
+                  onChange={(url) => handleConfigChange("url", url)}
+                />
                 <div className="space-y-1.5">
-                  <Label className="text-xs">URL da Imagem</Label>
+                  <Label className="text-xs">URL da Imagem (ou cole o link)</Label>
                   <Input
                     value={(activeComponent.config.url as string) || ""}
                     onChange={(e) => handleConfigChange("url", e.target.value)}
