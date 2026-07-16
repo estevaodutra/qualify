@@ -34,11 +34,11 @@ export const NODE_DEFINITIONS: NodeBlockDefinition[] = [
   {
     blockType: "content", label: "Mensagem", icon: MessageSquare, color: "bg-blue-500",
     subTypes: [
-      { subType: "message", label: "Texto", icon: MessageSquare, color: "bg-blue-500" },
+      { subType: "message", label: "Mensagem de texto", icon: MessageSquare, color: "bg-blue-500" },
       { subType: "image", label: "Imagem", icon: Image, color: "bg-emerald-500" },
       { subType: "video", label: "Vídeo", icon: Video, color: "bg-cyan-500" },
-      { subType: "audio", label: "Áudio", icon: Music, color: "bg-pink-500" },
-      { subType: "document", label: "Documento", icon: FileText, color: "bg-slate-500" },
+      { subType: "audio", label: "Mensagem de áudio", icon: Music, color: "bg-pink-500" },
+      { subType: "document", label: "Arquivo anexo", icon: FileText, color: "bg-slate-500" },
       { subType: "user_input", label: "Entrada do usuário", icon: MessageSquare, color: "bg-indigo-500" },
       { subType: "delay", label: "Atraso de tempo", icon: Clock, color: "bg-amber-500" },
       { subType: "dynamic_url", label: "Arquivo URL Dinâmica", icon: Link2, color: "bg-sky-500" },

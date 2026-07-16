@@ -15,6 +15,7 @@ import { toCanonicalPayload } from "@/lib/workflows/canonicalPayload";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import {
   Plus, Trash2, Zap, Play, Send,
   MessageSquare, Clock, GitBranch, Bell, Link2,
@@ -22,7 +23,7 @@ import {
   BarChart3, MousePointerClick, List, MapPin, Contact, Calendar,
   Pencil, ImageIcon, UserPlus, UserMinus, ShieldPlus, ShieldMinus, Settings, CircleDot,
   Shuffle, Tag, Award, Sliders, Sparkles, Info, RefreshCw, HelpCircle,
-  ChevronDown, CheckCircle2
+  ChevronDown, CheckCircle2, ArrowUp, ArrowDown, Copy
 } from "lucide-react";
 import {
   Dialog,
@@ -627,6 +628,7 @@ export function UnifiedNodeConfigPanel({
             {resolvedNodeType === "content" && (() => {
               const block = getNodeBlockDefinition(node.nodeType)!;
               const messages = (node.config.messages as any[]) || [];
+              const hasUserInput = messages.some(m => m.type === "user_input");
               
               const handleAddAction = (subType: string) => {
                 const messageId = Math.random().toString(36).substring(2, 9);
@@ -649,6 +651,23 @@ export function UnifiedNodeConfigPanel({
                 const newId = Math.random().toString(36).substring(2, 9);
                 onUpdate({ ...node.config, messages: [...messages, { ...msg, id: newId }] });
               };
+
+              const moveAction = (e: React.MouseEvent, index: number, direction: 'up' | 'down') => {
+                e.stopPropagation();
+                const newMessages = [...messages];
+                if (direction === 'up' && index > 0) {
+                  const temp = newMessages[index - 1];
+                  newMessages[index - 1] = newMessages[index];
+                  newMessages[index] = temp;
+                } else if (direction === 'down' && index < messages.length - 1) {
+                  const temp = newMessages[index + 1];
+                  newMessages[index + 1] = newMessages[index];
+                  newMessages[index] = temp;
+                }
+                onUpdate({ ...node.config, messages: newMessages });
+              };
+
+              const primaryTypes = ["message", "user_input", "delay", "audio", "document", "dynamic_url"];
 
               return (
                 <>
@@ -685,78 +704,126 @@ export function UnifiedNodeConfigPanel({
                         ))}
                       </SelectContent>
                     </Select>
-                    <Separator className="mt-4" />
                   </div>
 
-                  <div className="space-y-3 mb-6">
-                    <Label className="text-xs font-medium text-muted-foreground">Mensagens</Label>
-                    {messages.length === 0 ? (
-                      <div className="text-xs text-center text-muted-foreground py-4 bg-slate-50 rounded-lg border border-dashed">
-                        Nenhuma mensagem adicionada.
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        {messages.map((msg, idx) => {
-                          const subInfo = block.subTypes?.find(s => s.subType === msg.type);
-                          const MsgIcon = subInfo?.icon || MessageSquare;
-                          return (
-                            <div
-                              key={msg.id}
-                              onClick={() => setEditingMessageId(msg.id)}
-                              className="group flex items-center justify-between p-3 border rounded-lg hover:border-primary/50 hover:bg-slate-50 cursor-pointer transition-colors"
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className={cn("p-1.5 rounded-md text-white", subInfo?.color || "bg-slate-500")}>
-                                  <MsgIcon className="h-4 w-4" />
-                                </div>
-                                <div className="text-sm font-medium">
-                                  {subInfo?.label || "Desconhecido"}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-500" onClick={(e) => handleDuplicateAction(e, msg)}>
-                                  <Plus className="h-3 w-3" />
-                                </Button>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:bg-red-50 hover:text-red-600" onClick={(e) => handleDeleteAction(e, msg.id)}>
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-500">
-                                  <Pencil className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                  <div className="space-y-3 mb-6 bg-slate-50/50 border border-slate-200 rounded-xl p-3">
+                     {messages.length === 0 ? (
+                       <div className="text-xs text-center text-muted-foreground py-4">
+                         Nenhuma mensagem adicionada.
+                       </div>
+                     ) : (
+                       <div className="space-y-2 flex flex-col">
+                         {messages.map((msg, idx) => {
+                           const subInfo = block.subTypes?.find(s => s.subType === msg.type);
+                           const MsgIcon = subInfo?.icon || MessageSquare;
+                           return (
+                             <div key={msg.id} className="relative flex flex-col">
+                               <div
+                                 onClick={() => setEditingMessageId(msg.id)}
+                                 className="group flex flex-col p-3 border border-slate-200 rounded-lg hover:border-[#8A3CFF]/50 bg-white hover:bg-slate-50 cursor-pointer transition-colors shadow-sm"
+                               >
+                                 <div className="flex items-center justify-between">
+                                   <div className="flex items-center gap-3">
+                                     <div className={cn("p-1.5 rounded-md text-white shrink-0", subInfo?.color || "bg-slate-500")}>
+                                       <MsgIcon className="h-4 w-4" />
+                                     </div>
+                                     <div className="flex flex-col min-w-0">
+                                       <span className="text-[11px] font-bold text-slate-800">{subInfo?.label || "Desconhecido"}</span>
+                                       <span className="text-[9px] text-slate-500 truncate max-w-[130px]">{msg.content || msg.question || msg.url || "Configurar..."}</span>
+                                     </div>
+                                   </div>
+                                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                     <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-slate-800" onClick={(e) => moveAction(e, idx, 'up')} disabled={idx === 0}>
+                                       <ArrowUp className="h-3 w-3" />
+                                     </Button>
+                                     <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-slate-800" onClick={(e) => moveAction(e, idx, 'down')} disabled={idx === messages.length - 1}>
+                                       <ArrowDown className="h-3 w-3" />
+                                     </Button>
+                                     <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400" onClick={(e) => handleDuplicateAction(e, msg)}>
+                                       <Copy className="h-3 w-3" />
+                                     </Button>
+                                     <Button variant="ghost" size="icon" className="h-6 w-6 text-red-400 hover:bg-red-50 hover:text-red-600" onClick={(e) => handleDeleteAction(e, msg.id)}>
+                                       <Trash2 className="h-3 w-3" />
+                                     </Button>
+                                   </div>
+                                 </div>
+                               </div>
+                             </div>
+                           );
+                         })}
+                         {hasUserInput && (
+                           <div className="flex flex-col items-center justify-center mt-1 p-2.5 border border-dashed border-[#8A3CFF]/40 bg-[#8A3CFF]/5 rounded-lg">
+                             <div className="text-[10px] font-semibold text-[#8A3CFF] mb-1.5 flex items-center gap-1.5">
+                               <MessageSquare className="h-3 w-3" /> Resposta do usuário
+                             </div>
+                             <Button variant="outline" size="sm" className="h-6 text-[9px] bg-white text-[#8A3CFF] border-[#8A3CFF]/20 hover:bg-[#8A3CFF]/10 rounded-md">
+                               <Plus className="h-3 w-3 mr-1"/> Adicionar botão
+                             </Button>
+                           </div>
+                         )}
+                       </div>
+                     )}
                   </div>
 
-                  <div className="space-y-2">
-                    <Label className="text-xs font-medium text-muted-foreground">
-                      Adicionar nova ação
+                  <div className="space-y-3">
+                    <Label className="text-xs font-bold text-slate-800">
+                      Adicionar
                     </Label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="flex flex-col gap-2">
                       {block.subTypes!
-                        .filter((sub) => {
-                          if (sub.subType === "poll" && !isGroup) return false;
-                          return true;
-                        })
+                        .filter(sub => primaryTypes.includes(sub.subType))
                         .map((sub) => {
-                        const SubIcon = sub.icon;
-                        return (
-                          <button
-                            key={sub.subType}
-                            type="button"
-                            onClick={() => handleAddAction(sub.subType)}
-                            className="flex items-center gap-2 p-2.5 rounded-lg border border-border text-left hover:border-primary/50 hover:bg-slate-50 transition-all"
-                          >
-                            <div className={cn("p-1.5 rounded-md shrink-0", sub.color)}>
-                              <SubIcon className="h-3.5 w-3.5 text-white" />
-                            </div>
-                            <span className="text-[11px] font-medium leading-tight">{sub.label}</span>
-                          </button>
-                        );
+                          const SubIcon = sub.icon;
+                          return (
+                            <button
+                              key={sub.subType}
+                              type="button"
+                              onClick={() => handleAddAction(sub.subType)}
+                              className="flex items-center gap-3 p-2.5 rounded-xl border border-slate-200 bg-white text-left hover:border-[#8A3CFF]/50 hover:shadow-sm transition-all group"
+                            >
+                              <div className={cn("p-1.5 rounded-lg shrink-0 text-white shadow-sm", sub.color)}>
+                                <SubIcon className="h-4 w-4" />
+                              </div>
+                              <span className="text-[11px] font-bold text-slate-700 group-hover:text-slate-900">{sub.label}</span>
+                            </button>
+                          );
                       })}
+
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            className="flex items-center gap-3 p-2.5 rounded-xl border border-dashed border-slate-300 bg-transparent text-left hover:border-[#8A3CFF]/50 hover:bg-[#8A3CFF]/5 transition-all mt-1 group"
+                          >
+                            <div className="p-1.5 rounded-lg shrink-0 bg-slate-100 text-slate-500 group-hover:bg-[#8A3CFF]/10 group-hover:text-[#8A3CFF] transition-colors">
+                              <Plus className="h-4 w-4" />
+                            </div>
+                            <span className="text-[11px] font-bold text-slate-500 group-hover:text-[#8A3CFF] transition-colors">Adicionar outro tipo de mensagem</span>
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[280px] p-2" align="center">
+                          <div className="grid grid-cols-2 gap-2">
+                            {block.subTypes!
+                              .filter(sub => !primaryTypes.includes(sub.subType) && !(sub.subType === "poll" && !isGroup))
+                              .map((sub) => {
+                                const SubIcon = sub.icon;
+                                return (
+                                  <button
+                                    key={sub.subType}
+                                    type="button"
+                                    onClick={() => handleAddAction(sub.subType)}
+                                    className="flex items-center gap-2 p-2 rounded-lg border border-transparent text-left hover:bg-slate-50 hover:border-slate-200 transition-all"
+                                  >
+                                    <div className={cn("p-1.5 rounded-md shrink-0 text-white", sub.color)}>
+                                      <SubIcon className="h-3 w-3" />
+                                    </div>
+                                    <span className="text-[10px] font-bold text-slate-700 leading-tight">{sub.label}</span>
+                                  </button>
+                                );
+                            })}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </div>
                   <Separator className="mt-6" />

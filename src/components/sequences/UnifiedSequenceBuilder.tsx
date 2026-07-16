@@ -1348,6 +1348,44 @@ export function UnifiedSequenceBuilder({
                             <Plus className="h-3.5 w-3.5" /> Adicionar ação
                           </button>
                           
+                          <div className="flex flex-col gap-2 w-full text-right relative mb-4">
+                            {(((node.config.messages as any[]) || [])).some(m => m.type === "user_input") && (
+                              <div className="relative flex items-center justify-end w-full">
+                                <span className="text-[8px] font-bold text-slate-500 select-none mr-2">Caso o contato não responda</span>
+                                <div
+                                  data-node-port="true"
+                                  onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", "timeout")}
+                                  className="absolute -right-[27.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-amber-500 bg-background hover:bg-amber-500 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
+                                  title="Caso o contato não responda"
+                                >
+                                  <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                </div>
+                              </div>
+                            )}
+                            <div className="relative flex items-center justify-end w-full">
+                              <span className="text-[8px] font-bold text-slate-500 select-none mr-2">Caso ocorrer erro no envio da mensagem</span>
+                              <div
+                                data-node-port="true"
+                                onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", "error")}
+                                className="absolute -right-[27.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-destructive bg-background hover:bg-destructive cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
+                                title="Caso ocorrer erro"
+                              >
+                                <div className="h-1.5 w-1.5 rounded-full bg-destructive" />
+                              </div>
+                            </div>
+                            <div className="relative flex items-center justify-end w-full">
+                              <span className="text-[8px] font-bold text-slate-500 select-none mr-2">Próximo passo</span>
+                              <div
+                                data-node-port="true"
+                                onMouseDown={(e) => handlePortMouseDown(e, node.id, "out")}
+                                className="absolute -right-[27.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-blue-500 bg-background hover:bg-blue-500 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
+                                title="Próximo passo"
+                              >
+                                <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                              </div>
+                            </div>
+                          </div>
+
                           <div className="flex items-center justify-between pt-4 border-t border-slate-100 px-2 mt-auto">
                             <div className="text-center">
                               <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
