@@ -10,6 +10,8 @@ import { COMPONENT_REGISTRY } from "../registry/componentRegistry";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { X } from "lucide-react";
 import { TEXT_COLOR_PRESETS } from "@/utils/quiz/quizTextSanitizer";
+import { ImageUploader } from "../media/ImageUploader";
+import { EditableRichText } from "../editor/EditableRichText";
 
 interface ColorPickerProps {
   label: string;
