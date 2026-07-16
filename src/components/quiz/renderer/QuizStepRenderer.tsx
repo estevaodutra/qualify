@@ -3,6 +3,7 @@ import React from "react";
 import { QuizStep, QuizComponent, QuizDesignConfig } from "@/types/quiz";
 import { QuizComponentRenderer } from "./QuizComponentRenderer";
 import { ArrowLeft } from "lucide-react";
+import { useQuizBuilderStore } from "@/stores/quiz/useQuizBuilderStore";
 
 interface StepRendererProps {
   step: QuizStep;
@@ -44,6 +45,34 @@ export const QuizStepRenderer: React.FC<StepRendererProps> = ({
   const d = designConfig;
   const progressPercent = totalSteps > 0 ? Math.round(((currentStepIndex + 1) / totalSteps) * 100) : 0;
   const borderRadius = d.borderRadius || "12px";
+
+  const duplicateComponent = useQuizBuilderStore((s) => s.duplicateComponent);
+  const deleteComponent = useQuizBuilderStore((s) => s.deleteComponent);
+  const reorderComponents = useQuizBuilderStore((s) => s.reorderComponents);
+
+  const handleMoveUp = (id: string) => {
+    const ids = components.map((c) => c.id);
+    const idx = ids.indexOf(id);
+    if (idx > 0) {
+      const newIds = [...ids];
+      const temp = newIds[idx - 1];
+      newIds[idx - 1] = newIds[idx];
+      newIds[idx] = temp;
+      reorderComponents(step.id, newIds);
+    }
+  };
+
+  const handleMoveDown = (id: string) => {
+    const ids = components.map((c) => c.id);
+    const idx = ids.indexOf(id);
+    if (idx < ids.length - 1) {
+      const newIds = [...ids];
+      const temp = newIds[idx + 1];
+      newIds[idx + 1] = newIds[idx];
+      newIds[idx] = temp;
+      reorderComponents(step.id, newIds);
+    }
+  };
 
   const containerStyle: React.CSSProperties = {
     maxWidth: isEditor ? "100%" : `${d.contentMaxWidth || 540}px`,
@@ -119,6 +148,10 @@ export const QuizStepRenderer: React.FC<StepRendererProps> = ({
                 onOptionSelect={(optId, destination) => onOptionSelect?.(comp.id, optId, destination)}
                 onNext={onNextStep}
                 onSelectComponent={onSelectComponent}
+                onDuplicateComponent={(id) => duplicateComponent(id)}
+                onDeleteComponent={(id) => deleteComponent(id)}
+                onMoveUp={(id) => handleMoveUp(id)}
+                onMoveDown={(id) => handleMoveDown(id)}
               />
             ))
           )}
