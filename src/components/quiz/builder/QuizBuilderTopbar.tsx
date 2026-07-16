@@ -14,18 +14,20 @@ import {
   Eye,
   CheckCircle2,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Settings
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useQuizBuilderStore, DeviceMode, SaveStatus } from "@/stores/quiz/useQuizBuilderStore";
+import { useQuizBuilderStore, SaveStatus } from "@/stores/quiz/useQuizBuilderStore";
 import { useToast } from "@/hooks/use-toast";
 
 interface TopbarProps {
   onSave: () => void;
   onPublish: () => void;
+  onOpenSettings: () => void;
 }
 
-export const QuizBuilderTopbar: React.FC<TopbarProps> = ({ onSave, onPublish }) => {
+export const QuizBuilderTopbar: React.FC<TopbarProps> = ({ onSave, onPublish, onOpenSettings }) => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -81,7 +83,7 @@ export const QuizBuilderTopbar: React.FC<TopbarProps> = ({ onSave, onPublish }) 
   };
 
   return (
-    <div className="h-14 bg-card border-b border-border px-4 flex items-center justify-between shrink-0 select-none z-30 shadow-sm">
+    <div className="h-14 bg-card border-b border-border px-4 flex items-center justify-between shrink-0 select-none z-30 shadow-xs">
       {/* Left: Back & Funnel Name */}
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate("/quiz")}>
@@ -135,8 +137,18 @@ export const QuizBuilderTopbar: React.FC<TopbarProps> = ({ onSave, onPublish }) 
         </Button>
       </div>
 
-      {/* Right: Actions (Save, Preview, Public Link, Publish) */}
+      {/* Right: Actions (Settings Gear, Preview, Link, Save, Publish) */}
       <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-8 w-8"
+          onClick={onOpenSettings}
+          title="Configurações do Quiz"
+        >
+          <Settings className="w-4 h-4 text-slate-700" />
+        </Button>
+
         <Button
           variant="outline"
           size="sm"

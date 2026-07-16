@@ -1,5 +1,5 @@
 // src/components/quiz/builder/QuizBuilderShell.tsx
-import React, { useEffect, useCallback } from "react";
+import React, { useEffect, useCallback, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuizBuilderStore } from "@/stores/quiz/useQuizBuilderStore";
 import { QuizBuilderTopbar } from "./QuizBuilderTopbar";
@@ -7,6 +7,7 @@ import { StepSidebar } from "./StepSidebar";
 import { ComponentLibrary } from "./ComponentLibrary";
 import { BuilderCanvas } from "./BuilderCanvas";
 import { PropertiesPanel } from "./PropertiesPanel";
+import { QuizSettingsOverlay } from "../settings/QuizSettingsOverlay";
 import { QuizFunnel, QuizStep, QuizComponent, QuizDesignConfig } from "@/types/quiz";
 import { DEFAULT_DESIGN_CONFIG } from "@/components/quiz/design/DesignTab";
 import { useToast } from "@/hooks/use-toast";
@@ -17,6 +18,7 @@ interface QuizBuilderShellProps {
 
 export const QuizBuilderShell: React.FC<QuizBuilderShellProps> = ({ funnelId }) => {
   const { toast } = useToast();
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const funnel = useQuizBuilderStore((s) => s.funnel);
   const steps = useQuizBuilderStore((s) => s.steps);
@@ -119,7 +121,6 @@ export const QuizBuilderShell: React.FC<QuizBuilderShellProps> = ({ funnelId }) 
 
     setSaveStatus("saving");
     try {
-      // 1. Update Funnel design config
       await (supabase as any)
         .from("quiz_funnels")
         .update({
@@ -128,7 +129,6 @@ export const QuizBuilderShell: React.FC<QuizBuilderShellProps> = ({ funnelId }) 
         })
         .eq("id", funnel.id);
 
-      // 2. Sync steps
       for (const st of steps) {
         await (supabase as any).from("quiz_steps").upsert({
           id: st.id,
@@ -144,7 +144,6 @@ export const QuizBuilderShell: React.FC<QuizBuilderShellProps> = ({ funnelId }) 
         });
       }
 
-      // 3. Sync components
       for (const comp of components) {
         await (supabase as any).from("quiz_components").upsert({
           id: comp.id,
@@ -209,14 +208,26 @@ export const QuizBuilderShell: React.FC<QuizBuilderShellProps> = ({ funnelId }) 
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col overflow-hidden bg-background">
-      <QuizBuilderTopbar onSave={handleSave} onPublish={handlePublish} />
-      <div className="flex-1 flex overflow-hidden">
+    <div className="fixed inset-0 h-screen w-screen flex flex-col overflow-hidden bg-background">
+      <QuizBuilderTopbar
+        onSave={handleSave}
+        onPublish={handlePublish}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+      />
+      <div className="flex-1 flex overflow-hidden relative">
         <StepSidebar />
         <ComponentLibrary />
         <BuilderCanvas />
         <PropertiesPanel />
       </div>
+
+      {/* Settings Overlay Fullscreen */}
+      {isSettingsOpen && (
+        <QuizSettingsOverlay
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+        />
+      )}
     </div>
   );
 };
