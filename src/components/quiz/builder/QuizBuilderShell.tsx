@@ -10,6 +10,7 @@ import { PropertiesPanel } from "./PropertiesPanel";
 import { QuizSettingsOverlay } from "../settings/QuizSettingsOverlay";
 import { QuizFunnel, QuizStep, QuizComponent, QuizDesignConfig } from "@/types/quiz";
 import { DEFAULT_DESIGN_CONFIG } from "@/components/quiz/design/DesignTab";
+import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 
 interface QuizBuilderShellProps {
@@ -17,6 +18,7 @@ interface QuizBuilderShellProps {
 }
 
 export const QuizBuilderShell: React.FC<QuizBuilderShellProps> = ({ funnelId }) => {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
