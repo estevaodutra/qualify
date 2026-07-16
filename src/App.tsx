@@ -97,6 +97,16 @@ const App = () => {
                         </ProtectedRoute>
                       }
                     />
+                    {/* Quiz Editor Route — Fullscreen Builder Mode outside AppLayout */}
+                    <Route
+                      path="/quiz/:id"
+                      element={
+                        <ProtectedRoute>
+                          <QuizEditorPage />
+                        </ProtectedRoute>
+                      }
+                    />
+
                     {/* Authenticated routes with AppLayout */}
                     <Route
                       element={
@@ -129,9 +139,9 @@ const App = () => {
                       {/* Settings sub-routes */}
                       <Route path="/configuracoes/membros" element={<MembersPage />} />
 
-                      {/* Quiz / Funnel routes */}
+                      {/* Quiz Library (inside AppLayout) */}
                       <Route path="/quiz" element={<QuizFunnelsPage />} />
-                      <Route path="/quiz/:id" element={<QuizEditorPage />} />
+
 
                       {/* Prospecting routes */}
                       <Route path="/prospeccao" element={<ProspectingCampaigns />} />
