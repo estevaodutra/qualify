@@ -179,34 +179,61 @@ export default function QuizPublicPage() {
       if (!content || !content.trim()) return;
       
       try {
-        const range = document.createRange();
-        const fragment = range.createContextualFragment(content.trim());
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(content.trim(), "text/html");
         
-        // Add data-quiz-script attribute to track and cleanup
-        const children = Array.from(fragment.childNodes);
-        children.forEach((child) => {
-          if (child.nodeType === Node.ELEMENT_NODE) {
-            const el = child as HTMLElement;
-            el.setAttribute("data-quiz-script", funnel.id);
-            elementsToCleanup.push(el);
+        // 1. Process and execute all script elements
+        const scripts = Array.from(doc.querySelectorAll("script"));
+        scripts.forEach((s) => {
+          const scriptEl = document.createElement("script");
+          // Copy all attributes
+          Array.from(s.attributes).forEach((attr) => {
+            scriptEl.setAttribute(attr.name, attr.value);
+          });
+          // Set text content to execute script
+          scriptEl.text = s.textContent || "";
+          scriptEl.setAttribute("data-quiz-script", funnel.id);
+          
+          if (position === "prepend" && target.firstChild) {
+            target.insertBefore(scriptEl, target.firstChild);
           } else {
-            // Wrap text/comments in a wrapper so they can be cleaned up
-            const span = document.createElement("span");
-            span.style.display = "none";
-            span.setAttribute("data-quiz-script", funnel.id);
-            span.appendChild(child.cloneNode(true));
-            child.parentNode?.replaceChild(span, child);
-            elementsToCleanup.push(span);
+            target.appendChild(scriptEl);
           }
+          elementsToCleanup.push(scriptEl);
         });
 
-        if (position === "prepend" && target.firstChild) {
-          target.insertBefore(fragment, target.firstChild);
-        } else {
-          target.appendChild(fragment);
-        }
+        // 2. Remove scripts from temp document to avoid duplicates
+        scripts.forEach((s) => s.parentNode?.removeChild(s));
+
+        // 3. Inject remaining elements (style, noscript, meta, etc.)
+        const remainingNodes = Array.from(doc.body.childNodes);
+        remainingNodes.forEach((node) => {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            const el = node as HTMLElement;
+            el.setAttribute("data-quiz-script", funnel.id);
+            if (position === "prepend" && target.firstChild) {
+              target.insertBefore(el, target.firstChild);
+            } else {
+              target.appendChild(el);
+            }
+            elementsToCleanup.push(el);
+          } else if (node.nodeType === Node.TEXT_NODE || node.nodeType === Node.COMMENT_NODE) {
+            // Re-wrap comments and texts inside a hidden span to ensure clean up
+            const wrap = document.createElement("span");
+            wrap.style.display = "none";
+            wrap.setAttribute("data-quiz-script", funnel.id);
+            wrap.appendChild(node.cloneNode(true));
+            
+            if (position === "prepend" && target.firstChild) {
+              target.insertBefore(wrap, target.firstChild);
+            } else {
+              target.appendChild(wrap);
+            }
+            elementsToCleanup.push(wrap);
+          }
+        });
       } catch (err) {
-        console.warn("createContextualFragment script injection failed:", err);
+        console.warn("DOMParser script injection failed:", err);
       }
     };
 
