@@ -178,7 +178,8 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
             }}
             className={cn(
               "py-3.5 px-6 font-semibold text-sm flex items-center justify-center gap-2 shadow-md hover:opacity-95 transition-all active:scale-[0.99]",
-              config.animated && "animate-pulse"
+              config.animated && "animate-pulse",
+              isEditor && "pointer-events-none"
             )}
           >
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
@@ -214,7 +215,10 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
                       borderColor: isSel ? primaryColor : "rgba(100,116,139,0.3)",
                       backgroundColor: isSel ? `${primaryColor}15` : "transparent",
                     }}
-                    className="flex flex-col items-center p-2.5 border-2 text-center transition-all hover:border-primary/60 active:scale-[0.98] h-full"
+                    className={cn(
+                      "flex flex-col items-center p-2.5 border-2 text-center transition-all hover:border-primary/60 active:scale-[0.98] h-full",
+                      isEditor && "pointer-events-none"
+                    )}
                   >
                     {opt.image ? (
                       <img src={opt.image} alt={opt.text} className="w-full h-24 object-cover rounded-md mb-2" />
@@ -243,7 +247,10 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
                       borderColor: isSel ? primaryColor : "rgba(100,116,139,0.3)",
                       backgroundColor: isSel ? `${primaryColor}15` : "transparent",
                     }}
-                    className="w-full flex items-center gap-3 px-4 py-3 border-2 text-left text-sm font-medium transition-all hover:border-primary/60 active:scale-[0.99]"
+                    className={cn(
+                      "w-full flex items-center gap-3 px-4 py-3 border-2 text-left text-sm font-medium transition-all hover:border-primary/60 active:scale-[0.99]",
+                      isEditor && "pointer-events-none"
+                    )}
                   >
                     <span
                       style={{
@@ -295,7 +302,10 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
               disabled={isEditor}
               value={val}
               onChange={(e) => onFormChange?.(e.target.value)}
-              className="w-full accent-indigo-600 cursor-pointer h-2 bg-muted rounded-lg"
+              className={cn(
+                "w-full accent-indigo-600 cursor-pointer h-2 bg-muted rounded-lg",
+                isEditor && "pointer-events-none"
+              )}
             />
           </div>
         );
@@ -316,7 +326,10 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
               value={formValue}
               onChange={(e) => onFormChange?.(e.target.value)}
               style={inputInputStyle}
-              className="w-full px-3.5 py-2.5 border-2 text-sm bg-transparent outline-none focus:border-primary transition-colors min-h-[90px]"
+              className={cn(
+                "w-full px-3.5 py-2.5 border-2 text-sm bg-transparent outline-none focus:border-primary transition-colors min-h-[90px]",
+                isEditor && "pointer-events-none"
+              )}
             />
           ) : (
             <input
@@ -326,7 +339,10 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
               value={formValue}
               onChange={(e) => onFormChange?.(e.target.value)}
               style={inputInputStyle}
-              className="w-full px-3.5 py-2.5 border-2 text-sm bg-transparent outline-none focus:border-primary transition-colors"
+              className={cn(
+                "w-full px-3.5 py-2.5 border-2 text-sm bg-transparent outline-none focus:border-primary transition-colors",
+                isEditor && "pointer-events-none"
+              )}
             />
           )}
           {hasError && <p className="text-xs text-red-500 font-medium">{validationError}</p>}
@@ -353,7 +369,10 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
             type="button"
             disabled={isEditor}
             style={{ backgroundColor: primaryColor, borderRadius: borderStyle.borderRadius }}
-            className="w-full py-3 px-6 text-white font-semibold text-sm shadow-md hover:opacity-90 transition-opacity"
+            className={cn(
+              "w-full py-3 px-6 text-white font-semibold text-sm shadow-md hover:opacity-90 transition-opacity",
+              isEditor && "pointer-events-none"
+            )}
           >
             {(config.ctaText as string) || "Falar no WhatsApp"}
           </button>
