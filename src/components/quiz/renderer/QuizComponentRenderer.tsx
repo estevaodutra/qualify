@@ -131,21 +131,50 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
     // ─── Buttons (CTA & WhatsApp) ──────────────────────────────────────────────
     if (type === "button" || type === "cta_whatsapp") {
       const text = (config.text as string) || (type === "cta_whatsapp" ? "Falar no WhatsApp" : "Continuar");
-      const style = (config.style as string) || "primary";
+      const buttonColor = (config.buttonColor as string) || (config.backgroundColor as string) || primaryColor;
+      const textColor = (config.textColor as string) || (config.color as string) || "#ffffff";
       const width = (config.width as string) || "100%";
+      const actionType = (config.actionType as string) || "navigate";
+      const redirectUrl = (config.redirectUrl as string) || "";
+      const openInNewTab = !!config.openInNewTab;
+      const targetStepId = (config.targetStepId as string) || "";
+
+      const handleButtonClick = () => {
+        if (isEditor) return;
+
+        if (actionType === "redirect") {
+          if (redirectUrl) {
+            let formattedUrl = redirectUrl.trim();
+            if (!formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://")) {
+              formattedUrl = `https://${formattedUrl}`;
+            }
+            if (openInNewTab) {
+              window.open(formattedUrl, "_blank");
+            } else {
+              window.location.href = formattedUrl;
+            }
+          }
+          return;
+        }
+
+        if (targetStepId) {
+          onOptionSelect?.("", targetStepId);
+        } else {
+          onNext?.();
+        }
+      };
 
       return (
-        <div className="w-full my-2 flex justify-center transition-all">
+        <div className="w-full my-1 flex justify-center transition-all">
           <button
             type="button"
             disabled={submitting || isEditor}
-            onClick={onNext}
+            onClick={handleButtonClick}
             style={{
               width,
               borderRadius: borderStyle.borderRadius,
-              backgroundColor: style === "primary" ? primaryColor : "transparent",
-              color: style === "primary" ? "#ffffff" : primaryColor,
-              border: style !== "primary" ? `2px solid ${primaryColor}` : "none",
+              backgroundColor: buttonColor,
+              color: textColor,
             }}
             className={cn(
               "py-3.5 px-6 font-semibold text-sm flex items-center justify-center gap-2 shadow-md hover:opacity-95 transition-all active:scale-[0.99]",

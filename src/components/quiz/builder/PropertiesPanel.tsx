@@ -243,7 +243,7 @@ export const PropertiesPanel: React.FC = () => {
             ) : null}
 
             {activeComponent.componentType === "button" || activeComponent.componentType === "cta_whatsapp" ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Texto do Botão</Label>
                   <Input
@@ -252,6 +252,98 @@ export const PropertiesPanel: React.FC = () => {
                     className="h-8 text-xs"
                   />
                 </div>
+
+                {/* Colors */}
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div className="space-y-1">
+                    <Label className="text-[11px]">Cor do Botão</Label>
+                    <div className="flex items-center gap-2 border border-border rounded-md p-1 bg-background h-8">
+                      <input
+                        type="color"
+                        value={(activeComponent.config.buttonColor as string) || "#ec4899"}
+                        onChange={(e) => handleConfigChange("buttonColor", e.target.value)}
+                        className="w-5 h-5 rounded cursor-pointer border-0 p-0 bg-transparent"
+                      />
+                      <span className="text-[10px] uppercase font-mono truncate">
+                        {(activeComponent.config.buttonColor as string) || "#ec4899"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-[11px]">Cor do Texto</Label>
+                    <div className="flex items-center gap-2 border border-border rounded-md p-1 bg-background h-8">
+                      <input
+                        type="color"
+                        value={(activeComponent.config.textColor as string) || "#ffffff"}
+                        onChange={(e) => handleConfigChange("textColor", e.target.value)}
+                        className="w-5 h-5 rounded cursor-pointer border-0 p-0 bg-transparent"
+                      />
+                      <span className="text-[10px] uppercase font-mono truncate">
+                        {(activeComponent.config.textColor as string) || "#ffffff"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Navigation Type Box */}
+                <div className="relative border border-border/80 rounded-xl p-3 bg-card shadow-xs space-y-3 pt-4 select-none">
+                  <span className="absolute -top-2.5 left-3 bg-card px-1.5 text-[11px] font-semibold text-primary">
+                    Tipo de navegação
+                  </span>
+
+                  <select
+                    value={(activeComponent.config.actionType as string) || "navigate"}
+                    onChange={(e) => handleConfigChange("actionType", e.target.value)}
+                    className="w-full h-8 px-2 border rounded-md text-xs bg-background"
+                  >
+                    <option value="navigate">Navegar entre etapas</option>
+                    <option value="redirect">Redirecionar</option>
+                  </select>
+
+                  {activeComponent.config.actionType === "redirect" ? (
+                    <div className="space-y-3 pt-1 animate-in fade-in duration-200">
+                      <div className="relative border border-border rounded-xl p-2.5 bg-background shadow-xs">
+                        <span className="absolute -top-2.5 left-2 bg-background px-1 text-[10px] font-medium text-muted-foreground">
+                          Destino do redirecionamento
+                        </span>
+                        <Input
+                          value={(activeComponent.config.redirectUrl as string) || ""}
+                          onChange={(e) => handleConfigChange("redirectUrl", e.target.value)}
+                          placeholder="URL"
+                          className="h-7 text-xs border-0 focus-visible:ring-0 p-0 shadow-none bg-transparent"
+                        />
+                      </div>
+
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!!activeComponent.config.openInNewTab}
+                          onChange={(e) => handleConfigChange("openInNewTab", e.target.checked)}
+                          className="rounded text-indigo-600"
+                        />
+                        <span className="text-xs">Nova aba?</span>
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 pt-1 animate-in fade-in duration-200">
+                      <Label className="text-xs">Etapa de destino</Label>
+                      <select
+                        value={(activeComponent.config.targetStepId as string) || ""}
+                        onChange={(e) => handleConfigChange("targetStepId", e.target.value)}
+                        className="w-full h-8 px-2 border rounded-md text-xs bg-background"
+                      >
+                        <option value="">Próxima Etapa (Padrão)</option>
+                        {steps.map((st, idx) => (
+                          <option key={st.id} value={st.id}>
+                            {st.name || `Etapa ${idx + 1}`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+
                 <label className="flex items-center gap-2 cursor-pointer pt-1">
                   <input
                     type="checkbox"
@@ -259,7 +351,7 @@ export const PropertiesPanel: React.FC = () => {
                     onChange={(e) => handleConfigChange("animated", e.target.checked)}
                     className="rounded text-indigo-600"
                   />
-                  <span>Efeito Pulsante de Atenção</span>
+                  <span className="text-xs">Efeito Pulsante de Atenção</span>
                 </label>
               </div>
             ) : null}
