@@ -96,6 +96,33 @@ export const QuizBuilderShell: React.FC<QuizBuilderShellProps> = ({ funnelId }) 
         settings: s.settings || {},
       }));
 
+      // Auto-create initial default step if funnel is empty
+      if (formattedSteps.length === 0) {
+        const defaultStepId = crypto.randomUUID();
+        const defaultStep: QuizStep = {
+          id: defaultStepId,
+          funnelId: f.id,
+          name: "Etapa 1",
+          stepOrder: 0,
+          type: "content",
+          showLogo: true,
+          showProgress: true,
+          allowBack: true,
+        };
+        formattedSteps.push(defaultStep);
+
+        await (supabase as any).from("quiz_steps").insert({
+          id: defaultStepId,
+          funnel_id: f.id,
+          user_id: f.user_id,
+          name: defaultStep.name,
+          step_order: 0,
+          show_logo: true,
+          show_progress: true,
+          allow_back: true,
+        });
+      }
+
       const formattedComponents: QuizComponent[] = (cList || []).map((c: any) => ({
         id: c.id,
         stepId: c.step_id,
