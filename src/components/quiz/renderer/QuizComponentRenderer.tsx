@@ -77,7 +77,7 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
       const normalized = normalizeLegacyTextConfig(type, config);
 
       return (
-        <div className="w-full py-1 transition-all">
+        <div className="w-full py-0 transition-all">
           <EditableRichText
             value={normalized.content}
             onChange={(newContent) => {
@@ -340,7 +340,7 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
       onClick={handleClick}
       className={cn(
         "relative group/comp w-full transition-all",
-        isEditor && "cursor-pointer rounded-lg p-1.5 hover:ring-2 hover:ring-indigo-400/50",
+        isEditor && "cursor-pointer rounded-lg p-0.5 hover:ring-2 hover:ring-indigo-400/50",
         isEditor && isSelected && "ring-2 ring-indigo-600 shadow-sm"
       )}
     >

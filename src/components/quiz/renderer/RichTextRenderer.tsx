@@ -31,14 +31,14 @@ export const RichTextRenderer: React.FC<RichTextRendererProps> = ({
       style={style}
       className={cn(
         "prose prose-slate max-w-none dark:prose-invert",
-        "prose-h1:text-2xl prose-h1:font-bold prose-h1:my-2 prose-h1:leading-tight",
-        "prose-h2:text-xl prose-h2:font-bold prose-h2:my-1.5 prose-h2:leading-tight",
-        "prose-h3:text-lg prose-h3:font-semibold prose-h3:my-1 prose-h3:leading-snug",
-        "prose-p:my-1 prose-p:leading-relaxed text-sm",
+        "prose-h1:text-2xl prose-h1:font-bold prose-h1:my-0.5 prose-h1:leading-tight",
+        "prose-h2:text-xl prose-h2:font-bold prose-h2:my-0.5 prose-h2:leading-tight",
+        "prose-h3:text-lg prose-h3:font-semibold prose-h3:my-0.5 prose-h3:leading-snug",
+        "prose-p:my-0.5 prose-p:leading-snug text-sm",
         "prose-a:text-indigo-600 prose-a:underline hover:prose-a:text-indigo-500",
-        "prose-ul:list-disc prose-ul:pl-5 prose-ul:my-1",
-        "prose-ol:list-decimal prose-ol:pl-5 prose-ol:my-1",
-        "prose-li:my-0.5",
+        "prose-ul:list-disc prose-ul:pl-5 prose-ul:my-0.5",
+        "prose-ol:list-decimal prose-ol:pl-5 prose-ol:my-0.5",
+        "prose-li:my-0",
         "break-words transition-all",
         className
       )}

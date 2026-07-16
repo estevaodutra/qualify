@@ -96,7 +96,7 @@ export const QuizStepRenderer: React.FC<StepRendererProps> = ({
           </div>
         )}
 
-        <div className="pt-2 space-y-4">
+        <div className="pt-1 space-y-1.5">
           {/* Logo Header */}
           {step.showLogo && d.logo?.url && (
             <div
