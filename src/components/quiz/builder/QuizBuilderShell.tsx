@@ -113,10 +113,13 @@ export const QuizBuilderShell: React.FC<QuizBuilderShellProps> = ({ funnelId }) 
         };
         formattedSteps.push(defaultStep);
 
+        const { data: authData } = await supabase.auth.getUser();
+        const effectiveUser = f.user_id || authData.user?.id;
+
         await (supabase as any).from("quiz_steps").insert({
           id: defaultStepId,
           funnel_id: f.id,
-          user_id: f.user_id,
+          user_id: effectiveUser,
           name: defaultStep.name,
           step_order: 0,
           show_logo: true,
@@ -150,19 +153,26 @@ export const QuizBuilderShell: React.FC<QuizBuilderShellProps> = ({ funnelId }) 
 
     setSaveStatus("saving");
     try {
-      await (supabase as any)
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData.user?.id || funnel.userId;
+
+      // 1. Update Funnel
+      const { error: fErr } = await (supabase as any)
         .from("quiz_funnels")
         .update({
-          design_config: designConfig,
+          design_config: designConfig || funnel.designConfig,
           updated_at: new Date().toISOString(),
         })
         .eq("id", funnel.id);
 
+      if (fErr) throw fErr;
+
+      // 2. Upsert Steps
       for (const st of steps) {
-        await (supabase as any).from("quiz_steps").upsert({
+        const { error: sErr } = await (supabase as any).from("quiz_steps").upsert({
           id: st.id,
           funnel_id: funnel.id,
-          user_id: funnel.userId,
+          user_id: userId,
           name: st.name,
           step_order: st.stepOrder,
           show_logo: st.showLogo,
@@ -171,26 +181,46 @@ export const QuizBuilderShell: React.FC<QuizBuilderShellProps> = ({ funnelId }) 
           type: st.type,
           settings: st.settings || {},
         });
+
+        if (sErr) throw sErr;
       }
 
+      // 3. Clean Deleted Components
+      const currentCompIds = components.map((c) => c.id);
+      if (currentCompIds.length > 0) {
+        await (supabase as any)
+          .from("quiz_components")
+          .delete()
+          .eq("funnel_id", funnel.id)
+          .not("id", "in", `(${currentCompIds.join(",")})`);
+      } else {
+        await (supabase as any)
+          .from("quiz_components")
+          .delete()
+          .eq("funnel_id", funnel.id);
+      }
+
+      // 4. Upsert Components
       for (const comp of components) {
-        await (supabase as any).from("quiz_components").upsert({
+        const { error: cErr } = await (supabase as any).from("quiz_components").upsert({
           id: comp.id,
           step_id: comp.stepId,
           funnel_id: funnel.id,
-          user_id: funnel.userId,
+          user_id: userId,
           component_type: comp.componentType,
           component_order: comp.componentOrder,
           config: comp.config,
           schema_version: comp.schemaVersion,
         });
+
+        if (cErr) throw cErr;
       }
 
       setSaveStatus("saved");
       toast({ title: "Funil salvo com sucesso!" });
     } catch (e: any) {
       setSaveStatus("error");
-      toast({ title: "Erro ao salvar", description: e.message, variant: "destructive" });
+      toast({ title: "Erro ao salvar", description: e.message || "Erro ao conectar com o banco de dados.", variant: "destructive" });
     }
   }, [funnel, steps, components, designConfig, saveStatus]);
 
