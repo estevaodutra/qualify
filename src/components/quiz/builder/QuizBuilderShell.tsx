@@ -146,7 +146,7 @@ export const QuizBuilderShell: React.FC<QuizBuilderShellProps> = ({ funnelId }) 
 
   // Persist Changes to Supabase
   const handleSave = useCallback(async () => {
-    if (!funnel || saveStatus === "saved") return;
+    if (!funnel) return;
 
     setSaveStatus("saving");
     try {

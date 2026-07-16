@@ -72,6 +72,7 @@ interface QuizBuilderStore {
   // Component Operations
   addComponent: (component: QuizComponent) => void;
   updateComponent: (id: string, updates: Partial<QuizComponent>) => void;
+  updateComponentConfig: (id: string, configUpdates: Record<string, unknown>) => void;
   deleteComponent: (id: string) => void;
   reorderComponents: (stepId: string, orderedIds: string[]) => void;
   duplicateComponent: (id: string) => void;
@@ -246,6 +247,16 @@ export const useQuizBuilderStore = create<QuizBuilderStore>((set, get) => ({
     get().pushHistory();
     set((state) => ({
       components: state.components.map((c) => (c.id === id ? { ...c, ...updates } : c)),
+      saveStatus: "dirty",
+    }));
+  },
+
+  updateComponentConfig: (id, configUpdates) => {
+    get().pushHistory();
+    set((state) => ({
+      components: state.components.map((c) =>
+        c.id === id ? { ...c, config: { ...c.config, ...configUpdates } } : c
+      ),
       saveStatus: "dirty",
     }));
   },
