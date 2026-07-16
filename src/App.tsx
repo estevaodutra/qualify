@@ -105,6 +105,29 @@ const App = () => {
                         </ProtectedRoute>
                       }
                     >
+                      <Route path="/" element={<Dashboard />} />
+                      <Route path="/chat" element={<Chat />} />
+                      <Route path="/painel-ligacoes" element={<CallPanel />} />
+                      <Route path="/leads" element={<Leads />} />
+                      <Route path="/pipelines" element={<Pipelines />} />
+                      <Route path="/numbers" element={<PhoneNumbers />} />
+                      <Route path="/instances" element={<Instances />} />
+                      <Route path="/alerts" element={<Alerts />} />
+                      <Route path="/billing" element={<Billing />} />
+                      <Route path="/settings" element={<Settings />} />
+                      <Route path="/settings/profile" element={<Settings />} />
+                      <Route path="/settings/account" element={<Settings />} />
+                      <Route path="/settings/logs" element={<Settings />} />
+                      <Route path="/settings/fields" element={<Settings />} />
+
+                      {/* Wallet routes */}
+                      <Route path="/carteira" element={<WalletPage />} />
+                      <Route path="/carteira/extrato" element={<ExtratoPage />} />
+                      <Route path="/carteira/configuracoes" element={<WalletSettingsPage />} />
+
+                      {/* Settings sub-routes */}
+                      <Route path="/configuracoes/membros" element={<MembersPage />} />
+
                       {/* Quiz / Funnel routes (inside AppLayout with sidebar support) */}
                       <Route path="/quiz" element={<QuizFunnelsPage />} />
                       <Route path="/quiz/:id" element={<QuizEditorPage />} />
