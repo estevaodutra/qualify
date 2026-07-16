@@ -10,6 +10,58 @@ import { COMPONENT_REGISTRY } from "../registry/componentRegistry";
 import { ImageUploader } from "../media/ImageUploader";
 import { EditableRichText } from "../editor/EditableRichText";
 
+interface WidthSliderProps {
+  value: string;
+  onChange: (val: string) => void;
+}
+
+const WidthSliderControl: React.FC<WidthSliderProps> = ({ value, onChange }) => {
+  const numericVal = parseInt(value || "100", 10) || 100;
+
+  const updateVal = (newVal: number) => {
+    const clamped = Math.max(10, Math.min(100, newVal));
+    onChange(`${clamped}%`);
+  };
+
+  return (
+    <div className="relative border border-border rounded-xl p-3 bg-card shadow-sm space-y-2 select-none">
+      <span className="absolute -top-2.5 left-3 bg-card px-1.5 text-[11px] font-semibold text-sky-600 dark:text-sky-400">
+        Largura
+      </span>
+      <div className="flex items-center justify-between text-xs font-bold pt-1 px-1">
+        <button
+          type="button"
+          onClick={() => updateVal(numericVal - 5)}
+          className="w-6 h-6 rounded-md hover:bg-muted flex items-center justify-center text-foreground font-bold text-sm transition-colors"
+          title="Diminuir (-5%)"
+        >
+          −
+        </button>
+        <span className="text-sky-600 dark:text-sky-400 font-bold text-xs">{numericVal}%</span>
+        <button
+          type="button"
+          onClick={() => updateVal(numericVal + 5)}
+          className="w-6 h-6 rounded-md hover:bg-muted flex items-center justify-center text-foreground font-bold text-sm transition-colors"
+          title="Aumentar (+5%)"
+        >
+          +
+        </button>
+      </div>
+      <div className="px-1">
+        <input
+          type="range"
+          min={10}
+          max={100}
+          step={1}
+          value={numericVal}
+          onChange={(e) => updateVal(Number(e.target.value))}
+          className="w-full accent-sky-500 cursor-pointer h-2 bg-muted rounded-lg"
+        />
+      </div>
+    </div>
+  );
+};
+
 export const PropertiesPanel: React.FC = () => {
   const activeComponentId = useQuizBuilderStore((s) => s.activeComponentId);
   const activeStepId = useQuizBuilderStore((s) => s.activeStepId);
@@ -285,15 +337,11 @@ export const PropertiesPanel: React.FC = () => {
           </TabsContent>
 
           {/* Spacing Tab */}
-          <TabsContent value="spacing" className="space-y-3 m-0">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Largura</Label>
-              <Input
-                value={(activeComponent.config.width as string) || "100%"}
-                onChange={(e) => handleConfigChange("width", e.target.value)}
-                className="h-8 text-xs"
-              />
-            </div>
+          <TabsContent value="spacing" className="space-y-3 m-0 pt-2">
+            <WidthSliderControl
+              value={(activeComponent.config.width as string) || "100%"}
+              onChange={(val) => handleConfigChange("width", val)}
+            />
           </TabsContent>
 
           {/* Responsive Tab */}
