@@ -66,3 +66,9 @@ export interface RandomizerConfig {
   mode: "weighted_random" | "round_robin";
   branches: RandomizerBranch[];
 }
+
+export interface MessageAction {
+  id: string;
+  type: string;
+  [key: string]: any;
+}

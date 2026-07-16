@@ -1318,12 +1318,22 @@ export function UnifiedSequenceBuilder({
                                 }
                               })()
                             ) : (
-                              node.config.content ? (node.config.content as string) :
-                              node.config.question ? (node.config.question as string) :
-                              node.config.url ? (node.config.url as string) :
-                              node.config.seconds || node.config.minutes || node.config.hours || node.config.days ?
-                              `Aguardar ${node.config.days || 0}d ${node.config.hours || 0}h ${node.config.minutes || 0}m` :
-                              "Clique para configurar o bloco..."
+                              (() => {
+                                if (node.nodeType === "content" && Array.isArray(node.config.messages) && node.config.messages.length > 0) {
+                                  const msg = node.config.messages[0];
+                                  const text = msg.content || msg.question || msg.url || msg.caption;
+                                  if (text) {
+                                    return `${node.config.messages.length} ação(ões): ${text}`;
+                                  }
+                                  return `${node.config.messages.length} ação(ões)`;
+                                }
+                                return node.config.content ? (node.config.content as string) :
+                                node.config.question ? (node.config.question as string) :
+                                node.config.url ? (node.config.url as string) :
+                                node.config.seconds || node.config.minutes || node.config.hours || node.config.days ?
+                                `Aguardar ${node.config.days || 0}d ${node.config.hours || 0}h ${node.config.minutes || 0}m` :
+                                "Clique para configurar o bloco...";
+                              })()
                             )}
                           </div>
                         </>

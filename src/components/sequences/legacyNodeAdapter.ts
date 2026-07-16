@@ -14,8 +14,27 @@ import { isActionSubType, isContentSubType } from "./nodeDefinitions";
 // directions.
 
 export function liftLegacyNode(node: LocalNode): LocalNode {
+  if (node.nodeType === "content") {
+    // Already migrated to container, ensure messages array exists
+    if (!node.config.messages) {
+      return { ...node, config: { ...node.config, messages: [] } };
+    }
+    return node;
+  }
   if (isContentSubType(node.nodeType)) {
-    return { ...node, nodeType: "content", config: { ...node.config, contentType: node.nodeType } };
+    // Lift legacy literal node to a container node with 1 message
+    const messageId = Math.random().toString(36).substring(2, 9);
+    return { 
+      ...node, 
+      nodeType: "content", 
+      config: { 
+        messages: [{
+          id: messageId,
+          type: node.nodeType,
+          ...node.config
+        }]
+      } 
+    };
   }
   if (isActionSubType(node.nodeType)) {
     return { ...node, nodeType: "action", config: { ...node.config, actionType: node.nodeType } };
@@ -25,8 +44,8 @@ export function liftLegacyNode(node: LocalNode): LocalNode {
 
 export function lowerToLegacyNode(node: LocalNode): LocalNode {
   if (node.nodeType === "content") {
-    const { contentType, ...rest } = node.config;
-    return { ...node, nodeType: (contentType as string) || "message", config: rest };
+    // Save as "content" node, backend will process config.messages
+    return node;
   }
   if (node.nodeType === "action") {
     const { actionType, ...rest } = node.config;

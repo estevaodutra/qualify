@@ -32,13 +32,16 @@ export interface NodeBlockDefinition {
 // fit without scrolling.
 export const NODE_DEFINITIONS: NodeBlockDefinition[] = [
   {
-    blockType: "content", label: "Conteúdo", icon: MessageSquare, color: "bg-blue-500",
+    blockType: "content", label: "Mensagem", icon: MessageSquare, color: "bg-blue-500",
     subTypes: [
       { subType: "message", label: "Texto", icon: MessageSquare, color: "bg-blue-500" },
       { subType: "image", label: "Imagem", icon: Image, color: "bg-emerald-500" },
       { subType: "video", label: "Vídeo", icon: Video, color: "bg-cyan-500" },
       { subType: "audio", label: "Áudio", icon: Music, color: "bg-pink-500" },
       { subType: "document", label: "Documento", icon: FileText, color: "bg-slate-500" },
+      { subType: "user_input", label: "Entrada do usuário", icon: MessageSquare, color: "bg-indigo-500" },
+      { subType: "delay", label: "Atraso de tempo", icon: Clock, color: "bg-amber-500" },
+      { subType: "dynamic_url", label: "Arquivo URL Dinâmica", icon: Link2, color: "bg-sky-500" },
       { subType: "sticker", label: "Figurinha", icon: Smile, color: "bg-yellow-500" },
       { subType: "poll", label: "Enquete", icon: BarChart3, color: "bg-indigo-500" },
       { subType: "buttons", label: "Botões", icon: MousePointerClick, color: "bg-orange-500" },
@@ -135,6 +138,9 @@ export function getDefaultConfigForSubType(blockType: string, subType: string): 
     case "audio": return { url: "", isVoiceMessage: true, sendPrivate: false, viewOnce: false };
     case "document": return { url: "", filename: "", caption: "", sendPrivate: false, viewOnce: false };
     case "sticker": return { url: "", sendPrivate: false, viewOnce: false };
+    case "user_input": return { targetField: "", timeoutMs: 3600000, question: "", invalidMessage: "", saveMedia: false };
+    case "delay": return { delayMs: 3000 };
+    case "dynamic_url": return { url: "", caption: "", sendPrivate: false, viewOnce: false };
     case "poll": return { question: "", options: ["", "", ""], multiSelect: false };
     case "buttons": return { text: "", buttons: [{ id: "1", label: "", type: "REPLY" }] };
     case "list": return { title: "", buttonText: "Selecionar", sections: [{ title: "Opções", rows: [{ id: "1", title: "", description: "" }] }] };

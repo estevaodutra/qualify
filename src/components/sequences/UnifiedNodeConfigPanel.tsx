@@ -39,7 +39,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getNodeBlockDefinition } from "./nodeDefinitions";
+import { getNodeBlockDefinition, getDefaultConfigForSubType } from "./nodeDefinitions";
 import { VariablePicker } from "./VariablePicker";
 function formatWhatsAppText(text: string) {
   const escaped = text
@@ -524,7 +524,7 @@ export function UnifiedNodeConfigPanel({
   // node_type (dispatch builder, timeline builder, or an already-saved node
   // predating the consolidation).
   const resolvedNodeType = node.nodeType === "content"
-    ? ((node.config.contentType as string) || "message")
+    ? (editingMessage ? editingMessage.type : "content")
     : node.nodeType === "action"
     ? ((node.config.actionType as string) || "tag_add")
     : node.nodeType;
@@ -532,8 +532,28 @@ export function UnifiedNodeConfigPanel({
   const nodeInfo = NODE_TITLES[resolvedNodeType] || NODE_TITLES[node.nodeType] || NODE_TITLES.message;
   const Icon = nodeInfo.icon;
 
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+
+  const editingMessage = editingMessageId && Array.isArray(node.config.messages)
+    ? node.config.messages.find((m: any) => m.id === editingMessageId)
+    : null;
+
+  // Use editingMessage config if editing, else root config
+  const currentConfig = editingMessage || node.config;
+
+  const updateMultipleConfigs = (updates: Record<string, unknown>) => {
+    if (editingMessageId && Array.isArray(node.config.messages)) {
+      const updatedMessages = node.config.messages.map((m: any) =>
+        m.id === editingMessageId ? { ...m, ...updates } : m
+      );
+      onUpdate({ ...node.config, messages: updatedMessages });
+    } else {
+      onUpdate({ ...node.config, ...updates });
+    }
+  };
+
   const updateConfig = (key: string, value: unknown) => {
-    onUpdate({ ...node.config, [key]: value });
+    updateMultipleConfigs({ [key]: value });
   };
 
   const isGroup = isGroupProp !== undefined ? isGroupProp : mode === "group";
@@ -547,11 +567,11 @@ export function UnifiedNodeConfigPanel({
     if (renderMediaUploader) {
       return renderMediaUploader({
         mediaType,
-        currentUrl: (node.config.url as string) || "",
+        currentUrl: (currentConfig.url as string) || "",
         onUpload: (url, filename) => {
-          const updates: Record<string, unknown> = { ...node.config, url };
+          const updates: Record<string, unknown> = { url };
           if (filename) updates.filename = filename;
-          onUpdate(updates);
+          updateMultipleConfigs(updates);
         },
         onUrlChange: (url) => updateConfig("url", url),
         placeholder,
@@ -560,7 +580,7 @@ export function UnifiedNodeConfigPanel({
     return (
       <Input
         placeholder={placeholder}
-        value={(node.config.url as string) || ""}
+        value={(currentConfig.url as string) || ""}
         onChange={e => updateConfig("url", e.target.value)}
       />
     );
@@ -570,8 +590,22 @@ export function UnifiedNodeConfigPanel({
     <div className="flex flex-col">
       <div className="px-6 pt-6 pb-3 shrink-0 border-b border-border">
         <div className="flex items-center gap-2">
-          <Icon className="h-4 w-4" />
-          <h2 className="text-sm font-semibold">{nodeInfo.title}</h2>
+          {editingMessageId ? (
+            <button 
+              onClick={() => setEditingMessageId(null)}
+              className="flex items-center gap-2 hover:bg-slate-100 p-1.5 -ml-1.5 rounded-md transition-colors"
+            >
+              <div className="bg-slate-100 p-1 rounded-md text-slate-500">
+                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6.85355 3.14645C7.04882 3.34171 7.04882 3.65829 6.85355 3.85355L3.70711 7H12.5C12.7761 7 13 7.22386 13 7.5C13 7.77614 12.7761 8 12.5 8H3.70711L6.85355 11.1464C7.04882 11.3417 7.04882 11.6583 6.85355 11.8536C6.65829 12.0488 6.34171 12.0488 6.14645 11.8536L2.14645 7.85355C1.95118 7.65829 1.95118 7.34171 2.14645 7.14645L6.14645 3.14645C6.34171 2.95118 6.65829 2.95118 6.85355 3.14645Z" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
+              </div>
+              <h2 className="text-sm font-semibold text-slate-700">Voltar para Mensagens</h2>
+            </button>
+          ) : (
+            <>
+              <Icon className="h-4 w-4" />
+              <h2 className="text-sm font-semibold">{nodeInfo.title}</h2>
+            </>
+          )}
         </div>
       </div>
       <div className="px-6 py-6">
@@ -581,7 +615,7 @@ export function UnifiedNodeConfigPanel({
               <Label className="text-xs font-medium text-muted-foreground">Nome do componente</Label>
               <Input
                 placeholder={nodeInfo.title}
-                value={(node.config.label as string) || ""}
+                value={(currentConfig.label as string) || ""}
                 onChange={e => updateConfig("label", e.target.value)}
                 className="h-8 text-sm"
               />
@@ -590,54 +624,118 @@ export function UnifiedNodeConfigPanel({
 
             {/* CONTENT / ACTION sub-type selector */}
             {/* CONTENT / ACTION sub-type selector */}
-            {(node.nodeType === "content" || node.nodeType === "action") && (() => {
+            {resolvedNodeType === "content" && (() => {
               const block = getNodeBlockDefinition(node.nodeType)!;
-              const configKey = node.nodeType === "content" ? "contentType" : "actionType";
-              const currentSubType = (node.config[configKey] as string) || block.subTypes![0].subType;
+              const messages = (node.config.messages as any[]) || [];
+              
+              const handleAddAction = (subType: string) => {
+                const messageId = Math.random().toString(36).substring(2, 9);
+                const newAction = {
+                  id: messageId,
+                  type: subType,
+                  ...getDefaultConfigForSubType("content", subType)
+                };
+                onUpdate({ ...node.config, messages: [...messages, newAction] });
+                setEditingMessageId(messageId);
+              };
+
+              const handleDeleteAction = (e: React.MouseEvent, id: string) => {
+                e.stopPropagation();
+                onUpdate({ ...node.config, messages: messages.filter(m => m.id !== id) });
+              };
+
+              const handleDuplicateAction = (e: React.MouseEvent, msg: any) => {
+                e.stopPropagation();
+                const newId = Math.random().toString(36).substring(2, 9);
+                onUpdate({ ...node.config, messages: [...messages, { ...msg, id: newId }] });
+              };
+
               return (
                 <>
-                  {node.nodeType === "content" && (
-                    <div className="space-y-2 mb-4">
-                      <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                        Conexão
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <HelpCircle className="h-3 w-3" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="w-48 text-xs">Deixe em branco para usar a conexão dos blocos anteriores ou da campanha padrão.</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </Label>
-                      <Select
-                        value={(node.config.instanceId as string) || "default"}
-                        onValueChange={(val) => updateConfig("instanceId", val === "default" ? "" : val)}
-                      >
-                        <SelectTrigger className="w-full bg-white">
-                          <SelectValue placeholder="Selecionar" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="default">Selecionar (Padrão)</SelectItem>
-                          {activeInstances.map(inst => (
-                            <SelectItem key={inst.id} value={inst.id}>
-                              <div className="flex items-center gap-2">
-                                <MessageSquare className="h-3.5 w-3.5 text-success" />
-                                {inst.name}
+                  <div className="space-y-2 mb-4">
+                    <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                      Conexão
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <HelpCircle className="h-3 w-3" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="w-48 text-xs">Deixe em branco para usar a conexão dos blocos anteriores ou da campanha padrão.</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </Label>
+                    <Select
+                      value={(currentConfig.instanceId as string) || "default"}
+                      onValueChange={(val) => updateConfig("instanceId", val === "default" ? "" : val)}
+                    >
+                      <SelectTrigger className="w-full bg-white">
+                        <SelectValue placeholder="Selecionar" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">Selecionar (Padrão)</SelectItem>
+                        {activeInstances.map(inst => (
+                          <SelectItem key={inst.id} value={inst.id}>
+                            <div className="flex items-center gap-2">
+                              <MessageSquare className="h-3.5 w-3.5 text-success" />
+                              {inst.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Separator className="mt-4" />
+                  </div>
+
+                  <div className="space-y-3 mb-6">
+                    <Label className="text-xs font-medium text-muted-foreground">Mensagens</Label>
+                    {messages.length === 0 ? (
+                      <div className="text-xs text-center text-muted-foreground py-4 bg-slate-50 rounded-lg border border-dashed">
+                        Nenhuma mensagem adicionada.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {messages.map((msg, idx) => {
+                          const subInfo = block.subTypes?.find(s => s.subType === msg.type);
+                          const MsgIcon = subInfo?.icon || MessageSquare;
+                          return (
+                            <div
+                              key={msg.id}
+                              onClick={() => setEditingMessageId(msg.id)}
+                              className="group flex items-center justify-between p-3 border rounded-lg hover:border-primary/50 hover:bg-slate-50 cursor-pointer transition-colors"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={cn("p-1.5 rounded-md text-white", subInfo?.color || "bg-slate-500")}>
+                                  <MsgIcon className="h-4 w-4" />
+                                </div>
+                                <div className="text-sm font-medium">
+                                  {subInfo?.label || "Desconhecido"}
+                                </div>
                               </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Separator className="mt-4" />
-                    </div>
-                  )}
+                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-500" onClick={(e) => handleDuplicateAction(e, msg)}>
+                                  <Plus className="h-3 w-3" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:bg-red-50 hover:text-red-600" onClick={(e) => handleDeleteAction(e, msg.id)}>
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-500">
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="space-y-2">
                     <Label className="text-xs font-medium text-muted-foreground">
-                      {node.nodeType === "content" ? "Tipo de conteúdo" : "Qual ação deseja executar?"}
+                      Adicionar nova ação
                     </Label>
-                    <div className="grid grid-cols-3 gap-1.5">
+                    <div className="grid grid-cols-2 gap-2">
                       {block.subTypes!
                         .filter((sub) => {
                           if (sub.subType === "poll" && !isGroup) return false;
@@ -645,27 +743,23 @@ export function UnifiedNodeConfigPanel({
                         })
                         .map((sub) => {
                         const SubIcon = sub.icon;
-                        const isSelected = currentSubType === sub.subType;
                         return (
                           <button
                             key={sub.subType}
                             type="button"
-                            onClick={() => updateConfig(configKey, sub.subType)}
-                            className={cn(
-                              "flex flex-col items-center gap-1 p-2 rounded-lg border text-center transition-all",
-                              isSelected ? "border-primary bg-primary/10 ring-2 ring-primary/20" : "border-border hover:border-primary/50"
-                            )}
+                            onClick={() => handleAddAction(sub.subType)}
+                            className="flex items-center gap-2 p-2.5 rounded-lg border border-border text-left hover:border-primary/50 hover:bg-slate-50 transition-all"
                           >
-                            <div className={cn("p-1.5 rounded-lg", sub.color)}>
+                            <div className={cn("p-1.5 rounded-md shrink-0", sub.color)}>
                               <SubIcon className="h-3.5 w-3.5 text-white" />
                             </div>
-                            <span className="text-[10px] font-medium leading-tight">{sub.label}</span>
+                            <span className="text-[11px] font-medium leading-tight">{sub.label}</span>
                           </button>
                         );
                       })}
                     </div>
                   </div>
-                  <Separator />
+                  <Separator className="mt-6" />
                 </>
               );
             })()}
@@ -679,12 +773,12 @@ export function UnifiedNodeConfigPanel({
                   <VariablePicker
                     isGroup={isGroup}
                     onSelect={(val) => {
-                      const current = (node.config.content as string) || "";
+                      const current = (currentConfig.content as string) || "";
                       updateConfig("content", current + val);
                     }}
                   />
                 </div>
-                <Textarea value={(node.config.content as string) || ""} onChange={(e) => { e.target.style.height = "auto"; e.target.style.height = `${e.target.scrollHeight + 2}px`; updateConfig("content", e.target.value); }} onFocus={(e) => { e.target.style.height = "auto"; e.target.style.height = `${e.target.scrollHeight + 2}px`; }} placeholder="Digite a mensagem (Use *negrito*, _itálico_, ~riscado~)..." className="resize-none font-mono text-sm overflow-hidden" rows={isGroup ? 6 : 8} />
+                <Textarea value={(currentConfig.content as string) || ""} onChange={(e) => { e.target.style.height = "auto"; e.target.style.height = `${e.target.scrollHeight + 2}px`; updateConfig("content", e.target.value); }} onFocus={(e) => { e.target.style.height = "auto"; e.target.style.height = `${e.target.scrollHeight + 2}px`; }} placeholder="Digite a mensagem (Use *negrito*, _itálico_, ~riscado~)..." className="resize-none font-mono text-sm overflow-hidden" rows={isGroup ? 6 : 8} />
                 <p className="text-xs text-muted-foreground">
                   {isGroup
                     ? <>Variáveis: {"{{name}}"}, {"{{phone}}"}, {"{{group_name}}"}</>
@@ -700,7 +794,7 @@ export function UnifiedNodeConfigPanel({
                       <p className="text-xs text-muted-foreground">Mensagem desaparece após ser lida</p>
                     </div>
                     <Switch
-                      checked={(node.config.viewOnce as boolean) || false}
+                      checked={(currentConfig.viewOnce as boolean) || false}
                       onCheckedChange={checked => updateConfig("viewOnce", checked)}
                     />
                   </div>
@@ -709,14 +803,14 @@ export function UnifiedNodeConfigPanel({
                       <div className="flex items-center justify-between">
                         <Label>Enviar no privado</Label>
                         <Switch
-                          checked={(node.config.sendPrivate as boolean) || false}
+                          checked={(currentConfig.sendPrivate as boolean) || false}
                           onCheckedChange={checked => updateConfig("sendPrivate", checked)}
                         />
                       </div>
                       <div className="flex items-center justify-between">
                         <Label>Mencionar membro</Label>
                         <Switch
-                          checked={(node.config.mentionMember as boolean) || false}
+                          checked={(currentConfig.mentionMember as boolean) || false}
                           onCheckedChange={checked => updateConfig("mentionMember", checked)}
                         />
                       </div>
@@ -740,14 +834,14 @@ export function UnifiedNodeConfigPanel({
                   <VariablePicker
                     isGroup={isGroup}
                     onSelect={(val) => {
-                      const current = (node.config.caption as string) || "";
+                      const current = (currentConfig.caption as string) || "";
                       updateConfig("caption", current + val);
                     }}
                   />
                 </div>
                 <Textarea
                   placeholder={isGroup ? "Descrição da mídia..." : "Texto que acompanha a mídia..."}
-                  value={(node.config.caption as string) || ""}
+                  value={(currentConfig.caption as string) || ""}
                   onChange={e => updateConfig("caption", e.target.value)}
                   rows={isGroup ? 2 : 3}
                 />
@@ -763,7 +857,7 @@ export function UnifiedNodeConfigPanel({
                   <p className="text-xs text-muted-foreground">Mídia desaparece após ser vista</p>
                 </div>
                 <Switch
-                  checked={(node.config.viewOnce as boolean) || false}
+                  checked={(currentConfig.viewOnce as boolean) || false}
                   onCheckedChange={checked => updateConfig("viewOnce", checked)}
                 />
               </div>
@@ -771,7 +865,7 @@ export function UnifiedNodeConfigPanel({
                 <div className="flex items-center justify-between">
                   <Label>Enviar no privado</Label>
                   <Switch
-                    checked={(node.config.sendPrivate as boolean) || false}
+                    checked={(currentConfig.sendPrivate as boolean) || false}
                     onCheckedChange={checked => updateConfig("sendPrivate", checked)}
                   />
                 </div>
@@ -792,14 +886,14 @@ export function UnifiedNodeConfigPanel({
                   <VariablePicker
                     isGroup={isGroup}
                     onSelect={(val) => {
-                      const current = (node.config.caption as string) || "";
+                      const current = (currentConfig.caption as string) || "";
                       updateConfig("caption", current + val);
                     }}
                   />
                 </div>
                 <Textarea
                   placeholder={isGroup ? "Descrição da mídia..." : "Texto que acompanha a mídia..."}
-                  value={(node.config.caption as string) || ""}
+                  value={(currentConfig.caption as string) || ""}
                   onChange={e => updateConfig("caption", e.target.value)}
                   rows={isGroup ? 2 : 3}
                 />
@@ -815,7 +909,7 @@ export function UnifiedNodeConfigPanel({
                   <p className="text-xs text-muted-foreground">Envia como bolinha circular flutuante</p>
                 </div>
                 <Switch
-                  checked={(node.config.isVideoNote as boolean) || false}
+                  checked={(currentConfig.isVideoNote as boolean) || false}
                   onCheckedChange={checked => updateConfig("isVideoNote", checked)}
                 />
               </div>
@@ -825,7 +919,7 @@ export function UnifiedNodeConfigPanel({
                   <p className="text-xs text-muted-foreground">Mídia desaparece após ser vista</p>
                 </div>
                 <Switch
-                  checked={(node.config.viewOnce as boolean) || false}
+                  checked={(currentConfig.viewOnce as boolean) || false}
                   onCheckedChange={checked => updateConfig("viewOnce", checked)}
                 />
               </div>
@@ -833,7 +927,7 @@ export function UnifiedNodeConfigPanel({
                 <div className="flex items-center justify-between">
                   <Label>Enviar no privado</Label>
                   <Switch
-                    checked={(node.config.sendPrivate as boolean) || false}
+                    checked={(currentConfig.sendPrivate as boolean) || false}
                     onCheckedChange={checked => updateConfig("sendPrivate", checked)}
                   />
                 </div>
@@ -855,14 +949,14 @@ export function UnifiedNodeConfigPanel({
                     <VariablePicker
                       isGroup={isGroup}
                       onSelect={(val) => {
-                        const current = (node.config.caption as string) || "";
+                        const current = (currentConfig.caption as string) || "";
                         updateConfig("caption", current + val);
                       }}
                     />
                   </div>
                   <Textarea
                     placeholder="Texto que acompanha a mídia..."
-                    value={(node.config.caption as string) || ""}
+                    value={(currentConfig.caption as string) || ""}
                     onChange={e => updateConfig("caption", e.target.value)}
                     rows={3}
                   />
@@ -877,7 +971,7 @@ export function UnifiedNodeConfigPanel({
                   <p className="text-xs text-muted-foreground">Enviar como mensagem de voz (ondinhas)</p>
                 </div>
                 <Switch
-                  checked={(node.config.waveform as boolean) ?? true}
+                  checked={(currentConfig.waveform as boolean) ?? true}
                   onCheckedChange={checked => updateConfig("waveform", checked)}
                 />
               </div>
@@ -887,7 +981,7 @@ export function UnifiedNodeConfigPanel({
                   <p className="text-xs text-muted-foreground">Áudio desaparece após ser ouvido</p>
                 </div>
                 <Switch
-                  checked={(node.config.viewOnce as boolean) || false}
+                  checked={(currentConfig.viewOnce as boolean) || false}
                   onCheckedChange={checked => updateConfig("viewOnce", checked)}
                 />
               </div>
@@ -895,7 +989,7 @@ export function UnifiedNodeConfigPanel({
                 <div className="flex items-center justify-between">
                   <Label>Enviar no privado</Label>
                   <Switch
-                    checked={(node.config.sendPrivate as boolean) || false}
+                    checked={(currentConfig.sendPrivate as boolean) || false}
                     onCheckedChange={checked => updateConfig("sendPrivate", checked)}
                   />
                 </div>
@@ -914,7 +1008,7 @@ export function UnifiedNodeConfigPanel({
                 <Label>Nome do Arquivo</Label>
                 <Input
                   placeholder="contrato.pdf"
-                  value={(node.config.filename as string) || ""}
+                  value={(currentConfig.filename as string) || ""}
                   onChange={e => updateConfig("filename", e.target.value)}
                 />
               </div>
@@ -924,14 +1018,14 @@ export function UnifiedNodeConfigPanel({
                   <VariablePicker
                     isGroup={isGroup}
                     onSelect={(val) => {
-                      const current = (node.config.caption as string) || "";
+                      const current = (currentConfig.caption as string) || "";
                       updateConfig("caption", current + val);
                     }}
                   />
                 </div>
                 <Textarea
                   placeholder={isGroup ? "Descrição do documento..." : "Texto que acompanha a mídia..."}
-                  value={(node.config.caption as string) || ""}
+                  value={(currentConfig.caption as string) || ""}
                   onChange={e => updateConfig("caption", e.target.value)}
                   rows={2}
                 />
@@ -947,7 +1041,7 @@ export function UnifiedNodeConfigPanel({
                   <p className="text-xs text-muted-foreground">Documento desaparece após ser visto</p>
                 </div>
                 <Switch
-                  checked={(node.config.viewOnce as boolean) || false}
+                  checked={(currentConfig.viewOnce as boolean) || false}
                   onCheckedChange={checked => updateConfig("viewOnce", checked)}
                 />
               </div>
@@ -955,7 +1049,7 @@ export function UnifiedNodeConfigPanel({
                 <div className="flex items-center justify-between">
                   <Label>Enviar no privado</Label>
                   <Switch
-                    checked={(node.config.sendPrivate as boolean) || false}
+                    checked={(currentConfig.sendPrivate as boolean) || false}
                     onCheckedChange={checked => updateConfig("sendPrivate", checked)}
                   />
                 </div>
@@ -977,7 +1071,7 @@ export function UnifiedNodeConfigPanel({
                   <p className="text-xs text-muted-foreground">Sticker desaparece após ser visto</p>
                 </div>
                 <Switch
-                  checked={(node.config.viewOnce as boolean) || false}
+                  checked={(currentConfig.viewOnce as boolean) || false}
                   onCheckedChange={checked => updateConfig("viewOnce", checked)}
                 />
               </div>
@@ -985,7 +1079,7 @@ export function UnifiedNodeConfigPanel({
                 <div className="flex items-center justify-between">
                   <Label>Enviar no privado</Label>
                   <Switch
-                    checked={(node.config.sendPrivate as boolean) || false}
+                    checked={(currentConfig.sendPrivate as boolean) || false}
                     onCheckedChange={checked => updateConfig("sendPrivate", checked)}
                   />
                 </div>
@@ -1004,11 +1098,11 @@ export function UnifiedNodeConfigPanel({
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label>Pergunta</Label>
-                  <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (node.config.question as string) || ""; updateConfig("question", current + val); }} />
+                  <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (currentConfig.question as string) || ""; updateConfig("question", current + val); }} />
                 </div>
                 <Textarea
                   placeholder="Qual sua preferência?"
-                  value={(node.config.question as string) || ""}
+                  value={(currentConfig.question as string) || ""}
                   onChange={e => updateConfig("question", e.target.value)}
                   maxLength={255}
                   rows={3}
@@ -1024,18 +1118,18 @@ export function UnifiedNodeConfigPanel({
                     size="sm"
                     className="h-6"
                     onClick={() => {
-                      const options = [...((node.config.options as string[]) || [])];
+                      const options = [...((currentConfig.options as string[]) || [])];
                       if (options.length < 12) {
                         options.push("");
                         updateConfig("options", options);
                       }
                     }}
-                    disabled={((node.config.options as string[]) || []).length >= 12}
+                    disabled={((currentConfig.options as string[]) || []).length >= 12}
                   >
                     <Plus className="h-3 w-3 mr-1" /> Adicionar
                   </Button>
                 </div>
-                {((node.config.options as string[]) || ["", "", ""]).map((opt, i) => {
+                {((currentConfig.options as string[]) || ["", "", ""]).map((opt, i) => {
                   const action = getOptionAction?.(node, i);
                   const hasAction = action && (action as any)?.actionType !== "none";
 
@@ -1045,7 +1139,7 @@ export function UnifiedNodeConfigPanel({
                         placeholder={`Opção ${i + 1}`}
                         value={opt}
                         onChange={e => {
-                          const options = [...((node.config.options as string[]) || [])];
+                          const options = [...((currentConfig.options as string[]) || [])];
                           options[i] = e.target.value;
                           updateConfig("options", options);
                         }}
@@ -1071,13 +1165,13 @@ export function UnifiedNodeConfigPanel({
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
-                      {((node.config.options as string[]) || []).length > 2 && (
+                      {((currentConfig.options as string[]) || []).length > 2 && (
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-9 w-9 shrink-0"
                           onClick={() => {
-                            const options = [...((node.config.options as string[]) || [])];
+                            const options = [...((currentConfig.options as string[]) || [])];
                             options.splice(i, 1);
                             updateConfig("options", options);
                           }}
@@ -1092,7 +1186,7 @@ export function UnifiedNodeConfigPanel({
               <div className="flex items-center justify-between">
                 <Label>Múltipla escolha</Label>
                 <Switch
-                  checked={(node.config.multiSelect as boolean) || false}
+                  checked={(currentConfig.multiSelect as boolean) || false}
                   onCheckedChange={checked => updateConfig("multiSelect", checked)}
                 />
               </div>
@@ -1103,13 +1197,12 @@ export function UnifiedNodeConfigPanel({
                 open: actionDialogOpen,
                 onClose: () => { setActionDialogOpen(false); setEditingOptionIndex(null); },
                 optionIndex: editingOptionIndex ?? 0,
-                optionText: ((node.config.options as string[]) || [])[editingOptionIndex ?? 0] || "",
+                optionText: ((currentConfig.options as string[]) || [])[editingOptionIndex ?? 0] || "",
                 currentAction: editingOptionIndex !== null ? getOptionAction?.(node, editingOptionIndex) : null,
                 onSave: (action) => {
                   if (editingOptionIndex !== null) {
-                    const optionActions = (node.config.optionActions as Record<string, unknown>) || {};
-                    onUpdate({
-                      ...node.config,
+                    const optionActions = (currentConfig.optionActions as Record<string, unknown>) || {};
+                    updateMultipleConfigs({
                       optionActions: { ...optionActions, [String(editingOptionIndex)]: action },
                     });
                   }
@@ -1122,7 +1215,7 @@ export function UnifiedNodeConfigPanel({
           {resolvedNodeType === "buttons" && (() => {
             if (isGroup) {
               type ButtonAction = { id: string; label: string; type: "REPLY" | "CALL" | "URL"; phone?: string; url?: string; };
-              const buttons = (node.config.buttons as ButtonAction[]) || [];
+              const buttons = (currentConfig.buttons as ButtonAction[]) || [];
               const updateButton = (index: number, field: keyof ButtonAction, value: string) => {
                 const updated = [...buttons];
                 updated[index] = { ...updated[index], [field]: value };
@@ -1139,24 +1232,24 @@ export function UnifiedNodeConfigPanel({
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label>Título (opcional)</Label>
-                      <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (node.config.title as string) || ""; updateConfig("title", current + val); }} />
+                      <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (currentConfig.title as string) || ""; updateConfig("title", current + val); }} />
                     </div>
-                    <Input placeholder="Título da mensagem" value={(node.config.title as string) || ""} onChange={e => updateConfig("title", e.target.value)} maxLength={60} />
+                    <Input placeholder="Título da mensagem" value={(currentConfig.title as string) || ""} onChange={e => updateConfig("title", e.target.value)} maxLength={60} />
                     <p className="text-xs text-muted-foreground">Até 60 caracteres</p>
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label>Texto da Mensagem</Label>
-                      <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (node.config.text as string) || ""; updateConfig("text", current + val); }} />
+                      <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (currentConfig.text as string) || ""; updateConfig("text", current + val); }} />
                     </div>
-                    <Textarea placeholder="Escolha uma opção:" value={(node.config.text as string) || ""} onChange={e => updateConfig("text", e.target.value)} rows={2} />
+                    <Textarea placeholder="Escolha uma opção:" value={(currentConfig.text as string) || ""} onChange={e => updateConfig("text", e.target.value)} rows={2} />
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label>Rodapé (opcional)</Label>
-                      <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (node.config.footer as string) || ""; updateConfig("footer", current + val); }} />
+                      <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (currentConfig.footer as string) || ""; updateConfig("footer", current + val); }} />
                     </div>
-                    <Input placeholder="Texto do rodapé" value={(node.config.footer as string) || ""} onChange={e => updateConfig("footer", e.target.value)} maxLength={60} />
+                    <Input placeholder="Texto do rodapé" value={(currentConfig.footer as string) || ""} onChange={e => updateConfig("footer", e.target.value)} maxLength={60} />
                     <p className="text-xs text-muted-foreground">Até 60 caracteres</p>
                   </div>
                   <div className="space-y-3">
@@ -1205,15 +1298,15 @@ export function UnifiedNodeConfigPanel({
                 </>
               );
             } else {
-              const buttons = (node.config.buttons as { id: string; label: string }[]) || [];
+              const buttons = (currentConfig.buttons as { id: string; label: string }[]) || [];
               return (
                 <>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label>Texto da Mensagem</Label>
-                      <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (node.config.text as string) || ""; updateConfig("text", current + val); }} />
+                      <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (currentConfig.text as string) || ""; updateConfig("text", current + val); }} />
                     </div>
-                    <Textarea placeholder="Texto exibido acima dos botões..." value={(node.config.text as string) || ""} onChange={e => updateConfig("text", e.target.value)} rows={3} />
+                    <Textarea placeholder="Texto exibido acima dos botões..." value={(currentConfig.text as string) || ""} onChange={e => updateConfig("text", e.target.value)} rows={3} />
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
@@ -1250,42 +1343,42 @@ export function UnifiedNodeConfigPanel({
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label>Título</Label>
-                      <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (node.config.title as string) || ""; updateConfig("title", current + val); }} />
+                      <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (currentConfig.title as string) || ""; updateConfig("title", current + val); }} />
                     </div>
-                    <Input placeholder="Menu Principal" value={(node.config.title as string) || ""} onChange={e => updateConfig("title", e.target.value)} />
+                    <Input placeholder="Menu Principal" value={(currentConfig.title as string) || ""} onChange={e => updateConfig("title", e.target.value)} />
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label>Texto do Botão</Label>
-                      <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (node.config.buttonText as string) || ""; updateConfig("buttonText", current + val); }} />
+                      <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (currentConfig.buttonText as string) || ""; updateConfig("buttonText", current + val); }} />
                     </div>
-                    <Input placeholder="Ver opções" value={(node.config.buttonText as string) || ""} onChange={e => updateConfig("buttonText", e.target.value)} />
+                    <Input placeholder="Ver opções" value={(currentConfig.buttonText as string) || ""} onChange={e => updateConfig("buttonText", e.target.value)} />
                   </div>
                   <div className="space-y-2">
                     <Label>Seções</Label>
-                    {((node.config.sections as { title: string; rows: { id: string; title: string; description: string }[] }[]) || []).map((section, sIdx) => (
+                    {((currentConfig.sections as { title: string; rows: { id: string; title: string; description: string }[] }[]) || []).map((section, sIdx) => (
                       <div key={sIdx} className="border rounded-lg p-2 space-y-2">
                         <Input placeholder="Título da seção" value={section.title} onChange={e => {
-                          const sections = JSON.parse(JSON.stringify(node.config.sections || []));
+                          const sections = JSON.parse(JSON.stringify(currentConfig.sections || []));
                           sections[sIdx].title = e.target.value;
                           updateConfig("sections", sections);
                         }} />
                         {section.rows.map((row, rIdx) => (
                           <div key={rIdx} className="ml-2 space-y-1">
                             <Input placeholder="Título do item" value={row.title} className="h-8 text-xs" onChange={e => {
-                              const sections = JSON.parse(JSON.stringify(node.config.sections || []));
+                              const sections = JSON.parse(JSON.stringify(currentConfig.sections || []));
                               sections[sIdx].rows[rIdx].title = e.target.value;
                               updateConfig("sections", sections);
                             }} />
                             <Input placeholder="Descrição (opcional)" value={row.description} className="h-8 text-xs" onChange={e => {
-                              const sections = JSON.parse(JSON.stringify(node.config.sections || []));
+                              const sections = JSON.parse(JSON.stringify(currentConfig.sections || []));
                               sections[sIdx].rows[rIdx].description = e.target.value;
                               updateConfig("sections", sections);
                             }} />
                           </div>
                         ))}
                         <Button variant="ghost" size="sm" className="h-6 w-full" onClick={() => {
-                          const sections = JSON.parse(JSON.stringify(node.config.sections || []));
+                          const sections = JSON.parse(JSON.stringify(currentConfig.sections || []));
                           sections[sIdx].rows.push({ id: String(Date.now()), title: "", description: "" });
                           updateConfig("sections", sections);
                         }}>
@@ -1294,7 +1387,7 @@ export function UnifiedNodeConfigPanel({
                       </div>
                     ))}
                     <Button variant="outline" size="sm" className="w-full" onClick={() => {
-                      const sections = JSON.parse(JSON.stringify(node.config.sections || []));
+                      const sections = JSON.parse(JSON.stringify(currentConfig.sections || []));
                       sections.push({ title: "", rows: [{ id: String(Date.now()), title: "", description: "" }] });
                       updateConfig("sections", sections);
                     }}>
@@ -1309,15 +1402,15 @@ export function UnifiedNodeConfigPanel({
                 <>
                   <div className="space-y-2">
                     <Label>Título</Label>
-                    <Input placeholder="Título da lista" value={(node.config.title as string) || ""} onChange={e => updateConfig("title", e.target.value)} />
+                    <Input placeholder="Título da lista" value={(currentConfig.title as string) || ""} onChange={e => updateConfig("title", e.target.value)} />
                   </div>
                   <div className="space-y-2">
                     <Label>Texto do Botão</Label>
-                    <Input placeholder="Selecionar" value={(node.config.buttonText as string) || "Selecionar"} onChange={e => updateConfig("buttonText", e.target.value)} />
+                    <Input placeholder="Selecionar" value={(currentConfig.buttonText as string) || "Selecionar"} onChange={e => updateConfig("buttonText", e.target.value)} />
                   </div>
                   <div className="space-y-2">
                     <Label>Corpo da Mensagem</Label>
-                    <Textarea placeholder="Texto exibido antes da lista..." value={(node.config.body as string) || ""} onChange={e => updateConfig("body", e.target.value)} rows={3} />
+                    <Textarea placeholder="Texto exibido antes da lista..." value={(currentConfig.body as string) || ""} onChange={e => updateConfig("body", e.target.value)} rows={3} />
                   </div>
                 </>
               );
@@ -1330,20 +1423,20 @@ export function UnifiedNodeConfigPanel({
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-2">
                   <Label>Latitude</Label>
-                  <Input type="number" step="any" placeholder="-23.5505" value={(node.config.latitude as string) || ""} onChange={e => updateConfig("latitude", e.target.value)} />
+                  <Input type="number" step="any" placeholder="-23.5505" value={(currentConfig.latitude as string) || ""} onChange={e => updateConfig("latitude", e.target.value)} />
                 </div>
                 <div className="space-y-2">
                   <Label>Longitude</Label>
-                  <Input type="number" step="any" placeholder="-46.6333" value={(node.config.longitude as string) || ""} onChange={e => updateConfig("longitude", e.target.value)} />
+                  <Input type="number" step="any" placeholder="-46.6333" value={(currentConfig.longitude as string) || ""} onChange={e => updateConfig("longitude", e.target.value)} />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label>Nome do Local</Label>
-                <Input placeholder="Escritório Central" value={(node.config.name as string) || ""} onChange={e => updateConfig("name", e.target.value)} />
+                <Input placeholder="Escritório Central" value={(currentConfig.name as string) || ""} onChange={e => updateConfig("name", e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label>Endereço</Label>
-                <Input placeholder="Av. Paulista, 1000" value={(node.config.address as string) || ""} onChange={e => updateConfig("address", e.target.value)} />
+                <Input placeholder="Av. Paulista, 1000" value={(currentConfig.address as string) || ""} onChange={e => updateConfig("address", e.target.value)} />
               </div>
             </>
           )}
@@ -1353,19 +1446,19 @@ export function UnifiedNodeConfigPanel({
             <>
               <div className="space-y-2">
                 <Label>Nome Completo</Label>
-                <Input placeholder="João Silva" value={(node.config.fullName as string) || ""} onChange={e => updateConfig("fullName", e.target.value)} />
+                <Input placeholder="João Silva" value={(currentConfig.fullName as string) || ""} onChange={e => updateConfig("fullName", e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label>Telefone</Label>
-                <Input placeholder="5511999999999" value={(node.config.phone as string) || ""} onChange={e => updateConfig("phone", e.target.value)} />
+                <Input placeholder="5511999999999" value={(currentConfig.phone as string) || ""} onChange={e => updateConfig("phone", e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label>Email (opcional)</Label>
-                <Input type="email" placeholder="joao@empresa.com" value={(node.config.email as string) || ""} onChange={e => updateConfig("email", e.target.value)} />
+                <Input type="email" placeholder="joao@empresa.com" value={(currentConfig.email as string) || ""} onChange={e => updateConfig("email", e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label>Organização (opcional)</Label>
-                <Input placeholder="Empresa LTDA" value={(node.config.organization as string) || ""} onChange={e => updateConfig("organization", e.target.value)} />
+                <Input placeholder="Empresa LTDA" value={(currentConfig.organization as string) || ""} onChange={e => updateConfig("organization", e.target.value)} />
               </div>
             </>
           )}
@@ -1375,50 +1468,150 @@ export function UnifiedNodeConfigPanel({
             <>
               <div className="space-y-2">
                 <Label>Nome do Evento</Label>
-                <Input placeholder="Reunião de Equipe" value={(node.config.name as string) || ""} onChange={e => updateConfig("name", e.target.value)} />
+                <Input placeholder="Reunião de Equipe" value={(currentConfig.name as string) || ""} onChange={e => updateConfig("name", e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label>Descrição</Label>
-                <Textarea placeholder="Detalhes do evento..." value={(node.config.description as string) || ""} onChange={e => updateConfig("description", e.target.value)} rows={2} />
+                <Textarea placeholder="Detalhes do evento..." value={(currentConfig.description as string) || ""} onChange={e => updateConfig("description", e.target.value)} rows={2} />
               </div>
               <div className="space-y-2">
                 <Label>Data/Hora Início</Label>
-                <Input type="datetime-local" value={(node.config.startDate as string) || ""} onChange={e => updateConfig("startDate", e.target.value)} />
+                <Input type="datetime-local" value={(currentConfig.startDate as string) || ""} onChange={e => updateConfig("startDate", e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label>Data/Hora Fim</Label>
-                <Input type="datetime-local" value={(node.config.endDate as string) || ""} onChange={e => updateConfig("endDate", e.target.value)} />
+                <Input type="datetime-local" value={(currentConfig.endDate as string) || ""} onChange={e => updateConfig("endDate", e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label>Local (opcional)</Label>
-                <Input placeholder="Sala de Reuniões" value={(node.config.location as string) || ""} onChange={e => updateConfig("location", e.target.value)} />
+                <Input placeholder="Sala de Reuniões" value={(currentConfig.location as string) || ""} onChange={e => updateConfig("location", e.target.value)} />
               </div>
             </>
           )}
 
+          {/* DYNAMIC URL */}
+          {resolvedNodeType === "dynamic_url" && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>URL Base</Label>
+                <VariablePicker
+                  isGroup={isGroup}
+                  onSelect={(val) => {
+                    const current = (currentConfig.url as string) || "";
+                    updateConfig("url", current + val);
+                  }}
+                />
+                <Input
+                  placeholder="https://exemplo.com/arquivo.pdf?email={{email}}"
+                  value={(currentConfig.url as string) || ""}
+                  onChange={e => updateConfig("url", e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">O arquivo será baixado e enviado no momento do disparo.</p>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Legenda (opcional)</Label>
+                  <VariablePicker
+                    isGroup={isGroup}
+                    onSelect={(val) => {
+                      const current = (currentConfig.caption as string) || "";
+                      updateConfig("caption", current + val);
+                    }}
+                  />
+                </div>
+                <Textarea
+                  value={(currentConfig.caption as string) || ""}
+                  onChange={e => updateConfig("caption", e.target.value)}
+                  placeholder="Texto que acompanha o arquivo..."
+                  className="resize-none font-mono text-sm"
+                  rows={4}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* USER INPUT */}
+          {resolvedNodeType === "user_input" && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Mensagem com Pergunta</Label>
+                  <VariablePicker
+                    isGroup={isGroup}
+                    onSelect={(val) => {
+                      const current = (currentConfig.question as string) || "";
+                      updateConfig("question", current + val);
+                    }}
+                  />
+                </div>
+                <Textarea 
+                  value={(currentConfig.question as string) || ""} 
+                  onChange={(e) => updateConfig("question", e.target.value)} 
+                  placeholder="Digite a pergunta que será enviada ao usuário..." 
+                  className="resize-none font-mono text-sm" 
+                  rows={4} 
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Salvar resposta em</Label>
+                <Select
+                  value={(currentConfig.targetField as string) || ""}
+                  onValueChange={(val) => updateConfig("targetField", val)}
+                >
+                  <SelectTrigger className="w-full bg-white">
+                    <SelectValue placeholder="Selecione o campo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {customFieldsMetadata.map(field => (
+                      <SelectItem key={field.id} value={field.name}>
+                        {field.label} ({field.type})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Tempo de Espera Máximo (minutos)</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={((currentConfig.timeoutMs as number) || 3600000) / 60000}
+                  onChange={e => updateConfig("timeoutMs", parseInt(e.target.value) * 60000)}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label>Salvar mídia recebida?</Label>
+                <Switch
+                  checked={(currentConfig.saveMedia as boolean) || false}
+                  onCheckedChange={checked => updateConfig("saveMedia", checked)}
+                />
+              </div>
+            </div>
+          )}
+
           {/* DELAY */}
-          {node.nodeType === "delay" && (() => {
+          {resolvedNodeType === "delay" && (() => {
             if (isGroup) {
               return (
                 <>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-2">
                       <Label>Dias</Label>
-                      <Input type="number" min="0" value={(node.config.days as number) || 0} onChange={e => updateConfig("days", parseInt(e.target.value) || 0)} />
+                      <Input type="number" min="0" value={(currentConfig.days as number) || 0} onChange={e => updateConfig("days", parseInt(e.target.value) || 0)} />
                     </div>
                     <div className="space-y-2">
                       <Label>Horas</Label>
-                      <Input type="number" min="0" max="23" value={(node.config.hours as number) || 0} onChange={e => updateConfig("hours", parseInt(e.target.value) || 0)} />
+                      <Input type="number" min="0" max="23" value={(currentConfig.hours as number) || 0} onChange={e => updateConfig("hours", parseInt(e.target.value) || 0)} />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-2">
                       <Label>Minutos</Label>
-                      <Input type="number" min="0" max="59" value={(node.config.minutes as number) || 0} onChange={e => updateConfig("minutes", parseInt(e.target.value) || 0)} />
+                      <Input type="number" min="0" max="59" value={(currentConfig.minutes as number) || 0} onChange={e => updateConfig("minutes", parseInt(e.target.value) || 0)} />
                     </div>
                     <div className="space-y-2">
                       <Label>Segundos</Label>
-                      <Input type="number" min="0" max="59" value={(node.config.seconds as number) || 0} onChange={e => updateConfig("seconds", parseInt(e.target.value) || 0)} />
+                      <Input type="number" min="0" max="59" value={(currentConfig.seconds as number) || 0} onChange={e => updateConfig("seconds", parseInt(e.target.value) || 0)} />
                     </div>
                   </div>
                 </>
@@ -1429,19 +1622,19 @@ export function UnifiedNodeConfigPanel({
                   <div className="grid grid-cols-4 gap-2">
                     <div className="space-y-1">
                       <Label className="text-xs">Dias</Label>
-                      <Input type="number" min={0} value={(node.config.days as number) || 0} onChange={e => updateConfig("days", parseInt(e.target.value) || 0)} />
+                      <Input type="number" min={0} value={(currentConfig.days as number) || 0} onChange={e => updateConfig("days", parseInt(e.target.value) || 0)} />
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs">Horas</Label>
-                      <Input type="number" min={0} max={23} value={(node.config.hours as number) || 0} onChange={e => updateConfig("hours", parseInt(e.target.value) || 0)} />
+                      <Input type="number" min={0} max={23} value={(currentConfig.hours as number) || 0} onChange={e => updateConfig("hours", parseInt(e.target.value) || 0)} />
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs">Minutos</Label>
-                      <Input type="number" min={0} max={59} value={(node.config.minutes as number) || 0} onChange={e => updateConfig("minutes", parseInt(e.target.value) || 0)} />
+                      <Input type="number" min={0} max={59} value={(currentConfig.minutes as number) || 0} onChange={e => updateConfig("minutes", parseInt(e.target.value) || 0)} />
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs">Segundos</Label>
-                      <Input type="number" min={0} max={59} value={(node.config.seconds as number) || 0} onChange={e => updateConfig("seconds", parseInt(e.target.value) || 0)} />
+                      <Input type="number" min={0} max={59} value={(currentConfig.seconds as number) || 0} onChange={e => updateConfig("seconds", parseInt(e.target.value) || 0)} />
                     </div>
                   </div>
                   <div>
@@ -1449,7 +1642,7 @@ export function UnifiedNodeConfigPanel({
                     <div className="flex flex-wrap gap-2 mt-2">
                       {QUICK_DELAYS.map(qd => (
                         <Button key={qd.label} variant="outline" size="sm" onClick={() => {
-                          onUpdate({ ...node.config, minutes: qd.minutes, hours: qd.hours, days: qd.days });
+                          updateMultipleConfigs({ minutes: qd.minutes, hours: qd.hours, days: qd.days });
                         }}>
                           {qd.label}
                         </Button>
@@ -1469,7 +1662,7 @@ export function UnifiedNodeConfigPanel({
             <>
               <div className="space-y-2">
                 <Label>Mapear Campo / Variável</Label>
-                <Select value={(node.config.field as string) || "name"} onValueChange={v => updateConfig("field", v)}>
+                <Select value={(currentConfig.field as string) || "name"} onValueChange={v => updateConfig("field", v)}>
                   <SelectTrigger className="rounded-xl border-border/40"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="name">Nome do Lead</SelectItem>
@@ -1487,7 +1680,7 @@ export function UnifiedNodeConfigPanel({
               </div>
               <div className="space-y-2">
                 <Label>Operador Lógico</Label>
-                <Select value={(node.config.operator as string) || "equals"} onValueChange={v => updateConfig("operator", v)}>
+                <Select value={(currentConfig.operator as string) || "equals"} onValueChange={v => updateConfig("operator", v)}>
                   <SelectTrigger className="rounded-xl border-border/40"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="equals">Igual a</SelectItem>
@@ -1505,11 +1698,11 @@ export function UnifiedNodeConfigPanel({
                 </Select>
               </div>
 
-              {((node.config.operator as string) !== "is_set" && (node.config.operator as string) !== "is_empty" && (node.config.operator as string) !== "between") && (
+              {((currentConfig.operator as string) !== "is_set" && (currentConfig.operator as string) !== "is_empty" && (currentConfig.operator as string) !== "between") && (
                 <div className="space-y-2">
                   <Label>Valor Comparado</Label>
                   <Input 
-                    value={(node.config.value as string) || ""} 
+                    value={(currentConfig.value as string) || ""} 
                     onChange={e => updateConfig("value", e.target.value)} 
                     placeholder="Digite o valor de comparação..." 
                     className="rounded-xl border-border/40 bg-background/50 text-xs"
@@ -1517,13 +1710,13 @@ export function UnifiedNodeConfigPanel({
                 </div>
               )}
 
-              {(node.config.operator as string) === "between" && (
+              {(currentConfig.operator as string) === "between" && (
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-2">
                     <Label>Valor Mínimo</Label>
                     <Input 
                       type="number"
-                      value={(node.config.minValue as string) || ""} 
+                      value={(currentConfig.minValue as string) || ""} 
                       onChange={e => updateConfig("minValue", e.target.value)} 
                       placeholder="Min" 
                       className="rounded-xl border-border/40 bg-background/50 text-xs"
@@ -1533,7 +1726,7 @@ export function UnifiedNodeConfigPanel({
                     <Label>Valor Máximo</Label>
                     <Input 
                       type="number"
-                      value={(node.config.maxValue as string) || ""} 
+                      value={(currentConfig.maxValue as string) || ""} 
                       onChange={e => updateConfig("maxValue", e.target.value)} 
                       placeholder="Max" 
                       className="rounded-xl border-border/40 bg-background/50 text-xs"
@@ -1546,8 +1739,8 @@ export function UnifiedNodeConfigPanel({
 
           {/* RANDOMIZER - weighted random or round-robin branching */}
           {node.nodeType === "randomizer" && (() => {
-            const mode = (node.config.mode as string) || "weighted_random";
-            const branches = ((node.config.branches as RandomizerBranch[]) || []).slice().sort((a, b) => a.position - b.position);
+            const mode = (currentConfig.mode as string) || "weighted_random";
+            const branches = ((currentConfig.branches as RandomizerBranch[]) || []).slice().sort((a, b) => a.position - b.position);
             const totalWeight = branches.reduce((sum, b) => sum + (Number(b.weight) || 0), 0);
 
             const distributeEqually = (list: RandomizerBranch[]): RandomizerBranch[] => {
@@ -1729,7 +1922,7 @@ export function UnifiedNodeConfigPanel({
             <div className="space-y-2">
               <Label>Nome da Tag / Etiqueta</Label>
               <Input 
-                value={(node.config.tag as string) || ""} 
+                value={(currentConfig.tag as string) || ""} 
                 onChange={e => updateConfig("tag", e.target.value)} 
                 placeholder="Ex: VIP, Frio..." 
                 className="rounded-xl border-border/40 bg-background/50 text-xs"
@@ -1740,7 +1933,7 @@ export function UnifiedNodeConfigPanel({
           {resolvedNodeType === "deal_move" && (
             <div className="space-y-2">
               <Label>Mover para Etapa do CRM</Label>
-              <Select value={(node.config.stageId as string) || ""} onValueChange={v => updateConfig("stageId", v)}>
+              <Select value={(currentConfig.stageId as string) || ""} onValueChange={v => updateConfig("stageId", v)}>
                 <SelectTrigger className="rounded-xl border-border/40"><SelectValue placeholder="Selecione a etapa..." /></SelectTrigger>
                 <SelectContent>
                   {pipelineStages.map(s => (
@@ -1757,7 +1950,7 @@ export function UnifiedNodeConfigPanel({
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Selecionar Instância de Envio (WhatsApp)</Label>
-                <Select value={(node.config.instanceId as string) || ""} onValueChange={v => updateConfig("instanceId", v)}>
+                <Select value={(currentConfig.instanceId as string) || ""} onValueChange={v => updateConfig("instanceId", v)}>
                   <SelectTrigger className="rounded-xl border-border/40"><SelectValue placeholder="Selecione a instância..." /></SelectTrigger>
                   <SelectContent>
                     {activeInstances.map(i => (
@@ -1770,7 +1963,7 @@ export function UnifiedNodeConfigPanel({
               </div>
               <div className="space-y-2">
                 <Label>Caso a instância falhe (Fallback)</Label>
-                <Select value={(node.config.fallbackType as string) || "last_sender"} onValueChange={v => updateConfig("fallbackType", v)}>
+                <Select value={(currentConfig.fallbackType as string) || "last_sender"} onValueChange={v => updateConfig("fallbackType", v)}>
                   <SelectTrigger className="rounded-xl border-border/40"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="last_sender">🔄 Usar o último canal que enviou com sucesso</SelectItem>
@@ -1799,11 +1992,11 @@ export function UnifiedNodeConfigPanel({
             <>
               <div className="space-y-2">
                 <Label>Mensagem da Notificação</Label>
-                <Textarea placeholder="Digite a notificação..." value={(node.config.message as string) || ""} onChange={e => updateConfig("message", e.target.value)} rows={3} />
+                <Textarea placeholder="Digite a notificação..." value={(currentConfig.message as string) || ""} onChange={e => updateConfig("message", e.target.value)} rows={3} />
               </div>
               <div className="flex items-center justify-between">
                 <Label>Notificar admins</Label>
-                <Switch checked={(node.config.notifyAdmins as boolean) ?? true} onCheckedChange={checked => updateConfig("notifyAdmins", checked)} />
+                <Switch checked={(currentConfig.notifyAdmins as boolean) ?? true} onCheckedChange={checked => updateConfig("notifyAdmins", checked)} />
               </div>
             </>
           )}
@@ -1813,11 +2006,11 @@ export function UnifiedNodeConfigPanel({
             <>
               <div className="space-y-2">
                 <Label>URL</Label>
-                <Input type="url" placeholder="https://..." value={(node.config.url as string) || ""} onChange={e => updateConfig("url", e.target.value)} />
+                <Input type="url" placeholder="https://..." value={(currentConfig.url as string) || ""} onChange={e => updateConfig("url", e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label>Método</Label>
-                <Select value={(node.config.method as string) || "POST"} onValueChange={v => updateConfig("method", v)}>
+                <Select value={(currentConfig.method as string) || "POST"} onValueChange={v => updateConfig("method", v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="GET">GET</SelectItem>
@@ -1829,7 +2022,7 @@ export function UnifiedNodeConfigPanel({
               </div>
               <div className="space-y-2">
                 <Label>Body (JSON)</Label>
-                <Textarea placeholder='{"key": "value"}' value={(node.config.body as string) || ""} onChange={e => updateConfig("body", e.target.value)} rows={3} className="font-mono text-xs" />
+                <Textarea placeholder='{"key": "value"}' value={(currentConfig.body as string) || ""} onChange={e => updateConfig("body", e.target.value)} rows={3} className="font-mono text-xs" />
               </div>
             </>
           )}
@@ -1845,23 +2038,23 @@ export function UnifiedNodeConfigPanel({
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label>Nome do Grupo</Label>
-                  <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (node.config.groupName as string) || ""; updateConfig("groupName", current + val); }} />
+                  <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (currentConfig.groupName as string) || ""; updateConfig("groupName", current + val); }} />
                 </div>
                 <Input
                   placeholder="Nome do novo grupo..."
-                  value={(node.config.groupName as string) || ""}
+                  value={(currentConfig.groupName as string) || ""}
                   onChange={e => updateConfig("groupName", e.target.value)}
                 />
               </div>
               <div className="space-y-2">
                 <Label>Participantes (números com DDI)</Label>
-                {((node.config.phones as string[]) || [""]).map((phone, idx) => (
+                {((currentConfig.phones as string[]) || [""]).map((phone, idx) => (
                   <div key={idx} className="flex gap-2">
                     <Input
                       placeholder="5511999999999"
                       value={phone}
                       onChange={e => {
-                        const phones = [...((node.config.phones as string[]) || [""])];
+                        const phones = [...((currentConfig.phones as string[]) || [""])];
                         phones[idx] = e.target.value;
                         updateConfig("phones", phones);
                       }}
@@ -1871,7 +2064,7 @@ export function UnifiedNodeConfigPanel({
                       size="icon"
                       className="shrink-0"
                       onClick={() => {
-                        const phones = [...((node.config.phones as string[]) || [""])];
+                        const phones = [...((currentConfig.phones as string[]) || [""])];
                         phones.splice(idx, 1);
                         updateConfig("phones", phones.length ? phones : [""]);
                       }}
@@ -1884,7 +2077,7 @@ export function UnifiedNodeConfigPanel({
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    const phones = [...((node.config.phones as string[]) || [""])];
+                    const phones = [...((currentConfig.phones as string[]) || [""])];
                     phones.push("");
                     updateConfig("phones", phones);
                   }}
@@ -1900,11 +2093,11 @@ export function UnifiedNodeConfigPanel({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>Novo Nome do Grupo</Label>
-                <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (node.config.newName as string) || ""; updateConfig("newName", current + val); }} />
+                <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (currentConfig.newName as string) || ""; updateConfig("newName", current + val); }} />
               </div>
               <Input
                 placeholder="Nome do grupo..."
-                value={(node.config.newName as string) || ""}
+                value={(currentConfig.newName as string) || ""}
                 onChange={e => updateConfig("newName", e.target.value)}
               />
               <p className="text-xs text-muted-foreground">O grupo será renomeado quando este nó for executado</p>
@@ -1916,14 +2109,14 @@ export function UnifiedNodeConfigPanel({
               <Label>Foto do Grupo</Label>
               {renderMediaUploader ? renderMediaUploader({
                 mediaType: "image",
-                currentUrl: (node.config.url as string) || "",
+                currentUrl: (currentConfig.url as string) || "",
                 onUpload: (url) => updateConfig("url", url),
                 onUrlChange: (url) => updateConfig("url", url),
                 placeholder: "https://exemplo.com/foto.jpg",
               }) : (
                 <Input
                   placeholder="URL da foto..."
-                  value={(node.config.url as string) || ""}
+                  value={(currentConfig.url as string) || ""}
                   onChange={e => updateConfig("url", e.target.value)}
                 />
               )}
@@ -1935,11 +2128,11 @@ export function UnifiedNodeConfigPanel({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>Nova Descrição</Label>
-                <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (node.config.description as string) || ""; updateConfig("description", current + val); }} />
+                <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (currentConfig.description as string) || ""; updateConfig("description", current + val); }} />
               </div>
               <Textarea
                 placeholder="Descrição do grupo..."
-                value={(node.config.description as string) || ""}
+                value={(currentConfig.description as string) || ""}
                 onChange={e => updateConfig("description", e.target.value)}
                 rows={4}
               />
@@ -1947,7 +2140,7 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {node.nodeType === "group_add_participant" && isGroup && (() => {
-            const phones = (node.config.phones as string[]) || [""];
+            const phones = (currentConfig.phones as string[]) || [""];
             return (
               <>
                 <div className="space-y-2">
@@ -1987,7 +2180,7 @@ export function UnifiedNodeConfigPanel({
               <Label>Número do Participante</Label>
               <Input
                 placeholder="5511999999999"
-                value={(node.config.phone as string) || ""}
+                value={(currentConfig.phone as string) || ""}
                 onChange={e => updateConfig("phone", e.target.value)}
               />
               <p className="text-xs text-muted-foreground">O participante será removido do grupo</p>
@@ -1999,7 +2192,7 @@ export function UnifiedNodeConfigPanel({
               <Label>Número do Participante</Label>
               <Input
                 placeholder="5511999999999"
-                value={(node.config.phone as string) || ""}
+                value={(currentConfig.phone as string) || ""}
                 onChange={e => updateConfig("phone", e.target.value)}
               />
               <p className="text-xs text-muted-foreground">O participante será promovido a administrador</p>
@@ -2011,7 +2204,7 @@ export function UnifiedNodeConfigPanel({
               <Label>Número do Participante</Label>
               <Input
                 placeholder="5511999999999"
-                value={(node.config.phone as string) || ""}
+                value={(currentConfig.phone as string) || ""}
                 onChange={e => updateConfig("phone", e.target.value)}
               />
               <p className="text-xs text-muted-foreground">O participante será rebaixado de administrador</p>
@@ -2026,7 +2219,7 @@ export function UnifiedNodeConfigPanel({
                   <p className="text-xs text-muted-foreground">Restringe o envio de mensagens a administradores</p>
                 </div>
                 <Switch
-                  checked={(node.config.adminOnlyMessage as boolean) || false}
+                  checked={(currentConfig.adminOnlyMessage as boolean) || false}
                   onCheckedChange={checked => updateConfig("adminOnlyMessage", checked)}
                 />
               </div>
@@ -2036,7 +2229,7 @@ export function UnifiedNodeConfigPanel({
                   <p className="text-xs text-muted-foreground">Restringe a edição de nome, foto e descrição</p>
                 </div>
                 <Switch
-                  checked={(node.config.adminOnlyEditInfo as boolean) || false}
+                  checked={(currentConfig.adminOnlyEditInfo as boolean) || false}
                   onCheckedChange={checked => updateConfig("adminOnlyEditInfo", checked)}
                 />
               </div>
@@ -2046,7 +2239,7 @@ export function UnifiedNodeConfigPanel({
                   <p className="text-xs text-muted-foreground">Novos membros precisam de aprovação</p>
                 </div>
                 <Switch
-                  checked={(node.config.approvalMode as boolean) || false}
+                  checked={(currentConfig.approvalMode as boolean) || false}
                   onCheckedChange={checked => updateConfig("approvalMode", checked)}
                 />
               </div>
@@ -2056,7 +2249,7 @@ export function UnifiedNodeConfigPanel({
                   <p className="text-xs text-muted-foreground">Impede novas entradas via link</p>
                 </div>
                 <Switch
-                  checked={(node.config.locked as boolean) || false}
+                  checked={(currentConfig.locked as boolean) || false}
                   onCheckedChange={checked => updateConfig("locked", checked)}
                 />
               </div>
@@ -2076,14 +2269,14 @@ export function UnifiedNodeConfigPanel({
                   <VariablePicker
                     isGroup={isGroup}
                     onSelect={(val) => {
-                      const current = (node.config.caption as string) || "";
+                      const current = (currentConfig.caption as string) || "";
                       updateConfig("caption", current + val);
                     }}
                   />
                 </div>
                 <Textarea
                   placeholder="Texto do status..."
-                  value={(node.config.caption as string) || ""}
+                  value={(currentConfig.caption as string) || ""}
                   onChange={e => updateConfig("caption", e.target.value)}
                   rows={2}
                 />
@@ -2104,14 +2297,14 @@ export function UnifiedNodeConfigPanel({
                   <VariablePicker
                     isGroup={isGroup}
                     onSelect={(val) => {
-                      const current = (node.config.caption as string) || "";
+                      const current = (currentConfig.caption as string) || "";
                       updateConfig("caption", current + val);
                     }}
                   />
                 </div>
                 <Textarea
                   placeholder="Texto do status..."
-                  value={(node.config.caption as string) || ""}
+                  value={(currentConfig.caption as string) || ""}
                   onChange={e => updateConfig("caption", e.target.value)}
                   rows={2}
                 />
@@ -2126,7 +2319,7 @@ export function UnifiedNodeConfigPanel({
               <div className="space-y-2">
                 <Label>Tipo de Status</Label>
                 <Select 
-                  value={(node.config.statusType as string) || "text"} 
+                  value={(currentConfig.statusType as string) || "text"} 
                   onValueChange={v => {
                     updateConfig("statusType", v);
                     if (v === "text") {
@@ -2148,7 +2341,7 @@ export function UnifiedNodeConfigPanel({
               {/* Select Connection/Instance */}
               <div className="space-y-2">
                 <Label>Conexão / Instância</Label>
-                <Select value={(node.config.instanceId as string) || ""} onValueChange={v => updateConfig("instanceId", v)}>
+                <Select value={(currentConfig.instanceId as string) || ""} onValueChange={v => updateConfig("instanceId", v)}>
                   <SelectTrigger className="rounded-xl border-border/40">
                     <SelectValue placeholder="Selecione a instância..." />
                   </SelectTrigger>
@@ -2163,21 +2356,21 @@ export function UnifiedNodeConfigPanel({
               </div>
 
               {/* Status Content Fields */}
-              {((node.config.statusType as string) || "text") === "text" ? (
+              {((currentConfig.statusType as string) || "text") === "text" ? (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label>Texto do Status</Label>
                     <VariablePicker
                       isGroup={isGroup}
                       onSelect={(val) => {
-                        const current = (node.config.content as string) || "";
+                        const current = (currentConfig.content as string) || "";
                         updateConfig("content", current + val);
                       }}
                     />
                   </div>
                   <Textarea
                     placeholder="Escreva a mensagem do status..."
-                    value={(node.config.content as string) || ""}
+                    value={(currentConfig.content as string) || ""}
                     onChange={e => updateConfig("content", e.target.value)}
                     rows={4}
                   />
@@ -2186,7 +2379,7 @@ export function UnifiedNodeConfigPanel({
                 <>
                   <div className="space-y-2">
                     <Label>Mídia do Status</Label>
-                    {renderMediaField((node.config.statusType as "image" | "video") || "image", "https://exemplo.com/media")}
+                    {renderMediaField((currentConfig.statusType as "image" | "video") || "image", "https://exemplo.com/media")}
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
@@ -2194,14 +2387,14 @@ export function UnifiedNodeConfigPanel({
                       <VariablePicker
                         isGroup={isGroup}
                         onSelect={(val) => {
-                          const current = (node.config.caption as string) || "";
+                          const current = (currentConfig.caption as string) || "";
                           updateConfig("caption", current + val);
                         }}
                       />
                     </div>
                     <Textarea
                       placeholder="Texto da legenda..."
-                      value={(node.config.caption as string) || ""}
+                      value={(currentConfig.caption as string) || ""}
                       onChange={e => updateConfig("caption", e.target.value)}
                       rows={2}
                     />
@@ -2213,7 +2406,7 @@ export function UnifiedNodeConfigPanel({
               <div className="space-y-2 pt-3 border-t">
                 <Label>Envio / Agendamento</Label>
                 <Select 
-                  value={(node.config.scheduleType as string) || "now"} 
+                  value={(currentConfig.scheduleType as string) || "now"} 
                   onValueChange={v => updateConfig("scheduleType", v)}
                 >
                   <SelectTrigger className="rounded-xl border-border/40">
@@ -2226,14 +2419,14 @@ export function UnifiedNodeConfigPanel({
                 </Select>
               </div>
 
-              {((node.config.scheduleType as string) || "now") === "schedule" && (
+              {((currentConfig.scheduleType as string) || "now") === "schedule" && (
                 <div className="space-y-3 p-3 rounded-xl bg-slate-50 border border-slate-100 animate-in fade-in slide-in-from-top-1 duration-150">
                   <div className="space-y-1.5">
                     <Label className="text-[10px] uppercase font-bold text-slate-400">Tipo de agendamento</Label>
                     <Select 
-                      value={((node.config.scheduling as any)?.type as string) || "single"} 
+                      value={((currentConfig.scheduling as any)?.type as string) || "single"} 
                       onValueChange={v => {
-                        const sched = (node.config.scheduling as any) || {};
+                        const sched = (currentConfig.scheduling as any) || {};
                         updateConfig("scheduling", { ...sched, type: v });
                       }}
                     >
@@ -2245,13 +2438,13 @@ export function UnifiedNodeConfigPanel({
                     </Select>
                   </div>
 
-                  {((node.config.scheduling as any)?.type as string) === "recurrent" && (
+                  {((currentConfig.scheduling as any)?.type as string) === "recurrent" && (
                     <div className="space-y-1.5">
                       <Label className="text-[10px] uppercase font-bold text-slate-400">Recorrência</Label>
                       <Select 
-                        value={((node.config.scheduling as any)?.recount as string) || "daily"} 
+                        value={((currentConfig.scheduling as any)?.recount as string) || "daily"} 
                         onValueChange={v => {
-                          const sched = (node.config.scheduling as any) || {};
+                          const sched = (currentConfig.scheduling as any) || {};
                           updateConfig("scheduling", { ...sched, recount: v });
                         }}
                       >
@@ -2268,13 +2461,13 @@ export function UnifiedNodeConfigPanel({
                   <div className="space-y-1.5">
                     <Label className="text-[10px] uppercase font-bold text-slate-400">Horários</Label>
                     <div className="space-y-1">
-                      {(((node.config.scheduling as any)?.times as string[]) || ["12:00"]).map((time, idx) => (
+                      {(((currentConfig.scheduling as any)?.times as string[]) || ["12:00"]).map((time, idx) => (
                         <div key={idx} className="flex items-center gap-1">
                           <Input 
                             type="time" 
                             value={time} 
                             onChange={e => {
-                              const sched = (node.config.scheduling as any) || {};
+                              const sched = (currentConfig.scheduling as any) || {};
                               const times = [...(sched.times || ["12:00"])];
                               times[idx] = e.target.value;
                               updateConfig("scheduling", { ...sched, times });
@@ -2287,7 +2480,7 @@ export function UnifiedNodeConfigPanel({
                               variant="ghost" 
                               size="icon" 
                               onClick={() => {
-                                const sched = (node.config.scheduling as any) || {};
+                                const sched = (currentConfig.scheduling as any) || {};
                                 const times = (sched.times || ["12:00"]).filter((_: any, i: any) => i !== idx);
                                 updateConfig("scheduling", { ...sched, times });
                               }}
@@ -2303,7 +2496,7 @@ export function UnifiedNodeConfigPanel({
                         variant="ghost" 
                         size="sm" 
                         onClick={() => {
-                          const sched = (node.config.scheduling as any) || {};
+                          const sched = (currentConfig.scheduling as any) || {};
                           const times = [...(sched.times || ["12:00"]), "12:00"];
                           updateConfig("scheduling", { ...sched, times });
                         }}
@@ -2326,7 +2519,7 @@ export function UnifiedNodeConfigPanel({
                 <Input
                   type="url"
                   placeholder="https://n8n.exemplo.com/webhook/..."
-                  value={(node.config.url as string) || ""}
+                  value={(currentConfig.url as string) || ""}
                   onChange={e => updateConfig("url", e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
@@ -2335,7 +2528,7 @@ export function UnifiedNodeConfigPanel({
               </div>
               <div className="space-y-2">
                 <Label>Método</Label>
-                <Select value={(node.config.method as string) || "POST"} onValueChange={v => updateConfig("method", v)}>
+                <Select value={(currentConfig.method as string) || "POST"} onValueChange={v => updateConfig("method", v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="POST">POST</SelectItem>
@@ -2353,20 +2546,20 @@ export function UnifiedNodeConfigPanel({
                     size="sm"
                     className="h-6 px-2"
                     onClick={() => {
-                      const headers = ((node.config.headers as Array<{key: string; value: string}>) || []);
+                      const headers = ((currentConfig.headers as Array<{key: string; value: string}>) || []);
                       updateConfig("headers", [...headers, { key: "", value: "" }]);
                     }}
                   >
                     <Plus className="h-3 w-3 mr-1" /> Header
                   </Button>
                 </div>
-                {((node.config.headers as Array<{key: string; value: string}>) || []).map((header, idx) => (
+                {((currentConfig.headers as Array<{key: string; value: string}>) || []).map((header, idx) => (
                   <div key={idx} className="flex gap-1">
                     <Input
                       placeholder="Chave"
                       value={header.key}
                       onChange={e => {
-                        const headers = [...((node.config.headers as Array<{key: string; value: string}>) || [])];
+                        const headers = [...((currentConfig.headers as Array<{key: string; value: string}>) || [])];
                         headers[idx] = { ...headers[idx], key: e.target.value };
                         updateConfig("headers", headers);
                       }}
@@ -2376,7 +2569,7 @@ export function UnifiedNodeConfigPanel({
                       placeholder="Valor"
                       value={header.value}
                       onChange={e => {
-                        const headers = [...((node.config.headers as Array<{key: string; value: string}>) || [])];
+                        const headers = [...((currentConfig.headers as Array<{key: string; value: string}>) || [])];
                         headers[idx] = { ...headers[idx], value: e.target.value };
                         updateConfig("headers", headers);
                       }}
@@ -2387,7 +2580,7 @@ export function UnifiedNodeConfigPanel({
                       size="icon"
                       className="h-8 w-8 shrink-0"
                       onClick={() => {
-                        const headers = ((node.config.headers as Array<{key: string; value: string}>) || []).filter((_, i) => i !== idx);
+                        const headers = ((currentConfig.headers as Array<{key: string; value: string}>) || []).filter((_, i) => i !== idx);
                         updateConfig("headers", headers);
                       }}
                     >
@@ -2405,7 +2598,7 @@ export function UnifiedNodeConfigPanel({
                   <p className="text-xs text-muted-foreground">Envia ID, nome e telefone da instância</p>
                 </div>
                 <Switch
-                  checked={(node.config.includeInstance as boolean) ?? true}
+                  checked={(currentConfig.includeInstance as boolean) ?? true}
                   onCheckedChange={checked => updateConfig("includeInstance", checked)}
                 />
               </div>
@@ -2417,7 +2610,7 @@ export function UnifiedNodeConfigPanel({
                     <p className="text-xs text-muted-foreground">Envia lista de grupos vinculados</p>
                   </div>
                   <Switch
-                    checked={(node.config.includeGroups as boolean) ?? true}
+                    checked={(currentConfig.includeGroups as boolean) ?? true}
                     onCheckedChange={checked => updateConfig("includeGroups", checked)}
                   />
                 </div>
@@ -2427,7 +2620,7 @@ export function UnifiedNodeConfigPanel({
                 <Label>Payload adicional (JSON, opcional)</Label>
                 <Textarea
                   placeholder={'{"chave": "valor"}'}
-                  value={(node.config.customPayload as string) || ""}
+                  value={(currentConfig.customPayload as string) || ""}
                   onChange={e => updateConfig("customPayload", e.target.value)}
                   rows={3}
                   className="font-mono text-xs"
@@ -2451,13 +2644,15 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {/* Schedule & Manual Send Section */}
-          <NodeScheduleSection
-            config={node.config}
-            onUpdateConfig={updateConfig}
-            onManualSend={onManualSend}
-            isSendingManual={isSendingManual}
-            nodeType={resolvedNodeType}
-          />
+          {!editingMessageId && (
+            <NodeScheduleSection
+              config={node.config}
+              onUpdateConfig={updateConfig}
+              onManualSend={onManualSend}
+              isSendingManual={isSendingManual}
+              nodeType={resolvedNodeType}
+            />
+          )}
           </div>
         </div>
     </div>
