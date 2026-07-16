@@ -157,7 +157,11 @@ export default function QuizPublicPage() {
       setComponents(formattedComponents);
 
       // Record Visit & Setup Pixels
-      await (supabase as any).rpc("quiz_funnel_increment", { p_funnel_id: formattedFunnel.id, p_field: "visits" });
+      try {
+        await (supabase as any).rpc("quiz_funnel_increment", { p_funnel_id: formattedFunnel.id, p_field: "visits" });
+      } catch (visitErr) {
+        console.warn("Visits RPC error:", visitErr);
+      }
       setLoading(false);
     }
 
@@ -168,47 +172,78 @@ export default function QuizPublicPage() {
     if (submissionId) return submissionId;
     if (!funnel) return "";
 
-    const sessionId = getOrCreateSessionId();
-    const { data } = await (supabase as any)
-      .from("quiz_submissions")
-      .insert({ funnel_id: funnel.id, session_id: sessionId, status: "started" })
-      .select("id")
-      .single();
+    try {
+      const sessionId = getOrCreateSessionId();
+      const { data, error } = await (supabase as any)
+        .from("quiz_submissions")
+        .insert({ funnel_id: funnel.id, session_id: sessionId, status: "started" })
+        .select("id")
+        .single();
 
-    const newId = data.id as string;
-    setSubmissionId(newId);
-    await (supabase as any).rpc("quiz_funnel_increment", { p_funnel_id: funnel.id, p_field: "responses" });
-    return newId;
+      if (error) {
+        console.warn("Could not insert submission:", error);
+        return "";
+      }
+
+      const newId = data?.id as string;
+      if (newId) {
+        setSubmissionId(newId);
+        try {
+          await (supabase as any).rpc("quiz_funnel_increment", { p_funnel_id: funnel.id, p_field: "responses" });
+        } catch (rpcErr) {
+          console.warn("Responses RPC error:", rpcErr);
+        }
+      }
+      return newId || "";
+    } catch (err) {
+      console.warn("ensureSubmission caught error:", err);
+      return "";
+    }
   };
 
   const handleNextStep = async (forcedDestination?: string | null) => {
     if (!funnel || !steps[currentStepIndex]) return;
 
     setSubmitting(true);
-    const sid = await ensureSubmission();
+    try {
+      const sid = await ensureSubmission();
 
-    // Navigation logic
-    if (forcedDestination) {
-      const targetIdx = steps.findIndex((s) => s.id === forcedDestination);
-      if (targetIdx >= 0) {
-        setCurrentStepIndex(targetIdx);
-        setSubmitting(false);
-        return;
+      // Navigation logic
+      if (forcedDestination) {
+        const targetIdx = steps.findIndex((s) => s.id === forcedDestination);
+        if (targetIdx >= 0) {
+          setCurrentStepIndex(targetIdx);
+          return;
+        }
       }
-    }
 
-    if (currentStepIndex >= steps.length - 1) {
-      await (supabase as any)
-        .from("quiz_submissions")
-        .update({ status: "completed", completed_at: new Date().toISOString() })
-        .eq("id", sid);
-      await (supabase as any).rpc("quiz_funnel_increment", { p_funnel_id: funnel.id, p_field: "completions" });
-      setCompleted(true);
-    } else {
-      setCurrentStepIndex((prev) => prev + 1);
+      if (currentStepIndex >= steps.length - 1) {
+        if (sid) {
+          try {
+            await (supabase as any)
+              .from("quiz_submissions")
+              .update({ status: "completed", completed_at: new Date().toISOString() })
+              .eq("id", sid);
+            await (supabase as any).rpc("quiz_funnel_increment", { p_funnel_id: funnel.id, p_field: "completions" });
+          } catch (dbErr) {
+            console.warn("Could not finalize submission:", dbErr);
+          }
+        }
+        setCompleted(true);
+      } else {
+        setCurrentStepIndex((prev) => prev + 1);
+      }
+    } catch (e) {
+      console.error("Navigation error:", e);
+      // Fallback navigation in case of unexpected exception
+      if (currentStepIndex < steps.length - 1) {
+        setCurrentStepIndex((prev) => prev + 1);
+      } else {
+        setCompleted(true);
+      }
+    } finally {
+      setSubmitting(false);
     }
-
-    setSubmitting(false);
   };
 
   if (loading) {
