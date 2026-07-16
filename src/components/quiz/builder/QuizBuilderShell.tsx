@@ -208,7 +208,6 @@ export const QuizBuilderShell: React.FC<QuizBuilderShellProps> = ({ funnelId }) 
           component_type: comp.componentType,
           component_order: comp.componentOrder,
           config: comp.config,
-          schema_version: comp.schemaVersion,
         });
 
         if (cErr) throw cErr;
