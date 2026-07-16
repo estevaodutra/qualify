@@ -68,6 +68,7 @@ interface QuizBuilderStore {
   updateStep: (id: string, updates: Partial<QuizStep>) => void;
   deleteStep: (id: string) => void;
   reorderSteps: (orderedIds: string[]) => void;
+  duplicateStep: (id: string) => void;
 
   // Component Operations
   addComponent: (component: QuizComponent) => void;
@@ -229,6 +230,37 @@ export const useQuizBuilderStore = create<QuizBuilderStore>((set, get) => ({
       const reordered = [...state.steps].sort((a, b) => orderedIds.indexOf(a.id) - orderedIds.indexOf(b.id));
       return {
         steps: reordered.map((s, idx) => ({ ...s, stepOrder: idx })),
+        saveStatus: "dirty",
+      };
+    });
+  },
+
+  duplicateStep: (id) => {
+    get().pushHistory();
+    set((state) => {
+      const sourceStep = state.steps.find((s) => s.id === id);
+      if (!sourceStep) return {};
+
+      const newStepId = crypto.randomUUID();
+      const duplicatedStep: QuizStep = {
+        ...sourceStep,
+        id: newStepId,
+        name: `${sourceStep.name} (Cópia)`,
+        stepOrder: state.steps.length,
+      };
+
+      const stepComponents = state.components.filter((c) => c.stepId === id);
+      const duplicatedComponents = stepComponents.map((c) => ({
+        ...JSON.parse(JSON.stringify(c)),
+        id: crypto.randomUUID(),
+        stepId: newStepId,
+      }));
+
+      return {
+        steps: [...state.steps, duplicatedStep],
+        components: [...state.components, ...duplicatedComponents],
+        activeStepId: newStepId,
+        activeComponentId: null,
         saveStatus: "dirty",
       };
     });

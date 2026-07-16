@@ -12,6 +12,7 @@ export const StepSidebar: React.FC = () => {
   const setActiveStepId = useQuizBuilderStore((s) => s.setActiveStepId);
   const addStep = useQuizBuilderStore((s) => s.addStep);
   const deleteStep = useQuizBuilderStore((s) => s.deleteStep);
+  const duplicateStep = useQuizBuilderStore((s) => s.duplicateStep);
   const funnel = useQuizBuilderStore((s) => s.funnel);
   const isOpen = useQuizBuilderStore((s) => s.isStepSidebarOpen);
   const toggleStepSidebar = useQuizBuilderStore((s) => s.toggleStepSidebar);
@@ -50,13 +51,7 @@ export const StepSidebar: React.FC = () => {
   const handleDuplicateStep = (e: React.MouseEvent, step: QuizStep) => {
     e.stopPropagation();
     if (!funnel) return;
-    const duplicatedStep: QuizStep = {
-      ...step,
-      id: crypto.randomUUID(),
-      name: `${step.name} (Cópia)`,
-      stepOrder: steps.length,
-    };
-    addStep(duplicatedStep);
+    duplicateStep(step.id);
   };
 
   const handleDeleteStep = (e: React.MouseEvent, stepId: string) => {
