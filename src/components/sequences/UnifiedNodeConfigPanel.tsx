@@ -16,6 +16,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import {
   Plus, Trash2, Zap, Play, Send,
   MessageSquare, Clock, GitBranch, Bell, Link2,
@@ -765,68 +766,69 @@ export function UnifiedNodeConfigPanel({
                      )}
                   </div>
 
-                  <div className="space-y-3">
-                    <Label className="text-xs font-bold text-slate-800">
-                      Adicionar
-                    </Label>
-                    <div className="flex flex-col gap-2">
-                      {block.subTypes!
-                        .filter(sub => primaryTypes.includes(sub.subType))
-                        .map((sub) => {
-                          const SubIcon = sub.icon;
-                          return (
-                            <button
-                              key={sub.subType}
-                              type="button"
-                              onClick={() => handleAddAction(sub.subType)}
-                              className="flex items-center gap-3 p-2.5 rounded-xl border border-slate-200 bg-white text-left hover:border-[#8A3CFF]/50 hover:shadow-sm transition-all group"
-                            >
-                              <div className={cn("p-1.5 rounded-lg shrink-0 text-white shadow-sm", sub.color)}>
-                                <SubIcon className="h-4 w-4" />
-                              </div>
-                              <span className="text-[11px] font-bold text-slate-700 group-hover:text-slate-900">{sub.label}</span>
-                            </button>
-                          );
-                      })}
+                  <div className="space-y-3 pb-2">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="w-full flex items-center gap-2 border-dashed border-slate-300 hover:border-[#8A3CFF]/50 hover:bg-[#8A3CFF]/5 text-slate-600 hover:text-[#8A3CFF] transition-all">
+                          <Plus className="h-4 w-4" />
+                          Adicionar ação
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[320px] p-0" align="center">
+                        <Command>
+                          <CommandInput placeholder="Buscar ação..." className="h-9 text-xs" />
+                          <CommandList className="max-h-[300px]">
+                            <CommandEmpty className="py-6 text-center text-xs text-slate-500">
+                              Nenhuma ação encontrada.
+                            </CommandEmpty>
+                            
+                            <CommandGroup heading="Principais" className="text-xs text-slate-500">
+                              {block.subTypes!
+                                .filter(sub => primaryTypes.includes(sub.subType))
+                                .map((sub) => {
+                                  const SubIcon = sub.icon;
+                                  return (
+                                    <CommandItem
+                                      key={sub.subType}
+                                      value={sub.label}
+                                      onSelect={() => handleAddAction(sub.subType)}
+                                      className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
+                                    >
+                                      <div className={cn("p-1.5 rounded-md shrink-0 text-white shadow-sm", sub.color)}>
+                                        <SubIcon className="h-3.5 w-3.5" />
+                                      </div>
+                                      <span className="text-sm font-semibold text-slate-700">{sub.label}</span>
+                                    </CommandItem>
+                                  );
+                              })}
+                            </CommandGroup>
 
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <button
-                            type="button"
-                            className="flex items-center gap-3 p-2.5 rounded-xl border border-dashed border-slate-300 bg-transparent text-left hover:border-[#8A3CFF]/50 hover:bg-[#8A3CFF]/5 transition-all mt-1 group"
-                          >
-                            <div className="p-1.5 rounded-lg shrink-0 bg-slate-100 text-slate-500 group-hover:bg-[#8A3CFF]/10 group-hover:text-[#8A3CFF] transition-colors">
-                              <Plus className="h-4 w-4" />
-                            </div>
-                            <span className="text-[11px] font-bold text-slate-500 group-hover:text-[#8A3CFF] transition-colors">Adicionar outro tipo de mensagem</span>
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[280px] p-2" align="center">
-                          <div className="grid grid-cols-2 gap-2">
-                            {block.subTypes!
-                              .filter(sub => !primaryTypes.includes(sub.subType) && !(sub.subType === "poll" && !isGroup))
-                              .map((sub) => {
-                                const SubIcon = sub.icon;
-                                return (
-                                  <button
-                                    key={sub.subType}
-                                    type="button"
-                                    onClick={() => handleAddAction(sub.subType)}
-                                    className="flex items-center gap-2 p-2 rounded-lg border border-transparent text-left hover:bg-slate-50 hover:border-slate-200 transition-all"
-                                  >
-                                    <div className={cn("p-1.5 rounded-md shrink-0 text-white", sub.color)}>
-                                      <SubIcon className="h-3 w-3" />
-                                    </div>
-                                    <span className="text-[10px] font-bold text-slate-700 leading-tight">{sub.label}</span>
-                                  </button>
-                                );
-                            })}
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
+                            <CommandGroup heading="Avançados" className="text-xs text-slate-500 mt-1 border-t border-slate-100">
+                              {block.subTypes!
+                                .filter(sub => !primaryTypes.includes(sub.subType) && !(sub.subType === "poll" && !isGroup))
+                                .map((sub) => {
+                                  const SubIcon = sub.icon;
+                                  return (
+                                    <CommandItem
+                                      key={sub.subType}
+                                      value={sub.label}
+                                      onSelect={() => handleAddAction(sub.subType)}
+                                      className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
+                                    >
+                                      <div className={cn("p-1.5 rounded-md shrink-0 text-white shadow-sm", sub.color)}>
+                                        <SubIcon className="h-3.5 w-3.5" />
+                                      </div>
+                                      <span className="text-sm font-semibold text-slate-700">{sub.label}</span>
+                                    </CommandItem>
+                                  );
+                              })}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
-                  <Separator className="mt-6" />
+                  <Separator className="mt-4" />
                 </>
               );
             })()}
