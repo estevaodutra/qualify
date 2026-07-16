@@ -517,6 +517,12 @@ export function UnifiedNodeConfigPanel({
     fetchPanelData();
   }, [node.nodeType, activeCompanyId]);
 
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+
+  const editingMessage = editingMessageId && Array.isArray(node.config.messages)
+    ? node.config.messages.find((m: any) => m.id === editingMessageId)
+    : null;
+
   // "content"/"action" nodes carry their real sub-type inside config
   // (contentType/actionType) — resolvedNodeType lets every existing per-type
   // block below key off the sub-type transparently, whether the node arrived
@@ -531,12 +537,6 @@ export function UnifiedNodeConfigPanel({
 
   const nodeInfo = NODE_TITLES[resolvedNodeType] || NODE_TITLES[node.nodeType] || NODE_TITLES.message;
   const Icon = nodeInfo.icon;
-
-  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
-
-  const editingMessage = editingMessageId && Array.isArray(node.config.messages)
-    ? node.config.messages.find((m: any) => m.id === editingMessageId)
-    : null;
 
   // Use editingMessage config if editing, else root config
   const currentConfig = editingMessage || node.config;
