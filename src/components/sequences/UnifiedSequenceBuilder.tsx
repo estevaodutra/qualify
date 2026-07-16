@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   ArrowLeft, Save, Play, Pause, Trash2, ZoomIn, ZoomOut, Maximize,
-  Loader2, Info, GitBranch, Copy, PenLine, History, Sliders, ArrowRight, Plus
+  Loader2, Info, GitBranch, Copy, PenLine, History, Sliders, ArrowRight, Plus, MessageSquare
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { NodeEditorModal } from "../workflows/node-editor/NodeEditorModal";
@@ -915,6 +915,7 @@ export function UnifiedSequenceBuilder({
                   const isFieldOp = node.nodeType === "field_op";
                   const fieldOpMappings = (node.config.mappings as any[]) || [];
                   const isTrigger = node.nodeType === "trigger";
+                  const isContent = node.nodeType === "content";
 
                   const isHovered = hoveredNodeId === node.id;
                   const showHoverToolbar = isHovered && !draggedNodeId && !isTrigger;
@@ -926,7 +927,7 @@ export function UnifiedSequenceBuilder({
                         position: "absolute",
                         left: posX,
                         top: posY,
-                        width: isTrigger ? 320 : 220,
+                        width: isTrigger || isContent ? 320 : 220,
                         minHeight: isRandomizer ? Math.max(140, 40 + randomizerBranches.length * RANDOMIZER_PORT_SPACING) : undefined,
                         pointerEvents: "auto"
                       }}
@@ -947,7 +948,7 @@ export function UnifiedSequenceBuilder({
                       }}
                       className={cn(
                         "rounded-xl border border-slate-200 bg-white shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col transition-[border-color,box-shadow] duration-150 cursor-grab active:cursor-grabbing select-none",
-                        isTrigger ? "p-5" : "p-3",
+                        isTrigger || isContent ? "p-5" : "p-3",
                         isSelected && "border-[#8A3CFF] ring-2 ring-[#8A3CFF]/10"
                       )}
                     >
@@ -1278,6 +1279,90 @@ export function UnifiedSequenceBuilder({
                             </div>
                           </div>
                         </div>
+                      ) : isContent ? (
+                        <div className="flex flex-col w-full text-left h-full">
+                          <div className="flex items-center gap-2 mb-2">
+                            <MessageSquare className="h-5 w-5 text-blue-500 stroke-[1.5]" fill="currentColor" />
+                            <h2 className="text-xl font-bold text-slate-800 tracking-tight">{(node.config.label as string) || "Mensagem"}</h2>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mb-4 leading-relaxed font-medium">
+                            Ações que serão executadas sequencialmente:
+                          </p>
+                          
+                          {(((node.config.messages as any[]) || [])).map((msg, idx) => {
+                            const msgDef = getNodeVisual("content", msg.type);
+                            const Icon = msgDef?.icon || ArrowRight;
+                            return (
+                              <div 
+                                key={msg.id || idx} 
+                                className="group relative flex flex-col gap-2 p-3 border border-slate-200 rounded-xl bg-white shadow-sm mb-3 cursor-pointer hover:border-[#8A3CFF]/50 transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedNodeId(node.id);
+                                  setEditingNodeId(node.id);
+                                  setNodeEditorOpen(true);
+                                }}
+                              >
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                                    <Icon className={cn("h-4 w-4 shrink-0", msgDef?.color ? msgDef.color.replace("bg-", "text-") : "text-slate-600")} />
+                                    <div className="min-w-0">
+                                      <p className="text-xs font-bold text-slate-800 truncate">{msgDef?.label || msg.type}</p>
+                                      <p className="text-[10px] text-slate-500 truncate">{msg.content || msg.url || msg.question || "Clique para configurar..."}</p>
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      updateNodesAndSave(prev => prev.map(n => 
+                                        n.id === node.id ? { 
+                                          ...n, 
+                                          config: { 
+                                            ...n.config, 
+                                            messages: (n.config.messages as any[]).filter(m => m.id !== msg.id) 
+                                          } 
+                                        } : n
+                                      ));
+                                    }}
+                                    className="p-1.5 text-slate-400 hover:text-destructive hover:bg-destructive/10 rounded-md opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                    title="Remover ação"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                          <button 
+                             type="button"
+                             onClick={(e) => {
+                               e.stopPropagation();
+                               setSelectedNodeId(node.id);
+                               setEditingNodeId(node.id);
+                               setNodeEditorOpen(true);
+                             }}
+                             className="w-full flex items-center justify-center gap-1.5 py-2.5 border-2 border-dashed border-[#8A3CFF]/30 rounded-xl text-[#8A3CFF] font-semibold hover:bg-[#8A3CFF]/5 transition-colors mb-4 text-xs"
+                          >
+                            <Plus className="h-3.5 w-3.5" /> Adicionar ação
+                          </button>
+                          
+                          <div className="flex items-center justify-between pt-4 border-t border-slate-100 px-2 mt-auto">
+                            <div className="text-center">
+                              <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
+                              <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Sucessos</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
+                              <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Alertas</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
+                              <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Erros</p>
+                            </div>
+                          </div>
+                        </div>
                       ) : (
                         <>
                           {/* Header/Title */}
@@ -1340,7 +1425,7 @@ export function UnifiedSequenceBuilder({
                       )}
 
                       {/* Mock Stats (DataCray aesthetic) */}
-                      {!isTrigger && !isFieldOp && (
+                      {!isTrigger && !isFieldOp && !isContent && (
                         <div className="flex justify-between items-center text-[9px] font-bold text-slate-400/80 border-t border-slate-100 pt-2 mt-2 select-none">
                           <span className="flex items-center gap-0.5">🟢 0</span>
                           <span className="flex items-center gap-0.5">🟡 0</span>
