@@ -178,8 +178,6 @@ export const QuizBuilderShell: React.FC<QuizBuilderShellProps> = ({ funnelId }) 
           show_logo: st.showLogo,
           show_progress: st.showProgress,
           allow_back: st.allowBack,
-          type: st.type,
-          settings: st.settings || {},
         });
 
         if (sErr) throw sErr;
