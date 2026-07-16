@@ -82,19 +82,16 @@ export function getNodeSubTypeInfo(blockType: string, subType: string | undefine
 // Maps every legacy literal node_type (message/image/.../tag_add/.../field_op)
 // back to the block+subtype it now lives under, driving the lift-on-load side
 // of the legacy adapter (see legacyNodeAdapter.ts).
-const CONTENT_SUBTYPES = new Set(
-  (getNodeBlockDefinition("content")?.subTypes || []).map((s) => s.subType)
-);
-const ACTION_SUBTYPES = new Set(
-  (getNodeBlockDefinition("action")?.subTypes || []).map((s) => s.subType)
-);
-
 export function isContentSubType(nodeType: string): boolean {
-  return CONTENT_SUBTYPES.has(nodeType);
+  const block = getNodeBlockDefinition("content");
+  if (!block || !block.subTypes) return false;
+  return block.subTypes.some((s) => s.subType === nodeType);
 }
 
 export function isActionSubType(nodeType: string): boolean {
-  return ACTION_SUBTYPES.has(nodeType);
+  const block = getNodeBlockDefinition("action");
+  if (!block || !block.subTypes) return false;
+  return block.subTypes.some((s) => s.subType === nodeType);
 }
 
 // Icon/label/color lookup for the canvas card + palette, resolving through a
