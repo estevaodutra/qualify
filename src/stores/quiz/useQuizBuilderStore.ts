@@ -19,6 +19,12 @@ interface QuizBuilderStore {
   components: QuizComponent[];
   designConfig: QuizDesignConfig | null;
 
+  // Sidebar Toggles
+  isStepSidebarOpen: boolean;
+  isLibraryOpen: boolean;
+  toggleStepSidebar: () => void;
+  toggleLibrary: () => void;
+
   // Active Selections
   activeStepId: string | null;
   activeComponentId: string | null;
@@ -77,6 +83,11 @@ export const useQuizBuilderStore = create<QuizBuilderStore>((set, get) => ({
   components: [],
   designConfig: null,
 
+  isStepSidebarOpen: true,
+  isLibraryOpen: true,
+  toggleStepSidebar: () => set((state) => ({ isStepSidebarOpen: !state.isStepSidebarOpen })),
+  toggleLibrary: () => set((state) => ({ isLibraryOpen: !state.isLibraryOpen })),
+
   activeStepId: null,
   activeComponentId: null,
   activeTab: "content",
@@ -129,7 +140,6 @@ export const useQuizBuilderStore = create<QuizBuilderStore>((set, get) => ({
     const newHistory = history.slice(0, historyIndex + 1);
     newHistory.push(snapshot);
 
-    // Limit history stack to 30 steps
     if (newHistory.length > 30) newHistory.shift();
 
     const newIndex = newHistory.length - 1;

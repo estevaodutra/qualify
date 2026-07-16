@@ -1,6 +1,6 @@
 // src/components/quiz/builder/StepSidebar.tsx
 import React from "react";
-import { Plus, Trash2, Copy, Layers, GripVertical, CheckCircle2 } from "lucide-react";
+import { Plus, Trash2, Copy, Layers, GripVertical, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuizBuilderStore } from "@/stores/quiz/useQuizBuilderStore";
 import { QuizStep } from "@/types/quiz";
@@ -8,12 +8,29 @@ import { cn } from "@/lib/utils";
 
 export const StepSidebar: React.FC = () => {
   const steps = useQuizBuilderStore((s) => s.steps);
-  const components = useQuizBuilderStore((s) => s.components);
   const activeStepId = useQuizBuilderStore((s) => s.activeStepId);
   const setActiveStepId = useQuizBuilderStore((s) => s.setActiveStepId);
   const addStep = useQuizBuilderStore((s) => s.addStep);
   const deleteStep = useQuizBuilderStore((s) => s.deleteStep);
   const funnel = useQuizBuilderStore((s) => s.funnel);
+  const isOpen = useQuizBuilderStore((s) => s.isStepSidebarOpen);
+  const toggleStepSidebar = useQuizBuilderStore((s) => s.toggleStepSidebar);
+
+  if (!isOpen) {
+    return (
+      <div className="w-10 bg-card border-r border-border flex flex-col items-center py-3 shrink-0 select-none">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-indigo-600"
+          onClick={toggleStepSidebar}
+          title="Expandir Etapas"
+        >
+          <Layers className="w-4 h-4" />
+        </Button>
+      </div>
+    );
+  }
 
   const handleAddStep = () => {
     if (!funnel) return;
@@ -33,10 +50,9 @@ export const StepSidebar: React.FC = () => {
   const handleDuplicateStep = (e: React.MouseEvent, step: QuizStep) => {
     e.stopPropagation();
     if (!funnel) return;
-    const duplicatedId = crypto.randomUUID();
     const duplicatedStep: QuizStep = {
       ...step,
-      id: duplicatedId,
+      id: crypto.randomUUID(),
       name: `${step.name} (Cópia)`,
       stepOrder: steps.length,
     };
@@ -50,23 +66,27 @@ export const StepSidebar: React.FC = () => {
   };
 
   return (
-    <div className="w-64 bg-card border-r border-border flex flex-col h-full shrink-0 select-none">
+    <div className="w-60 bg-card border-r border-border flex flex-col h-full shrink-0 select-none">
       {/* Header */}
-      <div className="p-3 border-b border-border flex items-center justify-between">
+      <div className="p-3 border-b border-border flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
-          <Layers className="w-4 h-4 text-indigo-600" />
-          <span className="font-semibold text-xs tracking-wide uppercase">Etapas do Funil</span>
+          <Layers className="w-4 h-4 text-indigo-600 shrink-0" />
+          <span className="font-semibold text-xs tracking-wide uppercase truncate">Etapas do Funil</span>
         </div>
-        <Button size="icon" variant="ghost" className="h-7 w-7 text-indigo-600 hover:bg-indigo-50" onClick={handleAddStep} title="Nova Etapa">
-          <Plus className="w-4 h-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button size="icon" variant="ghost" className="h-7 w-7 text-indigo-600 hover:bg-indigo-50" onClick={handleAddStep} title="Nova Etapa">
+            <Plus className="w-4 h-4" />
+          </Button>
+          <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" onClick={toggleStepSidebar} title="Recolher Painel">
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Step List */}
-      <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+      <div className="flex-1 overflow-y-auto p-2 space-y-1.5 min-h-0">
         {steps.map((step, idx) => {
           const isActive = step.id === activeStepId;
-          const stepComponentCount = components.filter((c) => c.stepId === step.id).length;
 
           return (
             <div
@@ -113,7 +133,7 @@ export const StepSidebar: React.FC = () => {
       </div>
 
       {/* Footer Add Action */}
-      <div className="p-3 border-t border-border">
+      <div className="p-3 border-t border-border shrink-0">
         <Button variant="outline" size="sm" className="w-full text-xs gap-1.5 border-dashed" onClick={handleAddStep}>
           <Plus className="w-3.5 h-3.5" /> Adicionar Nova Etapa
         </Button>

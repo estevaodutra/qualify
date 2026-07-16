@@ -1,7 +1,8 @@
 // src/components/quiz/builder/ComponentLibrary.tsx
 import React, { useState } from "react";
-import { Search, Plus } from "lucide-react";
+import { Search, Plus, LayoutGrid, ChevronLeft } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { COMPONENT_REGISTRY, ComponentDefinition } from "../registry/componentRegistry";
 import { useQuizBuilderStore } from "@/stores/quiz/useQuizBuilderStore";
 import { QuizComponent, QuizComponentType, QuizComponentCategory } from "@/types/quiz";
@@ -21,6 +22,24 @@ export const ComponentLibrary: React.FC = () => {
   const funnel = useQuizBuilderStore((s) => s.funnel);
   const components = useQuizBuilderStore((s) => s.components);
   const addComponent = useQuizBuilderStore((s) => s.addComponent);
+  const isOpen = useQuizBuilderStore((s) => s.isLibraryOpen);
+  const toggleLibrary = useQuizBuilderStore((s) => s.toggleLibrary);
+
+  if (!isOpen) {
+    return (
+      <div className="w-10 bg-card border-r border-border flex flex-col items-center py-3 shrink-0 select-none">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-indigo-600"
+          onClick={toggleLibrary}
+          title="Expandir Biblioteca de Componentes"
+        >
+          <LayoutGrid className="w-4 h-4" />
+        </Button>
+      </div>
+    );
+  }
 
   const handleAddComponent = (type: QuizComponentType) => {
     if (!activeStepId || !funnel) return;
@@ -52,10 +71,17 @@ export const ComponentLibrary: React.FC = () => {
   const categories = Array.from(new Set(filtered.map((d) => d.category)));
 
   return (
-    <div className="w-72 bg-card border-r border-border flex flex-col h-full shrink-0 select-none">
+    <div className="w-64 bg-card border-r border-border flex flex-col h-full shrink-0 select-none">
       {/* Search Header */}
-      <div className="p-3 border-b border-border space-y-2">
-        <span className="font-semibold text-xs tracking-wide uppercase text-foreground/80">Biblioteca de Componentes</span>
+      <div className="p-3 border-b border-border space-y-2 shrink-0">
+        <div className="flex items-center justify-between">
+          <span className="font-semibold text-xs tracking-wide uppercase text-foreground/80 truncate">
+            Biblioteca de Componentes
+          </span>
+          <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" onClick={toggleLibrary} title="Recolher Painel">
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+        </div>
         <div className="relative">
           <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
           <Input
@@ -68,7 +94,7 @@ export const ComponentLibrary: React.FC = () => {
       </div>
 
       {/* Categorized Component List */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-4">
+      <div className="flex-1 overflow-y-auto p-3 space-y-4 min-h-0">
         {categories.map((cat) => {
           const categoryComponents = filtered.filter((d) => d.category === cat);
           return (
@@ -83,10 +109,10 @@ export const ComponentLibrary: React.FC = () => {
                     <div
                       key={def.type}
                       onClick={() => handleAddComponent(def.type)}
-                      className="group flex items-center gap-3 p-2.5 rounded-lg border border-border bg-background hover:border-indigo-500 hover:shadow-xs cursor-pointer transition-all active:scale-[0.99]"
+                      className="group flex items-center gap-2.5 p-2 rounded-lg border border-border bg-background hover:border-indigo-500 hover:shadow-xs cursor-pointer transition-all active:scale-[0.99]"
                     >
-                      <div className="w-8 h-8 rounded-md bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                        <IconComponent className="w-4 h-4" />
+                      <div className="w-7 h-7 rounded-md bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                        <IconComponent className="w-3.5 h-3.5" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-semibold text-foreground truncate">{def.label}</p>
