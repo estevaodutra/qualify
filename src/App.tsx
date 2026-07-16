@@ -97,6 +97,14 @@ const App = () => {
                         </ProtectedRoute>
                       }
                     />
+                    {/* Authenticated routes with AppLayout */}
+                    <Route
+                      element={
+                        <ProtectedRoute>
+                          <AppLayout />
+                        </ProtectedRoute>
+                      }
+                    >
                       {/* Quiz / Funnel routes (inside AppLayout with sidebar support) */}
                       <Route path="/quiz" element={<QuizFunnelsPage />} />
                       <Route path="/quiz/:id" element={<QuizEditorPage />} />

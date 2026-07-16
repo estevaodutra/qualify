@@ -513,7 +513,7 @@ export default function ChatComposer({ onSend, isSending, templates }: ChatCompo
                   <Trash2 className="h-4 w-4" />
                </Button>
                <Button variant="ghost" size="icon" onClick={togglePlayback} className="h-8 w-8 shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 rounded-full shadow-sm">
-                  {isPlaying ? <Pause className="h-4 w-4" fill="currentColor" /> : <Play className="h-4 w-4" fill="currentColor" className="ml-0.5" />}
+                  {isPlaying ? <Pause className="h-4 w-4" fill="currentColor" /> : <Play className="h-4 w-4 ml-0.5" fill="currentColor" />}
                </Button>
                
                {/* Static Waveform */}
