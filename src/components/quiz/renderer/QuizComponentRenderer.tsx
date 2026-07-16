@@ -375,7 +375,7 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
     >
       {/* Action Toolbar on Component Hover/Select (Mover, Duplicar, Excluir) */}
       {isEditor && isSelected && (
-        <div className="absolute -top-3.5 right-2 z-40 flex items-center bg-card border border-indigo-200 shadow-md rounded-md px-1.5 py-0.5 text-xs gap-1 select-none animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute top-1 right-1 z-50 flex items-center bg-card border border-indigo-300 shadow-md rounded-md px-1.5 py-0.5 text-xs gap-1 select-none animate-in fade-in zoom-in-95 duration-150">
           {/* 1. Mover (Reordenar) */}
           <div className="flex items-center border-r border-border pr-1 gap-0.5">
             <button

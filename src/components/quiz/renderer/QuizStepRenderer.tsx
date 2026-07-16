@@ -85,7 +85,7 @@ export const QuizStepRenderer: React.FC<StepRendererProps> = ({
 
   return (
     <div className="w-full flex flex-col items-center justify-start transition-all">
-      <div style={containerStyle} className="w-full relative overflow-hidden transition-all duration-300">
+      <div style={containerStyle} className="w-full relative overflow-visible transition-all duration-300">
         {/* Step Top Progress Bar */}
         {step.showProgress && d.progress?.style !== "none" && (
           <div className="w-full h-1.5 bg-muted/30 absolute top-0 left-0 right-0 overflow-hidden">
