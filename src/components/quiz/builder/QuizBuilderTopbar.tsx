@@ -25,9 +25,10 @@ interface TopbarProps {
   onSave: () => void;
   onPublish: () => void;
   onOpenSettings: () => void;
+  onExit?: () => void;
 }
 
-export const QuizBuilderTopbar: React.FC<TopbarProps> = ({ onSave, onPublish, onOpenSettings }) => {
+export const QuizBuilderTopbar: React.FC<TopbarProps> = ({ onSave, onPublish, onOpenSettings, onExit }) => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -86,7 +87,7 @@ export const QuizBuilderTopbar: React.FC<TopbarProps> = ({ onSave, onPublish, on
     <div className="h-14 bg-card border-b border-border px-4 flex items-center justify-between shrink-0 select-none z-30 shadow-xs">
       {/* Left: Back & Funnel Name */}
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate("/quiz")}>
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onExit || (() => navigate("/quiz"))} title="Salvar e Sair">
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div className="flex items-center gap-2">

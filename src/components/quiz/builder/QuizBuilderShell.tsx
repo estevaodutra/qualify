@@ -192,14 +192,13 @@ export const QuizBuilderShell: React.FC<QuizBuilderShellProps> = ({ funnelId }) 
     }
   }, [funnel, steps, components, designConfig, saveStatus]);
 
-  // Auto-save debounce effect (1000ms)
-  useEffect(() => {
-    if (saveStatus !== "dirty") return;
-    const timer = setTimeout(() => {
-      handleSave();
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [saveStatus, handleSave]);
+  // Auto-save only on exit
+  const handleExit = useCallback(async () => {
+    if (saveStatus === "dirty") {
+      await handleSave();
+    }
+    navigate("/quiz");
+  }, [saveStatus, handleSave, navigate]);
 
   // Keyboard Shortcuts (Ctrl+Z, Ctrl+Y, Delete)
   useEffect(() => {
@@ -240,6 +239,7 @@ export const QuizBuilderShell: React.FC<QuizBuilderShellProps> = ({ funnelId }) 
         onSave={handleSave}
         onPublish={handlePublish}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onExit={handleExit}
       />
       <div className="flex-1 flex overflow-hidden relative">
         <StepSidebar />
