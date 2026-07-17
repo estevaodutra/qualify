@@ -2662,7 +2662,7 @@ export function UnifiedNodeConfigPanel({
                              </Button>
                            </div>
                          )}
-                       </div>
+                       </Accordion>
                      )}
                   </div>
 
