@@ -136,7 +136,7 @@ export function UnifiedSequenceBuilder({
       portCoordsRef.current = newCoords;
       setTick(t => t + 1);
     }
-  });
+  }, [localNodes, zoom]);
 
   const getPortCoords = (nodeId: string, portId: string, fallbackX: number, fallbackY: number) => {
     const coords = portCoordsRef.current[`${nodeId}-${portId}`];
