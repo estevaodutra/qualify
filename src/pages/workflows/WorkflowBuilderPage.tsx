@@ -44,13 +44,14 @@ export default function WorkflowBuilderPage() {
         
         // If the workflow is orphaned (no campaign), create one so group linking works
         if (!finalCampaignId) {
-          const { data: newCampaign } = await supabase
+          const { data: userData } = await supabase.auth.getUser();
+          const { data: newCampaign, error: insertError } = await supabase
             .from("group_campaigns")
             .insert({
               name: row.name || "Workflow Context",
               status: "active",
-              user_id: row.user_id,
-              company_id: row.company_id
+              user_id: userData?.user?.id || row.user_id,
+              company_id: row.company_id || null
             })
             .select("id")
             .single();
@@ -61,6 +62,9 @@ export default function WorkflowBuilderPage() {
               .from("message_sequences" as any)
               .update({ group_campaign_id: finalCampaignId })
               .eq("id", row.id);
+          } else {
+            console.error("Failed to create orphaned campaign:", insertError);
+            throw new Error(`Falha ao migrar contexto da automação: ${insertError?.message || "Erro desconhecido"}`);
           }
         }
 
@@ -87,24 +91,43 @@ export default function WorkflowBuilderPage() {
       if (dsErr) throw dsErr;
 
       // 1. Create a matching group_campaign if needed
-      await supabase
-        .from("group_campaigns")
-        .insert({
-          id: ds.campaign_id,
-          user_id: ds.user_id,
-          company_id: ds.company_id,
-          name: ds.name,
-          status: "active"
-        });
+      // If ds.campaign_id is null, we need to capture the newly generated ID
+      let legacyCampaignId = ds.campaign_id;
+      const { data: userData } = await supabase.auth.getUser();
+      const currentUserId = userData?.user?.id || ds.user_id;
+      
+      if (!legacyCampaignId) {
+        const { data: newLegacyCampaign } = await supabase
+          .from("group_campaigns")
+          .insert({
+            user_id: currentUserId,
+            company_id: ds.company_id || null,
+            name: ds.name,
+            status: "active"
+          })
+          .select("id")
+          .single();
+        if (newLegacyCampaign) legacyCampaignId = newLegacyCampaign.id;
+      } else {
+        await supabase
+          .from("group_campaigns")
+          .insert({
+            id: ds.campaign_id,
+            user_id: currentUserId,
+            company_id: ds.company_id || null,
+            name: ds.name,
+            status: "active"
+          });
+      }
 
       // 2. Create the message_sequence
       const { data: ms, error: msErr } = await supabase
         .from("message_sequences" as any)
         .insert({
           id: ds.id,
-          user_id: ds.user_id,
-          company_id: ds.company_id,
-          group_campaign_id: ds.campaign_id,
+          user_id: currentUserId,
+          company_id: ds.company_id || null,
+          group_campaign_id: legacyCampaignId,
           name: ds.name,
           description: ds.description,
           trigger_type: ds.trigger_type,
