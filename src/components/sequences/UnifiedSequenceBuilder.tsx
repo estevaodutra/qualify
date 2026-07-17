@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useLayoutEffect, useRef, ReactNode, Fragment } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { LocalNode, LocalConnection, NodeCategory, RandomizerBranch, TriggerItem } from "./shared-types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
