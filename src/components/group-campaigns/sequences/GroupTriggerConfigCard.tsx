@@ -86,20 +86,6 @@ export function GroupTriggerConfigCard({
               />
             </div>
 
-            <div className="flex items-center justify-between p-3 rounded-lg bg-background border">
-              <div className="space-y-0.5">
-                <label className="text-sm font-medium" htmlFor="group-mode-toggle">Habilitar para Grupo</label>
-                <p className="text-xs text-muted-foreground">
-                  Quando ativo, envia para os grupos do WhatsApp configurados. Desative para enviar em conversas individuais.
-                </p>
-              </div>
-              <Switch
-                id="group-mode-toggle"
-                checked={triggerConfig.isGroup ?? true}
-                onCheckedChange={(checked) => onTriggerConfigChange({ ...triggerConfig, isGroup: checked })}
-              />
-            </div>
-
             {(triggerType === "member_join" || triggerType === "member_leave") && (
               <div className="p-3 rounded-lg bg-background border">
                 <p className="text-sm text-muted-foreground">

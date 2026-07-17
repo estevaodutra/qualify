@@ -1,5 +1,6 @@
 import { X } from "lucide-react";
 import { WebhookGroupScopeConfig } from "./triggers/configs/WebhookGroupScopeConfig";
+import { Switch } from "@/components/ui/switch";
 
 interface WorkflowSettingsModalProps {
   isOpen: boolean;
@@ -40,13 +41,29 @@ export function WorkflowSettingsModal({
 
         <div className="p-4 overflow-y-auto">
           <div className="space-y-4">
-            <div className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50">
-              <WebhookGroupScopeConfig
-                config={config}
-                onChange={onChange}
-                campaignId={campaignId!}
+            <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200/80 bg-slate-50/50">
+              <div className="space-y-0.5">
+                <label className="text-sm font-medium" htmlFor="modal-group-mode-toggle">Habilitar para Grupo</label>
+                <p className="text-xs text-muted-foreground">
+                  Quando ativo, envia para os grupos do WhatsApp configurados. Desative para enviar em conversas individuais.
+                </p>
+              </div>
+              <Switch
+                id="modal-group-mode-toggle"
+                checked={(config.isGroup as boolean) ?? true}
+                onCheckedChange={(checked) => onChange({ ...config, isGroup: checked })}
               />
             </div>
+
+            {((config.isGroup as boolean) ?? true) && (
+              <div className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 animate-in fade-in slide-in-from-top-2 duration-200">
+                <WebhookGroupScopeConfig
+                  config={config}
+                  onChange={onChange}
+                  campaignId={campaignId!}
+                />
+              </div>
+            )}
           </div>
         </div>
 
