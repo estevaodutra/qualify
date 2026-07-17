@@ -83,28 +83,9 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Extract sequence ID from URL path
-    // Expected: /trigger-sequence/{sequenceId}
     const url = new URL(req.url);
-    const pathParts = url.pathname.split('/').filter(Boolean);
-    const sequenceId = pathParts[pathParts.length - 1];
-
-    if (!sequenceId || sequenceId === "trigger-sequence") {
-      return new Response(
-        JSON.stringify({ 
-          error: "Sequence ID is required in URL path",
-          example: "/functions/v1/trigger-sequence/{sequence-id}"
-        }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    console.log(`[TriggerSequence] Received request for sequence: ${sequenceId}`);
-
-    // Extract triggerId if provided (used to select specific branch from trigger node)
-    const triggerIdFromUrl = url.searchParams.get("triggerId");
-
-    // Parse the incoming payload
+    
+    // Parse the incoming payload first
     let payload: Record<string, unknown> = {};
     try {
       const bodyText = await req.text();
@@ -118,6 +99,28 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Extract sequence ID from URL path, search params, or payload
+    const pathParts = url.pathname.split('/').filter(Boolean);
+    const lastPathPart = pathParts[pathParts.length - 1];
+    
+    const sequenceId = (lastPathPart && lastPathPart !== "trigger-sequence") 
+      ? lastPathPart 
+      : (url.searchParams.get("id") || url.searchParams.get("sequenceId") || (payload.sequenceId as string) || (payload.sequence_id as string));
+
+    if (!sequenceId) {
+      return new Response(
+        JSON.stringify({ 
+          error: "Sequence ID is required (either in URL path /trigger-sequence/{sequence-id}, query param ?id=..., or payload sequenceId)",
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`[TriggerSequence] Received request for sequence: ${sequenceId}`);
+
+    // Extract triggerId if provided (used to select specific branch from trigger node)
+    const triggerIdFromUrl = url.searchParams.get("triggerId");
 
     console.log(`[TriggerSequence] Payload received:`, JSON.stringify(payload).substring(0, 500));
 
