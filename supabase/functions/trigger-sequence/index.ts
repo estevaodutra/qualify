@@ -221,18 +221,35 @@ Deno.serve(async (req) => {
     console.log(`[TriggerSequence] Applied ${fieldMappings.length} field mappings + fallback keys:`, customFields);
 
     // Check if payload contains destination phone for private sending
-    const destinationPhone = extractField(payload, "destination.phone") ||
-                             extractField(payload, "phone") ||
-                             extractField(payload, "to");
+    let destinationPhone = extractField(payload, "destination.phone") ||
+                           extractField(payload, "phone") ||
+                           extractField(payload, "to");
 
     const isGroupMode = triggerConfig.isGroup !== false;
 
     if (!isGroupMode && !destinationPhone) {
-      console.error(`[TriggerSequence] Individual conversation mode, but no destination phone found in payload`);
-      return new Response(
-        JSON.stringify({ error: "No destination phone found in payload for individual conversation mode" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      if (isManualTest) {
+        const instanceId = triggerConfig.instanceId as string | undefined;
+        let testPhone = "5511999999999";
+        if (instanceId) {
+          const { data: inst } = await supabase
+            .from("instances")
+            .select("phone")
+            .eq("id", instanceId)
+            .maybeSingle();
+          if (inst?.phone) {
+            testPhone = inst.phone.replace(/\D/g, "");
+          }
+        }
+        destinationPhone = testPhone;
+        console.log(`[TriggerSequence] Manual test: falling back to destinationPhone = ${destinationPhone}`);
+      } else {
+        console.error(`[TriggerSequence] Individual conversation mode, but no destination phone found in payload`);
+        return new Response(
+          JSON.stringify({ error: "No destination phone found in payload for individual conversation mode" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     // Group scope config (new, additive — instanceId/groupScope/selectedGroupJids
