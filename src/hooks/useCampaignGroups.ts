@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useParams } from "react-router-dom";
 
 export interface CampaignGroup {
   id: string;
@@ -37,22 +38,24 @@ export function useCampaignGroups(campaignId: string | undefined) {
   const { user } = useAuth();
   const { activeCompanyId } = useCompany();
   const queryClient = useQueryClient();
+  const { sequenceId, workflowId } = useParams();
+  const effectiveCampaignId = campaignId || sequenceId || workflowId;
 
   const { data: linkedGroups = [], isLoading, error, refetch } = useQuery({
-    queryKey: ["campaign_groups", campaignId],
+    queryKey: ["campaign_groups", effectiveCampaignId],
     queryFn: async () => {
-      if (!campaignId) return [];
+      if (!effectiveCampaignId) return [];
       
       const { data, error } = await supabase
         .from("campaign_groups")
         .select("*")
-        .eq("campaign_id", campaignId)
+        .eq("campaign_id", effectiveCampaignId)
         .order("added_at", { ascending: false });
 
       if (error) throw error;
       return (data as DbCampaignGroup[]).map(transformDbToFrontend);
     },
-    enabled: !!campaignId && !!user,
+    enabled: !!effectiveCampaignId && !!user,
   });
 
   const addGroupsMutation = useMutation({
@@ -60,14 +63,14 @@ export function useCampaignGroups(campaignId: string | undefined) {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       const activeUser = currentUser || user;
       
-      if (!campaignId) throw new Error("ID da campanha não encontrado");
+      if (!effectiveCampaignId) throw new Error("ID da campanha não encontrado na URL nem nas propriedades.");
       if (!activeUser) throw new Error("Usuário não autenticado");
 
       const { error } = await supabase
         .from("campaign_groups")
         .insert(
           groups.map((g) => ({
-            campaign_id: campaignId,
+            campaign_id: effectiveCampaignId,
             user_id: user.id,
             group_jid: g.jid,
             group_name: g.name,
@@ -78,7 +81,7 @@ export function useCampaignGroups(campaignId: string | undefined) {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["campaign_groups", campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["campaign_groups", effectiveCampaignId] });
       toast({ title: "Sucesso", description: "Grupo(s) adicionado(s) à campanha." });
     },
     onError: (error) => {
