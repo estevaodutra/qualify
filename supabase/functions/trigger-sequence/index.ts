@@ -138,22 +138,12 @@ Deno.serve(async (req) => {
     }
 
     const typedSequence = sequence as MessageSequence;
+    const isManualTest = !!(triggerIdFromUrl || payload.triggerId || payload.trigger_id);
 
-    // Validate sequence is active and is webhook type
-    if (!typedSequence.active) {
+    // Validate sequence is active (unless this is a manual test from the editor)
+    if (!typedSequence.active && !isManualTest) {
       return new Response(
         JSON.stringify({ error: "Sequence is not active", sequenceId }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    if (typedSequence.trigger_type !== "webhook") {
-      return new Response(
-        JSON.stringify({ 
-          error: "Sequence is not configured for webhook trigger", 
-          sequenceId,
-          currentTriggerType: typedSequence.trigger_type
-        }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

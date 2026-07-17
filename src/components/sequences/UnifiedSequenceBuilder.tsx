@@ -165,6 +165,24 @@ export function UnifiedSequenceBuilder({
   const [triggerSelectorOpen, setTriggerSelectorOpen] = useState(false);
   const [workflowSettingsOpen, setWorkflowSettingsOpen] = useState(false);
 
+  const handleManualTriggerExecution = async (triggerId: string) => {
+    try {
+      toast({ title: "Gatilho Executado", description: "Disparando automação para teste." });
+      
+      const { error } = await supabase.functions.invoke("trigger-sequence", {
+        body: { 
+          sequenceId: sequence.id,
+          triggerId: triggerId,
+        }
+      });
+
+      if (error) throw error;
+      toast({ title: "Gatilho Executado", description: "O gatilho foi disparado com sucesso." });
+    } catch (error: any) {
+      toast({ title: "Erro ao executar gatilho", description: error.message || "Não foi possível disparar o gatilho", variant: "destructive" });
+    }
+  };
+
   useEffect(() => {
     const handleOpenTriggerSelector = () => setTriggerSelectorOpen(true);
     document.addEventListener("open-trigger-selector", handleOpenTriggerSelector);
