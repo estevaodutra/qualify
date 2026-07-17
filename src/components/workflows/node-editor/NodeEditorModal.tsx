@@ -634,7 +634,7 @@ export function NodeEditorModal({
               <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
                 <TabsContent value="config" className="m-0 p-0 focus-visible:ring-0">
                   <NodeParametersPanel
-                    node={node}
+                    node={{ ...node, config: localConfig }}
                     onUpdate={handleUpdateConfig}
                     mode={mode}
                     isGroup={isGroup}
