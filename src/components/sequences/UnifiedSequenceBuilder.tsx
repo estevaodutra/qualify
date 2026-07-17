@@ -1169,6 +1169,9 @@ export function UnifiedSequenceBuilder({
                           
                           {(node.config.triggers as TriggerItem[] || []).map((trigger, idx) => {
                             const def = getTriggerDefinition(trigger.type);
+                            const summary = def?.summaryBuilder ? def.summaryBuilder(trigger.config || {}) : undefined;
+                            const title = summary?.title || def?.label || trigger.type;
+                            const subtitle = summary?.subtitle || def?.description;
                             return (
                               <div 
                                 key={trigger.id} 
@@ -1184,8 +1187,8 @@ export function UnifiedSequenceBuilder({
                                   <div className="flex items-center gap-3 min-w-0 flex-1">
                                     <ArrowRight className="h-4 w-4 text-slate-600 shrink-0" />
                                     <div className="min-w-0">
-                                      <p className="text-xs font-bold text-slate-800 truncate">{def?.label || trigger.type}</p>
-                                      <p className="text-[10px] text-slate-500 truncate">{def?.description}</p>
+                                      <p className="text-xs font-bold text-slate-800 truncate">{title}</p>
+                                      <p className="text-[10px] text-slate-500 truncate">{subtitle}</p>
                                     </div>
                                   </div>
                                   <button
