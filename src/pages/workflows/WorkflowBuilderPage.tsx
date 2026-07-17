@@ -40,33 +40,7 @@ export default function WorkflowBuilderPage() {
 
       if (data) {
         const row = data as any;
-        let finalCampaignId = row.group_campaign_id;
-        
-        // If the workflow is orphaned (no campaign), create one so group linking works
-        if (!finalCampaignId) {
-          const { data: userData } = await supabase.auth.getUser();
-          const { data: newCampaign, error: insertError } = await supabase
-            .from("group_campaigns")
-            .insert({
-              name: row.name || "Workflow Context",
-              status: "active",
-              user_id: userData?.user?.id || row.user_id,
-              company_id: row.company_id || null
-            })
-            .select("id")
-            .single();
-            
-          if (newCampaign) {
-            finalCampaignId = newCampaign.id;
-            await supabase
-              .from("message_sequences" as any)
-              .update({ group_campaign_id: finalCampaignId })
-              .eq("id", row.id);
-          } else {
-            console.error("Failed to create orphaned campaign:", insertError);
-            throw new Error(`Falha ao migrar contexto da automação: ${insertError?.message || "Erro desconhecido"}`);
-          }
-        }
+        const finalCampaignId = row.id;
 
         return {
           id: row.id,

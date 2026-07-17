@@ -109,61 +109,11 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
 
   const handleManualSendNode = async (node: LocalNode) => {
     try {
-      let activeCampaignId = sequence.groupCampaignId;
+      let activeCampaignId = sequence.id;
 
-      const { data: campaign } = await supabase
-        .from("group_campaigns")
-        .select("id")
-        .eq("id", activeCampaignId || "00000000-0000-0000-0000-000000000000")
-        .maybeSingle();
+      // No longer need to query group_campaigns, we just use sequence.id
+      const campaign = { id: activeCampaignId };
 
-      if (!campaign) {
-        // Obter usuário logado para o insert obrigatório
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          toast.error("Sessão de usuário não encontrada.");
-          return;
-        }
-
-        // Fallback for Workflows: create a dummy campaign with an active instance
-        const { data: instance } = await supabase
-          .from("instances")
-          .select("id, company_id")
-          .eq("status", "connected")
-          .limit(1)
-          .maybeSingle();
-
-        if (!instance) {
-          toast.error("Nenhuma conexão de WhatsApp ativa foi encontrada para testar.");
-          return;
-        }
-
-        const { data: newCampaign, error: insertErr } = await supabase
-          .from("group_campaigns")
-          .insert({
-            name: "Workflow Dummy Context",
-            status: "active",
-            instance_id: instance.id,
-            user_id: user.id,
-            company_id: instance.company_id
-          })
-          .select("id")
-          .single();
-
-        if (insertErr || !newCampaign) {
-          console.error("Erro ao criar contexto de campanha:", insertErr);
-          toast.error("Erro ao preparar o ambiente de teste.");
-          return;
-        }
-
-        activeCampaignId = newCampaign.id;
-
-        // Optionally link it so we don't recreate it next time
-        await supabase
-          .from("message_sequences" as any)
-          .update({ group_campaign_id: activeCampaignId })
-          .eq("id", sequence.id);
-      }
 
       const { error } = await supabase.functions.invoke("execute-message", {
         body: {
@@ -195,7 +145,7 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
       sequenceName={sequence.name}
       isActive={sequence.active}
       sequenceId={sequence.id}
-      campaignId={sequence.groupCampaignId}
+      campaignId={sequence.id}
       nodeCategories={NODE_CATEGORIES}
       getDefaultConfig={getDefaultConfig}
       renderConfigPanel={(node, onUpdateConfig, onClose, onManualSend, isSendingManual, isGroup, nodes) => {
@@ -217,7 +167,7 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
                   onTriggerTypeChange={(type) => onUpdateConfig({ ...node.config, triggerType: type })}
                   onTriggerConfigChange={(config) => onUpdateConfig({ ...node.config, triggerConfig: config })}
                   sequenceId={sequence.id}
-                  campaignId={sequence.groupCampaignId}
+                  campaignId={sequence.id}
                 />
               </div>
             </div>

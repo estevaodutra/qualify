@@ -154,22 +154,14 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Fetch the campaign to get campaign ID
-    const { data: campaign, error: campaignError } = await supabase
+    // Fetch the legacy campaign for backwards compatibility (fallback instance_id)
+    const { data: campaign } = await supabase
       .from("group_campaigns")
       .select("id, name, instance_id, config")
       .eq("id", typedSequence.group_campaign_id)
-      .single();
+      .maybeSingle();
 
-    if (campaignError || !campaign) {
-      console.error("[TriggerSequence] Campaign not found:", campaignError);
-      return new Response(
-        JSON.stringify({ error: "Associated campaign not found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const typedCampaign = campaign as GroupCampaign;
+    const typedCampaign = (campaign || {}) as GroupCampaign;
     const triggerConfig = typedSequence.trigger_config as Record<string, unknown> || {};
 
     // ── Deduplication guard (best-effort) ───────────────────────────────────
@@ -196,7 +188,7 @@ Deno.serve(async (req) => {
       // Insert lock record so concurrent calls are blocked
       await supabase.from("sequence_executions").insert({
         sequence_id: typedSequence.id,
-        campaign_id: typedCampaign.id,
+        campaign_id: typedCampaign.id || typedSequence.id,
         user_id: typedSequence.user_id,
         status: "processing",
         trigger_context: {},
@@ -269,7 +261,7 @@ Deno.serve(async (req) => {
         let query = supabase
           .from("campaign_groups")
           .select("group_jid, group_name, instance_id")
-          .eq("campaign_id", typedCampaign.id);
+          .in("campaign_id", [typedSequence.id, typedSequence.group_campaign_id].filter(Boolean));
         const { data: groups } = await query;
         let resolved = (groups || []) as { group_jid: string; group_name: string | null; instance_id: string | null }[];
         if (groupScope === "selected" && selectedGroupJids && selectedGroupJids.length > 0) {
@@ -281,9 +273,9 @@ Deno.serve(async (req) => {
         const { data: firstGroup } = await supabase
           .from("campaign_groups")
           .select("group_jid, group_name")
-          .eq("campaign_id", typedCampaign.id)
+          .in("campaign_id", [typedSequence.id, typedSequence.group_campaign_id].filter(Boolean))
           .limit(1)
-          .single();
+          .maybeSingle();
 
         if (firstGroup) targetGroups = [firstGroup];
         console.log(`[TriggerSequence] No phone in payload, using first group as destination: ${firstGroup?.group_jid}`);
