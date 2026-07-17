@@ -536,6 +536,9 @@ export function NodeEditorModal({
 
                     return (
                       <div className="space-y-6 pb-4">
+                        <div className="text-[10px] text-red-500 font-mono mb-2">
+                          DEBUG: activeTriggerId={activeTriggerId}, triggerType={triggerType}, selectorValue={selectorValue}, activeTrigger.type={activeTrigger?.type}
+                        </div>
                         <div className="flex items-center justify-between p-4 rounded-xl bg-slate-50/50 border border-slate-200/80">
                           <div className="space-y-0.5">
                             <label className="text-xs font-bold text-slate-700" htmlFor="group-mode-toggle">Habilitar para Grupo</label>
