@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   ArrowLeft, Save, Play, Pause, Trash2, ZoomIn, ZoomOut, Maximize,
-  Loader2, Info, GitBranch, Copy, PenLine, History, Sliders, ArrowRight, Plus, MessageSquare
+  Loader2, Info, GitBranch, Copy, PenLine, History, Sliders, ArrowRight, Plus, MessageSquare, Settings
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { NodeEditorModal } from "../workflows/node-editor/NodeEditorModal";
@@ -46,7 +46,8 @@ export interface UnifiedSequenceBuilderProps {
   onSave: (
     name: string, 
     nodes: LocalNode[], 
-    connections: { sourceNodeId: string; targetNodeId: string; conditionPath?: string }[]
+    connections: { sourceNodeId: string; targetNodeId: string; conditionPath?: string }[],
+    workflowConfig: Record<string, unknown>
   ) => Promise<void>;
   onToggleActive: () => Promise<void>;
   onManualSendNode?: (node: LocalNode) => Promise<void>;
@@ -55,6 +56,7 @@ export interface UnifiedSequenceBuilderProps {
   initialConnections: LocalConnection[];
   isSaving: boolean;
   isLoading?: boolean;
+  workflowConfig?: Record<string, unknown>;
 }
 
 const RANDOMIZER_PORT_BASE_Y = 28;
@@ -81,12 +83,14 @@ export function UnifiedSequenceBuilder({
   initialNodes,
   initialConnections,
   isSaving,
-  isLoading = false
+  isLoading = false,
+  workflowConfig: initialWorkflowConfig = {}
 }: UnifiedSequenceBuilderProps) {
   const { toast } = useToast();
   const { saveVersion, isSavingVersion } = useSequences(sequenceId);
   const [localNodes, setLocalNodes] = useState<LocalNode[]>([]);
   const [localConnections, setLocalConnections] = useState<LocalConnection[]>([]);
+  const [localWorkflowConfig, setLocalWorkflowConfig] = useState<Record<string, unknown>>(initialWorkflowConfig);
   const [sequenceName, setSequenceName] = useState(initialName);
   
   // Canvas State (Pan & Zoom)
@@ -150,13 +154,14 @@ export function UnifiedSequenceBuilder({
   const [activePort, setActivePort] = useState<{
     nodeId: string;
     portType: "in" | "out";
-    branchId?: string;
+    conditionPath?: string;
     x: number;
     y: number;
   } | null>(null);
 
   // Trigger Selector Modal State
   const [triggerSelectorOpen, setTriggerSelectorOpen] = useState(false);
+  const [workflowSettingsOpen, setWorkflowSettingsOpen] = useState(false);
 
   useEffect(() => {
     const handleOpenTriggerSelector = () => setTriggerSelectorOpen(true);
@@ -209,7 +214,6 @@ export function UnifiedSequenceBuilder({
   const [editingTriggerId, setEditingTriggerId] = useState<string | undefined>(undefined);
 
   const canvasRef = useRef<HTMLDivElement>(null);
-  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydratedSequenceId = useRef<string | null>(null);
   // Distinguishes a click from a drag without an artificial timeout: a real
   // pointer movement past this threshold marks the interaction as a drag, so
@@ -218,11 +222,21 @@ export function UnifiedSequenceBuilder({
   const dragMovedRef = useRef(false);
   const mouseDownPosRef = useRef({ x: 0, y: 0 });
 
+  const saveChangesDebounced = useCallback(
+    debounce(async (nds: LocalNode[], cns: LocalConnection[], wConfig: Record<string, unknown>, name: string) => {
+      setAutoSaveStatus("saving");
+      try {
+        await onSave(name, nds, cns, wConfig);
+        setAutoSaveStatus("saved");
+        setTimeout(() => setAutoSaveStatus("idle"), 2000);
+      } catch {
+        setAutoSaveStatus("idle");
+      }
+    }, 1500),
+    [onSave]
+  );
+
   // Initialize and auto-position if nodes lack coordinates.
-  // Runs only once per sequenceId — initialNodes/initialConnections are recreated
-  // with new array references on every parent render (autosave flips isSaving,
-  // query invalidation refetches, etc). Re-running this on every reference change
-  // would stomp over in-progress edits (e.g. snap a node back mid-drag).
   useEffect(() => {
     if (isLoading) return;
     if (hydratedSequenceId.current === sequenceId) {
@@ -307,25 +321,10 @@ export function UnifiedSequenceBuilder({
     }
   }, [sequenceId, initialNodes, initialConnections, isLoading]);
 
-  // Debounced Autosave
-  const triggerAutosave = useCallback((nodesToSave: LocalNode[], connsToSave: LocalConnection[], nameToSave: string) => {
-    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-    autoSaveTimer.current = setTimeout(async () => {
-      setAutoSaveStatus("saving");
-      try {
-        await onSave(nameToSave, nodesToSave, connsToSave);
-        setAutoSaveStatus("saved");
-        setTimeout(() => setAutoSaveStatus("idle"), 2000);
-      } catch {
-        setAutoSaveStatus("idle");
-      }
-    }, 1500);
-  }, [onSave]);
-
   const updateNodesAndSave = (updater: (prev: LocalNode[]) => LocalNode[]) => {
     setLocalNodes(prev => {
       const next = updater(prev);
-      triggerAutosave(next, localConnections, sequenceName);
+      saveChangesDebounced(next, localConnections, localWorkflowConfig, sequenceName);
       return next;
     });
   };
@@ -333,7 +332,15 @@ export function UnifiedSequenceBuilder({
   const updateConnectionsAndSave = (updater: (prev: LocalConnection[]) => LocalConnection[]) => {
     setLocalConnections(prev => {
       const next = updater(prev);
-      triggerAutosave(localNodes, next, sequenceName);
+      saveChangesDebounced(localNodes, next, localWorkflowConfig, sequenceName);
+      return next;
+    });
+  };
+
+  const updateWorkflowConfigAndSave = (updater: (prev: Record<string, unknown>) => Record<string, unknown>) => {
+    setLocalWorkflowConfig(prev => {
+      const next = updater(prev);
+      saveChangesDebounced(localNodes, localConnections, next, sequenceName);
       return next;
     });
   };
@@ -401,7 +408,7 @@ export function UnifiedSequenceBuilder({
     setIsPanning(false);
     if (draggedNodeId) {
       setDraggedNodeId(null);
-      triggerAutosave(localNodes, localConnections, sequenceName);
+      saveChangesDebounced(localNodes, localConnections, localWorkflowConfig, sequenceName);
     }
 
     // Dropping a dragged-out connection on the raw canvas background (not on
@@ -671,10 +678,12 @@ export function UnifiedSequenceBuilder({
   // Save Name change
   const handleSaveAll = async () => {
     try {
-      await onSave(sequenceName, localNodes, localConnections);
+      await onSave(sequenceName, localNodes, localConnections, localWorkflowConfig);
       toast({ title: "Workflow salvo com sucesso!" });
-    } catch {
-      toast({ title: "Erro ao salvar", variant: "destructive" });
+    } catch (error: any) {
+      console.error("Save failed:", error);
+      const errorMsg = typeof error === 'object' ? JSON.stringify(error) : String(error);
+      toast({ title: "Erro ao salvar", description: errorMsg, variant: "destructive" });
     }
   };
 
@@ -744,7 +753,7 @@ export function UnifiedSequenceBuilder({
           <div className="flex flex-col gap-0.5">
             <Input 
               value={sequenceName} 
-              onChange={e => { setSequenceName(e.target.value); triggerAutosave(localNodes, localConnections, e.target.value); }}
+              onChange={e => { setSequenceName(e.target.value); saveChangesDebounced(localNodes, localConnections, localWorkflowConfig, e.target.value); }}
               className="font-bold text-base h-8 border-transparent focus-visible:border-slate-200 focus-visible:ring-0 p-0 w-64 shadow-none bg-transparent hover:bg-slate-50 rounded-lg px-2"
             />
             <div className="flex items-center gap-2 px-2">
@@ -778,6 +787,10 @@ export function UnifiedSequenceBuilder({
               Execuções
             </button>
           </div>
+          <Button variant="outline" onClick={() => setWorkflowSettingsOpen(true)} className="rounded-xl border-slate-200 hover:bg-slate-50 gap-2 h-9 px-4 font-semibold text-slate-700">
+             <Settings className="h-4 w-4" />
+             Configurações
+          </Button>
           <Button variant="outline" onClick={handleToggleActiveClick} className="rounded-xl border-slate-200 hover:bg-slate-50 gap-2 h-9 px-4 font-semibold text-slate-700">
             {isActive ? <Pause className="h-4 w-4 text-amber-500" /> : <Play className="h-4 w-4 text-emerald-500" />}
             {isActive ? "Pausar" : "Ativar"}
@@ -1133,7 +1146,7 @@ export function UnifiedSequenceBuilder({
                         <>{/* Handles moved to inline flow inside the node body to prevent overlapping */}</>
                       ) : (
                         randomizerBranches.map((branch, i) => {
-                          const portCoords = getPortCoords(node.id, branch.id, 220, 45);
+                          const portY = RANDOMIZER_PORT_BASE_Y + i * RANDOMIZER_PORT_SPACING;
                           return (
                             <Fragment key={branch.id}>
                               <div
@@ -1601,8 +1614,6 @@ export function UnifiedSequenceBuilder({
           onCancel={handleFloatingPickerCancel}
         />
       )}
-
-      {/* The node editor is now a left-aligned Sheet handled by NodeEditorModal */}
 
       {/* Delete node confirmation */}
       <AlertDialog open={!!nodeIdPendingDelete} onOpenChange={(open) => { if (!open) setNodeIdPendingDelete(null); }}>

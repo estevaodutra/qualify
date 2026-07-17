@@ -51,14 +51,15 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
   const persistedTrigger = nodes.find(n => n.nodeType === TRIGGER_NODE_TYPE);
 
   const initialNodes: LocalNode[] = nodes.map(n => liftLegacyNode({
-    id: n.id, nodeType: n.nodeType, nodeOrder: n.nodeOrder, config: n.config, positionX: n.positionX, positionY: n.positionY,
+    ...n,
+    id: n.id,
+    nodeType: (n as any).node_type as any,
+    positionX: (n as any).position_x,
+    positionY: (n as any).position_y,
+    nodeOrder: (n as any).node_order,
+    config: (n.config as any) || {},
   }));
 
-  // For sequences saved before the Start node existed, seed its config from
-  // the legacy trigger_type/trigger_config columns so the first load already
-  // shows the real trigger instead of a blank "Início" placeholder -- the
-  // node.config becomes the editable source of truth from here on, the
-  // columns are kept as a derived mirror written back on save.
   if (!persistedTrigger) {
     initialNodes.unshift({
       id: "trigger",
@@ -67,8 +68,11 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
       positionX: 50,
       positionY: 150,
       config: {
-        triggerType: (sequence.triggerType as TriggerType) || "manual",
-        triggerConfig: (sequence.triggerConfig as TriggerConfig) || {},
+        triggers: [{
+          id: Math.random().toString(36).substring(2, 9),
+          type: (sequence.triggerType as TriggerType) || "manual",
+          config: {}
+        }]
       },
     });
   }
@@ -77,11 +81,22 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
     sourceNodeId: c.sourceNodeId, targetNodeId: c.targetNodeId, conditionPath: c.conditionPath || undefined,
   }));
 
-  const handleSave = async (name: string, localNodes: LocalNode[], localConnections: { sourceNodeId: string; targetNodeId: string; conditionPath?: string }[]) => {
+  const handleSave = async (
+    name: string, 
+    localNodes: LocalNode[], 
+    localConnections: { sourceNodeId: string; targetNodeId: string; conditionPath?: string }[],
+    workflowConfig: Record<string, unknown>
+  ) => {
     const triggerNode = localNodes.find(n => n.nodeType === TRIGGER_NODE_TYPE);
     const triggerType = (triggerNode?.config.triggerType as TriggerType) || "manual";
-    const triggerConfig = (triggerNode?.config.triggerConfig as TriggerConfig) || {};
-    await onUpdate({ id: sequence.id, updates: { name, triggerType, triggerConfig: triggerConfig as Record<string, unknown> } });
+    await onUpdate({ 
+      id: sequence.id, 
+      updates: { 
+        name, 
+        triggerType, 
+        triggerConfig: workflowConfig 
+      } 
+    });
     const idMapping = await saveNodes(localNodes.map(lowerToLegacyNode).map(node => ({
       localId: node.id, nodeType: node.nodeType, positionX: node.positionX || 0, positionY: node.positionY || 0, nodeOrder: node.nodeOrder, config: node.config,
     })));
@@ -252,6 +267,7 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
       initialConnections={initialConnections}
       isSaving={isSaving}
       isLoading={isLoading}
+      workflowConfig={(sequence.triggerConfig as Record<string, unknown>) || {}}
     />
   );
 }

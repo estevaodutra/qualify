@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import { TriggerTypeSelector } from "@/components/sequences/triggers/TriggerTypeSelector";
 import { getTriggerDefinition } from "@/components/sequences/triggers/triggerDefinitions";
-import { WebhookGroupScopeConfig } from "@/components/sequences/triggers/configs/WebhookGroupScopeConfig";
 import { WebhookFieldMappings } from "./WebhookFieldMappings";
 import type { TriggerType, TriggerConfig } from "./triggerTypes";
 
@@ -135,13 +134,7 @@ export function GroupTriggerConfigCard({
               />
             )}
 
-            {(triggerConfig.isGroup ?? true) && (
-              <WebhookGroupScopeConfig
-                campaignId={campaignId}
-                config={triggerConfig}
-                onChange={(scope) => onTriggerConfigChange({ ...triggerConfig, ...scope })}
-              />
-            )}
+
 
             {triggerType === "manual" && (
               <div className="p-3 rounded-lg bg-background border">

@@ -25,7 +25,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { TriggerTypeSelector } from "@/components/sequences/triggers/TriggerTypeSelector";
-import { WebhookGroupScopeConfig } from "@/components/sequences/triggers/configs/WebhookGroupScopeConfig";
 import { ScheduledTriggerConfig } from "@/components/sequences/triggers/configs/ScheduledTriggerConfig";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
@@ -585,14 +584,6 @@ export function NodeEditorModal({
                               onChange={handleTriggerConfigChange}
                             />
                           </div>
-                        )}
-
-                        {(triggerConfig.isGroup ?? true) && campaignId && (
-                          <WebhookGroupScopeConfig
-                            campaignId={campaignId}
-                            config={triggerConfig}
-                            onChange={(scope) => handleTriggerConfigChange({ ...triggerConfig, ...scope })}
-                          />
                         )}
                       </div>
                     );
