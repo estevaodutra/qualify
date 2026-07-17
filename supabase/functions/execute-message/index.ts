@@ -1078,7 +1078,20 @@ Deno.serve(async (req) => {
             status: "success", startedAt: nodeStartedAt,
             input: triggerContext || {}, output: triggerContext || {},
           });
-          const nextConn = connections.find(c => c.source_node_id === node.id);
+          
+          const tId = triggerContext?.triggerId as string | undefined;
+          let nextConn = null;
+          
+          if (tId) {
+            // Priority 1: Match connection with condition_path equal to triggerId
+            nextConn = connections.find(c => c.source_node_id === node.id && c.condition_path === tId);
+          }
+          
+          if (!nextConn) {
+            // Priority 2: Match any connection (fallback)
+            nextConn = connections.find(c => c.source_node_id === node.id);
+          }
+          
           currentNodeId = nextConn ? nextConn.target_node_id : null;
           nodesProcessed++;
           continue;

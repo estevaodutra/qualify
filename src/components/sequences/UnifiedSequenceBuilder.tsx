@@ -1208,6 +1208,17 @@ export function UnifiedSequenceBuilder({
                                   </div>
                                   <button
                                     type="button"
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      await handleManualTriggerExecution(trigger.id);
+                                    }}
+                                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                    title="Executar agora (teste manual)"
+                                  >
+                                    <Play className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       updateNodesAndSave(prev => prev.map(n => 
@@ -1668,6 +1679,7 @@ export function UnifiedSequenceBuilder({
         config={localWorkflowConfig}
         onChange={(newConfig) => updateWorkflowConfigAndSave(() => newConfig)}
         isGroup={!!campaignId}
+        campaignId={campaignId}
       />
     </div>
   );

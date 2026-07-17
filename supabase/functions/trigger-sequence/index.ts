@@ -101,6 +101,10 @@ Deno.serve(async (req) => {
 
     console.log(`[TriggerSequence] Received request for sequence: ${sequenceId}`);
 
+    // Extract triggerId if provided (used to select specific branch from trigger node)
+    const url = new URL(req.url);
+    const triggerIdFromUrl = url.searchParams.get("triggerId");
+
     // Parse the incoming payload
     let payload: Record<string, unknown> = {};
     try {
@@ -305,10 +309,11 @@ Deno.serve(async (req) => {
         sendPrivate: !shouldSendToGroup,
         customFields,
         webhookPayload,
+        triggerId: triggerIdFromUrl || payload.triggerId || payload.trigger_id,
       };
 
       const executePayload = {
-        campaignId: typedCampaign.id,
+        campaignId: typedCampaign.id || typedSequence.id,
         sequenceId: typedSequence.id,
         triggerContext,
       };
