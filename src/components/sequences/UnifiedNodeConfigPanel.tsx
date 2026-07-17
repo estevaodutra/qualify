@@ -16,6 +16,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import {
   Plus, Trash2, Zap, Play, Send,
@@ -560,286 +561,17 @@ export function UnifiedNodeConfigPanel({
 
   const isGroup = isGroupProp !== undefined ? isGroupProp : mode === "group";
 
-  const openActionDialog = (index: number) => {
-    setEditingOptionIndex(index);
-    setActionDialogOpen(true);
-  };
-
-  const renderMediaField = (mediaType: string, placeholder: string) => {
-    if (renderMediaUploader) {
-      return renderMediaUploader({
-        mediaType,
-        currentUrl: (currentConfig.url as string) || "",
-        onUpload: (url, filename) => {
-          const updates: Record<string, unknown> = { url };
-          if (filename) updates.filename = filename;
-          updateMultipleConfigs(updates);
-        },
-        onUrlChange: (url) => updateConfig("url", url),
-        placeholder,
-      });
-    }
+  
+  const renderMessageSpecificFields = (
+    type: string,
+    currentConfig: any,
+    updateConfig: (key: string, value: unknown) => void,
+    updateMultipleConfigs: (updates: Record<string, unknown>) => void
+  ) => {
     return (
-      <Input
-        placeholder={placeholder}
-        value={(currentConfig.url as string) || ""}
-        onChange={e => updateConfig("url", e.target.value)}
-      />
-    );
-  };
-
-  return (
-    <div className="flex flex-col">
-      <div className="px-6 pt-6 pb-3 shrink-0 border-b border-border">
-        <div className="flex items-center gap-2">
-          {editingMessageId ? (
-            <button 
-              onClick={() => setEditingMessageId(null)}
-              className="flex items-center gap-2 hover:bg-slate-100 p-1.5 -ml-1.5 rounded-md transition-colors"
-            >
-              <div className="bg-slate-100 p-1 rounded-md text-slate-500">
-                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6.85355 3.14645C7.04882 3.34171 7.04882 3.65829 6.85355 3.85355L3.70711 7H12.5C12.7761 7 13 7.22386 13 7.5C13 7.77614 12.7761 8 12.5 8H3.70711L6.85355 11.1464C7.04882 11.3417 7.04882 11.6583 6.85355 11.8536C6.65829 12.0488 6.34171 12.0488 6.14645 11.8536L2.14645 7.85355C1.95118 7.65829 1.95118 7.34171 2.14645 7.14645L6.14645 3.14645C6.34171 2.95118 6.65829 2.95118 6.85355 3.14645Z" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
-              </div>
-              <h2 className="text-sm font-semibold text-slate-700">Voltar para Mensagens</h2>
-            </button>
-          ) : (
-            <>
-              <Icon className="h-4 w-4" />
-              <h2 className="text-sm font-semibold">{nodeInfo.title}</h2>
-            </>
-          )}
-        </div>
-      </div>
-      <div className="px-6 py-6">
-        <div className="space-y-4">
-            {/* Node Label/Name */}
-            {node.nodeType !== "content" && (
-              <>
-                <div className="space-y-2">
-                  <Label className="text-xs font-medium text-muted-foreground">Nome do componente</Label>
-                  <Input
-                    placeholder={nodeInfo.title}
-                    value={(currentConfig.label as string) || ""}
-                    onChange={e => updateConfig("label", e.target.value)}
-                    className="h-8 text-sm"
-                  />
-                </div>
-                <Separator />
-              </>
-            )}
-
-
-            {/* CONTENT / ACTION sub-type selector */}
-            {/* CONTENT / ACTION sub-type selector */}
-            {resolvedNodeType === "content" && (() => {
-              const block = getNodeBlockDefinition(node.nodeType)!;
-              const messages = (node.config.messages as any[]) || [];
-              const hasUserInput = messages.some(m => m.type === "user_input");
-              
-              const handleAddAction = (subType: string) => {
-                const messageId = Math.random().toString(36).substring(2, 9);
-                const newAction = {
-                  id: messageId,
-                  type: subType,
-                  ...getDefaultConfigForSubType("content", subType)
-                };
-                onUpdate({ ...node.config, messages: [...messages, newAction] });
-                setEditingMessageId(messageId);
-              };
-
-              const handleDeleteAction = (e: React.MouseEvent, id: string) => {
-                e.stopPropagation();
-                onUpdate({ ...node.config, messages: messages.filter(m => m.id !== id) });
-              };
-
-              const handleDuplicateAction = (e: React.MouseEvent, msg: any) => {
-                e.stopPropagation();
-                const newId = Math.random().toString(36).substring(2, 9);
-                onUpdate({ ...node.config, messages: [...messages, { ...msg, id: newId }] });
-              };
-
-              const moveAction = (e: React.MouseEvent, index: number, direction: 'up' | 'down') => {
-                e.stopPropagation();
-                const newMessages = [...messages];
-                if (direction === 'up' && index > 0) {
-                  const temp = newMessages[index - 1];
-                  newMessages[index - 1] = newMessages[index];
-                  newMessages[index] = temp;
-                } else if (direction === 'down' && index < messages.length - 1) {
-                  const temp = newMessages[index + 1];
-                  newMessages[index + 1] = newMessages[index];
-                  newMessages[index] = temp;
-                }
-                onUpdate({ ...node.config, messages: newMessages });
-              };
-
-              const primaryTypes = ["message", "user_input", "delay", "audio", "document", "dynamic_url"];
-
-              return (
-                <>
-                  <div className="space-y-2 mb-4">
-                    <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                      Conexão
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <HelpCircle className="h-3 w-3" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p className="w-48 text-xs">Deixe em branco para usar a conexão dos blocos anteriores ou da campanha padrão.</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </Label>
-                    <Select
-                      value={(currentConfig.instanceId as string) || "default"}
-                      onValueChange={(val) => updateConfig("instanceId", val === "default" ? "" : val)}
-                    >
-                      <SelectTrigger className="w-full bg-white">
-                        <SelectValue placeholder="Selecionar" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="default">Selecionar (Padrão)</SelectItem>
-                        {activeInstances.map(inst => (
-                          <SelectItem key={inst.id} value={inst.id}>
-                            <div className="flex items-center gap-2">
-                              <MessageSquare className="h-3.5 w-3.5 text-success" />
-                              {inst.name}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-3 mb-6 bg-slate-50/50 border border-slate-200 rounded-xl p-3">
-                     {messages.length === 0 ? (
-                       <div className="text-xs text-center text-muted-foreground py-4">
-                         Nenhuma mensagem adicionada.
-                       </div>
-                     ) : (
-                       <div className="space-y-2 flex flex-col">
-                         {messages.map((msg, idx) => {
-                           const subInfo = block.subTypes?.find(s => s.subType === msg.type);
-                           const MsgIcon = subInfo?.icon || MessageSquare;
-                           return (
-                             <div key={msg.id} className="relative flex flex-col">
-                               <div
-                                 onClick={() => setEditingMessageId(msg.id)}
-                                 className="group flex flex-col p-3 border border-slate-200 rounded-lg hover:border-[#8A3CFF]/50 bg-white hover:bg-slate-50 cursor-pointer transition-colors shadow-sm"
-                               >
-                                 <div className="flex items-center justify-between">
-                                   <div className="flex items-center gap-3">
-                                     <div className={cn("p-1.5 rounded-md text-white shrink-0", subInfo?.color || "bg-slate-500")}>
-                                       <MsgIcon className="h-4 w-4" />
-                                     </div>
-                                     <div className="flex flex-col min-w-0">
-                                       <span className="text-[11px] font-bold text-slate-800">{subInfo?.label || "Desconhecido"}</span>
-                                       <span className="text-[9px] text-slate-500 truncate max-w-[130px]">{msg.content || msg.question || msg.url || "Configurar..."}</span>
-                                     </div>
-                                   </div>
-                                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                     <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-slate-800" onClick={(e) => moveAction(e, idx, 'up')} disabled={idx === 0}>
-                                       <ArrowUp className="h-3 w-3" />
-                                     </Button>
-                                     <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-slate-800" onClick={(e) => moveAction(e, idx, 'down')} disabled={idx === messages.length - 1}>
-                                       <ArrowDown className="h-3 w-3" />
-                                     </Button>
-                                     <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400" onClick={(e) => handleDuplicateAction(e, msg)}>
-                                       <Copy className="h-3 w-3" />
-                                     </Button>
-                                     <Button variant="ghost" size="icon" className="h-6 w-6 text-red-400 hover:bg-red-50 hover:text-red-600" onClick={(e) => handleDeleteAction(e, msg.id)}>
-                                       <Trash2 className="h-3 w-3" />
-                                     </Button>
-                                   </div>
-                                 </div>
-                               </div>
-                             </div>
-                           );
-                         })}
-                         {hasUserInput && (
-                           <div className="flex flex-col items-center justify-center mt-1 p-2.5 border border-dashed border-[#8A3CFF]/40 bg-[#8A3CFF]/5 rounded-lg">
-                             <div className="text-[10px] font-semibold text-[#8A3CFF] mb-1.5 flex items-center gap-1.5">
-                               <MessageSquare className="h-3 w-3" /> Resposta do usuário
-                             </div>
-                             <Button variant="outline" size="sm" className="h-6 text-[9px] bg-white text-[#8A3CFF] border-[#8A3CFF]/20 hover:bg-[#8A3CFF]/10 rounded-md">
-                               <Plus className="h-3 w-3 mr-1"/> Adicionar botão
-                             </Button>
-                           </div>
-                         )}
-                       </div>
-                     )}
-                  </div>
-
-                  <div className="space-y-3 pb-2">
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" className="w-full flex items-center gap-2 border-dashed border-slate-300 hover:border-[#8A3CFF]/50 hover:bg-[#8A3CFF]/5 text-slate-600 hover:text-[#8A3CFF] transition-all">
-                          <Plus className="h-4 w-4" />
-                          Adicionar ação
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[320px] p-0" align="center">
-                        <Command>
-                          <CommandInput placeholder="Buscar ação..." className="h-9 text-xs" />
-                          <CommandList className="max-h-[300px]">
-                            <CommandEmpty className="py-6 text-center text-xs text-slate-500">
-                              Nenhuma ação encontrada.
-                            </CommandEmpty>
-                            
-                            <CommandGroup heading="Principais" className="text-xs text-slate-500">
-                              {block.subTypes!
-                                .filter(sub => primaryTypes.includes(sub.subType))
-                                .map((sub) => {
-                                  const SubIcon = sub.icon;
-                                  return (
-                                    <CommandItem
-                                      key={sub.subType}
-                                      value={sub.label}
-                                      onSelect={() => handleAddAction(sub.subType)}
-                                      className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
-                                    >
-                                      <div className={cn("p-1.5 rounded-md shrink-0 text-white shadow-sm", sub.color)}>
-                                        <SubIcon className="h-3.5 w-3.5" />
-                                      </div>
-                                      <span className="text-sm font-semibold text-slate-700">{sub.label}</span>
-                                    </CommandItem>
-                                  );
-                              })}
-                            </CommandGroup>
-
-                            <CommandGroup heading="Avançados" className="text-xs text-slate-500 mt-1 border-t border-slate-100">
-                              {block.subTypes!
-                                .filter(sub => !primaryTypes.includes(sub.subType) && !(sub.subType === "poll" && !isGroup))
-                                .map((sub) => {
-                                  const SubIcon = sub.icon;
-                                  return (
-                                    <CommandItem
-                                      key={sub.subType}
-                                      value={sub.label}
-                                      onSelect={() => handleAddAction(sub.subType)}
-                                      className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
-                                    >
-                                      <div className={cn("p-1.5 rounded-md shrink-0 text-white shadow-sm", sub.color)}>
-                                        <SubIcon className="h-3.5 w-3.5" />
-                                      </div>
-                                      <span className="text-sm font-semibold text-slate-700">{sub.label}</span>
-                                    </CommandItem>
-                                  );
-                              })}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <Separator className="mt-4" />
-                </>
-              );
-            })()}
-
+      <>
           {/* MESSAGE */}
-          {resolvedNodeType === "message" && (
+          {type === "message" && (
             <>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -896,7 +628,7 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {/* IMAGE */}
-          {resolvedNodeType === "image" && (
+          {type === "image" && (
             <>
               <div className="space-y-2">
                 <Label>{isGroup ? "Mídia" : "URL da Mídia"}</Label>
@@ -948,7 +680,7 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {/* VIDEO */}
-          {resolvedNodeType === "video" && (
+          {type === "video" && (
             <>
               <div className="space-y-2">
                 <Label>{isGroup ? "Mídia" : "URL da Mídia"}</Label>
@@ -1010,7 +742,7 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {/* AUDIO */}
-          {resolvedNodeType === "audio" && (
+          {type === "audio" && (
             <>
               <div className="space-y-2">
                 <Label>{isGroup ? "Áudio" : "URL da Mídia"}</Label>
@@ -1072,7 +804,7 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {/* DOCUMENT */}
-          {resolvedNodeType === "document" && (
+          {type === "document" && (
             <>
               <div className="space-y-2">
                 <Label>{isGroup ? "Documento" : "URL da Mídia"}</Label>
@@ -1132,7 +864,7 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {/* STICKER */}
-          {resolvedNodeType === "sticker" && (
+          {type === "sticker" && (
             <>
               <div className="space-y-2">
                 <Label>Sticker</Label>
@@ -1162,12 +894,12 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {/* POLL - Group only */}
-          {resolvedNodeType === "poll" && !isGroup && (
+          {type === "poll" && !isGroup && (
             <div className="p-4 bg-yellow-500/10 text-yellow-600 rounded-xl border border-yellow-500/20 text-sm">
               Enquetes estão disponíveis apenas quando a automação está habilitada para grupos. Ative o modo grupo no gatilho principal.
             </div>
           )}
-          {resolvedNodeType === "poll" && isGroup && (
+          {type === "poll" && isGroup && (
             <>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -1286,7 +1018,7 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {/* BUTTONS */}
-          {resolvedNodeType === "buttons" && (() => {
+          {type === "buttons" && (() => {
             if (isGroup) {
               type ButtonAction = { id: string; label: string; type: "REPLY" | "CALL" | "URL"; phone?: string; url?: string; };
               const buttons = (currentConfig.buttons as ButtonAction[]) || [];
@@ -1410,7 +1142,7 @@ export function UnifiedNodeConfigPanel({
           })()}
 
           {/* LIST */}
-          {resolvedNodeType === "list" && (() => {
+          {type === "list" && (() => {
             if (isGroup) {
               return (
                 <>
@@ -1492,7 +1224,7 @@ export function UnifiedNodeConfigPanel({
           })()}
 
           {/* LOCATION - Group only */}
-          {resolvedNodeType === "location" && isGroup && (
+          {type === "location" && isGroup && (
             <>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-2">
@@ -1516,7 +1248,7 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {/* CONTACT - Group only */}
-          {resolvedNodeType === "contact" && isGroup && (
+          {type === "contact" && isGroup && (
             <>
               <div className="space-y-2">
                 <Label>Nome Completo</Label>
@@ -1538,7 +1270,7 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {/* EVENT - Group only */}
-          {resolvedNodeType === "event" && isGroup && (
+          {type === "event" && isGroup && (
             <>
               <div className="space-y-2">
                 <Label>Nome do Evento</Label>
@@ -1564,7 +1296,7 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {/* DYNAMIC URL */}
-          {resolvedNodeType === "dynamic_url" && (
+          {type === "dynamic_url" && (
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>URL Base</Label>
@@ -1605,7 +1337,7 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {/* USER INPUT */}
-          {resolvedNodeType === "user_input" && (
+          {type === "user_input" && (
             <div className="space-y-4">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -1664,7 +1396,7 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {/* DELAY */}
-          {resolvedNodeType === "delay" && (() => {
+          {type === "delay" && (() => {
             if (isGroup) {
               return (
                 <>
@@ -1992,7 +1724,7 @@ export function UnifiedNodeConfigPanel({
           })()}
 
           {/* ACTION - Add/Remove Tag, Move Deal Stage */}
-          {(resolvedNodeType === "tag_add" || resolvedNodeType === "tag_remove") && (
+          {(type === "tag_add" || type === "tag_remove") && (
             <div className="space-y-2">
               <Label>Nome da Tag / Etiqueta</Label>
               <Input 
@@ -2004,7 +1736,7 @@ export function UnifiedNodeConfigPanel({
             </div>
           )}
 
-          {resolvedNodeType === "deal_move" && (
+          {type === "deal_move" && (
             <div className="space-y-2">
               <Label>Mover para Etapa do CRM</Label>
               <Select value={(currentConfig.stageId as string) || ""} onValueChange={v => updateConfig("stageId", v)}>
@@ -2020,7 +1752,7 @@ export function UnifiedNodeConfigPanel({
             </div>
           )}
 
-          {resolvedNodeType === "channel_select" && (
+          {type === "channel_select" && (
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Selecionar Instância de Envio (WhatsApp)</Label>
@@ -2716,6 +2448,292 @@ export function UnifiedNodeConfigPanel({
               </div>
             </>
           )}
+
+      </>
+    );
+  };
+
+  const openActionDialog = (index: number) => {
+    setEditingOptionIndex(index);
+    setActionDialogOpen(true);
+  };
+
+  const renderMediaField = (mediaType: string, placeholder: string) => {
+    if (renderMediaUploader) {
+      return renderMediaUploader({
+        mediaType,
+        currentUrl: (currentConfig.url as string) || "",
+        onUpload: (url, filename) => {
+          const updates: Record<string, unknown> = { url };
+          if (filename) updates.filename = filename;
+          updateMultipleConfigs(updates);
+        },
+        onUrlChange: (url) => updateConfig("url", url),
+        placeholder,
+      });
+    }
+    return (
+      <Input
+        placeholder={placeholder}
+        value={(currentConfig.url as string) || ""}
+        onChange={e => updateConfig("url", e.target.value)}
+      />
+    );
+  };
+
+  return (
+    <div className="flex flex-col">
+      <div className="px-6 pt-6 pb-3 shrink-0 border-b border-border">
+        <div className="flex items-center gap-2">
+          {editingMessageId ? (
+            <button 
+              onClick={() => setEditingMessageId(null)}
+              className="flex items-center gap-2 hover:bg-slate-100 p-1.5 -ml-1.5 rounded-md transition-colors"
+            >
+              <div className="bg-slate-100 p-1 rounded-md text-slate-500">
+                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6.85355 3.14645C7.04882 3.34171 7.04882 3.65829 6.85355 3.85355L3.70711 7H12.5C12.7761 7 13 7.22386 13 7.5C13 7.77614 12.7761 8 12.5 8H3.70711L6.85355 11.1464C7.04882 11.3417 7.04882 11.6583 6.85355 11.8536C6.65829 12.0488 6.34171 12.0488 6.14645 11.8536L2.14645 7.85355C1.95118 7.65829 1.95118 7.34171 2.14645 7.14645L6.14645 3.14645C6.34171 2.95118 6.65829 2.95118 6.85355 3.14645Z" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
+              </div>
+              <h2 className="text-sm font-semibold text-slate-700">Voltar para Mensagens</h2>
+            </button>
+          ) : (
+            <>
+              <Icon className="h-4 w-4" />
+              <h2 className="text-sm font-semibold">{nodeInfo.title}</h2>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="px-6 py-6">
+        <div className="space-y-4">
+            {/* Node Label/Name */}
+            {node.nodeType !== "content" && (
+              <>
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium text-muted-foreground">Nome do componente</Label>
+                  <Input
+                    placeholder={nodeInfo.title}
+                    value={(currentConfig.label as string) || ""}
+                    onChange={e => updateConfig("label", e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <Separator />
+              </>
+            )}
+
+
+            {/* CONTENT / ACTION sub-type selector */}
+            {/* CONTENT / ACTION sub-type selector */}
+            {resolvedNodeType === "content" && (() => {
+              const block = getNodeBlockDefinition(node.nodeType)!;
+              const messages = (node.config.messages as any[]) || [];
+              const hasUserInput = messages.some(m => m.type === "user_input");
+              
+              const handleAddAction = (subType: string) => {
+                const messageId = Math.random().toString(36).substring(2, 9);
+                const newAction = {
+                  id: messageId,
+                  type: subType,
+                  ...getDefaultConfigForSubType("content", subType)
+                };
+                onUpdate({ ...node.config, messages: [...messages, newAction] });
+                setEditingMessageId(messageId);
+              };
+
+              const handleDeleteAction = (e: React.MouseEvent, id: string) => {
+                e.stopPropagation();
+                onUpdate({ ...node.config, messages: messages.filter(m => m.id !== id) });
+              };
+
+              const handleDuplicateAction = (e: React.MouseEvent, msg: any) => {
+                e.stopPropagation();
+                const newId = Math.random().toString(36).substring(2, 9);
+                onUpdate({ ...node.config, messages: [...messages, { ...msg, id: newId }] });
+              };
+
+              const moveAction = (e: React.MouseEvent, index: number, direction: 'up' | 'down') => {
+                e.stopPropagation();
+                const newMessages = [...messages];
+                if (direction === 'up' && index > 0) {
+                  const temp = newMessages[index - 1];
+                  newMessages[index - 1] = newMessages[index];
+                  newMessages[index] = temp;
+                } else if (direction === 'down' && index < messages.length - 1) {
+                  const temp = newMessages[index + 1];
+                  newMessages[index + 1] = newMessages[index];
+                  newMessages[index] = temp;
+                }
+                onUpdate({ ...node.config, messages: newMessages });
+              };
+
+              const primaryTypes = ["message", "user_input", "delay", "audio", "document", "dynamic_url"];
+
+              return (
+                <>
+                  <div className="space-y-2 mb-4">
+                    <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                      Conexão
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <HelpCircle className="h-3 w-3" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="w-48 text-xs">Deixe em branco para usar a conexão dos blocos anteriores ou da campanha padrão.</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </Label>
+                    <Select
+                      value={(currentConfig.instanceId as string) || "default"}
+                      onValueChange={(val) => updateConfig("instanceId", val === "default" ? "" : val)}
+                    >
+                      <SelectTrigger className="w-full bg-white">
+                        <SelectValue placeholder="Selecionar" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">Selecionar (Padrão)</SelectItem>
+                        {activeInstances.map(inst => (
+                          <SelectItem key={inst.id} value={inst.id}>
+                            <div className="flex items-center gap-2">
+                              <MessageSquare className="h-3.5 w-3.5 text-success" />
+                              {inst.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-3 mb-6 bg-slate-50/50 border border-slate-200 rounded-xl p-3">
+                     {messages.length === 0 ? (
+                       <div className="text-xs text-center text-muted-foreground py-4">
+                         Nenhuma mensagem adicionada.
+                       </div>
+                     ) : (
+                       <Accordion type="single" collapsible value={editingMessageId || ""} onValueChange={(val) => setEditingMessageId(val || null)} className="space-y-2 flex flex-col">
+                         {messages.map((msg, idx) => {
+                           const subInfo = block.subTypes?.find(s => s.subType === msg.type);
+                           const MsgIcon = subInfo?.icon || MessageSquare;
+                           return (
+                             <AccordionItem key={msg.id} value={msg.id} className="relative flex flex-col border-none">
+                               <AccordionTrigger
+                                 className="group flex flex-col p-3 border border-slate-200 rounded-lg hover:border-[#8A3CFF]/50 bg-white hover:bg-slate-50 transition-colors shadow-sm [&[data-state=open]]:border-[#8A3CFF] hover:no-underline"
+                               >
+                                 <div className="flex items-center justify-between w-full">
+                                   <div className="flex items-center gap-3">
+                                     <div className={cn("p-1.5 rounded-md text-white shrink-0", subInfo?.color || "bg-slate-500")}>
+                                       <MsgIcon className="h-4 w-4" />
+                                     </div>
+                                     <div className="flex flex-col min-w-0 text-left">
+                                       <span className="text-[11px] font-bold text-slate-800">{subInfo?.label || "Desconhecido"}</span>
+                                       <span className="text-[9px] text-slate-500 truncate max-w-[130px] font-normal">{msg.content || msg.question || msg.url || "Configurar..."}</span>
+                                     </div>
+                                   </div>
+                                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                     <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-slate-800" onClick={(e) => { e.stopPropagation(); moveAction(e, idx, 'up'); }} disabled={idx === 0}>
+                                       <ArrowUp className="h-3 w-3" />
+                                     </Button>
+                                     <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-slate-800" onClick={(e) => { e.stopPropagation(); moveAction(e, idx, 'down'); }} disabled={idx === messages.length - 1}>
+                                       <ArrowDown className="h-3 w-3" />
+                                     </Button>
+                                     <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400" onClick={(e) => { e.stopPropagation(); handleDuplicateAction(e, msg); }}>
+                                       <Copy className="h-3 w-3" />
+                                     </Button>
+                                     <Button variant="ghost" size="icon" className="h-6 w-6 text-red-400 hover:bg-red-50 hover:text-red-600" onClick={(e) => { e.stopPropagation(); handleDeleteAction(e, msg.id); }}>
+                                       <Trash2 className="h-3 w-3" />
+                                     </Button>
+                                   </div>
+                                 </div>
+                               </AccordionTrigger>
+                               <AccordionContent className="pt-4 pb-2 px-1">
+                                 {editingMessageId === msg.id && renderMessageSpecificFields(msg.type, msg, updateConfig, updateMultipleConfigs)}
+                               </AccordionContent>
+                             </AccordionItem>
+                           );
+                         })}
+                         {hasUserInput && (
+                           <div className="flex flex-col items-center justify-center mt-1 p-2.5 border border-dashed border-[#8A3CFF]/40 bg-[#8A3CFF]/5 rounded-lg">
+                             <div className="text-[10px] font-semibold text-[#8A3CFF] mb-1.5 flex items-center gap-1.5">
+                               <MessageSquare className="h-3 w-3" /> Resposta do usuário
+                             </div>
+                             <Button variant="outline" size="sm" className="h-6 text-[9px] bg-white text-[#8A3CFF] border-[#8A3CFF]/20 hover:bg-[#8A3CFF]/10 rounded-md">
+                               <Plus className="h-3 w-3 mr-1"/> Adicionar botão
+                             </Button>
+                           </div>
+                         )}
+                       </div>
+                     )}
+                  </div>
+
+                  <div className="space-y-3 pb-2">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="w-full flex items-center gap-2 border-dashed border-slate-300 hover:border-[#8A3CFF]/50 hover:bg-[#8A3CFF]/5 text-slate-600 hover:text-[#8A3CFF] transition-all">
+                          <Plus className="h-4 w-4" />
+                          Adicionar ação
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[320px] p-0" align="center">
+                        <Command>
+                          <CommandInput placeholder="Buscar ação..." className="h-9 text-xs" />
+                          <CommandList className="max-h-[300px]">
+                            <CommandEmpty className="py-6 text-center text-xs text-slate-500">
+                              Nenhuma ação encontrada.
+                            </CommandEmpty>
+                            
+                            <CommandGroup heading="Principais" className="text-xs text-slate-500">
+                              {block.subTypes!
+                                .filter(sub => primaryTypes.includes(sub.subType))
+                                .map((sub) => {
+                                  const SubIcon = sub.icon;
+                                  return (
+                                    <CommandItem
+                                      key={sub.subType}
+                                      value={sub.label}
+                                      onSelect={() => handleAddAction(sub.subType)}
+                                      className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
+                                    >
+                                      <div className={cn("p-1.5 rounded-md shrink-0 text-white shadow-sm", sub.color)}>
+                                        <SubIcon className="h-3.5 w-3.5" />
+                                      </div>
+                                      <span className="text-sm font-semibold text-slate-700">{sub.label}</span>
+                                    </CommandItem>
+                                  );
+                              })}
+                            </CommandGroup>
+
+                            <CommandGroup heading="Avançados" className="text-xs text-slate-500 mt-1 border-t border-slate-100">
+                              {block.subTypes!
+                                .filter(sub => !primaryTypes.includes(sub.subType) && !(sub.subType === "poll" && !isGroup))
+                                .map((sub) => {
+                                  const SubIcon = sub.icon;
+                                  return (
+                                    <CommandItem
+                                      key={sub.subType}
+                                      value={sub.label}
+                                      onSelect={() => handleAddAction(sub.subType)}
+                                      className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
+                                    >
+                                      <div className={cn("p-1.5 rounded-md shrink-0 text-white shadow-sm", sub.color)}>
+                                        <SubIcon className="h-3.5 w-3.5" />
+                                      </div>
+                                      <span className="text-sm font-semibold text-slate-700">{sub.label}</span>
+                                    </CommandItem>
+                                  );
+                              })}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <Separator className="mt-4" />
+                </>
+              );
+            })()}
+
+          {renderMessageSpecificFields(resolvedNodeType, currentConfig, updateConfig, updateMultipleConfigs)}
 
           {/* Schedule & Manual Send Section */}
           {!editingMessageId && (
