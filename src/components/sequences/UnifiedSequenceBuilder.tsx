@@ -556,6 +556,53 @@ export function UnifiedSequenceBuilder({
     setPanOffset({ x: 80, y: 80 });
   };
 
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest("textarea, .scroll-area, .overflow-y-auto, .overflow-auto, [data-radix-scroll-area-viewport]")) {
+        if (!e.ctrlKey && !e.metaKey) return;
+      }
+
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault(); // Stop browser zoom
+        const zoomFactor = e.deltaY > 0 ? -0.1 : 0.1;
+        
+        setZoom((prevZoom) => {
+          const newZoom = Math.min(Math.max(prevZoom + zoomFactor, 0.4), 1.8);
+          if (newZoom !== prevZoom) {
+            setPanOffset(prevPan => {
+              const rect = canvas.getBoundingClientRect();
+              const mouseX = e.clientX - rect.left;
+              const mouseY = e.clientY - rect.top;
+              
+              const pointX = (mouseX - prevPan.x) / prevZoom;
+              const pointY = (mouseY - prevPan.y) / prevZoom;
+              
+              return {
+                x: mouseX - pointX * newZoom,
+                y: mouseY - pointY * newZoom
+              };
+            });
+          }
+          return newZoom;
+        });
+      } else {
+        // Standard Panning
+        e.preventDefault();
+        setPanOffset(prev => ({
+          x: prev.x - e.deltaX,
+          y: prev.y - e.deltaY
+        }));
+      }
+    };
+
+    canvas.addEventListener("wheel", handleWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", handleWheel);
+  }, []);
+
   // Activating requires a valid flow (configured Start, no isolated nodes,
   // no invalid cycles, etc). Deactivating is always allowed, unconditionally --
   // the "turn it off" path must never be blocked by validation.
