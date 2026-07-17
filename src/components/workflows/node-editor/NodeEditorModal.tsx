@@ -26,6 +26,7 @@ import {
 import { cn } from "@/lib/utils";
 import { TriggerTypeSelector } from "@/components/sequences/triggers/TriggerTypeSelector";
 import { WebhookGroupScopeConfig } from "@/components/sequences/triggers/configs/WebhookGroupScopeConfig";
+import { ScheduledTriggerConfig } from "@/components/sequences/triggers/configs/ScheduledTriggerConfig";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 
@@ -571,6 +572,15 @@ export function NodeEditorModal({
                                 />
                               </div>
                             </div>
+                          </div>
+                        )}
+
+                        {selectorValue === "scheduled" && (
+                          <div className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 space-y-4">
+                            <ScheduledTriggerConfig
+                              config={triggerConfig}
+                              onChange={handleTriggerConfigChange}
+                            />
                           </div>
                         )}
 
