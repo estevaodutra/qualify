@@ -79,7 +79,9 @@ export const TRIGGER_DEFINITIONS: Record<string, TriggerDefinition> = {
       if (type === "schedule_daily") return { title: "Todo dia", subtitle: `às ${firstTime}` };
       if (type === "schedule_week_days") {
         const days = (config.daysOfWeek as string[]) || [];
-        return { title: days.length > 0 ? `${days.length} dia(s) na semana` : "Dias não definidos", subtitle: `às ${firstTime}` };
+        const ptDays: Record<string, string> = { monday: "Seg", tuesday: "Ter", wednesday: "Qua", thursday: "Qui", friday: "Sex", saturday: "Sáb", sunday: "Dom" };
+        const dayNames = days.map(d => ptDays[d]).filter(Boolean);
+        return { title: days.length > 0 ? dayNames.join(", ") : "Dias não definidos", subtitle: `às ${firstTime}` };
       }
       if (type === "schedule_month_days") {
         const days = (config.daysOfMonth as number[]) || [];
