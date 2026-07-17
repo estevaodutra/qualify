@@ -682,7 +682,7 @@ Deno.serve(async (req) => {
             order: node.node_order,
             config: node.config,
           },
-          campaign: { id: typedCampaign.id, name: typedCampaign.name },
+          campaign: { id: typedCampaign.id || typedSequence.id, name: typedCampaign.name || typedSequence.name },
           instance: {
             id: instance.id,
             name: instance.name,
@@ -763,8 +763,8 @@ Deno.serve(async (req) => {
             config: simpleNodeConfig,
           },
           campaign: {
-            id: typedCampaign.id,
-            name: typedCampaign.name,
+            id: typedCampaign.id || typedSequence.id,
+            name: typedCampaign.name || typedSequence.name,
           },
           instance: {
             id: instance.id,
@@ -787,7 +787,7 @@ Deno.serve(async (req) => {
           .from("group_message_logs")
           .insert({
             user_id: userId,
-            group_campaign_id: typedCampaign.id,
+            group_campaign_id: typedCampaign.id || typedSequence.id,
             message_id: typedMessage.id,
             node_type: "simple_message",
             node_order: 0,
@@ -795,7 +795,7 @@ Deno.serve(async (req) => {
             group_name: group.group_name,
             instance_id: instance.id,
             instance_name: instance.name,
-            campaign_name: typedCampaign.name,
+            campaign_name: typedCampaign.name || typedSequence.name,
             status: "sending",
             payload,
           })
@@ -1113,7 +1113,7 @@ Deno.serve(async (req) => {
             const { data: leadData } = await supabase
               .from("leads")
               .select("id, tags, pipeline_stage_id")
-              .eq("company_id", typedCampaign.company_id)
+              .eq("company_id", typedCampaign.company_id || typedSequence.company_id)
               .eq("phone", phoneClean)
               .maybeSingle();
 
@@ -1200,7 +1200,7 @@ Deno.serve(async (req) => {
               const { data: leadData } = await supabase
                 .from("leads")
                 .select("id, name, phone, email, company_name, document, source, tags, custom_fields")
-                .eq("company_id", typedCampaign.company_id)
+                .eq("company_id", typedCampaign.company_id || typedSequence.company_id)
                 .eq("phone", phoneClean)
                 .maybeSingle();
 
@@ -1284,7 +1284,7 @@ Deno.serve(async (req) => {
                       .from("deals")
                       .select("id, title, value, pipeline_id, stage_id")
                       .eq("lead_id", leadData.id)
-                      .eq("company_id", typedCampaign.company_id)
+                      .eq("company_id", typedCampaign.company_id || typedSequence.company_id)
                       .eq("status", "open")
                       .order("created_at", { ascending: false })
                       .limit(1)
@@ -1308,7 +1308,7 @@ Deno.serve(async (req) => {
                       const { data: newDeal } = await supabase
                         .from("deals")
                         .insert({
-                          company_id: typedCampaign.company_id,
+                          company_id: typedCampaign.company_id || typedSequence.company_id,
                           lead_id: leadData.id,
                           title: dealUpdates.title || `Negócio ${leadData.name || leadData.phone}`,
                           value: dealUpdates.value || 0,
@@ -1367,7 +1367,7 @@ Deno.serve(async (req) => {
             const { data: leadData } = await supabase
               .from("leads")
               .select("id, name, phone, email, tags, custom_fields, pipeline_stage_id")
-              .eq("company_id", typedCampaign.company_id)
+              .eq("company_id", typedCampaign.company_id || typedSequence.company_id)
               .eq("phone", phoneClean)
               .maybeSingle();
 
@@ -1401,7 +1401,7 @@ Deno.serve(async (req) => {
             if (mode === "round_robin") {
               const branchIds = branches.map(b => b.id);
               const { data: rpcResult, error: rpcError } = await supabase.rpc("get_next_randomizer_branch", {
-                p_company_id: typedCampaign.company_id,
+                p_company_id: typedCampaign.company_id || typedSequence.company_id,
                 p_sequence_id: effectiveSequenceId,
                 p_node_id: node.id,
                 p_branch_ids: branchIds,
@@ -1556,7 +1556,7 @@ Deno.serve(async (req) => {
             const payload = buildStandardPayload({
               action,
               node: { id: node.id, type: node.node_type, order: node.node_order, config: formattedConfig },
-              campaign: { id: typedCampaign.id, name: typedCampaign.name },
+              campaign: { id: typedCampaign.id || typedSequence.id, name: typedCampaign.name || typedSequence.name },
               instance: {
                 id: activeInstanceId, name: instance.name, phone: instance.phone || "",
                 provider: instance.provider, externalId: instance.external_instance_id || "",
@@ -1570,11 +1570,11 @@ Deno.serve(async (req) => {
             const { data: logEntry } = await supabase
               .from("group_message_logs")
               .insert({
-                user_id: userId, group_campaign_id: typedCampaign.id,
+                user_id: userId, group_campaign_id: typedCampaign.id || typedSequence.id,
                 sequence_id: effectiveSequenceId, node_type: node.node_type,
                 node_order: node.node_order, group_jid: dest.group_jid,
                 group_name: dest.group_name, instance_id: activeInstanceId,
-                instance_name: instance.name, campaign_name: typedCampaign.name,
+                instance_name: instance.name, campaign_name: typedCampaign.name || typedSequence.name,
                 status: "sending", payload,
               })
               .select().single();
@@ -1671,8 +1671,8 @@ Deno.serve(async (req) => {
               customFields: triggerContext.customFields || {},
             } : null,
             campaign: {
-              id: typedCampaign.id,
-              name: typedCampaign.name,
+              id: typedCampaign.id || typedSequence.id,
+              name: typedCampaign.name || typedSequence.name,
             },
             sequence: {
               id: effectiveSequenceId,
@@ -1714,10 +1714,10 @@ Deno.serve(async (req) => {
           const { data: logEntry } = await supabase
             .from("group_message_logs")
             .insert({
-              user_id: userId, group_campaign_id: typedCampaign.id,
+              user_id: userId, group_campaign_id: typedCampaign.id || typedSequence.id,
               sequence_id: effectiveSequenceId, node_type: node.node_type,
               node_order: node.node_order, instance_id: activeInstanceId,
-              instance_name: instance.name, campaign_name: typedCampaign.name,
+              instance_name: instance.name, campaign_name: typedCampaign.name || typedSequence.name,
               status: "sending", payload: forwardPayload,
             })
             .select().single();
@@ -1800,8 +1800,8 @@ Deno.serve(async (req) => {
               config: formattedConfig,
             },
             campaign: {
-              id: typedCampaign.id,
-              name: typedCampaign.name,
+              id: typedCampaign.id || typedSequence.id,
+              name: typedCampaign.name || typedSequence.name,
             },
             instance: {
               id: activeInstanceId,
@@ -1822,7 +1822,7 @@ Deno.serve(async (req) => {
             .from("group_message_logs")
             .insert({
               user_id: userId,
-              group_campaign_id: typedCampaign.id,
+              group_campaign_id: typedCampaign.id || typedSequence.id,
               message_id: typedMessage?.id || null,
               sequence_id: effectiveSequenceId,
               node_type: node.node_type,
@@ -1831,7 +1831,7 @@ Deno.serve(async (req) => {
               group_name: "Status",
               instance_id: activeInstanceId,
               instance_name: instance.name,
-              campaign_name: typedCampaign.name,
+              campaign_name: typedCampaign.name || typedSequence.name,
               status: "sending",
               payload,
             })
@@ -1911,8 +1911,8 @@ Deno.serve(async (req) => {
               config: formattedConfig,
             },
             campaign: {
-              id: typedCampaign.id,
-              name: typedCampaign.name,
+              id: typedCampaign.id || typedSequence.id,
+              name: typedCampaign.name || typedSequence.name,
             },
             instance: {
               id: activeInstanceId,
@@ -1935,7 +1935,7 @@ Deno.serve(async (req) => {
             .from("group_message_logs")
             .insert({
               user_id: userId,
-              group_campaign_id: typedCampaign.id,
+              group_campaign_id: typedCampaign.id || typedSequence.id,
               message_id: typedMessage?.id || null,
               sequence_id: effectiveSequenceId,
               node_type: node.node_type,
@@ -1945,7 +1945,7 @@ Deno.serve(async (req) => {
               recipient_phone: dest.isPrivate ? triggerContext?.respondentPhone : null,
               instance_id: activeInstanceId,
               instance_name: instance.name,
-              campaign_name: typedCampaign.name,
+              campaign_name: typedCampaign.name || typedSequence.name,
               status: "sending",
               payload,
             })
@@ -2015,7 +2015,7 @@ Deno.serve(async (req) => {
                     zaap_id: zaapId,
                     node_id: node.id,
                     sequence_id: effectiveSequenceId,
-                    campaign_id: typedCampaign.id,
+                    campaign_id: typedCampaign.id || typedSequence.id,
                     group_jid: dest.group_jid,
                     instance_id: instance.id,
                     question_text: pollQuestion,
