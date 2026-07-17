@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, ReactNode, Fragment } from "react";
+import { useState, useCallback, useEffect, useLayoutEffect, useRef, ReactNode, Fragment } from "react";
 import { LocalNode, LocalConnection, NodeCategory, RandomizerBranch, TriggerItem } from "./shared-types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -98,6 +98,53 @@ export function UnifiedSequenceBuilder({
   // Dragging nodes
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
   const [nodeDragOffset, setNodeDragOffset] = useState({ x: 0, y: 0 });
+
+  // Port connection coords reading from DOM
+  const portCoordsRef = useRef<Record<string, {x: number, y: number}>>({});
+  const [, setTick] = useState(0);
+
+  useLayoutEffect(() => {
+    const ports = document.querySelectorAll('[data-node-port="true"]');
+    let changed = false;
+    const newCoords = { ...portCoordsRef.current };
+
+    ports.forEach(port => {
+      const nodeId = port.getAttribute('data-node-id');
+      const portId = port.getAttribute('data-port-id');
+      if (!nodeId || !portId) return;
+
+      const nodeEl = document.querySelector(`[data-node-wrapper="${nodeId}"]`);
+      if (!nodeEl) return;
+
+      const portRect = port.getBoundingClientRect();
+      const nodeRect = nodeEl.getBoundingClientRect();
+
+      const scale = zoom || 1;
+      const offsetX = (portRect.left - nodeRect.left + portRect.width / 2) / scale;
+      const offsetY = (portRect.top - nodeRect.top + portRect.height / 2) / scale;
+
+      const key = `${nodeId}-${portId}`;
+      const existing = newCoords[key];
+      
+      if (!existing || Math.abs(existing.x - offsetX) > 1 || Math.abs(existing.y - offsetY) > 1) {
+        newCoords[key] = { x: offsetX, y: offsetY };
+        changed = true;
+      }
+    });
+
+    if (changed) {
+      portCoordsRef.current = newCoords;
+      setTick(t => t + 1);
+    }
+  });
+
+  const getPortCoords = (nodeId: string, portId: string, fallbackX: number, fallbackY: number) => {
+    const coords = portCoordsRef.current[`${nodeId}-${portId}`];
+    return coords ? { x: coords.x, y: coords.y } : { x: fallbackX, y: fallbackY };
+  };
+
+  // Drawing a line in progress
+  const [draggedLine, setDraggedLine] = useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
   
   // Active Connection line state
   const [activePort, setActivePort] = useState<{
@@ -874,35 +921,15 @@ export function UnifiedSequenceBuilder({
                   const tY = tgtNode.positionY || 0;
 
                   // Output port on the right side of the card
-                  let portX1 = sX + (srcNode.nodeType === "trigger" || srcNode.nodeType === "content" ? 320 : 220);
-                  let portY1 = sY + 45;
-                  if (conn.conditionPath === "yes") portY1 = sY + 35;
-                  if (conn.conditionPath === "no") portY1 = sY + 65;
-                  if (srcNode.nodeType === "trigger") {
-                    const triggers = (srcNode.config.triggers as any[]) || [];
-                    const triggerIndex = triggers.findIndex(t => t.id === conn.conditionPath);
-                    if (triggerIndex >= 0) {
-                      portY1 = sY + 112 + (triggerIndex * 72);
-                    }
-                  }
-                  if (srcNode.nodeType === "randomizer") {
-                    const branches = getSortedRandomizerBranches(srcNode);
-                    const idx = branches.findIndex(b => b.id === conn.conditionPath);
-                    if (idx >= 0) portY1 = sY + RANDOMIZER_PORT_BASE_Y + idx * RANDOMIZER_PORT_SPACING;
-                  }
-                  if (srcNode.nodeType === "field_op") {
-                    const mappingsCount = (srcNode.config.mappings as any[])?.length || 0;
-                    if (conn.conditionPath === "error") {
-                      portY1 = sY + 146 + (mappingsCount * 53);
-                    } else {
-                      // Default "Próximo passo" out port
-                      portY1 = sY + 166 + (mappingsCount * 53);
-                    }
-                  }
+                  const portIdOut = conn.conditionPath || "default";
+                  const coordsOut = getPortCoords(srcNode.id, portIdOut, (srcNode.nodeType === "trigger" || srcNode.nodeType === "content" ? 320 : 220), 45);
+                  let portX1 = sX + coordsOut.x;
+                  let portY1 = sY + coordsOut.y;
 
                   // Input port on the left side of target
-                  const portX2 = tX;
-                  const portY2 = tY + 45;
+                  const coordsIn = getPortCoords(tgtNode.id, "in", 0, 45);
+                  const portX2 = tX + coordsIn.x;
+                  const portY2 = tY + coordsIn.y;
 
                   const d = drawBezier(portX1, portY1, portX2, portY2);
                   const midX = (portX1 + portX2) / 2;
@@ -977,6 +1004,7 @@ export function UnifiedSequenceBuilder({
                   return (
                     <div
                       key={node.id}
+                      data-node-wrapper={node.id}
                       style={{
                         position: "absolute",
                         left: posX,
@@ -1056,7 +1084,7 @@ export function UnifiedSequenceBuilder({
                       {/* Input Port (Left Handle) - Excluded for trigger node */}
                       {!isTrigger && (
                         <div
-                          data-node-port="true"
+                          data-node-port="true" data-node-id={node.id} data-port-id="in"
                           onMouseUp={(e) => handlePortMouseUp(e, node.id, "in")}
                           className="absolute -left-1.5 top-[38px] h-3.5 w-3.5 rounded-full border-2 border-slate-300 bg-white hover:bg-[#8A3CFF] cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
                           title="Entrada do fluxo"
@@ -1069,7 +1097,7 @@ export function UnifiedSequenceBuilder({
                       {!isCondition && !isRandomizer && !isFieldOp && !isTrigger ? (
                         <>
                           <div
-                            data-node-port="true"
+                            data-node-port="true" data-node-id={node.id} data-port-id="default"
                             onMouseDown={(e) => handlePortMouseDown(e, node.id, "out")}
                             className="absolute -right-1.5 top-[38px] h-3.5 w-3.5 rounded-full border-2 border-[#8A3CFF] bg-background hover:bg-[#8A3CFF] cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
                             title="Saída do fluxo"
@@ -1081,7 +1109,7 @@ export function UnifiedSequenceBuilder({
                         <>
                           {/* "Sim" (True) output handle */}
                           <div
-                            data-node-port="true"
+                            data-node-port="true" data-node-id={node.id} data-port-id="yes"
                             onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", "yes")}
                             className="absolute -right-1.5 top-[28px] h-3.5 w-3.5 rounded-full border-2 border-emerald-500 bg-background hover:bg-emerald-500 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
                             title="Verdadeiro (Sim)"
@@ -1092,7 +1120,7 @@ export function UnifiedSequenceBuilder({
 
                           {/* "Não" (False) output handle */}
                           <div
-                            data-node-port="true"
+                            data-node-port="true" data-node-id={node.id} data-port-id="no"
                             onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", "no")}
                             className="absolute -right-1.5 top-[58px] h-3.5 w-3.5 rounded-full border-2 border-destructive bg-background hover:bg-destructive cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
                             title="Falso (Não)"
@@ -1105,11 +1133,11 @@ export function UnifiedSequenceBuilder({
                         <>{/* Handles moved to inline flow inside the node body to prevent overlapping */}</>
                       ) : (
                         randomizerBranches.map((branch, i) => {
-                          const portY = RANDOMIZER_PORT_BASE_Y + i * RANDOMIZER_PORT_SPACING;
+                          const portCoords = getPortCoords(node.id, branch.id, 220, 45);
                           return (
                             <Fragment key={branch.id}>
                               <div
-                                data-node-port="true"
+                                data-node-port="true" data-node-id={node.id} data-port-id={branch.id}
                                 onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", branch.id)}
                                 style={{ top: portY }}
                                 className="absolute -right-1.5 h-3.5 w-3.5 rounded-full border-2 border-fuchsia-500 bg-background hover:bg-fuchsia-500 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
@@ -1188,7 +1216,7 @@ export function UnifiedSequenceBuilder({
                                   </div>
                                 )}
                                 <div
-                                  data-node-port="true"
+                                  data-node-port="true" data-node-id={node.id} data-port-id={trigger.id}
                                   onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", trigger.id)}
                                   className="absolute -right-[26px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-[#8A3CFF] bg-background hover:bg-[#8A3CFF] cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
                                   title={`Conectar: ${def?.label || trigger.type}`}
@@ -1317,7 +1345,7 @@ export function UnifiedSequenceBuilder({
                             <div className="relative flex items-center justify-end w-full">
                               <span className="text-[8px] font-bold text-slate-500 select-none mr-2">Caso ocorrer erro na operação de campo</span>
                               <div
-                                data-node-port="true"
+                                data-node-port="true" data-node-id={node.id} data-port-id="error"
                                 onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", "error")}
                                 className="absolute -right-[19.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-destructive bg-background hover:bg-destructive cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
                                 title="Caso ocorrer erro"
@@ -1328,8 +1356,8 @@ export function UnifiedSequenceBuilder({
                             <div className="relative flex items-center justify-end w-full">
                               <span className="text-[8px] font-bold text-slate-500 select-none mr-2">Próximo passo</span>
                               <div
-                                data-node-port="true"
-                                onMouseDown={(e) => handlePortMouseDown(e, node.id, "out")}
+                                data-node-port="true" data-node-id={node.id} data-port-id="default"
+                            onMouseDown={(e) => handlePortMouseDown(e, node.id, "out")}
                                 className="absolute -right-[19.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-blue-500 bg-background hover:bg-blue-500 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
                                 title="Próximo passo"
                               >
@@ -1412,7 +1440,7 @@ export function UnifiedSequenceBuilder({
                               <div className="relative flex items-center justify-end w-full">
                                 <span className="text-[8px] font-bold text-slate-500 select-none mr-2">Caso o contato não responda</span>
                                 <div
-                                  data-node-port="true"
+                                  data-node-port="true" data-node-id={node.id} data-port-id="timeout"
                                   onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", "timeout")}
                                   className="absolute -right-[27.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-amber-500 bg-background hover:bg-amber-500 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
                                   title="Caso o contato não responda"
@@ -1424,7 +1452,7 @@ export function UnifiedSequenceBuilder({
                             <div className="relative flex items-center justify-end w-full">
                               <span className="text-[8px] font-bold text-slate-500 select-none mr-2">Caso ocorrer erro no envio da mensagem</span>
                               <div
-                                data-node-port="true"
+                                data-node-port="true" data-node-id={node.id} data-port-id="error"
                                 onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", "error")}
                                 className="absolute -right-[27.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-destructive bg-background hover:bg-destructive cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
                                 title="Caso ocorrer erro"
@@ -1435,8 +1463,8 @@ export function UnifiedSequenceBuilder({
                             <div className="relative flex items-center justify-end w-full">
                               <span className="text-[8px] font-bold text-slate-500 select-none mr-2">Próximo passo</span>
                               <div
-                                data-node-port="true"
-                                onMouseDown={(e) => handlePortMouseDown(e, node.id, "out")}
+                                data-node-port="true" data-node-id={node.id} data-port-id="default"
+                            onMouseDown={(e) => handlePortMouseDown(e, node.id, "out")}
                                 className="absolute -right-[27.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-blue-500 bg-background hover:bg-blue-500 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
                                 title="Próximo passo"
                               >
