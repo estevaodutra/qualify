@@ -102,7 +102,6 @@ Deno.serve(async (req) => {
     console.log(`[TriggerSequence] Received request for sequence: ${sequenceId}`);
 
     // Extract triggerId if provided (used to select specific branch from trigger node)
-    const url = new URL(req.url);
     const triggerIdFromUrl = url.searchParams.get("triggerId");
 
     // Parse the incoming payload
