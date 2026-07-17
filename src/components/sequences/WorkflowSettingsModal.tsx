@@ -7,6 +7,7 @@ interface WorkflowSettingsModalProps {
   config: Record<string, unknown>;
   onChange: (config: Record<string, unknown>) => void;
   isGroup?: boolean;
+  campaignId?: string;
 }
 
 export function WorkflowSettingsModal({
@@ -15,6 +16,7 @@ export function WorkflowSettingsModal({
   config,
   onChange,
   isGroup = false,
+  campaignId,
 }: WorkflowSettingsModalProps) {
   if (!isOpen) return null;
 
@@ -42,7 +44,7 @@ export function WorkflowSettingsModal({
               <WebhookGroupScopeConfig
                 config={config}
                 onChange={onChange}
-                forceGroup={isGroup}
+                campaignId={campaignId!}
               />
             </div>
           </div>
