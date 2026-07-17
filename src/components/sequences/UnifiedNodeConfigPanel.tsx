@@ -533,7 +533,7 @@ export function UnifiedNodeConfigPanel({
   // node_type (dispatch builder, timeline builder, or an already-saved node
   // predating the consolidation).
   const resolvedNodeType = node.nodeType === "content"
-    ? (editingMessage ? editingMessage.type : "content")
+    ? "content"
     : node.nodeType === "action"
     ? ((node.config.actionType as string) || "tag_add")
     : node.nodeType;
@@ -541,18 +541,10 @@ export function UnifiedNodeConfigPanel({
   const nodeInfo = NODE_TITLES[resolvedNodeType] || NODE_TITLES[node.nodeType] || NODE_TITLES.message;
   const Icon = nodeInfo.icon;
 
-  // Use editingMessage config if editing, else root config
-  const currentConfig = editingMessage || node.config;
+  const currentConfig = node.config;
 
   const updateMultipleConfigs = (updates: Record<string, unknown>) => {
-    if (editingMessageId && Array.isArray(node.config.messages)) {
-      const updatedMessages = node.config.messages.map((m: any) =>
-        m.id === editingMessageId ? { ...m, ...updates } : m
-      );
-      onUpdate({ ...node.config, messages: updatedMessages });
-    } else {
-      onUpdate({ ...node.config, ...updates });
-    }
+    onUpdate({ ...node.config, ...updates });
   };
 
   const updateConfig = (key: string, value: unknown) => {
@@ -2633,7 +2625,18 @@ export function UnifiedNodeConfigPanel({
                                  </div>
                                </AccordionTrigger>
                                <AccordionContent className="pt-4 pb-2 px-1">
-                                 {editingMessageId === msg.id && renderMessageSpecificFields(msg.type, msg, updateConfig, updateMultipleConfigs)}
+                                 {editingMessageId === msg.id && renderMessageSpecificFields(
+                                   msg.type,
+                                   msg,
+                                   (key, val) => {
+                                     const newMsgs = messages.map(m => m.id === msg.id ? { ...m, [key]: val } : m);
+                                     onUpdate({ ...node.config, messages: newMsgs });
+                                   },
+                                   (updates) => {
+                                     const newMsgs = messages.map(m => m.id === msg.id ? { ...m, ...updates } : m);
+                                     onUpdate({ ...node.config, messages: newMsgs });
+                                   }
+                                 )}
                                </AccordionContent>
                              </AccordionItem>
                            );
