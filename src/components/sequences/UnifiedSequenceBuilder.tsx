@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { debounce } from "lodash";
 import { useToast } from "@/hooks/use-toast";
+import { WorkflowSettingsModal } from "./WorkflowSettingsModal";
 import { NodeEditorModal } from "../workflows/node-editor/NodeEditorModal";
 import { cn } from "@/lib/utils";
 import { ExecutionsPanel } from "./executions/ExecutionsPanel";
@@ -1660,6 +1661,14 @@ export function UnifiedSequenceBuilder({
           onManualSendNode={onManualSendNode}
         />
       )}
+
+      <WorkflowSettingsModal
+        isOpen={workflowSettingsOpen}
+        onClose={() => setWorkflowSettingsOpen(false)}
+        config={localWorkflowConfig}
+        onChange={(newConfig) => updateWorkflowConfigAndSave(() => newConfig)}
+        isGroup={!!campaignId}
+      />
     </div>
   );
 }
