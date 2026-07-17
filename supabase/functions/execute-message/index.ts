@@ -469,7 +469,7 @@ Deno.serve(async (req) => {
     }
 
     // Get campaign (left join on instance so we can return a precise error)
-    const { data: campaign, error: campaignError } = await supabase
+    const { data: campaignData, error: campaignError } = await supabase
       .from("group_campaigns")
       .select(`
         id,
@@ -491,16 +491,39 @@ Deno.serve(async (req) => {
       .eq("id", campaignId)
       .maybeSingle();
 
-    if (campaignError || !campaign) {
-      console.error("[ExecuteMessage] Campaign not found:", campaignError, "campaignId:", campaignId);
-      return new Response(
-        JSON.stringify({ error: "Campaign not found", campaignId }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    let typedCampaign: CampaignData;
+    let instance: any = null;
 
-    const typedCampaign = campaign as unknown as CampaignData;
-    let instance = typedCampaign.instances;
+    if (campaignError || !campaignData) {
+      console.log("[ExecuteMessage] Campaign not found, attempting to resolve sequence as fallback campaign", campaignId);
+      const seqId = sequenceId || campaignId;
+      const { data: seqData } = await supabase
+        .from("message_sequences")
+        .select("id, name, user_id, company_id")
+        .eq("id", seqId)
+        .maybeSingle();
+
+      if (!seqData) {
+        return new Response(
+          JSON.stringify({ error: "Campaign/Sequence not found", campaignId }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      typedCampaign = {
+        id: seqData.id,
+        name: seqData.name,
+        status: "active",
+        instance_id: null,
+        config: {},
+        user_id: seqData.user_id,
+        company_id: seqData.company_id,
+        instances: null
+      } as any;
+    } else {
+      typedCampaign = campaignData as unknown as CampaignData;
+      instance = typedCampaign.instances;
+    }
     const effectiveSequenceId = sequenceId || typedMessage?.sequence_id;
 
     // HIGH PRIORITY: For manual testing, the user might have selected a different instance in the UI
@@ -600,9 +623,13 @@ Deno.serve(async (req) => {
     const { data: linkedGroups, error: groupsError } = await supabase
       .from("campaign_groups")
       .select("id, group_jid, group_name")
-      .eq("campaign_id", campaignId);
+      .in("campaign_id", [campaignId, sequenceId, body.sequenceId].filter(Boolean) as string[]);
 
-    const hasPrivateDestinations = sendToPrivate || (targetPhones && targetPhones.length > 0) || isManualNodeExecution;
+    const hasPrivateDestinations = sendToPrivate || 
+                                   (targetPhones && targetPhones.length > 0) || 
+                                   isManualNodeExecution || 
+                                   !!(triggerContext?.groupJid) || 
+                                   !!(triggerContext?.triggerId);
 
     if (!hasPrivateDestinations && (groupsError || !linkedGroups || linkedGroups.length === 0)) {
       return new Response(
@@ -894,11 +921,17 @@ Deno.serve(async (req) => {
               group_name: triggerContext.respondentName || triggerContext.respondentPhone,
               isPrivate: true
             }]
-          : groups.map(g => ({ group_jid: g.group_jid, group_name: g.group_name, isPrivate: false }));
+          : triggerContext?.groupJid
+            ? [{
+                group_jid: triggerContext.groupJid as string,
+                group_name: (triggerContext.respondentName as string) || "Grupo",
+                isPrivate: false,
+              }]
+            : groups.map(g => ({ group_jid: g.group_jid, group_name: g.group_name, isPrivate: false }));
 
       // If this is a manual test execution from the builder and we have no destinations,
       // fallback to sending to the instance's own number to allow preview/testing.
-      if (isManualNodeExecution && destinations.length === 0) {
+      if ((isManualNodeExecution || !!(triggerContext?.triggerId)) && destinations.length === 0) {
         let testPhone = instance?.phone;
         let testName = instance?.name;
         
