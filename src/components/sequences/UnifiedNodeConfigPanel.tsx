@@ -521,6 +521,7 @@ export function UnifiedNodeConfigPanel({
   }, [node.nodeType, activeCompanyId]);
 
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [isAddActionOpen, setIsAddActionOpen] = useState(false);
 
   const editingMessage = editingMessageId && Array.isArray(node.config.messages)
     ? node.config.messages.find((m: any) => m.id === editingMessageId)
@@ -2516,6 +2517,7 @@ export function UnifiedNodeConfigPanel({
                 };
                 onUpdate({ ...node.config, messages: [...messages, newAction] });
                 setEditingMessageId(messageId);
+                setIsAddActionOpen(false);
               };
 
               const handleDeleteAction = (e: React.MouseEvent, id: string) => {
@@ -2656,7 +2658,7 @@ export function UnifiedNodeConfigPanel({
                   </div>
 
                   <div className="space-y-3 pb-2">
-                    <Popover>
+                    <Popover open={isAddActionOpen} onOpenChange={setIsAddActionOpen}>
                       <PopoverTrigger asChild>
                         <Button variant="outline" className="w-full flex items-center gap-2 border-dashed border-slate-300 hover:border-[#8A3CFF]/50 hover:bg-[#8A3CFF]/5 text-slate-600 hover:text-[#8A3CFF] transition-all">
                           <Plus className="h-4 w-4" />
@@ -2681,6 +2683,7 @@ export function UnifiedNodeConfigPanel({
                                       key={sub.subType}
                                       value={sub.label}
                                       onSelect={() => handleAddAction(sub.subType)}
+                                      onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleAddAction(sub.subType); }}
                                       className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50"
                                     >
                                       <div className={cn("p-1.5 rounded-md shrink-0 text-white shadow-sm", sub.color)}>
