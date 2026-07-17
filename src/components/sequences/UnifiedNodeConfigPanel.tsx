@@ -521,8 +521,6 @@ export function UnifiedNodeConfigPanel({
   }, [node.nodeType, activeCompanyId]);
 
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
-  const [isAddActionOpen, setIsAddActionOpen] = useState(false);
-
   const editingMessage = editingMessageId && Array.isArray(node.config.messages)
     ? node.config.messages.find((m: any) => m.id === editingMessageId)
     : null;
@@ -2517,7 +2515,7 @@ export function UnifiedNodeConfigPanel({
                 };
                 onUpdate({ ...node.config, messages: [...messages, newAction] });
                 setEditingMessageId(messageId);
-                setIsAddActionOpen(false);
+                document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
               };
 
               const handleDeleteAction = (e: React.MouseEvent, id: string) => {
@@ -2658,7 +2656,7 @@ export function UnifiedNodeConfigPanel({
                   </div>
 
                   <div className="space-y-3 pb-2">
-                    <Popover open={isAddActionOpen} onOpenChange={setIsAddActionOpen}>
+                    <Popover>
                       <PopoverTrigger asChild>
                         <Button variant="outline" className="w-full flex items-center gap-2 border-dashed border-slate-300 hover:border-[#8A3CFF]/50 hover:bg-[#8A3CFF]/5 text-slate-600 hover:text-[#8A3CFF] transition-all">
                           <Plus className="h-4 w-4" />
