@@ -14,6 +14,7 @@ import {
   ArrowLeft, Save, Play, Pause, Trash2, ZoomIn, ZoomOut, Maximize,
   Loader2, Info, GitBranch, Copy, PenLine, History, Sliders, ArrowRight, Plus, MessageSquare, Settings
 } from "lucide-react";
+import { debounce } from "lodash";
 import { useToast } from "@/hooks/use-toast";
 import { NodeEditorModal } from "../workflows/node-editor/NodeEditorModal";
 import { cn } from "@/lib/utils";
