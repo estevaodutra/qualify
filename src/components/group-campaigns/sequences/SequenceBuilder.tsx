@@ -53,10 +53,10 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
   const initialNodes: LocalNode[] = nodes.map(n => liftLegacyNode({
     ...n,
     id: n.id,
-    nodeType: (n as any).node_type as any,
-    positionX: (n as any).position_x,
-    positionY: (n as any).position_y,
-    nodeOrder: (n as any).node_order,
+    nodeType: n.nodeType as any,
+    positionX: n.positionX,
+    positionY: n.positionY,
+    nodeOrder: n.nodeOrder,
     config: (n.config as any) || {},
   }));
 

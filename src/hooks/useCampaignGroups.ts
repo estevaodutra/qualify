@@ -57,7 +57,11 @@ export function useCampaignGroups(campaignId: string | undefined) {
 
   const addGroupsMutation = useMutation({
     mutationFn: async (groups: { jid: string; name: string; instanceId?: string }[]) => {
-      if (!campaignId || !user) throw new Error("Missing campaign or user");
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      const activeUser = currentUser || user;
+      
+      if (!campaignId) throw new Error("ID da campanha não encontrado");
+      if (!activeUser) throw new Error("Usuário não autenticado");
 
       const { error } = await supabase
         .from("campaign_groups")
