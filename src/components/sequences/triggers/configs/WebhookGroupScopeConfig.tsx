@@ -11,9 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCampaignGroups } from "@/hooks/useCampaignGroups";
 import type { TriggerConfig } from "@/components/group-campaigns/sequences/triggerTypes";
 import { toast } from "sonner";
-import { useCompany } from "@/hooks/useCompany";
-import { useAuth } from "@/hooks/useAuth";
-
+import { useCompany } from "@/contexts/CompanyContext";
 interface WebhookGroupScopeConfigProps {
   campaignId: string;
   config: TriggerConfig;
@@ -22,7 +20,6 @@ interface WebhookGroupScopeConfigProps {
 
 export function WebhookGroupScopeConfig({ campaignId, config, onChange }: WebhookGroupScopeConfigProps) {
   const { activeCompanyId } = useCompany();
-  const { user } = useAuth();
   const [instances, setInstances] = useState<{ id: string; name: string; phone: string | null }[]>([]);
   const [search, setSearch] = useState("");
   const { linkedGroups, isLoading, addGroups, isAdding } = useCampaignGroups(campaignId);
@@ -35,20 +32,26 @@ export function WebhookGroupScopeConfig({ campaignId, config, onChange }: Webhoo
   const [importSelectedJids, setImportSelectedJids] = useState<string[]>([]);
 
   useEffect(() => {
-    if (!user) return;
-    let instancesQuery = supabase
-      .from("instances")
-      .select("id, name, phone")
-      .order("name", { ascending: true });
+    const fetchInstances = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      let instancesQuery = supabase
+        .from("instances")
+        .select("id, name, phone")
+        .order("name", { ascending: true });
 
-    if (activeCompanyId) {
-      instancesQuery = instancesQuery.eq("company_id", activeCompanyId);
-    } else {
-      instancesQuery = instancesQuery.eq("user_id", user.id).is("company_id", null);
-    }
+      if (activeCompanyId) {
+        instancesQuery = instancesQuery.eq("company_id", activeCompanyId);
+      } else {
+        instancesQuery = instancesQuery.eq("user_id", user.id).is("company_id", null);
+      }
 
-    instancesQuery.then(({ data }) => { if (data) setInstances(data); });
-  }, [activeCompanyId, user]);
+      instancesQuery.then(({ data }) => { if (data) setInstances(data); });
+    };
+
+    fetchInstances();
+  }, [activeCompanyId]);
 
   const fetchInstanceGroups = async () => {
     if (!config.instanceId) return;
