@@ -73,10 +73,23 @@ export function validateWorkflowActivation(
   if (!triggerNode) {
     errors.push("Esta automação não possui um gatilho (Início).");
   } else {
-    const triggerType = triggerNode.config.triggerType as string | undefined;
-    const triggerConfig = triggerNode.config.triggerConfig as Record<string, unknown> | undefined;
-    const triggerResult = validateTrigger(triggerType, triggerConfig);
-    if (!triggerResult.valid) errors.push(...triggerResult.errors);
+    const triggers = (triggerNode.config.triggers as any[]) || [];
+    
+    // Support for legacy unmigrated nodes just in case
+    const legacyType = triggerNode.config.triggerType as string | undefined;
+    const legacyConfig = triggerNode.config.triggerConfig as Record<string, unknown> | undefined;
+
+    if (triggers.length === 0 && !legacyType) {
+      errors.push("Configure ao menos um evento no gatilho de Início.");
+    } else if (triggers.length > 0) {
+      triggers.forEach((t: any) => {
+        const result = validateTrigger(t.type, t.config);
+        if (!result.valid) errors.push(...result.errors);
+      });
+    } else if (legacyType) {
+      const result = validateTrigger(legacyType, legacyConfig);
+      if (!result.valid) errors.push(...result.errors);
+    }
 
     const hasOutgoing = connections.some((c) => c.sourceNodeId === triggerNode.id);
     if (!hasOutgoing && nodes.length > 1) {

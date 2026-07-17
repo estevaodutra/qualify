@@ -874,10 +874,17 @@ export function UnifiedSequenceBuilder({
                   const tY = tgtNode.positionY || 0;
 
                   // Output port on the right side of the card
-                  let portX1 = sX + 220;
+                  let portX1 = sX + (srcNode.nodeType === "trigger" || srcNode.nodeType === "content" ? 320 : 220);
                   let portY1 = sY + 45;
                   if (conn.conditionPath === "yes") portY1 = sY + 35;
                   if (conn.conditionPath === "no") portY1 = sY + 65;
+                  if (srcNode.nodeType === "trigger") {
+                    const triggers = (srcNode.config.triggers as any[]) || [];
+                    const triggerIndex = triggers.findIndex(t => t.id === conn.conditionPath);
+                    if (triggerIndex >= 0) {
+                      portY1 = sY + 112 + (triggerIndex * 72);
+                    }
+                  }
                   if (srcNode.nodeType === "randomizer") {
                     const branches = getSortedRandomizerBranches(srcNode);
                     const idx = branches.findIndex(b => b.id === conn.conditionPath);
@@ -1059,7 +1066,7 @@ export function UnifiedSequenceBuilder({
                       )}
 
                       {/* Output Port(s) (Right Handles) */}
-                      {!isCondition && !isRandomizer && !isFieldOp ? (
+                      {!isCondition && !isRandomizer && !isFieldOp && !isTrigger ? (
                         <>
                           <div
                             data-node-port="true"
@@ -1069,9 +1076,6 @@ export function UnifiedSequenceBuilder({
                           >
                             <div className="h-1.5 w-1.5 rounded-full bg-[#8A3CFF]" />
                           </div>
-                          {isTrigger && (
-                            <span className="absolute right-2 top-[34px] text-[8px] font-bold text-[#8A3CFF] select-none text-right">Quando o<br/>evento ocorrer, então</span>
-                          )}
                         </>
                       ) : isCondition ? (
                         <>
@@ -1183,6 +1187,14 @@ export function UnifiedSequenceBuilder({
                                     </Badge>
                                   </div>
                                 )}
+                                <div
+                                  data-node-port="true"
+                                  onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", trigger.id)}
+                                  className="absolute -right-[26px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-[#8A3CFF] bg-background hover:bg-[#8A3CFF] cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
+                                  title={`Conectar: ${def?.label || trigger.type}`}
+                                >
+                                  <div className="h-1.5 w-1.5 rounded-full bg-[#8A3CFF]" />
+                                </div>
                               </div>
                             );
                           })}

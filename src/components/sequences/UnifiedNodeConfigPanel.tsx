@@ -884,13 +884,8 @@ export function UnifiedNodeConfigPanel({
             </>
           )}
 
-          {/* POLL - Group only */}
-          {type === "poll" && !isGroup && (
-            <div className="p-4 bg-yellow-500/10 text-yellow-600 rounded-xl border border-yellow-500/20 text-sm">
-              Enquetes estão disponíveis apenas quando a automação está habilitada para grupos. Ative o modo grupo no gatilho principal.
-            </div>
-          )}
-          {type === "poll" && isGroup && (
+          {/* POLL */}
+          {type === "poll" && (
             <>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -2695,7 +2690,7 @@ export function UnifiedNodeConfigPanel({
 
                             <CommandGroup heading="Avançados" className="text-xs text-slate-500 mt-1 border-t border-slate-100">
                               {block.subTypes!
-                                .filter(sub => !primaryTypes.includes(sub.subType) && !(sub.subType === "poll" && !isGroup))
+                                .filter(sub => !primaryTypes.includes(sub.subType))
                                 .map((sub) => {
                                   const SubIcon = sub.icon;
                                   return (

@@ -70,21 +70,45 @@ export const TRIGGER_DEFINITIONS: Record<string, TriggerDefinition> = {
     color: "bg-orange-500",
     status: "available",
     supportedBy: ["dispatch_sequence", "group_sequence"],
-    defaultConfig: { scheduledDate: "", scheduledTime: "" },
+    defaultConfig: { scheduleType: "schedule_once" },
     summaryBuilder: (config) => {
-      if (config && (Array.isArray(config.allowedDays) || Array.isArray(config.times))) {
-        return {
-          title: weekdayLabel(config.allowedDays),
-          subtitle: `${Array.isArray(config.times) && config.times.length > 0 ? config.times[0] : "--:--"} — America/Sao_Paulo`,
-        };
+      const type = config.scheduleType as string;
+      const times = (config.times as string[]) || [];
+      const firstTime = times[0] || "--:--";
+
+      if (type === "schedule_daily") return { title: "Todo dia", subtitle: `às ${firstTime}` };
+      if (type === "schedule_week_days") {
+        const days = (config.daysOfWeek as string[]) || [];
+        return { title: days.length > 0 ? `${days.length} dia(s) na semana` : "Dias não definidos", subtitle: `às ${firstTime}` };
       }
+      if (type === "schedule_month_days") {
+        const days = (config.daysOfMonth as number[]) || [];
+        return { title: days.length > 0 ? `Dias ${days.slice(0,3).join(", ")}${days.length>3?"...":""} do mês` : "Dias não definidos", subtitle: `às ${firstTime}` };
+      }
+      if (type === "schedule_interval") {
+        const i = config.interval;
+        const u = config.unit === "minutes" ? "min" : config.unit === "hours" ? "hora(s)" : config.unit === "days" ? "dia(s)" : "semana(s)";
+        return { title: `A cada ${i || "?"} ${u}`, subtitle: config.startAt ? `A partir de ${String(config.startAt).replace("T"," ")}` : "Recorrente" };
+      }
+      
       const date = config.scheduledDate as string | undefined;
       const time = config.scheduledTime as string | undefined;
-      return { title: "Agendado", subtitle: date && time ? `${date} às ${time}` : "Data/hora não configurada" };
+      return { title: "Data específica", subtitle: date && time ? `${date} às ${time}` : "Não configurada" };
     },
     validate: (config) => {
       const errors: string[] = [];
-      if (!config.scheduledDate && !config.allowedDays) errors.push("Configure a data/hora do agendamento.");
+      const type = config.scheduleType as string;
+      if (!type || type === "schedule_once") {
+        if (!config.scheduledDate) errors.push("Configure a data do agendamento.");
+        if (!config.scheduledTime) errors.push("Configure a hora do agendamento.");
+      } else if (type === "schedule_interval") {
+        if (!config.interval || (config.interval as number) < 1) errors.push("O intervalo precisa ser maior que zero.");
+      } else {
+        const times = config.times as string[];
+        if (!times || times.length === 0) errors.push("Configure ao menos um horário.");
+        if (type === "schedule_week_days" && !(config.daysOfWeek as string[])?.length) errors.push("Selecione ao menos um dia da semana.");
+        if (type === "schedule_month_days" && !(config.daysOfMonth as number[])?.length) errors.push("Informe os dias do mês.");
+      }
       return errors;
     },
     configComponent: ScheduledTriggerConfig,
