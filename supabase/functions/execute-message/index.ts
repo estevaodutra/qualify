@@ -1822,6 +1822,155 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // ============= CONTENT CONTAINER NODES =============
+        if (node.node_type === "content") {
+          const subMessages = (node.config?.messages as any[]) || [];
+          console.log(`[ExecuteMessage] Processing content node ${node.id} with ${subMessages.length} sub-messages`);
+          
+          let subFailed = false;
+          
+          for (const subMsg of subMessages) {
+            const subNodeType = subMsg.type || "message";
+            const subAction = getActionForNodeType(subNodeType);
+            
+            // Format the sub-message config as if it was a standalone node config
+            const subConfig = { ...subMsg };
+            delete subConfig.id;
+            delete subConfig.type;
+            
+            // Format text fields and replace variables
+            const formattedConfig = formatNodeConfig(subConfig, subNodeType);
+            const textFields = ["text", "content", "message", "caption", "title", "description", "footer", "question", "url", "filename"];
+            textFields.forEach((field) => {
+              if (typeof formattedConfig[field] === "string") {
+                formattedConfig[field] = replaceVariables(formattedConfig[field] as string);
+              }
+            });
+            
+            // Send to all destinations
+            for (const dest of activeDestinations) {
+              const payload = buildStandardPayload({
+                action: subAction,
+                node: {
+                  id: subMsg.id || node.id,
+                  type: subNodeType,
+                  order: node.node_order,
+                  config: formattedConfig,
+                },
+                campaign: {
+                  id: typedCampaign.id || typedSequence.id,
+                  name: typedCampaign.name || typedSequence.name,
+                },
+                instance: {
+                  id: activeInstanceId,
+                  name: instance.name,
+                  phone: instance.phone || "",
+                  provider: instance.provider,
+                  externalId: instance.external_instance_id || "",
+                  externalToken: instance.external_instance_token || "",
+                },
+                destination: {
+                  jid: dest.group_jid,
+                  name: dest.group_name,
+                },
+              });
+              
+              const sendStartTime = Date.now();
+              
+              // Create log entry
+              const { data: logEntry } = await supabase
+                .from("group_message_logs")
+                .insert({
+                  user_id: userId,
+                  group_campaign_id: typedCampaign.id || typedSequence.id,
+                  message_id: typedMessage?.id || null,
+                  sequence_id: effectiveSequenceId,
+                  node_type: subNodeType,
+                  node_order: node.node_order,
+                  group_jid: dest.group_jid,
+                  group_name: dest.group_name,
+                  recipient_phone: dest.isPrivate ? triggerContext?.respondentPhone : null,
+                  instance_id: activeInstanceId,
+                  instance_name: instance.name,
+                  campaign_name: typedCampaign.name || typedSequence.name,
+                  status: "sending",
+                  payload,
+                })
+                .select()
+                .single();
+                
+              try {
+                const result = await sendWhatsAppMessage(payload);
+                const responseTimeMs = Date.now() - sendStartTime;
+                const responseData = result.details || result;
+                
+                const zaapId = result.zaapId || null;
+                const externalMessageId = result.messageId || null;
+                
+                if (logEntry?.id) {
+                  await supabase
+                    .from("group_message_logs")
+                    .update({
+                      status: result.ok ? "sent" : "failed",
+                      error_message: result.ok ? null : `HTTP ${result.status}`,
+                      response_time_ms: responseTimeMs,
+                      provider_response: responseData,
+                      zaap_id: zaapId,
+                      external_message_id: externalMessageId,
+                      payload: {
+                        ...payload,
+                        zapiUrl: result.requestUrl,
+                        zapiBody: result.requestBody,
+                        curl: result.curl,
+                      } as any,
+                    })
+                    .eq("id", logEntry.id);
+                }
+                
+                if (!result.ok) {
+                  subFailed = true;
+                  console.error(`[ExecuteMessage] ❌ Failed to send sub-message ${subNodeType} to ${dest.group_name}`);
+                } else {
+                  console.log(`[ExecuteMessage] ✅ Sub-message ${subNodeType} sent to ${dest.group_name}`);
+                }
+              } catch (err: any) {
+                subFailed = true;
+                console.error(`[ExecuteMessage] ❌ Error sending sub-message ${subNodeType} to ${dest.group_name}:`, err);
+                if (logEntry?.id) {
+                  await supabase
+                    .from("group_message_logs")
+                    .update({
+                      status: "failed",
+                      error_message: err.message || String(err),
+                      response_time_ms: Date.now() - sendStartTime,
+                    })
+                    .eq("id", logEntry.id);
+                }
+              }
+            }
+          }
+          
+          await logNodeExecution(supabase, {
+            executionId: workflowExecutionId,
+            userId,
+            nodeId: node.id,
+            nodeType: node.node_type,
+            status: !subFailed ? "success" : "failed",
+            startedAt: nodeStartedAt,
+            input: node.config,
+            output: { status: "completed", subMessagesCount: subMessages.length },
+          });
+          
+          if (subFailed) {
+            nodesFailed++;
+          }
+          
+          const nextConn = connections.find(c => c.source_node_id === node.id);
+          currentNodeId = nextConn ? nextConn.target_node_id : null;
+          nodesProcessed++;
+          continue;
+        }
+
         // ============= STATUS NODES =============
         if (node.node_type === "status") {
           const config = node.config || {};
