@@ -1545,6 +1545,17 @@ Deno.serve(async (req) => {
         matchingMessages: messagesToSend.length,
         pausedExecutionsResumed: pausedExecutions?.length || 0,
         scheduledSequencesProcessed: triggerNodes?.length || 0,
+        debugTriggerNodes: triggerNodes?.map((n: any) => ({
+          sequenceName: n.message_sequences?.name,
+          triggersLength: n.config?.triggers?.length,
+          triggers: n.config?.triggers?.map((t: any) => ({
+            id: t.id,
+            type: t.type,
+            scheduleType: t.config?.scheduleType,
+            times: t.config?.times,
+            daysOfWeek: t.config?.daysOfWeek
+          }))
+        })),
         results,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
