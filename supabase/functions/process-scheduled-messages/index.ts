@@ -1562,6 +1562,7 @@ Deno.serve(async (req) => {
         })),
         debugLogs: (globalThis as any).debugLogs || [],
         results,
+        sequenceResults,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
