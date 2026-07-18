@@ -1825,12 +1825,89 @@ Deno.serve(async (req) => {
         // ============= CONTENT CONTAINER NODES =============
         if (node.node_type === "content") {
           const subMessages = (node.config?.messages as any[]) || [];
+          
+          // Special case: if it contains only a single delay, treat it exactly as a standalone delay node
+          if (subMessages.length === 1 && subMessages[0]?.type === "delay") {
+            const delayConfig = subMessages[0];
+            const delayMs = calculateDelayMs(delayConfig);
+            const nextConn = connections.find(c => c.source_node_id === node.id);
+            const nextNodeId = nextConn ? nextConn.target_node_id : null;
+            
+            if (delayMs > MAX_DELAY_MS) {
+              const resumeAt = new Date(Date.now() + delayMs);
+              console.log(`[ExecuteMessage] ⏱️ Long delay inside single-action content node: ${delayMs}ms. Scheduling continuation...`);
+              
+              const { data: savedExecution, error: saveError } = await supabase
+                .from("sequence_executions")
+                .insert({
+                  id: workflowExecutionId,
+                  user_id: userId,
+                  campaign_id: campaignId,
+                  sequence_id: effectiveSequenceId,
+                  message_id: typedMessage?.id || null,
+                  trigger_context: triggerContext || {},
+                  current_node_id: nextNodeId,
+                  nodes_data: sortedNodes,
+                  destinations: effectiveDests,
+                  status: "paused",
+                  resume_at: resumeAt.toISOString(),
+                  nodes_processed: nodesProcessed + 1,
+                  nodes_failed: nodesFailed,
+                })
+                .select()
+                .single();
+                
+              if (saveError) {
+                console.error("[ExecuteMessage] Failed to save execution state:", saveError);
+                const effectiveDelay = Math.min(delayMs, MAX_DELAY_MS);
+                await new Promise(resolve => setTimeout(resolve, effectiveDelay));
+              } else {
+                await logNodeExecution(supabase, {
+                  executionId: workflowExecutionId, userId, nodeId: node.id, nodeType: "delay",
+                  status: "success", startedAt: nodeStartedAt,
+                  input: delayConfig,
+                  output: { status: "paused", resumeAt: resumeAt.toISOString() }
+                });
+                break; // Stop execution loop for now, will resume from nextNodeId
+              }
+            } else {
+              console.log(`[ExecuteMessage] ⏱️ Short delay inside single-action content node: ${delayMs}ms`);
+              if (delayMs > 0) {
+                await new Promise(resolve => setTimeout(resolve, delayMs));
+              }
+              
+              await logNodeExecution(supabase, {
+                executionId: workflowExecutionId, userId, nodeId: node.id, nodeType: "delay",
+                status: "success", startedAt: nodeStartedAt,
+                input: delayConfig,
+                output: { status: "success" }
+              });
+            }
+            
+            const nextConn = connections.find(c => c.source_node_id === node.id);
+            currentNodeId = nextConn ? nextConn.target_node_id : null;
+            nodesProcessed++;
+            continue;
+          }
+
           console.log(`[ExecuteMessage] Processing content node ${node.id} with ${subMessages.length} sub-messages`);
           
           let subFailed = false;
           
           for (const subMsg of subMessages) {
             const subNodeType = subMsg.type || "message";
+            
+            // Inline delay handling inside a list of sub-messages
+            if (subNodeType === "delay") {
+              const delayMs = calculateDelayMs(subMsg);
+              const sleepTime = Math.min(delayMs, 20000); // Cap at 20 seconds to prevent Edge Function timeouts
+              console.log(`[ExecuteMessage] ⏱️ Inline delay in content node: waiting ${sleepTime}ms`);
+              if (sleepTime > 0) {
+                await new Promise(resolve => setTimeout(resolve, sleepTime));
+              }
+              continue;
+            }
+
             const subAction = getActionForNodeType(subNodeType);
             
             // Format the sub-message config as if it was a standalone node config
