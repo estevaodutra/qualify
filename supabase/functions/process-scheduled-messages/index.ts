@@ -276,6 +276,7 @@ Deno.serve(async (req) => {
   }
 
   try {
+    (globalThis as any).debugLogs = [];
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     
@@ -1108,6 +1109,9 @@ Deno.serve(async (req) => {
               const currentWeekdayStr = weekdayMap[currentDay];
               matches = times.includes(currentTime) && daysOfWeek.includes(currentWeekdayStr);
               
+              if (!(globalThis as any).debugLogs) (globalThis as any).debugLogs = [];
+              (globalThis as any).debugLogs.push(`Seq: ${sequence.name}, Trig: ${trigger.id}, times: ${JSON.stringify(times)}, days: ${JSON.stringify(daysOfWeek)}, currentTime: ${currentTime}, currentDayStr: ${currentWeekdayStr}, timeMatch: ${times.includes(currentTime)}, dayMatch: ${daysOfWeek.includes(currentWeekdayStr)}, matches: ${matches}`);
+
               if (matches) {
                 console.log(`[Scheduler] Sequence ${sequence.name} (Trigger ${trigger.id}) matches schedule_week_days (day: ${currentWeekdayStr}, time: ${currentTime})`);
               }
@@ -1556,6 +1560,7 @@ Deno.serve(async (req) => {
             daysOfWeek: t.config?.daysOfWeek
           }))
         })),
+        debugLogs: (globalThis as any).debugLogs || [],
         results,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
