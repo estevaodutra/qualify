@@ -1075,19 +1075,82 @@ Deno.serve(async (req) => {
         for (const trigger of triggers) {
           try {
             if (trigger.type !== "scheduled") continue;
-            
             const triggerConfig = trigger.config;
-            if (!triggerConfig?.days || !triggerConfig?.times) {
-              console.log(`[Scheduler] Sequence ${sequence.id} (${sequence.name}) trigger ${trigger.id} has invalid config, skipping`);
-              continue;
+            const scheduleType = triggerConfig?.scheduleType || "schedule_once";
+            
+            let matches = false;
+            
+            if (scheduleType === "schedule_once") {
+              const dateMatch = triggerConfig?.scheduledDate === todayDate;
+              const timeMatch = triggerConfig?.scheduledTime === currentTime;
+              matches = dateMatch && timeMatch;
+              
+              if (matches) {
+                console.log(`[Scheduler] Sequence ${sequence.name} (Trigger ${trigger.id}) matches schedule_once (date: ${triggerConfig?.scheduledDate}, time: ${triggerConfig?.scheduledTime})`);
+              }
+            } 
+            else if (scheduleType === "schedule_daily") {
+              const times = triggerConfig?.times || [];
+              matches = times.includes(currentTime);
+              
+              if (matches) {
+                console.log(`[Scheduler] Sequence ${sequence.name} (Trigger ${trigger.id}) matches schedule_daily (time: ${currentTime})`);
+              }
+            } 
+            else if (scheduleType === "schedule_week_days") {
+              const times = triggerConfig?.times || [];
+              const daysOfWeek = triggerConfig?.daysOfWeek || [];
+              const weekdayMap: Record<number, string> = {
+                0: "sunday", 1: "monday", 2: "tuesday", 3: "wednesday", 4: "thursday", 5: "friday", 6: "saturday"
+              };
+              const currentWeekdayStr = weekdayMap[currentDay];
+              matches = times.includes(currentTime) && daysOfWeek.includes(currentWeekdayStr);
+              
+              if (matches) {
+                console.log(`[Scheduler] Sequence ${sequence.name} (Trigger ${trigger.id}) matches schedule_week_days (day: ${currentWeekdayStr}, time: ${currentTime})`);
+              }
+            } 
+            else if (scheduleType === "schedule_month_days") {
+              const times = triggerConfig?.times || [];
+              const daysOfMonth = (triggerConfig?.daysOfMonth || []).map(Number);
+              matches = times.includes(currentTime) && daysOfMonth.includes(currentMonthDay);
+              
+              if (matches) {
+                console.log(`[Scheduler] Sequence ${sequence.name} (Trigger ${trigger.id}) matches schedule_month_days (monthDay: ${currentMonthDay}, time: ${currentTime})`);
+              }
             }
-            
-            const matchesDay = triggerConfig.days.includes(currentDay);
-            const matchesTime = triggerConfig.times.includes(currentTime);
-            
-            console.log(`[Scheduler] Sequence ${sequence.name} (Trigger ${trigger.id}): day ${currentDay} in [${triggerConfig.days.join(",")}]=${matchesDay}, time ${currentTime} in [${triggerConfig.times.join(",")}]=${matchesTime}`);
-            
-            if (!matchesDay || !matchesTime) {
+            else if (scheduleType === "schedule_interval") {
+              const interval = parseInt(triggerConfig?.interval || 0, 10);
+              const unit = triggerConfig?.unit || "minutes";
+              const startAtStr = triggerConfig?.startAt;
+              
+              if (interval > 0 && startAtStr) {
+                const startAt = new Date(startAtStr);
+                const nowTime = now.getTime();
+                const startTime = startAt.getTime();
+                
+                if (nowTime >= startTime) {
+                  const diffMs = nowTime - startTime;
+                  const totalMinutesDiff = Math.floor(diffMs / 60000);
+                  let intervalMinutes = 0;
+                  
+                  if (unit === "minutes") intervalMinutes = interval;
+                  else if (unit === "hours") intervalMinutes = interval * 60;
+                  else if (unit === "days") intervalMinutes = interval * 24 * 60;
+                  else if (unit === "weeks") intervalMinutes = interval * 7 * 24 * 60;
+                  
+                  if (intervalMinutes > 0) {
+                    matches = (totalMinutesDiff % intervalMinutes) === 0;
+                  }
+                }
+              }
+              
+              if (matches) {
+                console.log(`[Scheduler] Sequence ${sequence.name} (Trigger ${trigger.id}) matches schedule_interval (interval: ${interval} ${unit})`);
+              }
+            }
+
+            if (!matches) {
               continue; // Doesn't match schedule, silently skip
             }
             
