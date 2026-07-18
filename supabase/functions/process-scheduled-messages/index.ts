@@ -317,8 +317,10 @@ Deno.serve(async (req) => {
       day: "numeric",
     }).format(now));
     
-    // Get today's date for execution tracking
-    const todayDate = new Date().toISOString().split("T")[0];
+    // Get today's date for execution tracking in Brazil timezone
+    const todayDate = new Intl.DateTimeFormat("sv-SE", {
+      timeZone: "America/Sao_Paulo",
+    }).format(now);
 
     console.log(`[Scheduler] Running at ${currentTime} (Brazil), day ${currentDay}, monthDay ${currentMonthDay}, date ${todayDate}`);
 
