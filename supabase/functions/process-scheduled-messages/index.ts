@@ -1544,7 +1544,7 @@ Deno.serve(async (req) => {
         totalMessages: messages?.length || 0,
         matchingMessages: messagesToSend.length,
         pausedExecutionsResumed: pausedExecutions?.length || 0,
-        scheduledSequencesProcessed: scheduledSequences?.length || 0,
+        scheduledSequencesProcessed: triggerNodes?.length || 0,
         results,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
