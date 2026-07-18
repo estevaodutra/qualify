@@ -1884,7 +1884,6 @@ Deno.serve(async (req) => {
               });
             }
             
-            const nextConn = connections.find(c => c.source_node_id === node.id);
             currentNodeId = nextConn ? nextConn.target_node_id : null;
             nodesProcessed++;
             continue;
