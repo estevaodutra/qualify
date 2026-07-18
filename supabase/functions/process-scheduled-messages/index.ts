@@ -1062,12 +1062,12 @@ Deno.serve(async (req) => {
       .eq("node_type", "trigger")
       .eq("message_sequences.active", true);
 
+    const sequenceResults: Array<{ sequenceId: string; name: string; status: string; error?: string }> = [];
+
     if (nodesError) {
       console.error("[Scheduler] Error fetching trigger nodes:", nodesError);
     } else {
       console.log(`[Scheduler] Found ${triggerNodes?.length || 0} trigger nodes for active sequences`);
-      
-      const sequenceResults: Array<{ sequenceId: string; name: string; status: string; error?: string }> = [];
       
       for (const node of triggerNodes || []) {
         const sequence = (node as any).message_sequences;
