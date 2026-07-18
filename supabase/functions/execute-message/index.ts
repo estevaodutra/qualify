@@ -1513,9 +1513,11 @@ Deno.serve(async (req) => {
                 campaign_id: campaignId,
                 sequence_id: effectiveSequenceId,
                 message_id: typedMessage?.id || null,
-                trigger_context: triggerContext || {},
+                trigger_context: {
+                  ...(triggerContext || {}),
+                  resumeNodeId: nextNodeId,
+                },
                 current_node_index: 0, // Not index-based anymore, but maintain legacy column
-                current_node_id: nextNodeId, // Resume directly from next node ID!
                 nodes_data: sortedNodes,
                 destinations: effectiveDests,
                 status: "paused",
@@ -1845,8 +1847,10 @@ Deno.serve(async (req) => {
                   campaign_id: campaignId,
                   sequence_id: effectiveSequenceId,
                   message_id: typedMessage?.id || null,
-                  trigger_context: triggerContext || {},
-                  current_node_id: nextNodeId,
+                  trigger_context: {
+                    ...(triggerContext || {}),
+                    resumeNodeId: nextNodeId,
+                  },
                   nodes_data: sortedNodes,
                   destinations: effectiveDests,
                   status: "paused",
