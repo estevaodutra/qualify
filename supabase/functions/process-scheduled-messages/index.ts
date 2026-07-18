@@ -1242,13 +1242,13 @@ Deno.serve(async (req) => {
               sequenceResults.push({ sequenceId: sequence.id, name: sequence.name, status: "failed", error: responseData.error || "Unknown error" });
             }
 
-          } catch (err) {
+          } catch (err: any) {
             console.error(`[Scheduler] Error processing sequence ${sequence.id} (Trigger ${trigger.id}):`, err);
             sequenceResults.push({ 
               sequenceId: sequence.id, 
               name: sequence.name || "unknown",
               status: "failed", 
-              error: err instanceof Error ? err.message : "Unknown error" 
+              error: String(err?.stack || err?.message || err)
             });
           }
         }
