@@ -232,10 +232,13 @@ const formatNodeConfig = (
 };
 
 const calculateDelayMs = (config: Record<string, unknown>): number => {
-  const days = (config.days as number) || 0;
-  const hours = (config.hours as number) || 0;
-  const minutes = (config.minutes as number) || 0;
-  const seconds = (config.seconds as number) || 0;
+  if (config.delayMs !== undefined) {
+    return Number(config.delayMs);
+  }
+  const days = Number(config.days || 0);
+  const hours = Number(config.hours || 0);
+  const minutes = Number(config.minutes || 0);
+  const seconds = Number(config.seconds || 0);
   
   return (
     days * 86400000 +
