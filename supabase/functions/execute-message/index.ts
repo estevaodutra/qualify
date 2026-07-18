@@ -1869,13 +1869,34 @@ Deno.serve(async (req) => {
                 const effectiveDelay = Math.min(delayMs, MAX_DELAY_MS);
                 await new Promise(resolve => setTimeout(resolve, effectiveDelay));
               } else {
+                console.log(`[ExecuteMessage] ✅ Execution ${savedExecution.id} paused inside single-action content node, will resume at ${resumeAt.toISOString()}`);
                 await logNodeExecution(supabase, {
-                  executionId: workflowExecutionId, userId, nodeId: node.id, nodeType: "delay",
-                  status: "success", startedAt: nodeStartedAt,
+                  executionId: workflowExecutionId,
+                  userId,
+                  nodeId: node.id,
+                  nodeType: "delay",
+                  status: "success",
+                  startedAt: nodeStartedAt,
                   input: delayConfig,
                   output: { status: "paused", resumeAt: resumeAt.toISOString() }
                 });
-                break; // Stop execution loop for now, will resume from nextNodeId
+                await supabase.from("workflow_executions")
+                  .update({ status: "waiting" })
+                  .eq("id", workflowExecutionId);
+                const totalTimeMs = Date.now() - startTime;
+                return new Response(
+                  JSON.stringify({
+                    success: true,
+                    status: "paused",
+                    executionId: savedExecution.id,
+                    resumeAt: resumeAt.toISOString(),
+                    nodesProcessed: nodesProcessed + 1,
+                    nodesFailed,
+                    totalTimeMs,
+                    message: `Execution paused. Will resume in ${Math.round(delayMs / 60000)} minutes.`,
+                  }),
+                  { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                );
               }
             } else {
               console.log(`[ExecuteMessage] ⏱️ Short delay inside single-action content node: ${delayMs}ms`);
