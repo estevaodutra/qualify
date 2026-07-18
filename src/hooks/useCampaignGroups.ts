@@ -99,7 +99,7 @@ export function useCampaignGroups(campaignId: string | undefined) {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["campaign_groups", campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["campaign_groups", effectiveCampaignId] });
       toast({ title: "Removido", description: "Grupo removido da campanha." });
     },
     onError: (error) => {

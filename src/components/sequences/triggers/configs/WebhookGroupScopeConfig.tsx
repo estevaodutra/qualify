@@ -6,7 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Search, Loader2, RefreshCw } from "lucide-react";
+import { Search, Loader2, RefreshCw, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCampaignGroups } from "@/hooks/useCampaignGroups";
 import type { TriggerConfig } from "@/components/group-campaigns/sequences/triggerTypes";
@@ -22,7 +22,20 @@ export function WebhookGroupScopeConfig({ campaignId, config, onChange }: Webhoo
   const { activeCompanyId } = useCompany();
   const [instances, setInstances] = useState<{ id: string; name: string; phone: string | null }[]>([]);
   const [search, setSearch] = useState("");
-  const { linkedGroups, isLoading, addGroups, isAdding } = useCampaignGroups(campaignId);
+  const { linkedGroups, isLoading, addGroups, removeGroup, isAdding, isRemoving } = useCampaignGroups(campaignId);
+
+  const handleRemoveGroup = async (groupId: string, groupJid: string) => {
+    try {
+      await removeGroup(groupId);
+      const currentSelected = config.selectedGroupJids || [];
+      if (currentSelected.includes(groupJid)) {
+        const next = currentSelected.filter(j => j !== groupJid);
+        onChange({ ...config, selectedGroupJids: next });
+      }
+    } catch (err) {
+      console.error("Error removing group:", err);
+    }
+  };
 
   // Instance groups state
   const [instanceGroups, setInstanceGroups] = useState<{ jid: string; name: string }[]>([]);
@@ -167,8 +180,36 @@ export function WebhookGroupScopeConfig({ campaignId, config, onChange }: Webhoo
         </RadioGroup>
       </div>
 
+      {groupScope === "all" && (
+        <div className="space-y-2 pl-1 animate-in fade-in slide-in-from-top-1 duration-200">
+          <Label className="text-xs text-muted-foreground">Grupos vinculados:</Label>
+          <div className="max-h-32 overflow-y-auto space-y-1 border rounded-lg p-2 bg-slate-50/50">
+            {isLoading ? (
+              <p className="text-xs text-muted-foreground text-center py-2">Carregando grupos...</p>
+            ) : linkedGroups.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-2">Nenhum grupo vinculado.</p>
+            ) : (
+              linkedGroups.map(g => (
+                <div key={g.id} className="flex items-center justify-between gap-2 p-1 group/item hover:bg-slate-100/50 rounded p-1 transition-colors">
+                  <span className="text-xs text-slate-700 truncate flex-1">{g.groupName}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleRemoveGroup(g.id, g.groupJid)}
+                    disabled={isRemoving}
+                    className="h-6 w-6 text-slate-400 hover:text-red-500 hover:bg-red-50 hover:opacity-100 transition-all opacity-80 md:opacity-0 md:group-hover/item:opacity-100"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
       {groupScope === "selected" && (
-        <div className="space-y-2 pl-1">
+        <div className="space-y-2 pl-1 animate-in fade-in slide-in-from-top-1 duration-200">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
@@ -182,18 +223,29 @@ export function WebhookGroupScopeConfig({ campaignId, config, onChange }: Webhoo
             {isLoading ? (
               <p className="text-xs text-muted-foreground text-center py-2">Carregando grupos...</p>
             ) : filteredGroups.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-2">Nenhum grupo vinculado à campanha.</p>
+              <p className="text-xs text-muted-foreground text-center py-2">Nenhum grupo vinculado.</p>
             ) : (
               filteredGroups.map(g => (
-                <div key={g.id} className="flex items-center gap-2 p-1">
-                  <Checkbox
-                    id={`group-${g.id}`}
-                    checked={selectedGroupJids.includes(g.groupJid)}
-                    onCheckedChange={() => toggleGroup(g.groupJid)}
-                  />
-                  <Label htmlFor={`group-${g.id}`} className="text-xs font-normal cursor-pointer flex-1 truncate">
-                    {g.groupName}
-                  </Label>
+                <div key={g.id} className="flex items-center justify-between gap-2 p-1 group/item hover:bg-slate-50 rounded transition-colors">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <Checkbox
+                      id={`group-${g.id}`}
+                      checked={selectedGroupJids.includes(g.groupJid)}
+                      onCheckedChange={() => toggleGroup(g.groupJid)}
+                    />
+                    <Label htmlFor={`group-${g.id}`} className="text-xs font-normal cursor-pointer flex-1 truncate py-0.5">
+                      {g.groupName}
+                    </Label>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleRemoveGroup(g.id, g.groupJid)}
+                    disabled={isRemoving}
+                    className="h-6 w-6 text-slate-400 hover:text-red-500 hover:bg-red-50 hover:opacity-100 transition-all opacity-80 md:opacity-0 md:group-hover/item:opacity-100 shrink-0"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
               ))
             )}
