@@ -243,15 +243,32 @@ export function UnifiedSequenceBuilder({
   const dragMovedRef = useRef(false);
   const mouseDownPosRef = useRef({ x: 0, y: 0 });
 
+  const isSavingRef = useRef(false);
+  const pendingSaveRef = useRef<{nds: LocalNode[], cns: LocalConnection[], wConfig: Record<string, unknown>, name: string} | null>(null);
+
   const saveChangesDebounced = useCallback(
     debounce(async (nds: LocalNode[], cns: LocalConnection[], wConfig: Record<string, unknown>, name: string) => {
+      if (isSavingRef.current) {
+        pendingSaveRef.current = { nds, cns, wConfig, name };
+        return;
+      }
+      
+      isSavingRef.current = true;
       setAutoSaveStatus("saving");
       try {
         await onSave(name, nds, cns, wConfig);
         setAutoSaveStatus("saved");
         setTimeout(() => setAutoSaveStatus("idle"), 2000);
-      } catch {
+      } catch (err) {
+        console.error("Auto-save failed:", err);
         setAutoSaveStatus("idle");
+      } finally {
+        isSavingRef.current = false;
+        if (pendingSaveRef.current) {
+          const nextSave = pendingSaveRef.current;
+          pendingSaveRef.current = null;
+          saveChangesDebounced(nextSave.nds, nextSave.cns, nextSave.wConfig, nextSave.name);
+        }
       }
     }, 1500),
     [onSave]
@@ -698,13 +715,30 @@ export function UnifiedSequenceBuilder({
 
   // Save Name change
   const handleSaveAll = async () => {
+    if (isSavingRef.current) {
+      toast({ title: "Salvando...", description: "Por favor, aguarde o salvamento anterior ser concluído." });
+      return;
+    }
+    
+    isSavingRef.current = true;
+    setAutoSaveStatus("saving");
     try {
       await onSave(sequenceName, localNodes, localConnections, localWorkflowConfig);
       toast({ title: "Workflow salvo com sucesso!" });
+      setAutoSaveStatus("saved");
+      setTimeout(() => setAutoSaveStatus("idle"), 2000);
     } catch (error: any) {
       console.error("Save failed:", error);
       const errorMsg = typeof error === 'object' ? JSON.stringify(error) : String(error);
       toast({ title: "Erro ao salvar", description: errorMsg, variant: "destructive" });
+      setAutoSaveStatus("idle");
+    } finally {
+      isSavingRef.current = false;
+      if (pendingSaveRef.current) {
+        const nextSave = pendingSaveRef.current;
+        pendingSaveRef.current = null;
+        saveChangesDebounced(nextSave.nds, nextSave.cns, nextSave.wConfig, nextSave.name);
+      }
     }
   };
 
