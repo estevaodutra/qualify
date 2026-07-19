@@ -1,6 +1,7 @@
 import { UnifiedNodeConfigPanel } from "@/components/sequences/UnifiedNodeConfigPanel";
 import { Sliders } from "lucide-react";
 import { LocalNode } from "@/components/sequences/shared-types";
+import { MediaUploader } from "@/components/group-campaigns/sequences/MediaUploader";
 
 interface NodeParametersPanelProps {
   node: LocalNode;
@@ -39,6 +40,15 @@ export function NodeParametersPanel({
           nodes={nodes}
           onManualSend={onManualSend}
           isSendingManual={isSendingManual}
+          renderMediaUploader={(props) => (
+            <MediaUploader
+              mediaType={props.mediaType as "image" | "video" | "audio" | "document" | "sticker"}
+              currentUrl={props.currentUrl}
+              onUpload={props.onUpload}
+              onUrlChange={props.onUrlChange}
+              placeholder={props.placeholder}
+            />
+          )}
         />
       </div>
     </div>

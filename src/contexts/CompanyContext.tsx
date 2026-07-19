@@ -19,6 +19,7 @@ interface CompanyContextType {
   isAdmin: boolean;
   refetch: () => void;
   impersonateCompany: (id: string | null) => void;
+  stopImpersonating: () => void;
   isImpersonating: boolean;
 }
 
@@ -53,11 +54,11 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         // Superadmin fetches ALL companies
         const { data: allCompanies, error: compError } = await (supabase as any)
           .from("companies")
-          .select("id, name, owner_id")
+          .select("id, name, owner_id, is_deleted")
           .order("name");
 
         if (compError) throw compError;
-        companyRows = allCompanies || [];
+        companyRows = (allCompanies || []).filter((c: any) => !c.is_deleted);
 
         // Also fetch their own memberships to know their roles in specific companies
         const { data: memberships } = await (supabase as any)
@@ -87,11 +88,11 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
 
         const { data, error: compError } = await (supabase as any)
           .from("companies")
-          .select("id, name, owner_id")
+          .select("id, name, owner_id, is_deleted")
           .in("id", companyIds);
 
         if (compError) throw compError;
-        companyRows = data || [];
+        companyRows = (data || []).filter((c: any) => !c.is_deleted);
       }
 
       const mapped: Company[] = companyRows.map((c: any) => ({

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAdminCompanies, useToggleCompanyActive, useDeleteCompany, type AdminCompany } from "@/hooks/useAdmin";
+import { useAdminCompanies, useToggleCompanyActive, type AdminCompany } from "@/hooks/useAdmin";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -16,21 +16,28 @@ import { format } from "date-fns";
 import { CompanyDetailsDialog } from "@/components/admin/CompanyDetailsDialog";
 import { AddBalanceManualDialog } from "@/components/admin/AddBalanceManualDialog";
 import { CreateCompanyDialog } from "@/components/admin/CreateCompanyDialog";
+import { DeleteCompanyDialog } from "@/components/admin/DeleteCompanyDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useSuperadmin } from "@/hooks/useSuperadmin";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 export default function AdminCompanies() {
-  const { data, isLoading } = useAdminCompanies();
+  const [showDeleted, setShowDeleted] = useState(false);
+  const { data, isLoading } = useAdminCompanies(showDeleted);
+  const { isSuperadmin } = useSuperadmin();
   const toggle = useToggleCompanyActive();
-  const deleteCompany = useDeleteCompany();
+  
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [balanceFilter, setBalanceFilter] = useState("all");
   const [details, setDetails] = useState<AdminCompany | null>(null);
   const [credit, setCredit] = useState<AdminCompany | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [deletingCompany, setDeletingCompany] = useState<AdminCompany | null>(null);
   const { impersonateCompany } = useCompany();
 
   const filtered = (data || []).filter((c) => {
@@ -57,33 +64,46 @@ export default function AdminCompanies() {
       </div>
 
       <Card className="p-4">
-        <div className="flex flex-wrap gap-3">
-          <div className="relative flex-1 min-w-[240px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por nome ou email"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3 flex-1">
+            <div className="relative flex-1 min-w-[240px] max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nome ou email"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos status</SelectItem>
+                <SelectItem value="active">Ativas</SelectItem>
+                <SelectItem value="inactive">Inativas</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={balanceFilter} onValueChange={setBalanceFilter}>
+              <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos saldos</SelectItem>
+                <SelectItem value="with">Com saldo</SelectItem>
+                <SelectItem value="without">Sem saldo</SelectItem>
+                <SelectItem value="low">Saldo baixo (&lt;R$ 50)</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos status</SelectItem>
-              <SelectItem value="active">Ativas</SelectItem>
-              <SelectItem value="inactive">Inativas</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={balanceFilter} onValueChange={setBalanceFilter}>
-            <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos saldos</SelectItem>
-              <SelectItem value="with">Com saldo</SelectItem>
-              <SelectItem value="without">Sem saldo</SelectItem>
-              <SelectItem value="low">Saldo baixo (&lt;R$ 50)</SelectItem>
-            </SelectContent>
-          </Select>
+
+          {isSuperadmin && (
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="show-deleted-companies"
+                checked={showDeleted}
+                onCheckedChange={setShowDeleted}
+              />
+              <Label htmlFor="show-deleted-companies" className="cursor-pointer">Mostrar excluídas</Label>
+            </div>
+          )}
         </div>
       </Card>
 
@@ -108,16 +128,29 @@ export default function AdminCompanies() {
               {filtered.length === 0 ? (
                 <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhuma empresa encontrada</TableCell></TableRow>
               ) : filtered.map((c) => (
-                <TableRow key={c.id}>
-                  <TableCell className="font-medium">{c.name}</TableCell>
+                <TableRow key={c.id} className={c.is_deleted ? "opacity-60 bg-muted/20" : ""}>
+                  <TableCell className="font-medium">
+                    <span className="flex items-center gap-2">
+                      {c.name}
+                      {c.is_deleted && (
+                        <Badge variant="outline" className="text-destructive border-destructive/20 bg-destructive/5">
+                          Excluída
+                        </Badge>
+                      )}
+                    </span>
+                  </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{c.owner_email || "—"}</TableCell>
-                  <TableCell>{c.member_count}</TableCell>
-                  <TableCell className="text-right font-mono">{fmt(c.balance ?? 0)}</TableCell>
-                  <TableCell className="text-right font-mono text-muted-foreground">{fmt(c.month_consumption ?? 0)}</TableCell>
+                  <TableCell>{c.is_deleted ? "—" : c.member_count}</TableCell>
+                  <TableCell className="text-right font-mono">{c.is_deleted ? "—" : fmt(c.balance ?? 0)}</TableCell>
+                  <TableCell className="text-right font-mono text-muted-foreground">{c.is_deleted ? "—" : fmt(c.month_consumption ?? 0)}</TableCell>
                   <TableCell>
-                    <Badge variant={c.is_active ? "default" : "secondary"}>
-                      {c.is_active ? "Ativa" : "Inativa"}
-                    </Badge>
+                    {c.is_deleted ? (
+                      <Badge variant="destructive">Excluída</Badge>
+                    ) : (
+                      <Badge variant={c.is_active ? "default" : "secondary"}>
+                        {c.is_active ? "Ativa" : "Inativa"}
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell className="text-sm">{format(new Date(c.created_at), "dd/MM/yyyy")}</TableCell>
                   <TableCell>
@@ -126,33 +159,37 @@ export default function AdminCompanies() {
                         <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setDetails(c)}>
+                        <DropdownMenuItem onClick={() => setDetails(c)} disabled={c.is_deleted}>
                           <Eye className="mr-2 h-4 w-4" /> Ver detalhes
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setCredit(c)}>
+                        <DropdownMenuItem onClick={() => setCredit(c)} disabled={c.is_deleted}>
                           <Plus className="mr-2 h-4 w-4" /> Adicionar saldo
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => toggle.mutate({ id: c.id, is_active: !c.is_active })}
                           className={c.is_active ? "text-destructive" : ""}
+                          disabled={c.is_deleted}
                         >
                           {c.is_active ? <PowerOff className="mr-2 h-4 w-4" /> : <Power className="mr-2 h-4 w-4" />}
                           {c.is_active ? "Desativar" : "Ativar"}
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => { impersonateCompany(c.id); window.location.href = "/"; }}>
+                        <DropdownMenuItem
+                          onClick={() => { impersonateCompany(c.id); window.location.href = "/"; }}
+                          disabled={c.is_deleted}
+                        >
                           <Eye className="mr-2 h-4 w-4" /> Personificar
                         </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => {
-                            if (window.confirm(`Tem certeza que deseja EXCLUIR permanentemente a empresa ${c.name}? Todos os dados (carteira, membros, instâncias) serão apagados.`)) {
-                              deleteCompany.mutate(c.id);
-                            }
-                          }}
-                          className="text-destructive focus:text-destructive"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" /> Excluir Empresa
-                        </DropdownMenuItem>
+                        {isSuperadmin && !c.is_deleted && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => setDeletingCompany(c)}
+                              className="text-destructive focus:text-destructive cursor-pointer"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" /> Excluir Empresa
+                            </DropdownMenuItem>
+                          </>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -179,6 +216,12 @@ export default function AdminCompanies() {
       <CreateCompanyDialog
         open={isCreating}
         onClose={() => setIsCreating(false)}
+      />
+
+      <DeleteCompanyDialog
+        company={deletingCompany}
+        open={!!deletingCompany}
+        onClose={() => setDeletingCompany(null)}
       />
     </div>
   );

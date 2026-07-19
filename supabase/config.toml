@@ -3,6 +3,9 @@ project_id = "qualify"
 [functions.generate-api-key]
 verify_jwt = false
 
+[functions.admin-delete-resource]
+verify_jwt = false
+
 [functions.validate-api-key]
 verify_jwt = false
 

@@ -11,6 +11,8 @@ export interface AdminCompany {
   owner_id: string;
   is_active: boolean;
   created_at: string;
+  is_deleted?: boolean;
+  status?: string;
   // joined
   balance?: number;
   reserved_balance?: number;
@@ -19,20 +21,23 @@ export interface AdminCompany {
   month_consumption?: number;
 }
 
-export function useAdminCompanies() {
+export function useAdminCompanies(showDeleted: boolean = false) {
   return useQuery({
-    queryKey: ["admin", "companies"],
+    queryKey: ["admin", "companies", { showDeleted }],
     queryFn: async () => {
       const sb = supabase as any;
       const { data: companies, error } = await sb
         .from("companies")
-        .select("id, name, owner_id, is_active, created_at")
+        .select("id, name, owner_id, is_active, created_at, is_deleted, status")
         .order("created_at", { ascending: false });
       if (error) throw error;
       if (!companies?.length) return [] as AdminCompany[];
 
-      const ids = companies.map((c: any) => c.id);
-      const ownerIds = [...new Set(companies.map((c: any) => c.owner_id))];
+      const filteredCompanies = showDeleted ? companies : companies.filter((c: any) => !c.is_deleted);
+      if (!filteredCompanies.length) return [] as AdminCompany[];
+
+      const ids = filteredCompanies.map((c: any) => c.id);
+      const ownerIds = [...new Set(filteredCompanies.map((c: any) => c.owner_id))];
 
       const [walletsRes, membersRes, ownersRes, txRes] = await Promise.all([
         sb.from("wallets").select("company_id, balance, reserved_balance").in("company_id", ids),
@@ -57,7 +62,7 @@ export function useAdminCompanies() {
         consumptionMap.set(t.company_id, (consumptionMap.get(t.company_id) || 0) + Math.abs(Number(t.amount)));
       });
 
-      return companies.map((c: any) => ({
+      return filteredCompanies.map((c: any) => ({
         ...c,
         balance: Number(wMap.get(c.id)?.balance ?? 0),
         reserved_balance: Number(wMap.get(c.id)?.reserved_balance ?? 0),
@@ -179,18 +184,29 @@ export function useCreateCompany() {
 export function useDeleteCompany() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await (supabase as any)
-        .from("companies")
-        .delete()
-        .eq("id", id);
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const { data, error } = await supabase.functions.invoke("admin-delete-resource", {
+        body: {
+          resourceType: "company",
+          resourceId: id,
+          confirmation: name,
+        },
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin", "companies"] });
-      toast({ title: "Empresa excluída com sucesso" });
+      toast({ title: "Empresa excluída com sucesso." });
     },
-    onError: (e: any) => toast({ title: "Erro ao excluir empresa", description: e.message, variant: "destructive" }),
+    onError: (e: any) => {
+      let msg = e.message || "Não foi possível excluir. Tente novamente.";
+      if (msg.includes("Forbidden") || msg.includes("Only superadmin") || msg.includes("Apenas superadmins")) {
+        msg = "Apenas superadmins podem excluir este recurso.";
+      }
+      toast({ title: "Erro ao excluir empresa", description: msg, variant: "destructive" });
+    },
   });
 }
 
@@ -230,18 +246,23 @@ export interface AdminUser {
   created_at: string;
   is_superadmin: boolean;
   company_count: number;
+  is_deleted?: boolean;
 }
 
-export function useAdminUsers() {
+export function useAdminUsers(showDeleted: boolean = false) {
   return useQuery({
-    queryKey: ["admin", "users"],
+    queryKey: ["admin", "users", { showDeleted }],
     queryFn: async () => {
       const sb = supabase as any;
       const [profilesRes, rolesRes, membersRes] = await Promise.all([
-        sb.from("profiles").select("id, email, full_name, created_at").order("created_at", { ascending: false }),
+        sb.from("profiles").select("id, email, full_name, created_at, is_deleted").order("created_at", { ascending: false }),
         sb.from("user_roles").select("user_id, role"),
         sb.from("company_members").select("user_id").eq("is_active", true),
       ]);
+
+      const filteredProfiles = showDeleted 
+        ? (profilesRes.data || []) 
+        : (profilesRes.data || []).filter((p: any) => !p.is_deleted);
 
       const superSet = new Set(
         (rolesRes.data || []).filter((r: any) => r.role === "superadmin").map((r: any) => r.user_id),
@@ -251,11 +272,40 @@ export function useAdminUsers() {
         memberCounts.set(m.user_id, (memberCounts.get(m.user_id) || 0) + 1);
       });
 
-      return (profilesRes.data || []).map((p: any) => ({
+      return filteredProfiles.map((p: any) => ({
         ...p,
         is_superadmin: superSet.has(p.id),
         company_count: memberCounts.get(p.id) || 0,
       })) as AdminUser[];
+    },
+  });
+}
+
+export function useDeleteUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, email }: { id: string; email: string }) => {
+      const { data, error } = await supabase.functions.invoke("admin-delete-resource", {
+        body: {
+          resourceType: "user",
+          resourceId: id,
+          confirmation: email,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "users"] });
+      toast({ title: "Usuário excluído com sucesso." });
+    },
+    onError: (e: any) => {
+      let msg = e.message || "Não foi possível excluir. Tente novamente.";
+      if (msg.includes("Forbidden") || msg.includes("Only superadmin") || msg.includes("Apenas superadmins")) {
+        msg = "Apenas superadmins podem excluir este recurso.";
+      }
+      toast({ title: "Erro ao excluir usuário", description: msg, variant: "destructive" });
     },
   });
 }
