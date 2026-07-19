@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   ArrowLeft, Save, Play, Pause, Trash2, ZoomIn, ZoomOut, Maximize,
-  Loader2, Info, GitBranch, Copy, PenLine, History, Sliders, ArrowRight, Plus, MessageSquare, Settings
+  Loader2, Info, GitBranch, Copy, PenLine, History, Sliders, ArrowRight, Plus, MessageSquare, Settings, Clock
 } from "lucide-react";
 import { debounce } from "lodash";
 import { useToast } from "@/hooks/use-toast";
