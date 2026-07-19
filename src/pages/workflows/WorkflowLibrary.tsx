@@ -9,6 +9,7 @@ import { useWorkflowDefinitions, type WorkflowStatus } from "@/hooks/useWorkflow
 import { FolderTree } from "@/components/workflows/FolderTree";
 import { WorkflowCard } from "@/components/workflows/WorkflowCard";
 import { DeleteFolderDialog } from "@/components/workflows/DeleteFolderDialog";
+import { DeleteWorkflowDialog } from "@/components/workflows/DeleteWorkflowDialog";
 import { NewWorkflowDialog } from "@/components/workflows/NewWorkflowDialog";
 
 const STATUS_TABS: { value: WorkflowStatus | "all"; label: string }[] = [
@@ -25,9 +26,10 @@ export default function WorkflowLibrary() {
   const [search, setSearch] = useState("");
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [folderPendingDelete, setFolderPendingDelete] = useState<string | null>(null);
+  const [workflowPendingDelete, setWorkflowPendingDelete] = useState<any | null>(null);
 
   const { folders, isLoading: loadingFolders, createFolder, renameFolder, reorderFolders, deleteFolder } = useWorkflowFolders();
-  const { definitions: allDefinitions, isLoading: loadingDefinitions, moveToFolder } = useWorkflowDefinitions();
+  const { definitions: allDefinitions, isLoading: loadingDefinitions, moveToFolder, deleteWorkflowDefinition } = useWorkflowDefinitions();
 
   const countByFolder = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -147,6 +149,7 @@ export default function WorkflowLibrary() {
                     workflow={def}
                     folders={folders}
                     onMoveToFolder={(folderId) => moveToFolder({ id: def.id, folderId })}
+                    onDelete={() => setWorkflowPendingDelete(def)}
                   />
                 </div>
               ))}
@@ -168,6 +171,15 @@ export default function WorkflowLibrary() {
           folderName={folderPendingDeleteObj.name}
           automationCount={countByFolder[folderPendingDeleteObj.id] || 0}
           onConfirm={(mode) => deleteFolder({ id: folderPendingDeleteObj.id, mode })}
+        />
+      )}
+
+      {workflowPendingDelete && (
+        <DeleteWorkflowDialog
+          open={!!workflowPendingDelete}
+          onOpenChange={(open) => !open && setWorkflowPendingDelete(null)}
+          workflowName={workflowPendingDelete.name}
+          onConfirm={() => deleteWorkflowDefinition(workflowPendingDelete.id)}
         />
       )}
     </div>

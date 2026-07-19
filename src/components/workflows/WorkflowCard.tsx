@@ -6,7 +6,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub,
   DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreVertical, FolderInput, ExternalLink, Send, Users, Skull, Activity, PhoneCall } from "lucide-react";
+import { MoreVertical, FolderInput, ExternalLink, Send, Users, Skull, Activity, PhoneCall, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WorkflowDefinition, WorkflowSourceType } from "@/hooks/useWorkflowDefinitions";
 import type { WorkflowFolder } from "@/hooks/useWorkflowFolders";
@@ -45,9 +45,10 @@ interface WorkflowCardProps {
   workflow: WorkflowDefinition;
   folders: WorkflowFolder[];
   onMoveToFolder: (folderId: string | null) => void;
+  onDelete?: () => void;
 }
 
-export function WorkflowCard({ workflow, folders, onMoveToFolder }: WorkflowCardProps) {
+export function WorkflowCard({ workflow, folders, onMoveToFolder, onDelete }: WorkflowCardProps) {
   const navigate = useNavigate();
   const meta = SOURCE_TYPE_META[workflow.sourceType];
   const Icon = meta.icon;
@@ -101,6 +102,11 @@ export function WorkflowCard({ workflow, folders, onMoveToFolder }: WorkflowCard
                 ))}
               </DropdownMenuSubContent>
             </DropdownMenuSub>
+            {onDelete && (
+              <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir automação
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </CardHeader>

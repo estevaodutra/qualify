@@ -137,11 +137,53 @@ export function useWorkflowDefinitions(filters?: { folderId?: string | null; sta
     onError: (error: Error) => toast.error("Erro ao atualizar status", { description: error.message }),
   });
 
+  const deleteWorkflowDefinition = useMutation({
+    mutationFn: async (id: string) => {
+      // First, get the workflow definition to find sourceId and sourceType
+      const { data: wf } = await supabase
+        .from("workflow_definitions" as any)
+        .select("source_type, source_id")
+        .eq("id", id)
+        .maybeSingle();
+      
+      const { error } = await supabase
+        .from("workflow_definitions" as any)
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+
+      // Delete corresponding source if needed
+      if (wf) {
+        const typedWf = wf as any;
+        try {
+          if (typedWf.source_type === "group_sequence" || typedWf.source_type === "dispatch_sequence") {
+            // Delete message sequence (this will cascade delete nodes and connections)
+            await supabase.from("message_sequences").delete().eq("id", typedWf.source_id);
+          } else if (typedWf.source_type === "context_campaign") {
+            await supabase.from("context_campaigns" as any).delete().eq("id", typedWf.source_id);
+          } else if (typedWf.source_type === "pirate_campaign") {
+            await supabase.from("pirate_campaigns" as any).delete().eq("id", typedWf.source_id);
+          } else if (typedWf.source_type === "call_campaign") {
+            await supabase.from("call_campaigns" as any).delete().eq("id", typedWf.source_id);
+          }
+        } catch (err) {
+          console.warn("[deleteWorkflowDefinition] Failed to delete source campaign:", err);
+        }
+      }
+    },
+    onSuccess: () => {
+      invalidate();
+      toast.success("Automação excluída com sucesso");
+    },
+    onError: (error: Error) => toast.error("Erro ao excluir automação", { description: error.message }),
+  });
+
   return {
     definitions,
     isLoading,
     createWorkflowDefinition: createWorkflowDefinition.mutateAsync,
     moveToFolder: moveToFolder.mutateAsync,
     updateStatus: updateStatus.mutateAsync,
+    deleteWorkflowDefinition: deleteWorkflowDefinition.mutateAsync,
   };
 }
