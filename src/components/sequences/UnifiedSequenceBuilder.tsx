@@ -26,6 +26,7 @@ import { FloatingNodePicker } from "./FloatingNodePicker";
 import { buildTriggerSummary } from "./triggers/TriggerSummary";
 import { validateWorkflowActivation } from "@/lib/workflows/validateActivation";
 import { getNodeVisual, toNodeCategories } from "./nodeDefinitions";
+import { formatDelayLabel, normalizeDelayConfig } from "@/lib/workflows/delay";
 import { TriggerTypeSelector } from "./triggers/TriggerTypeSelector";
 import { getTriggerDefinition } from "./triggers/triggerDefinitions";
 
@@ -1065,6 +1066,7 @@ export function UnifiedSequenceBuilder({
                   const fieldOpMappings = (node.config.mappings as any[]) || [];
                   const isTrigger = node.nodeType === "trigger";
                   const isContent = node.nodeType === "content";
+                  const isDelay = node.nodeType === "delay";
 
                   const isHovered = hoveredNodeId === node.id;
                   const showHoverToolbar = isHovered && !draggedNodeId && !isTrigger;
@@ -1162,7 +1164,7 @@ export function UnifiedSequenceBuilder({
                       )}
 
                       {/* Output Port(s) (Right Handles) */}
-                      {!isCondition && !isRandomizer && !isFieldOp && !isTrigger ? (
+                      {!isCondition && !isRandomizer && !isFieldOp && !isTrigger && !isContent && !isDelay ? (
                         <>
                           <div
                             data-node-port="true" data-node-id={node.id} data-port-id="default"
@@ -1556,6 +1558,65 @@ export function UnifiedSequenceBuilder({
                           </div>
 
                           <div className="flex items-center justify-between pt-4 border-t border-slate-100 px-2 mt-auto">
+                            <div className="text-center">
+                              <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
+                              <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Sucessos</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
+                              <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Alertas</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
+                              <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Erros</p>
+                            </div>
+                          </div>
+                        </div>
+                      ) : isDelay ? (
+                        <div className="flex flex-col w-full text-left h-full">
+                          {/* Header / Title */}
+                          <div className="flex items-center gap-2 border-b border-slate-100 pb-2 mb-3">
+                            <div className="p-1.5 rounded-lg text-white shrink-0 shadow-sm bg-amber-500">
+                              <Clock className="h-3.5 w-3.5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-bold text-xs text-slate-800 truncate">
+                                Delay / Espera
+                              </p>
+                              <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                Tempo
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Card Content / Description */}
+                          <p className="text-[10px] text-slate-500 mb-3 leading-relaxed font-medium">
+                            Aguarde um tempo antes de continuar o fluxo.
+                          </p>
+
+                          {/* Time display box */}
+                          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/60 mb-3">
+                            <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Tempo de espera</span>
+                            <span className="text-xs font-bold text-slate-800">
+                              {formatDelayLabel(normalizeDelayConfig(node.config).delayMs)}
+                            </span>
+                          </div>
+
+                          {/* Single output connection text */}
+                          <div className="relative flex items-center justify-end w-full mt-auto mb-2 pr-1">
+                            <span className="text-[8px] font-bold text-slate-500 select-none mr-2">Próximo passo</span>
+                            <div
+                              data-node-port="true" data-node-id={node.id} data-port-id="default"
+                              onMouseDown={(e) => handlePortMouseDown(e, node.id, "out")}
+                              className="absolute -right-[19.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-blue-500 bg-background hover:bg-blue-500 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
+                              title="Próximo passo"
+                            >
+                              <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                            </div>
+                          </div>
+
+                          {/* Stats counters */}
+                          <div className="flex items-center justify-between pt-4 border-t border-slate-100 px-2 mt-2">
                             <div className="text-center">
                               <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
                               <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Sucessos</p>

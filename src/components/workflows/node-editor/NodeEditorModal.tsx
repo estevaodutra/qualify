@@ -6,6 +6,7 @@ import { NodeEditorHeader } from "./NodeEditorHeader";
 import { NodeInputPanel } from "./NodeInputPanel";
 import { NodeParametersPanel } from "./NodeParametersPanel";
 import { NodeOutputPanel } from "./NodeOutputPanel";
+import { normalizeDelayConfig } from "@/lib/workflows/delay";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { toCanonicalPayload } from "@/lib/workflows/canonicalPayload";
@@ -284,6 +285,19 @@ export function NodeEditorModal({
       };
     }
 
+    if (type === "delay") {
+      const normalized = normalizeDelayConfig(config);
+      return {
+        ...inputContext,
+        delay: {
+          delayMs: normalized.delayMs,
+          value: normalized.value,
+          unit: normalized.unit,
+          status: "simulated_wait"
+        }
+      };
+    }
+
     const outputContext = JSON.parse(JSON.stringify(inputContext || {
       webhook: {},
       lead: { name: "", phone: "", email: "", custom_fields: {} },
@@ -328,6 +342,59 @@ export function NodeEditorModal({
     }
 
     if (type === "message" || type === "whatsapp" || type === "content") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const messages = (config.messages as any[]) || [];
+      if (messages.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const simulatedMessages: any[] = [];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const simulatedDelays: any[] = [];
+        
+        for (const msg of messages) {
+          if (msg.type === "delay") {
+            const normalized = normalizeDelayConfig(msg);
+            simulatedDelays.push({
+              delayMs: normalized.delayMs,
+              value: normalized.value,
+              unit: normalized.unit,
+              status: "simulated_wait"
+            });
+          } else {
+            let msgContent = msg.content || "";
+            const lead = outputContext.lead || {};
+            const variables = outputContext.variables || {};
+            
+            msgContent = msgContent.replace(/\{\{lead\.name\}\}/gi, lead.name || "");
+            msgContent = msgContent.replace(/\{\{lead\.phone\}\}/gi, lead.phone || "");
+            msgContent = msgContent.replace(/\{\{lead\.email\}\}/gi, lead.email || "");
+            msgContent = msgContent.replace(/\{\{([^}]+)\}\}/g, (match: string, p1: string) => {
+              if (p1.startsWith("lead.")) {
+                const field = p1.substring(5);
+                return lead[field] || lead.custom_fields?.[field] || match;
+              }
+              return variables[p1] || match;
+            });
+            
+            simulatedMessages.push({
+              type: msg.type,
+              content: msgContent,
+              url: msg.url || null,
+              caption: msg.caption || null,
+              status: "simulated_sent"
+            });
+          }
+        }
+        
+        const returnContext = { ...outputContext };
+        if (simulatedMessages.length > 0) {
+          returnContext.sent_messages = simulatedMessages;
+        }
+        if (simulatedDelays.length > 0) {
+          returnContext.delay = simulatedDelays[simulatedDelays.length - 1];
+        }
+        return returnContext;
+      }
+
       let content = (config.content as string) || "";
       const lead = outputContext.lead || {};
       const variables = outputContext.variables || {};

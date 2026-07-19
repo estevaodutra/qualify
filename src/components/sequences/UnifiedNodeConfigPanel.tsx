@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { getNodeBlockDefinition, getDefaultConfigForSubType } from "./nodeDefinitions";
 import { VariablePicker } from "./VariablePicker";
+import { normalizeDelayConfig, toDelayMs, formatDelayLabel } from "@/lib/workflows/delay";
 function formatWhatsAppText(text: string) {
   const escaped = text
     .replace(/&/g, "&amp;")
@@ -175,12 +176,15 @@ const NODE_TITLES: Record<string, { title: string; icon: React.ElementType }> = 
 };
 
 const QUICK_DELAYS = [
-  { label: "15 min", minutes: 15, hours: 0, days: 0 },
-  { label: "30 min", minutes: 30, hours: 0, days: 0 },
-  { label: "1 hora", minutes: 0, hours: 1, days: 0 },
-  { label: "2 horas", minutes: 0, hours: 2, days: 0 },
-  { label: "1 dia", minutes: 0, hours: 0, days: 1 },
-  { label: "2 dias", minutes: 0, hours: 0, days: 2 },
+  { label: "15s", value: 15, unit: "seconds" },
+  { label: "30s", value: 30, unit: "seconds" },
+  { label: "1min", value: 1, unit: "minutes" },
+  { label: "5min", value: 5, unit: "minutes" },
+  { label: "15min", value: 15, unit: "minutes" },
+  { label: "30min", value: 30, unit: "minutes" },
+  { label: "1h", value: 1, unit: "hours" },
+  { label: "2h", value: 2, unit: "hours" },
+  { label: "1d", value: 1, unit: "days" },
 ];
 
 const WEEKDAY_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -1383,70 +1387,95 @@ export function UnifiedNodeConfigPanel({
 
           {/* DELAY */}
           {type === "delay" && (() => {
-            if (isGroup) {
-              return (
-                <>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-2">
-                      <Label>Dias</Label>
-                      <Input type="number" min="0" value={(currentConfig.days as number) || 0} onChange={e => updateConfig("days", parseInt(e.target.value) || 0)} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Horas</Label>
-                      <Input type="number" min="0" max="23" value={(currentConfig.hours as number) || 0} onChange={e => updateConfig("hours", parseInt(e.target.value) || 0)} />
-                    </div>
+            const normalized = normalizeDelayConfig(currentConfig);
+
+            const handleValueChange = (newVal: number) => {
+              const updatedValue = Math.max(0, newVal);
+              const updatedDelayMs = toDelayMs(updatedValue, normalized.unit);
+              updateMultipleConfigs({
+                value: updatedValue,
+                unit: normalized.unit,
+                delayMs: updatedDelayMs
+              });
+            };
+
+            const handleUnitChange = (newUnit: string) => {
+              const updatedDelayMs = toDelayMs(normalized.value, newUnit);
+              updateMultipleConfigs({
+                value: normalized.value,
+                unit: newUnit,
+                delayMs: updatedDelayMs
+              });
+            };
+
+            const handlePresetClick = (presetVal: number, presetUnit: string) => {
+              const updatedDelayMs = toDelayMs(presetVal, presetUnit);
+              updateMultipleConfigs({
+                value: presetVal,
+                unit: presetUnit,
+                delayMs: updatedDelayMs
+              });
+            };
+
+            return (
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Tempo</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={normalized.value}
+                    onChange={(e) => handleValueChange(Number(e.target.value))}
+                    className="h-9 rounded-xl bg-white"
+                  />
+                </div>
+                
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Unidade</Label>
+                  <Select value={normalized.unit} onValueChange={handleUnitChange}>
+                    <SelectTrigger className="h-9 rounded-xl bg-white border-border/40">
+                      <SelectValue placeholder="Selecione a unidade" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="seconds">Segundos</SelectItem>
+                      <SelectItem value="minutes">Minutos</SelectItem>
+                      <SelectItem value="hours">Horas</SelectItem>
+                      <SelectItem value="days">Dias</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground font-semibold">Presets rápidos</Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {QUICK_DELAYS.map((qd) => (
+                      <Button
+                        key={qd.label}
+                        variant="outline"
+                        size="sm"
+                        type="button"
+                        onClick={() => handlePresetClick(qd.value, qd.unit)}
+                        className={cn(
+                          "h-7 text-[11px] px-2.5 rounded-lg border-slate-200 hover:bg-[#8A3CFF]/5 hover:text-[#8A3CFF] hover:border-[#8A3CFF]/30 transition-colors",
+                          normalized.value === qd.value && normalized.unit === qd.unit && "bg-[#8A3CFF]/10 text-[#8A3CFF] border-[#8A3CFF]/30 font-bold"
+                        )}
+                      >
+                        {qd.label}
+                      </Button>
+                    ))}
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-2">
-                      <Label>Minutos</Label>
-                      <Input type="number" min="0" max="59" value={(currentConfig.minutes as number) || 0} onChange={e => updateConfig("minutes", parseInt(e.target.value) || 0)} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Segundos</Label>
-                      <Input type="number" min="0" max="59" value={(currentConfig.seconds as number) || 0} onChange={e => updateConfig("seconds", parseInt(e.target.value) || 0)} />
-                    </div>
-                  </div>
-                </>
-              );
-            } else {
-              return (
-                <>
-                  <div className="grid grid-cols-4 gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-xs">Dias</Label>
-                      <Input type="number" min={0} value={(currentConfig.days as number) || 0} onChange={e => updateConfig("days", parseInt(e.target.value) || 0)} />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Horas</Label>
-                      <Input type="number" min={0} max={23} value={(currentConfig.hours as number) || 0} onChange={e => updateConfig("hours", parseInt(e.target.value) || 0)} />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Minutos</Label>
-                      <Input type="number" min={0} max={59} value={(currentConfig.minutes as number) || 0} onChange={e => updateConfig("minutes", parseInt(e.target.value) || 0)} />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Segundos</Label>
-                      <Input type="number" min={0} max={59} value={(currentConfig.seconds as number) || 0} onChange={e => updateConfig("seconds", parseInt(e.target.value) || 0)} />
-                    </div>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-muted-foreground">Atalhos rápidos:</Label>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {QUICK_DELAYS.map(qd => (
-                        <Button key={qd.label} variant="outline" size="sm" onClick={() => {
-                          updateMultipleConfigs({ minutes: qd.minutes, hours: qd.hours, days: qd.days });
-                        }}>
-                          {qd.label}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    ℹ️ O sistema aguardará este tempo antes de enviar a próxima mensagem da sequência.
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/60 mt-2 space-y-1.5">
+                  <span className="text-xs font-bold text-slate-700 block">Preview</span>
+                  <p className="text-[11px] text-muted-foreground leading-normal">
+                    {!editingMessageId
+                      ? `Este fluxo aguardará ${formatDelayLabel(normalized.delayMs)} antes de seguir.`
+                      : `A próxima mensagem será enviada após ${formatDelayLabel(normalized.delayMs)}.`}
                   </p>
-                </>
-              );
-            }
+                </div>
+              </div>
+            );
           })()}
 
           {/* CONDITION - Unified Custom and Standard Fields Mapping */}
@@ -2599,8 +2628,16 @@ export function UnifiedNodeConfigPanel({
                                        <MsgIcon className="h-4 w-4" />
                                      </div>
                                      <div className="flex flex-col min-w-0 text-left">
-                                       <span className="text-[11px] font-bold text-slate-800">{subInfo?.label || "Desconhecido"}</span>
-                                       <span className="text-[9px] text-slate-500 truncate max-w-[130px] font-normal">{msg.content || msg.question || msg.url || "Configurar..."}</span>
+                                       <span className="text-[11px] font-bold text-slate-800">
+                                          {msg.type === "delay"
+                                            ? `${subInfo?.label || "Atraso de tempo"} — ${msg.delayMs ? formatDelayLabel(msg.delayMs) : "Configurar..."}`
+                                            : (subInfo?.label || "Desconhecido")}
+                                        </span>
+                                        <span className="text-[9px] text-slate-500 truncate max-w-[130px] font-normal">
+                                          {msg.type === "delay"
+                                            ? `Espera de ${msg.delayMs ? formatDelayLabel(msg.delayMs) : "tempo"}`
+                                            : (msg.content || msg.question || msg.url || "Configurar...")}
+                                        </span>
                                      </div>
                                    </div>
                                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">

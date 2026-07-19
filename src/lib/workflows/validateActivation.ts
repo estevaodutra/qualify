@@ -1,5 +1,6 @@
 import type { LocalNode, LocalConnection, RandomizerBranch } from "@/components/sequences/shared-types";
 import { validateTrigger } from "@/components/sequences/triggers/TriggerValidation";
+import { normalizeDelayConfig } from "./delay";
 
 export interface ActivationValidationResult {
   valid: boolean;
@@ -62,6 +63,51 @@ function validateRandomizerNodes(nodes: LocalNode[]): string[] {
   return errors;
 }
 
+function validateDelayNodes(nodes: LocalNode[]): string[] {
+  const errors: string[] = [];
+  const validUnits = ["seconds", "minutes", "hours", "days"];
+
+  for (const node of nodes) {
+    if (node.nodeType === "delay") {
+      const label = (node.config.label as string) || "Delay / Espera";
+      const normalized = normalizeDelayConfig(node.config);
+
+      if (normalized.value === undefined || normalized.value === null || isNaN(normalized.value)) {
+        errors.push(`"${label}": Informe o tempo de espera.`);
+      } else if (normalized.value <= 0) {
+        errors.push(`"${label}": O delay precisa ser maior que zero.`);
+      } else if (!validUnits.includes(normalized.unit)) {
+        errors.push(`"${label}": Selecione uma unidade válida.`);
+      } else if (normalized.delayMs > 30 * 24 * 60 * 60 * 1000) {
+        errors.push(`"${label}": O delay máximo permitido é de 30 dias.`);
+      } else if (normalized.delayMs < 1000) {
+        errors.push(`"${label}": O delay mínimo permitido é de 1 segundo.`);
+      }
+    } else if (node.nodeType === "content") {
+      const label = (node.config.label as string) || "Mensagem";
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const messages = (node.config.messages as any[]) || [];
+      for (const msg of messages) {
+        if (msg.type === "delay") {
+          const normalized = normalizeDelayConfig(msg);
+          if (normalized.value === undefined || normalized.value === null || isNaN(normalized.value)) {
+            errors.push(`"${label}" (Atraso de tempo): Informe o tempo de espera.`);
+          } else if (normalized.value <= 0) {
+            errors.push(`"${label}" (Atraso de tempo): O delay precisa ser maior que zero.`);
+          } else if (!validUnits.includes(normalized.unit)) {
+            errors.push(`"${label}" (Atraso de tempo): Selecione uma unidade válida.`);
+          } else if (normalized.delayMs > 30 * 24 * 60 * 60 * 1000) {
+            errors.push(`"${label}" (Atraso de tempo): O delay máximo permitido é de 30 dias.`);
+          } else if (normalized.delayMs < 1000) {
+            errors.push(`"${label}" (Atraso de tempo): O delay mínimo permitido é de 1 segundo.`);
+          }
+        }
+      }
+    }
+  }
+  return errors;
+}
+
 export function validateWorkflowActivation(
   nodes: LocalNode[],
   connections: LocalConnection[],
@@ -114,6 +160,7 @@ export function validateWorkflowActivation(
   }
 
   errors.push(...validateRandomizerNodes(nodes));
+  errors.push(...validateDelayNodes(nodes));
 
   if (options.instanceConnected === false) {
     errors.push("A instância selecionada para esta automação não está conectada.");

@@ -231,21 +231,72 @@ const formatNodeConfig = (
   return formatted;
 };
 
-const calculateDelayMs = (config: Record<string, unknown>): number => {
-  if (config.delayMs !== undefined) {
-    return Number(config.delayMs);
+const toDelayMs = (value: number, unit: string): number => {
+  switch (unit) {
+    case "seconds": return value * 1000;
+    case "minutes": return value * 60000;
+    case "hours": return value * 3600000;
+    case "days": return value * 86400000;
+    default: return 0;
   }
-  const days = Number(config.days || 0);
-  const hours = Number(config.hours || 0);
-  const minutes = Number(config.minutes || 0);
-  const seconds = Number(config.seconds || 0);
-  
-  return (
-    days * 86400000 +
-    hours * 3600000 +
-    minutes * 60000 +
-    seconds * 1000
-  );
+};
+
+const fromDelayMs = (delayMs: number): { value: number; unit: string } => {
+  if (delayMs <= 0) return { value: 0, unit: "seconds" };
+  const msInDay = 24 * 60 * 60 * 1000;
+  const msInHour = 60 * 60 * 1000;
+  const msInMinute = 60 * 1000;
+  const msInSecond = 1000;
+
+  if (delayMs % msInDay === 0) return { value: delayMs / msInDay, unit: "days" };
+  if (delayMs % msInHour === 0) return { value: delayMs / msInHour, unit: "hours" };
+  if (delayMs % msInMinute === 0) return { value: delayMs / msInMinute, unit: "minutes" };
+  const secondsValue = Math.floor(delayMs / msInSecond);
+  if (secondsValue * msInSecond === delayMs) return { value: secondsValue, unit: "seconds" };
+  return { value: Number((delayMs / 1000).toFixed(1)), unit: "seconds" };
+};
+
+const normalizeDelayConfig = (config: Record<string, any>): {
+  delayMs: number;
+  value: number;
+  unit: string;
+} => {
+  if (!config) {
+    return { delayMs: 300000, value: 5, unit: "minutes" };
+  }
+  if (typeof config.value === "number" && config.unit) {
+    const unit = config.unit;
+    const value = config.value;
+    const delayMs = typeof config.delayMs === "number" ? config.delayMs : toDelayMs(value, unit);
+    return { delayMs, value, unit };
+  }
+  if (typeof config.delayMs === "number") {
+    const { value, unit } = fromDelayMs(config.delayMs);
+    return { delayMs: config.delayMs, value, unit };
+  }
+  if (
+    typeof config.seconds === "number" ||
+    typeof config.minutes === "number" ||
+    typeof config.hours === "number" ||
+    typeof config.days === "number"
+  ) {
+    const seconds = config.seconds || 0;
+    const minutes = config.minutes || 0;
+    const hours = config.hours || 0;
+    const days = config.days || 0;
+    const totalMs = 
+      seconds * 1000 + 
+      minutes * 60 * 1000 + 
+      hours * 60 * 60 * 1000 + 
+      days * 24 * 60 * 60 * 1000;
+    const { value, unit } = fromDelayMs(totalMs);
+    return { delayMs: totalMs, value, unit };
+  }
+  return { delayMs: 300000, value: 5, unit: "minutes" };
+};
+
+const calculateDelayMs = (config: Record<string, unknown>): number => {
+  return normalizeDelayConfig(config).delayMs;
 };
 
 const getConditionFieldValue = (field: string, leadData: Record<string, any>): unknown => {
@@ -1497,16 +1548,24 @@ Deno.serve(async (req) => {
 
         // Handle DELAY nodes
         if (node.node_type === "delay") {
-          const delayMs = calculateDelayMs(node.config);
+          const normalized = normalizeDelayConfig(node.config);
+          const delayMs = normalized.delayMs;
+          const resumeAt = new Date(nodeStartedAt.getTime() + delayMs);
           const nextConn = connections.find(c => c.source_node_id === node.id);
           const nextNodeId = nextConn ? nextConn.target_node_id : null;
+
+          const delayOutput = {
+            delay: {
+              delayMs,
+              value: normalized.value,
+              unit: normalized.unit,
+              startedAt: nodeStartedAt.toISOString(),
+              resumeAt: resumeAt.toISOString()
+            },
+            context: triggerContext || {}
+          };
           
           if (delayMs > MAX_DELAY_MS) {
-            // Long delay - save state and schedule continuation
-            const resumeAt = new Date(Date.now() + delayMs);
-            
-            console.log(`[ExecuteMessage] ⏱️ Long delay detected: ${delayMs}ms. Scheduling continuation for ${resumeAt.toISOString()}`);
-            
             // Save execution state
             const { data: savedExecution, error: saveError } = await supabase
               .from("sequence_executions")
@@ -1543,7 +1602,7 @@ Deno.serve(async (req) => {
               await logNodeExecution(supabase, {
                 executionId: workflowExecutionId, userId, nodeId: node.id, nodeType: node.node_type,
                 status: "success", startedAt: nodeStartedAt,
-                input: node.config, output: { scheduled: true, resumeAt: resumeAt.toISOString() },
+                input: node.config, output: delayOutput,
               });
               await supabase.from("workflow_executions")
                 .update({ status: "waiting" })
@@ -1574,7 +1633,7 @@ Deno.serve(async (req) => {
           await logNodeExecution(supabase, {
             executionId: workflowExecutionId, userId, nodeId: node.id, nodeType: node.node_type,
             status: "success", startedAt: nodeStartedAt,
-            input: node.config, output: { waitedMs: Math.min(delayMs, MAX_DELAY_MS) },
+            input: node.config, output: delayOutput,
           });
           currentNodeId = nextNodeId;
           nodesProcessed++;
@@ -1834,12 +1893,24 @@ Deno.serve(async (req) => {
           // Special case: if it contains only a single delay, treat it exactly as a standalone delay node
           if (subMessages.length === 1 && subMessages[0]?.type === "delay") {
             const delayConfig = subMessages[0];
-            const delayMs = calculateDelayMs(delayConfig);
+            const normalized = normalizeDelayConfig(delayConfig);
+            const delayMs = normalized.delayMs;
+            const resumeAt = new Date(nodeStartedAt.getTime() + delayMs);
             const nextConn = connections.find(c => c.source_node_id === node.id);
             const nextNodeId = nextConn ? nextConn.target_node_id : null;
+
+            const delayOutput = {
+              delay: {
+                delayMs,
+                value: normalized.value,
+                unit: normalized.unit,
+                startedAt: nodeStartedAt.toISOString(),
+                resumeAt: resumeAt.toISOString()
+              },
+              context: triggerContext || {}
+            };
             
             if (delayMs > MAX_DELAY_MS) {
-              const resumeAt = new Date(Date.now() + delayMs);
               console.log(`[ExecuteMessage] ⏱️ Long delay inside single-action content node: ${delayMs}ms. Scheduling continuation...`);
               
               const { data: savedExecution, error: saveError } = await supabase
@@ -1878,7 +1949,7 @@ Deno.serve(async (req) => {
                   status: "success",
                   startedAt: nodeStartedAt,
                   input: delayConfig,
-                  output: { status: "paused", resumeAt: resumeAt.toISOString() }
+                  output: delayOutput
                 });
                 await supabase.from("workflow_executions")
                   .update({ status: "waiting" })
@@ -1908,7 +1979,7 @@ Deno.serve(async (req) => {
                 executionId: workflowExecutionId, userId, nodeId: node.id, nodeType: "delay",
                 status: "success", startedAt: nodeStartedAt,
                 input: delayConfig,
-                output: { status: "success" }
+                output: delayOutput
               });
             }
             

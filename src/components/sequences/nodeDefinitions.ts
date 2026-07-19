@@ -136,7 +136,7 @@ export function getDefaultConfigForSubType(blockType: string, subType: string): 
     case "document": return { url: "", filename: "", caption: "", sendPrivate: false, viewOnce: false };
     case "sticker": return { url: "", sendPrivate: false, viewOnce: false };
     case "user_input": return { targetField: "", timeoutMs: 3600000, question: "", invalidMessage: "", saveMedia: false };
-    case "delay": return { delayMs: 3000 };
+    case "delay": return { delayMs: 300000, value: 5, unit: "minutes" };
     case "dynamic_url": return { url: "", caption: "", sendPrivate: false, viewOnce: false };
     case "poll": return { question: "", options: ["", "", ""], multiSelect: false };
     case "buttons": return { text: "", buttons: [{ id: "1", label: "", type: "REPLY" }] };
@@ -155,7 +155,7 @@ export function getDefaultConfigForBlock(blockType: string): Record<string, unkn
   switch (blockType) {
     case "content": return { contentType: "message", ...getDefaultConfigForSubType("content", "message") };
     case "action": return { actionType: "tag_add", ...getDefaultConfigForSubType("action", "tag_add") };
-    case "delay": return { seconds: 0, minutes: 5, hours: 0, days: 0 };
+    case "delay": return { delayMs: 300000, value: 5, unit: "minutes" };
     case "condition": return { field: "member_count", operator: "greater_than", value: 0 };
     case "randomizer": return {
       mode: "weighted_random",
