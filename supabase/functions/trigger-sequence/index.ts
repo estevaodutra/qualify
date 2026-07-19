@@ -157,7 +157,25 @@ Deno.serve(async (req) => {
       .eq("id", typedSequence.group_campaign_id)
       .maybeSingle();
 
-    const typedCampaign = (campaign || {}) as GroupCampaign;
+    let typedCampaign = (campaign || {}) as GroupCampaign;
+    if (!typedCampaign.id) {
+      // Auto-upsert into group_campaigns to satisfy foreign key constraint!
+      await supabase
+        .from("group_campaigns")
+        .upsert({
+          id: typedSequence.id,
+          name: typedSequence.name || "Default Workflow Campaign",
+          user_id: typedSequence.user_id,
+          status: "active",
+        }, {
+          onConflict: "id"
+        });
+      typedCampaign = {
+        id: typedSequence.id,
+        name: typedSequence.name || "Default Workflow Campaign",
+        instance_id: null,
+      };
+    }
     const triggerConfig = typedSequence.trigger_config as Record<string, unknown> || {};
 
     // ── Deduplication guard (best-effort) ───────────────────────────────────

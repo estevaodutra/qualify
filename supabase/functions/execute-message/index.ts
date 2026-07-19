@@ -611,6 +611,19 @@ Deno.serve(async (req) => {
           instances: null
         } as any;
         effectiveCampaignId = seqData.id;
+
+        // Auto-upsert into group_campaigns to satisfy the database foreign key constraint!
+        await supabase
+          .from("group_campaigns")
+          .upsert({
+            id: seqData.id,
+            name: seqData.name || "Default Workflow Campaign",
+            user_id: seqData.user_id,
+            status: "active",
+            company_id: seqData.company_id || null,
+          }, {
+            onConflict: "id"
+          });
       }
     } else {
       typedCampaign = campaignData as unknown as CampaignData;
