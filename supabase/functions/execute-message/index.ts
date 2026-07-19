@@ -468,6 +468,7 @@ Deno.serve(async (req) => {
     // Parse request body
     const body: ExecuteMessageRequest = await req.json();
     const { messageId, campaignId, sequenceId, triggerContext, executionId, startFromNodeIndex, startFromNodeId, manualNodeIndex, targetPhones } = body;
+    let effectiveCampaignId = campaignId;
 
     // Check if this is a resumed execution
     const isResumedExecution = !!executionId && (startFromNodeIndex !== undefined || startFromNodeId !== undefined);
@@ -542,38 +543,75 @@ Deno.serve(async (req) => {
           status
         )
       `)
-      .eq("id", campaignId)
+      .eq("id", effectiveCampaignId)
       .maybeSingle();
 
     let typedCampaign: CampaignData;
     let instance: any = null;
 
     if (campaignError || !campaignData) {
-      console.log("[ExecuteMessage] Campaign not found, attempting to resolve sequence as fallback campaign", campaignId);
-      const seqId = sequenceId || campaignId;
+      console.log("[ExecuteMessage] Campaign not found, attempting to resolve sequence as fallback campaign", effectiveCampaignId);
+      const seqId = sequenceId || effectiveCampaignId;
       const { data: seqData } = await supabase
         .from("message_sequences")
-        .select("id, name, user_id, company_id")
+        .select("id, name, user_id, company_id, group_campaign_id")
         .eq("id", seqId)
         .maybeSingle();
 
       if (!seqData) {
         return new Response(
-          JSON.stringify({ error: "Campaign/Sequence not found", campaignId }),
+          JSON.stringify({ error: "Campaign/Sequence not found", campaignId: effectiveCampaignId }),
           { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      typedCampaign = {
-        id: seqData.id,
-        name: seqData.name,
-        status: "active",
-        instance_id: null,
-        config: {},
-        user_id: seqData.user_id,
-        company_id: seqData.company_id,
-        instances: null
-      } as any;
+      // If the sequence is linked to a campaign, try to load that campaign instead!
+      let resolvedCampaignData = null;
+      if (seqData.group_campaign_id) {
+        const { data: campaignFromSeq } = await supabase
+          .from("group_campaigns")
+          .select(`
+            id,
+            name,
+            status,
+            instance_id,
+            config,
+            user_id,
+            instances(
+              id,
+              name,
+              phone,
+              provider,
+              external_instance_id,
+              external_instance_token,
+              status
+            )
+          `)
+          .eq("id", seqData.group_campaign_id)
+          .maybeSingle();
+        if (campaignFromSeq) {
+          resolvedCampaignData = campaignFromSeq;
+        }
+      }
+
+      if (resolvedCampaignData) {
+        console.log(`[ExecuteMessage] Successfully resolved campaign ${resolvedCampaignData.id} from sequence ${seqId}`);
+        typedCampaign = resolvedCampaignData as CampaignData;
+        instance = resolvedCampaignData.instances;
+        effectiveCampaignId = resolvedCampaignData.id;
+      } else {
+        typedCampaign = {
+          id: seqData.id,
+          name: seqData.name,
+          status: "active",
+          instance_id: null,
+          config: {},
+          user_id: seqData.user_id,
+          company_id: seqData.company_id,
+          instances: null
+        } as any;
+        effectiveCampaignId = seqData.id;
+      }
     } else {
       typedCampaign = campaignData as unknown as CampaignData;
       instance = typedCampaign.instances;
@@ -649,8 +687,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (!instance) {
-      console.warn(`[ExecuteMessage] Campaign ${campaignId} has no instance linked. Creating dummy context for execution.`);
+    if (!instance && !isManualNodeExecution) {
+      console.warn(`[ExecuteMessage] Campaign ${effectiveCampaignId} has no instance linked. Creating dummy context for execution.`);
       instance = {
         id: "no-instance",
         name: "Sem Instância (Execução Offline)",
@@ -662,7 +700,7 @@ Deno.serve(async (req) => {
       } as any;
     }
 
-    if (instance.status !== "connected") {
+    if (instance && instance.status !== "connected") {
       console.warn(`[ExecuteMessage] Warning: Instance ${instance.id} is not connected. Messaging nodes may fail.`);
     }
 
@@ -677,7 +715,7 @@ Deno.serve(async (req) => {
     const { data: linkedGroups, error: groupsError } = await supabase
       .from("campaign_groups")
       .select("id, group_jid, group_name")
-      .in("campaign_id", [campaignId, sequenceId, body.sequenceId].filter(Boolean) as string[]);
+      .in("campaign_id", [effectiveCampaignId, sequenceId, body.sequenceId].filter(Boolean) as string[]);
 
     const hasPrivateDestinations = sendToPrivate || 
                                    (targetPhones && targetPhones.length > 0) || 
@@ -763,7 +801,7 @@ Deno.serve(async (req) => {
             order: node.node_order,
             config: node.config,
           },
-          campaign: { id: typedCampaign.id || typedSequence.id, name: typedCampaign.name || typedSequence.name },
+          campaign: { id: typedCampaign.id, name: typedCampaign.name },
           instance: {
             id: instance.id,
             name: instance.name,
@@ -844,8 +882,8 @@ Deno.serve(async (req) => {
             config: simpleNodeConfig,
           },
           campaign: {
-            id: typedCampaign.id || typedSequence.id,
-            name: typedCampaign.name || typedSequence.name,
+            id: typedCampaign.id,
+            name: typedCampaign.name,
           },
           instance: {
             id: instance.id,
@@ -868,7 +906,7 @@ Deno.serve(async (req) => {
           .from("group_message_logs")
           .insert({
             user_id: userId,
-            group_campaign_id: typedCampaign.id || typedSequence.id,
+            group_campaign_id: typedCampaign.id,
             message_id: typedMessage.id,
             node_type: "simple_message",
             node_order: 0,
@@ -876,7 +914,7 @@ Deno.serve(async (req) => {
             group_name: group.group_name,
             instance_id: instance.id,
             instance_name: instance.name,
-            campaign_name: typedCampaign.name || typedSequence.name,
+            campaign_name: typedCampaign.name,
             status: "sending",
             payload,
           })
@@ -1050,7 +1088,7 @@ Deno.serve(async (req) => {
           const { data: members } = await supabase
             .from("group_members")
             .select("phone")
-            .eq("group_campaign_id", campaignId)
+            .eq("group_campaign_id", effectiveCampaignId)
             .in("phone", phones)
             .eq("status", "active");
           const activePhonesSet = new Set((members || []).map((m: any) => m.phone));
@@ -1058,14 +1096,14 @@ Deno.serve(async (req) => {
             if (!d.isPrivate || !d.group_jid?.endsWith("@s.whatsapp.net")) return true;
             const phone = d.group_jid.replace("@s.whatsapp.net", "");
             if (!activePhonesSet.has(phone)) {
-              console.warn(`[ExecuteMessage] ${phone} não é membro ativo da campanha ${campaignId} — ignorado`);
+              console.warn(`[ExecuteMessage] ${phone} não é membro ativo da campanha ${effectiveCampaignId} — ignorado`);
               return false;
             }
             return true;
           });
           if (effectiveDests.length === 0) {
             return new Response(
-              JSON.stringify({ error: "Nenhum destino válido: números não são membros ativos da campanha", campaignId }),
+              JSON.stringify({ error: "Nenhum destino válido: números não são membros ativos da campanha", campaignId: effectiveCampaignId }),
               { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
           }
@@ -1098,8 +1136,9 @@ Deno.serve(async (req) => {
           const { data: newExecution, error: newExecutionError } = await supabase
             .from("workflow_executions")
             .insert({
+              id: workflowExecutionId,
               user_id: userId,
-              campaign_id: campaignId,
+              campaign_id: effectiveCampaignId,
               sequence_id: effectiveSequenceId,
               sequence_type: "message",
               status: "running",
@@ -1572,7 +1611,7 @@ Deno.serve(async (req) => {
               .insert({
                 id: workflowExecutionId, // reuse the same id as workflow_executions so resume can correlate them
                 user_id: userId,
-                campaign_id: campaignId,
+                campaign_id: effectiveCampaignId,
                 sequence_id: effectiveSequenceId,
                 message_id: typedMessage?.id || null,
                 trigger_context: {
@@ -1918,7 +1957,7 @@ Deno.serve(async (req) => {
                 .insert({
                   id: workflowExecutionId,
                   user_id: userId,
-                  campaign_id: campaignId,
+                  campaign_id: effectiveCampaignId,
                   sequence_id: effectiveSequenceId,
                   message_id: typedMessage?.id || null,
                   trigger_context: {
