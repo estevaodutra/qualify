@@ -627,7 +627,7 @@ export function UnifiedNodeConfigPanel({
             <>
               <div className="space-y-2">
                 <Label>{isGroup ? "Mídia" : "URL da Mídia"}</Label>
-                {renderMediaField("image", "https://exemplo.com/imagem.jpg")}
+                {renderMediaField("image", "https://exemplo.com/imagem.jpg", currentConfig, updateConfig, updateMultipleConfigs)}
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -679,7 +679,7 @@ export function UnifiedNodeConfigPanel({
             <>
               <div className="space-y-2">
                 <Label>{isGroup ? "Mídia" : "URL da Mídia"}</Label>
-                {renderMediaField("video", "https://exemplo.com/video.mp4")}
+                {renderMediaField("video", "https://exemplo.com/video.mp4", currentConfig, updateConfig, updateMultipleConfigs)}
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -741,7 +741,7 @@ export function UnifiedNodeConfigPanel({
             <>
               <div className="space-y-2">
                 <Label>{isGroup ? "Áudio" : "URL da Mídia"}</Label>
-                {renderMediaField("audio", "https://exemplo.com/audio.ogg")}
+                {renderMediaField("audio", "https://exemplo.com/audio.ogg", currentConfig, updateConfig, updateMultipleConfigs)}
               </div>
               {!isGroup && (
                 <div className="space-y-2">
@@ -803,7 +803,7 @@ export function UnifiedNodeConfigPanel({
             <>
               <div className="space-y-2">
                 <Label>{isGroup ? "Documento" : "URL da Mídia"}</Label>
-                {renderMediaField("document", "https://exemplo.com/documento.pdf")}
+                {renderMediaField("document", "https://exemplo.com/documento.pdf", currentConfig, updateConfig, updateMultipleConfigs)}
               </div>
               <div className="space-y-2">
                 <Label>Nome do Arquivo</Label>
@@ -863,7 +863,7 @@ export function UnifiedNodeConfigPanel({
             <>
               <div className="space-y-2">
                 <Label>Sticker</Label>
-                {renderMediaField("sticker", "https://exemplo.com/sticker.webp")}
+                {renderMediaField("sticker", "https://exemplo.com/sticker.webp", currentConfig, updateConfig, updateMultipleConfigs)}
                 <p className="text-xs text-muted-foreground">WebP 512x512px recomendado</p>
               </div>
               <div className="flex items-center justify-between">
@@ -2473,25 +2473,31 @@ export function UnifiedNodeConfigPanel({
     setActionDialogOpen(true);
   };
 
-  const renderMediaField = (mediaType: string, placeholder: string) => {
+  const renderMediaField = (
+    mediaType: string,
+    placeholder: string,
+    currConf: any = currentConfig,
+    updConf: (key: string, value: unknown) => void = updateConfig,
+    updMultConf: (updates: Record<string, unknown>) => void = updateMultipleConfigs
+  ) => {
     if (renderMediaUploader) {
       return renderMediaUploader({
         mediaType,
-        currentUrl: (currentConfig.url as string) || "",
+        currentUrl: (currConf.url as string) || "",
         onUpload: (url, filename) => {
           const updates: Record<string, unknown> = { url };
           if (filename) updates.filename = filename;
-          updateMultipleConfigs(updates);
+          updMultConf(updates);
         },
-        onUrlChange: (url) => updateConfig("url", url),
+        onUrlChange: (url) => updConf("url", url),
         placeholder,
       });
     }
     return (
       <Input
         placeholder={placeholder}
-        value={(currentConfig.url as string) || ""}
-        onChange={e => updateConfig("url", e.target.value)}
+        value={(currConf.url as string) || ""}
+        onChange={e => updConf("url", e.target.value)}
       />
     );
   };
