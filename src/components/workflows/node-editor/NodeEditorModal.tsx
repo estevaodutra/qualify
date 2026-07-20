@@ -106,6 +106,8 @@ export function NodeEditorModal({
   }, [isOpen, node?.nodeType, sequenceId]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [localConfig, setLocalConfig] = useState<Record<string, unknown>>({});
+  const [lastLoadedNodeId, setLastLoadedNodeId] = useState<string | null>(null);
+  const [wasOpen, setWasOpen] = useState(false);
   const [simulatedData, setSimulatedData] = useState<Record<string, { input: any; output: any; status: "success" | "error" | "not_run"; error?: string }>>({});
   const [mockData, setMockData] = useState<any>({
     method: "POST",
@@ -201,16 +203,26 @@ export function NodeEditorModal({
 
   useEffect(() => {
     if (isOpen && node) {
-      if (node.nodeType === "trigger" && activeTrigger) {
-        setLocalConfig(activeTrigger.config || {});
-      } else if (node.nodeType === "field_op" && activeMapping) {
-        setLocalConfig(activeMapping || {});
-      } else {
-        setLocalConfig(node.config || {});
+      const isNewNode = currentNodeId !== lastLoadedNodeId;
+      const isNewlyOpened = !wasOpen && isOpen;
+
+      if (isNewNode || isNewlyOpened) {
+        if (node.nodeType === "trigger" && activeTrigger) {
+          setLocalConfig(activeTrigger.config || {});
+        } else if (node.nodeType === "field_op" && activeMapping) {
+          setLocalConfig(activeMapping || {});
+        } else {
+          setLocalConfig(node.config || {});
+        }
+        setHasUnsavedChanges(false);
+        setLastLoadedNodeId(currentNodeId);
+        setWasOpen(true);
       }
-      setHasUnsavedChanges(false);
+    } else if (!isOpen) {
+      setWasOpen(false);
+      setLastLoadedNodeId(null);
     }
-  }, [isOpen, node, activeTrigger, activeMapping]);
+  }, [isOpen, node, activeTrigger, activeMapping, currentNodeId, lastLoadedNodeId, wasOpen]);
 
   if (!isOpen || !currentNodeId || !node) return null;
 
