@@ -2815,29 +2815,6 @@ export function UnifiedNodeConfigPanel({
 
               return (
                 <>
-                  <div className="space-y-4 mb-4">
-                    <div className="space-y-2">
-                      <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                        Destino do grupo
-                      </Label>
-                      <Select
-                        value={(currentConfig.targetMode as string) || "workflow_groups"}
-                        onValueChange={(val) => updateConfig("targetMode", val)}
-                      >
-                        <SelectTrigger className="w-full bg-white">
-                          <SelectValue placeholder="Selecione o destino" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="workflow_groups">Usar grupos do workflow</SelectItem>
-                          <SelectItem value="selected_groups">Selecionar grupo específico</SelectItem>
-                          <SelectItem value="context">Usar grupo vindo do contexto/variável</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <p className="text-[11px] text-muted-foreground">
-                        Define qual grupo será modificado pelas ações abaixo. A instância vinculada ao grupo será usada automaticamente.
-                      </p>
-                    </div>
-                  </div>
 
                   <div className="space-y-3 pb-2">
                     <Label className="text-xs font-medium text-slate-800">Ações configuradas</Label>
