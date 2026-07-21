@@ -1794,7 +1794,7 @@ export function UnifiedSequenceBuilder({
                       )}
 
                       {/* Mock Stats (DataCray aesthetic) */}
-                      {!isTrigger && !isFieldOp && !isContent && (
+                      {!isTrigger && !isFieldOp && !isContent && !isGroupManagement && (
                         <div className="flex justify-between items-center text-[9px] font-bold text-slate-400/80 border-t border-slate-100 pt-2 mt-2 select-none">
                           <span className="flex items-center gap-0.5">🟢 0</span>
                           <span className="flex items-center gap-0.5">🟡 0</span>
