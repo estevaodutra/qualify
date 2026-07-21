@@ -59,6 +59,7 @@ export const webhookCategories: WebhookCategory[] = [
       { id: "instance.qrcode", name: "instance.qrcode", description: "Obter QR Code", type: "request" },
       { id: "instance.connection.pairing-code", name: "instance.connection.pairing-code", description: "Obter código de pareamento", type: "request" },
       { id: "instance.logout", name: "instance.logout", description: "Fazer logout", type: "request" },
+      { id: "instance.list_all", name: "instance.list_all", description: "Listar todas as instâncias do provedor", type: "request" },
       // Event actions (n8n -> Dispatch)
       { id: "instance.connected", name: "instance.connected", description: "Instância conectada", type: "event" },
       { id: "instance.disconnected", name: "instance.disconnected", description: "Instância desconectada", type: "event" },

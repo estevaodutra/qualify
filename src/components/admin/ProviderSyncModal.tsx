@@ -31,9 +31,9 @@ export function ProviderSyncModal({ isOpen, onClose, localInstances, onSyncSucce
     setProviderInstances([]);
     setHasFetched(false);
     try {
-      const webhookUrl = getWebhookUrlForCategory("system", configs);
+      const webhookUrl = getWebhookUrlForCategory("instance", configs);
       if (!webhookUrl) {
-        throw new Error("Webhook de sistema não configurado.");
+        throw new Error("Webhook de instância não configurado.");
       }
 
       const payload = {
