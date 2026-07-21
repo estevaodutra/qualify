@@ -23,7 +23,7 @@ import {
   MessageSquare, Clock, GitBranch, Bell, Link2,
   Image, Video, Music, FileText, Smile,
   BarChart3, MousePointerClick, List, MapPin, Contact, Calendar,
-  Pencil, ImageIcon, UserPlus, UserMinus, ShieldPlus, ShieldMinus, Settings, CircleDot,
+  Pencil, ImageIcon, UserPlus, UserMinus, ShieldAlert, ShieldCheck, Settings, CircleDot,
   Shuffle, Tag, Award, Sliders, Sparkles, Info, RefreshCw, HelpCircle,
   ChevronDown, CheckCircle2, ArrowUp, ArrowDown, Copy
 } from "lucide-react";
