@@ -1788,7 +1788,7 @@ Deno.serve(async (req) => {
                   provider: instance.provider, externalId: instance.external_instance_id || "",
                   externalToken: instance.external_instance_token || "",
                 },
-                destination: { jid: dest.group_jid, name: dest.group_name, phone: "" },
+                destination: { jid: dest.group_jid, name: dest.group_name },
               });
 
               const sendStartTime = Date.now();
@@ -1900,7 +1900,7 @@ Deno.serve(async (req) => {
                 provider: instance.provider, externalId: instance.external_instance_id || "",
                 externalToken: instance.external_instance_token || "",
               },
-              destination: { jid: dest.group_jid, name: dest.group_name, phone: "" },
+              destination: { jid: dest.group_jid, name: dest.group_name },
             });
 
             const sendStartTime = Date.now();
