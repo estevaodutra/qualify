@@ -21,7 +21,7 @@ interface WebhookGroupScopeConfigProps {
 
 export function WebhookGroupScopeConfig({ campaignId, config, onChange }: WebhookGroupScopeConfigProps) {
   const { activeCompanyId } = useCompany();
-  const [instances, setInstances] = useState<{ id: string; name: string; phone: string | null }[]>([]);
+  const [instances, setInstances] = useState<{ id: string; name: string; phone: string | null; status: string | null }[]>([]);
   const [search, setSearch] = useState("");
   const { linkedGroups, isLoading, addGroups, removeGroup, isAdding, isRemoving } = useCampaignGroups(campaignId);
 
@@ -89,7 +89,7 @@ export function WebhookGroupScopeConfig({ campaignId, config, onChange }: Webhoo
       
       let instancesQuery = supabase
         .from("instances")
-        .select("id, name, phone")
+        .select("id, name, phone, status")
         .order("name", { ascending: true });
 
       if (activeCompanyId) {
@@ -208,8 +208,14 @@ export function WebhookGroupScopeConfig({ campaignId, config, onChange }: Webhoo
                   checked={selectedInstanceIds.includes(i.id)}
                   onCheckedChange={() => toggleInstance(i.id)}
                 />
-                <Label htmlFor={`instance-${i.id}`} className="text-xs font-normal cursor-pointer flex-1 truncate">
-                  {i.name} <span className="text-muted-foreground ml-1">({i.phone || "Sem número"})</span>
+                <Label htmlFor={`instance-${i.id}`} className="text-xs font-normal cursor-pointer flex-1 flex items-center gap-2 truncate">
+                  <span
+                    className={`h-2 w-2 shrink-0 rounded-full ${
+                      i.status === "connected" ? "bg-emerald-500" : "bg-rose-500"
+                    }`}
+                    title={i.status === "connected" ? "Conectada" : "Desconectada"}
+                  />
+                  <span>{i.name} <span className="text-muted-foreground ml-1">({i.phone || "Sem número"})</span></span>
                 </Label>
               </div>
             ))
