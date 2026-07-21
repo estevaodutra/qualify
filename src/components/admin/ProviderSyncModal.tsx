@@ -81,6 +81,8 @@ export function ProviderSyncModal({ isOpen, onClose, localInstances, onSyncSucce
         external_instance_id: pId,
         external_instance_token: pInst.externalToken || pInst["externa Token"] || pInst.token || null,
         provider: provider.toUpperCase() === "Z-API" ? "Z-API" : "WAHA",
+        status: "connected",
+        ...(pInst.phone ? { phone: String(pInst.phone).replace(/\D/g, "") } : {})
       }).eq("id", localIdToLink);
 
       if (error) throw error;
