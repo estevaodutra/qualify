@@ -24,8 +24,8 @@ import {
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-
-
+import { ProviderSyncModal } from "@/components/admin/ProviderSyncModal";
+import { Database } from "lucide-react";
 const statusConfig: Record<string, { label: string; className: string }> = {
   connected:            { label: "Conectada",    className: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" },
   "waiting connection": { label: "Aguardando",   className: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20" },
@@ -138,6 +138,9 @@ export default function AdminInstances() {
   // — Fetch phones —
   const [isFetchingPhones, setIsFetchingPhones] = useState(false);
   const [fetchingPhoneId, setFetchingPhoneId] = useState<string | null>(null);
+
+  // — Provider Sync —
+  const [showProviderSync, setShowProviderSync] = useState(false);
 
   // QR countdown
   useEffect(() => {
@@ -323,9 +326,13 @@ export default function AdminInstances() {
           <p className="text-sm text-muted-foreground mt-1">Todas as conexões WhatsApp da plataforma</p>
         </div>
         <div className="flex gap-2">
+          <Button onClick={() => setShowProviderSync(true)} size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white">
+            <Database className="h-4 w-4 mr-2" />
+            Sincronizar com Provedor
+          </Button>
           <Button onClick={handleSyncAll} disabled={isSyncing} size="sm">
             {isSyncing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCcw className="h-4 w-4 mr-2" />}
-            {isSyncing ? "Sincronizando..." : "Sincronizar com Z-API"}
+            {isSyncing ? "Sincronizando..." : "Sincronizar com API"}
           </Button>
           <Button variant="outline" size="sm" onClick={() => fetchPhoneNumbers()} disabled={isFetchingPhones || isLoading}>
             {isFetchingPhones ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Buscando...</> : <><Phone className="h-4 w-4 mr-2" /> Buscar Telefones</>}
@@ -604,6 +611,13 @@ export default function AdminInstances() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ProviderSyncModal
+        isOpen={showProviderSync}
+        onClose={() => setShowProviderSync(false)}
+        localInstances={instances}
+        onSyncSuccess={() => refetch()}
+      />
     </div>
   );
 }
