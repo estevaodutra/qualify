@@ -1751,6 +1751,123 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        if (node.node_type === "group_management") {
+          const actions = (node.config.actions as any[]) || [];
+          const targetMode = node.config.targetMode || "workflow_groups";
+          
+          let targets = effectiveDests;
+
+          const replaceDeep = (val: unknown): unknown => {
+            if (typeof val === "string") return replaceVariables(val);
+            if (Array.isArray(val)) return val.map(replaceDeep);
+            if (val && typeof val === "object") {
+              return Object.fromEntries(
+                Object.entries(val as Record<string, unknown>).map(([k, v]) => [k, replaceDeep(v)])
+              );
+            }
+            return val;
+          };
+
+          const nodeResults: Array<{ destination: string; status: string; subResults: any[] }> = [];
+
+          for (const dest of targets) {
+            const subResults = [];
+            let groupFailed = false;
+            for (const subAction of actions) {
+              const actionName = getActionForNodeType(subAction.type);
+              const formattedConfig = formatNodeConfig(subAction, subAction.type);
+              const resolvedConfig = replaceDeep(formattedConfig) as Record<string, unknown>;
+              Object.assign(formattedConfig, resolvedConfig);
+
+              const payload = buildStandardPayload({
+                action: actionName,
+                node: { id: node.id, type: subAction.type, order: node.node_order, config: formattedConfig },
+                campaign: { id: typedCampaign.id || typedSequence.id, name: typedCampaign.name || typedSequence.name },
+                instance: {
+                  id: activeInstanceId, name: instance.name, phone: instance.phone || "",
+                  provider: instance.provider, externalId: instance.external_instance_id || "",
+                  externalToken: instance.external_instance_token || "",
+                },
+                destination: { jid: dest.group_jid, name: dest.group_name },
+              });
+
+              const sendStartTime = Date.now();
+              const { data: logEntry } = await supabase
+                .from("group_message_logs")
+                .insert({
+                  user_id: userId, group_campaign_id: typedCampaign.id || typedSequence.id,
+                  sequence_id: effectiveSequenceId, node_type: subAction.type,
+                  node_order: node.node_order, group_jid: dest.group_jid,
+                  group_name: dest.group_name, instance_id: activeInstanceId,
+                  instance_name: instance.name, campaign_name: typedCampaign.name || typedSequence.name,
+                  status: "sending", payload,
+                }).select().single();
+
+              try {
+                const result = await sendWhatsAppMessage(payload);
+                const responseData = result.details || result;
+                if (logEntry?.id) {
+                  await supabase.from("group_message_logs").update({
+                    status: result.ok ? "sent" : "failed",
+                    error_message: result.ok ? null : `HTTP ${result.status}`,
+                    response_time_ms: Date.now() - sendStartTime, 
+                    provider_response: responseData,
+                    payload: { ...payload, zapiUrl: result.requestUrl, zapiBody: result.requestBody, curl: result.curl } as any,
+                  }).eq("id", logEntry.id);
+                }
+                
+                if (result.ok) {
+                  console.log(`[ExecuteMessage] ✅ Group mgmt subaction ${subAction.type} on ${dest.group_name}`);
+                  webhookResponses.push({ nodeType: subAction.type, nodeOrder: node.node_order, destination: dest.group_jid, status: "sent", data: responseData });
+                  subResults.push({ type: subAction.type, status: "sent" });
+                } else {
+                  console.log(`[ExecuteMessage] ❌ Group mgmt subaction ${subAction.type} failed: HTTP ${result.status}`);
+                  webhookResponses.push({ nodeType: subAction.type, nodeOrder: node.node_order, destination: dest.group_jid, status: "failed", data: responseData });
+                  subResults.push({ type: subAction.type, status: "failed" });
+                  groupFailed = true;
+                  break; // Stop further subactions for this group
+                }
+              } catch (err) {
+                if (logEntry?.id) {
+                  await supabase.from("group_message_logs").update({
+                    status: "failed", error_message: err instanceof Error ? err.message : "Unknown error",
+                    response_time_ms: Date.now() - sendStartTime,
+                  }).eq("id", logEntry.id);
+                }
+                console.error(`[ExecuteMessage] ❌ Group mgmt subaction error:`, err);
+                subResults.push({ type: subAction.type, status: "failed", error: err instanceof Error ? err.message : "Unknown error" });
+                groupFailed = true;
+                break; // Stop further subactions for this group
+              }
+            }
+            nodeResults.push({ destination: dest.group_jid, status: groupFailed ? "failed" : "sent", subResults });
+          }
+
+          const hasErrors = nodeResults.some(r => r.status === "failed");
+          if (hasErrors) nodesFailed++;
+          
+          await logNodeExecution(supabase, {
+            executionId: workflowExecutionId, userId, nodeId: node.id, nodeType: node.node_type,
+            status: hasErrors ? "error" : "success", startedAt: nodeStartedAt,
+            input: node.config, output: { results: nodeResults },
+          });
+
+          let nextNodeId = null;
+          if (hasErrors) {
+             const errorConn = connections.find(c => c.source_node_id === node.id && c.source_port_id === "error");
+             if (errorConn) nextNodeId = errorConn.target_node_id;
+          }
+          if (!nextNodeId) {
+             const defaultConn = connections.find(c => c.source_node_id === node.id && (!c.source_port_id || c.source_port_id === "default"));
+             nextNodeId = defaultConn ? defaultConn.target_node_id : null;
+          }
+
+          currentNodeId = nextNodeId;
+          nodesProcessed++;
+          continue;
+        }
+
+
         // ============= GROUP MANAGEMENT NODES =============
         if (GROUP_MANAGEMENT_NODE_TYPES.includes(node.node_type)) {
           const action = getActionForNodeType(node.node_type);

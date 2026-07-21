@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   MessageSquare, Clock, GitBranch, Shuffle, Tag, Award, Send, Link2, Sliders, Sparkles,
   Image, Video, Music, FileText, Smile, BarChart3, MousePointerClick, List, MapPin, Contact, Calendar,
-  Plus, Pencil, UserPlus, UserMinus, ShieldAlert, ShieldCheck, Settings, Radio
+  Plus, Pencil, UserPlus, UserMinus, ShieldAlert, ShieldCheck, Settings, Radio, UsersRound
 } from "lucide-react";
 import type { NodeCategory, NodeTypeInfo } from "./shared-types";
 
@@ -63,6 +63,7 @@ export const NODE_DEFINITIONS: NodeBlockDefinition[] = [
       { subType: "channel_select", label: "Selecionar Canal", icon: Send, color: "bg-indigo-600" },
     ],
   },
+  { blockType: "group_management", label: "Gestão de Grupo", icon: UsersRound, color: "bg-indigo-600" },
   { blockType: "status", label: "Status", icon: Radio, color: "bg-pink-600" },
   { blockType: "api_call", label: "API", icon: Link2, color: "bg-sky-600", status: "coming_soon" },
   { blockType: "field_op", label: "Mapeamento de Campos", icon: Sliders, color: "bg-teal-600" },
@@ -147,6 +148,15 @@ export function getDefaultConfigForSubType(blockType: string, subType: string): 
     case "tag_add": case "tag_remove": return { tag: "" };
     case "deal_move": return { stageId: "" };
     case "channel_select": return { instanceId: "", fallbackType: "last_sender" };
+    case "group_create": return { groupName: "", phones: [""], description: "", photoUrl: "" };
+    case "group_rename": return { newName: "" };
+    case "group_photo": return { url: "" };
+    case "group_description": return { description: "" };
+    case "group_add_participant": return { phones: [""] };
+    case "group_remove_participant": return { phone: "" };
+    case "group_promote_admin": return { phone: "" };
+    case "group_remove_admin": return { phone: "" };
+    case "group_settings": return { adminOnlyMessage: false, adminOnlyEditInfo: false, approvalMode: false, locked: false };
     default: return {};
   }
 }
@@ -157,6 +167,12 @@ export function getDefaultConfigForBlock(blockType: string): Record<string, unkn
     case "action": return { actionType: "tag_add", ...getDefaultConfigForSubType("action", "tag_add") };
     case "delay": return { delayMs: 300000, value: 5, unit: "minutes" };
     case "condition": return { field: "member_count", operator: "greater_than", value: 0 };
+    case "group_management": return {
+      targetMode: "workflow_groups",
+      selectedGroupJids: [],
+      continueOnActionError: false,
+      actions: []
+    };
     case "randomizer": return {
       mode: "weighted_random",
       branches: [

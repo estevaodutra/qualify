@@ -26,6 +26,7 @@ const getDefaultConfig = (nodeType: string): Record<string, unknown> => {
   switch (nodeType) {
     case "content": case "delay": case "condition": case "randomizer":
     case "action": case "field_op": case "api_call": case "ai_agent":
+    case "group_management":
       return getDefaultConfigForBlock(nodeType);
     case "notify": return { message: "", notifyAdmins: true };
     case "webhook": return { url: "", method: "POST", body: "" };

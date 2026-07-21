@@ -1070,6 +1070,8 @@ export function UnifiedSequenceBuilder({
                   const isTrigger = node.nodeType === "trigger";
                   const isContent = node.nodeType === "content";
                   const isDelay = node.nodeType === "delay";
+                  const isGroupManagement = node.nodeType === "group_management";
+                  const groupActions = (node.config.actions as any[]) || [];
 
                   const isHovered = hoveredNodeId === node.id;
                   const showHoverToolbar = isHovered && !draggedNodeId && !isTrigger;
@@ -1167,7 +1169,7 @@ export function UnifiedSequenceBuilder({
                       )}
 
                       {/* Output Port(s) (Right Handles) */}
-                      {!isCondition && !isRandomizer && !isFieldOp && !isTrigger && !isContent && !isDelay ? (
+                      {!isCondition && !isRandomizer && !isFieldOp && !isTrigger && !isContent && !isDelay && !isGroupManagement ? (
                         <>
                           <div
                             data-node-port="true" data-node-id={node.id} data-port-id="default"
@@ -1444,12 +1446,108 @@ export function UnifiedSequenceBuilder({
                               <span className="text-[8px] font-bold text-slate-500 select-none mr-2">Próximo passo</span>
                               <div
                                 data-node-port="true" data-node-id={node.id} data-port-id="default"
-                            onMouseDown={(e) => handlePortMouseDown(e, node.id, "out")}
+                                onMouseDown={(e) => handlePortMouseDown(e, node.id, "out")}
                                 className="absolute -right-[19.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-blue-500 bg-background hover:bg-blue-500 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
                                 title="Próximo passo"
                               >
                                 <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
                               </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-2 mt-2 border-t border-slate-100 px-1">
+                            <div className="text-center">
+                              <p className="text-sm font-bold text-slate-800 leading-none mb-1">0</p>
+                              <p className="text-[9px] font-semibold text-[#8A3CFF] leading-none">Sucessos</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-sm font-bold text-slate-800 leading-none mb-1">0</p>
+                              <p className="text-[9px] font-semibold text-[#8A3CFF] leading-none">Alertas</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-sm font-bold text-slate-800 leading-none mb-1">0</p>
+                              <p className="text-[9px] font-semibold text-[#8A3CFF] leading-none">Erros</p>
+                            </div>
+                          </div>
+                        </div>
+                      ) : isGroupManagement ? (
+                        <div className="flex flex-col w-full text-left h-full">
+                          <div className="flex items-center gap-2 border-b border-slate-100 pb-2 mb-2">
+                            <div className={cn("p-1.5 rounded-lg text-white shrink-0 shadow-sm", NodeIcon ? nodeInfo.color : "bg-indigo-600")}>
+                              {NodeIcon ? <NodeIcon className="h-3.5 w-3.5" /> : null}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-bold text-xs text-slate-800 truncate">Gestão de Grupo</p>
+                            </div>
+                          </div>
+                          
+                          <p className="text-[9px] text-slate-500 mb-2 leading-tight">
+                            Execute ações de criação, edição e moderação em grupos do WhatsApp.
+                          </p>
+                          
+                          {groupActions.map((action: any, idx: number) => (
+                            <div 
+                              key={action.id || idx} 
+                              className="group relative flex flex-col gap-1 p-2 border border-slate-200 rounded-lg bg-white shadow-sm mb-2 cursor-pointer hover:border-[#8A3CFF]/50 transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingTriggerId(action.id);
+                                setEditingNodeId(node.id);
+                                setNodeEditorOpen(true);
+                              }}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                  <ArrowRight className="h-3 w-3 text-slate-600 shrink-0" />
+                                  <div className="min-w-0">
+                                    <p className="text-[10px] font-bold text-slate-800 truncate">{action.label || action.type}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          
+                          {groupActions.length === 0 && (
+                            <p className="text-[9px] text-slate-500 italic mb-2">Clique para adicionar uma ação de grupo.</p>
+                          )}
+                          
+                          <div className="flex flex-col mt-3 gap-2 w-full text-right relative">
+                            <div className="relative flex items-center justify-end w-full">
+                              <span className="text-[8px] font-bold text-slate-500 select-none mr-2">Caso ocorrer erro na gestão do grupo</span>
+                              <div
+                                data-node-port="true" data-node-id={node.id} data-port-id="error"
+                                onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", "error")}
+                                className="absolute -right-[19.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-destructive bg-background hover:bg-destructive cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
+                                title="Caso ocorrer erro"
+                              >
+                                <div className="h-1.5 w-1.5 rounded-full bg-destructive" />
+                              </div>
+                            </div>
+                            <div className="relative flex items-center justify-end w-full">
+                              <span className="text-[8px] font-bold text-slate-500 select-none mr-2">Próximo passo</span>
+                              <div
+                                data-node-port="true" data-node-id={node.id} data-port-id="default"
+                                onMouseDown={(e) => handlePortMouseDown(e, node.id, "out")}
+                                className="absolute -right-[19.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-blue-500 bg-background hover:bg-blue-500 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
+                                title="Próximo passo"
+                              >
+                                <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-2 mt-2 border-t border-slate-100 px-1">
+                            <div className="text-center">
+                              <p className="text-sm font-bold text-slate-800 leading-none mb-1">0</p>
+                              <p className="text-[9px] font-semibold text-[#8A3CFF] leading-none">Sucessos</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-sm font-bold text-slate-800 leading-none mb-1">0</p>
+                              <p className="text-[9px] font-semibold text-[#8A3CFF] leading-none">Alertas</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-sm font-bold text-slate-800 leading-none mb-1">0</p>
+                              <p className="text-[9px] font-semibold text-[#8A3CFF] leading-none">Erros</p>
                             </div>
                           </div>
                         </div>
