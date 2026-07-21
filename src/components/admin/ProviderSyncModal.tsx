@@ -68,7 +68,7 @@ export function ProviderSyncModal({ isOpen, onClose, localInstances, onSyncSucce
   };
 
   const handleLink = async (pInst: any) => {
-    const pId = pInst.externalId || pInst.id || pInst.instanceId;
+    const pId = pInst.externalId || pInst.id || pInst.instanceId || pInst.name_phone || pInst.name;
     const localIdToLink = selectedLocalId[pId];
     if (!localIdToLink) {
       toast.error("Selecione uma instância do Qualify para atrelar.");
@@ -79,7 +79,7 @@ export function ProviderSyncModal({ isOpen, onClose, localInstances, onSyncSucce
     try {
       const { error } = await supabase.from("instances").update({
         external_instance_id: pId,
-        external_instance_token: pInst.externalToken || pInst.token || null,
+        external_instance_token: pInst.externalToken || pInst["externa Token"] || pInst.token || null,
         provider: provider.toUpperCase() === "Z-API" ? "Z-API" : "WAHA",
       }).eq("id", localIdToLink);
 
@@ -152,8 +152,8 @@ export function ProviderSyncModal({ isOpen, onClose, localInstances, onSyncSucce
               </thead>
               <tbody className="divide-y">
                 {providerInstances.map((pInst, idx) => {
-                  const pId = pInst.externalId || pInst.id || pInst.instanceId || pInst.name;
-                  const pName = pInst.name || pInst.sessionName || "Sem Nome";
+                  const pId = pInst.externalId || pInst.id || pInst.instanceId || pInst.name_phone || pInst.name;
+                  const pName = pInst.name_phone || pInst.name || pInst.sessionName || "Sem Nome";
                   const pPhone = pInst.phone || "---";
 
                   // Check if it already exists in Qualify
