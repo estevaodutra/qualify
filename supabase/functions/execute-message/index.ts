@@ -645,6 +645,36 @@ Deno.serve(async (req) => {
         console.log(`[ExecuteMessage] Resolved instance from manual node override: ${instance.name}`);
       }
     }
+    // Fallback: resolve instance from triggerContext if provided (carries the group's instance_id or the individual instanceIds)
+    const triggerContext = (body as ExecuteMessageRequest).triggerContext;
+    if (triggerContext?.instanceId) {
+      const { data: ctxInst } = await supabase
+        .from("instances")
+        .select("id, name, phone, provider, external_instance_id, external_instance_token, status")
+        .eq("id", triggerContext.instanceId)
+        .maybeSingle();
+      if (ctxInst) {
+        instance = ctxInst as any;
+        console.log(`[ExecuteMessage] Resolved instance from triggerContext.instanceId: ${instance.name}`);
+      }
+    } else if (triggerContext?.instanceIds && Array.isArray(triggerContext.instanceIds) && triggerContext.instanceIds.length > 0) {
+      const poolIds = triggerContext.instanceIds as string[];
+      const { data: pool } = await supabase
+        .from("instances")
+        .select("id, name, phone, provider, external_instance_id, external_instance_token, status")
+        .in("id", poolIds);
+      if (pool?.length) {
+        const connected = (pool as any[]).filter((i: any) => i.status === "connected");
+        if (connected.length > 0) {
+          instance = connected[Math.floor(Math.random() * connected.length)] as any;
+          console.log(`[ExecuteMessage] Selected connected instance from triggerContext.instanceIds pool: ${(instance as any)?.name}`);
+        } else {
+          instance = pool[Math.floor(Math.random() * pool.length)] as any;
+          console.log(`[ExecuteMessage] Selected disconnected instance from triggerContext.instanceIds pool: ${(instance as any)?.name}`);
+        }
+      }
+    }
+
     // Fallback: resolve instance from sequence trigger config if not linked to campaign
     if ((!instance || instance.status !== "connected") && effectiveSequenceId) {
       console.log(`[ExecuteMessage] Campaign instance not connected or null, attempting to resolve from sequence ${effectiveSequenceId} trigger config...`);
@@ -657,8 +687,23 @@ Deno.serve(async (req) => {
 
       const triggerConfig = triggerNode?.config?.triggerConfig as Record<string, any> | undefined;
       const configInstanceId = triggerConfig?.instanceId;
+      const configInstanceIds = triggerConfig?.instanceIds as string[] | undefined;
 
-      if (configInstanceId) {
+      if (configInstanceIds && configInstanceIds.length > 0) {
+        const { data: pool } = await supabase
+          .from("instances")
+          .select("id, name, phone, provider, external_instance_id, external_instance_token, status")
+          .in("id", configInstanceIds);
+        if (pool?.length) {
+          const connected = (pool as any[]).filter((i: any) => i.status === "connected");
+          if (connected.length > 0) {
+            instance = connected[Math.floor(Math.random() * connected.length)] as any;
+            console.log(`[ExecuteMessage] Selected connected instance from trigger config instanceIds pool: ${(instance as any)?.name}`);
+          } else if (!instance) {
+            instance = pool[Math.floor(Math.random() * pool.length)] as any;
+          }
+        }
+      } else if (configInstanceId) {
         const { data: inst } = await supabase
           .from("instances")
           .select("id, name, phone, provider, external_instance_id, external_instance_token, status")
@@ -1041,8 +1086,11 @@ Deno.serve(async (req) => {
         let testName = instance?.name;
         
         // Peek at the node config to see if it overrides the instance
-        if (sortedNodes.length > 0 && sortedNodes[0].config?.instanceId) {
-          const overrideId = sortedNodes[0].config.instanceId as string;
+        const nodeInstanceIds = sortedNodes.length > 0 ? (sortedNodes[0].config?.instanceIds as string[] | undefined) : undefined;
+        const nodeInstanceId = sortedNodes.length > 0 ? (sortedNodes[0].config?.instanceId as string | undefined) : undefined;
+        const overrideId = (nodeInstanceIds && nodeInstanceIds.length > 0) ? nodeInstanceIds[0] : nodeInstanceId;
+        
+        if (overrideId) {
           // In Edge Functions we can't use await here without making it async, but this is already inside an async function!
           const { data: overrideInst } = await supabase
             .from("instances")
@@ -1186,8 +1234,19 @@ Deno.serve(async (req) => {
         const nodeStartedAt = new Date();
 
         // Check if node overrides the WhatsApp instance
-        if (node.config && node.config.instanceId && node.config.instanceId !== activeInstanceId) {
-          const overrideId = node.config.instanceId as string;
+        const nodeInstanceIds = node.config?.instanceIds as string[] | undefined;
+        const nodeInstanceId = node.config?.instanceId as string | undefined;
+
+        let overrideId: string | undefined = undefined;
+
+        if (nodeInstanceIds && nodeInstanceIds.length > 0) {
+          overrideId = nodeInstanceIds[Math.floor(Math.random() * nodeInstanceIds.length)];
+          console.log(`[ExecuteMessage] Node ${node.id} picked instance ${overrideId} from pool of ${nodeInstanceIds.length}`);
+        } else if (nodeInstanceId) {
+          overrideId = nodeInstanceId;
+        }
+
+        if (overrideId && overrideId !== activeInstanceId) {
           console.log(`[ExecuteMessage] Node ${node.id} requested instance override: ${overrideId}`);
           
           const { data: overrideInst } = await supabase

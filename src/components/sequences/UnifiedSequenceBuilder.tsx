@@ -385,7 +385,10 @@ export function UnifiedSequenceBuilder({
   };
 
   const triggerNode = localNodes.find(n => n.nodeType === "trigger");
-  const isGroup = (triggerNode?.config?.triggerConfig as any)?.isGroup ?? true;
+  const legacyIsGroup = (triggerNode?.config?.triggerConfig as any)?.isGroup ?? (localWorkflowConfig.isGroup ?? true);
+  const isGroup = localWorkflowConfig.destinationMode 
+    ? localWorkflowConfig.destinationMode === "groups"
+    : legacyIsGroup;
   const categories = toNodeCategories(isGroup);
 
   const allNodeTypes = categories.flatMap(cat => cat.nodes);
@@ -1779,8 +1782,8 @@ export function UnifiedSequenceBuilder({
           onSaveWorkflow={handleSaveAll}
           isSavingWorkflow={isSaving}
           isUnsavedWorkflow={autoSaveStatus === "idle"}
-          mode={mode === "executions" ? "dispatch" : (localNodes.find(n => n.nodeType === "trigger")?.config.triggerConfig as any)?.isGroup ?? true ? "group" : "dispatch"}
-          isGroup={(localNodes.find(n => n.nodeType === "trigger")?.config.triggerConfig as any)?.isGroup ?? true}
+          mode={mode === "executions" ? "dispatch" : isGroup ? "group" : "dispatch"}
+          isGroup={isGroup}
           sequenceId={sequenceId}
           campaignId={campaignId}
           onManualSendNode={onManualSendNode}

@@ -20,6 +20,10 @@ export interface TriggerConfig {
   webhookId?: string;
   fieldMappings?: FieldMapping[];
   instanceId?: string;
+  instanceIds?: string[];
+  destinationMode?: "groups" | "individual";
+  sendStrategy?: string;
+  respectGroupInstance?: boolean;
   groupScope?: "all" | "selected";
   selectedGroupJids?: string[];
 }

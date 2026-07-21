@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import { WebhookGroupScopeConfig } from "./triggers/configs/WebhookGroupScopeConfig";
-import { Switch } from "@/components/ui/switch";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 
 interface WorkflowSettingsModalProps {
   isOpen: boolean;
@@ -20,6 +21,8 @@ export function WorkflowSettingsModal({
   campaignId,
 }: WorkflowSettingsModalProps) {
   if (!isOpen) return null;
+
+  const destinationMode = (config.destinationMode as string) || (config.isGroup !== false ? "groups" : "individual");
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
@@ -41,29 +44,31 @@ export function WorkflowSettingsModal({
 
         <div className="p-4 overflow-y-auto">
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200/80 bg-slate-50/50">
-              <div className="space-y-0.5">
-                <label className="text-sm font-medium" htmlFor="modal-group-mode-toggle">Habilitar para Grupo</label>
-                <p className="text-xs text-muted-foreground">
-                  Quando ativo, envia para os grupos do WhatsApp configurados. Desative para enviar em conversas individuais.
-                </p>
-              </div>
-              <Switch
-                id="modal-group-mode-toggle"
-                checked={(config.isGroup as boolean) ?? true}
-                onCheckedChange={(checked) => onChange({ ...config, isGroup: checked })}
-              />
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Modo de destino</Label>
+              <RadioGroup
+                value={destinationMode}
+                onValueChange={(value) => onChange({ ...config, destinationMode: value })}
+                className="flex flex-col gap-2"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="groups" id="mode-groups" />
+                  <Label htmlFor="mode-groups" className="cursor-pointer">Grupos do WhatsApp</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="individual" id="mode-individual" />
+                  <Label htmlFor="mode-individual" className="cursor-pointer">Conversas individuais</Label>
+                </div>
+              </RadioGroup>
             </div>
 
-            {((config.isGroup as boolean) ?? true) && (
-              <div className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 animate-in fade-in slide-in-from-top-2 duration-200">
-                <WebhookGroupScopeConfig
-                  config={config}
-                  onChange={onChange}
-                  campaignId={campaignId!}
-                />
-              </div>
-            )}
+            <div className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 animate-in fade-in slide-in-from-top-2 duration-200">
+              <WebhookGroupScopeConfig
+                config={config}
+                onChange={onChange}
+                campaignId={campaignId!}
+              />
+            </div>
           </div>
         </div>
 

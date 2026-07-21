@@ -617,19 +617,6 @@ export function NodeEditorModal({
                         <div className="text-[10px] text-red-500 font-mono mb-2">
                           DEBUG: activeTriggerId={activeTriggerId}, triggerType={triggerType}, selectorValue={selectorValue}, activeTrigger.type={activeTrigger?.type}
                         </div>
-                        <div className="flex items-center justify-between p-4 rounded-xl bg-slate-50/50 border border-slate-200/80">
-                          <div className="space-y-0.5">
-                            <label className="text-xs font-bold text-slate-700" htmlFor="group-mode-toggle">Habilitar para Grupo</label>
-                            <p className="text-[10px] text-muted-foreground leading-normal max-w-[380px]">
-                              Quando ativo, envia para os grupos do WhatsApp configurados. Desative para enviar em conversas individuais.
-                            </p>
-                          </div>
-                          <Switch
-                            id="group-mode-toggle"
-                            checked={(triggerConfig.isGroup as boolean) ?? true}
-                            onCheckedChange={(checked) => handleTriggerConfigChange({ ...triggerConfig, isGroup: checked })}
-                          />
-                        </div>
 
                         {selectorValue === "webhook" && (
                           <WebhookFieldMappings
