@@ -50,15 +50,31 @@ export function ProviderSyncModal({ isOpen, onClose, localInstances, onSyncSucce
       
       const response = JSON.parse(proxyResult.body);
       
+      let fetchedArray: any[] = [];
       if (response && Array.isArray(response)) {
-        setProviderInstances(response);
+        fetchedArray = response;
       } else if (response && response.instances && Array.isArray(response.instances)) {
-        setProviderInstances(response.instances);
+        fetchedArray = response.instances;
       } else {
         throw new Error("Formato de resposta inválido do webhook.");
       }
+      setProviderInstances(fetchedArray);
+
+      // Auto-update status for already linked instances
+      const linkedToUpdate = localInstances.filter(l => 
+        l.external_instance_id && 
+        fetchedArray.some(p => (p.externalId || p.id || p.instanceId || p.name_phone || p.name) === l.external_instance_id) &&
+        l.status !== "connected"
+      );
+      
+      if (linkedToUpdate.length > 0) {
+        const ids = linkedToUpdate.map(l => l.id);
+        await supabase.from("instances").update({ status: "connected" }).in("id", ids);
+        onSyncSuccess();
+      }
+
       setHasFetched(true);
-      toast.success(`${Array.isArray(response) ? response.length : response.instances.length} instâncias encontradas.`);
+      toast.success(`${fetchedArray.length} instâncias encontradas.`);
     } catch (err: any) {
       toast.error("Erro ao buscar instâncias", { description: err.message });
       console.error(err);
