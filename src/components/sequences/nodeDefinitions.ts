@@ -229,15 +229,7 @@ export function toNodeCategories(isGroup?: boolean): NodeCategory[] {
       id: "group_management",
       label: "Gestão de Grupo",
       nodes: [
-        { type: "group_create", label: "Criar Grupo", icon: Plus, color: "bg-indigo-600" },
-        { type: "group_rename", label: "Renomear Grupo", icon: Pencil, color: "bg-indigo-600" },
-        { type: "group_photo", label: "Alterar Foto", icon: Image, color: "bg-indigo-600" },
-        { type: "group_description", label: "Alterar Descrição", icon: FileText, color: "bg-indigo-600" },
-        { type: "group_add_participant", label: "Adicionar Membro", icon: UserPlus, color: "bg-indigo-600" },
-        { type: "group_remove_participant", label: "Remover Membro", icon: UserMinus, color: "bg-indigo-600" },
-        { type: "group_promote_admin", label: "Promover Admin", icon: ShieldAlert, color: "bg-indigo-600" },
-        { type: "group_remove_admin", label: "Remover Admin", icon: ShieldCheck, color: "bg-indigo-600" },
-        { type: "group_settings", label: "Configurações", icon: Settings, color: "bg-indigo-600" },
+        { type: "group_management", label: "Gestão de Grupo", icon: UsersRound, color: "bg-indigo-600" }
       ]
     });
   }
