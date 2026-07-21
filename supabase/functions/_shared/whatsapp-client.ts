@@ -236,7 +236,7 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
 
     case "group.update_name":
       endpoint = "/update-group-name";
-      body.groupName = config.name || config.groupName || "";
+      body.groupName = config.newName || config.name || config.groupName || "";
       break;
 
     case "group.update_photo":
