@@ -42,6 +42,10 @@ interface TriggerContext {
   pollOptionText?: string;
   sendPrivate: boolean;
   customFields?: Record<string, string>;
+  triggerId?: string;
+  instanceId?: string;
+  instanceIds?: string[];
+  webhookPayload?: any;
 }
 
 interface GroupMessage {
@@ -71,6 +75,7 @@ interface SequenceConnection {
   source_node_id: string;
   target_node_id: string;
   condition_path: string | null;
+  source_port_id?: string;
 }
 
 interface LinkedGroup {
@@ -96,6 +101,7 @@ interface CampaignData {
   instance_id: string;
   user_id: string;
   instances: InstanceData;
+  company_id?: string;
 }
 
 interface DestinationData {
@@ -646,7 +652,7 @@ Deno.serve(async (req) => {
       }
     }
     // Fallback: resolve instance from triggerContext if provided (carries the group's instance_id or the individual instanceIds)
-    const triggerContext = (body as ExecuteMessageRequest).triggerContext;
+    // triggerContext is already available
     if (triggerContext?.instanceId) {
       const { data: ctxInst } = await supabase
         .from("instances")
@@ -871,6 +877,7 @@ Deno.serve(async (req) => {
           destination: {
             jid: `status@s.whatsapp.net`,
             name: "Status",
+            phone: "",
           },
         };
         
@@ -2358,7 +2365,7 @@ Deno.serve(async (req) => {
             userId,
             nodeId: node.id,
             nodeType: node.node_type,
-            status: !subFailed ? "success" : "failed",
+            status: !subFailed ? "success" : "error",
             startedAt: nodeStartedAt,
             input: node.config,
             output: { status: "completed", subMessagesCount: subMessages.length },
@@ -2412,6 +2419,7 @@ Deno.serve(async (req) => {
             destination: {
               jid: `${instance.phone || "status"}@s.whatsapp.net`,
               name: "Status",
+              phone: "",
             },
           };
 
@@ -2471,7 +2479,7 @@ Deno.serve(async (req) => {
             userId,
             nodeId: node.id,
             nodeType: node.node_type,
-            status: nodesFailed === 0 ? "success" : "failed",
+            status: nodesFailed === 0 ? "success" : "error",
             startedAt: nodeStartedAt,
             input: formattedConfig,
             output: { status: "queued", type: statusType, instance_id: activeInstanceId },
