@@ -2773,6 +2773,7 @@ export function UnifiedNodeConfigPanel({
                 { type: "group_promote_admin", label: "Promover Admin", icon: ShieldAlert, category: "Moderação" },
                 { type: "group_remove_admin", label: "Remover Admin", icon: ShieldCheck, category: "Moderação" },
                 { type: "group_settings", label: "Configurações", icon: Settings, category: "Moderação" },
+                { type: "delay", label: "Delay", icon: Clock, category: "Moderação" },
               ];
 
               const handleAddAction = (actionType: string) => {
