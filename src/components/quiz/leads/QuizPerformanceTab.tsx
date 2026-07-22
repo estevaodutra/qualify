@@ -121,7 +121,7 @@ export function QuizPerformanceTab({ funnel, steps, components }: Props) {
         <CardContent className="space-y-4">
           <div className="space-y-1.5">
             <div className="flex justify-between text-xs font-semibold text-slate-700">
-              <span>Visitas -> Iniciados</span>
+              <span>Visitas &rarr; Iniciados</span>
               <span>{stats.startedCount} de {stats.totalVisits} ({startRate}%)</span>
             </div>
             <Progress value={startRate} className="h-2" />
@@ -129,7 +129,7 @@ export function QuizPerformanceTab({ funnel, steps, components }: Props) {
 
           <div className="space-y-1.5">
             <div className="flex justify-between text-xs font-semibold text-slate-700">
-              <span>Iniciados -> Leads Identificados</span>
+              <span>Iniciados &rarr; Leads Identificados</span>
               <span>{stats.identifiedCount} de {stats.startedCount} ({leadRate}%)</span>
             </div>
             <Progress value={leadRate} className="h-2 bg-slate-100 [&>div]:bg-amber-500" />
@@ -137,7 +137,7 @@ export function QuizPerformanceTab({ funnel, steps, components }: Props) {
 
           <div className="space-y-1.5">
             <div className="flex justify-between text-xs font-semibold text-slate-700">
-              <span>Iniciados -> Conclusões</span>
+              <span>Iniciados &rarr; Conclusões</span>
               <span>{stats.completedCount} de {stats.startedCount} ({completionRate}%)</span>
             </div>
             <Progress value={completionRate} className="h-2 bg-slate-100 [&>div]:bg-emerald-500" />
