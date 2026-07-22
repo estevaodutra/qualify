@@ -24,7 +24,7 @@ export function QuizLeadsPage({ funnel, steps, components }: Props) {
   const [status, setStatus] = useState("all");
   const [utmSource, setUtmSource] = useState("");
   const [utmCampaign, setUtmCampaign] = useState("");
-  const [deviceType, setDeviceType] = useState("");
+  const [deviceType, setDeviceType] = useState("all");
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
 
   const pageSize = 20;

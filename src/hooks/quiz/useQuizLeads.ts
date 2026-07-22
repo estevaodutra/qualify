@@ -63,7 +63,7 @@ export function useQuizLeads({
       if (utmCampaign) {
         query = query.eq("utm_campaign", utmCampaign);
       }
-      if (deviceType) {
+      if (deviceType && deviceType !== "all") {
         query = query.eq("device_type", deviceType);
       }
 

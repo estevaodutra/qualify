@@ -38,10 +38,10 @@ export function QuizLeadsToolbar({
     onStatusChange("all");
     onUtmSourceChange("");
     onUtmCampaignChange("");
-    onDeviceTypeChange("");
+    onDeviceTypeChange("all");
   };
 
-  const hasActiveFilters = search || status !== "all" || utmSource || utmCampaign || deviceType;
+  const hasActiveFilters = search || status !== "all" || utmSource || utmCampaign || (deviceType && deviceType !== "all");
 
   // Export to CSV natively
   const handleExportCSV = () => {
@@ -119,7 +119,7 @@ export function QuizLeadsToolbar({
             <SelectValue placeholder="Dispositivo" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Todos Dispositivos</SelectItem>
+            <SelectItem value="all">Todos Dispositivos</SelectItem>
             <SelectItem value="mobile">Celular</SelectItem>
             <SelectItem value="tablet">Tablet</SelectItem>
             <SelectItem value="desktop">Computador</SelectItem>
