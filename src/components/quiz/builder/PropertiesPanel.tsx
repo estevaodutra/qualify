@@ -1,6 +1,6 @@
 // src/components/quiz/builder/PropertiesPanel.tsx
 import React from "react";
-import { Sliders, Palette, LayoutGrid, Eye, Play, GitBranch, Database, Trash2 } from "lucide-react";
+import { Sliders, Palette, LayoutGrid, Eye, Play, GitBranch, Database, Trash2, Plus, ArrowUp, ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -423,7 +423,7 @@ export const PropertiesPanel: React.FC = () => {
             ) : null}
 
             {activeComponent.componentType === "options" || activeComponent.componentType === "cards_choice" ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Título da Pergunta</Label>
                   <Input
@@ -432,15 +432,184 @@ export const PropertiesPanel: React.FC = () => {
                     className="h-8 text-xs"
                   />
                 </div>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={!!activeComponent.config.multiple}
-                    onChange={(e) => handleConfigChange("multiple", e.target.checked)}
-                    className="rounded text-indigo-600"
-                  />
-                  <span>Permitir Escolha Múltipla</span>
-                </label>
+                
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={!!activeComponent.config.multiple}
+                      onChange={(e) => handleConfigChange("multiple", e.target.checked)}
+                      className="rounded text-indigo-600"
+                    />
+                    <span>Escolha Múltipla</span>
+                  </label>
+                  
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={activeComponent.config.autoAdvance !== false}
+                      onChange={(e) => handleConfigChange("autoAdvance", e.target.checked)}
+                      className="rounded text-indigo-600"
+                    />
+                    <span>Avanço Automático</span>
+                  </label>
+                </div>
+
+                <div className="space-y-2 pt-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold">Alternativas</Label>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => {
+                        const currentOptions = (activeComponent.config.options as any[]) || [];
+                        const newOption = {
+                          id: crypto.randomUUID(),
+                          text: `Alternativa ${currentOptions.length + 1}`,
+                          value: String.fromCharCode(65 + currentOptions.length),
+                          points: 0,
+                          destination: null,
+                          ...(activeComponent.componentType === "cards_choice" ? { image: "" } : {})
+                        };
+                        handleConfigChange("options", [...currentOptions, newOption]);
+                      }}
+                      className="h-6 px-2 text-[10px] gap-1 text-indigo-600 hover:text-indigo-700"
+                    >
+                      <Plus className="w-3 h-3" /> Adicionar
+                    </Button>
+                  </div>
+
+                  <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
+                    {((activeComponent.config.options as any[]) || []).map((opt, idx, arr) => (
+                      <div key={opt.id || idx} className="border border-border rounded-lg p-2.5 bg-muted/30 space-y-2 relative group/opt">
+                        <div className="flex items-center gap-1.5">
+                          {/* Value/Letter */}
+                          <Input
+                            value={opt.value || ""}
+                            onChange={(e) => {
+                              const updated = ((activeComponent.config.options as any[]) || []).map((o, i) => 
+                                i === idx ? { ...o, value: e.target.value } : o
+                              );
+                              handleConfigChange("options", updated);
+                            }}
+                            placeholder={String.fromCharCode(65 + idx)}
+                            className="w-10 h-7 text-center font-bold text-xs p-0 bg-background"
+                            title="Valor/Letra da alternativa"
+                          />
+                          
+                          {/* Option text */}
+                          <Input
+                            value={opt.text || ""}
+                            onChange={(e) => {
+                              const updated = ((activeComponent.config.options as any[]) || []).map((o, i) => 
+                                i === idx ? { ...o, text: e.target.value } : o
+                              );
+                              handleConfigChange("options", updated);
+                            }}
+                            placeholder="Texto da alternativa"
+                            className="flex-1 h-7 text-xs bg-background"
+                          />
+
+                          {/* Delete option */}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              const updated = ((activeComponent.config.options as any[]) || []).filter((_, i) => i !== idx);
+                              handleConfigChange("options", updated);
+                            }}
+                            className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50 shrink-0"
+                            title="Excluir alternativa"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+
+                        {/* Destination step redirect */}
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-muted-foreground shrink-0 w-10 text-right pr-1">Ir para:</span>
+                          <select
+                            value={opt.destination || ""}
+                            onChange={(e) => {
+                              const updated = ((activeComponent.config.options as any[]) || []).map((o, i) => 
+                                i === idx ? { ...o, destination: e.target.value || null } : o
+                              );
+                              handleConfigChange("options", updated);
+                            }}
+                            className="flex-1 h-7 border rounded-md text-[10px] px-1 bg-background focus:outline-none"
+                          >
+                            <option value="">Avançar para Próxima Etapa</option>
+                            {steps
+                              .filter((s) => s.id !== activeStepId)
+                              .map((s) => (
+                                <option key={s.id} value={s.id}>
+                                  Etapa: {s.name}
+                                </option>
+                              ))}
+                          </select>
+
+                          {/* Reordering */}
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              disabled={idx === 0}
+                              onClick={() => {
+                                const currentOptions = [...((activeComponent.config.options as any[]) || [])];
+                                const temp = currentOptions[idx];
+                                currentOptions[idx] = currentOptions[idx - 1];
+                                currentOptions[idx - 1] = temp;
+                                handleConfigChange("options", currentOptions);
+                              }}
+                              className="h-6 w-6 text-slate-500 hover:bg-slate-100"
+                              title="Subir"
+                            >
+                              <ArrowUp className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              disabled={idx === arr.length - 1}
+                              onClick={() => {
+                                const currentOptions = [...((activeComponent.config.options as any[]) || [])];
+                                const temp = currentOptions[idx];
+                                currentOptions[idx] = currentOptions[idx + 1];
+                                currentOptions[idx + 1] = temp;
+                                handleConfigChange("options", currentOptions);
+                              }}
+                              className="h-6 w-6 text-slate-500 hover:bg-slate-100"
+                              title="Baixar"
+                            >
+                              <ArrowDown className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Image URL input if card choice */}
+                        {activeComponent.componentType === "cards_choice" && (
+                          <div className="flex items-center gap-1.5 pt-1">
+                            <span className="text-[10px] text-muted-foreground shrink-0 w-10 text-right pr-1">Imagem:</span>
+                            <Input
+                              value={opt.image || ""}
+                              onChange={(e) => {
+                                const updated = ((activeComponent.config.options as any[]) || []).map((o, i) => 
+                                  i === idx ? { ...o, image: e.target.value } : o
+                                );
+                                handleConfigChange("options", updated);
+                              }}
+                              placeholder="URL da imagem (opcional)"
+                              className="flex-1 h-6 text-[10px] bg-background"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             ) : null}
 
