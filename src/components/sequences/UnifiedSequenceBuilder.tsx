@@ -13,7 +13,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   ArrowLeft, Save, Play, Pause, Trash2, ZoomIn, ZoomOut, Maximize,
-  Loader2, Info, GitBranch, Copy, PenLine, History, Sliders, ArrowRight, Plus, MessageSquare, Settings, Clock
+  Loader2, Info, GitBranch, Copy, PenLine, History, Sliders, ArrowRight, Plus, MessageSquare, Settings, Clock,
+  ChevronUp, ChevronDown
 } from "lucide-react";
 import { debounce } from "lodash";
 import { useToast } from "@/hooks/use-toast";
@@ -1266,6 +1267,58 @@ export function UnifiedSequenceBuilder({
                                       <p className="text-[10px] text-slate-500 truncate">{subtitle}</p>
                                     </div>
                                   </div>
+                                  {idx > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        updateNodesAndSave(prev => prev.map(n => {
+                                          if (n.id !== node.id) return n;
+                                          const triggers = [...(n.config.triggers as TriggerItem[] || [])];
+                                          const temp = triggers[idx];
+                                          triggers[idx] = triggers[idx - 1];
+                                          triggers[idx - 1] = temp;
+                                          return {
+                                            ...n,
+                                            config: {
+                                              ...n.config,
+                                              triggers
+                                            }
+                                          };
+                                        }));
+                                      }}
+                                      className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                      title="Mover para cima"
+                                    >
+                                      <ChevronUp className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
+                                  {idx < (node.config.triggers as TriggerItem[] || []).length - 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        updateNodesAndSave(prev => prev.map(n => {
+                                          if (n.id !== node.id) return n;
+                                          const triggers = [...(n.config.triggers as TriggerItem[] || [])];
+                                          const temp = triggers[idx];
+                                          triggers[idx] = triggers[idx + 1];
+                                          triggers[idx + 1] = temp;
+                                          return {
+                                            ...n,
+                                            config: {
+                                              ...n.config,
+                                              triggers
+                                            }
+                                          };
+                                        }));
+                                      }}
+                                      className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                      title="Mover para baixo"
+                                    >
+                                      <ChevronDown className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
                                     onClick={async (e) => {
