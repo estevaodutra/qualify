@@ -155,6 +155,112 @@ export function useQuizFunnels() {
     },
   });
 
+  const duplicateMutation = useMutation({
+    mutationFn: async (sourceId: string) => {
+      const { data: { user: u } } = await supabase.auth.getUser();
+      if (!u) throw new Error("Não autenticado");
+
+      // 1. Fetch original funnel
+      const { data: sourceFunnel, error: funnelFetchError } = await (supabase as any)
+        .from("quiz_funnels")
+        .select("*")
+        .eq("id", sourceId)
+        .single();
+      if (funnelFetchError) throw funnelFetchError;
+
+      // 2. Insert new funnel
+      const newFunnelId = crypto.randomUUID();
+      const newSlug = `${sourceFunnel.slug}-copia-${Math.floor(Math.random() * 1000)}`;
+      const { data: newFunnel, error: funnelInsertError } = await (supabase as any)
+        .from("quiz_funnels")
+        .insert({
+          id: newFunnelId,
+          user_id: u.id,
+          company_id: activeCompanyId,
+          name: `${sourceFunnel.name} (Cópia)`,
+          slug: newSlug,
+          status: "draft",
+          design_config: sourceFunnel.design_config,
+          seo_config: sourceFunnel.seo_config,
+          pixel_config: sourceFunnel.pixel_config,
+          webhook_config: sourceFunnel.webhook_config,
+        })
+        .select()
+        .single();
+      if (funnelInsertError) throw funnelInsertError;
+
+      // 3. Fetch steps belonging to source funnel
+      const { data: sourceSteps, error: stepsFetchError } = await (supabase as any)
+        .from("quiz_steps")
+        .select("*")
+        .eq("funnel_id", sourceId);
+      if (stepsFetchError) throw stepsFetchError;
+
+      // 4. Map old step IDs to new step IDs and insert cloned steps
+      const stepIdMap: Record<string, string> = {};
+      const clonedSteps = (sourceSteps || []).map((step: any) => {
+        const newStepId = crypto.randomUUID();
+        stepIdMap[step.id] = newStepId;
+        return {
+          id: newStepId,
+          funnel_id: newFunnelId,
+          user_id: u.id,
+          company_id: activeCompanyId,
+          name: step.name,
+          step_order: step.step_order,
+          show_logo: step.show_logo ?? true,
+          show_progress: step.show_progress ?? true,
+          allow_back: step.allow_back ?? true,
+        };
+      });
+
+      if (clonedSteps.length > 0) {
+        const { error: insertStepsError } = await (supabase as any)
+          .from("quiz_steps")
+          .insert(clonedSteps);
+        if (insertStepsError) throw insertStepsError;
+      }
+
+      // 5. Fetch components belonging to source funnel
+      const { data: sourceComponents, error: componentsFetchError } = await (supabase as any)
+        .from("quiz_components")
+        .select("*")
+        .eq("funnel_id", sourceId);
+      if (componentsFetchError) throw componentsFetchError;
+
+      // 6. Map them to the new step IDs and insert cloned components
+      const clonedComponents = (sourceComponents || [])
+        .filter((comp: any) => stepIdMap[comp.step_id])
+        .map((comp: any) => {
+          return {
+            id: crypto.randomUUID(),
+            step_id: stepIdMap[comp.step_id],
+            funnel_id: newFunnelId,
+            user_id: u.id,
+            component_type: comp.component_type,
+            component_order: comp.component_order,
+            config: comp.config,
+          };
+        });
+
+      if (clonedComponents.length > 0) {
+        const { error: insertComponentsError } = await (supabase as any)
+          .from("quiz_components")
+          .insert(clonedComponents);
+        if (insertComponentsError) throw insertComponentsError;
+      }
+
+      return transform(newFunnel as DbQuizFunnel);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["quiz_funnels"] });
+      toast({ title: "Funil duplicado com sucesso!" });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Erro ao duplicar funil", description: e.message, variant: "destructive" });
+    },
+  });
+
   return {
     funnels,
     isLoading,
@@ -162,6 +268,7 @@ export function useQuizFunnels() {
     updateFunnel: updateMutation.mutateAsync,
     deleteFunnel: deleteMutation.mutateAsync,
     publishFunnel: publishMutation.mutateAsync,
+    duplicateFunnel: duplicateMutation.mutateAsync,
     isCreating: createMutation.isPending,
   };
 }

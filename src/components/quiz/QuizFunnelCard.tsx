@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { MoreHorizontal, Edit, Trash2, Globe, EyeOff, BarChart2, Users, MousePointerClick, CheckSquare } from "lucide-react";
+import { MoreHorizontal, Edit, Trash2, Globe, EyeOff, BarChart2, Users, MousePointerClick, CheckSquare, Copy } from "lucide-react";
 import { QuizFunnel } from "@/hooks/useQuizFunnels";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,7 @@ interface Props {
   funnel: QuizFunnel;
   onDelete: (id: string) => void;
   onPublish: (id: string, publish: boolean) => void;
+  onDuplicate: (id: string) => void;
 }
 
 const statusLabel: Record<QuizFunnel["status"], string> = {
@@ -30,7 +31,7 @@ const statusVariant: Record<QuizFunnel["status"], "secondary" | "default" | "out
   archived: "outline",
 };
 
-export function QuizFunnelCard({ funnel, onDelete, onPublish }: Props) {
+export function QuizFunnelCard({ funnel, onDelete, onPublish, onDuplicate }: Props) {
   const navigate = useNavigate();
 
   return (
@@ -61,6 +62,9 @@ export function QuizFunnelCard({ funnel, onDelete, onPublish }: Props) {
             <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
               <DropdownMenuItem onClick={() => navigate(`/quiz/${funnel.id}`)}>
                 <Edit className="w-4 h-4 mr-2" /> Editar
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onDuplicate(funnel.id)}>
+                <Copy className="w-4 h-4 mr-2" /> Duplicar
               </DropdownMenuItem>
               {funnel.status === "published" ? (
                 <DropdownMenuItem onClick={() => onPublish(funnel.id, false)}>

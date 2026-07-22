@@ -10,7 +10,7 @@ export default function QuizFunnelsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [search, setSearch] = useState("");
 
-  const { funnels, isLoading, createFunnel, deleteFunnel, publishFunnel, isCreating } = useQuizFunnels();
+  const { funnels, isLoading, createFunnel, deleteFunnel, publishFunnel, duplicateFunnel, isCreating } = useQuizFunnels();
 
   const filtered = funnels.filter((f) =>
     f.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -29,6 +29,10 @@ export default function QuizFunnelsPage() {
 
   const handlePublish = async (id: string, publish: boolean) => {
     await publishFunnel({ id, publish });
+  };
+
+  const handleDuplicate = async (id: string) => {
+    await duplicateFunnel(id);
   };
 
   return (
@@ -89,6 +93,7 @@ export default function QuizFunnelsPage() {
               funnel={funnel}
               onDelete={handleDelete}
               onPublish={handlePublish}
+              onDuplicate={handleDuplicate}
             />
           ))}
         </div>
