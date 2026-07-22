@@ -3,7 +3,6 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Download, RefreshCw, X } from "lucide-react";
 import { QuizSubmissionDetail } from "@/types/quiz/tracking";
-import * as XLSX from "xlsx";
 
 interface Props {
   search: string;
@@ -44,29 +43,44 @@ export function QuizLeadsToolbar({
 
   const hasActiveFilters = search || status !== "all" || utmSource || utmCampaign || deviceType;
 
-  // Export to Excel / XLSX
-  const handleExportExcel = () => {
-    const dataToExport = leads.map(l => ({
-      ID: l.publicId,
-      Status: l.status,
-      Progresso: `${l.stepsCompleted} etapas`,
-      Nome: l.leadName || "Anônimo",
-      Email: l.leadEmail || "—",
-      WhatsApp: l.leadPhone || "—",
-      "Origem/Referrer": l.referrer || "—",
-      UTM_Source: l.utmSource || "—",
-      UTM_Campaign: l.utmCampaign || "—",
-      Dispositivo: l.deviceType || "—",
-      Navegador: l.browser || "—",
-      "Sistema Operacional": l.operatingSystem || "—",
-      Duração: l.totalDurationSeconds ? `${l.totalDurationSeconds}s` : "—",
-      Criado_Em: new Date(l.firstSeenAt).toLocaleString("pt-BR")
-    }));
+  // Export to CSV natively
+  const handleExportCSV = () => {
+    const headers = [
+      "ID", "Status", "Progresso", "Nome", "Email", "WhatsApp", 
+      "Origem/Referrer", "UTM_Source", "UTM_Campaign", "Dispositivo", 
+      "Navegador", "Sistema Operacional", "Duração", "Criado Em"
+    ];
+    
+    const rows = leads.map(l => [
+      l.publicId,
+      l.status,
+      `${l.stepsCompleted} etapas`,
+      l.leadName || "Anônimo",
+      l.leadEmail || "—",
+      l.leadPhone || "—",
+      l.referrer || "—",
+      l.utmSource || "—",
+      l.utmCampaign || "—",
+      l.deviceType || "—",
+      l.browser || "—",
+      l.operatingSystem || "—",
+      l.totalDurationSeconds ? `${l.totalDurationSeconds}s` : "—",
+      new Date(l.firstSeenAt).toLocaleString("pt-BR")
+    ]);
 
-    const ws = XLSX.utils.json_to_sheet(dataToExport);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Leads");
-    XLSX.writeFile(wb, `leads_funnel_${new Date().toISOString().slice(0,10)}.xlsx`);
+    const csvContent = [
+      headers.join(";"),
+      ...rows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(";"))
+    ].join("\n");
+
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `leads_funnel_${new Date().toISOString().slice(0,10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -150,12 +164,12 @@ export function QuizLeadsToolbar({
         <Button
           variant="default"
           size="sm"
-          onClick={handleExportExcel}
+          onClick={handleExportCSV}
           disabled={leads.length === 0}
           className="h-9 text-xs font-semibold bg-[#8A3CFF] hover:bg-[#7830E3] text-white"
         >
           <Download className="h-3.5 w-3.5 mr-1.5" />
-          Exportar Excel
+          Exportar CSV
         </Button>
       </div>
     </div>
