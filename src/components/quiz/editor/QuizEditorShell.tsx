@@ -12,10 +12,10 @@ import { StepList } from "./StepList";
 import { ComponentPalette } from "./ComponentPalette";
 import { MobilePreview } from "./MobilePreview";
 import { ComponentConfigPanel } from "./ComponentConfigPanel";
-import { ResponsesTable } from "../leads/ResponsesTable";
-import { PerformanceTab } from "../leads/PerformanceTab";
+import { QuizLeadsPage } from "../leads/QuizLeadsPage";
 import { DesignTab, DesignConfig, DEFAULT_DESIGN_CONFIG } from "../design/DesignTab";
 import { QuizSettingsDialog } from "../QuizSettingsDialog";
+import { Users } from "lucide-react";
 
 interface Props {
   funnel: QuizFunnel;
@@ -31,6 +31,7 @@ export function QuizEditorShell({ funnel }: Props) {
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [activeTab, setActiveTab] = useState("construtor");
 
   const [unsavedComponents, setUnsavedComponents] = useState<Record<string, Record<string, unknown>>>({});
   const [unsavedDesign, setUnsavedDesign] = useState<Partial<DesignConfig>>({});
@@ -188,6 +189,16 @@ export function QuizEditorShell({ funnel }: Props) {
             <Settings className="w-4 h-4" />
           </Button>
           <Button
+            variant={activeTab === "leads" ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => setActiveTab("leads")}
+            className="flex items-center gap-1.5 h-8 text-xs font-semibold px-3"
+            title="Leads do Funil"
+          >
+            <Users className="w-4 h-4" />
+            <span>Leads</span>
+          </Button>
+          <Button
             size="sm"
             variant={hasUnsavedChanges ? "default" : "secondary"}
             onClick={handleSaveAll}
@@ -212,7 +223,7 @@ export function QuizEditorShell({ funnel }: Props) {
       </div>
 
       {/* Main tabs */}
-      <Tabs defaultValue="construtor" className="flex-1 flex flex-col min-h-0">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
         <div className="border-b px-4 shrink-0">
           <TabsList className="h-9 bg-transparent p-0 gap-0">
             {[
@@ -284,22 +295,9 @@ export function QuizEditorShell({ funnel }: Props) {
           <DesignTab config={designConfig} onChange={handleDesignChange} />
         </TabsContent>
 
-        {/* Leads tab with sub-tabs */}
-        <TabsContent value="leads" className="flex-1 overflow-y-auto mt-0">
-          <div className="p-6">
-            <Tabs defaultValue="respostas">
-              <TabsList className="mb-4">
-                <TabsTrigger value="respostas">Respostas</TabsTrigger>
-                <TabsTrigger value="performance">Performance</TabsTrigger>
-              </TabsList>
-              <TabsContent value="respostas">
-                <ResponsesTable funnelId={funnel.id} totalSteps={steps.length} />
-              </TabsContent>
-              <TabsContent value="performance">
-                <PerformanceTab funnel={funnel} steps={steps} components={allComponents} />
-              </TabsContent>
-            </Tabs>
-          </div>
+        {/* Leads tab */}
+        <TabsContent value="leads" className="flex-1 overflow-y-auto mt-0 flex flex-col min-h-0">
+          <QuizLeadsPage funnel={funnel} steps={steps} components={allComponents} />
         </TabsContent>
       </Tabs>
 
