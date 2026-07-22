@@ -36,6 +36,7 @@ interface Props {
   onDeviceTypeChange: (s: string) => void;
   dateRange: { from?: Date; to?: Date };
   onDateRangeChange: (r: { from?: Date; to?: Date }) => void;
+  onRefresh?: () => void;
 }
 
 export function QuizLeadsTable({
@@ -59,7 +60,8 @@ export function QuizLeadsTable({
   deviceType,
   onDeviceTypeChange,
   dateRange,
-  onDateRangeChange
+  onDateRangeChange,
+  onRefresh
 }: Props) {
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null);
 
@@ -149,7 +151,10 @@ export function QuizLeadsTable({
         deviceType={deviceType}
         onDeviceTypeChange={onDeviceTypeChange}
         leads={leads}
-        onRefresh={() => supabase.channel(`quiz_realtime_leads_${funnel.id}`).send({ type: "broadcast", event: "refresh", payload: {} })}
+        onRefresh={() => {
+          onRefresh?.();
+          supabase.channel(`quiz_realtime_leads_${funnel.id}`).send({ type: "broadcast", event: "refresh", payload: {} });
+        }}
       />
 
       {/* Main container with horizontal overflow and scrollbars */}

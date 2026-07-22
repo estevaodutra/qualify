@@ -32,7 +32,7 @@ export function QuizLeadsPage({ funnel, steps, components }: Props) {
   // Realtime subscription (will invalidate React Query queries on update)
   useQuizRealtimeLeads(funnel.id, true);
 
-  const { data, isLoading } = useQuizLeads({
+  const { data, isLoading, refetch } = useQuizLeads({
     funnelId: funnel.id,
     page,
     pageSize,
@@ -99,6 +99,7 @@ export function QuizLeadsPage({ funnel, steps, components }: Props) {
               onDeviceTypeChange={setDeviceType}
               dateRange={dateRange}
               onDateRangeChange={setDateRange}
+              onRefresh={refetch}
             />
           </TabsContent>
 
