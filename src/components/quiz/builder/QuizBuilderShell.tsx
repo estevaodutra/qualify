@@ -12,6 +12,7 @@ import { QuizFunnel, QuizStep, QuizComponent, QuizDesignConfig } from "@/types/q
 import { DEFAULT_DESIGN_CONFIG } from "@/components/quiz/design/DesignTab";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { QuizLeadsPage } from "../leads/QuizLeadsPage";
 
 interface QuizBuilderShellProps {
   funnelId: string;
@@ -21,6 +22,7 @@ export const QuizBuilderShell: React.FC<QuizBuilderShellProps> = ({ funnelId }) 
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [activeView, setActiveView] = useState<"builder" | "leads">("builder");
 
   const funnel = useQuizBuilderStore((s) => s.funnel);
   const steps = useQuizBuilderStore((s) => s.steps);
@@ -269,12 +271,20 @@ export const QuizBuilderShell: React.FC<QuizBuilderShellProps> = ({ funnelId }) 
         onPublish={handlePublish}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onExit={handleExit}
+        activeView={activeView}
+        onViewChange={setActiveView}
       />
       <div className="flex-1 flex overflow-hidden relative">
-        <StepSidebar />
-        <ComponentLibrary />
-        <BuilderCanvas />
-        <PropertiesPanel />
+        {activeView === "leads" && funnel ? (
+          <QuizLeadsPage funnel={funnel as any} steps={steps} components={components} />
+        ) : (
+          <>
+            <StepSidebar />
+            <ComponentLibrary />
+            <BuilderCanvas />
+            <PropertiesPanel />
+          </>
+        )}
       </div>
 
       {/* Settings Overlay Fullscreen */}

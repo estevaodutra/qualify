@@ -15,7 +15,8 @@ import {
   CheckCircle2,
   Loader2,
   AlertCircle,
-  Settings
+  Settings,
+  Users
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuizBuilderStore, SaveStatus } from "@/stores/quiz/useQuizBuilderStore";
@@ -26,9 +27,18 @@ interface TopbarProps {
   onPublish: () => void;
   onOpenSettings: () => void;
   onExit?: () => void;
+  activeView: "builder" | "leads";
+  onViewChange: (view: "builder" | "leads") => void;
 }
 
-export const QuizBuilderTopbar: React.FC<TopbarProps> = ({ onSave, onPublish, onOpenSettings, onExit }) => {
+export const QuizBuilderTopbar: React.FC<TopbarProps> = ({
+  onSave,
+  onPublish,
+  onOpenSettings,
+  onExit,
+  activeView,
+  onViewChange
+}) => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -98,44 +108,48 @@ export const QuizBuilderTopbar: React.FC<TopbarProps> = ({ onSave, onPublish, on
 
       {/* Center: Device Switcher & Undo/Redo */}
       <div className="flex items-center gap-2">
-        <div className="flex items-center bg-muted/60 p-0.5 rounded-lg border border-border">
-          <Button
-            variant={deviceMode === "mobile" ? "secondary" : "ghost"}
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => setDeviceMode("mobile")}
-            title="Visualização Mobile"
-          >
-            <Smartphone className="w-3.5 h-3.5" />
-          </Button>
-          <Button
-            variant={deviceMode === "tablet" ? "secondary" : "ghost"}
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => setDeviceMode("tablet")}
-            title="Visualização Tablet"
-          >
-            <Tablet className="w-3.5 h-3.5" />
-          </Button>
-          <Button
-            variant={deviceMode === "desktop" ? "secondary" : "ghost"}
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => setDeviceMode("desktop")}
-            title="Visualização Desktop"
-          >
-            <Monitor className="w-3.5 h-3.5" />
-          </Button>
-        </div>
+        {activeView === "builder" && (
+          <>
+            <div className="flex items-center bg-muted/60 p-0.5 rounded-lg border border-border">
+              <Button
+                variant={deviceMode === "mobile" ? "secondary" : "ghost"}
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setDeviceMode("mobile")}
+                title="Visualização Mobile"
+              >
+                <Smartphone className="w-3.5 h-3.5" />
+              </Button>
+              <Button
+                variant={deviceMode === "tablet" ? "secondary" : "ghost"}
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setDeviceMode("tablet")}
+                title="Visualização Tablet"
+              >
+                <Tablet className="w-3.5 h-3.5" />
+              </Button>
+              <Button
+                variant={deviceMode === "desktop" ? "secondary" : "ghost"}
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setDeviceMode("desktop")}
+                title="Visualização Desktop"
+              >
+                <Monitor className="w-3.5 h-3.5" />
+              </Button>
+            </div>
 
-        <div className="h-4 w-px bg-border mx-1" />
+            <div className="h-4 w-px bg-border mx-1" />
 
-        <Button variant="ghost" size="icon" className="h-8 w-8" disabled={!canUndo} onClick={undo} title="Desfazer (Ctrl+Z)">
-          <Undo2 className="w-4 h-4" />
-        </Button>
-        <Button variant="ghost" size="icon" className="h-8 w-8" disabled={!canRedo} onClick={redo} title="Refazer (Ctrl+Y)">
-          <Redo2 className="w-4 h-4" />
-        </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" disabled={!canUndo} onClick={undo} title="Desfazer (Ctrl+Z)">
+              <Undo2 className="w-4 h-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" disabled={!canRedo} onClick={redo} title="Refazer (Ctrl+Y)">
+              <Redo2 className="w-4 h-4" />
+            </Button>
+          </>
+        )}
       </div>
 
       {/* Right: Actions (Settings Gear, Preview, Link, Save, Publish) */}
@@ -151,14 +165,27 @@ export const QuizBuilderTopbar: React.FC<TopbarProps> = ({ onSave, onPublish, on
         </Button>
 
         <Button
-          variant="outline"
+          variant={activeView === "leads" ? "secondary" : "outline"}
           size="sm"
-          className="h-8 text-xs gap-1.5"
-          onClick={() => setIsPreviewMode(!isPreviewMode)}
+          className={`h-8 text-xs gap-1.5 ${activeView === "leads" ? "bg-indigo-50 border-indigo-200 text-indigo-700 font-semibold" : "text-slate-700"}`}
+          onClick={() => onViewChange(activeView === "leads" ? "builder" : "leads")}
+          title="Leads e Métricas do Funil"
         >
-          <Eye className="w-3.5 h-3.5" />
-          {isPreviewMode ? "Editar" : "Preview"}
+          <Users className="w-3.5 h-3.5" />
+          <span>Leads</span>
         </Button>
+
+        {activeView === "builder" && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs gap-1.5"
+            onClick={() => setIsPreviewMode(!isPreviewMode)}
+          >
+            <Eye className="w-3.5 h-3.5" />
+            {isPreviewMode ? "Editar" : "Preview"}
+          </Button>
+        )}
 
         {funnel?.status === "published" && (
           <Button variant="ghost" size="sm" className="h-8 text-xs gap-1.5" onClick={handleCopyLink}>
