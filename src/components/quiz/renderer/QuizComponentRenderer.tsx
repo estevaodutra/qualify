@@ -18,6 +18,16 @@ import { RichTextRenderer } from "./RichTextRenderer";
 import { normalizeLegacyTextConfig } from "@/utils/quiz/quizTextSanitizer";
 import { useQuizBuilderStore } from "@/stores/quiz/useQuizBuilderStore";
 
+const isEmoji = (str: string): boolean => {
+  if (!str) return false;
+  if (/^[a-zA-Z0-9]$/.test(str)) return false;
+  try {
+    return /\p{Extended_Pictographic}|\p{Emoji}/u.test(str);
+  } catch (e) {
+    return str.charCodeAt(0) > 127;
+  }
+};
+
 function formatPhone(value: string, mask: string): string {
   if (!mask || mask === "no_mask") return value;
   const digits = value.replace(/\D/g, "");
@@ -276,15 +286,21 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
                       isEditor && "pointer-events-none"
                     )}
                   >
-                    <span
-                      style={{
-                        borderColor: isSel ? primaryColor : "currentColor",
-                        color: isSel ? primaryColor : "currentColor",
-                      }}
-                      className="w-6 h-6 rounded-full border-2 flex items-center justify-center text-[10px] font-bold shrink-0"
-                    >
-                      {opt.value || "•"}
-                    </span>
+                    {isEmoji(opt.value) ? (
+                      <span className="w-6 h-6 flex items-center justify-center text-lg shrink-0 select-none">
+                        {opt.value}
+                      </span>
+                    ) : (
+                      <span
+                        style={{
+                          borderColor: isSel ? primaryColor : "currentColor",
+                          color: isSel ? primaryColor : "currentColor",
+                        }}
+                        className="w-6 h-6 rounded-full border-2 flex items-center justify-center text-[10px] font-bold shrink-0"
+                      >
+                        {opt.value || "•"}
+                      </span>
+                    )}
                     <span className="flex-1">{opt.text}</span>
                     {isSel && <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: primaryColor }} />}
                   </button>
