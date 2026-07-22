@@ -1786,6 +1786,17 @@ Deno.serve(async (req) => {
               const resolvedConfig = replaceDeep(formattedConfig) as Record<string, unknown>;
               Object.assign(formattedConfig, resolvedConfig);
 
+              if (subAction.type === "delay") {
+                const normalized = normalizeDelayConfig(formattedConfig);
+                const effectiveDelay = Math.min(normalized.delayMs, MAX_DELAY_MS);
+                if (effectiveDelay > 0) {
+                  console.log(`[ExecuteMessage] ⏱️ Group management delay: waiting ${effectiveDelay}ms`);
+                  await new Promise(resolve => setTimeout(resolve, effectiveDelay));
+                }
+                subResults.push({ destination: dest.group_jid, status: "success", action: "delay" });
+                continue;
+              }
+
               const payload = buildStandardPayload({
                 action: actionName,
                 node: { id: node.id, type: subAction.type, order: node.node_order, config: formattedConfig },
