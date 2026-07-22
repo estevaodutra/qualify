@@ -10,7 +10,7 @@ export default function QuizFunnelsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [search, setSearch] = useState("");
 
-  const { funnels, isLoading, createFunnel, deleteFunnel, publishFunnel, duplicateFunnel, isCreating } = useQuizFunnels();
+  const { funnels, isLoading, createFunnel, updateFunnel, deleteFunnel, publishFunnel, duplicateFunnel, isCreating } = useQuizFunnels();
 
   const filtered = funnels.filter((f) =>
     f.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -33,6 +33,13 @@ export default function QuizFunnelsPage() {
 
   const handleDuplicate = async (id: string) => {
     await duplicateFunnel(id);
+  };
+
+  const handleRename = async (id: string, currentName: string) => {
+    const newName = prompt("Digite o novo nome para este funil:", currentName);
+    if (newName !== null && newName.trim() !== "" && newName.trim() !== currentName) {
+      await updateFunnel({ id, updates: { name: newName.trim() } });
+    }
   };
 
   return (
@@ -94,6 +101,7 @@ export default function QuizFunnelsPage() {
               onDelete={handleDelete}
               onPublish={handlePublish}
               onDuplicate={handleDuplicate}
+              onRename={handleRename}
             />
           ))}
         </div>

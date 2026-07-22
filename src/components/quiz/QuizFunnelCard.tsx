@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { MoreHorizontal, Edit, Trash2, Globe, EyeOff, BarChart2, Users, MousePointerClick, CheckSquare, Copy } from "lucide-react";
+import { MoreHorizontal, Edit, Trash2, Globe, EyeOff, BarChart2, Users, MousePointerClick, CheckSquare, Copy, PenLine } from "lucide-react";
 import { QuizFunnel } from "@/hooks/useQuizFunnels";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,7 @@ interface Props {
   onDelete: (id: string) => void;
   onPublish: (id: string, publish: boolean) => void;
   onDuplicate: (id: string) => void;
+  onRename?: (id: string, currentName: string) => void;
 }
 
 const statusLabel: Record<QuizFunnel["status"], string> = {
@@ -31,7 +32,7 @@ const statusVariant: Record<QuizFunnel["status"], "secondary" | "default" | "out
   archived: "outline",
 };
 
-export function QuizFunnelCard({ funnel, onDelete, onPublish, onDuplicate }: Props) {
+export function QuizFunnelCard({ funnel, onDelete, onPublish, onDuplicate, onRename }: Props) {
   const navigate = useNavigate();
 
   return (
@@ -62,6 +63,9 @@ export function QuizFunnelCard({ funnel, onDelete, onPublish, onDuplicate }: Pro
             <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
               <DropdownMenuItem onClick={() => navigate(`/quiz/${funnel.id}`)}>
                 <Edit className="w-4 h-4 mr-2" /> Editar
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onRename?.(funnel.id, funnel.name)}>
+                <PenLine className="w-4 h-4 mr-2" /> Renomear
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onDuplicate(funnel.id)}>
                 <Copy className="w-4 h-4 mr-2" /> Duplicar
