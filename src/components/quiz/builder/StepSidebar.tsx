@@ -1,6 +1,6 @@
 // src/components/quiz/builder/StepSidebar.tsx
 import React from "react";
-import { Plus, Trash2, Copy, Layers, GripVertical, ChevronLeft } from "lucide-react";
+import { Plus, Trash2, Copy, Layers, GripVertical, ChevronLeft, ChevronUp, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuizBuilderStore } from "@/stores/quiz/useQuizBuilderStore";
 import { QuizStep } from "@/types/quiz";
@@ -13,6 +13,7 @@ export const StepSidebar: React.FC = () => {
   const addStep = useQuizBuilderStore((s) => s.addStep);
   const deleteStep = useQuizBuilderStore((s) => s.deleteStep);
   const duplicateStep = useQuizBuilderStore((s) => s.duplicateStep);
+  const reorderSteps = useQuizBuilderStore((s) => s.reorderSteps);
   const funnel = useQuizBuilderStore((s) => s.funnel);
   const isOpen = useQuizBuilderStore((s) => s.isStepSidebarOpen);
   const toggleStepSidebar = useQuizBuilderStore((s) => s.toggleStepSidebar);
@@ -60,6 +61,22 @@ export const StepSidebar: React.FC = () => {
     deleteStep(stepId);
   };
 
+  const handleMoveStep = (e: React.MouseEvent, idx: number, direction: "up" | "down") => {
+    e.stopPropagation();
+    const orderedIds = steps.map((s) => s.id);
+    if (direction === "up" && idx > 0) {
+      const temp = orderedIds[idx];
+      orderedIds[idx] = orderedIds[idx - 1];
+      orderedIds[idx - 1] = temp;
+      reorderSteps(orderedIds);
+    } else if (direction === "down" && idx < steps.length - 1) {
+      const temp = orderedIds[idx];
+      orderedIds[idx] = orderedIds[idx + 1];
+      orderedIds[idx + 1] = temp;
+      reorderSteps(orderedIds);
+    }
+  };
+
   return (
     <div className="w-60 bg-card border-r border-border flex flex-col h-full shrink-0 select-none">
       {/* Header */}
@@ -102,7 +119,27 @@ export const StepSidebar: React.FC = () => {
                 <span className="truncate">{step.name}</span>
               </div>
 
-              <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                {idx > 0 && (
+                  <button
+                    type="button"
+                    onClick={(e) => handleMoveStep(e, idx, "up")}
+                    className="p-1 hover:text-indigo-600 transition-colors"
+                    title="Mover para cima"
+                  >
+                    <ChevronUp className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                {idx < steps.length - 1 && (
+                  <button
+                    type="button"
+                    onClick={(e) => handleMoveStep(e, idx, "down")}
+                    className="p-1 hover:text-indigo-600 transition-colors"
+                    title="Mover para baixo"
+                  >
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={(e) => handleDuplicateStep(e, step)}
