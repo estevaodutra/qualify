@@ -470,7 +470,7 @@ export default function QuizPublicPage() {
   };
 
   const handleNextStep = async (forcedDestination?: string | null) => {
-    if (!funnel || !steps[currentStepIndex] || !submissionId) return;
+    if (!funnel || !steps[currentStepIndex]) return;
 
     setSubmitting(true);
     try {
@@ -486,93 +486,103 @@ export default function QuizPublicPage() {
         if (comp.componentType.startsWith("field_")) {
           const val = formValues[comp.id];
           if (val) {
-            await quizTrackingService.saveAnswer({
-              submissionId,
-              funnelId: funnel.id,
-              companyId: funnel.companyId,
-              stepId: currentStep.id,
-              componentId: comp.id,
-              answerValue: val
-            });
+            if (submissionId) {
+              await quizTrackingService.saveAnswer({
+                submissionId,
+                funnelId: funnel.id,
+                companyId: funnel.companyId,
+                stepId: currentStep.id,
+                componentId: comp.id,
+                answerValue: val
+              });
+            }
 
             if (comp.componentType === "field_name") leadName = val;
             if (comp.componentType === "field_email") leadEmail = val;
             if (comp.componentType === "field_phone") leadPhone = val;
 
             // Track field completed
-            await quizTrackingService.trackQuizEvent({
-              submissionId,
-              funnelId: funnel.id,
-              companyId: funnel.companyId,
-              sessionId: quizTrackingService.getOrCreateSessionId(funnel.id),
-              eventName: "field_completed",
-              stepId: currentStep.id,
-              componentId: comp.id,
-              payload: { valueLength: val.length }
-            });
+            if (submissionId) {
+              await quizTrackingService.trackQuizEvent({
+                submissionId,
+                funnelId: funnel.id,
+                companyId: funnel.companyId,
+                sessionId: quizTrackingService.getOrCreateSessionId(funnel.id),
+                eventName: "field_completed",
+                stepId: currentStep.id,
+                componentId: comp.id,
+                payload: { valueLength: val.length }
+              });
+            }
           }
         } else if (comp.componentType === "options" || comp.componentType === "cards_choice") {
           const opts = selectedOptions[comp.id];
           if (opts && opts.length > 0) {
-            await quizTrackingService.saveAnswer({
-              submissionId,
-              funnelId: funnel.id,
-              companyId: funnel.companyId,
-              stepId: currentStep.id,
-              componentId: comp.id,
-              answerValue: opts
-            });
+            if (submissionId) {
+              await quizTrackingService.saveAnswer({
+                submissionId,
+                funnelId: funnel.id,
+                companyId: funnel.companyId,
+                stepId: currentStep.id,
+                componentId: comp.id,
+                answerValue: opts
+              });
 
-            // Track option selected
-            await quizTrackingService.trackQuizEvent({
-              submissionId,
-              funnelId: funnel.id,
-              companyId: funnel.companyId,
-              sessionId: quizTrackingService.getOrCreateSessionId(funnel.id),
-              eventName: "option_selected",
-              stepId: currentStep.id,
-              componentId: comp.id,
-              payload: { selectedOptions: opts }
-            });
+              // Track option selected
+              await quizTrackingService.trackQuizEvent({
+                submissionId,
+                funnelId: funnel.id,
+                companyId: funnel.companyId,
+                sessionId: quizTrackingService.getOrCreateSessionId(funnel.id),
+                eventName: "option_selected",
+                stepId: currentStep.id,
+                componentId: comp.id,
+                payload: { selectedOptions: opts }
+              });
+            }
           }
         }
       }
 
       // 2. If lead information is entered, identify lead
       if (leadName || leadEmail || leadPhone) {
-        await quizTrackingService.identifyLead({
-          submissionId,
-          funnel,
-          leadData: { name: leadName, email: leadEmail, phone: leadPhone }
-        });
+        if (submissionId) {
+          await quizTrackingService.identifyLead({
+            submissionId,
+            funnel,
+            leadData: { name: leadName, email: leadEmail, phone: leadPhone }
+          });
+        }
       }
 
       // 3. Mark the submission as started if it was in anonymous state and we are moving past the first step
-      if (currentStepIndex === 0) {
+      if (currentStepIndex === 0 && submissionId) {
         await quizTrackingService.markSubmissionAsStarted(submissionId, funnel.id, funnel.companyId);
       }
 
       // 4. Exit current step session
-      await quizTrackingService.trackStepSessionExit({
-        submissionId,
-        stepId: currentStep.id,
-        exitType: currentStepIndex >= steps.length - 1 ? "completed" : "next"
-      });
+      if (submissionId) {
+        await quizTrackingService.trackStepSessionExit({
+          submissionId,
+          stepId: currentStep.id,
+          exitType: currentStepIndex >= steps.length - 1 ? "completed" : "next"
+        });
 
-      // 5. Track step completed event
-      await quizTrackingService.trackQuizEvent({
-        submissionId,
-        funnelId: funnel.id,
-        companyId: funnel.companyId,
-        sessionId: quizTrackingService.getOrCreateSessionId(funnel.id),
-        eventName: "step_completed",
-        stepId: currentStep.id,
-        payload: {
-          stepIndex: currentStepIndex + 1,
-          stepName: currentStep.name,
-          forcedDestination
-        }
-      });
+        // 5. Track step completed event
+        await quizTrackingService.trackQuizEvent({
+          submissionId,
+          funnelId: funnel.id,
+          companyId: funnel.companyId,
+          sessionId: quizTrackingService.getOrCreateSessionId(funnel.id),
+          eventName: "step_completed",
+          stepId: currentStep.id,
+          payload: {
+            stepIndex: currentStepIndex + 1,
+            stepName: currentStep.name,
+            forcedDestination
+          }
+        });
+      }
 
       // 6. Navigation logic
       if (forcedDestination) {
@@ -581,6 +591,54 @@ export default function QuizPublicPage() {
           const nextStep = steps[targetIdx];
           setCurrentStepIndex(targetIdx);
 
+          if (submissionId) {
+            // Track next step entry
+            await quizTrackingService.trackQuizEvent({
+              submissionId,
+              funnelId: funnel.id,
+              companyId: funnel.companyId,
+              sessionId: quizTrackingService.getOrCreateSessionId(funnel.id),
+              eventName: "step_viewed",
+              stepId: nextStep.id,
+              payload: {
+                stepIndex: targetIdx + 1,
+                stepName: nextStep.name,
+                navigationType: "next",
+                forced: true
+              }
+            });
+
+            await quizTrackingService.trackStepSessionEntry({
+              submissionId,
+              funnelId: funnel.id,
+              companyId: funnel.companyId,
+              stepId: nextStep.id
+            });
+
+            await quizTrackingService.updateProgress({
+              submissionId,
+              currentStepId: nextStep.id,
+              stepsCompleted: currentStepIndex + 1,
+              stepsViewed: Math.max(currentStepIndex + 2, targetIdx + 1),
+              totalSteps: steps.length
+            });
+          }
+          return;
+        }
+      }
+
+      if (currentStepIndex >= steps.length - 1) {
+        // Complete the quiz
+        if (submissionId) {
+          await quizTrackingService.completeSubmission(submissionId, funnel.id, funnel.companyId);
+        }
+        setCompleted(true);
+      } else {
+        const nextIdx = currentStepIndex + 1;
+        const nextStep = steps[nextIdx];
+        setCurrentStepIndex(nextIdx);
+
+        if (submissionId) {
           // Track next step entry
           await quizTrackingService.trackQuizEvent({
             submissionId,
@@ -590,10 +648,9 @@ export default function QuizPublicPage() {
             eventName: "step_viewed",
             stepId: nextStep.id,
             payload: {
-              stepIndex: targetIdx + 1,
+              stepIndex: nextIdx + 1,
               stepName: nextStep.name,
-              navigationType: "next",
-              forced: true
+              navigationType: "next"
             }
           });
 
@@ -607,52 +664,11 @@ export default function QuizPublicPage() {
           await quizTrackingService.updateProgress({
             submissionId,
             currentStepId: nextStep.id,
-            stepsCompleted: currentStepIndex + 1,
-            stepsViewed: Math.max(currentStepIndex + 2, targetIdx + 1),
+            stepsCompleted: nextIdx,
+            stepsViewed: nextIdx + 1,
             totalSteps: steps.length
           });
-          return;
         }
-      }
-
-      if (currentStepIndex >= steps.length - 1) {
-        // Complete the quiz
-        await quizTrackingService.completeSubmission(submissionId, funnel.id, funnel.companyId);
-        setCompleted(true);
-      } else {
-        const nextIdx = currentStepIndex + 1;
-        const nextStep = steps[nextIdx];
-        setCurrentStepIndex(nextIdx);
-
-        // Track next step entry
-        await quizTrackingService.trackQuizEvent({
-          submissionId,
-          funnelId: funnel.id,
-          companyId: funnel.companyId,
-          sessionId: quizTrackingService.getOrCreateSessionId(funnel.id),
-          eventName: "step_viewed",
-          stepId: nextStep.id,
-          payload: {
-            stepIndex: nextIdx + 1,
-            stepName: nextStep.name,
-            navigationType: "next"
-          }
-        });
-
-        await quizTrackingService.trackStepSessionEntry({
-          submissionId,
-          funnelId: funnel.id,
-          companyId: funnel.companyId,
-          stepId: nextStep.id
-        });
-
-        await quizTrackingService.updateProgress({
-          submissionId,
-          currentStepId: nextStep.id,
-          stepsCompleted: nextIdx,
-          stepsViewed: nextIdx + 1,
-          totalSteps: steps.length
-        });
       }
     } catch (e) {
       console.error("Navigation error:", e);
