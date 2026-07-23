@@ -563,7 +563,7 @@ Deno.serve(async (req) => {
       const seqId = sequenceId || effectiveCampaignId;
       const { data: seqData } = await supabase
         .from("message_sequences")
-        .select("id, name, user_id, company_id, group_campaign_id")
+        .select("id, name, user_id, company_id, group_campaign_id, trigger_config")
         .eq("id", seqId)
         .maybeSingle();
 
@@ -687,14 +687,14 @@ Deno.serve(async (req) => {
     // Fallback: resolve instance from sequence trigger config if not linked to campaign
     if ((!instance || instance.status !== "connected") && effectiveSequenceId) {
       console.log(`[ExecuteMessage] Campaign instance not connected or null, attempting to resolve from sequence ${effectiveSequenceId} trigger config...`);
-      const { data: triggerNode } = await supabase
-        .from("sequence_nodes")
-        .select("config")
-        .eq("sequence_id", effectiveSequenceId)
-        .eq("node_type", "trigger")
+      
+      const { data: triggerSeqData } = await supabase
+        .from("message_sequences")
+        .select("trigger_config")
+        .eq("id", effectiveSequenceId)
         .maybeSingle();
 
-      const triggerConfig = triggerNode?.config?.triggerConfig as Record<string, any> | undefined;
+      const triggerConfig = triggerSeqData?.trigger_config as Record<string, any> | undefined;
       const configInstanceId = triggerConfig?.instanceId;
       const configInstanceIds = triggerConfig?.instanceIds as string[] | undefined;
 
