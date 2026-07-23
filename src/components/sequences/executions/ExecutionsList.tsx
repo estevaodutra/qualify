@@ -121,6 +121,11 @@ export function ExecutionsList({ executions, isLoading, error, selectedExecution
                     <span className="text-[9px] text-slate-400">{new Date(exec.startedAt).toLocaleString("pt-BR")}</span>
                     {exec.triggerType && <span className="text-[9px] text-slate-400 uppercase font-bold">{exec.triggerType}</span>}
                   </div>
+                  {exec.errorMessage && (
+                    <div className="mt-2 text-[10px] text-destructive bg-destructive/10 p-1.5 rounded text-left break-words line-clamp-2">
+                      {exec.errorMessage}
+                    </div>
+                  )}
                 </button>
               );
             })}

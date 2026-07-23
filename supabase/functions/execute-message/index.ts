@@ -464,12 +464,15 @@ Deno.serve(async (req) => {
   }
 
   const startTime = Date.now();
+  let globalWorkflowExecutionId: string | undefined;
+  let supabaseGlobal: any;
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    supabaseGlobal = supabase;
 
     // Parse request body
     const body: ExecuteMessageRequest = await req.json();
@@ -1196,6 +1199,7 @@ Deno.serve(async (req) => {
         : "message";
 
       let workflowExecutionId: string = crypto.randomUUID();
+      globalWorkflowExecutionId = workflowExecutionId;
       try {
         if (isResumedExecution && executionId) {
           workflowExecutionId = executionId;
@@ -2775,6 +2779,21 @@ Deno.serve(async (req) => {
     const totalTimeMs = Date.now() - startTime;
     console.error("[ExecuteMessage] Fatal error:", error);
     
+    if (globalWorkflowExecutionId && supabaseGlobal) {
+      try {
+        await supabaseGlobal.from("workflow_executions")
+          .update({
+            status: "error",
+            finished_at: new Date().toISOString(),
+            duration_ms: totalTimeMs,
+            error_message: error instanceof Error ? error.message : "Unknown fatal error",
+          })
+          .eq("id", globalWorkflowExecutionId);
+      } catch (updateErr) {
+        console.error("[ExecuteMessage] Failed to mark workflow_execution as error:", updateErr);
+      }
+    }
+
     return new Response(
       JSON.stringify({ 
         error: error instanceof Error ? error.message : "Unknown error",
