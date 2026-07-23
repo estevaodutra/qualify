@@ -149,3 +149,6 @@ verify_jwt = false
 
 [functions.received]
 verify_jwt = false
+
+[functions.temp-run-sql]
+verify_jwt = false
