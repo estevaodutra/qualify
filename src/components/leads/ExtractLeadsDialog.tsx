@@ -316,14 +316,14 @@ export function ExtractLeadsDialog({ open, onOpenChange }: Props) {
         console.log(`[ExtractLeads] Group "${groupName}": ${membersList.length} members found`, membersList[0]);
 
         for (const m of membersList) {
-          // Normalizar: o webhook pode retornar phone OU id (JID format)
-          const rawPhone = m.phone || m.id || "";
+          // Normalizar: o webhook pode retornar pn, phone OU id (JID format)
+          const rawPhone = m.pn || m.phone || m.id || "";
           if (!rawPhone || rawPhone.includes("-group") || rawPhone.includes("@g.us")) continue;
-          const phone = rawPhone.replace(/@s\.whatsapp\.net$/, "").replace(/\D/g, "");
+          const phone = rawPhone.replace(/@s\.whatsapp\.net$/, "").replace(/@c\.us$/, "").replace(/@lid$/, "").replace(/\D/g, "");
           if (!phone) continue;
           totalCount++;
 
-          const isAdmin = m.isAdmin || m.isSuperAdmin || false;
+          const isAdmin = m.isAdmin || m.isSuperAdmin || m.role === "admin" || m.role === "superadmin" || false;
           if (ignoreAdmins && isAdmin) {
             invalidCount++;
             continue;
