@@ -914,6 +914,8 @@ Deno.serve(async (req) => {
 
     let nodesProcessed = isResumedExecution ? (startFromNodeIndex || 0) : 0;
     let nodesFailed = 0;
+    let firstNodeError: string | null = null;
+    let accumulatedDelayMs = 0;
     const webhookResponses: Array<{ nodeType: string; nodeOrder: number; destination: string; status: string; data: unknown }> = [];
 
     // ============= NODE-FIRST ORCHESTRATION =============
@@ -1241,8 +1243,14 @@ Deno.serve(async (req) => {
         }
         visitCounts.set(node.id, visits);
 
+        const activeProcessingTime = Date.now() - startTime - accumulatedDelayMs;
+        if (activeProcessingTime > 60000) {
+          throw new Error(`Timeout: A execução excedeu o limite de 1 minuto de processamento ativo (tempo real: ${activeProcessingTime}ms).`);
+        }
+
         console.log(`[ExecuteMessage] Processing node: ${node.id} (${node.node_type})`);
         const nodeStartedAt = new Date();
+        const initialNodesFailed = nodesFailed;
 
         // Check if node overrides the WhatsApp instance
         const nodeInstanceIds = node.config?.instanceIds as string[] | undefined;
@@ -1747,8 +1755,8 @@ Deno.serve(async (req) => {
               );
             }
           } else if (delayMs > 0) {
-            // Short delay - wait inline
             console.log(`[ExecuteMessage] ⏱️ Short delay: waiting ${delayMs}ms`);
+            accumulatedDelayMs += delayMs;
             await new Promise(resolve => setTimeout(resolve, delayMs));
           }
 
@@ -1795,6 +1803,7 @@ Deno.serve(async (req) => {
                 const effectiveDelay = Math.min(normalized.delayMs, MAX_DELAY_MS);
                 if (effectiveDelay > 0) {
                   console.log(`[ExecuteMessage] ⏱️ Group management delay: waiting ${effectiveDelay}ms`);
+                  accumulatedDelayMs += effectiveDelay;
                   await new Promise(resolve => setTimeout(resolve, effectiveDelay));
                 }
                 subResults.push({ destination: dest.group_jid, status: "success", action: "delay" });
@@ -1879,9 +1888,14 @@ Deno.serve(async (req) => {
              const errorConn = connections.find(c => c.source_node_id === node.id && c.source_port_id === "error");
              if (errorConn) nextNodeId = errorConn.target_node_id;
           }
-          if (!nextNodeId) {
+          if (!nextNodeId && !hasErrors) {
              const defaultConn = connections.find(c => c.source_node_id === node.id && (!c.source_port_id || c.source_port_id === "default"));
              nextNodeId = defaultConn ? defaultConn.target_node_id : null;
+          }
+
+          if (hasErrors && !nextNodeId) {
+             console.log(`[ExecuteMessage] Node ${node.id} failed without error path, aborting.`);
+             break;
           }
 
           currentNodeId = nextNodeId;
@@ -2130,6 +2144,10 @@ Deno.serve(async (req) => {
             input: { url: targetUrl, method, payload: forwardPayload },
             error: webhookNodeError,
           });
+          if (nodesFailed > initialNodesFailed) {
+            console.log(`[ExecuteMessage] Webhook node ${node.id} failed, aborting.`);
+            break;
+          }
           const nextConn = connections.find(c => c.source_node_id === node.id);
           currentNodeId = nextConn ? nextConn.target_node_id : null;
           nodesProcessed++;
@@ -2701,6 +2719,11 @@ Deno.serve(async (req) => {
           break;
         }
 
+        if (nodesFailed > initialNodesFailed) {
+          console.log(`[ExecuteMessage] Message node ${node.id} failed, aborting.`);
+          break;
+        }
+
         // Advance to the next connected node — this branch handles every
         // "sendable" node type that fell through the specific-type checks
         // above (message/media/poll/buttons/list/etc).
@@ -2743,6 +2766,17 @@ Deno.serve(async (req) => {
         }
       }
 
+      if (nodesFailed > 0 && !firstNodeError) {
+        const firstFailed = webhookResponses.find(r => r.status === "failed");
+        if (firstFailed && firstFailed.data) {
+          if (typeof firstFailed.data === 'string') {
+            firstNodeError = firstFailed.data;
+          } else if (typeof firstFailed.data === 'object') {
+            firstNodeError = (firstFailed.data as any).error || (firstFailed.data as any).message || JSON.stringify(firstFailed.data);
+          }
+        }
+      }
+
       // Finalize this run's workflow_executions row (observability, non-fatal)
       try {
         await supabase.from("workflow_executions")
@@ -2750,7 +2784,7 @@ Deno.serve(async (req) => {
             status: nodesFailed === 0 ? "success" : "error",
             finished_at: new Date().toISOString(),
             duration_ms: Date.now() - startTime,
-            error_message: nodesFailed > 0 ? `${nodesFailed} node(s) failed` : null,
+            error_message: nodesFailed > 0 ? (firstNodeError || `${nodesFailed} node(s) failed`) : null,
           })
           .eq("id", workflowExecutionId);
       } catch (err) {
