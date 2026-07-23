@@ -366,7 +366,7 @@ export function ExtractLeadsDialog({ open, onOpenChange }: Props) {
 
   // ── Step 4: Import to campaign ──
   const importLeads = useCallback(async () => {
-    if (!user || !campaignId) return;
+    if (!user) return;
     setStep("importing");
     setImportProgress(0);
 
@@ -380,7 +380,7 @@ export function ExtractLeadsDialog({ open, onOpenChange }: Props) {
 
     // Check existing leads in campaign if needed
     let existingPhones = new Set<string>();
-    if (ignoreCampaignExisting) {
+    if (ignoreCampaignExisting && campaignId) {
       const { data: existing } = await supabase
         .from("leads")
         .select("phone")
@@ -412,8 +412,8 @@ export function ExtractLeadsDialog({ open, onOpenChange }: Props) {
           status: "active",
           source_type: "whatsapp_group",
           tags: tags.length > 0 ? tags : [],
-          active_campaign_id: campaignId,
-          active_campaign_type: campaignType,
+          active_campaign_id: campaignId || null,
+          active_campaign_type: campaignType || null,
         };
 
         if (keepReference) {
@@ -818,7 +818,7 @@ export function ExtractLeadsDialog({ open, onOpenChange }: Props) {
             </p>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Selecione a campanha de destino *</label>
+              <label className="text-sm font-medium">Selecione a campanha de destino (Opcional)</label>
               <Select value={campaignId ? `${campaignType}::${campaignId}` : ""} onValueChange={handleCampaignChange}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione uma campanha..." />
@@ -872,7 +872,7 @@ export function ExtractLeadsDialog({ open, onOpenChange }: Props) {
               </Button>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => handleClose(false)}>Cancelar</Button>
-                <Button disabled={!campaignId} onClick={importLeads}>
+                <Button onClick={importLeads}>
                   <Check className="mr-1 h-4 w-4" />
                   Importar {extractionStats.valid} Leads
                 </Button>
@@ -913,7 +913,7 @@ export function ExtractLeadsDialog({ open, onOpenChange }: Props) {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">📁 Campanha</span>
-                <span className="font-medium">{selectedCampaignLabel}</span>
+                <span className="font-medium">{selectedCampaignLabel || "Nenhuma"}</span>
               </div>
               {tags.length > 0 && (
                 <div className="flex justify-between">
