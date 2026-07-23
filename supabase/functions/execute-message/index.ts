@@ -2414,6 +2414,158 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // ============= PHONE CALL NODES =============
+        if (node.node_type === "phone_call") {
+          console.log(`[ExecuteMessage] 📞 Processing phone_call node ${node.id}`);
+          const config = node.config || {};
+          
+          // Check if we are resuming from a call task action result
+          const callResult = triggerContext?.callResult;
+          if (callResult) {
+            console.log(`[ExecuteMessage] Resuming phone_call node ${node.id} with result: ${callResult}`);
+            
+            // Register node execution outcome
+            await logNodeExecution(supabase, {
+              executionId: workflowExecutionId,
+              userId,
+              nodeId: node.id,
+              nodeType: node.node_type,
+              status: "success",
+              startedAt: nodeStartedAt,
+              input: node.config,
+              output: { status: "completed", callResult },
+            });
+
+            // Find the connection matching the callResult
+            const nextConn = connections.find(c => c.source_node_id === node.id && c.condition_path === callResult);
+            currentNodeId = nextConn ? nextConn.target_node_id : null;
+            nodesProcessed++;
+            continue;
+          }
+
+          // If not resuming, we must queue a new call task and pause the workflow
+          const leadId = triggerContext?.leadId || triggerContext?.respondentId || lead?.id;
+          const companyId = triggerContext?.companyId || lead?.company_id || typedCampaign.company_id;
+
+          if (!leadId) {
+            console.error(`[ExecuteMessage] ❌ Cannot queue phone_call task: lead_id is missing.`);
+            await logNodeExecution(supabase, {
+              executionId: workflowExecutionId,
+              userId,
+              nodeId: node.id,
+              nodeType: node.node_type,
+              status: "error",
+              startedAt: nodeStartedAt,
+              input: node.config,
+              output: { error: "Missing lead ID" },
+            });
+            const nextConn = connections.find(c => c.source_node_id === node.id && c.condition_path === "error");
+            currentNodeId = nextConn ? nextConn.target_node_id : null;
+            nodesProcessed++;
+            continue;
+          }
+
+          // Format script content with lead variables
+          const scriptContent = config.script?.content || "";
+          const formattedScript = replaceVariables(scriptContent);
+          
+          // Default operator actions
+          const actions = config.actions || [
+            { id: "success", label: "Sucesso", type: "success", color: "green", output: "success", requiresNote: false, finalizesCall: true, scheduleRetry: false },
+            { id: "no_success", label: "Sem Sucesso", type: "no_success", color: "red", output: "no_success", requiresNote: true, finalizesCall: true, scheduleRetry: false }
+          ];
+
+          // Create the workflow call task
+          const taskPayload = {
+            company_id: companyId,
+            user_id: userId || typedCampaign.user_id,
+            workflow_id: effectiveSequenceId,
+            workflow_execution_id: workflowExecutionId,
+            node_id: node.id,
+            lead_id: leadId,
+            phone: leadPhone || lead?.phone || "",
+            status: "queued",
+            attempt_count: 0,
+            max_attempts: config.attempts?.maxAttempts || 3,
+            script: formattedScript,
+            actions: actions,
+            queue_id: config.assignment?.mode === "queue" ? config.assignment?.queueId : null,
+            assigned_operator_id: config.assignment?.mode === "operator" ? config.assignment?.operatorId : null,
+            department_id: config.assignment?.mode === "department" ? config.assignment?.departmentId : null,
+          };
+
+          const { data: taskData, error: taskError } = await supabase
+            .from("workflow_call_tasks")
+            .insert(taskPayload)
+            .select("id")
+            .single();
+
+          if (taskError) {
+            console.error(`[ExecuteMessage] ❌ Failed to insert call task:`, taskError);
+            await logNodeExecution(supabase, {
+              executionId: workflowExecutionId,
+              userId,
+              nodeId: node.id,
+              nodeType: node.node_type,
+              status: "error",
+              startedAt: nodeStartedAt,
+              input: node.config,
+              output: { error: taskError.message },
+            });
+            const nextConn = connections.find(c => c.source_node_id === node.id && c.condition_path === "error");
+            currentNodeId = nextConn ? nextConn.target_node_id : null;
+            nodesProcessed++;
+            continue;
+          }
+
+          // Register node execution as paused/waiting
+          await logNodeExecution(supabase, {
+            executionId: workflowExecutionId,
+            userId,
+            nodeId: node.id,
+            nodeType: node.node_type,
+            status: "success",
+            startedAt: nodeStartedAt,
+            input: node.config,
+            output: { status: "waiting_call", taskId: taskData.id },
+          });
+
+          // Update workflow execution status to waiting
+          await supabase
+            .from("workflow_executions")
+            .update({ 
+              status: "waiting", 
+              updated_at: new Date().toISOString() 
+            })
+            .eq("id", workflowExecutionId);
+
+          // Update sequence execution state
+          await supabase
+            .from("sequence_executions")
+            .upsert({
+              user_id: userId || typedCampaign.user_id,
+              sequence_id: effectiveSequenceId,
+              status: "paused",
+              resume_at: null,
+              trigger_context: {
+                ...triggerContext,
+                resumeNodeId: node.id,
+              }
+            }, {
+              onConflict: "user_id,sequence_id"
+            });
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              status: "paused",
+              executionId: workflowExecutionId,
+              message: "Execution paused waiting for call task completion."
+            }),
+            { headers: { "Content-Type": "application/json" } }
+          );
+        }
+
         // ============= STATUS NODES =============
         if (node.node_type === "status") {
           const config = node.config || {};

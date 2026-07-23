@@ -144,9 +144,14 @@ export function ExecutionCanvas({
               }
               const strokeColor = colorKey === "success" ? "#10b981" : colorKey === "error" ? "#ef4444" : "#cbd5e1";
 
+              const isTrigger = srcNode.nodeType === "trigger";
+              const isContent = srcNode.nodeType === "content";
+              const isPhoneCall = srcNode.nodeType === "phone_call";
+              const srcWidth = isTrigger || isContent || isPhoneCall ? 320 : 220;
+
               const sX = srcNode.positionX || 0, sY = srcNode.positionY || 0;
               const tX = tgtNode.positionX || 0, tY = tgtNode.positionY || 0;
-              const portX1 = sX + 220;
+              const portX1 = sX + srcWidth;
               let portY1 = sY + 45;
               if (conn.conditionPath === "yes") portY1 = sY + 35;
               if (conn.conditionPath === "no") portY1 = sY + 65;
@@ -154,6 +159,11 @@ export function ExecutionCanvas({
                 const branches = getSortedRandomizerBranches(srcNode);
                 const idx = branches.findIndex(b => b.id === conn.conditionPath);
                 if (idx >= 0) portY1 = sY + RANDOMIZER_PORT_BASE_Y + idx * RANDOMIZER_PORT_SPACING;
+              }
+              if (srcNode.nodeType === "phone_call") {
+                const phoneCallOutputs = ["success", "no_success", "no_answer", "attempts_exhausted", "error"];
+                const idx = phoneCallOutputs.indexOf(conn.conditionPath || "");
+                if (idx >= 0) portY1 = sY + 160 + idx * 26;
               }
               const portX2 = tX;
               const portY2 = tY + 45;
@@ -189,7 +199,7 @@ export function ExecutionCanvas({
               return (
                 <div
                   key={node.id}
-                  style={{ position: "absolute", left: posX, top: posY, width: 220, pointerEvents: "auto" }}
+                  style={{ position: "absolute", left: posX, top: posY, width: node.nodeType === "trigger" || node.nodeType === "content" || node.nodeType === "phone_call" ? 320 : 220, pointerEvents: "auto" }}
                   onClick={() => nodeExec && onSelectNode(node.id)}
                   className={cn(
                     "rounded-xl border-2 bg-white shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col p-3",

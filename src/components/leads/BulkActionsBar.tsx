@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Tag, Megaphone, Trash2, X, TagsIcon } from "lucide-react";
+import { Tag, Megaphone, Trash2, X, TagsIcon, Play } from "lucide-react";
 
 interface BulkActionsBarProps {
   count: number;
@@ -11,9 +11,10 @@ interface BulkActionsBarProps {
   onRemoveTag: () => void;
   onDelete: () => void;
   onCancel: () => void;
+  onTriggerWorkflow?: () => void;
 }
 
-export function BulkActionsBar({ count, totalCount, allSelected, onSelectAll, onAddToCampaign, onAddTag, onRemoveTag, onDelete, onCancel }: BulkActionsBarProps) {
+export function BulkActionsBar({ count, totalCount, allSelected, onSelectAll, onAddToCampaign, onAddTag, onRemoveTag, onDelete, onCancel, onTriggerWorkflow }: BulkActionsBarProps) {
   if (count === 0) return null;
   return (
     <div className="sticky top-0 z-10 bg-primary text-primary-foreground rounded-lg px-4 py-3 space-y-2">
@@ -27,6 +28,11 @@ export function BulkActionsBar({ count, totalCount, allSelected, onSelectAll, on
           )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {onTriggerWorkflow && (
+            <Button size="sm" variant="secondary" onClick={onTriggerWorkflow} className="gap-1">
+              <Play className="h-3.5 w-3.5 fill-current" /> Disparar Workflow
+            </Button>
+          )}
           <Button size="sm" variant="secondary" onClick={onAddToCampaign} className="gap-1">
             <Megaphone className="h-3.5 w-3.5" /> Campanha
           </Button>

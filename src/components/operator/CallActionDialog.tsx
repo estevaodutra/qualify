@@ -123,6 +123,32 @@ export function CallActionDialog({
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyVersion, setHistoryVersion] = useState(0);
 
+  const isWorkflowCall = currentData.callId?.startsWith("wt_") || false;
+  const realTaskId = isWorkflowCall ? currentData.callId.replace("wt_", "") : null;
+  const [workflowTask, setWorkflowTask] = useState<{ script: string; actions: any[] } | null>(null);
+  const [workflowTaskLoading, setWorkflowTaskLoading] = useState(false);
+
+  useEffect(() => {
+    if (isWorkflowCall && realTaskId && open) {
+      setWorkflowTaskLoading(true);
+      supabase
+        .from("workflow_call_tasks")
+        .select("script, actions")
+        .eq("id", realTaskId)
+        .single()
+        .then(({ data, error }) => {
+          if (error) {
+            console.error("Error fetching workflow task script/actions:", error);
+          } else if (data) {
+            setWorkflowTask(data);
+          }
+          setWorkflowTaskLoading(false);
+        });
+    } else {
+      setWorkflowTask(null);
+    }
+  }, [currentData.callId, open]);
+
   // Reset per-view state when currentData changes
   useEffect(() => {
     setSelectedActionId(null);
@@ -144,7 +170,16 @@ export function CallActionDialog({
     { id: "__success", name: "Sucesso", color: "#10b981", icon: "✅", actionType: "none" as const },
     { id: "__failure", name: "Sem Sucesso", color: "#ef4444", icon: "❌", actionType: "none" as const },
   ];
-  const displayActions = actions.length > 0 ? actions : fallbackActions;
+  const displayActions = isWorkflowCall
+    ? (workflowTask?.actions || fallbackActions).map((a: any) => ({
+        id: a.id,
+        name: a.label || a.name,
+        color: a.color === "green" ? "#10b981" : a.color === "red" ? "#ef4444" : a.color || "#6b7280",
+        icon: a.type === "success" ? "✅" : "❌",
+        actionType: "none" as const,
+        requiresNote: a.requiresNote || false,
+      }))
+    : (actions.length > 0 ? actions : fallbackActions);
 
   const copyExternalId = (id: string) => {
     navigator.clipboard.writeText(id);
@@ -324,6 +359,23 @@ export function CallActionDialog({
 
     setIsSaving(true);
     try {
+      if (isWorkflowCall) {
+        const { data, error } = await supabase.functions.invoke("resolve-call-task", {
+          body: {
+            taskId: realTaskId,
+            actionId: selectedActionId,
+            notes: notes || null,
+            operatorId: operatorId || null,
+          },
+        });
+
+        if (error) throw error;
+
+        toast({ title: "Ligação finalizada", description: "O resultado da ligação foi salvo e o workflow retomado." });
+        onOpenChange(false);
+        return;
+      }
+
       // Resolve targetCallId — fallback to latest log if callId is empty
       let targetCallId = currentData.callId;
 
@@ -508,12 +560,24 @@ export function CallActionDialog({
                   </CollapsibleTrigger>
                   <CollapsibleContent className="mt-3">
                     <div className="rounded-lg border bg-muted/10 p-3">
-                      <InlineScriptRunner campaignId={currentData.campaignId} leadId={currentData.leadId} />
+                      {isWorkflowCall ? (
+                        workflowTaskLoading ? (
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground p-2">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> Carregando roteiro...
+                          </div>
+                        ) : (
+                          <div className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
+                            {workflowTask?.script || "Nenhum roteiro configurado."}
+                          </div>
+                        )
+                      ) : (
+                        <InlineScriptRunner campaignId={currentData.campaignId} leadId={currentData.leadId} />
+                      )}
                     </div>
                   </CollapsibleContent>
                 </Collapsible>
 
-                {currentData.callId && (
+                {currentData.callId && !isWorkflowCall && (
                   <>
                     <div className="border-t" />
                     <InlineReschedule callId={currentData.callId} />
@@ -526,13 +590,13 @@ export function CallActionDialog({
                   <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">🎯 Ações</h3>
 
                   <div className="space-y-2">
-                    {actionsLoading ? (
+                    {(isWorkflowCall ? workflowTaskLoading : actionsLoading) ? (
                       <div className="flex justify-center py-4">
                         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                       </div>
                     ) : (
                       <>
-                        {actions.length === 0 && (
+                        {!isWorkflowCall && actions.length === 0 && (
                           <div className="rounded-lg border border-dashed p-3 bg-muted/20 mb-2">
                             <p className="text-xs text-muted-foreground">
                               ⚠️ Nenhuma ação configurada para esta campanha. Usando ações padrão:

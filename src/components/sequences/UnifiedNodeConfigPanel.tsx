@@ -42,9 +42,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getNodeBlockDefinition, getDefaultConfigForSubType } from "./nodeDefinitions";
 import { VariablePicker } from "./VariablePicker";
 import { normalizeDelayConfig, toDelayMs, formatDelayLabel } from "@/lib/workflows/delay";
+import { useCallOperators } from "@/hooks/useCallOperators";
+import { useCallCampaigns } from "@/hooks/useCallCampaigns";
+
 function formatWhatsAppText(text: string) {
   const escaped = text
     .replace(/&/g, "&amp;")
@@ -477,6 +481,8 @@ export function UnifiedNodeConfigPanel({
   const [editingOptionIndex, setEditingOptionIndex] = useState<number | null>(null);
 
   const { activeCompanyId } = useCompany();
+  const { operators = [] } = useCallOperators();
+  const { campaigns = [] } = useCallCampaigns();
 
   const [customFieldsMetadata, setCustomFieldsMetadata] = useState<any[]>([]);
   const [pipelineStages, setPipelineStages] = useState<any[]>([]);
@@ -2331,6 +2337,318 @@ export function UnifiedNodeConfigPanel({
               )}
             </>
           )}
+
+          {/* PHONE CALL EDITOR */}
+          {node.nodeType === "phone_call" && (() => {
+            const script = currentConfig.script || { enabled: true, title: "Roteiro da ligação", content: "", showLeadVariables: true };
+            const assignment = currentConfig.assignment || { mode: "queue", queueId: null, operatorId: null, departmentId: null, distributionStrategy: "round-robin" };
+            const attempts = currentConfig.attempts || { enabled: true, maxAttempts: 3, retryDelayMs: 3600000, retryOn: ["no_answer", "busy", "failed"], businessHoursOnly: true };
+            const actions = currentConfig.actions || [
+              { id: "success", label: "Sucesso", type: "success", color: "green", output: "success", requiresNote: false, finalizesCall: true, scheduleRetry: false },
+              { id: "no_success", label: "Sem Sucesso", type: "no_success", color: "red", output: "no_success", requiresNote: true, finalizesCall: true, scheduleRetry: false }
+            ];
+
+            const updateScript = (key: string, val: any) => {
+              updateConfig("script", { ...script, [key]: val });
+            };
+
+            const updateAssignment = (key: string, val: any) => {
+              updateConfig("assignment", { ...assignment, [key]: val });
+            };
+
+            const updateAttempts = (key: string, val: any) => {
+              updateConfig("attempts", { ...attempts, [key]: val });
+            };
+
+            const addCustomAction = () => {
+              const newAction = {
+                id: Math.random().toString(36).substring(2, 9),
+                label: "Nova Ação",
+                type: "other",
+                color: "blue",
+                output: "success",
+                requiresNote: false,
+                finalizesCall: true,
+                scheduleRetry: false
+              };
+              updateConfig("actions", [...actions, newAction]);
+            };
+
+            const removeAction = (index: number) => {
+              const updated = actions.filter((_: any, idx: number) => idx !== index);
+              updateConfig("actions", updated);
+            };
+
+            const updateActionField = (index: number, key: string, val: any) => {
+              const updated = actions.map((act: any, idx: number) => 
+                idx === index ? { ...act, [key]: val } : act
+              );
+              updateConfig("actions", updated);
+            };
+
+            return (
+              <Tabs defaultValue="script" className="w-full">
+                <TabsList className="grid grid-cols-4 w-full mb-4">
+                  <TabsTrigger value="script">Roteiro</TabsTrigger>
+                  <TabsTrigger value="dist">Distribuição</TabsTrigger>
+                  <TabsTrigger value="attempts">Retentativas</TabsTrigger>
+                  <TabsTrigger value="actions">Ações</TabsTrigger>
+                </TabsList>
+
+                {/* SCRIPT TAB */}
+                <TabsContent value="script" className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Título do roteiro</Label>
+                    <Input
+                      value={script.title || ""}
+                      onChange={e => updateScript("title", e.target.value)}
+                      placeholder="Ex: Roteiro da ligação de apresentação"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Conteúdo do Roteiro</Label>
+                      <VariablePicker
+                        isGroup={isGroup}
+                        onSelect={(val) => {
+                          updateScript("content", (script.content || "") + val);
+                        }}
+                      />
+                    </div>
+                    <Textarea
+                      value={script.content || ""}
+                      onChange={e => updateScript("content", e.target.value)}
+                      placeholder="Olá {{lead.name}}, tudo bem? Vi que você se cadastrou na nossa página..."
+                      rows={8}
+                      className="font-sans text-sm leading-relaxed"
+                    />
+                    <p className="text-[10px] text-muted-foreground leading-normal">
+                      Use as tags acima para substituir variáveis dinamicamente na tela do operador (ex: nome, telefone).
+                    </p>
+                  </div>
+                </TabsContent>
+
+                {/* DISTRIBUTION TAB */}
+                <TabsContent value="dist" className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Atribuir chamada para</Label>
+                    <Select
+                      value={assignment.mode || "queue"}
+                      onValueChange={v => {
+                        updateAssignment("mode", v);
+                        updateAssignment("queueId", null);
+                        updateAssignment("operatorId", null);
+                        updateAssignment("departmentId", null);
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Selecione o destino..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="queue">Campanha / Fila</SelectItem>
+                        <SelectItem value="operator">Operador específico</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {assignment.mode === "queue" && (
+                    <div className="space-y-2 animate-in fade-in duration-100">
+                      <Label>Campanha / Fila de destino</Label>
+                      <Select
+                        value={assignment.queueId || "none"}
+                        onValueChange={v => updateAssignment("queueId", v === "none" ? null : v)}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Selecione a campanha..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Selecione uma campanha...</SelectItem>
+                          {campaigns.map((c: any) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[10px] text-muted-foreground leading-normal">
+                        A chamada será colocada na fila da campanha escolhida, e os operadores associados a ela poderão atendê-la.
+                      </p>
+                    </div>
+                  )}
+
+                  {assignment.mode === "operator" && (
+                    <div className="space-y-2 animate-in fade-in duration-100">
+                      <Label>Operador específico</Label>
+                      <Select
+                        value={assignment.operatorId || "none"}
+                        onValueChange={v => updateAssignment("operatorId", v === "none" ? null : v)}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Selecione o operador..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Selecione um operador...</SelectItem>
+                          {operators.map((op: any) => (
+                            <SelectItem key={op.id} value={op.id}>
+                              {op.operatorName} ({op.extension || "sem ramal"})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[10px] text-muted-foreground leading-normal">
+                        A chamada será direcionada diretamente para a fila particular do operador selecionado.
+                      </p>
+                    </div>
+                  )}
+                </TabsContent>
+
+                {/* ATTEMPTS TAB */}
+                <TabsContent value="attempts" className="space-y-4">
+                  <div className="flex items-center justify-between border-b pb-2 mb-2">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm font-medium">Habilitar Retentativas</Label>
+                      <p className="text-[10px] text-muted-foreground">Repetir chamadas sem resposta automaticamente</p>
+                    </div>
+                    <Switch
+                      checked={attempts.enabled !== false}
+                      onCheckedChange={checked => updateAttempts("enabled", checked)}
+                    />
+                  </div>
+
+                  {attempts.enabled !== false && (
+                    <div className="space-y-4 animate-in fade-in duration-100">
+                      <div className="space-y-2">
+                        <Label>Quantidade máxima de tentativas</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={10}
+                          value={attempts.maxAttempts || 3}
+                          onChange={e => updateAttempts("maxAttempts", parseInt(e.target.value) || 1)}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Intervalo entre tentativas</Label>
+                        <Select
+                          value={String(attempts.retryDelayMs || 3600000)}
+                          onValueChange={v => updateAttempts("retryDelayMs", parseInt(v))}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="300000">5 minutos</SelectItem>
+                            <SelectItem value="1800000">30 minutos</SelectItem>
+                            <SelectItem value="3600000">1 hora</SelectItem>
+                            <SelectItem value="14400000">4 horas</SelectItem>
+                            <SelectItem value="86400000">1 dia</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label className="text-xs font-semibold">Apenas horário comercial</Label>
+                          <p className="text-[9px] text-muted-foreground">Evita agendamentos fora do horário das 08h às 18h</p>
+                        </div>
+                        <Switch
+                          checked={attempts.businessHoursOnly !== false}
+                          onCheckedChange={checked => updateAttempts("businessHoursOnly", checked)}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </TabsContent>
+
+                {/* ACTIONS TAB */}
+                <TabsContent value="actions" className="space-y-4">
+                  <div className="flex items-center justify-between border-b pb-2">
+                    <Label className="text-sm font-semibold">Botões do Operador</Label>
+                    <Button type="button" size="sm" onClick={addCustomAction} className="h-7 text-xs gap-1">
+                      <Plus className="h-3 w-3" /> Adicionar Ação
+                    </Button>
+                  </div>
+
+                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                    {actions.map((act: any, idx: number) => (
+                      <div key={act.id || idx} className="p-3 rounded-lg border border-slate-200 bg-slate-50 space-y-2 relative">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeAction(idx)}
+                          className="h-6 w-6 text-destructive hover:bg-destructive/10 absolute top-2 right-2"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <Label className="text-[10px]">Nome do Botão</Label>
+                            <Input
+                              value={act.label || ""}
+                              onChange={e => updateActionField(idx, "label", e.target.value)}
+                              className="h-8 text-xs"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <Label className="text-[10px]">Caminho do Workflow</Label>
+                            <Select
+                              value={act.output || "success"}
+                              onValueChange={v => updateActionField(idx, "output", v)}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="success">Sucesso</SelectItem>
+                                <SelectItem value="no_success">Sem sucesso</SelectItem>
+                                <SelectItem value="no_answer">Não atendeu / Retentativa</SelectItem>
+                                <SelectItem value="attempts_exhausted">Tentativas encerradas</SelectItem>
+                                <SelectItem value="error">Erro</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <div className="space-y-1">
+                            <Label className="text-[10px]">Cor do Botão</Label>
+                            <Select
+                              value={act.color || "blue"}
+                              onValueChange={v => updateActionField(idx, "color", v)}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="blue">Azul</SelectItem>
+                                <SelectItem value="green">Verde</SelectItem>
+                                <SelectItem value="red">Vermelho</SelectItem>
+                                <SelectItem value="amber">Amarelo</SelectItem>
+                                <SelectItem value="indigo">Roxo</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 pt-4">
+                            <Switch
+                              id={`note-${act.id}`}
+                              checked={act.requiresNote === true}
+                              onCheckedChange={checked => updateActionField(idx, "requiresNote", checked)}
+                            />
+                            <Label htmlFor={`note-${act.id}`} className="text-[10px] cursor-pointer">Exigir observação</Label>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </TabsContent>
+              </Tabs>
+            );
+          })()}
 
           {/* WEBHOOK FORWARD */}
           {node.nodeType === "webhook_forward" && (

@@ -550,7 +550,58 @@ export default function CallPanel() {
     refetchInterval: 10000,
   });
 
-  // ── Combined queue: call_queue + call_logs (scheduled/ready) ──
+  // ── Workflow Call Tasks ──
+  const { data: workflowCallTasks = [], isLoading: workflowTasksLoading } = useQuery({
+    queryKey: ["workflow_call_tasks_queue", campaignFilter, searchQuery, activeCompanyId],
+    queryFn: async () => {
+      let query = (supabase as any)
+        .from("workflow_call_tasks")
+        .select("*, leads(name, phone)")
+        .in("status", ["queued", "retry_scheduled", "assigned", "in_progress"])
+        .order("created_at", { ascending: true })
+        .limit(1000);
+
+      if (activeCompanyId) query = query.eq("company_id", activeCompanyId);
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      let results = (data || []).map((db: any, idx: number) => ({
+        id: `wt_${db.id}`,
+        realId: db.id,
+        campaignId: db.queue_id || null,
+        campaignName: "Workflow / Fila",
+        leadId: db.lead_id,
+        leadName: db.leads?.name || null,
+        phone: db.phone || db.leads?.phone || null,
+        isPriority: true,
+        status: db.status as string,
+        scheduledFor: db.next_attempt_at || null,
+        attemptNumber: (db.attempt_count || 0) + 1,
+        maxAttempts: db.max_attempts || 3,
+        position: 80000 + idx,
+        observations: db.notes || null,
+        source: "workflow_call_task" as const,
+      }));
+
+      if (searchQuery) {
+        const s = searchQuery.toLowerCase();
+        const sDigits = s.replace(/\D/g, "");
+        results = results.filter((e: any) => {
+          const nameMatch = e.leadName?.toLowerCase().includes(s);
+          const phoneDigits = (e.phone || "").replace(/\D/g, "");
+          const phoneMatch = sDigits ? phoneDigits.includes(sDigits) : false;
+          return nameMatch || phoneMatch;
+        });
+      }
+
+      return results;
+    },
+    enabled: !!user,
+    refetchInterval: 10000,
+  });
+
+  // ── Combined queue: call_queue + call_logs (scheduled/ready) + workflow_call_tasks ──
   const combinedQueue = useMemo(() => {
     // Map queueEntries to a uniform shape
     const fromQueue = queueEntries.map((q) => ({
@@ -571,11 +622,18 @@ export default function CallPanel() {
       source: "call_queue" as const,
     }));
 
-    // Deduplicate: remove call_logs entries whose lead_id already exists in call_queue
-    const queueLeadIds = new Set(fromQueue.filter(q => q.leadId).map(q => q.leadId));
-    const fromLogs = scheduledCallLogs.filter((cl: any) => !cl.leadId || !queueLeadIds.has(cl.leadId));
+    const fromWorkflow = workflowCallTasks.map((w: any) => ({
+      ...w,
+    }));
 
-    const combined = [...fromQueue, ...fromLogs];
+    // Deduplicate: remove call_logs entries whose lead_id already exists in call_queue or workflowCallTasks
+    const queueLeadIds = new Set(fromQueue.filter(q => q.leadId).map(q => q.leadId));
+    const workflowLeadIds = new Set(fromWorkflow.filter(w => w.leadId).map(w => w.leadId));
+
+    const fromLogs = scheduledCallLogs.filter((cl: any) => !cl.leadId || (!queueLeadIds.has(cl.leadId) && !workflowLeadIds.has(cl.leadId)));
+    const fromQueueFiltered = fromQueue.filter((q) => !q.leadId || !workflowLeadIds.has(q.leadId));
+
+    const combined = [...fromWorkflow, ...fromQueueFiltered, ...fromLogs];
 
     // Sort: scheduled first (by scheduled_for), then priority, then position
     combined.sort((a, b) => {
@@ -596,7 +654,7 @@ export default function CallPanel() {
     });
 
     return combined;
-  }, [queueEntries, scheduledCallLogs]);
+  }, [queueEntries, scheduledCallLogs, workflowCallTasks]);
 
   const combinedQueueCount = combinedQueue.length;
 
@@ -1076,7 +1134,7 @@ export default function CallPanel() {
 
       {/* ── Aba Fila ── */}
       {activeTab === "queue" && (
-        (queueLoading || scheduledLogsLoading) ? (
+        (queueLoading || scheduledLogsLoading || workflowTasksLoading) ? (
           <div className="text-center py-12 text-muted-foreground">Carregando fila...</div>
         ) : paginatedQueue.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -1163,7 +1221,22 @@ export default function CallPanel() {
                             </TooltipTrigger>
                             <TooltipContent>Ver detalhes</TooltipContent>
                           </Tooltip>
-                          {!isFromCallLog && (
+                          {qe.source === "workflow_call_task" && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                  onClick={() => setViewingQueueLead(qe)}
+                                >
+                                  <Phone className="h-3.5 w-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Atender ligação</TooltipContent>
+                            </Tooltip>
+                          )}
+                          {!isFromCallLog && qe.source !== "workflow_call_task" && (
                             <>
                               {qe.status !== "in_call" && (
                                 <Tooltip>

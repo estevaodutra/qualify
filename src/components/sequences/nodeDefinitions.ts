@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   MessageSquare, Clock, GitBranch, Shuffle, Tag, Award, Send, Link2, Sliders, Sparkles,
   Image, Video, Music, FileText, Smile, BarChart3, MousePointerClick, List, MapPin, Contact, Calendar,
-  Plus, Pencil, UserPlus, UserMinus, ShieldAlert, ShieldCheck, Settings, Radio, UsersRound
+  Plus, Pencil, UserPlus, UserMinus, ShieldAlert, ShieldCheck, Settings, Radio, UsersRound, PhoneCall
 } from "lucide-react";
 import type { NodeCategory, NodeTypeInfo } from "./shared-types";
 
@@ -65,6 +65,7 @@ export const NODE_DEFINITIONS: NodeBlockDefinition[] = [
   },
   { blockType: "group_management", label: "Gestão de Grupo", icon: UsersRound, color: "bg-indigo-600" },
   { blockType: "status", label: "Status", icon: Radio, color: "bg-pink-600" },
+  { blockType: "phone_call", label: "Ligação", icon: PhoneCall, color: "bg-pink-600" },
   { blockType: "api_call", label: "API", icon: Link2, color: "bg-sky-600", status: "coming_soon" },
   { blockType: "field_op", label: "Mapeamento de Campos", icon: Sliders, color: "bg-teal-600" },
   { blockType: "ai_agent", label: "AI Assistant", icon: Sparkles, color: "bg-violet-600", status: "coming_soon" },
@@ -195,6 +196,16 @@ export function getDefaultConfigForBlock(blockType: string): Record<string, unkn
         times: ["12:00"]
       }
     };
+    case "phone_call": return {
+      script: { enabled: true, title: "Roteiro da ligação", content: "", showLeadVariables: true },
+      assignment: { mode: "queue", queueId: null, operatorId: null, departmentId: null, distributionStrategy: "round-robin" },
+      attempts: { enabled: true, maxAttempts: 3, retryDelayMs: 3600000, retryOn: ["no_answer", "busy", "failed"], businessHoursOnly: true },
+      actions: [
+        { id: "success", label: "Sucesso", type: "success", color: "green", output: "success", requiresNote: false, finalizesCall: true, scheduleRetry: false },
+        { id: "no_success", label: "Sem Sucesso", type: "no_success", color: "red", output: "no_success", requiresNote: true, finalizesCall: true, scheduleRetry: false }
+      ],
+      outputs: { success: true, no_success: true, no_answer: true, attempts_exhausted: true, error: true }
+    };
     case "api_call": case "ai_agent": return {};
     default: return {};
   }
@@ -211,7 +222,7 @@ export function toNodeCategories(isGroup?: boolean): NodeCategory[] {
     .map((b) => ({ type: b.blockType, label: b.label, icon: b.icon, color: b.color, status: b.status }));
 
   const channels: NodeTypeInfo[] = NODE_DEFINITIONS
-    .filter((b) => ["status"].includes(b.blockType))
+    .filter((b) => ["status", "phone_call"].includes(b.blockType))
     .map((b) => ({ type: b.blockType, label: b.label, icon: b.icon, color: b.color, status: b.status }));
 
   const advanced: NodeTypeInfo[] = NODE_DEFINITIONS

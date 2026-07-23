@@ -1,0 +1,19 @@
+const { createClient } = require("@supabase/supabase-js");
+
+const supabaseUrl = "https://qualify.6ksfuf.easypanel.host";
+const supabaseServiceKey = "eyJhbGciOiAiSFMyNTYiLCAidHlwIjogIkpXVCJ9.eyJyb2xlIjogInNlcnZpY2Vfcm9sZSIsICJpc3MiOiAic3VwYWJhc2UiLCAiaWF0IjogMTc0OTI5NjAwMCwgImV4cCI6IDQ5MDQ5Njk2MDB9.oOJGfhukDhCdORGCQX01RLNCR1mb4FJUkOgtF3sp5o0";
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+async function checkSeq() {
+  const { data, error } = await supabase
+    .from("message_sequences")
+    .select("id, name, trigger_config")
+    .not("trigger_config", "is", null)
+    .limit(10);
+    
+  if (error) console.error(error);
+  else console.log(JSON.stringify(data, null, 2));
+}
+
+checkSeq();

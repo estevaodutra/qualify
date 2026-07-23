@@ -14,7 +14,7 @@ import {
 import {
   ArrowLeft, Save, Play, Pause, Trash2, ZoomIn, ZoomOut, Maximize,
   Loader2, Info, GitBranch, Copy, PenLine, History, Sliders, ArrowRight, Plus, MessageSquare, Settings, Clock,
-  ChevronUp, ChevronDown
+  ChevronUp, ChevronDown, PhoneCall
 } from "lucide-react";
 import { debounce } from "lodash";
 import { useToast } from "@/hooks/use-toast";
@@ -995,7 +995,7 @@ export function UnifiedSequenceBuilder({
 
                   // Output port on the right side of the card
                   const portIdOut = conn.conditionPath || "default";
-                  const coordsOut = getPortCoords(srcNode.id, portIdOut, (srcNode.nodeType === "trigger" || srcNode.nodeType === "content" ? 320 : 220), 45);
+                  const coordsOut = getPortCoords(srcNode.id, portIdOut, (srcNode.nodeType === "trigger" || srcNode.nodeType === "content" || srcNode.nodeType === "phone_call" ? 320 : 220), 45);
                   let portX1 = sX + coordsOut.x;
                   let portY1 = sY + coordsOut.y;
 
@@ -1085,7 +1085,7 @@ export function UnifiedSequenceBuilder({
                         position: "absolute",
                         left: posX,
                         top: posY,
-                        width: isTrigger || isContent ? 320 : 220,
+                        width: isTrigger || isContent || node.nodeType === "phone_call" ? 320 : 220,
                         minHeight: isRandomizer ? Math.max(140, 40 + randomizerBranches.length * RANDOMIZER_PORT_SPACING) : undefined,
                         pointerEvents: "auto"
                       }}
@@ -1170,7 +1170,7 @@ export function UnifiedSequenceBuilder({
                       )}
 
                       {/* Output Port(s) (Right Handles) */}
-                      {!isCondition && !isRandomizer && !isFieldOp && !isTrigger && !isContent && !isDelay && !isGroupManagement ? (
+                      {!isCondition && !isRandomizer && !isFieldOp && !isTrigger && !isContent && !isDelay && !isGroupManagement && node.nodeType !== "phone_call" ? (
                         <>
                           <div
                             data-node-port="true" data-node-id={node.id} data-port-id="default"
@@ -1205,6 +1205,73 @@ export function UnifiedSequenceBuilder({
                           </div>
                           <span className="absolute right-2 top-[54px] text-[8px] font-bold text-destructive select-none">Não</span>
                         </>
+                      ) : node.nodeType === "phone_call" ? (
+                        <div className="flex flex-col w-full text-left h-full">
+                          {/* Header / Title */}
+                          <div className="flex items-center gap-2 border-b border-slate-100 pb-2 mb-3">
+                            <div className="p-1.5 rounded-lg text-white shrink-0 shadow-sm bg-pink-600">
+                              <PhoneCall className="h-3.5 w-3.5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-bold text-xs text-slate-800 truncate">
+                                {(node.config.label as string) || "Ligação"}
+                              </p>
+                              <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                Call Panel
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Card Content / Description */}
+                          <p className="text-[10px] text-slate-500 mb-3 leading-relaxed font-medium">
+                            Configure roteiro, ações e retentativas para o Call Panel.
+                          </p>
+
+                          {/* Details summaries */}
+                          <div className="space-y-1.5 mb-3">
+                            <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-200/60 text-[10px] font-semibold text-slate-700">
+                              <span className="text-slate-400">📋</span>
+                              <span className="truncate">
+                                {node.config.script?.content ? "Roteiro configurado" : "Nenhum roteiro"}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-200/60 text-[10px] font-semibold text-slate-700">
+                              <span className="text-slate-400">🎯</span>
+                              <span className="truncate">
+                                {(node.config.actions as any[])?.length || 2} ações do operador
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-200/60 text-[10px] font-semibold text-slate-700">
+                              <span className="text-slate-400">🔁</span>
+                              <span className="truncate">
+                                Até {(node.config.attempts as any)?.maxAttempts || 3} tentativas
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Outputs list with handles */}
+                          <div className="flex flex-col gap-2 w-full text-right relative pr-1">
+                            {[
+                              { id: "success", label: "Sucesso", color: "border-green-500 bg-green-500" },
+                              { id: "no_success", label: "Sem sucesso", color: "border-red-500 bg-red-500" },
+                              { id: "no_answer", label: "Não atendeu / Retentativa", color: "border-amber-500 bg-amber-500" },
+                              { id: "attempts_exhausted", label: "Tentativas encerradas", color: "border-indigo-500 bg-indigo-500" },
+                              { id: "error", label: "Erro", color: "border-destructive bg-destructive" }
+                            ].map((out) => (
+                              <div key={out.id} className="relative flex items-center justify-end w-full">
+                                <span className="text-[8px] font-bold text-slate-500 select-none mr-2">{out.label}</span>
+                                <div
+                                  data-node-port="true" data-node-id={node.id} data-port-id={out.id}
+                                  onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", out.id)}
+                                  className={cn("absolute -right-[27.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm bg-background", out.id === "success" ? "border-green-500 hover:bg-green-500" : out.id === "no_success" ? "border-red-500 hover:bg-red-500" : out.id === "no_answer" ? "border-amber-500 hover:bg-amber-500" : out.id === "attempts_exhausted" ? "border-indigo-500 hover:bg-indigo-500" : "border-destructive hover:bg-destructive")}
+                                  title={out.label}
+                                >
+                                  <div className={cn("h-1.5 w-1.5 rounded-full", out.id === "success" ? "bg-green-500" : out.id === "no_success" ? "bg-red-500" : out.id === "no_answer" ? "bg-amber-500" : out.id === "attempts_exhausted" ? "bg-indigo-500" : "bg-destructive")} />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       ) : isFieldOp ? (
                         <>{/* Handles moved to inline flow inside the node body to prevent overlapping */}</>
                       ) : (

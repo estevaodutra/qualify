@@ -9,9 +9,10 @@ import { CampaignOption } from "@/components/leads/ImportLeadsDialog";
 import { PageHeader } from "@/components/dispatch/PageHeader";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { cn, formatPhone } from "@/lib/utils";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { MetricCard } from "@/components/dispatch/MetricCard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -87,6 +88,46 @@ export default function Leads() {
   const [historyLead, setHistoryLead] = useState<Lead | null>(null);
   const [campaignDialogOpen, setCampaignDialogOpen] = useState(false);
   const [tagDialogMode, setTagDialogMode] = useState<"add" | "remove" | null>(null);
+  const [workflowDialogOpen, setWorkflowDialogOpen] = useState(false);
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>("");
+
+  const { data: workflows = [], isLoading: workflowsLoading } = useQuery({
+    queryKey: ["message_sequences", activeCompanyId],
+    queryFn: async () => {
+      let query = supabase
+        .from("message_sequences")
+        .select("id, name, description")
+        .order("name", { ascending: true });
+      
+      if (activeCompanyId) {
+        query = query.eq("company_id", activeCompanyId);
+      }
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: workflowDialogOpen,
+  });
+
+  const triggerWorkflow = useMutation({
+    mutationFn: async ({ workflowId, leadIds }: { workflowId: string; leadIds: string[] }) => {
+      const { data, error } = await supabase.functions.invoke("start-workflow-for-leads", {
+        body: { workflowId, leadIds },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      toast.success(data?.message || "Workflow disparado com sucesso!");
+      clearSelection();
+      setWorkflowDialogOpen(false);
+      setSelectedWorkflowId("");
+    },
+    onError: (err: any) => {
+      toast.error(`Erro ao disparar workflow: ${err.message}`);
+    },
+  });
 
   const filters: LeadFilters = {
     search: search || undefined,
@@ -263,6 +304,7 @@ export default function Leads() {
         onAddToCampaign={() => setCampaignDialogOpen(true)}
         onAddTag={() => setTagDialogMode("add")}
         onRemoveTag={() => setTagDialogMode("remove")}
+        onTriggerWorkflow={() => setWorkflowDialogOpen(true)}
         onDelete={async () => {
           const ids = await getSelectedIds();
           bulkDelete.mutate(ids);
@@ -488,6 +530,88 @@ export default function Leads() {
         open={extractOpen}
         onOpenChange={setExtractOpen}
       />
+
+      {workflowDialogOpen && (
+        <Dialog open={workflowDialogOpen} onOpenChange={setWorkflowDialogOpen}>
+          <DialogContent className="max-w-md rounded-xl bg-card border border-border shadow-lg p-6">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-bold text-foreground">Disparar Workflow em Massa</DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground">
+                Inicie um workflow automático para os <strong>{effectiveCount}</strong> leads selecionados.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Selecione o Workflow</label>
+                <Select
+                  value={selectedWorkflowId}
+                  onValueChange={setSelectedWorkflowId}
+                >
+                  <SelectTrigger className="w-full rounded-xl border-border/40 bg-background text-sm">
+                    <SelectValue placeholder="Selecione um workflow..." />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl border-border">
+                    {workflowsLoading ? (
+                      <div className="p-2 text-center text-xs text-muted-foreground flex items-center justify-center gap-1.5">
+                        <RefreshCw className="h-3 w-3 animate-spin" /> Carregando...
+                      </div>
+                    ) : workflows.length === 0 ? (
+                      <div className="p-2 text-center text-xs text-muted-foreground">Nenhum workflow cadastrado</div>
+                    ) : (
+                      workflows.map((w: any) => (
+                        <SelectItem key={w.id} value={w.id} className="rounded-lg m-0.5">
+                          {w.name}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-100/80 space-y-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Resumo do Disparo</span>
+                <div className="flex justify-between items-center text-xs font-semibold">
+                  <span className="text-slate-500">Leads selecionados:</span>
+                  <span className="text-foreground">{effectiveCount} contatos</span>
+                </div>
+                <div className="flex justify-between items-center text-xs font-semibold">
+                  <span className="text-slate-500">Ação:</span>
+                  <span className="text-primary">Disparo imediato</span>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setWorkflowDialogOpen(false);
+                  setSelectedWorkflowId("");
+                }}
+                className="h-9 rounded-md text-xs"
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={async () => {
+                  if (!selectedWorkflowId) {
+                    toast.error("Por favor, selecione um workflow.");
+                    return;
+                  }
+                  const ids = await getSelectedIds();
+                  triggerWorkflow.mutate({ workflowId: selectedWorkflowId, leadIds: ids });
+                }}
+                disabled={!selectedWorkflowId || triggerWorkflow.isPending}
+                className="h-9 rounded-md text-xs bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5"
+              >
+                {triggerWorkflow.isPending && <RefreshCw className="h-3 w-3 animate-spin" />}
+                Confirmar e Iniciar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
