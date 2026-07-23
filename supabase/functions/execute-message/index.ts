@@ -2466,8 +2466,25 @@ Deno.serve(async (req) => {
           }
 
           // Format script content with lead variables
-          const scriptContent = config.script?.content || "";
-          const formattedScript = replaceVariables(scriptContent);
+          let formattedScript = "";
+          if (config.script?.type === "quiz") {
+            const formattedQuiz = (config.script.quiz || []).map((q: any) => ({
+              ...q,
+              questionText: replaceVariables(q.questionText || ""),
+              alternatives: (q.alternatives || []).map((alt: any) => ({
+                ...alt,
+                text: replaceVariables(alt.text || "")
+              }))
+            }));
+            formattedScript = JSON.stringify({
+              type: "quiz",
+              title: config.script.title || "Quiz Interativo",
+              quiz: formattedQuiz
+            });
+          } else {
+            const scriptContent = config.script?.content || "";
+            formattedScript = replaceVariables(scriptContent);
+          }
           
           // Default operator actions
           const actions = config.actions || [

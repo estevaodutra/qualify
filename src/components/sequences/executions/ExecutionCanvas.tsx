@@ -161,7 +161,16 @@ export function ExecutionCanvas({
                 if (idx >= 0) portY1 = sY + RANDOMIZER_PORT_BASE_Y + idx * RANDOMIZER_PORT_SPACING;
               }
               if (srcNode.nodeType === "phone_call") {
-                const phoneCallOutputs = ["success", "no_success", "no_answer", "attempts_exhausted", "error"];
+                const actions = srcNode.config.actions || [
+                  { id: "success", label: "Sucesso", type: "success", color: "green", output: "success", requiresNote: false, finalizesCall: true, scheduleRetry: false },
+                  { id: "no_success", label: "Sem Sucesso", type: "no_success", color: "red", output: "no_success", requiresNote: true, finalizesCall: true, scheduleRetry: false }
+                ];
+                const phoneCallOutputs = [
+                  ...actions.map((act: any) => act.output || act.id),
+                  "no_answer",
+                  "attempts_exhausted",
+                  "error"
+                ];
                 const idx = phoneCallOutputs.indexOf(conn.conditionPath || "");
                 if (idx >= 0) portY1 = sY + 160 + idx * 26;
               }

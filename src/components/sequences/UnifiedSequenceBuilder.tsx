@@ -1246,30 +1246,54 @@ export function UnifiedSequenceBuilder({
                               <span className="truncate">
                                 Até {(node.config.attempts as any)?.maxAttempts || 3} tentativas
                               </span>
-                            </div>
-                          </div>
-
-                          {/* Outputs list with handles */}
+                                    {/* Outputs list with handles */}
                           <div className="flex flex-col gap-2 w-full text-right relative pr-1">
-                            {[
-                              { id: "success", label: "Sucesso", color: "border-green-500 bg-green-500" },
-                              { id: "no_success", label: "Sem sucesso", color: "border-red-500 bg-red-500" },
-                              { id: "no_answer", label: "Não atendeu / Retentativa", color: "border-amber-500 bg-amber-500" },
-                              { id: "attempts_exhausted", label: "Tentativas encerradas", color: "border-indigo-500 bg-indigo-500" },
-                              { id: "error", label: "Erro", color: "border-destructive bg-destructive" }
-                            ].map((out) => (
-                              <div key={out.id} className="relative flex items-center justify-end w-full">
-                                <span className="text-[8px] font-bold text-slate-500 select-none mr-2">{out.label}</span>
-                                <div
-                                  data-node-port="true" data-node-id={node.id} data-port-id={out.id}
-                                  onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", out.id)}
-                                  className={cn("absolute -right-[27.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm bg-background", out.id === "success" ? "border-green-500 hover:bg-green-500" : out.id === "no_success" ? "border-red-500 hover:bg-red-500" : out.id === "no_answer" ? "border-amber-500 hover:bg-amber-500" : out.id === "attempts_exhausted" ? "border-indigo-500 hover:bg-indigo-500" : "border-destructive hover:bg-destructive")}
-                                  title={out.label}
-                                >
-                                  <div className={cn("h-1.5 w-1.5 rounded-full", out.id === "success" ? "bg-green-500" : out.id === "no_success" ? "bg-red-500" : out.id === "no_answer" ? "bg-amber-500" : out.id === "attempts_exhausted" ? "bg-indigo-500" : "bg-destructive")} />
+                            {(() => {
+                              const actions = node.config.actions || [
+                                { id: "success", label: "Sucesso", type: "success", color: "green", output: "success", requiresNote: false, finalizesCall: true, scheduleRetry: false },
+                                { id: "no_success", label: "Sem Sucesso", type: "no_success", color: "red", output: "no_success", requiresNote: true, finalizesCall: true, scheduleRetry: false }
+                              ];
+                              const systemOutputs = [
+                                { id: "no_answer", label: "Não atendeu / Retentativa", dot: "bg-amber-500", border: "border-amber-500", hover: "hover:bg-amber-500" },
+                                { id: "attempts_exhausted", label: "Tentativas encerradas", dot: "bg-indigo-500", border: "border-indigo-500", hover: "hover:bg-indigo-500" },
+                                { id: "error", label: "Erro", dot: "bg-destructive", border: "border-destructive", hover: "hover:bg-destructive" }
+                              ];
+
+                              const dynamicOutputs = [
+                                ...actions.map((act: any) => {
+                                  const isGreen = act.color === "green";
+                                  const isRed = act.color === "red";
+                                  const isAmber = act.color === "amber";
+                                  const isIndigo = act.color === "indigo";
+                                  const borderClass = isGreen ? "border-green-500" : isRed ? "border-red-500" : isAmber ? "border-amber-500" : isIndigo ? "border-indigo-500" : "border-slate-500";
+                                  const hoverClass = isGreen ? "hover:bg-green-500" : isRed ? "hover:bg-red-500" : isAmber ? "hover:bg-amber-500" : isIndigo ? "hover:bg-indigo-500" : "hover:bg-slate-500";
+                                  const dotClass = isGreen ? "bg-green-500" : isRed ? "bg-red-500" : isAmber ? "bg-amber-500" : isIndigo ? "bg-indigo-500" : "bg-slate-500";
+                                  return {
+                                    id: act.output || act.id,
+                                    label: act.label || "Ação",
+                                    dot: dotClass,
+                                    border: borderClass,
+                                    hover: hoverClass
+                                  };
+                                }),
+                                ...systemOutputs
+                              ];
+
+                              return dynamicOutputs.map((out) => (
+                                <div key={out.id} className="relative flex items-center justify-end w-full">
+                                  <span className="text-[8px] font-bold text-slate-500 select-none mr-2">{out.label}</span>
+                                  <div
+                                    data-node-port="true" data-node-id={node.id} data-port-id={out.id}
+                                    onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", out.id)}
+                                    className={cn("absolute -right-[27.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm bg-background", out.border, out.hover)}
+                                    title={out.label}
+                                  >
+                                    <div className={cn("h-1.5 w-1.5 rounded-full", out.dot)} />
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              ));
+                            })()}
+                          </div>                         ))}
                           </div>
                         </div>
                       ) : isFieldOp ? (

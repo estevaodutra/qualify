@@ -128,6 +128,25 @@ export function CallActionDialog({
   const [workflowTask, setWorkflowTask] = useState<{ script: string; actions: any[] } | null>(null);
   const [workflowTaskLoading, setWorkflowTaskLoading] = useState(false);
 
+  const [currentQuestionId, setCurrentQuestionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (workflowTask?.script) {
+      try {
+        const parsed = JSON.parse(workflowTask.script);
+        if (parsed && parsed.type === "quiz" && parsed.quiz && parsed.quiz.length > 0) {
+          setCurrentQuestionId(parsed.quiz[0].id);
+        } else {
+          setCurrentQuestionId(null);
+        }
+      } catch (e) {
+        setCurrentQuestionId(null);
+      }
+    } else {
+      setCurrentQuestionId(null);
+    }
+  }, [workflowTask]);
+
   useEffect(() => {
     if (isWorkflowCall && realTaskId && open) {
       setWorkflowTaskLoading(true);
@@ -566,9 +585,89 @@ export function CallActionDialog({
                             <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> Carregando roteiro...
                           </div>
                         ) : (
-                          <div className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
-                            {workflowTask?.script || "Nenhum roteiro configurado."}
-                          </div>
+                          (() => {
+                            let quizData: any = null;
+                            try {
+                              if (workflowTask?.script && (workflowTask.script.trim().startsWith("{") || workflowTask.script.trim().startsWith("["))) {
+                                const parsed = JSON.parse(workflowTask.script);
+                                if (parsed && parsed.type === "quiz") {
+                                  quizData = parsed;
+                                }
+                              }
+                            } catch (e) {
+                              // Not a quiz
+                            }
+
+                            if (quizData && quizData.quiz && quizData.quiz.length > 0) {
+                              const currentQuestion = quizData.quiz.find((q: any) => q.id === currentQuestionId) || quizData.quiz[0];
+                              const isEnd = !currentQuestionId || currentQuestionId === "end";
+
+                              return (
+                                <div className="space-y-4">
+                                  <div className="flex items-center justify-between border-b pb-2 mb-2">
+                                    <span className="text-xs font-bold text-pink-600 uppercase tracking-wider">
+                                      {quizData.title || "Quiz Interativo"}
+                                    </span>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => setCurrentQuestionId(quizData.quiz[0].id)}
+                                      className="h-6 text-[10px] text-muted-foreground hover:bg-slate-100 rounded-lg"
+                                    >
+                                      Reiniciar Quiz
+                                    </Button>
+                                  </div>
+
+                                  {isEnd ? (
+                                    <div className="text-center p-4 bg-emerald-50 border border-emerald-100 rounded-xl space-y-2">
+                                      <span className="text-xl">🎉</span>
+                                      <p className="text-xs font-semibold text-emerald-800">Quiz Concluído!</p>
+                                      <p className="text-[10px] text-emerald-600 leading-normal">
+                                        Perguntas finalizadas. Por favor, registre o resultado da ligação selecionando um dos botões abaixo.
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <div className="space-y-3 animate-in fade-in duration-100">
+                                      <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                                        <span className="text-[9px] font-bold text-slate-400 block mb-1">PERGUNTA</span>
+                                        <p className="text-xs font-semibold text-slate-800 leading-relaxed">
+                                          {currentQuestion.questionText}
+                                        </p>
+                                      </div>
+
+                                      <div className="space-y-1.5 pl-2">
+                                        <span className="text-[9px] font-bold text-slate-400 block mb-1">ALTERNATIVAS</span>
+                                        {(currentQuestion.alternatives || []).length === 0 ? (
+                                          <p className="text-[10px] text-muted-foreground italic">Nenhuma opção de resposta. O operador pode avançar.</p>
+                                        ) : (
+                                          <div className="grid grid-cols-1 gap-2">
+                                            {(currentQuestion.alternatives || []).map((alt: any) => (
+                                              <Button
+                                                key={alt.id}
+                                                type="button"
+                                                variant="outline"
+                                                onClick={() => setCurrentQuestionId(alt.nextQuestionId || "end")}
+                                                className="justify-start text-left text-xs h-auto py-2.5 px-3 rounded-xl border-slate-200 hover:border-pink-600/50 hover:bg-pink-50/50 transition-all font-medium text-slate-700 hover:text-pink-700"
+                                              >
+                                                {alt.text}
+                                              </Button>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
+                                {workflowTask?.script || "Nenhum roteiro configurado."}
+                              </div>
+                            );
+                          })()
                         )
                       ) : (
                         <InlineScriptRunner campaignId={currentData.campaignId} leadId={currentData.leadId} />
