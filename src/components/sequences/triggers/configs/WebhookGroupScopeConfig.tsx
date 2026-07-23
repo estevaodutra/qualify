@@ -164,14 +164,7 @@ export function WebhookGroupScopeConfig({ campaignId, config, onChange }: Webhoo
     !search.trim() || g.groupName.toLowerCase().includes(search.trim().toLowerCase())
   );
 
-  const groupsByInstance = useMemo(() => {
-    return filteredGroups.reduce((acc, group) => {
-      const instId = group.instanceId || "unknown";
-      if (!acc[instId]) acc[instId] = [];
-      acc[instId].push(group);
-      return acc;
-    }, {} as Record<string, typeof filteredGroups>);
-  }, [filteredGroups]);
+  // Removed groupsByInstance because we want a flat list now
 
   const toggleGroup = (jid: string) => {
     const next = selectedGroupJids.includes(jid)
@@ -279,48 +272,40 @@ export function WebhookGroupScopeConfig({ campaignId, config, onChange }: Webhoo
               ) : linkedGroups.length === 0 ? (
                 <p className="text-xs text-muted-foreground text-center py-2">Nenhum grupo vinculado.</p>
               ) : (
-                Object.entries(groupsByInstance).map(([instId, groups]) => {
-                  const instance = instances.find(i => i.id === instId);
-                  const instanceName = instance ? `${instance.name} (${instance.phone || "Sem número"})` : "Instância Desconhecida";
-                  
-                  return (
-                    <div key={instId} className="space-y-1.5">
-                      <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-100 px-2 py-1 rounded">
-                        {instanceName}
-                      </div>
-                      <div className="space-y-0.5 pl-1">
-                        {groups.map(g => (
-                          <div key={g.id} className="flex items-center justify-between gap-2 p-1.5 group/item hover:bg-slate-50 rounded transition-colors">
-                            {groupScope === "selected" ? (
-                              <div className="flex items-center gap-2 flex-1 min-w-0">
-                                <Checkbox
-                                  id={`group-${g.id}`}
-                                  checked={selectedGroupJids.includes(g.groupJid)}
-                                  onCheckedChange={() => toggleGroup(g.groupJid)}
-                                />
-                                <Label htmlFor={`group-${g.id}`} className="text-xs font-normal cursor-pointer flex-1 truncate py-0.5">
-                                  {g.groupName}
-                                </Label>
-                              </div>
-                            ) : (
-                              <span className="text-xs text-slate-700 truncate flex-1 px-1">{g.groupName}</span>
-                            )}
-                            
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleRemoveGroup(g.id, g.groupJid)}
-                              disabled={isRemoving}
-                              className="h-6 w-6 text-slate-400 hover:text-red-500 hover:bg-red-50 hover:opacity-100 transition-all opacity-80 md:opacity-0 md:group-hover/item:opacity-100 shrink-0"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
+                <div className="space-y-0.5 pl-1">
+                  {filteredGroups.map(g => (
+                    <div key={g.id} className="flex items-center justify-between gap-2 p-1.5 group/item hover:bg-slate-50 rounded transition-colors">
+                      {groupScope === "selected" ? (
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <Checkbox
+                            id={`group-${g.id}`}
+                            checked={selectedGroupJids.includes(g.groupJid)}
+                            onCheckedChange={() => toggleGroup(g.groupJid)}
+                          />
+                          <Label htmlFor={`group-${g.id}`} className="text-xs font-normal cursor-pointer flex-1 truncate">
+                            {g.groupName}
+                          </Label>
+                        </div>
+                      ) : (
+                        <div className="text-xs font-normal text-slate-700 flex-1 truncate flex items-center gap-2">
+                          <div className="h-1.5 w-1.5 rounded-full bg-primary/40" />
+                          {g.groupName}
+                        </div>
+                      )}
+                      
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-slate-400 hover:text-rose-500 hover:bg-rose-50 opacity-0 group-hover/item:opacity-100 transition-all shrink-0"
+                        onClick={() => handleRemoveGroup(g.id, g.groupJid)}
+                        disabled={isRemoving === g.id}
+                        title="Remover grupo vinculado"
+                      >
+                        {isRemoving === g.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                      </Button>
                     </div>
-                  );
-                })
+                  ))}
+                </div>
               )}
             </div>
             
