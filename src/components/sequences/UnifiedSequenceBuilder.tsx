@@ -1232,7 +1232,7 @@ export function UnifiedSequenceBuilder({
                             <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-200/60 text-[10px] font-semibold text-slate-700">
                               <span className="text-slate-400">📋</span>
                               <span className="truncate">
-                                {node.config.script?.content ? "Roteiro configurado" : "Nenhum roteiro"}
+                                {node.config.script?.type === "quiz" ? "Quiz Interativo" : node.config.script?.content ? "Roteiro configurado" : "Nenhum roteiro"}
                               </span>
                             </div>
                             <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-200/60 text-[10px] font-semibold text-slate-700">
@@ -1246,7 +1246,10 @@ export function UnifiedSequenceBuilder({
                               <span className="truncate">
                                 Até {(node.config.attempts as any)?.maxAttempts || 3} tentativas
                               </span>
-                                    {/* Outputs list with handles */}
+                            </div>
+                          </div>
+
+                          {/* Outputs list with handles */}
                           <div className="flex flex-col gap-2 w-full text-right relative pr-1">
                             {(() => {
                               const actions = node.config.actions || [
@@ -1293,7 +1296,6 @@ export function UnifiedSequenceBuilder({
                                 </div>
                               ));
                             })()}
-                          </div>                         ))}
                           </div>
                         </div>
                       ) : isFieldOp ? (
