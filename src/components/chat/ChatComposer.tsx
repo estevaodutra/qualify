@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import {  Send, Lock, MessageSquare, Paperclip, Smile, Loader2, Sparkles, X, File, Image as ImageIcon, Video, Mic, Play, Pause, Trash2, Square  } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import {  Send, Lock, MessageSquare, Paperclip, Smile, Loader2, Sparkles, X, File, Image as ImageIcon, Video, Mic, Play, Pause, Trash2, Square, GitBranch  } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -13,16 +14,21 @@ interface ChatComposerProps {
   onSend: (text: string, isInternal: boolean, mediaUrl?: string, mediaType?: string) => Promise<any>;
   isSending: boolean;
   templates: ChatTemplate[];
+  leadId?: string;
 }
 
-export default function ChatComposer({ onSend, isSending, templates }: ChatComposerProps) {
+type DropdownItem = 
+  | { type: 'template'; id: string; shortcut: string; title: string; body: string; data: ChatTemplate }
+  | { type: 'workflow'; id: string; shortcut: string; title: string; body: string; data: any };
+
+export default function ChatComposer({ onSend, isSending, templates, leadId }: ChatComposerProps) {
   const { activeCompanyId } = useCompany();
   const [text, setText] = useState("");
   const [isInternal, setIsInternal] = useState(false);
   
-  // Quick Replies (Slash Commands)
-  const [showTemplates, setShowTemplates] = useState(false);
-  const [filteredTemplates, setFilteredTemplates] = useState<ChatTemplate[]>([]);
+  // Quick Replies & Workflows (Slash Commands)
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [filteredItems, setFilteredItems] = useState<DropdownItem[]>([]);
   const [templateSearch, setTemplateSearch] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -168,31 +174,97 @@ export default function ChatComposer({ onSend, isSending, templates }: ChatCompo
     }
   }, [text]);
 
+  // Fetch active workflows
+  const { data: workflows = [] } = useQuery({
+    queryKey: ["chat-composer-workflows", activeCompanyId],
+    queryFn: async () => {
+      if (!activeCompanyId) return [];
+      const { data, error } = await supabase
+        .from("message_sequences")
+        .select("id, name, description")
+        .order("name", { ascending: true });
+      
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!activeCompanyId,
+  });
+
   // Handle template selection trigger via "/"
   const handleTextChange = (val: string) => {
     setText(val);
     
-    // Check if user typed / followed by keyword at the end
-    const match = val.match(/\/(\w*)$/);
+    // Check if user typed / followed by keyword at the end (allowing dashes/underscores)
+    const match = val.match(/\/([\w\-]*)$/);
     if (match && !isInternal) { // Slash commands are mainly for public replies
       const query = match[1].toLowerCase();
       setTemplateSearch(query);
-      const filtered = templates.filter(
-        (t) => t.shortcut.toLowerCase().includes(query) || t.title.toLowerCase().includes(query)
-      );
-      setFilteredTemplates(filtered);
-      setShowTemplates(filtered.length > 0);
+      
+      const matchedTemplates = templates
+        .filter(
+          (t) => t.shortcut.toLowerCase().includes(query) || t.title.toLowerCase().includes(query)
+        )
+        .map((t) => ({
+          type: "template" as const,
+          id: t.id,
+          shortcut: t.shortcut,
+          title: t.title,
+          body: t.body,
+          data: t
+        }));
+
+      const matchedWorkflows = workflows
+        .filter(
+          (w) => w.name.toLowerCase().includes(query) || (w.description && w.description.toLowerCase().includes(query))
+        )
+        .map((w) => ({
+          type: "workflow" as const,
+          id: w.id,
+          shortcut: `workflow:${w.name.toLowerCase().replace(/\s+/g, "-")}`,
+          title: w.name,
+          body: w.description || "Disparar este workflow para o lead atual",
+          data: w
+        }));
+
+      const combined = [...matchedTemplates, ...matchedWorkflows];
+      setFilteredItems(combined);
+      setShowDropdown(combined.length > 0);
       setSelectedIndex(0);
     } else {
-      setShowTemplates(false);
+      setShowDropdown(false);
     }
   };
 
   const selectTemplate = (template: ChatTemplate) => {
     // Replace slash and shortcut with actual template content
-    const replaced = text.replace(/\/(\w*)$/, template.body);
+    const replaced = text.replace(/\/([\w\-]*)$/, template.body);
     setText(replaced);
-    setShowTemplates(false);
+    setShowDropdown(false);
+    textareaRef.current?.focus();
+  };
+
+  const selectWorkflow = async (workflow: any) => {
+    if (!leadId) {
+      toast.error("Nenhum lead selecionado para disparar o workflow.");
+      return;
+    }
+    
+    // Clear the slash command
+    const replaced = text.replace(/\/([\w\-]*)$/, "");
+    setText(replaced);
+    setShowDropdown(false);
+
+    const toastId = toast.loading(`Disparando workflow "${workflow.name}"...`);
+    try {
+      const { data, error } = await supabase.functions.invoke("start-workflow-for-leads", {
+        body: { workflowId: workflow.id, leadIds: [leadId] },
+      });
+      if (error) throw error;
+      toast.success(data?.message || `Workflow "${workflow.name}" disparado com sucesso!`, { id: toastId });
+    } catch (err: any) {
+      console.error(err);
+      toast.error(`Erro ao disparar workflow: ${err.message || err}`, { id: toastId });
+    }
     textareaRef.current?.focus();
   };
 
@@ -290,10 +362,10 @@ export default function ChatComposer({ onSend, isSending, templates }: ChatCompo
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (showTemplates && filteredTemplates.length > 0) {
+    if (showDropdown && filteredItems.length > 0) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setSelectedIndex((prev) => Math.min(prev + 1, filteredTemplates.length - 1));
+        setSelectedIndex((prev) => Math.min(prev + 1, filteredItems.length - 1));
         return;
       }
       if (e.key === "ArrowUp") {
@@ -303,11 +375,16 @@ export default function ChatComposer({ onSend, isSending, templates }: ChatCompo
       }
       if (e.key === "Enter") {
         e.preventDefault();
-        selectTemplate(filteredTemplates[selectedIndex]);
+        const selected = filteredItems[selectedIndex];
+        if (selected.type === "template") {
+          selectTemplate(selected.data);
+        } else {
+          selectWorkflow(selected.data);
+        }
         return;
       }
       if (e.key === "Escape") {
-        setShowTemplates(false);
+        setShowDropdown(false);
         return;
       }
     }
@@ -330,28 +407,55 @@ export default function ChatComposer({ onSend, isSending, templates }: ChatCompo
 
   return (
     <div className="p-4 border-t border-border/40 bg-card/10 space-y-3 shrink-0 relative flex flex-col">
-      {/* Templates Dropdown Popover */}
-      {showTemplates && (
+      {/* Templates & Workflows Dropdown Popover */}
+      {showDropdown && filteredItems.length > 0 && (
         <div className="absolute bottom-full left-4 mb-3 w-80 max-h-64 bg-popover/95 backdrop-blur-xl border border-border/80 rounded-2xl shadow-2xl overflow-y-auto z-50 divide-y divide-border/40 animate-in slide-in-from-bottom-3 fade-in duration-200">
-          <div className="sticky top-0 bg-popover/80 backdrop-blur-sm p-2.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center justify-between border-b border-border/40">
-            <span className="flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-primary" /> Respostas Rápidas</span>
+          <div className="sticky top-0 bg-popover/80 backdrop-blur-sm p-2.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center justify-between border-b border-border/40 z-10">
+            <span className="flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-primary" /> Comandos Rápidos</span>
             <span className="bg-muted px-1.5 py-0.5 rounded text-[8px]">Use ↑↓ para navegar</span>
           </div>
-          {filteredTemplates.map((t, i) => (
+          {filteredItems.map((item, i) => (
             <div
-              key={t.id}
-              onClick={() => selectTemplate(t)}
+              key={item.type + "-" + item.id}
+              onClick={() => item.type === "template" ? selectTemplate(item.data) : selectWorkflow(item.data)}
               onMouseEnter={() => setSelectedIndex(i)}
               className={cn(
-                "p-3 cursor-pointer text-xs transition-colors flex flex-col gap-1",
-                selectedIndex === i ? "bg-primary/10 border-l-2 border-primary" : "hover:bg-primary/5 border-l-2 border-transparent"
+                "p-3 cursor-pointer text-xs transition-all duration-200 flex items-start gap-3 border-l-2",
+                selectedIndex === i
+                  ? "bg-primary/10 border-primary"
+                  : "hover:bg-primary/5 border-transparent"
               )}
             >
-              <div className="flex justify-between items-center font-bold">
-                <span className="text-foreground">/{t.shortcut}</span>
-                <span className="text-[10px] text-muted-foreground font-medium truncate ml-2">{t.title}</span>
+              <div className={cn(
+                "p-2 rounded-xl shrink-0 mt-0.5",
+                item.type === "template"
+                  ? "bg-amber-500/10 text-amber-500"
+                  : "bg-indigo-500/10 text-indigo-500"
+              )}>
+                {item.type === "template" ? (
+                  <Sparkles className="h-4 w-4" />
+                ) : (
+                  <GitBranch className="h-4 w-4" />
+                )}
               </div>
-              <p className="text-muted-foreground/80 line-clamp-2 leading-relaxed">{t.body}</p>
+              <div className="flex-1 min-w-0">
+                <div className="flex justify-between items-center gap-2 mb-1">
+                  <span className="font-bold text-foreground truncate">
+                    {item.type === "template" ? `/${item.shortcut}` : item.title}
+                  </span>
+                  <span className={cn(
+                    "text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 border",
+                    item.type === "template"
+                      ? "bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-400"
+                      : "bg-indigo-500/10 text-indigo-600 border-indigo-500/20 dark:text-indigo-400"
+                  )}>
+                    {item.type === "template" ? "Resposta" : "Workflow"}
+                  </span>
+                </div>
+                <p className="text-muted-foreground/80 line-clamp-2 leading-relaxed text-[11px]">
+                  {item.body}
+                </p>
+              </div>
             </div>
           ))}
         </div>

@@ -134,6 +134,7 @@ export function ChatExpressSessionView({ session }: ChatExpressSessionViewProps)
         onSend={handleSend}
         isSending={isSending}
         templates={[]}
+        leadId={session.leadId}
       />
     </div>
   );

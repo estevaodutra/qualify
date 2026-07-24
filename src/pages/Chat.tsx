@@ -240,6 +240,7 @@ export default function Chat() {
               onSend={handleSendMessage}
               isSending={isSending}
               templates={templates}
+              leadId={selectedConv?.lead?.id}
             />
           </>
         ) : (
