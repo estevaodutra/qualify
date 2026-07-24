@@ -32,6 +32,7 @@ interface CallDialogData {
   callStatus?: string;
   externalCallId?: string | null;
   audioUrl?: string | null;
+  userId?: string;
 }
 
 interface CallActionDialogProps {
@@ -53,6 +54,7 @@ interface CallActionDialogProps {
   audioUrl?: string | null;
   operatorId?: string;
   depth?: number; // kept for backwards compat but unused
+  userId?: string;
 }
 
 interface CallLogEntry {
@@ -82,7 +84,7 @@ export function CallActionDialog({
   open, onOpenChange, callId, campaignId, leadId,
   leadName, leadPhone, campaignName, duration,
   initialObservations, attemptNumber, maxAttempts, isPriority,
-  callStatus, externalCallId, audioUrl, operatorId,
+  callStatus, externalCallId, audioUrl, operatorId, userId,
 }: CallActionDialogProps) {
   // --- Navigation state ---
   const cleanCallId = callId?.startsWith("cl_") ? callId.replace("cl_", "") : callId;
@@ -90,7 +92,7 @@ export function CallActionDialog({
   const initialData: CallDialogData = {
     callId: cleanCallId, campaignId, leadId, leadName, leadPhone, campaignName,
     duration, notes: initialObservations || "", attemptNumber, maxAttempts,
-    isPriority, callStatus, externalCallId, audioUrl,
+    isPriority, callStatus, externalCallId, audioUrl, userId,
   };
 
   const [currentData, setCurrentData] = useState<CallDialogData>(initialData);
@@ -104,11 +106,11 @@ export function CallActionDialog({
       setCurrentData({
         callId: activeCallId, campaignId, leadId, leadName, leadPhone, campaignName,
         duration, notes: initialObservations || "", attemptNumber, maxAttempts,
-        isPriority, callStatus, externalCallId, audioUrl,
+        isPriority, callStatus, externalCallId, audioUrl, userId,
       });
       setForwardStack([]);
     }
-  }, [open, callId]);
+  }, [open, callId, userId]);
 
   // --- Per-view state ---
   const { actions, isLoading: actionsLoading } = useCallActions(currentData.campaignId);
@@ -469,6 +471,7 @@ export function CallActionDialog({
       const { data: configs } = await supabase
         .from("webhook_configs")
         .select("url")
+        .eq("user_id", currentData.userId)
         .eq("category", "calls")
         .eq("is_active", true)
         .limit(1);

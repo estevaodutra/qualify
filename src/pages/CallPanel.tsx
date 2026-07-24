@@ -582,6 +582,7 @@ export default function CallPanel() {
         position: 80000 + idx,
         observations: db.notes || null,
         source: "workflow_call_task" as const,
+        userId: db.user_id,
       }));
 
       if (searchQuery) {
@@ -788,6 +789,7 @@ export default function CallPanel() {
       const { data: configs } = await supabase
         .from("webhook_configs")
         .select("url")
+        .eq("user_id", qe.userId)
         .eq("category", "calls")
         .eq("is_active", true)
         .limit(1);
@@ -1298,19 +1300,34 @@ export default function CallPanel() {
                             <TooltipContent>Ver detalhes</TooltipContent>
                           </Tooltip>
                           {qe.source === "workflow_call_task" && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                                  onClick={() => { setViewingQueueLead(qe); handleWorkflowDial(qe); }}
-                                >
-                                  <Phone className="h-3.5 w-3.5" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>Atender ligação</TooltipContent>
-                            </Tooltip>
+                            <>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                    onClick={() => { setViewingQueueLead(qe); handleWorkflowDial(qe); }}
+                                  >
+                                    <Phone className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Ligar</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    onClick={() => setCancelEntry(qe)}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Remover da fila</TooltipContent>
+                              </Tooltip>
+                            </>
                           )}
                           {!isFromCallLog && qe.source !== "workflow_call_task" && (
                             <>
@@ -1933,6 +1950,7 @@ export default function CallPanel() {
           callStatus="queued"
           initialObservations={viewingQueueLead.observations || ""}
           audioUrl={viewingQueueLead.audioUrl || null}
+          userId={viewingQueueLead.userId}
         />
       )}
           </div>

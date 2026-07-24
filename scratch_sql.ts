@@ -7,7 +7,7 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 async function main() {
   const supabase = createClient(supabaseUrl, supabaseKey);
-  const { data, error } = await supabase.rpc('execute_sql_query', { query: "select tablename, policyname, qual, with_check from pg_policies where tablename = 'leads';" }).catch(() => ({ data: null, error: 'no rpc' }));
-  console.log(data, error);
+  const { data, error } = await supabase.from('workflow_call_tasks').select('*, workflow_executions(*)').limit(1);
+  console.log(JSON.stringify(data, null, 2), error);
 }
 main().catch(console.error);
