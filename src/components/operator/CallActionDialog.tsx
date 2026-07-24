@@ -126,6 +126,8 @@ export function CallActionDialog({
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyVersion, setHistoryVersion] = useState(0);
 
+  const [isDialing, setIsDialing] = useState(false);
+
   const isWorkflowCall = currentData.callId?.startsWith("wt_") || false;
   const realTaskId = isWorkflowCall ? currentData.callId.replace("wt_", "") : null;
   const [workflowTask, setWorkflowTask] = useState<{ script: string; actions: any[] } | null>(null);
@@ -459,6 +461,60 @@ export function CallActionDialog({
     }
   };
 
+  const handleManualDial = async () => {
+    if (!realTaskId) return;
+    setIsDialing(true);
+    try {
+      // Fetch webhook configs
+      const { data: configs } = await supabase
+        .from("webhook_configs")
+        .select("url")
+        .eq("category", "calls")
+        .eq("is_active", true)
+        .limit(1);
+
+      const webhookUrl = configs?.[0]?.url;
+      if (!webhookUrl) {
+        toast({ title: "Webhook não configurado", description: "Vá em Painel Admin -> Webhooks e configure a categoria 'calls'.", variant: "destructive" });
+        return;
+      }
+
+      // Update task status in database
+      await supabase
+        .from("workflow_call_tasks")
+        .update({ status: "in_progress" })
+        .eq("id", realTaskId);
+
+      const payload = {
+        action: "call.dial",
+        call: {
+          id: realTaskId,
+          status: "dialing",
+          source: "workflow"
+        },
+        lead: {
+          id: currentData.leadId,
+          phone: currentData.leadPhone,
+          name: currentData.leadName
+        }
+      };
+
+      const { error: proxyError } = await supabase.functions.invoke("webhook-proxy", {
+        body: { url: webhookUrl, payload }
+      });
+
+      if (proxyError) {
+        toast({ title: "Erro no Webhook", description: proxyError.message, variant: "destructive" });
+      } else {
+        toast({ title: "Ligação iniciada", description: "A chamada foi disparada para o webhook." });
+      }
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.message, variant: "destructive" });
+    } finally {
+      setIsDialing(false);
+    }
+  };
+
   const resetState = () => {
     setSelectedActionId(null);
     setNotes("");
@@ -524,9 +580,23 @@ export function CallActionDialog({
               </button>
             </div>
           )}
-          <p className="text-lg font-mono text-primary">
-            📞 {currentData.leadPhone}
-          </p>
+          <div className="flex items-center justify-center gap-2">
+            <p className="text-lg font-mono text-primary">
+              📞 {currentData.leadPhone}
+            </p>
+            {isWorkflowCall && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2.5 gap-1.5 text-emerald-600 border-emerald-500/30 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
+                onClick={handleManualDial}
+                disabled={isDialing}
+              >
+                {isDialing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Phone className="h-3 w-3" />}
+                Ligar
+              </Button>
+            )}
+          </div>
           <div className="flex items-center justify-center gap-2 flex-wrap">
             <Badge variant="outline" className="text-xs">📁 {currentData.campaignName}</Badge>
             <Badge variant="outline" className="text-xs">🔄 x{currentData.attemptNumber}/{currentData.maxAttempts}</Badge>

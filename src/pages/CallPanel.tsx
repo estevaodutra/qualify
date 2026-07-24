@@ -781,6 +781,57 @@ export default function CallPanel() {
     setCancelReason("");
   };
 
+  const handleWorkflowDial = async (qe: any) => {
+    try {
+      const realId = qe.id.replace("wt_", "");
+      
+      const { data: configs } = await supabase
+        .from("webhook_configs")
+        .select("url")
+        .eq("category", "calls")
+        .eq("is_active", true)
+        .limit(1);
+
+      const webhookUrl = configs?.[0]?.url;
+      if (!webhookUrl) {
+        toast({ title: "Webhook não configurado", description: "Vá em Painel Admin -> Webhooks e configure a categoria 'calls'.", variant: "destructive" });
+        return;
+      }
+
+      await supabase
+        .from("workflow_call_tasks")
+        .update({ status: "in_progress", assigned_operator_id: user?.id })
+        .eq("id", realId);
+
+      const payload = {
+        action: "call.dial",
+        call: {
+          id: realId,
+          status: "dialing",
+          source: "workflow"
+        },
+        lead: {
+          id: qe.leadId,
+          phone: qe.phone,
+          name: qe.leadName
+        }
+      };
+
+      const { error: proxyError } = await supabase.functions.invoke("webhook-proxy", {
+        body: { url: webhookUrl, payload }
+      });
+
+      if (proxyError) {
+        toast({ title: "Erro no Webhook", description: proxyError.message, variant: "destructive" });
+      } else {
+        toast({ title: "Ligação iniciada", description: `Disparo enviado para o webhook.` });
+        queryClient.invalidateQueries({ queryKey: ["workflow_call_tasks_queue"] });
+      }
+    } catch (err: any) {
+      console.error("[handleWorkflowDial] Error:", err);
+    }
+  };
+
   const handleRescheduleQuick = (minutes: number) => {
     const now = new Date();
     now.setMinutes(now.getMinutes() + minutes);
@@ -1253,7 +1304,7 @@ export default function CallPanel() {
                                   variant="ghost"
                                   size="icon"
                                   className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                                  onClick={() => setViewingQueueLead(qe)}
+                                  onClick={() => { setViewingQueueLead(qe); handleWorkflowDial(qe); }}
                                 >
                                   <Phone className="h-3.5 w-3.5" />
                                 </Button>
