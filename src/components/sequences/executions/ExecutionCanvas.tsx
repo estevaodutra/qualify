@@ -172,7 +172,7 @@ export function ExecutionCanvas({
                   "error"
                 ];
                 const idx = phoneCallOutputs.indexOf(conn.conditionPath || "");
-                if (idx >= 0) portY1 = sY + 160 + idx * 26;
+                if (idx >= 0) portY1 = sY + 140 + idx * 22 + 11;
               }
               const portX2 = tX;
               const portY2 = tY + 45;
