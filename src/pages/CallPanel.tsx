@@ -580,7 +580,7 @@ export default function CallPanel() {
         attemptNumber: (db.attempt_count || 0) + 1,
         maxAttempts: db.max_attempts || 3,
         position: 80000 + idx,
-        observations: db.notes || null,
+        observations: db.observation || null,
         source: "workflow_call_task" as const,
         userId: db.user_id,
       }));
@@ -756,7 +756,7 @@ export default function CallPanel() {
       const realId = cancelEntry.id.replace("wt_", "");
       const { error: taskErr } = await supabase
         .from("workflow_call_tasks")
-        .update({ status: "cancelled", notes: cancelReason || null })
+        .update({ status: "cancelled", observation: cancelReason || null })
         .eq("id", realId);
       if (taskErr) {
         toast({ title: "Erro ao cancelar tarefa", description: taskErr.message, variant: "destructive" });
