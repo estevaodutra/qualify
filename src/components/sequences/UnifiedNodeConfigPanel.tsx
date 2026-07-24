@@ -571,10 +571,15 @@ export function UnifiedNodeConfigPanel({
     const script = currentConfig.script || { enabled: true, title: "Roteiro da ligação", content: "", showLeadVariables: true, type: "simple", quiz: [] };
     const assignment = currentConfig.assignment || { mode: "queue", queueId: null, operatorId: null, departmentId: null, distributionStrategy: "round-robin" };
     const attempts = currentConfig.attempts || { enabled: true, maxAttempts: 3, retryDelayMs: 3600000, retryOn: ["no_answer", "busy", "failed"], businessHoursOnly: true };
-    const actions = currentConfig.actions || [
+    const actions = (currentConfig.actions || [
       { id: "success", label: "Sucesso", type: "success", color: "green", output: "success", requiresNote: false, finalizesCall: true, scheduleRetry: false },
       { id: "no_success", label: "Sem Sucesso", type: "no_success", color: "red", output: "no_success", requiresNote: true, finalizesCall: true, scheduleRetry: false }
-    ];
+    ]).map((act: any) => {
+      if (act.output !== act.id) {
+        return { ...act, output: act.id };
+      }
+      return act;
+    });
     const quiz = script.quiz || [];
 
     const updateScript = (key: string, val: any) => {

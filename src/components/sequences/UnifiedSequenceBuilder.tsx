@@ -324,6 +324,19 @@ export function UnifiedSequenceBuilder({
              config: { ...node.config, triggers }
            };
         }
+      } else if (node.nodeType === "phone_call") {
+        if (node.config.actions) {
+          const sanitizedActions = (node.config.actions as any[]).map((act: any) => {
+            if (act.output !== act.id) {
+              return { ...act, output: act.id };
+            }
+            return act;
+          });
+          migratedNode = {
+            ...node,
+            config: { ...node.config, actions: sanitizedActions }
+          };
+        }
       }
 
       return {
@@ -1228,7 +1241,7 @@ export function UnifiedSequenceBuilder({
                                 const hoverClass = isGreen ? "hover:bg-green-500" : isRed ? "hover:bg-red-500" : isAmber ? "hover:bg-amber-500" : isIndigo ? "hover:bg-indigo-500" : "hover:bg-slate-500";
                                 const dotClass = isGreen ? "bg-green-500" : isRed ? "bg-red-500" : isAmber ? "bg-amber-500" : isIndigo ? "bg-indigo-500" : "bg-slate-500";
                                 return {
-                                  id: act.output || act.id,
+                                  id: act.id,
                                   label: act.label || "Ação",
                                   dot: dotClass,
                                   border: borderClass,
