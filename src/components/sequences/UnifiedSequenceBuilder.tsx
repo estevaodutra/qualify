@@ -1218,55 +1218,7 @@ export function UnifiedSequenceBuilder({
                           </div>
                           <span className="absolute right-2 top-[54px] text-[8px] font-bold text-destructive select-none">Não</span>
                         </>
-                      ) : node.nodeType === "phone_call" ? (
-                        <div className="absolute right-0 top-[140px] flex flex-col gap-2.5 w-[200px] text-right pointer-events-none select-none">
-                          {(() => {
-                            const actions = node.config.actions || [
-                              { id: "success", label: "Sucesso", type: "success", color: "green", output: "success", requiresNote: false, finalizesCall: true, scheduleRetry: false },
-                              { id: "no_success", label: "Sem Sucesso", type: "no_success", color: "red", output: "no_success", requiresNote: true, finalizesCall: true, scheduleRetry: false }
-                            ];
-                            const systemOutputs = [
-                              { id: "no_answer", label: "Não atendeu / Retentativa", border: "border-amber-500", hover: "hover:bg-amber-500", dot: "bg-amber-500" },
-                              { id: "attempts_exhausted", label: "Tentativas encerradas", border: "border-indigo-500", hover: "hover:bg-indigo-500", dot: "bg-indigo-500" },
-                              { id: "error", label: "Erro", border: "border-destructive", hover: "hover:bg-destructive", dot: "bg-destructive" }
-                            ];
-
-                            const dynamicOutputs = [
-                              ...actions.map((act: any) => {
-                                const isGreen = act.color === "green";
-                                const isRed = act.color === "red";
-                                const isAmber = act.color === "amber";
-                                const isIndigo = act.color === "indigo";
-                                const borderClass = isGreen ? "border-green-500" : isRed ? "border-red-500" : isAmber ? "border-amber-500" : isIndigo ? "border-indigo-500" : "border-slate-500";
-                                const hoverClass = isGreen ? "hover:bg-green-500" : isRed ? "hover:bg-red-500" : isAmber ? "hover:bg-amber-500" : isIndigo ? "hover:bg-indigo-500" : "hover:bg-slate-500";
-                                const dotClass = isGreen ? "bg-green-500" : isRed ? "bg-red-500" : isAmber ? "bg-amber-500" : isIndigo ? "bg-indigo-500" : "bg-slate-500";
-                                return {
-                                  id: act.id,
-                                  label: act.label || "Ação",
-                                  dot: dotClass,
-                                  border: borderClass,
-                                  hover: hoverClass
-                                };
-                              }),
-                              ...systemOutputs
-                            ];
-
-                            return dynamicOutputs.map((out) => (
-                              <div key={out.id} className="relative flex items-center justify-end w-full h-[22px] pointer-events-auto">
-                                <span className="text-[8px] font-bold text-slate-500 select-none mr-2">{out.label}</span>
-                                <div
-                                  data-node-port="true" data-node-id={node.id} data-port-id={out.id}
-                                  onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", out.id)}
-                                  className={cn("absolute -right-[27.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm bg-background", out.border, out.hover)}
-                                  title={out.label}
-                                >
-                                  <div className={cn("h-1.5 w-1.5 rounded-full", out.dot)} />
-                                </div>
-                              </div>
-                            ));
-                          })()}
-                        </div>
-                      ) : isFieldOp ? (
+                      ) : node.nodeType === "phone_call" ? null : isFieldOp ? (
                         <>{/* Handles moved to inline flow inside the node body to prevent overlapping */}</>
                       ) : (
                         randomizerBranches.map((branch, i) => {
@@ -1809,46 +1761,89 @@ export function UnifiedSequenceBuilder({
                             Configure roteiro, ações e retentativas para o Call Panel.
                           </p>
 
-                          {/* Details summaries */}
-                          <div className="space-y-1.5 mb-3">
-                            <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-200/60 text-[10px] font-semibold text-slate-700">
-                              <span className="text-slate-400">📋</span>
-                              <span className="truncate">
-                                {node.config.script?.type === "quiz" ? "Quiz Interativo" : node.config.script?.content ? "Roteiro configurado" : "Nenhum roteiro"}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-200/60 text-[10px] font-semibold text-slate-700">
-                              <span className="text-slate-400">🎯</span>
-                              <span className="truncate">
-                                {(node.config.actions as any[])?.length || 2} ações do operador
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-200/60 text-[10px] font-semibold text-slate-700">
-                              <span className="text-slate-400">🔁</span>
-                              <span className="truncate">
-                                Até {(node.config.attempts as any)?.maxAttempts || 3} tentativas
-                              </span>
+                          {/* 1. Roteiro / Quiz Block (No output port) */}
+                          <div className="p-3 border border-slate-200 rounded-xl bg-white shadow-sm mb-3">
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">📋</span>
+                              <div className="text-left min-w-0 flex-1">
+                                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Roteiro / Quiz</span>
+                                <p className="text-xs font-bold text-slate-800 truncate">
+                                  {node.config.script?.type === "quiz" ? "Quiz Interativo" : node.config.script?.content ? "Roteiro Configurado" : "Nenhum roteiro"}
+                                </p>
+                              </div>
                             </div>
                           </div>
 
-                          {/* Spacer matching outputs list height so card stretches */}
-                          <div className="flex flex-col gap-2.5 w-full pr-1 invisible pointer-events-none select-none">
-                            {(() => {
-                              const actions = node.config.actions || [
-                                { id: "success", label: "Sucesso", type: "success", color: "green", output: "success", requiresNote: false, finalizesCall: true, scheduleRetry: false },
-                                { id: "no_success", label: "Sem Sucesso", type: "no_success", color: "red", output: "no_success", requiresNote: true, finalizesCall: true, scheduleRetry: false }
-                              ];
-                              const systemOutputs = [
-                                { id: "no_answer", label: "Não atendeu / Retentativa" },
-                                { id: "attempts_exhausted", label: "Tentativas encerradas" },
-                                { id: "error", label: "Erro" }
-                              ];
-                              const totalCount = actions.length + systemOutputs.length;
-                              return Array.from({ length: totalCount }).map((_, i) => (
-                                <div key={i} className="h-[22px]" />
-                              ));
-                            })()}
-                          </div>
+                          {/* 2. Operator Actions Blocks */}
+                          {(() => {
+                            const actions = node.config.actions || [
+                              { id: "success", label: "Sucesso", type: "success", color: "green", output: "success", requiresNote: false, finalizesCall: true, scheduleRetry: false },
+                              { id: "no_success", label: "Sem Sucesso", type: "no_success", color: "red", output: "no_success", requiresNote: true, finalizesCall: true, scheduleRetry: false }
+                            ];
+
+                            return actions.map((act: any) => {
+                              const isGreen = act.color === "green";
+                              const isRed = act.color === "red";
+                              const isAmber = act.color === "amber";
+                              const isIndigo = act.color === "indigo";
+                              const borderClass = isGreen ? "border-green-500 hover:bg-green-500" : isRed ? "border-red-500 hover:bg-red-500" : isAmber ? "border-amber-500 hover:bg-amber-500" : isIndigo ? "border-indigo-500 hover:bg-indigo-500" : "border-slate-500 hover:bg-slate-500";
+                              const dotClass = isGreen ? "bg-green-500" : isRed ? "bg-red-500" : isAmber ? "bg-amber-500" : isIndigo ? "bg-indigo-500" : "bg-slate-500";
+                              const borderOutline = isGreen ? "border-green-500/20 hover:border-green-500/40" : isRed ? "border-red-500/20 hover:border-red-500/40" : isAmber ? "border-amber-500/20 hover:border-amber-500/40" : isIndigo ? "border-indigo-500/20 hover:border-indigo-500/40" : "border-slate-200 hover:border-slate-300";
+                              
+                              return (
+                                <div key={act.id} className={cn("group relative flex flex-col gap-1 p-3 border rounded-xl bg-white shadow-sm mb-3 cursor-pointer transition-colors", borderOutline)}>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-base">🎯</span>
+                                    <div className="text-left min-w-0 flex-1">
+                                      <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Ação do Operador</span>
+                                      <p className="text-xs font-bold text-slate-800 truncate">{act.label || "Ação"}</p>
+                                    </div>
+                                  </div>
+
+                                  {/* Output handle on the right edge of this specific action box! */}
+                                  <div
+                                    data-node-port="true" data-node-id={node.id} data-port-id={act.id}
+                                    onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", act.id)}
+                                    className={cn("absolute -right-[19.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 bg-background cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm", borderClass.split(" ")[0], borderClass.split(" ")[1])}
+                                    title={act.label}
+                                  >
+                                    <div className={cn("h-1.5 w-1.5 rounded-full", dotClass)} />
+                                  </div>
+                                </div>
+                              );
+                            });
+                          })()}
+
+                          {/* 3. System Outputs / Retentativas Blocks */}
+                          {(() => {
+                            const systemOutputs = [
+                              { id: "no_answer", label: "Não atendeu / Retentativa", border: "border-amber-500", hover: "hover:bg-amber-500", dot: "bg-amber-500", icon: "🔁", borderOutline: "border-amber-500/20 hover:border-amber-500/40" },
+                              { id: "attempts_exhausted", label: "Tentativas encerradas", border: "border-indigo-500", hover: "hover:bg-indigo-500", dot: "bg-indigo-500", icon: "🚫", borderOutline: "border-indigo-500/20 hover:border-indigo-500/40" },
+                              { id: "error", label: "Erro na ligação", border: "border-destructive", hover: "hover:bg-destructive", dot: "bg-destructive", icon: "⚠️", borderOutline: "border-destructive/20 hover:border-destructive/40" }
+                            ];
+
+                            return systemOutputs.map((out) => (
+                              <div key={out.id} className={cn("group relative flex flex-col gap-1 p-3 border rounded-xl bg-white shadow-sm mb-3 cursor-pointer transition-colors", out.borderOutline)}>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-base">{out.icon}</span>
+                                  <div className="text-left min-w-0 flex-1">
+                                    <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Resultado do Fluxo</span>
+                                    <p className="text-xs font-bold text-slate-800 truncate">{out.label}</p>
+                                  </div>
+                                </div>
+
+                                {/* Output handle on the right edge of this specific system output box! */}
+                                <div
+                                  data-node-port="true" data-node-id={node.id} data-port-id={out.id}
+                                  onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", out.id)}
+                                  className={cn("absolute -right-[19.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 bg-background cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm", out.border, out.hover)}
+                                  title={out.label}
+                                >
+                                  <div className={cn("h-1.5 w-1.5 rounded-full", out.dot)} />
+                                </div>
+                              </div>
+                            ));
+                          })()}
                         </div>
                       ) : isDelay ? (
                         <div className="flex flex-col w-full text-left h-full">
