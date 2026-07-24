@@ -800,6 +800,24 @@ export default function CallPanel() {
         return;
       }
 
+      // Fetch current operator details
+      let operatorDetails = { name: user?.email || "", email: user?.email || "", extension: "" };
+      if (user) {
+        const { data: operatorData } = await supabase
+          .from("call_operators")
+          .select("operator_name, extension")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (operatorData) {
+          operatorDetails = {
+            name: operatorData.operator_name || user.email || "",
+            email: user.email || "",
+            extension: operatorData.extension || ""
+          };
+        }
+      }
+
       await supabase
         .from("workflow_call_tasks")
         .update({ status: "dialing", assigned_operator_id: user?.id })
@@ -819,6 +837,11 @@ export default function CallPanel() {
           id: qe.leadId,
           phone: qe.phone,
           name: qe.leadName
+        },
+        operator: {
+          name: operatorDetails.name,
+          email: operatorDetails.email,
+          extension: operatorDetails.extension
         }
       };
 

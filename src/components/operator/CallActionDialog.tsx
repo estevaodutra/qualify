@@ -16,6 +16,7 @@ import { Loader2, Calendar, Phone, PhoneMissed, ChevronDown, Clock, Copy, Check,
 import { cn } from "@/lib/utils";
 import { addHours, format, setHours, setMinutes, addDays } from "date-fns";
 import { InlineReschedule } from "./InlineReschedule";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface CallDialogData {
   callId: string;
@@ -98,6 +99,7 @@ export function CallActionDialog({
   initialObservations, attemptNumber, maxAttempts, isPriority,
   callStatus, externalCallId, audioUrl, operatorId, userId,
 }: CallActionDialogProps) {
+  const { user } = useAuth();
   // --- Navigation state ---
   const cleanCallId = callId?.startsWith("cl_") ? callId.replace("cl_", "") : callId;
 
@@ -528,6 +530,24 @@ export function CallActionDialog({
         return;
       }
 
+      // Fetch current operator details
+      let operatorDetails = { name: user?.email || "", email: user?.email || "", extension: "" };
+      if (user) {
+        const { data: operatorData } = await supabase
+          .from("call_operators")
+          .select("operator_name, extension")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (operatorData) {
+          operatorDetails = {
+            name: operatorData.operator_name || user.email || "",
+            email: user.email || "",
+            extension: operatorData.extension || ""
+          };
+        }
+      }
+
       // Update task status in database to dialing
       await supabase
         .from("workflow_call_tasks")
@@ -545,6 +565,11 @@ export function CallActionDialog({
           id: currentData.leadId,
           phone: currentData.leadPhone,
           name: currentData.leadName
+        },
+        operator: {
+          name: operatorDetails.name,
+          email: operatorDetails.email,
+          extension: operatorDetails.extension
         }
       };
 
