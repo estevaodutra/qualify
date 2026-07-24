@@ -92,7 +92,7 @@ export function ComponentConfigPanel({ component, activeStep, steps, onChange, o
             <ImageConfig config={component.config} onChange={handleChange} />
           )}
           {component.componentType === "button" && (
-            <ButtonConfig config={component.config} onChange={handleChange} steps={steps} />
+            <ButtonConfig componentId={component.id} config={component.config} onChange={handleChange} steps={steps} />
           )}
           {component.componentType === "options" && (
             <OptionsConfig config={component.config} onChange={handleChange} steps={steps} />

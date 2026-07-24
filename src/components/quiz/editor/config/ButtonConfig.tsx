@@ -4,17 +4,27 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Props {
+  componentId: string;
   config: Record<string, unknown>;
   onChange: (config: Record<string, unknown>) => void;
   steps: Array<{ id: string; name: string }>;
 }
 
-export function ButtonConfig({ config, onChange, steps }: Props) {
+export function ButtonConfig({ componentId, config, onChange, steps }: Props) {
   const set = (key: string, val: unknown) => onChange({ ...config, [key]: val });
   const navType = (config.navigationType as string) || "step";
+  const idNameVal = (config.idName as string) || componentId.substring(0, 6);
 
   return (
     <div className="space-y-3">
+      <div className="space-y-1.5">
+        <Label>ID/Name</Label>
+        <Input
+          value={idNameVal}
+          onChange={(e) => set("idName", e.target.value)}
+        />
+      </div>
+
       <div className="space-y-1.5">
         <Label>Texto do botão</Label>
         <Input
@@ -79,7 +89,7 @@ export function ButtonConfig({ config, onChange, steps }: Props) {
         </Select>
       </div>
 
-      <div className="space-y-2 pt-1">
+      <div className="flex items-center gap-2 pt-1">
         <div className="flex items-center gap-2">
           <Switch
             checked={(config.animated as boolean) ?? true}
@@ -87,19 +97,44 @@ export function ButtonConfig({ config, onChange, steps }: Props) {
           />
           <Label>Com animação</Label>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 ml-auto">
           <Switch
             checked={(config.relief as boolean) ?? false}
             onCheckedChange={(v) => set("relief", v)}
           />
           <Label>Efeito relevo</Label>
         </div>
-        <div className="flex items-center gap-2">
-          <Switch
-            checked={(config.fixedBottom as boolean) ?? false}
-            onCheckedChange={(v) => set("fixedBottom", v)}
+      </div>
+      <div className="flex items-center gap-2">
+        <Switch
+          checked={(config.fixedBottom as boolean) ?? false}
+          onCheckedChange={(v) => set("fixedBottom", v)}
+        />
+        <Label>Fixar no rodapé</Label>
+      </div>
+
+      <div className="pt-2 border-t border-border/80 space-y-3">
+        <h4 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">— AVANÇADO</h4>
+        
+        <div className="space-y-1.5">
+          <Label>ID/Name</Label>
+          <Input
+            value={idNameVal}
+            onChange={(e) => set("idName", e.target.value)}
           />
-          <Label>Fixar no rodapé</Label>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>função onClick (Script/Código)</Label>
+          <div className="relative border rounded-md overflow-hidden bg-slate-900 border-slate-700/60 font-mono text-xs">
+            <textarea
+              value={(config.onClickScript as string) || ""}
+              onChange={(e) => set("onClickScript", e.target.value)}
+              placeholder="Digite seu script..."
+              rows={8}
+              className="w-full bg-slate-950/80 p-2.5 outline-none font-mono text-xs resize-y text-green-400 leading-relaxed placeholder:text-muted-foreground/30 border-0"
+            />
+          </div>
         </div>
       </div>
     </div>

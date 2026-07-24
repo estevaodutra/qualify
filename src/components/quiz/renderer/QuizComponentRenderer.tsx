@@ -176,6 +176,17 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
       const handleButtonClick = () => {
         if (isEditor) return;
 
+        // Execute custom onClick script/code if configured
+        const onClickScript = config.onClickScript as string;
+        if (onClickScript && onClickScript.trim()) {
+          try {
+            const fn = new Function(onClickScript);
+            fn();
+          } catch (err) {
+            console.error("Erro ao executar script onClick do botão:", err);
+          }
+        }
+
         if (actionType === "redirect") {
           if (redirectUrl) {
             let formattedUrl = redirectUrl.trim();
@@ -201,6 +212,7 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
       return (
         <div className="w-full my-1 flex justify-center transition-all">
           <button
+            id={(config.idName as string) || component.id}
             type="button"
             disabled={submitting || isEditor}
             onClick={handleButtonClick}
