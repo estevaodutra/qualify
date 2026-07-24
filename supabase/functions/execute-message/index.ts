@@ -2558,55 +2558,6 @@ Deno.serve(async (req) => {
             nodesProcessed++;
             continue;
           }
-
-          // Fetch webhook config for "calls" category
-          let webhookUrl = null;
-          try {
-            const { data: webhookConfigs } = await supabase
-              .from("webhook_configs")
-              .select("url")
-              .eq("user_id", userId || typedCampaign.user_id)
-              .eq("category", "calls")
-              .eq("is_active", true)
-              .limit(1);
-
-            webhookUrl = webhookConfigs?.[0]?.url;
-          } catch (e) {
-            console.error(`[ExecuteMessage] ⚠️ Failed to fetch webhook config:`, e);
-          }
-
-          if (webhookUrl) {
-            console.log(`[ExecuteMessage] 📞 Triggering webhook call dial to: ${webhookUrl}`);
-            const webhookPayload = {
-              action: "call.dial",
-              call: {
-                id: taskData.id,
-                status: "queued",
-                source: "workflow"
-              },
-              workflow: {
-                id: effectiveSequenceId,
-                name: typedCampaign.name || "Workflow"
-              },
-              lead: {
-                id: leadId,
-                phone: leadPhone,
-                name: lead?.name || ""
-              }
-            };
-
-            try {
-              const res = await fetch(webhookUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(webhookPayload),
-              });
-              console.log(`[ExecuteMessage] Webhook response status: ${res.status}`);
-            } catch (e) {
-              console.error(`[ExecuteMessage] ❌ Failed to dispatch webhook:`, e);
-            }
-          }
-
           // Register node execution as paused/waiting
           await logNodeExecution(supabase, {
             executionId: workflowExecutionId,
