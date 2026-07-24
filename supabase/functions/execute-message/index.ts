@@ -2444,8 +2444,32 @@ Deno.serve(async (req) => {
           }
 
           // If not resuming, we must queue a new call task and pause the workflow
-          const leadId = triggerContext?.leadId || triggerContext?.respondentId || lead?.id;
-          const companyId = triggerContext?.companyId || lead?.company_id || typedCampaign.company_id;
+          const companyId = triggerContext?.companyId || typedCampaign.company_id;
+          let lead = null;
+          const resolvedLeadId = triggerContext?.leadId || triggerContext?.respondentId;
+          const firstDest = activeDestinations[0];
+          const phoneClean = firstDest?.group_jid?.split("@")[0]?.replace(/\D/g, "");
+          const resolvedPhone = phoneClean || triggerContext?.respondentPhone || triggerContext?.contactPhone;
+
+          if (resolvedLeadId) {
+            const { data: lData } = await supabase
+              .from("leads")
+              .select("id, name, phone, company_id")
+              .eq("id", resolvedLeadId)
+              .maybeSingle();
+            lead = lData;
+          } else if (resolvedPhone) {
+            const { data: lData } = await supabase
+              .from("leads")
+              .select("id, name, phone, company_id")
+              .eq("company_id", companyId)
+              .eq("phone", resolvedPhone)
+              .maybeSingle();
+            lead = lData;
+          }
+
+          const leadId = resolvedLeadId || lead?.id;
+          const leadPhone = lead?.phone || resolvedPhone || "";
 
           if (!leadId) {
             console.error(`[ExecuteMessage] ❌ Cannot queue phone_call task: lead_id is missing.`);
