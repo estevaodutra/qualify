@@ -85,8 +85,10 @@ export function CallActionDialog({
   callStatus, externalCallId, audioUrl, operatorId,
 }: CallActionDialogProps) {
   // --- Navigation state ---
+  const cleanCallId = callId?.startsWith("cl_") ? callId.replace("cl_", "") : callId;
+
   const initialData: CallDialogData = {
-    callId, campaignId, leadId, leadName, leadPhone, campaignName,
+    callId: cleanCallId, campaignId, leadId, leadName, leadPhone, campaignName,
     duration, notes: initialObservations || "", attemptNumber, maxAttempts,
     isPriority, callStatus, externalCallId, audioUrl,
   };
@@ -98,8 +100,9 @@ export function CallActionDialog({
   // Keep currentData in sync with props when dialog reopens
   useEffect(() => {
     if (open) {
+      const activeCallId = callId?.startsWith("cl_") ? callId.replace("cl_", "") : callId;
       setCurrentData({
-        callId, campaignId, leadId, leadName, leadPhone, campaignName,
+        callId: activeCallId, campaignId, leadId, leadName, leadPhone, campaignName,
         duration, notes: initialObservations || "", attemptNumber, maxAttempts,
         isPriority, callStatus, externalCallId, audioUrl,
       });

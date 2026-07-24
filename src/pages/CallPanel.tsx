@@ -751,7 +751,32 @@ export default function CallPanel() {
   };
   const handleCancel = async () => {
     if (!cancelEntry) return;
-    await cancelCall({ callId: cancelEntry.id, reason: cancelReason || undefined });
+    if (cancelEntry.id.startsWith("wt_")) {
+      const realId = cancelEntry.id.replace("wt_", "");
+      const { error: taskErr } = await supabase
+        .from("workflow_call_tasks")
+        .update({ status: "cancelled", notes: cancelReason || null })
+        .eq("id", realId);
+      if (taskErr) {
+        toast({ title: "Erro ao cancelar tarefa", description: taskErr.message, variant: "destructive" });
+        return;
+      }
+      const { data: taskData } = await supabase
+        .from("workflow_call_tasks")
+        .select("workflow_execution_id")
+        .eq("id", realId)
+        .maybeSingle();
+      if (taskData?.workflow_execution_id) {
+        await supabase
+          .from("workflow_executions")
+          .update({ status: "failed" })
+          .eq("id", taskData.workflow_execution_id);
+      }
+      queryClient.invalidateQueries({ queryKey: ["workflow_call_tasks_queue"] });
+      toast({ title: "Removido", description: "Lead removido da fila de ligação." });
+    } else {
+      await cancelCall({ callId: cancelEntry.id, reason: cancelReason || undefined });
+    }
     setCancelEntry(null);
     setCancelReason("");
   };
@@ -1273,7 +1298,7 @@ export default function CallPanel() {
                                   )}
                                   <DropdownMenuItem
                                     className="text-destructive focus:text-destructive"
-                                    onClick={() => {
+                                    onClick={async () => {
                                       if (qe.status === "in_call" && qe.callLogId) {
                                         setCancelEntry({
                                           id: qe.callLogId,
@@ -1301,9 +1326,34 @@ export default function CallPanel() {
                                           isPriority: qe.isPriority || false,
                                           observations: qe.observations || null,
                                         });
-                                      } else {
-                                        removeFromQueue(qe.id);
-                                      }
+                                       } else {
+                                         if (qe.id.startsWith("wt_")) {
+                                           const realId = qe.id.replace("wt_", "");
+                                           const { error } = await supabase
+                                             .from("workflow_call_tasks")
+                                             .update({ status: "cancelled" })
+                                             .eq("id", realId);
+                                           if (error) {
+                                             toast({ title: "Erro ao remover da fila", description: error.message, variant: "destructive" });
+                                           } else {
+                                             const { data: taskData } = await supabase
+                                               .from("workflow_call_tasks")
+                                               .select("workflow_execution_id")
+                                               .eq("id", realId)
+                                               .maybeSingle();
+                                             if (taskData?.workflow_execution_id) {
+                                               await supabase
+                                                 .from("workflow_executions")
+                                                 .update({ status: "failed" })
+                                                 .eq("id", taskData.workflow_execution_id);
+                                             }
+                                             queryClient.invalidateQueries({ queryKey: ["workflow_call_tasks_queue"] });
+                                             toast({ title: "Removido", description: "Lead removido da fila com sucesso." });
+                                           }
+                                         } else {
+                                           removeFromQueue(qe.id);
+                                         }
+                                       }
                                     }}
                                   >
                                     <Trash2 className="h-4 w-4 mr-2" /> Remover da fila
@@ -1418,6 +1468,7 @@ export default function CallPanel() {
                           size="sm"
                           className="h-7 gap-1.5 text-muted-foreground hover:text-foreground"
                           onClick={() => setViewingQueueLead({
+                            id: entry.id,
                             campaignId: entry.campaignId,
                             leadId: entry.leadId,
                             leadName: entry.leadName,
@@ -1542,6 +1593,7 @@ export default function CallPanel() {
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => setViewingQueueLead({
+                              id: entry.id,
                               campaignId: entry.campaignId,
                               leadId: entry.leadId,
                               leadName: entry.leadName,
@@ -1633,6 +1685,7 @@ export default function CallPanel() {
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => setViewingQueueLead({
+                              id: entry.id,
                               campaignId: entry.campaignId,
                               leadId: entry.leadId,
                               leadName: entry.leadName,
@@ -1816,7 +1869,7 @@ export default function CallPanel() {
         <CallActionDialog
           open={!!viewingQueueLead}
           onOpenChange={(open) => !open && setViewingQueueLead(null)}
-          callId={viewingQueueLead.callLogId || ""}
+          callId={viewingQueueLead.callLogId || viewingQueueLead.id || ""}
           campaignId={viewingQueueLead.campaignId || ""}
           leadId={viewingQueueLead.leadId || ""}
           leadName={viewingQueueLead.leadName || "Sem nome"}
