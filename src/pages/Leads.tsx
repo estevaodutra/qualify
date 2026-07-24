@@ -9,6 +9,7 @@ import { CampaignOption } from "@/components/leads/ImportLeadsDialog";
 import { PageHeader } from "@/components/dispatch/PageHeader";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { cn, formatPhone } from "@/lib/utils";
 import { toast } from "sonner";
@@ -67,6 +68,7 @@ const TYPE_BADGES: Record<string, { label: string; className: string }> = {
 
 export default function Leads() {
   const { user } = useAuth();
+  const { activeCompanyId } = useCompany();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
