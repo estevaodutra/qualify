@@ -325,102 +325,141 @@ export const PropertiesPanel: React.FC = () => {
               </div>
             ) : null}
 
-            {activeComponent.componentType === "button" || activeComponent.componentType === "cta_whatsapp" ? (
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Texto do Botão</Label>
-                  <Input
-                    value={(activeComponent.config.text as string) || ""}
-                    onChange={(e) => handleConfigChange("text", e.target.value)}
-                    className="h-8 text-xs"
-                  />
-                </div>
+            {activeComponent.componentType === "button" || activeComponent.componentType === "cta_whatsapp" ? (() => {
+              const idNameVal = (activeComponent.config.idName as string) || activeComponent.id.substring(0, 6);
+              return (
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">ID/Name</Label>
+                    <Input
+                      value={idNameVal}
+                      onChange={(e) => handleConfigChange("idName", e.target.value)}
+                      className="h-8 text-xs font-mono"
+                    />
+                  </div>
 
-                {/* Colors with Swatch Palette Popover */}
-                <div className="grid grid-cols-2 gap-2 pt-1">
-                  <ColorPickerPopover
-                    label="Cor do Botão"
-                    value={(activeComponent.config.buttonColor as string) || ""}
-                    onChange={(color) => handleConfigChange("buttonColor", color)}
-                    defaultColor="#ec4899"
-                  />
-                  <ColorPickerPopover
-                    label="Cor do Texto"
-                    value={(activeComponent.config.textColor as string) || ""}
-                    onChange={(color) => handleConfigChange("textColor", color)}
-                    defaultColor="#ffffff"
-                  />
-                </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Texto do Botão</Label>
+                    <Input
+                      value={(activeComponent.config.text as string) || ""}
+                      onChange={(e) => handleConfigChange("text", e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                  </div>
 
-                {/* Navigation Type Box */}
-                <div className="relative border border-border/80 rounded-xl p-3 bg-card shadow-xs space-y-3 pt-4 select-none">
-                  <span className="absolute -top-2.5 left-3 bg-card px-1.5 text-[11px] font-semibold text-primary">
-                    Tipo de navegação
-                  </span>
+                  {/* Colors with Swatch Palette Popover */}
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <ColorPickerPopover
+                      label="Cor do Botão"
+                      value={(activeComponent.config.buttonColor as string) || ""}
+                      onChange={(color) => handleConfigChange("buttonColor", color)}
+                      defaultColor="#ec4899"
+                    />
+                    <ColorPickerPopover
+                      label="Cor do Texto"
+                      value={(activeComponent.config.textColor as string) || ""}
+                      onChange={(color) => handleConfigChange("textColor", color)}
+                      defaultColor="#ffffff"
+                    />
+                  </div>
 
-                  <select
-                    value={(activeComponent.config.actionType as string) || "navigate"}
-                    onChange={(e) => handleConfigChange("actionType", e.target.value)}
-                    className="w-full h-8 px-2 border rounded-md text-xs bg-background"
-                  >
-                    <option value="navigate">Navegar entre etapas</option>
-                    <option value="redirect">Redirecionar</option>
-                  </select>
+                  {/* Navigation Type Box */}
+                  <div className="relative border border-border/80 rounded-xl p-3 bg-card shadow-xs space-y-3 pt-4 select-none">
+                    <span className="absolute -top-2.5 left-3 bg-card px-1.5 text-[11px] font-semibold text-primary">
+                      Tipo de navegação
+                    </span>
 
-                  {activeComponent.config.actionType === "redirect" ? (
-                    <div className="space-y-3 pt-1 animate-in fade-in duration-200">
-                      <div className="relative border border-border rounded-xl p-2.5 bg-background shadow-xs">
-                        <span className="absolute -top-2.5 left-2 bg-background px-1 text-[10px] font-medium text-muted-foreground">
-                          Destino do redirecionamento
-                        </span>
-                        <Input
-                          value={(activeComponent.config.redirectUrl as string) || ""}
-                          onChange={(e) => handleConfigChange("redirectUrl", e.target.value)}
-                          placeholder="URL"
-                          className="h-7 text-xs border-0 focus-visible:ring-0 p-0 shadow-none bg-transparent"
+                    <select
+                      value={(activeComponent.config.actionType as string) || "navigate"}
+                      onChange={(e) => handleConfigChange("actionType", e.target.value)}
+                      className="w-full h-8 px-2 border rounded-md text-xs bg-background"
+                    >
+                      <option value="navigate">Navegar entre etapas</option>
+                      <option value="redirect">Redirecionar</option>
+                    </select>
+
+                    {activeComponent.config.actionType === "redirect" ? (
+                      <div className="space-y-3 pt-1 animate-in fade-in duration-200">
+                        <div className="relative border border-border rounded-xl p-2.5 bg-background shadow-xs">
+                          <span className="absolute -top-2.5 left-2 bg-background px-1 text-[10px] font-medium text-muted-foreground">
+                            Destino do redirecionamento
+                          </span>
+                          <Input
+                            value={(activeComponent.config.redirectUrl as string) || ""}
+                            onChange={(e) => handleConfigChange("redirectUrl", e.target.value)}
+                            placeholder="URL"
+                            className="h-7 text-xs border-0 focus-visible:ring-0 p-0 shadow-none bg-transparent"
+                          />
+                        </div>
+
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={!!activeComponent.config.openInNewTab}
+                            onChange={(e) => handleConfigChange("openInNewTab", e.target.checked)}
+                            className="rounded text-indigo-600"
+                          />
+                          <span className="text-xs">Nova aba?</span>
+                        </label>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5 pt-1 animate-in fade-in duration-200">
+                        <Label className="text-xs">Etapa de destino</Label>
+                        <select
+                          value={(activeComponent.config.targetStepId as string) || ""}
+                          onChange={(e) => handleConfigChange("targetStepId", e.target.value)}
+                          className="w-full h-8 px-2 border rounded-md text-xs bg-background"
+                        >
+                          <option value="">Próxima Etapa (Padrão)</option>
+                          {steps.map((st, idx) => (
+                            <option key={st.id} value={st.id}>
+                              {st.name || `Etapa ${idx + 1}`}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  <label className="flex items-center gap-2 cursor-pointer pt-1">
+                    <input
+                      type="checkbox"
+                      checked={!!activeComponent.config.animated}
+                      onChange={(e) => handleConfigChange("animated", e.target.checked)}
+                      className="rounded text-indigo-600"
+                    />
+                    <span className="text-xs">Efeito Pulsante de Atenção</span>
+                  </label>
+
+                  {/* Advanced settings */}
+                  <div className="pt-2 border-t border-border/80 space-y-3">
+                    <h4 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">— AVANÇADO</h4>
+                    
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">ID/Name</Label>
+                      <Input
+                        value={idNameVal}
+                        onChange={(e) => handleConfigChange("idName", e.target.value)}
+                        className="h-8 text-xs font-mono"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">função onClick (Script/Código)</Label>
+                      <div className="relative border rounded-md overflow-hidden bg-slate-900 border-slate-700/60 font-mono text-xs">
+                        <textarea
+                          value={(activeComponent.config.onClickScript as string) || ""}
+                          onChange={(e) => handleConfigChange("onClickScript", e.target.value)}
+                          placeholder="Digite seu script..."
+                          rows={8}
+                          className="w-full bg-slate-950/80 p-2.5 outline-none font-mono text-xs resize-y text-green-400 leading-relaxed placeholder:text-muted-foreground/30 border-0"
                         />
                       </div>
-
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={!!activeComponent.config.openInNewTab}
-                          onChange={(e) => handleConfigChange("openInNewTab", e.target.checked)}
-                          className="rounded text-indigo-600"
-                        />
-                        <span className="text-xs">Nova aba?</span>
-                      </label>
                     </div>
-                  ) : (
-                    <div className="space-y-1.5 pt-1 animate-in fade-in duration-200">
-                      <Label className="text-xs">Etapa de destino</Label>
-                      <select
-                        value={(activeComponent.config.targetStepId as string) || ""}
-                        onChange={(e) => handleConfigChange("targetStepId", e.target.value)}
-                        className="w-full h-8 px-2 border rounded-md text-xs bg-background"
-                      >
-                        <option value="">Próxima Etapa (Padrão)</option>
-                        {steps.map((st, idx) => (
-                          <option key={st.id} value={st.id}>
-                            {st.name || `Etapa ${idx + 1}`}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
+                  </div>
                 </div>
-
-                <label className="flex items-center gap-2 cursor-pointer pt-1">
-                  <input
-                    type="checkbox"
-                    checked={!!activeComponent.config.animated}
-                    onChange={(e) => handleConfigChange("animated", e.target.checked)}
-                    className="rounded text-indigo-600"
-                  />
-                  <span className="text-xs">Efeito Pulsante de Atenção</span>
-                </label>
-              </div>
-            ) : null}
+              );
+            })() : null}
 
             {activeComponent.componentType === "options" || activeComponent.componentType === "cards_choice" ? (
               <div className="space-y-4">
