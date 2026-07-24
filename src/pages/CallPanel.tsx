@@ -802,8 +802,11 @@ export default function CallPanel() {
 
       await supabase
         .from("workflow_call_tasks")
-        .update({ status: "in_progress", assigned_operator_id: user?.id })
+        .update({ status: "dialing", assigned_operator_id: user?.id })
         .eq("id", realId);
+
+      // Invalidate queries so UI reflects dialing state immediately
+      queryClient.invalidateQueries({ queryKey: ["workflow_call_tasks_queue"] });
 
       const payload = {
         action: "call.dial",
@@ -825,8 +828,17 @@ export default function CallPanel() {
 
       if (proxyError) {
         toast({ title: "Erro no Webhook", description: proxyError.message, variant: "destructive" });
+        await supabase
+          .from("workflow_call_tasks")
+          .update({ status: "failed" })
+          .eq("id", realId);
+        queryClient.invalidateQueries({ queryKey: ["workflow_call_tasks_queue"] });
       } else {
         toast({ title: "Ligação iniciada", description: `Disparo enviado para o webhook.` });
+        await supabase
+          .from("workflow_call_tasks")
+          .update({ status: "ringing" })
+          .eq("id", realId);
         queryClient.invalidateQueries({ queryKey: ["workflow_call_tasks_queue"] });
       }
     } catch (err: any) {

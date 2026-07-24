@@ -276,6 +276,65 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ==================== CHECK WORKFLOW CALL TASK ====================
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (external_call_id && typeof external_call_id === 'string' && uuidRegex.test(external_call_id)) {
+      const { data: workflowTask } = await supabase
+        .from('workflow_call_tasks')
+        .select('id, status, company_id, lead_id, user_id')
+        .eq('id', external_call_id)
+        .maybeSingle();
+
+      if (workflowTask) {
+        console.log('[call-status] Found matching workflow_call_task:', workflowTask.id);
+        let mappedStatus = status;
+        if (status === 'answered') {
+          mappedStatus = 'in_call';
+        }
+
+        const updateData: any = {
+          status: mappedStatus,
+          updated_at: new Date().toISOString()
+        };
+
+        if (status === 'answered') {
+          updateData.started_at = new Date().toISOString();
+        } else if (['ended', 'completed', 'busy', 'no_answer', 'failed', 'cancelled', 'timeout'].includes(status)) {
+          updateData.completed_at = new Date().toISOString();
+        }
+
+        const { error: updateErr } = await supabase
+          .from('workflow_call_tasks')
+          .update(updateData)
+          .eq('id', workflowTask.id);
+
+        if (updateErr) {
+          console.error('[call-status] Error updating workflow_call_task:', updateErr);
+        } else {
+          console.log('[call-status] Successfully updated workflow_call_task status to:', mappedStatus);
+        }
+
+        // Return success response early
+        const responseBody = { success: true, message: 'Workflow call task status updated' };
+        await logApiCall(supabase, {
+          method: req.method,
+          endpoint: '/call-status',
+          statusCode: 200,
+          responseTimeMs: Date.now() - startTime,
+          userId,
+          apiKeyId,
+          ipAddress,
+          requestBody,
+          responseBody,
+        });
+
+        return new Response(JSON.stringify(responseBody), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     // ==================== FIND EXISTING CALL LOG ====================
     console.log('[call-status] Searching for call log by external_call_id:', external_call_id);
     

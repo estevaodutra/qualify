@@ -74,6 +74,18 @@ interface CallLogEntry {
   audio_url?: string | null;
 }
 
+const statusStyles: Record<string, { label: string; className: string }> = {
+  queued: { label: "📋 Na Fila", className: "bg-amber-500/15 text-amber-700 dark:text-amber-400" },
+  dialing: { label: "🔵 Discando...", className: "bg-blue-500/15 text-blue-700 dark:text-blue-400 animate-pulse" },
+  ringing: { label: "🔔 Chamando...", className: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-400 animate-pulse" },
+  in_call: { label: "📞 Em Andamento", className: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" },
+  answered: { label: "🟢 Atendido", className: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" },
+  completed: { label: "✅ Concluído", className: "bg-gray-500/15 text-gray-700 dark:text-gray-400" },
+  failed: { label: "❌ Falha", className: "bg-destructive/15 text-destructive dark:text-destructive-400" },
+  cancelled: { label: "🚫 Cancelado", className: "bg-gray-500/15 text-gray-700 dark:text-gray-400" },
+  in_progress: { label: "⚙️ Em Progresso", className: "bg-blue-500/15 text-blue-700 dark:text-blue-400" },
+};
+
 const formatDuration = (s: number) => {
   const m = Math.floor(s / 60);
   const sec = s % 60;
@@ -174,6 +186,37 @@ export function CallActionDialog({
       setWorkflowTask(null);
     }
   }, [currentData.callId, open]);
+
+  // Subscribe to changes on the workflow_call_task
+  useEffect(() => {
+    if (!isWorkflowCall || !realTaskId || !open) return;
+
+    const channel = supabase
+      .channel(`workflow_task_${realTaskId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "workflow_call_tasks",
+          filter: `id=eq.${realTaskId}`,
+        },
+        (payload) => {
+          const updatedTask = payload.new;
+          if (updatedTask && updatedTask.status) {
+            setCurrentData((prev) => ({
+              ...prev,
+              callStatus: updatedTask.status,
+            }));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [realTaskId, isWorkflowCall, open]);
 
   // Reset per-view state when currentData changes
   useEffect(() => {
@@ -466,6 +509,8 @@ export function CallActionDialog({
   const handleManualDial = async () => {
     if (!realTaskId) return;
     setIsDialing(true);
+    // Immediately set local state to dialing
+    setCurrentData(prev => ({ ...prev, callStatus: "dialing" }));
     try {
       // Fetch webhook configs
       const { data: configs } = await supabase
@@ -479,13 +524,14 @@ export function CallActionDialog({
       const webhookUrl = configs?.[0]?.url;
       if (!webhookUrl) {
         toast({ title: "Webhook não configurado", description: "Vá em Painel Admin -> Webhooks e configure a categoria 'calls'.", variant: "destructive" });
+        setCurrentData(prev => ({ ...prev, callStatus: initialData.callStatus }));
         return;
       }
 
-      // Update task status in database
+      // Update task status in database to dialing
       await supabase
         .from("workflow_call_tasks")
-        .update({ status: "in_progress" })
+        .update({ status: "dialing" })
         .eq("id", realTaskId);
 
       const payload = {
@@ -508,11 +554,20 @@ export function CallActionDialog({
 
       if (proxyError) {
         toast({ title: "Erro no Webhook", description: proxyError.message, variant: "destructive" });
+        setCurrentData(prev => ({ ...prev, callStatus: "failed" }));
       } else {
         toast({ title: "Ligação iniciada", description: "A chamada foi disparada para o webhook." });
+        // Set local state to ringing
+        setCurrentData(prev => ({ ...prev, callStatus: "ringing" }));
+        // Update database to ringing
+        await supabase
+          .from("workflow_call_tasks")
+          .update({ status: "ringing" })
+          .eq("id", realTaskId);
       }
     } catch (err: any) {
       toast({ title: "Erro", description: err.message, variant: "destructive" });
+      setCurrentData(prev => ({ ...prev, callStatus: "failed" }));
     } finally {
       setIsDialing(false);
     }
@@ -604,7 +659,17 @@ export function CallActionDialog({
             <Badge variant="outline" className="text-xs">📁 {currentData.campaignName}</Badge>
             <Badge variant="outline" className="text-xs">🔄 x{currentData.attemptNumber}/{currentData.maxAttempts}</Badge>
             {currentData.isPriority && <Badge variant="secondary" className="text-xs">⭐ Prioridade</Badge>}
-            {currentData.callStatus && <Badge variant="outline" className={cn("text-xs", currentData.callStatus === "queued" && "bg-amber-500/15 text-amber-700 dark:text-amber-400")}>{currentData.callStatus === "queued" ? "📋 Na Fila" : `📡 ${currentData.callStatus}`}</Badge>}
+            {currentData.callStatus && (() => {
+              const style = statusStyles[currentData.callStatus] || {
+                label: `📡 ${currentData.callStatus}`,
+                className: "bg-primary/10 text-primary"
+              };
+              return (
+                <Badge variant="outline" className={cn("text-xs", style.className)}>
+                  {style.label}
+                </Badge>
+              );
+            })()}
           </div>
           {currentData.externalCallId && (
             <div className="flex items-center justify-center gap-1.5">
