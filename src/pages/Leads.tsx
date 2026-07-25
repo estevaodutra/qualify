@@ -92,6 +92,58 @@ export default function Leads() {
   const [tagDialogMode, setTagDialogMode] = useState<"add" | "remove" | null>(null);
   const [workflowDialogOpen, setWorkflowDialogOpen] = useState(false);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>("");
+  const [leadsWithPhone, setLeadsWithPhone] = useState<number>(0);
+  const [leadsWithoutPhone, setLeadsWithoutPhone] = useState<number>(0);
+  const [loadingPhoneStats, setLoadingPhoneStats] = useState(false);
+
+  const { data: selectedWorkflowNodes = [] } = useQuery({
+    queryKey: ["sequence_nodes_summary", selectedWorkflowId],
+    queryFn: async () => {
+      if (!selectedWorkflowId) return [];
+      const { data, error } = await supabase
+        .from("sequence_nodes")
+        .select("*")
+        .eq("sequence_id", selectedWorkflowId);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!selectedWorkflowId && workflowDialogOpen,
+  });
+
+  useEffect(() => {
+    if (!workflowDialogOpen || !selectedWorkflowId) {
+      setLeadsWithPhone(0);
+      setLeadsWithoutPhone(0);
+      return;
+    }
+    const fetchLeadPhoneStats = async () => {
+      setLoadingPhoneStats(true);
+      try {
+        const ids = await getSelectedIds();
+        if (ids.length === 0) {
+          setLeadsWithPhone(0);
+          setLeadsWithoutPhone(0);
+          return;
+        }
+        
+        const { data, error } = await supabase
+          .from("leads")
+          .select("phone")
+          .in("id", ids);
+          
+        if (!error && data) {
+          const withPhone = data.filter((l: any) => l.phone && l.phone.replace(/\D/g, "").length > 0).length;
+          setLeadsWithPhone(withPhone);
+          setLeadsWithoutPhone(ids.length - withPhone);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoadingPhoneStats(false);
+      }
+    };
+    fetchLeadPhoneStats();
+  }, [workflowDialogOpen, selectedWorkflowId]);
 
   const { data: workflows = [], isLoading: workflowsLoading } = useQuery({
     queryKey: ["message_sequences", activeCompanyId],
@@ -570,6 +622,51 @@ export default function Leads() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {(() => {
+                const hasUraNode = selectedWorkflowNodes.some((n: any) => n.node_type === "ura");
+                if (!hasUraNode) return null;
+
+                const uraNode = selectedWorkflowNodes.find((n: any) => n.node_type === "ura");
+                const config = uraNode?.config || {};
+                const modeLabel = config.uraMode === "reverse" ? "URA Reversa" : "URA Simples";
+                const audioType = config.audio?.type || "tts";
+                const audioLabel = audioType === "tts" ? "TTS Configurado" : (audioType === "audio" ? "Arquivo de Áudio" : "URA Pré-configurada");
+                const dtmfCount = config.dtmf?.actions?.length || 0;
+                const attemptsCount = config.attempts?.maxAttempts || 1;
+
+                return (
+                  <div className="p-4 rounded-xl bg-purple-500/5 border border-purple-500/20 space-y-2 animate-in fade-in duration-200">
+                    <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider block">Resumo do Nó URA no Workflow</span>
+                    <div className="flex justify-between items-center text-xs font-semibold">
+                      <span className="text-slate-500">Tipo de URA:</span>
+                      <span className="text-foreground">{modeLabel}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs font-semibold">
+                      <span className="text-slate-500">Áudio da chamada:</span>
+                      <span className="text-foreground">{audioLabel}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs font-semibold">
+                      <span className="text-slate-500">Opções DTMF:</span>
+                      <span className="text-foreground">{dtmfCount} opções</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs font-semibold">
+                      <span className="text-slate-500">Tentativas:</span>
+                      <span className="text-foreground">{attemptsCount}x</span>
+                    </div>
+                    <div className="border-t border-purple-500/10 my-2 pt-2 space-y-1">
+                      <div className="flex justify-between items-center text-xs font-semibold">
+                        <span className="text-slate-500">Leads com telefone:</span>
+                        <span className="text-emerald-600 font-bold">{loadingPhoneStats ? "Carregando..." : `${leadsWithPhone} contatos`}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs font-semibold">
+                        <span className="text-slate-500">Leads sem telefone (serão ignorados):</span>
+                        <span className="text-rose-600 font-bold">{loadingPhoneStats ? "Carregando..." : `${leadsWithoutPhone} contatos`}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="p-4 rounded-xl bg-slate-50 border border-slate-100/80 space-y-2">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Resumo do Disparo</span>

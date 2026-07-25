@@ -1,4 +1,4 @@
-﻿import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -29,11 +29,12 @@ Deno.serve(async (req) => {
     if (contentType.includes("multipart/form-data")) {
       const formData = await req.formData();
       const campaignId = formData.get("campaign_id");
+      const nodeId = formData.get("node_id");
       const audioFile = formData.get("audio");
       const nome = formData.get("nome") ?? (audioFile instanceof File ? audioFile.name : "audio");
 
-      if (!campaignId || !audioFile) {
-        return new Response(JSON.stringify({ error: "campaign_id and audio are required." }), {
+      if ((!campaignId && !nodeId) || !audioFile) {
+        return new Response(JSON.stringify({ error: "campaign_id or node_id and audio are required." }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -56,9 +57,27 @@ Deno.serve(async (req) => {
         });
       }
 
-      await (supabase as any).from("ura_campaigns").update({ audio_value: String(nome) }).eq("id", String(campaignId));
+      if (campaignId) {
+        await (supabase as any).from("ura_campaigns").update({ audio_value: String(nome) }).eq("id", String(campaignId));
+      } else if (nodeId) {
+        const { data: nodeData, error: nodeFetchErr } = await supabase
+          .from("sequence_nodes")
+          .select("config")
+          .eq("id", String(nodeId))
+          .single();
+        if (!nodeFetchErr && nodeData) {
+          const config = (nodeData.config || {}) as Record<string, any>;
+          config.audio = {
+            ...(config.audio || {}),
+            type: "audio",
+            mosAudioName: String(nome),
+            fileUrl: ""
+          };
+          await supabase.from("sequence_nodes").update({ config }).eq("id", String(nodeId));
+        }
+      }
 
-      return new Response(JSON.stringify({ ok: true, audio_name: String(nome), mos_response: mosBody }), {
+      return new Response(JSON.stringify({ ok: true, nome: String(nome), mos_response: mosBody }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

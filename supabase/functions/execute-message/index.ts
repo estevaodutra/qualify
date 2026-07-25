@@ -2414,6 +2414,199 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // ============= URA / IVR NODES =============
+        if (node.node_type === "ura") {
+          console.log(`[ExecuteMessage] 🔊 Processing URA node ${node.id}`);
+          const config = node.config || {};
+          
+          // Check if we are resuming from a URA callback result
+          const uraResult = triggerContext?.uraResult;
+          if (uraResult) {
+            console.log(`[ExecuteMessage] Resuming URA node ${node.id} with result: ${uraResult}`);
+            
+            // Register node execution outcome
+            await logNodeExecution(supabase, {
+              executionId: workflowExecutionId,
+              userId,
+              nodeId: node.id,
+              nodeType: node.node_type,
+              status: "success",
+              startedAt: nodeStartedAt,
+              input: node.config,
+              output: { status: "completed", uraResult },
+            });
+
+            // Map DTMF digit to path: if digit is in 0-9, *, #, map to "dtmf_" + digit
+            let conditionPath = uraResult;
+            if (["0","1","2","3","4","5","6","7","8","9","*","#"].includes(uraResult)) {
+              conditionPath = `dtmf_${uraResult}`;
+            }
+
+            // Find the connection matching the condition path
+            const nextConn = connections.find(c => c.source_node_id === node.id && c.condition_path === conditionPath);
+            currentNodeId = nextConn ? nextConn.target_node_id : null;
+            nodesProcessed++;
+            continue;
+          }
+
+          // If not resuming, we must queue a new URA task, call the dispatch function, and pause the workflow
+          const companyId = triggerContext?.companyId || typedCampaign.company_id;
+          let lead = null;
+          const resolvedLeadId = triggerContext?.leadId || triggerContext?.respondentId;
+          const firstDest = activeDestinations[0];
+          const phoneClean = firstDest?.group_jid?.split("@")[0]?.replace(/\D/g, "");
+          const resolvedPhone = phoneClean || triggerContext?.respondentPhone || triggerContext?.contactPhone;
+
+          if (resolvedLeadId) {
+            const { data: lData } = await supabase
+              .from("leads")
+              .select("id, name, phone, company_id")
+              .eq("id", resolvedLeadId)
+              .maybeSingle();
+            lead = lData;
+          } else if (resolvedPhone) {
+            const { data: lData } = await supabase
+              .from("leads")
+              .select("id, name, phone, company_id")
+              .eq("company_id", companyId)
+              .eq("phone", resolvedPhone)
+              .maybeSingle();
+            lead = lData;
+          }
+
+          const leadId = resolvedLeadId || lead?.id;
+          const leadPhone = lead?.phone || resolvedPhone || "";
+
+          if (!leadId || !leadPhone) {
+            console.error(`[ExecuteMessage] ❌ Cannot queue URA task: lead_id or phone is missing.`);
+            await logNodeExecution(supabase, {
+              executionId: workflowExecutionId,
+              userId,
+              nodeId: node.id,
+              nodeType: node.node_type,
+              status: "error",
+              startedAt: nodeStartedAt,
+              input: node.config,
+              output: { error: "Missing lead ID or phone" },
+            });
+            const nextConn = connections.find(c => c.source_node_id === node.id && c.condition_path === "error");
+            currentNodeId = nextConn ? nextConn.target_node_id : null;
+            nodesProcessed++;
+            continue;
+          }
+
+          // Evaluate audio variables if type is TTS
+          let audioValue = config.audio?.value || "";
+          if (config.audio?.type === "tts" && audioValue) {
+            audioValue = replaceVariables(audioValue);
+          } else {
+            audioValue = config.audio?.mosAudioName || config.audio?.fileUrl || "";
+          }
+
+          // Create URA task
+          const taskPayload = {
+            company_id: companyId,
+            user_id: userId || typedCampaign.user_id,
+            workflow_id: effectiveSequenceId,
+            workflow_execution_id: workflowExecutionId,
+            node_id: node.id,
+            lead_id: leadId,
+            phone: leadPhone.replace(/\D/g, ""),
+            status: "pending",
+            attempt_count: 0,
+            max_attempts: config.attempts?.maxAttempts || 2,
+            audio_type: config.audio?.type || "tts",
+            audio_value: audioValue,
+            dtmf_actions: config.dtmf?.actions || [],
+          };
+
+          const { data: taskData, error: taskError } = await supabase
+            .from("workflow_ura_tasks")
+            .insert(taskPayload)
+            .select("id")
+            .single();
+
+          if (taskError) {
+            console.error(`[ExecuteMessage] ❌ Failed to insert URA task:`, taskError);
+            await logNodeExecution(supabase, {
+              executionId: workflowExecutionId,
+              userId,
+              nodeId: node.id,
+              nodeType: node.node_type,
+              status: "error",
+              startedAt: nodeStartedAt,
+              input: node.config,
+              output: { error: taskError.message },
+            });
+            const nextConn = connections.find(c => c.source_node_id === node.id && c.condition_path === "error");
+            currentNodeId = nextConn ? nextConn.target_node_id : null;
+            nodesProcessed++;
+            continue;
+          }
+
+          // Register node execution as paused/waiting URA callback
+          await logNodeExecution(supabase, {
+            executionId: workflowExecutionId,
+            userId,
+            nodeId: node.id,
+            nodeType: node.node_type,
+            status: "success",
+            startedAt: nodeStartedAt,
+            input: node.config,
+            output: { status: "waiting_ura_callback", taskId: taskData.id },
+          });
+
+          // Update workflow execution status to waiting
+          await supabase
+            .from("workflow_executions")
+            .update({ 
+              status: "waiting", 
+              updated_at: new Date().toISOString() 
+            })
+            .eq("id", workflowExecutionId);
+
+          // Update sequence execution state
+          await supabase
+            .from("sequence_executions")
+            .upsert({
+              user_id: userId || typedCampaign.user_id,
+              sequence_id: effectiveSequenceId,
+              status: "paused",
+              resume_at: null,
+              trigger_context: {
+                ...triggerContext,
+                resumeNodeId: node.id,
+              }
+            }, {
+              onConflict: "user_id,sequence_id"
+            });
+
+          // Dispatch the task asynchronously
+          const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+          const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+          
+          fetch(`${supabaseUrl}/functions/v1/workflow-ura-dispatch`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${supabaseServiceKey}`,
+            },
+            body: JSON.stringify({ taskId: taskData.id })
+          }).catch(err => {
+            console.error(`[ExecuteMessage] Failed to trigger workflow-ura-dispatch for task ${taskData.id}:`, err);
+          });
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              status: "paused",
+              executionId: workflowExecutionId,
+              message: "Execution paused waiting for URA callback."
+            }),
+            { headers: { "Content-Type": "application/json" } }
+          );
+        }
+
         // ============= PHONE CALL NODES =============
         if (node.node_type === "phone_call") {
           console.log(`[ExecuteMessage] 📞 Processing phone_call node ${node.id}`);

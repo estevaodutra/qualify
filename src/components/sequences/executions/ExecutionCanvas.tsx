@@ -147,7 +147,8 @@ export function ExecutionCanvas({
               const isTrigger = srcNode.nodeType === "trigger";
               const isContent = srcNode.nodeType === "content";
               const isPhoneCall = srcNode.nodeType === "phone_call";
-              const srcWidth = isTrigger || isContent || isPhoneCall ? 320 : 220;
+              const isUra = srcNode.nodeType === "ura";
+              const srcWidth = isTrigger || isContent || isPhoneCall || isUra ? 320 : 220;
 
               const sX = srcNode.positionX || 0, sY = srcNode.positionY || 0;
               const tX = tgtNode.positionX || 0, tY = tgtNode.positionY || 0;
@@ -173,6 +174,13 @@ export function ExecutionCanvas({
                 ];
                 const idx = phoneCallOutputs.indexOf(conn.conditionPath || "");
                 if (idx >= 0) portY1 = sY + 140 + idx * 70 + 29;
+              }
+              if (srcNode.nodeType === "ura") {
+                const actions = srcNode.config.dtmf?.actions || [];
+                const systemOutputs = ["no_digit", "no_answer", "busy", "failed", "attempts_exhausted", "error"];
+                const allOutputs = [...actions.map((act: any) => act.id), ...systemOutputs];
+                const idx = allOutputs.indexOf(conn.conditionPath || "");
+                if (idx >= 0) portY1 = sY + 145 + idx * 66 + 27;
               }
               const portX2 = tX;
               const portY2 = tY + 45;
@@ -208,7 +216,7 @@ export function ExecutionCanvas({
               return (
                 <div
                   key={node.id}
-                  style={{ position: "absolute", left: posX, top: posY, width: node.nodeType === "trigger" || node.nodeType === "content" || node.nodeType === "phone_call" ? 320 : 220, pointerEvents: "auto" }}
+                  style={{ position: "absolute", left: posX, top: posY, width: node.nodeType === "trigger" || node.nodeType === "content" || node.nodeType === "phone_call" || node.nodeType === "ura" ? 320 : 220, pointerEvents: "auto" }}
                   onClick={() => nodeExec && onSelectNode(node.id)}
                   className={cn(
                     "rounded-xl border-2 bg-white shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col p-3",

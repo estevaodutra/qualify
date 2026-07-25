@@ -66,6 +66,7 @@ export const NODE_DEFINITIONS: NodeBlockDefinition[] = [
   { blockType: "group_management", label: "Gestão de Grupo", icon: UsersRound, color: "bg-indigo-600" },
   { blockType: "status", label: "Status", icon: Radio, color: "bg-pink-600" },
   { blockType: "phone_call", label: "Ligação", icon: PhoneCall, color: "bg-pink-600" },
+  { blockType: "ura", label: "URA", icon: PhoneCall, color: "bg-purple-600" },
   { blockType: "api_call", label: "API", icon: Link2, color: "bg-sky-600", status: "coming_soon" },
   { blockType: "field_op", label: "Mapeamento de Campos", icon: Sliders, color: "bg-teal-600" },
   { blockType: "ai_agent", label: "AI Assistant", icon: Sparkles, color: "bg-violet-600", status: "coming_soon" },
@@ -206,6 +207,63 @@ export function getDefaultConfigForBlock(blockType: string): Record<string, unkn
       ],
       outputs: { success: true, no_success: true, no_answer: true, attempts_exhausted: true, error: true }
     };
+    case "ura": return {
+      uraMode: "simple",
+      provider: "mos_br",
+      audio: {
+        type: "tts",
+        value: "Olá, por favor digite 1 para sim ou 2 para não.",
+        voice: "pt-BR",
+        fileUrl: "",
+        mosAudioName: ""
+      },
+      dtmf: {
+        enabled: true,
+        timeoutSeconds: 10,
+        maxDigits: 1,
+        actions: [
+          {
+            id: "dtmf_1",
+            digit: "1",
+            label: "Tenho interesse",
+            output: "dtmf_1",
+            actionType: "workflow_output",
+            actionConfig: {}
+          },
+          {
+            id: "dtmf_2",
+            digit: "2",
+            label: "Receber WhatsApp",
+            output: "dtmf_2",
+            actionType: "workflow_output",
+            actionConfig: {}
+          }
+        ]
+      },
+      attempts: {
+        enabled: true,
+        maxAttempts: 2,
+        retryDelayMs: 3600000,
+        retryOn: ["no_answer", "busy", "failed"],
+        businessHoursOnly: true
+      },
+      assignment: {
+        createCallPanelTaskOnDtmf: false,
+        queueId: null,
+        operatorId: null
+      },
+      billing: {
+        walletDebitEnabled: true
+      },
+      outputs: {
+        no_digit: true,
+        no_answer: true,
+        busy: true,
+        failed: true,
+        attempts_exhausted: true,
+        error: true
+      }
+    };
     case "api_call": case "ai_agent": return {};
     default: return {};
   }
@@ -222,7 +280,7 @@ export function toNodeCategories(isGroup?: boolean): NodeCategory[] {
     .map((b) => ({ type: b.blockType, label: b.label, icon: b.icon, color: b.color, status: b.status }));
 
   const channels: NodeTypeInfo[] = NODE_DEFINITIONS
-    .filter((b) => ["status", "phone_call"].includes(b.blockType))
+    .filter((b) => ["status", "phone_call", "ura"].includes(b.blockType))
     .map((b) => ({ type: b.blockType, label: b.label, icon: b.icon, color: b.color, status: b.status }));
 
   const advanced: NodeTypeInfo[] = NODE_DEFINITIONS

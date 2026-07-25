@@ -1008,7 +1008,7 @@ export function UnifiedSequenceBuilder({
 
                   // Output port on the right side of the card
                   const portIdOut = conn.conditionPath || "default";
-                  const coordsOut = getPortCoords(srcNode.id, portIdOut, (srcNode.nodeType === "trigger" || srcNode.nodeType === "content" || srcNode.nodeType === "phone_call" ? 320 : 220), 45);
+                  const coordsOut = getPortCoords(srcNode.id, portIdOut, (srcNode.nodeType === "trigger" || srcNode.nodeType === "content" || srcNode.nodeType === "phone_call" || srcNode.nodeType === "ura" ? 320 : 220), 45);
                   let portX1 = sX + coordsOut.x;
                   let portY1 = sY + coordsOut.y;
 
@@ -1098,7 +1098,7 @@ export function UnifiedSequenceBuilder({
                         position: "absolute",
                         left: posX,
                         top: posY,
-                        width: isTrigger || isContent || node.nodeType === "phone_call" ? 320 : 220,
+                        width: isTrigger || isContent || node.nodeType === "phone_call" || node.nodeType === "ura" ? 320 : 220,
                         minHeight: isRandomizer ? Math.max(140, 40 + randomizerBranches.length * RANDOMIZER_PORT_SPACING) : undefined,
                         pointerEvents: "auto"
                       }}
@@ -1183,7 +1183,7 @@ export function UnifiedSequenceBuilder({
                       )}
 
                       {/* Output Port(s) (Right Handles) */}
-                      {!isCondition && !isRandomizer && !isFieldOp && !isTrigger && !isContent && !isDelay && !isGroupManagement && node.nodeType !== "phone_call" ? (
+                      {!isCondition && !isRandomizer && !isFieldOp && !isTrigger && !isContent && !isDelay && !isGroupManagement && node.nodeType !== "phone_call" && node.nodeType !== "ura" ? (
                         <>
                           <div
                             data-node-port="true" data-node-id={node.id} data-port-id="default"
@@ -1218,7 +1218,7 @@ export function UnifiedSequenceBuilder({
                           </div>
                           <span className="absolute right-2 top-[54px] text-[8px] font-bold text-destructive select-none">Não</span>
                         </>
-                      ) : node.nodeType === "phone_call" ? null : isFieldOp ? (
+                      ) : (node.nodeType === "phone_call" || node.nodeType === "ura") ? null : isFieldOp ? (
                         <>{/* Handles moved to inline flow inside the node body to prevent overlapping */}</>
                       ) : (
                         randomizerBranches.map((branch, i) => {
@@ -1845,6 +1845,179 @@ export function UnifiedSequenceBuilder({
                             ));
                           })()}
                         </div>
+                      ) : node.nodeType === "ura" ? (
+                        (() => {
+                          const isUraConfigured = !!(node.config.audio?.value || node.config.audio?.fileUrl || node.config.audio?.mosAudioName);
+                          if (!isUraConfigured) {
+                            return (
+                              <div className="flex flex-col w-full text-left h-full">
+                                {/* Header / Title */}
+                                <div className="flex items-center gap-2 border-b border-slate-100 pb-2 mb-3">
+                                  <div className="p-1.5 rounded-lg text-white shrink-0 shadow-sm bg-purple-600">
+                                    <PhoneCall className="h-3.5 w-3.5" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-bold text-xs text-slate-800 truncate">
+                                      {(node.config.label as string) || "URA"}
+                                    </p>
+                                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                      Não configurado
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <p className="text-[10px] text-slate-500 mb-4 leading-relaxed font-medium">
+                                  Configure áudio, DTMF e retentativas para disparar chamadas automáticas.
+                                </p>
+
+                                <div className="p-4 border border-dashed border-slate-200 rounded-xl bg-slate-50/50 flex flex-col items-center justify-center text-center mb-4">
+                                  <span className="text-xs font-semibold text-slate-600 mb-1">Clique para configurar a URA</span>
+                                  <span className="text-[10px] text-slate-400">Parâmetros pendentes</span>
+                                </div>
+
+                                {/* Default outcomes for unconfigured state */}
+                                <div className="relative flex items-center justify-end w-full mt-auto mb-2 pr-1">
+                                  <span className="text-[8px] font-bold text-slate-500 select-none mr-2">Próximo passo</span>
+                                  <div
+                                    data-node-port="true" data-node-id={node.id} data-port-id="default"
+                                    onMouseDown={(e) => handlePortMouseDown(e, node.id, "out")}
+                                    className="absolute -right-[19.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-purple-500 bg-background hover:bg-purple-500 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
+                                    title="Próximo passo"
+                                  >
+                                    <div className="h-1.5 w-1.5 rounded-full bg-purple-500" />
+                                  </div>
+                                </div>
+
+                                <div className="relative flex items-center justify-end w-full mb-2 pr-1">
+                                  <span className="text-[8px] font-bold text-slate-500 select-none mr-2">Erro</span>
+                                  <div
+                                    data-node-port="true" data-node-id={node.id} data-port-id="error"
+                                    onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", "error")}
+                                    className="absolute -right-[19.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-destructive bg-background hover:bg-destructive cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
+                                    title="Erro"
+                                  >
+                                    <div className="h-1.5 w-1.5 rounded-full bg-destructive" />
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          const audioType = node.config.audio?.type || "tts";
+                          const audioValue = audioType === "tts"
+                            ? `TTS: ${node.config.audio?.value || "Sem texto"}`
+                            : audioType === "audio"
+                            ? `Áudio: ${node.config.audio?.mosAudioName || node.config.audio?.fileUrl || "Sem arquivo"}`
+                            : `URA: ${node.config.audio?.mosAudioName || "Sem fluxo"}`;
+                          
+                          const actions = node.config.dtmf?.actions || [];
+                          const maxAttempts = node.config.attempts?.maxAttempts || 1;
+
+                          const systemOutputs = [
+                            { id: "no_digit", label: "Não digitou", border: "border-slate-500", hover: "hover:bg-slate-500", dot: "bg-slate-500", icon: "⏳", borderOutline: "border-slate-200 hover:border-slate-300" },
+                            { id: "no_answer", label: "Não atendeu / Retentativa", border: "border-amber-500", hover: "hover:bg-amber-500", dot: "bg-amber-500", icon: "🔁", borderOutline: "border-amber-500/20 hover:border-amber-500/40" },
+                            { id: "busy", label: "Ocupado", border: "border-rose-500", hover: "hover:bg-rose-500", dot: "bg-rose-500", icon: "🚫", borderOutline: "border-rose-500/20 hover:border-rose-500/40" },
+                            { id: "failed", label: "Falhou", border: "border-rose-500", hover: "hover:bg-rose-500", dot: "bg-rose-500", icon: "❌", borderOutline: "border-rose-500/20 hover:border-rose-500/40" },
+                            { id: "attempts_exhausted", label: "Tentativas encerradas", border: "border-indigo-500", hover: "hover:bg-indigo-500", dot: "bg-indigo-500", icon: "🚫", borderOutline: "border-indigo-500/20 hover:border-indigo-500/40" },
+                            { id: "error", label: "Erro técnico", border: "border-destructive", hover: "hover:bg-destructive", dot: "bg-destructive", icon: "⚠️", borderOutline: "border-destructive/20 hover:border-destructive/40" }
+                          ];
+
+                          return (
+                            <div className="flex flex-col w-full text-left h-full">
+                              {/* Header / Title */}
+                              <div className="flex items-center gap-2 border-b border-slate-100 pb-2 mb-3">
+                                <div className="p-1.5 rounded-lg text-white shrink-0 shadow-sm bg-purple-600">
+                                  <PhoneCall className="h-3.5 w-3.5" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-bold text-xs text-slate-800 truncate">
+                                    {(node.config.label as string) || "URA"}
+                                  </p>
+                                  <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                    {node.config.uraMode === "reverse" ? "URA Reversa" : "URA Simples"}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Card Content / Description */}
+                              <p className="text-[10px] text-slate-500 mb-3 leading-relaxed font-medium">
+                                Dispare uma chamada automática com áudio, TTS e saídas por tecla DTMF.
+                              </p>
+
+                              {/* Audio/TTS display block */}
+                              <div className="p-3 border border-slate-200 rounded-xl bg-white shadow-sm mb-3">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-base">🔊</span>
+                                  <div className="text-left min-w-0 flex-1">
+                                    <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Áudio da Chamada</span>
+                                    <p className="text-xs font-bold text-slate-800 truncate">{audioValue}</p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* DTMF Actions Blocks */}
+                              {actions.map((act: any) => (
+                                <div key={act.id} className="group relative flex flex-col gap-1 p-3 border border-purple-500/20 hover:border-purple-500/40 rounded-xl bg-white shadow-sm mb-3 cursor-pointer transition-colors">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-base">🔢</span>
+                                    <div className="text-left min-w-0 flex-1">
+                                      <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Tecla {act.digit}</span>
+                                      <p className="text-xs font-bold text-slate-800 truncate">{act.label || `Tecla ${act.digit}`}</p>
+                                    </div>
+                                  </div>
+
+                                  {/* Output handle on the right edge */}
+                                  <div
+                                    data-node-port="true" data-node-id={node.id} data-port-id={act.id}
+                                    onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", act.id)}
+                                    className="absolute -right-[19.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-purple-500 bg-background hover:bg-purple-500 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
+                                    title={act.label || `Tecla ${act.digit}`}
+                                  >
+                                    <div className="h-1.5 w-1.5 rounded-full bg-purple-500 hover:bg-white" />
+                                  </div>
+                                </div>
+                              ))}
+
+                              {/* System Outputs Blocks */}
+                              {systemOutputs.map((out) => (
+                                <div key={out.id} className={cn("group relative flex flex-col gap-1 p-3 border rounded-xl bg-white shadow-sm mb-3 cursor-pointer transition-colors", out.borderOutline)}>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-base">{out.icon}</span>
+                                    <div className="text-left min-w-0 flex-1">
+                                      <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Resultado do Fluxo</span>
+                                      <p className="text-xs font-bold text-slate-800 truncate">{out.label}</p>
+                                    </div>
+                                  </div>
+
+                                  <div
+                                    data-node-port="true" data-node-id={node.id} data-port-id={out.id}
+                                    onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", out.id)}
+                                    className={cn("absolute -right-[19.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 bg-background cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm", out.border, out.hover)}
+                                    title={out.label}
+                                  >
+                                    <div className={cn("h-1.5 w-1.5 rounded-full", out.dot)} />
+                                  </div>
+                                </div>
+                              ))}
+
+                              {/* Stats counters */}
+                              <div className="flex items-center justify-between pt-4 border-t border-slate-100 px-2 mt-2">
+                                <div className="text-center">
+                                  <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
+                                  <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Sucessos</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
+                                  <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Alertas</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
+                                  <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Erros</p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()
                       ) : isDelay ? (
                         <div className="flex flex-col w-full text-left h-full">
                           {/* Header / Title */}

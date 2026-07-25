@@ -43,6 +43,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import { getNodeBlockDefinition, getDefaultConfigForSubType } from "./nodeDefinitions";
 import { VariablePicker } from "./VariablePicker";
 import { normalizeDelayConfig, toDelayMs, formatDelayLabel } from "@/lib/workflows/delay";
@@ -177,6 +178,8 @@ const NODE_TITLES: Record<string, { title: string; icon: React.ElementType }> = 
   api_call: { title: "API", icon: Link2 },
   ai_agent: { title: "AI Assistant", icon: Sparkles },
   js_code: { title: "Executar JavaScript", icon: Sliders },
+  phone_call: { title: "Ligação", icon: PhoneCall },
+  ura: { title: "URA", icon: PhoneCall },
 };
 
 const QUICK_DELAYS = [
@@ -481,6 +484,8 @@ export function UnifiedNodeConfigPanel({
   const [editingOptionIndex, setEditingOptionIndex] = useState<number | null>(null);
 
   const [isPopupOpen, setIsPopupOpen] = useState(open);
+  const [activeUraTab, setActiveUraTab] = useState<"audio" | "dtmf" | "attempts" | "outputs">("audio");
+  const [isUploadingAudio, setIsUploadingAudio] = useState(false);
   useEffect(() => {
     setIsPopupOpen(open);
   }, [open, node.id]);
@@ -566,6 +571,560 @@ export function UnifiedNodeConfigPanel({
   };
 
   const isGroup = isGroupProp !== undefined ? isGroupProp : mode === "group";
+
+  if (resolvedNodeType === "ura") {
+    const audio = currentConfig.audio || { type: "tts", value: "Olá, por favor digite 1 para sim ou 2 para não.", voice: "pt-BR", fileUrl: "", mosAudioName: "" };
+    const dtmf = currentConfig.dtmf || { enabled: true, timeoutSeconds: 10, maxDigits: 1, actions: [] };
+    const attempts = currentConfig.attempts || { enabled: true, maxAttempts: 2, retryDelayMs: 3600000, retryOn: ["no_answer", "busy", "failed"], businessHoursOnly: true };
+    const outputs = currentConfig.outputs || { no_digit: true, no_answer: true, busy: true, failed: true, attempts_exhausted: true, error: true };
+    const uraMode = currentConfig.uraMode || "simple";
+
+    const updateAudio = (key: string, val: any) => {
+      updateConfig("audio", { ...audio, [key]: val });
+    };
+
+    const updateDtmf = (key: string, val: any) => {
+      updateConfig("dtmf", { ...dtmf, [key]: val });
+    };
+
+    const updateAttempts = (key: string, val: any) => {
+      updateConfig("attempts", { ...attempts, [key]: val });
+    };
+
+    const updateOutputs = (key: string, val: boolean) => {
+      updateConfig("outputs", { ...outputs, [key]: val });
+    };
+
+    const handleUploadAudio = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setIsUploadingAudio(true);
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        const projectUrl = import.meta.env.VITE_SUPABASE_URL as string;
+
+        const formData = new FormData();
+        formData.append("node_id", node.id);
+        formData.append("audio", file, file.name);
+        formData.append("nome", file.name.replace(/\.[^/.]+$/, "").toUpperCase());
+
+        const res = await fetch(`${projectUrl}/functions/v1/ura-campaign-sync`, {
+          method: "POST",
+          headers: { Authorization: token ? `Bearer ${token}` : "" },
+          body: formData,
+        });
+
+        if (!res.ok) {
+          const err = await res.text();
+          throw new Error(err);
+        }
+
+        const data = await res.json();
+        updateConfig("audio", {
+          type: "audio",
+          value: "",
+          voice: "pt-BR",
+          fileUrl: data.fileUrl || "",
+          mosAudioName: data.nome || data.audio_value || file.name.replace(/\.[^/.]+$/, "").toUpperCase()
+        });
+        toast({ title: "Sucesso", description: "Áudio enviado e registrado na MOS BR com sucesso!" });
+      } catch (err: any) {
+        toast({ title: "Erro", description: `Falha no upload do áudio: ${err.message}`, variant: "destructive" });
+      } finally {
+        setIsUploadingAudio(false);
+      }
+    };
+
+    const addDtmfAction = () => {
+      const actions = dtmf.actions || [];
+      const existingDigits = actions.map((a: any) => a.digit);
+      let nextDigit = "1";
+      for (let i = 1; i <= 9; i++) {
+        if (!existingDigits.includes(String(i))) {
+          nextDigit = String(i);
+          break;
+        }
+      }
+      
+      const newId = `dtmf_${nextDigit}`;
+      const newAction = {
+        id: newId,
+        digit: nextDigit,
+        label: `Opção ${nextDigit}`,
+        output: newId,
+        actionType: "workflow_output",
+        actionConfig: {}
+      };
+      
+      updateDtmf("actions", [...actions, newAction]);
+    };
+
+    const removeDtmfAction = (index: number) => {
+      const actions = dtmf.actions || [];
+      const updated = actions.filter((_: any, idx: number) => idx !== index);
+      updateDtmf("actions", updated);
+    };
+
+    const updateDtmfActionField = (index: number, key: string, val: any) => {
+      const actions = dtmf.actions || [];
+      const updated = actions.map((act: any, idx: number) => {
+        if (idx === index) {
+          const u = { ...act, [key]: val };
+          if (key === "digit") {
+            u.id = `dtmf_${val}`;
+            u.output = `dtmf_${val}`;
+          }
+          return u;
+        }
+        return act;
+      });
+      updateDtmf("actions", updated);
+    };
+
+    return (
+      <>
+        <div className="flex flex-col p-5 text-center space-y-4">
+          <div className="mx-auto p-3 rounded-full bg-purple-50 border border-purple-100 text-purple-600">
+            <PhoneCall className="h-6 w-6" />
+          </div>
+          <div className="space-y-1">
+            <h4 className="text-sm font-bold text-slate-800">Parâmetros de URA</h4>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              O nó de URA possui configurações detalhadas de Áudio, Teclas de Interação e Retentativas.
+            </p>
+          </div>
+          <Button
+            type="button"
+            className="w-full text-xs h-9 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold flex items-center justify-center gap-1.5 shadow-sm"
+            onClick={() => setIsPopupOpen(true)}
+          >
+            <Sliders className="h-3.5 w-3.5" /> Configurar no Pop-up
+          </Button>
+        </div>
+
+        <Dialog open={isPopupOpen} onOpenChange={(v) => { if (!v) { setIsPopupOpen(false); onClose(); } }}>
+          <DialogContent className="max-w-4xl w-[90vw] p-6 rounded-2xl bg-white border border-slate-100 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <DialogHeader className="border-b pb-4 mb-4 flex flex-row items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-purple-600 text-white shadow-sm">
+                  <PhoneCall className="h-5 w-5" />
+                </div>
+                <div>
+                  <DialogTitle className="text-lg font-bold text-slate-800">Configurar Bloco de URA</DialogTitle>
+                  <p className="text-xs text-muted-foreground">Configure o áudio de reprodução (TTS ou upload), opções DTMF de teclado e retentativas automáticas.</p>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="md:col-span-1 space-y-4 border-r pr-6">
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Identificação do Nó</Label>
+                  <Input
+                    value={(node.config.label as string) || "URA"}
+                    onChange={(e) => updateConfig("label", e.target.value)}
+                    placeholder="Ex: URA Atendimento"
+                    className="rounded-xl border-slate-200"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Modo da URA</Label>
+                  <Select
+                    value={uraMode}
+                    onValueChange={(val) => updateConfig("uraMode", val)}
+                  >
+                    <SelectTrigger className="rounded-xl border-slate-200 bg-background text-sm">
+                      <SelectValue placeholder="Modo da URA..." />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-slate-200">
+                      <SelectItem value="simple" className="rounded-lg m-0.5">Simple (Reproduzir e Capturar)</SelectItem>
+                      <SelectItem value="reverse" className="rounded-lg m-0.5">Reverse (Interativa / Roteamento)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="p-4 rounded-xl bg-purple-50 border border-purple-100 space-y-2">
+                  <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wider block">Integrado via MOS BR</span>
+                  <p className="text-[11px] text-purple-700 leading-relaxed">
+                    A URA realiza chamadas discadas pela MOS BR. Custos de chamada: R$ 0,15 por bloco de 30 segundos, debitados diretamente da carteira da empresa.
+                  </p>
+                </div>
+              </div>
+
+              <div className="md:col-span-3 space-y-6">
+                <div className="flex border-b border-slate-100 gap-4">
+                  {(["audio", "dtmf", "attempts", "outputs"] as const).map((tab) => {
+                    const isActive = activeUraTab === tab;
+                    const labels = { audio: "1. Áudio / TTS", dtmf: "2. Teclas DTMF", attempts: "3. Retentativas", outputs: "4. Saídas do Nó" };
+                    return (
+                      <button
+                        key={tab}
+                        type="button"
+                        onClick={() => setActiveUraTab(tab)}
+                        className={cn(
+                          "pb-2 text-sm font-semibold border-b-2 px-1 transition-all",
+                          isActive ? "border-purple-600 text-purple-600" : "border-transparent text-slate-400 hover:text-slate-600"
+                        )}
+                      >
+                        {labels[tab]}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {activeUraTab === "audio" && (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Origem do Áudio</Label>
+                      <Select
+                        value={audio.type || "tts"}
+                        onValueChange={(val) => updateAudio("type", val)}
+                      >
+                        <SelectTrigger className="rounded-xl border-slate-200 bg-background text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl border-slate-200">
+                          <SelectItem value="tts">Texto para Fala (TTS)</SelectItem>
+                          <SelectItem value="audio">Upload de Arquivo de Áudio (MP3/WAV)</SelectItem>
+                          <SelectItem value="mos_ura">URA Pré-configurada na MOS BR</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {audio.type === "tts" && (
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Texto da Mensagem (TTS)</Label>
+                          <Textarea
+                            value={audio.value || ""}
+                            onChange={(e) => updateAudio("value", e.target.value)}
+                            placeholder="Digite a mensagem a ser lida para o lead. Use variáveis como {{name}} se necessário."
+                            rows={4}
+                            className="rounded-xl border-slate-200 resize-none"
+                          />
+                          <p className="text-[10px] text-slate-400">Variáveis suportadas: {"{{name}}"}</p>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Idioma / Voz</Label>
+                          <Select
+                            value={audio.voice || "pt-BR"}
+                            onValueChange={(val) => updateAudio("voice", val)}
+                          >
+                            <SelectTrigger className="rounded-xl border-slate-200 bg-background text-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl border-slate-200">
+                              <SelectItem value="pt-BR">Português (Brasil)</SelectItem>
+                              <SelectItem value="pt-PT">Português (Portugal)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    )}
+
+                    {audio.type === "audio" && (
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Arquivo de Áudio</Label>
+                          <div className="flex flex-col gap-3">
+                            {audio.mosAudioName && (
+                              <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-xs text-emerald-800 font-semibold flex items-center justify-between">
+                                <span>🎵 {audio.mosAudioName}</span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    updateAudio("mosAudioName", "");
+                                    updateAudio("fileUrl", "");
+                                  }}
+                                  className="h-7 w-7 p-0 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-100/50 rounded-lg"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            )}
+                            <div className="relative">
+                              <Input
+                                type="file"
+                                accept="audio/mp3,audio/wav,audio/mpeg"
+                                onChange={handleUploadAudio}
+                                disabled={isUploadingAudio}
+                                className="rounded-xl border-slate-200 text-xs py-2 file:mr-2 file:py-0 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer"
+                              />
+                              {isUploadingAudio && (
+                                <div className="absolute inset-0 bg-white/80 flex items-center justify-center gap-1.5 text-xs font-semibold text-purple-600 rounded-xl border border-slate-200">
+                                  <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Sincronizando com a MOS BR...
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-slate-400">Tamanho máximo recomendado: 5MB. Formatos: MP3 ou WAV.</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {audio.type === "mos_ura" && (
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Nome da URA Pré-configurada</Label>
+                        <Input
+                          value={audio.mosAudioName || ""}
+                          onChange={(e) => updateAudio("mosAudioName", e.target.value)}
+                          placeholder="Ex: URA_SUPORTE_MOS"
+                          className="rounded-xl border-slate-200"
+                        />
+                        <p className="text-[10px] text-slate-400">Insira exatamente o identificador do fluxo configurado na plataforma MOS BR.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeUraTab === "dtmf" && (
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Mapeamento de Teclas (DTMF)</Label>
+                      <Button
+                        type="button"
+                        onClick={addDtmfAction}
+                        className="h-8 rounded-lg px-2.5 text-xs bg-purple-600 hover:bg-purple-700 text-white font-semibold gap-1"
+                      >
+                        <Plus className="h-3 w-3" /> Adicionar Tecla
+                      </Button>
+                    </div>
+
+                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+                      {(dtmf.actions || []).length === 0 ? (
+                        <div className="p-6 border border-dashed border-slate-200 rounded-xl text-center text-xs text-muted-foreground">
+                          Nenhuma tecla configurada. O workflow continuará pelo output "Sem digitação" se o tempo limite se esgotar.
+                        </div>
+                      ) : (
+                        (dtmf.actions || []).map((act: any, idx: number) => (
+                          <div key={act.id || idx} className="p-4 border border-slate-100 rounded-xl bg-slate-50/50 flex items-center gap-4 relative">
+                            <div className="w-20">
+                              <Label className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block mb-1">Dígito</Label>
+                              <Select
+                                value={act.digit}
+                                onValueChange={(val) => updateDtmfActionField(idx, "digit", val)}
+                              >
+                                <SelectTrigger className="h-8 rounded-lg border-slate-200 bg-background text-xs font-bold text-center">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-xl border-slate-200">
+                                  {["0","1","2","3","4","5","6","7","8","9","*","#"].map((d) => (
+                                    <SelectItem key={d} value={d} className="rounded-lg text-xs m-0.5">{d}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="flex-1">
+                              <Label className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block mb-1">Descrição do Caminho</Label>
+                              <Input
+                                value={act.label || ""}
+                                onChange={(e) => updateDtmfActionField(idx, "label", e.target.value)}
+                                placeholder="Ex: Falar com vendas"
+                                className="h-8 rounded-lg border-slate-200 text-xs font-semibold"
+                              />
+                            </div>
+
+                            <div className="w-24">
+                              <Label className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block mb-1">Tipo de Ação</Label>
+                              <span className="h-8 rounded-lg border border-slate-100 bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600 text-center">
+                                Workflow Output
+                              </span>
+                            </div>
+
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={() => removeDtmfAction(idx)}
+                              className="h-8 w-8 p-0 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg mt-5"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tempo Limite de Digitação (segundos)</Label>
+                        <Input
+                          type="number"
+                          value={dtmf.timeoutSeconds ?? 10}
+                          onChange={(e) => updateDtmf("timeoutSeconds", Number(e.target.value))}
+                          min={5}
+                          max={30}
+                          className="rounded-xl border-slate-200"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Máximo de Dígitos Aceitos</Label>
+                        <Input
+                          type="number"
+                          value={dtmf.maxDigits ?? 1}
+                          onChange={(e) => updateDtmf("maxDigits", Number(e.target.value))}
+                          min={1}
+                          max={5}
+                          className="rounded-xl border-slate-200"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeUraTab === "attempts" && (
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between p-4 border rounded-xl bg-slate-50/50">
+                      <div className="space-y-1">
+                        <span className="text-xs font-bold text-slate-700 block">Ativar Retentativas Automáticas</span>
+                        <p className="text-[10px] text-slate-400">Dispara novas chamadas se o lead estiver ocupado, indisponível ou não atender.</p>
+                      </div>
+                      <Switch
+                        checked={attempts.enabled ?? true}
+                        onCheckedChange={(val) => updateAttempts("enabled", val)}
+                      />
+                    </div>
+
+                    {attempts.enabled && (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Número Máximo de Tentativas</Label>
+                          <Select
+                            value={String(attempts.maxAttempts || 2)}
+                            onValueChange={(val) => updateAttempts("maxAttempts", Number(val))}
+                          >
+                            <SelectTrigger className="rounded-xl border-slate-200 bg-background text-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl border-slate-200">
+                              <SelectItem value="1" className="rounded-lg m-0.5">1 tentativa (Sem retentar)</SelectItem>
+                              <SelectItem value="2" className="rounded-lg m-0.5">2 tentativas</SelectItem>
+                              <SelectItem value="3" className="rounded-lg m-0.5">3 tentativas</SelectItem>
+                              <SelectItem value="4" className="rounded-lg m-0.5">4 tentativas</SelectItem>
+                              <SelectItem value="5" className="rounded-lg m-0.5">5 tentativas</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Intervalo entre Tentativas</Label>
+                          <Select
+                            value={String(attempts.retryDelayMs || 3600000)}
+                            onValueChange={(val) => updateAttempts("retryDelayMs", Number(val))}
+                          >
+                            <SelectTrigger className="rounded-xl border-slate-200 bg-background text-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl border-slate-200">
+                              <SelectItem value="600000" className="rounded-lg m-0.5">10 minutos</SelectItem>
+                              <SelectItem value="1800000" className="rounded-lg m-0.5">30 minutos</SelectItem>
+                              <SelectItem value="3600000" className="rounded-lg m-0.5">1 hora</SelectItem>
+                              <SelectItem value="7200000" className="rounded-lg m-0.5">2 horas</SelectItem>
+                              <SelectItem value="14400000" className="rounded-lg m-0.5">4 horas</SelectItem>
+                              <SelectItem value="86400000" className="rounded-lg m-0.5">24 horas</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="col-span-2 p-4 border rounded-xl space-y-4">
+                          <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Condições de Retentativa</Label>
+                          <div className="grid grid-cols-3 gap-4">
+                            {[
+                              { id: "no_answer", label: "Não atendeu" },
+                              { id: "busy", label: "Ocupado" },
+                              { id: "failed", label: "Falha na chamada" }
+                            ].map((cond) => {
+                              const activeOn = attempts.retryOn || ["no_answer", "busy", "failed"];
+                              const isActive = activeOn.includes(cond.id);
+                              return (
+                                <div key={cond.id} className="flex items-center gap-2">
+                                  <Checkbox
+                                    id={`retry-${cond.id}`}
+                                    checked={isActive}
+                                    onCheckedChange={(checked) => {
+                                      const newRetryOn = checked
+                                        ? [...activeOn, cond.id]
+                                        : activeOn.filter((c: string) => c !== cond.id);
+                                      updateAttempts("retryOn", newRetryOn);
+                                    }}
+                                  />
+                                  <label htmlFor={`retry-${cond.id}`} className="text-xs font-semibold text-slate-700 cursor-pointer">{cond.label}</label>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="col-span-2 flex items-center justify-between p-4 border rounded-xl bg-slate-50/50">
+                          <div className="space-y-1">
+                            <span className="text-xs font-bold text-slate-700 block">Apenas em Horário Comercial</span>
+                            <p className="text-[10px] text-slate-400">Evita realizar chamadas em finais de semana ou fora das 08:00 às 18:00.</p>
+                          </div>
+                          <Switch
+                            checked={attempts.businessHoursOnly ?? true}
+                            onCheckedChange={(val) => updateAttempts("businessHoursOnly", val)}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeUraTab === "outputs" && (
+                  <div className="space-y-4">
+                    <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Configuração de Portas de Saída do Nó</Label>
+                    <p className="text-[11px] text-slate-400 leading-relaxed mb-2">
+                      Marque abaixo quais resultados de ligação você deseja expor no canvas como portas de saída para continuar o fluxo. As teclas DTMF configuradas sempre aparecem como saídas.
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      {[
+                        { id: "no_digit", label: "Não digitou (Timeout / Sem resposta)" },
+                        { id: "no_answer", label: "Não atendeu / Não disponível" },
+                        { id: "busy", label: "Número ocupado" },
+                        { id: "failed", label: "Falha técnica na operadora" },
+                        { id: "attempts_exhausted", label: "Tentativas esgotadas" },
+                        { id: "error", label: "Erro na carteira / saldo insuficiente" }
+                      ].map((item) => {
+                        const isEnabled = outputs[item.id] !== false;
+                        return (
+                          <div key={item.id} className="flex items-center gap-2 p-3 border border-slate-100 bg-slate-50/20 rounded-xl">
+                            <Checkbox
+                              id={`out-${item.id}`}
+                              checked={isEnabled}
+                              onCheckedChange={(checked) => updateOutputs(item.id, !!checked)}
+                            />
+                            <label htmlFor={`out-${item.id}`} className="text-xs font-semibold text-slate-700 cursor-pointer">{item.label}</label>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <DialogFooter className="border-t pt-4 mt-6">
+              <Button
+                type="button"
+                className="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-6 rounded-xl text-xs h-9 shadow-sm"
+                onClick={() => {
+                  setIsPopupOpen(false);
+                  onClose();
+                }}
+              >
+                Salvar Configurações
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+  }
 
   if (resolvedNodeType === "phone_call") {
     const script = currentConfig.script || { enabled: true, title: "Roteiro da ligação", content: "", showLeadVariables: true, type: "simple", quiz: [] };
