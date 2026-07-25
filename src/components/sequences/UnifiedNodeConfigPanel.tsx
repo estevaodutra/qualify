@@ -486,6 +486,20 @@ export function UnifiedNodeConfigPanel({
   const [isPopupOpen, setIsPopupOpen] = useState(open);
   const [activeUraTab, setActiveUraTab] = useState<"audio" | "dtmf" | "attempts" | "outputs">("audio");
   const [isUploadingAudio, setIsUploadingAudio] = useState(false);
+  const [registeredUras, setRegisteredUras] = useState<any[]>([]);
+
+  useEffect(() => {
+    supabase
+      .from("ura_campaigns")
+      .select("id, name, mos_campaign_id")
+      .order("name", { ascending: true })
+      .then(({ data, error }) => {
+        if (!error && data) {
+          setRegisteredUras(data.filter((u: any) => u.mos_campaign_id));
+        }
+      });
+  }, []);
+
   useEffect(() => {
     setIsPopupOpen(open);
   }, [open, node.id]);
@@ -868,14 +882,27 @@ export function UnifiedNodeConfigPanel({
 
                     {audio.type === "mos_ura" && (
                       <div className="space-y-2">
-                        <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Nome da URA Pré-configurada</Label>
-                        <Input
+                        <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Selecionar URA Cadastrada</Label>
+                        <Select
                           value={audio.mosAudioName || ""}
-                          onChange={(e) => updateAudio("mosAudioName", e.target.value)}
-                          placeholder="Ex: URA_SUPORTE_MOS"
-                          className="rounded-xl border-slate-200"
-                        />
-                        <p className="text-[10px] text-slate-400">Insira exatamente o identificador do fluxo configurado na plataforma MOS BR.</p>
+                          onValueChange={(val) => updateAudio("mosAudioName", val)}
+                        >
+                          <SelectTrigger className="rounded-xl border-slate-200 bg-white">
+                            <SelectValue placeholder="Selecione uma URA..." />
+                          </SelectTrigger>
+                          <SelectContent className="rounded-xl">
+                            {registeredUras.length === 0 ? (
+                              <SelectItem value="empty" disabled>Nenhuma URA cadastrada</SelectItem>
+                            ) : (
+                              registeredUras.map((ura: any) => (
+                                <SelectItem key={ura.id} value={ura.mos_campaign_id}>
+                                  {ura.name} (ID: {ura.mos_campaign_id})
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-[10px] text-slate-400">Escolha uma das URAs cadastradas no painel administrativo em Gestão de URAs.</p>
                       </div>
                     )}
                   </div>

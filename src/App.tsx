@@ -69,6 +69,7 @@ import AdminEventDictionary from "./pages/admin/AdminEventDictionary";
 import AdminPlaceholder from "./components/admin/AdminPlaceholder";
 import AdminSettings from "./pages/admin/AdminSettings";
 import AdminSystemWebhooks from "./pages/admin/AdminSystemWebhooks";
+import AdminUras from "./pages/admin/AdminUras";
 
 const App = () => {
   const [queryClient] = useState(() => new QueryClient());
@@ -222,8 +223,9 @@ const App = () => {
                       <Route path="logs" element={<Logs />} />
                       <Route path="events" element={<WebhookEvents />} />
                       <Route path="dicionario" element={<AdminEventDictionary />} />
-                      <Route path="configuracoes" element={<AdminSettings />} />
+                       <Route path="configuracoes" element={<AdminSettings />} />
                       <Route path="notificacoes" element={<AdminSystemWebhooks />} />
+                      <Route path="uras" element={<AdminUras />} />
                     </Route>
 
                     <Route path="*" element={<NotFound />} />

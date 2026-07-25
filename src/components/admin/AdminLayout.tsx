@@ -7,6 +7,7 @@ import {
   DollarSign,
   Tag,
   Phone,
+  PhoneCall,
   FileBarChart,
   Settings,
   Shield,
@@ -53,6 +54,7 @@ const financialItems = [
 const otherItems = [
   { title: "Preços", url: "/admin/precos", icon: Tag },
   { title: "Provedores", url: "/admin/provedores", icon: Phone },
+  { title: "Gestão de URAs", url: "/admin/uras", icon: PhoneCall },
   { title: "Relatórios", url: "/admin/relatorios", icon: FileBarChart },
   { title: "API Docs", url: "/admin/api", icon: BookOpen },
   { title: "Logs", url: "/admin/logs", icon: Activity },
