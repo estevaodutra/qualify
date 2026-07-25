@@ -802,6 +802,8 @@ export default function CallPanel() {
 
       // Fetch current operator details
       let operatorDetails = { name: user?.email || "", email: user?.email || "", extension: "" };
+      let operatorQueryError = null;
+      let operatorQueryCount = 0;
       if (user) {
         let query = supabase
           .from("call_operators")
@@ -813,7 +815,13 @@ export default function CallPanel() {
           query = query.eq("company_id", activeCompanyId);
         }
 
-        const { data: operatorDataArray } = await query.limit(1);
+        const { data: operatorDataArray, error: opError } = await query.limit(1);
+        if (opError) {
+          operatorQueryError = opError.message;
+        }
+        if (operatorDataArray) {
+          operatorQueryCount = operatorDataArray.length;
+        }
         const operatorData = operatorDataArray?.[0] || null;
 
         if (operatorData) {
@@ -849,6 +857,13 @@ export default function CallPanel() {
           name: operatorDetails.name,
           email: operatorDetails.email,
           extension: operatorDetails.extension
+        },
+        _debug: {
+          userId: user?.id || null,
+          activeCompanyId: activeCompanyId || null,
+          hasUser: !!user,
+          operatorQueryCount: operatorQueryCount,
+          operatorQueryError: operatorQueryError
         }
       };
 
