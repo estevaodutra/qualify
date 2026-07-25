@@ -278,12 +278,18 @@ Deno.serve(async (req) => {
 
     // ==================== CHECK WORKFLOW CALL TASK ====================
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (external_call_id && typeof external_call_id === 'string' && uuidRegex.test(external_call_id)) {
-      const { data: workflowTask } = await supabase
+    if (external_call_id && typeof external_call_id === 'string') {
+      let query = supabase
         .from('workflow_call_tasks')
-        .select('id, status, company_id, lead_id, user_id')
-        .eq('id', external_call_id)
-        .maybeSingle();
+        .select('id, status, company_id, lead_id, user_id');
+
+      if (uuidRegex.test(external_call_id)) {
+        query = query.or(`id.eq.${external_call_id},external_call_id.eq.${external_call_id}`);
+      } else {
+        query = query.eq('external_call_id', external_call_id);
+      }
+
+      const { data: workflowTask } = await query.maybeSingle();
 
       if (workflowTask) {
         console.log('[call-status] Found matching workflow_call_task:', workflowTask.id);

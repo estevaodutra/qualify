@@ -867,7 +867,7 @@ export default function CallPanel() {
         }
       };
 
-      const { error: proxyError } = await supabase.functions.invoke("webhook-proxy", {
+      const { data: proxyData, error: proxyError } = await supabase.functions.invoke("webhook-proxy", {
         body: { url: webhookUrl, payload }
       });
 
@@ -879,10 +879,25 @@ export default function CallPanel() {
           .eq("id", realId);
         queryClient.invalidateQueries({ queryKey: ["workflow_call_tasks_queue"] });
       } else {
+        // Try to extract external_call_id from proxy response
+        let externalCallId = null;
+        try {
+          const responseBody = typeof proxyData?.body === "string" ? JSON.parse(proxyData.body) : proxyData?.body;
+          const externalId = Array.isArray(responseBody) ? responseBody[0]?.id : responseBody?.id;
+          if (externalId) {
+            externalCallId = String(externalId);
+          }
+        } catch (e) {
+          console.warn("[handleWorkflowDial] Failed to extract external_call_id:", e);
+        }
+
         toast({ title: "Ligação iniciada", description: `Disparo enviado para o webhook.` });
         await supabase
           .from("workflow_call_tasks")
-          .update({ status: "ringing" })
+          .update({ 
+            status: "ringing",
+            ...(externalCallId ? { external_call_id: externalCallId } : {})
+          })
           .eq("id", realId);
         queryClient.invalidateQueries({ queryKey: ["workflow_call_tasks_queue"] });
       }
