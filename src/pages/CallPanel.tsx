@@ -803,11 +803,18 @@ export default function CallPanel() {
       // Fetch current operator details
       let operatorDetails = { name: user?.email || "", email: user?.email || "", extension: "" };
       if (user) {
-        const { data: operatorData } = await supabase
+        let query = supabase
           .from("call_operators")
           .select("operator_name, extension")
           .eq("user_id", user.id)
-          .maybeSingle();
+          .eq("is_active", true);
+
+        if (activeCompanyId) {
+          query = query.eq("company_id", activeCompanyId);
+        }
+
+        const { data: operatorDataArray } = await query.limit(1);
+        const operatorData = operatorDataArray?.[0] || null;
 
         if (operatorData) {
           operatorDetails = {

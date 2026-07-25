@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { addHours, format, setHours, setMinutes, addDays } from "date-fns";
 import { InlineReschedule } from "./InlineReschedule";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
 
 interface CallDialogData {
   callId: string;
@@ -100,6 +101,7 @@ export function CallActionDialog({
   callStatus, externalCallId, audioUrl, operatorId, userId,
 }: CallActionDialogProps) {
   const { user } = useAuth();
+  const { activeCompanyId } = useCompany();
   // --- Navigation state ---
   const cleanCallId = callId?.startsWith("cl_") ? callId.replace("cl_", "") : callId;
 
@@ -533,11 +535,18 @@ export function CallActionDialog({
       // Fetch current operator details
       let operatorDetails = { name: user?.email || "", email: user?.email || "", extension: "" };
       if (user) {
-        const { data: operatorData } = await supabase
+        let query = supabase
           .from("call_operators")
           .select("operator_name, extension")
           .eq("user_id", user.id)
-          .maybeSingle();
+          .eq("is_active", true);
+
+        if (activeCompanyId) {
+          query = query.eq("company_id", activeCompanyId);
+        }
+
+        const { data: operatorDataArray } = await query.limit(1);
+        const operatorData = operatorDataArray?.[0] || null;
 
         if (operatorData) {
           operatorDetails = {
