@@ -600,35 +600,35 @@ export function UnifiedNodeConfigPanel({
       if (!file) return;
       setIsUploadingAudio(true);
       try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData?.session?.access_token;
-        const projectUrl = import.meta.env.VITE_SUPABASE_URL as string;
+        const fileExt = file.name.split('.').pop();
+        const cleanNodeId = node.id.replace(/\W/g, "");
+        const filePath = `node_${cleanNodeId}_${Date.now()}.${fileExt}`;
 
-        const formData = new FormData();
-        formData.append("node_id", node.id);
-        formData.append("audio", file, file.name);
-        formData.append("nome", file.name.replace(/\.[^/.]+$/, "").toUpperCase());
+        const { error: uploadErr } = await supabase.storage
+          .from("ura-audios")
+          .upload(filePath, file, {
+            upsert: true
+          });
 
-        const res = await fetch(`${projectUrl}/functions/v1/ura-campaign-sync`, {
-          method: "POST",
-          headers: { Authorization: token ? `Bearer ${token}` : "" },
-          body: formData,
-        });
-
-        if (!res.ok) {
-          const err = await res.text();
-          throw new Error(err);
+        if (uploadErr) {
+          throw uploadErr;
         }
 
-        const data = await res.json();
+        const { data: urlData } = supabase.storage
+          .from("ura-audios")
+          .getPublicUrl(filePath);
+
+        const publicUrl = urlData.publicUrl;
+        const audioName = file.name.replace(/\.[^/.]+$/, "").toUpperCase();
+
         updateConfig("audio", {
           type: "audio",
           value: "",
           voice: "pt-BR",
-          fileUrl: data.fileUrl || "",
-          mosAudioName: data.nome || data.audio_value || file.name.replace(/\.[^/.]+$/, "").toUpperCase()
+          fileUrl: publicUrl,
+          mosAudioName: audioName
         });
-        toast({ title: "Sucesso", description: "Áudio enviado e registrado na MOS BR com sucesso!" });
+        toast({ title: "Sucesso", description: "Áudio enviado com sucesso!" });
       } catch (err: any) {
         toast({ title: "Erro", description: `Falha no upload do áudio: ${err.message}`, variant: "destructive" });
       } finally {
