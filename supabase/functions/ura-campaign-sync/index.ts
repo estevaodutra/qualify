@@ -39,23 +39,38 @@ Deno.serve(async (req) => {
         });
       }
 
-      const mosForm = new FormData();
-      mosForm.append("nome", String(nome));
-      mosForm.append("audio", audioFile as File, (audioFile as File).name);
+      // Check/Create the public bucket "ura-audios" in Supabase Storage
+      const { data: bucketData, error: bucketErr } = await supabase.storage.getBucket("ura-audios");
+      if (bucketErr || !bucketData) {
+        console.log("[ura-campaign-sync] Bucket 'ura-audios' not found. Creating it...");
+        await supabase.storage.createBucket("ura-audios", { public: true });
+      }
 
-      const mosRes = await fetch(MOS_BASE + "/tvoz/audio/", {
-        method: "POST",
-        headers: { Authorization: mosBasicAuth() },
-        body: mosForm,
-      });
+      const fileObj = audioFile as File;
+      const fileExt = fileObj.name.split('.').pop() || "mp3";
+      const filePath = `${nodeId || campaignId}/${Date.now()}.${fileExt}`;
 
-      const mosBody = await mosRes.text();
-      if (!mosRes.ok) {
-        console.error("[ura-campaign-sync] Audio upload failed:", mosBody);
-        return new Response(JSON.stringify({ error: "MOS BR audio upload failed", detail: mosBody }), {
+      // Upload file to Supabase Storage
+      const { data: uploadData, error: uploadErr } = await supabase.storage
+        .from("ura-audios")
+        .upload(filePath, fileObj, {
+          contentType: fileObj.type || "audio/mpeg",
+          upsert: true,
+        });
+
+      if (uploadErr) {
+        console.error("[ura-campaign-sync] Storage upload failed:", uploadErr);
+        return new Response(JSON.stringify({ error: "Storage upload failed", detail: uploadErr.message }), {
           status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from("ura-audios")
+        .getPublicUrl(filePath);
+
+      const publicUrl = urlData.publicUrl;
 
       if (campaignId) {
         await (supabase as any).from("ura_campaigns").update({ audio_value: String(nome) }).eq("id", String(campaignId));
@@ -71,13 +86,13 @@ Deno.serve(async (req) => {
             ...(config.audio || {}),
             type: "audio",
             mosAudioName: String(nome),
-            fileUrl: ""
+            fileUrl: publicUrl
           };
           await supabase.from("sequence_nodes").update({ config }).eq("id", String(nodeId));
         }
       }
 
-      return new Response(JSON.stringify({ ok: true, nome: String(nome), mos_response: mosBody }), {
+      return new Response(JSON.stringify({ ok: true, nome: String(nome), fileUrl: publicUrl }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

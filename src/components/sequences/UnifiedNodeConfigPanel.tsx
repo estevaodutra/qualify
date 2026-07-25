@@ -600,33 +600,33 @@ export function UnifiedNodeConfigPanel({
       if (!file) return;
       setIsUploadingAudio(true);
       try {
-        const fileExt = file.name.split('.').pop();
-        const cleanNodeId = node.id.replace(/\W/g, "");
-        const filePath = `node_${cleanNodeId}_${Date.now()}.${fileExt}`;
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        const projectUrl = import.meta.env.VITE_SUPABASE_URL as string;
 
-        const { error: uploadErr } = await supabase.storage
-          .from("ura-audios")
-          .upload(filePath, file, {
-            upsert: true
-          });
+        const formData = new FormData();
+        formData.append("node_id", node.id);
+        formData.append("audio", file, file.name);
+        formData.append("nome", file.name.replace(/\.[^/.]+$/, "").toUpperCase());
 
-        if (uploadErr) {
-          throw uploadErr;
+        const res = await fetch(`${projectUrl}/functions/v1/ura-campaign-sync`, {
+          method: "POST",
+          headers: { Authorization: token ? `Bearer ${token}` : "" },
+          body: formData,
+        });
+
+        if (!res.ok) {
+          const err = await res.text();
+          throw new Error(err);
         }
 
-        const { data: urlData } = supabase.storage
-          .from("ura-audios")
-          .getPublicUrl(filePath);
-
-        const publicUrl = urlData.publicUrl;
-        const audioName = file.name.replace(/\.[^/.]+$/, "").toUpperCase();
-
+        const data = await res.json();
         updateConfig("audio", {
           type: "audio",
           value: "",
           voice: "pt-BR",
-          fileUrl: publicUrl,
-          mosAudioName: audioName
+          fileUrl: data.fileUrl || "",
+          mosAudioName: data.nome || data.audio_name || file.name.replace(/\.[^/.]+$/, "").toUpperCase()
         });
         toast({ title: "Sucesso", description: "Áudio enviado com sucesso!" });
       } catch (err: any) {
