@@ -236,6 +236,16 @@ export const webhookCategories: WebhookCategory[] = [
       { id: "utility.send_product", name: "utility.send_product", description: "Enviar produto", type: "request" },
     ],
   },
+  {
+    id: "ura",
+    name: "URA",
+    description: "Eventos relacionados a disparos de URA",
+    defaultUrl: "https://n8n.6ksfuf.easypanel.host/webhook/ura",
+    actions: [
+      { id: "ura.dispatch", name: "ura.dispatch", description: "Disparar chamada de URA", type: "request" },
+      { id: "ura.completed", name: "ura.completed", description: "Chamada de URA finalizada", type: "event" },
+    ],
+  },
 ];
 
 // Helper to get all request actions for a category

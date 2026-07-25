@@ -17,19 +17,15 @@ Deno.serve(async (req) => {
     console.log("[URA Callback] Received callback payload:", JSON.stringify(payload));
 
     const callback = payload.callbackTvozRequest ?? payload.callbackTvozShippingLotEvent;
-    if (!callback) {
-      return new Response(JSON.stringify({ error: "Invalid callback payload" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const mosCampaignId = callback.campaignId;
-    const dtmf = callback.dtmf ?? null;
-    const phone = callback.number ?? null;
-    const mosStatus = (callback.statusNome ?? callback.status ?? "").toUpperCase();
-    const durationSeconds = Number(callback.duration ?? callback.duracao ?? 0);
-    const causeName = callback.cause ?? callback.causa ?? callback.statusNome ?? "Desconectado";
-    const callbackId = callback.id || callback.externalId || callback.request_id;
+    
+    // Support both standard MOS BR structure and simplified n8n fields
+    const callbackId = callback?.id || callback?.externalId || callback?.request_id || payload.taskId || payload.callbackId;
+    const mosCampaignId = callback?.campaignId || payload.campaignId || null;
+    const dtmf = callback?.dtmf ?? payload.dtmfPressed ?? payload.dtmf ?? null;
+    const phone = callback?.number ?? payload.phone ?? null;
+    const mosStatus = String(callback?.statusNome ?? callback?.status ?? payload.status ?? "").toUpperCase();
+    const durationSeconds = Number(callback?.duration ?? callback?.duracao ?? payload.durationSeconds ?? payload.duration ?? 0);
+    const causeName = callback?.cause ?? callback?.causa ?? callback?.statusNome ?? payload.causeName ?? payload.cause ?? "Desconectado";
 
     // Audit log insertion
     await supabase.from("mos_callbacks").insert({

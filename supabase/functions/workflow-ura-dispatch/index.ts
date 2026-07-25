@@ -60,7 +60,7 @@ async function dispatchSingleTask(supabase: any, task: any, supabaseUrl: string,
       return { success: false, reason: "Insufficient balance" };
     }
 
-    // 2. Fetch the node configuration to get mosCampaignId
+    // 2. Fetch the node configuration and user's webhook config
     const { data: nodeData, error: nodeErr } = await supabase
       .from("sequence_nodes")
       .select("config")
@@ -71,71 +71,68 @@ async function dispatchSingleTask(supabase: any, task: any, supabaseUrl: string,
       throw new Error(`Failed to fetch node configuration: ${nodeErr?.message || "Not found"}`);
     }
 
-    let mosCampaignId = nodeData.config?.mosCampaignId;
+    // Fetch webhook config for category = 'ura'
+    const { data: webConfig } = await supabase
+      .from("webhook_configs")
+      .select("url, is_active")
+      .eq("user_id", task.user_id)
+      .eq("category", "ura")
+      .maybeSingle();
 
-    // 3. Dynamically create campaign on MOS BR if not present
-    if (!mosCampaignId) {
-      console.log(`[URA Dispatch] Campaign not found on MOS BR for URA node ${task.node_id}. Creating...`);
-      
-      const payload = { name: `Qualify URA Node - ${task.node_id}` };
-      const mosRes = await fetch(`${MOS_BASE}/tvoz/campaigns/`, {
-        method: "POST",
-        headers: {
-          Authorization: mosBasicAuth(),
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+    const n8nWebhookUrl = (webConfig?.is_active && webConfig?.url) 
+      ? webConfig.url 
+      : "https://n8n.6ksfuf.easypanel.host/webhook/ura";
 
-      if (!mosRes.ok) {
-        const errText = await mosRes.text();
-        throw new Error(`MOS BR campaign creation failed: ${errText}`);
-      }
+    // 3. Fetch lead details
+    const { data: lead } = await supabase
+      .from("leads")
+      .select("name")
+      .eq("id", task.lead_id)
+      .maybeSingle();
 
-      const mosData = await mosRes.json();
-      mosCampaignId = mosData?.id;
-
-      if (mosCampaignId) {
-        const newConfig = { ...nodeData.config, mosCampaignId };
-        await supabase
-          .from("sequence_nodes")
-          .update({ config: newConfig })
-          .eq("id", task.node_id);
-      } else {
-        throw new Error("MOS BR campaign creation returned no ID.");
-      }
-    }
-
-    // 4. Dispatch the call via MOS BR
-    const payload = {
-      sendTvozMultiRequest: {
-        campaignId: mosCampaignId,
-        defaultValues: {
-          audio: task.audio_value,
-        },
-        sendTvozRequestList: [
-          {
-            to: task.phone,
-            id: task.id,
-          }
-        ]
+    // 4. Send dispatch payload to n8n webhook
+    const dispatchPayload = {
+      taskId: task.id,
+      companyId: task.company_id,
+      userId: task.user_id,
+      workflowId: task.workflow_id,
+      workflowExecutionId: task.workflow_execution_id,
+      nodeId: task.node_id,
+      phone: task.phone,
+      lead: {
+        id: task.lead_id,
+        name: lead?.name || "",
+        phone: task.phone,
+      },
+      audio: {
+        type: task.audio_type,
+        value: task.audio_value,
+        voice: nodeData.config?.audio?.voice || "pt-BR",
+        mosAudioName: nodeData.config?.audio?.mosAudioName || "",
+      },
+      dtmf: {
+        actions: task.dtmf_actions || [],
+      },
+      attempts: {
+        attemptCount: (task.attempt_count || 0) + 1,
+        maxAttempts: task.max_attempts || 2,
+        retryDelayMs: nodeData.config?.attempts?.retryDelayMs || 3600000,
+        retryOn: nodeData.config?.attempts?.retryOn || ["no_answer", "busy", "failed"],
       }
     };
 
-    const mosCallRes = await fetch(`${MOS_BASE}/tvoz/multi/`, {
+    console.log(`[URA Dispatch] Sending dispatch to n8n Webhook: ${n8nWebhookUrl}`);
+    const n8nRes = await fetch(n8nWebhookUrl, {
       method: "POST",
       headers: {
-        Authorization: mosBasicAuth(),
         "Content-Type": "application/json",
-        Accept: "application/json",
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(dispatchPayload),
     });
 
-    if (!mosCallRes.ok) {
-      const errText = await mosCallRes.text();
-      throw new Error(`MOS BR dispatch failed: ${errText}`);
+    if (!n8nRes.ok) {
+      const errText = await n8nRes.text();
+      throw new Error(`n8n webhook dispatch failed: ${errText}`);
     }
 
     // 5. Update task state
@@ -143,14 +140,13 @@ async function dispatchSingleTask(supabase: any, task: any, supabaseUrl: string,
       .from("workflow_ura_tasks")
       .update({
         status: "calling",
-        mos_campaign_id: mosCampaignId,
         attempt_count: (task.attempt_count || 0) + 1,
         started_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
       .eq("id", task.id);
 
-    console.log(`[URA Dispatch] Task ${task.id} successfully calling.`);
+    console.log(`[URA Dispatch] Task ${task.id} successfully dispatched to n8n.`);
     return { success: true };
 
   } catch (err: any) {
