@@ -694,22 +694,45 @@ export default function CallPanel() {
       const { data, error } = await query;
       if (error) throw error;
 
-      let results = (data || []).map((db: any) => ({
-        id: db.id,
-        campaignId: db.campaign_id,
-        campaignName: db.call_campaigns?.name || null,
-        leadId: db.lead_id,
-        leadName: db.call_leads?.name || null,
-        leadPhone: db.call_leads?.phone || null,
-        operatorId: db.operator_id,
-        operatorName: db.call_operators?.operator_name || null,
-        callStatus: db.call_status || "unknown",
-        createdAt: db.created_at || new Date().toISOString(),
-        endedAt: db.ended_at,
-        startedAt: db.started_at,
-        durationSeconds: db.duration_seconds,
-        isPriority: db.call_campaigns?.is_priority ?? false,
-      }));
+      // Extract all lead IDs where call_leads join is null
+      const crmLeadIds = (data || [])
+        .filter((db: any) => !db.call_leads && db.lead_id)
+        .map((db: any) => db.lead_id);
+
+      let crmLeadsMap: Record<string, { name: string; phone: string }> = {};
+
+      if (crmLeadIds.length > 0) {
+        const { data: crmLeadsData } = await supabase
+          .from("leads")
+          .select("id, name, phone")
+          .in("id", crmLeadIds);
+        
+        if (crmLeadsData) {
+          crmLeadsData.forEach((l: any) => {
+            crmLeadsMap[l.id] = { name: l.name, phone: l.phone };
+          });
+        }
+      }
+
+      let results = (data || []).map((db: any) => {
+        const crmLead = db.lead_id ? crmLeadsMap[db.lead_id] : null;
+        return {
+          id: db.id,
+          campaignId: db.campaign_id,
+          campaignName: db.call_campaigns?.name || null,
+          leadId: db.lead_id,
+          leadName: db.call_leads?.name || crmLead?.name || "Sem nome",
+          leadPhone: db.call_leads?.phone || crmLead?.phone || null,
+          operatorId: db.operator_id,
+          operatorName: db.call_operators?.operator_name || null,
+          callStatus: db.call_status || "unknown",
+          createdAt: db.created_at || new Date().toISOString(),
+          endedAt: db.ended_at,
+          startedAt: db.started_at,
+          durationSeconds: db.duration_seconds || (db.started_at && db.ended_at ? Math.round((new Date(db.ended_at).getTime() - new Date(db.started_at).getTime()) / 1000) : null),
+          isPriority: db.call_campaigns?.is_priority ?? false,
+        };
+      });
 
       if (searchQuery) {
         const s = searchQuery.toLowerCase();
@@ -2345,14 +2368,18 @@ function ActionDialog({
 function LeadCallHistory({ leadId, campaignId, currentLogId }: { leadId: string | null; campaignId: string | null; currentLogId: string }) {
   const { data: history, isLoading } = useQuery({
     queryKey: ["call-lead-history", leadId, campaignId],
-    enabled: !!leadId && !!campaignId,
+    enabled: !!leadId,
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      let query = (supabase as any)
         .from("call_logs")
         .select("*, call_script_actions(name, color), call_operators(operator_name)")
-        .eq("lead_id", leadId)
-        .eq("campaign_id", campaignId)
-        .order("created_at", { ascending: false });
+        .eq("lead_id", leadId);
+
+      if (campaignId) {
+        query = query.eq("campaign_id", campaignId);
+      }
+
+      const { data, error } = await query.order("created_at", { ascending: false });
       if (error) throw error;
       return data as Array<{
         id: string;
