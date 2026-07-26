@@ -70,7 +70,18 @@ Deno.serve(async (req) => {
         .from("ura-audios")
         .getPublicUrl(filePath);
 
-      const publicUrl = urlData.publicUrl;
+      let publicUrl = urlData.publicUrl;
+
+      // Dynamically replace internal docker network origins (e.g., kong:8000) with the external request origin
+      try {
+        const reqOrigin = new URL(req.url).origin;
+        if (publicUrl.includes("kong:8000") || publicUrl.includes("localhost:8000")) {
+          const parsedPublic = new URL(publicUrl);
+          publicUrl = `${reqOrigin}${parsedPublic.pathname}${parsedPublic.search}`;
+        }
+      } catch (err) {
+        console.error("[ura-campaign-sync] Failed to parse request origin:", err);
+      }
 
       if (campaignId) {
         await (supabase as any).from("ura_campaigns").update({ audio_value: String(nome) }).eq("id", String(campaignId));

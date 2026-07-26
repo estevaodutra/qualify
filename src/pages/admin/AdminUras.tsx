@@ -433,13 +433,22 @@ export default function AdminUras() {
                       <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Arquivo de Áudio Carregado</span>
                       <span className="text-xs font-semibold text-slate-700">{selectedRequest.audio_file_name || "audio.mp3"}</span>
                     </div>
-                    {selectedRequest.audio_file_url && (
-                      <Button asChild className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs gap-1.5 h-8">
-                        <a href={selectedRequest.audio_file_url} target="_blank" rel="noopener noreferrer">
-                          <Download className="h-3.5 w-3.5" /> Baixar Áudio
-                        </a>
-                      </Button>
-                    )}
+                    {selectedRequest.audio_file_url && (() => {
+                      let url = selectedRequest.audio_file_url;
+                      if (url.includes("kong:8000") || url.includes("localhost:8000")) {
+                        try {
+                          const parsed = new URL(url);
+                          url = `${window.location.origin}${parsed.pathname}${parsed.search}`;
+                        } catch (e) {}
+                      }
+                      return (
+                        <Button asChild className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs gap-1.5 h-8">
+                          <a href={url} target="_blank" rel="noopener noreferrer">
+                            <Download className="h-3.5 w-3.5" /> Baixar Áudio
+                          </a>
+                        </Button>
+                      );
+                    })()}
                   </div>
                 )}
 
