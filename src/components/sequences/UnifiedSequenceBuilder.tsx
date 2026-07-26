@@ -1856,14 +1856,44 @@ export function UnifiedSequenceBuilder({
                                   <div className="p-1.5 rounded-lg text-white shrink-0 shadow-sm bg-purple-600">
                                     <PhoneCall className="h-3.5 w-3.5" />
                                   </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className="font-bold text-xs text-slate-800 truncate">
-                                      {(node.config.label as string) || "URA"}
-                                    </p>
-                                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                                      Não configurado
-                                    </p>
-                                  </div>
+                                  {(() => {
+                                    const approvalStatus = node.config.approval?.status || "draft";
+                                    const getBadge = () => {
+                                      switch (approvalStatus) {
+                                        case "pending_admin_setup":
+                                          return { label: "Pendente", className: "bg-amber-100 text-amber-700 border-amber-200" };
+                                        case "in_setup":
+                                          return { label: "Em Configuração", className: "bg-blue-100 text-blue-700 border-blue-200" };
+                                        case "approved":
+                                          return { label: "Aprovada", className: "bg-emerald-100 text-emerald-700 border-emerald-200" };
+                                        case "needs_adjustment":
+                                          return { label: "Ajuste", className: "bg-purple-100 text-purple-700 border-purple-200" };
+                                        case "rejected":
+                                          return { label: "Rejeitada", className: "bg-rose-100 text-rose-700 border-rose-200" };
+                                        case "disabled":
+                                          return { label: "Desativada", className: "bg-slate-100 text-slate-700 border-slate-200" };
+                                        case "draft":
+                                        default:
+                                          return { label: "Rascunho", className: "bg-slate-100 text-slate-500 border-slate-200" };
+                                      }
+                                    };
+                                    const badge = getBadge();
+                                    return (
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-1.5 justify-between">
+                                          <p className="font-bold text-xs text-slate-800 truncate">
+                                            {(node.config.label as string) || "URA"}
+                                          </p>
+                                          <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full border shrink-0", badge.className)}>
+                                            {badge.label}
+                                          </span>
+                                        </div>
+                                        <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                          Não configurado
+                                        </p>
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
 
                                 <p className="text-[10px] text-slate-500 mb-4 leading-relaxed font-medium">
@@ -1919,6 +1949,7 @@ export function UnifiedSequenceBuilder({
                             { id: "busy", label: "Ocupado", border: "border-rose-500", hover: "hover:bg-rose-500", dot: "bg-rose-500", icon: "🚫", borderOutline: "border-rose-500/20 hover:border-rose-500/40" },
                             { id: "failed", label: "Falhou", border: "border-rose-500", hover: "hover:bg-rose-500", dot: "bg-rose-500", icon: "❌", borderOutline: "border-rose-500/20 hover:border-rose-500/40" },
                             { id: "attempts_exhausted", label: "Tentativas encerradas", border: "border-indigo-500", hover: "hover:bg-indigo-500", dot: "bg-indigo-500", icon: "🚫", borderOutline: "border-indigo-500/20 hover:border-indigo-500/40" },
+                            { id: "pending_approval", label: "Pendente de aprovação", border: "border-purple-500", hover: "hover:bg-purple-500", dot: "bg-purple-500", icon: "📋", borderOutline: "border-purple-500/20 hover:border-purple-500/40" },
                             { id: "error", label: "Erro técnico", border: "border-destructive", hover: "hover:bg-destructive", dot: "bg-destructive", icon: "⚠️", borderOutline: "border-destructive/20 hover:border-destructive/40" }
                           ];
 
@@ -1929,14 +1960,44 @@ export function UnifiedSequenceBuilder({
                                 <div className="p-1.5 rounded-lg text-white shrink-0 shadow-sm bg-purple-600">
                                   <PhoneCall className="h-3.5 w-3.5" />
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-bold text-xs text-slate-800 truncate">
-                                    {(node.config.label as string) || "URA"}
-                                  </p>
-                                  <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                                    {node.config.uraMode === "reverse" ? "URA Reversa" : "URA Simples"}
-                                  </p>
-                                </div>
+                                {(() => {
+                                  const approvalStatus = node.config.approval?.status || "draft";
+                                  const getBadge = () => {
+                                    switch (approvalStatus) {
+                                      case "pending_admin_setup":
+                                        return { label: "Pendente", className: "bg-amber-100 text-amber-700 border-amber-200" };
+                                      case "in_setup":
+                                        return { label: "Em Configuração", className: "bg-blue-100 text-blue-700 border-blue-200" };
+                                      case "approved":
+                                        return { label: "Aprovada", className: "bg-emerald-100 text-emerald-700 border-emerald-200" };
+                                      case "needs_adjustment":
+                                        return { label: "Ajuste", className: "bg-purple-100 text-purple-700 border-purple-200" };
+                                      case "rejected":
+                                        return { label: "Rejeitada", className: "bg-rose-100 text-rose-700 border-rose-200" };
+                                      case "disabled":
+                                        return { label: "Desativada", className: "bg-slate-100 text-slate-700 border-slate-200" };
+                                      case "draft":
+                                      default:
+                                        return { label: "Rascunho", className: "bg-slate-100 text-slate-500 border-slate-200" };
+                                    }
+                                  };
+                                  const badge = getBadge();
+                                  return (
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-1.5 justify-between">
+                                        <p className="font-bold text-xs text-slate-800 truncate">
+                                          {(node.config.label as string) || "URA"}
+                                        </p>
+                                        <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full border shrink-0", badge.className)}>
+                                          {badge.label}
+                                        </span>
+                                      </div>
+                                      <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                        {node.config.uraMode === "reverse" ? "URA Reversa" : "URA Simples"}
+                                      </p>
+                                    </div>
+                                  );
+                                })()}
                               </div>
 
                               {/* Card Content / Description */}

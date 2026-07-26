@@ -210,6 +210,22 @@ export function getDefaultConfigForBlock(blockType: string): Record<string, unkn
     case "ura": return {
       uraMode: "simple",
       provider: "mos_br",
+      approval: {
+        status: "draft",
+        requestId: null,
+        requestedAt: null,
+        requestedBy: null,
+        reviewedAt: null,
+        reviewedBy: null,
+        adminNotes: "",
+        rejectionReason: ""
+      },
+      mos: {
+        mosCampaignId: null,
+        mosUraId: null,
+        mosCampaignName: "",
+        configuredManually: true
+      },
       audio: {
         type: "tts",
         value: "Olá, por favor digite 1 para sim ou 2 para não.",
@@ -261,6 +277,7 @@ export function getDefaultConfigForBlock(blockType: string): Record<string, unkn
         busy: true,
         failed: true,
         attempts_exhausted: true,
+        pending_approval: true,
         error: true
       }
     };

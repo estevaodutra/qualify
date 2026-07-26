@@ -99,6 +99,8 @@ async function dispatchSingleTask(supabase: any, task: any, supabaseUrl: string,
       workflowExecutionId: task.workflow_execution_id,
       nodeId: task.node_id,
       phone: task.phone,
+      mosCampaignId: nodeData.config?.mos?.mosCampaignId || null,
+      mosUraId: nodeData.config?.mos?.mosUraId || null,
       lead: {
         id: task.lead_id,
         name: lead?.name || "",

@@ -487,6 +487,7 @@ export function UnifiedNodeConfigPanel({
   const [activeUraTab, setActiveUraTab] = useState<"audio" | "dtmf" | "attempts" | "outputs">("audio");
   const [isUploadingAudio, setIsUploadingAudio] = useState(false);
   const [registeredUras, setRegisteredUras] = useState<any[]>([]);
+  const [isSubmittingUra, setIsSubmittingUra] = useState(false);
 
   useEffect(() => {
     supabase
@@ -592,6 +593,105 @@ export function UnifiedNodeConfigPanel({
     const attempts = currentConfig.attempts || { enabled: true, maxAttempts: 2, retryDelayMs: 3600000, retryOn: ["no_answer", "busy", "failed"], businessHoursOnly: true };
     const outputs = currentConfig.outputs || { no_digit: true, no_answer: true, busy: true, failed: true, attempts_exhausted: true, error: true };
     const uraMode = currentConfig.uraMode || "simple";
+
+    const approval = currentConfig.approval || {
+      status: "draft",
+      requestId: null,
+      requestedAt: null,
+      requestedBy: null,
+      reviewedAt: null,
+      reviewedBy: null,
+      adminNotes: "",
+      rejectionReason: ""
+    };
+    const mosConfig = currentConfig.mos || {
+      mosCampaignId: null,
+      mosUraId: null,
+      mosCampaignName: "",
+      configuredManually: true
+    };
+
+    const isFieldsDisabled = approval.status !== "draft" && approval.status !== "needs_adjustment" && approval.status !== "rejected";
+
+    const handleSubmitForSetup = async () => {
+      if (audio.type === "tts" && !audio.value?.trim()) {
+        toast({ title: "Erro de Validação", description: "Informe o texto do TTS antes de enviar.", variant: "destructive" });
+        return;
+      }
+      if (audio.type === "audio" && !audio.fileUrl) {
+        toast({ title: "Erro de Validação", description: "Faça o upload do arquivo de áudio antes de enviar.", variant: "destructive" });
+        return;
+      }
+      if (audio.type === "mos_ura" && !audio.mosAudioName) {
+        toast({ title: "Erro de Validação", description: "Selecione uma URA pré-configurada.", variant: "destructive" });
+        return;
+      }
+
+      setIsSubmittingUra(true);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("Usuário não autenticado");
+
+        const { data: requestData, error: reqError } = await supabase
+          .from("ura_setup_requests")
+          .insert({
+            company_id: activeCompanyId,
+            workflow_id: node.sequenceId || null,
+            node_id: node.id,
+            requested_by: user.id,
+            status: "pending_admin_setup",
+            ura_name: currentConfig.label || "URA",
+            ura_mode: uraMode,
+            audio_type: audio.type,
+            audio_value: audio.type === "tts" ? audio.value : (audio.type === "mos_ura" ? audio.mosAudioName : null),
+            audio_file_url: audio.type === "audio" ? audio.fileUrl : null,
+            audio_file_name: audio.type === "audio" ? audio.fileName : null,
+            dtmf_actions: dtmf.actions || [],
+            attempts_config: attempts || {}
+          })
+          .select("id")
+          .single();
+
+        if (reqError) throw reqError;
+
+        const updatedApproval = {
+          status: "pending_admin_setup",
+          requestId: requestData.id,
+          requestedAt: new Date().toISOString(),
+          requestedBy: user.id,
+          reviewedAt: null,
+          reviewedBy: null,
+          adminNotes: "",
+          rejectionReason: ""
+        };
+
+        updateMultipleConfigs({
+          approval: updatedApproval,
+          mos: mosConfig
+        });
+
+        toast({ title: "Sucesso", description: "Sua URA foi enviada para configuração com sucesso." });
+      } catch (err: any) {
+        toast({ title: "Erro ao enviar", description: err.message || "Erro desconhecido", variant: "destructive" });
+      } finally {
+        setIsSubmittingUra(false);
+      }
+    };
+
+    const handleRevertToDraft = () => {
+      updateMultipleConfigs({
+        approval: {
+          status: "draft",
+          requestId: null,
+          requestedAt: null,
+          requestedBy: null,
+          reviewedAt: null,
+          reviewedBy: null,
+          adminNotes: "",
+          rejectionReason: ""
+        }
+      });
+    };
 
     const updateAudio = (key: string, val: any) => {
       updateConfig("audio", { ...audio, [key]: val });
@@ -768,6 +868,144 @@ export function UnifiedNodeConfigPanel({
               </div>
 
               <div className="md:col-span-3 space-y-6">
+                {/* URA Status Banner and Actions */}
+                {(() => {
+                  const status = approval.status || "draft";
+                  switch (status) {
+                    case "pending_admin_setup":
+                      return (
+                        <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 space-y-1">
+                          <div className="flex items-center gap-2 font-bold text-sm">
+                            <span className="text-base">⏳</span> URA Pendente de Configuração
+                          </div>
+                          <p className="text-xs text-amber-700">
+                            A solicitação foi encaminhada para a equipe técnica. Esta URA ainda não pode ser utilizada em produção até que o administrador a configure e libere.
+                          </p>
+                          {approval.requestedAt && (
+                            <p className="text-[10px] text-amber-500 font-semibold">
+                              Solicitado em: {new Date(approval.requestedAt).toLocaleString("pt-BR")}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    case "in_setup":
+                      return (
+                        <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 space-y-1">
+                          <div className="flex items-center gap-2 font-bold text-sm">
+                            <span className="text-base">⚙️</span> Em Configuração pelo Administrador
+                          </div>
+                          <p className="text-xs text-blue-700">
+                            Um administrador técnico iniciou a configuração manual do fluxo na plataforma MOS BR. Alterações nos parâmetros agora estão temporariamente desabilitadas.
+                          </p>
+                        </div>
+                      );
+                    case "approved":
+                      return (
+                        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 space-y-1">
+                          <div className="flex items-center gap-2 font-bold text-sm">
+                            <span className="text-base">✅</span> URA Aprovada e Pronta para Uso
+                          </div>
+                          <p className="text-xs text-emerald-700">
+                            A configuração foi concluída com sucesso pelo administrador técnico. O nó está liberado para disparo de chamadas.
+                          </p>
+                          <div className="flex items-center gap-4 text-[10px] text-emerald-600 font-semibold mt-1">
+                            <span>ID MOS BR: <code className="bg-emerald-500/10 px-1 py-0.5 rounded font-mono">{mosConfig.mosCampaignId}</code></span>
+                            {approval.reviewedAt && (
+                              <span>Aprovada em: {new Date(approval.reviewedAt).toLocaleString("pt-BR")}</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    case "needs_adjustment":
+                      return (
+                        <div className="p-4 rounded-xl bg-purple-50 border border-purple-200 text-purple-800 space-y-1">
+                          <div className="flex items-center gap-2 font-bold text-sm">
+                            <span className="text-base">✏️</span> Ajustes Solicitados pelo Administrador
+                          </div>
+                          <p className="text-xs text-purple-700 font-semibold">
+                            Motivo: {approval.adminNotes || "Sem justificativa informada."}
+                          </p>
+                          <p className="text-xs text-purple-600">
+                            Revise as opções indicadas e clique no botão abaixo para reenviar para configuração.
+                          </p>
+                        </div>
+                      );
+                    case "rejected":
+                      return (
+                        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 space-y-1">
+                          <div className="flex items-center gap-2 font-bold text-sm">
+                            <span className="text-base">❌</span> Solicitação Rejeitada
+                          </div>
+                          <p className="text-xs text-rose-700 font-semibold">
+                            Motivo: {approval.rejectionReason || "Sem justificativa informada."}
+                          </p>
+                          <p className="text-xs text-rose-600">
+                            Revise as configurações para submeter uma nova solicitação se necessário.
+                          </p>
+                        </div>
+                      );
+                    case "draft":
+                    default:
+                      return (
+                        <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 space-y-1">
+                          <div className="flex items-center gap-2 font-bold text-sm">
+                            <span className="text-base">📝</span> Rascunho de URA
+                          </div>
+                          <p className="text-xs text-slate-600">
+                            Esta URA está em modo rascunho. Configure o áudio, digitações e retentativas e clique em <b>Enviar para configuração</b> para enviá-la para revisão técnica.
+                          </p>
+                        </div>
+                      );
+                  }
+                })()}
+
+                {approval.status === "draft" && (
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      disabled={isSubmittingUra}
+                      onClick={handleSubmitForSetup}
+                      className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-semibold text-xs px-4 py-2"
+                    >
+                      {isSubmittingUra ? "Enviando..." : "Enviar para configuração"}
+                    </Button>
+                  </div>
+                )}
+
+                {(approval.status === "needs_adjustment" || approval.status === "rejected") && (
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleRevertToDraft}
+                      className="rounded-xl text-xs"
+                    >
+                      Editar Configurações
+                    </Button>
+                    <Button
+                      type="button"
+                      disabled={isSubmittingUra}
+                      onClick={handleSubmitForSetup}
+                      className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-semibold text-xs px-4 py-2"
+                    >
+                      {isSubmittingUra ? "Reenviando..." : "Reenviar para configuração"}
+                    </Button>
+                  </div>
+                )}
+
+                {approval.status === "pending_admin_setup" && (
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleRevertToDraft}
+                      className="rounded-xl text-xs text-slate-500 border-slate-200 hover:bg-slate-50"
+                    >
+                      Cancelar Solicitação e Voltar para Rascunho
+                    </Button>
+                  </div>
+                )}
+
                 <div className="flex border-b border-slate-100 gap-4">
                   {(["audio", "dtmf", "attempts", "outputs"] as const).map((tab) => {
                     const isActive = activeUraTab === tab;
@@ -789,7 +1027,7 @@ export function UnifiedNodeConfigPanel({
                 </div>
 
                 {activeUraTab === "audio" && (
-                  <div className="space-y-4">
+                  <fieldset disabled={isFieldsDisabled} className="space-y-4">
                     <div className="space-y-2">
                       <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Origem do Áudio</Label>
                       <Select
@@ -905,11 +1143,11 @@ export function UnifiedNodeConfigPanel({
                         <p className="text-[10px] text-slate-400">Escolha uma das URAs cadastradas no painel administrativo em Gestão de URAs.</p>
                       </div>
                     )}
-                  </div>
+                  </fieldset>
                 )}
 
                 {activeUraTab === "dtmf" && (
-                  <div className="space-y-4">
+                  <fieldset disabled={isFieldsDisabled} className="space-y-4">
                     <div className="flex justify-between items-center">
                       <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Mapeamento de Teclas (DTMF)</Label>
                       <Button
@@ -947,27 +1185,20 @@ export function UnifiedNodeConfigPanel({
                             </div>
 
                             <div className="flex-1">
-                              <Label className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block mb-1">Descrição do Caminho</Label>
+                              <Label className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block mb-1">Nome/Rótulo do Output</Label>
                               <Input
                                 value={act.label || ""}
                                 onChange={(e) => updateDtmfActionField(idx, "label", e.target.value)}
-                                placeholder="Ex: Falar com vendas"
-                                className="h-8 rounded-lg border-slate-200 text-xs font-semibold"
+                                placeholder="Ex: Rota Falar com Atendente"
+                                className="h-8 rounded-lg border-slate-200 text-xs"
                               />
-                            </div>
-
-                            <div className="w-24">
-                              <Label className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block mb-1">Tipo de Ação</Label>
-                              <span className="h-8 rounded-lg border border-slate-100 bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600 text-center">
-                                Workflow Output
-                              </span>
                             </div>
 
                             <Button
                               type="button"
                               variant="ghost"
                               onClick={() => removeDtmfAction(idx)}
-                              className="h-8 w-8 p-0 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg mt-5"
+                              className="h-8 w-8 text-rose-500 hover:bg-rose-50 hover:text-rose-600 rounded-lg absolute right-2 top-2 p-0"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -976,9 +1207,9 @@ export function UnifiedNodeConfigPanel({
                       )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                    <div className="grid grid-cols-2 gap-4 border-t pt-4">
                       <div className="space-y-2">
-                        <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tempo Limite de Digitação (segundos)</Label>
+                        <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tempo Limite para Digitação (s)</Label>
                         <Input
                           type="number"
                           value={dtmf.timeoutSeconds ?? 10}
@@ -1000,11 +1231,11 @@ export function UnifiedNodeConfigPanel({
                         />
                       </div>
                     </div>
-                  </div>
+                  </fieldset>
                 )}
 
                 {activeUraTab === "attempts" && (
-                  <div className="space-y-6">
+                  <fieldset disabled={isFieldsDisabled} className="space-y-6">
                     <div className="flex items-center justify-between p-4 border rounded-xl bg-slate-50/50">
                       <div className="space-y-1">
                         <span className="text-xs font-bold text-slate-700 block">Ativar Retentativas Automáticas</span>
@@ -1038,34 +1269,26 @@ export function UnifiedNodeConfigPanel({
                         </div>
 
                         <div className="space-y-2">
-                          <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Intervalo entre Tentativas</Label>
-                          <Select
-                            value={String(attempts.retryDelayMs || 3600000)}
-                            onValueChange={(val) => updateAttempts("retryDelayMs", Number(val))}
-                          >
-                            <SelectTrigger className="rounded-xl border-slate-200 bg-background text-sm">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl border-slate-200">
-                              <SelectItem value="600000" className="rounded-lg m-0.5">10 minutos</SelectItem>
-                              <SelectItem value="1800000" className="rounded-lg m-0.5">30 minutos</SelectItem>
-                              <SelectItem value="3600000" className="rounded-lg m-0.5">1 hora</SelectItem>
-                              <SelectItem value="7200000" className="rounded-lg m-0.5">2 horas</SelectItem>
-                              <SelectItem value="14400000" className="rounded-lg m-0.5">4 horas</SelectItem>
-                              <SelectItem value="86400000" className="rounded-lg m-0.5">24 horas</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Intervalo entre Tentativas (Minutos)</Label>
+                          <Input
+                            type="number"
+                            value={Math.round((attempts.retryDelayMs || 3600000) / 60000)}
+                            onChange={(e) => updateAttempts("retryDelayMs", Number(e.target.value) * 60000)}
+                            min={1}
+                            max={1440}
+                            className="rounded-xl border-slate-200 animate-none"
+                          />
                         </div>
 
-                        <div className="col-span-2 p-4 border rounded-xl space-y-4">
-                          <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Condições de Retentativa</Label>
-                          <div className="grid grid-cols-3 gap-4">
+                        <div className="col-span-2 space-y-2">
+                          <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Tentar novamente em caso de:</Label>
+                          <div className="grid grid-cols-3 gap-2">
                             {[
-                              { id: "no_answer", label: "Não atendeu" },
+                              { id: "no_answer", label: "Não Atendeu" },
                               { id: "busy", label: "Ocupado" },
-                              { id: "failed", label: "Falha na chamada" }
+                              { id: "failed", label: "Falhou (Erro de Linha)" }
                             ].map((cond) => {
-                              const activeOn = attempts.retryOn || ["no_answer", "busy", "failed"];
+                              const activeOn = attempts.retryOn || [];
                               const isActive = activeOn.includes(cond.id);
                               return (
                                 <div key={cond.id} className="flex items-center gap-2">
@@ -1098,11 +1321,11 @@ export function UnifiedNodeConfigPanel({
                         </div>
                       </div>
                     )}
-                  </div>
+                  </fieldset>
                 )}
 
                 {activeUraTab === "outputs" && (
-                  <div className="space-y-4">
+                  <fieldset disabled={isFieldsDisabled} className="space-y-4">
                     <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Configuração de Portas de Saída do Nó</Label>
                     <p className="text-[11px] text-slate-400 leading-relaxed mb-2">
                       Marque abaixo quais resultados de ligação você deseja expor no canvas como portas de saída para continuar o fluxo. As teclas DTMF configuradas sempre aparecem como saídas.
@@ -1115,6 +1338,7 @@ export function UnifiedNodeConfigPanel({
                         { id: "busy", label: "Número ocupado" },
                         { id: "failed", label: "Falha técnica na operadora" },
                         { id: "attempts_exhausted", label: "Tentativas esgotadas" },
+                        { id: "pending_approval", label: "Pendente de aprovação" },
                         { id: "error", label: "Erro na carteira / saldo insuficiente" }
                       ].map((item) => {
                         const isEnabled = outputs[item.id] !== false;
@@ -1130,7 +1354,7 @@ export function UnifiedNodeConfigPanel({
                         );
                       })}
                     </div>
-                  </div>
+                  </fieldset>
                 )}
               </div>
             </div>

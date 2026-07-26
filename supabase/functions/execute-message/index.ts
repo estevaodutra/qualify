@@ -2418,6 +2418,39 @@ Deno.serve(async (req) => {
         if (node.node_type === "ura") {
           console.log(`[ExecuteMessage] 🔊 Processing URA node ${node.id}`);
           const config = node.config || {};
+
+          // Verify approval status before dispatching
+          const approvalStatus = config.approval?.status || "draft";
+          const mosCampaignId = config.mos?.mosCampaignId;
+
+          if (approvalStatus !== "approved" || !mosCampaignId) {
+            console.warn(`[ExecuteMessage] ⚠️ URA node ${node.id} execution blocked. Approval status: ${approvalStatus}. Campaign ID: ${mosCampaignId}`);
+            
+            // Log warning execution
+            await logNodeExecution(supabase, {
+              executionId: workflowExecutionId,
+              userId,
+              nodeId: node.id,
+              nodeType: node.node_type,
+              status: "error",
+              startedAt: nodeStartedAt,
+              input: node.config,
+              output: { 
+                error: "URA pendente de configuração pelo administrador", 
+                approvalStatus,
+                mosCampaignId
+              },
+            });
+
+            // Route to pending_approval or error outcome port
+            let nextConn = connections.find(c => c.source_node_id === node.id && c.condition_path === "pending_approval");
+            if (!nextConn) {
+              nextConn = connections.find(c => c.source_node_id === node.id && c.condition_path === "error");
+            }
+            currentNodeId = nextConn ? nextConn.target_node_id : null;
+            nodesProcessed++;
+            continue;
+          }
           
           // Check if we are resuming from a URA callback result
           const uraResult = triggerContext?.uraResult;
