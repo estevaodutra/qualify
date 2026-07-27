@@ -16,16 +16,22 @@ Deno.serve(async (req) => {
     const payload = await req.json();
     console.log("[URA Callback] Received callback payload:", JSON.stringify(payload));
 
-    const callback = payload.callbackTvozRequest ?? payload.callbackTvozShippingLotEvent;
+    // Resolve real payload if nested under 'body' (e.g. from n8n webhook proxy)
+    const realPayload = payload.body !== undefined && typeof payload.body === "object" ? payload.body : payload;
+    const callback = realPayload.callbackTvozRequest ?? realPayload.callbackTvozShippingLotEvent;
     
     // Support both standard MOS BR structure and simplified n8n fields
-    const callbackId = callback?.id || callback?.externalId || callback?.request_id || payload.taskId || payload.callbackId;
-    const mosCampaignId = callback?.campaignId || payload.campaignId || null;
-    const dtmf = callback?.dtmf ?? payload.dtmfPressed ?? payload.dtmf ?? null;
-    const phone = callback?.number ?? payload.phone ?? null;
-    const mosStatus = String(callback?.statusNome ?? callback?.status ?? payload.status ?? "").toUpperCase();
-    const durationSeconds = Number(callback?.duration ?? callback?.duracao ?? payload.durationSeconds ?? payload.duration ?? 0);
-    const causeName = callback?.cause ?? callback?.causa ?? callback?.statusNome ?? payload.causeName ?? payload.cause ?? "Desconectado";
+    const callbackId = callback?.id || callback?.externalId || callback?.request_id || realPayload.taskId || realPayload.callbackId;
+    const mosCampaignId = callback?.campaignId || realPayload.campaignId || null;
+    const dtmf = callback?.dtmf ?? realPayload.dtmfPressed ?? realPayload.dtmf ?? null;
+    const phone = callback?.number ?? realPayload.phone ?? null;
+    
+    // Resolve status checking causaNome, causa, statusNome, status
+    const statusText = String(callback?.causaNome ?? callback?.causa ?? callback?.statusNome ?? callback?.status ?? realPayload.status ?? "");
+    const mosStatus = statusText.toUpperCase();
+    
+    const durationSeconds = Number(callback?.duration ?? callback?.duracao ?? realPayload.durationSeconds ?? realPayload.duration ?? 0);
+    const causeName = callback?.causaNome ?? callback?.cause ?? callback?.causa ?? callback?.statusNome ?? realPayload.causeName ?? realPayload.cause ?? "Desconectado";
 
     // Audit log insertion
     await supabase.from("mos_callbacks").insert({
@@ -38,11 +44,23 @@ Deno.serve(async (req) => {
 
     // 1. Locate the task
     let task = null;
-    if (callbackId) {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const isValidUuid = typeof callbackId === "string" && uuidRegex.test(callbackId);
+
+    if (isValidUuid) {
       const { data } = await supabase
         .from("workflow_ura_tasks")
         .select("*")
         .eq("id", callbackId)
+        .maybeSingle();
+      task = data;
+    }
+
+    if (!task && callbackId) {
+      const { data } = await supabase
+        .from("workflow_ura_tasks")
+        .select("*")
+        .eq("mos_call_id", String(callbackId))
         .maybeSingle();
       task = data;
     }
@@ -80,7 +98,7 @@ Deno.serve(async (req) => {
     } else if (["BUSY", "OCUPADO"].some(s => mosStatus.includes(s))) {
       finalStatus = "busy";
       workflowOutcome = "busy";
-    } else if (["NO_ANSWER", "NAO_ATENDEU", "NOANSWER", "NAOATENDEU", "TIMEOUT"].some(s => mosStatus.includes(s))) {
+    } else if (["NO_ANSWER", "NAO_ATENDEU", "NOANSWER", "NAOATENDEU", "TIMEOUT", "NAO_ATENDIDO", "NAO ATENDIDO", "NÃO ATENDIDO", "NAO ATENDEU", "NÃO ATENDEU"].some(s => mosStatus.includes(s))) {
       finalStatus = "no_answer";
       workflowOutcome = "no_answer";
     } else if (["CANCELLED", "CANCELADO"].some(s => mosStatus.includes(s))) {
@@ -140,6 +158,7 @@ Deno.serve(async (req) => {
           cause_name: causeName,
           cost_value: cost,
           raw_callback: payload,
+          mos_call_id: callback?.id || callback?.callId || task.mos_call_id || null,
           next_attempt_at: nextAttemptAt,
           updated_at: new Date().toISOString()
         })
@@ -163,6 +182,7 @@ Deno.serve(async (req) => {
           cause_name: causeName,
           cost_value: cost,
           raw_callback: payload,
+          mos_call_id: callback?.id || callback?.callId || task.mos_call_id || null,
           completed_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
