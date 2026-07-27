@@ -1,4 +1,4 @@
-import { Bell, Search, LogOut, Settings, UserCircle } from "lucide-react";
+import { Bell, Search, LogOut, Settings, UserCircle, Wallet as WalletIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -17,6 +17,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useAlerts } from "@/hooks/useAlerts";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+import { useCompany } from "@/contexts/CompanyContext";
+import { useWallet } from "@/hooks/useWallet";
 
 const SEVERITY_DOT: Record<string, string> = {
   info: "bg-info",
@@ -46,6 +48,8 @@ export function AppHeader() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { alerts, unreadCount, markAsRead, markAllAsRead } = useAlerts();
+  const { activeCompanyId } = useCompany();
+  const { data: wallet } = useWallet();
 
   const handleSignOut = async () => {
     const { error } = await signOut();
@@ -102,6 +106,21 @@ export function AppHeader() {
           </div>
 
           <SystemClock />
+
+          {/* Wallet Balance Pill */}
+          {wallet !== undefined && (
+            <button 
+              onClick={() => navigate("/carteira/configuracoes")}
+              className="flex items-center gap-1.5 px-3 h-9 rounded-xl border border-border/50 bg-muted/30 text-[13px] font-bold text-foreground hover:bg-accent hover:text-foreground hover:border-border transition-all duration-200"
+            >
+              <WalletIcon className="h-3.5 w-3.5 text-muted-foreground" />
+              <span>
+                {wallet !== null 
+                  ? wallet.balance.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+                  : "R$ 0,00"}
+              </span>
+            </button>
+          )}
 
           {/* Notifications */}
           <DropdownMenu>
