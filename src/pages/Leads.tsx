@@ -629,9 +629,7 @@ export default function Leads() {
 
                 const uraNode = selectedWorkflowNodes.find((n: any) => n.node_type === "ura");
                 const config = uraNode?.config || {};
-                const modeLabel = config.uraMode === "reverse" ? "URA Reversa" : "URA Simples";
-                const audioType = config.audio?.type || "tts";
-                const audioLabel = audioType === "tts" ? "TTS Configurado" : (audioType === "audio" ? "Arquivo de Áudio" : "URA Pré-configurada");
+                const mosId = config.mos?.idType === "ura" ? (config.mos?.mosUraId || "") : (config.mos?.mosCampaignId || "");
                 const dtmfCount = config.dtmf?.actions?.length || 0;
                 const attemptsCount = config.attempts?.maxAttempts || 1;
 
@@ -639,20 +637,20 @@ export default function Leads() {
                   <div className="p-4 rounded-xl bg-purple-500/5 border border-purple-500/20 space-y-2 animate-in fade-in duration-200">
                     <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider block">Resumo do Nó URA no Workflow</span>
                     <div className="flex justify-between items-center text-xs font-semibold">
-                      <span className="text-slate-500">Tipo de URA:</span>
-                      <span className="text-foreground">{modeLabel}</span>
+                      <span className="text-slate-500">Contém node URA:</span>
+                      <span className="text-foreground">Sim</span>
                     </div>
                     <div className="flex justify-between items-center text-xs font-semibold">
-                      <span className="text-slate-500">Áudio da chamada:</span>
-                      <span className="text-foreground">{audioLabel}</span>
+                      <span className="text-slate-500">ID MOS BR:</span>
+                      <span className="text-foreground font-mono">{mosId || "Não configurado"}</span>
                     </div>
                     <div className="flex justify-between items-center text-xs font-semibold">
-                      <span className="text-slate-500">Opções DTMF:</span>
-                      <span className="text-foreground">{dtmfCount} opções</span>
+                      <span className="text-slate-500">DTMF:</span>
+                      <span className="text-foreground">{dtmfCount} opção(ões)</span>
                     </div>
                     <div className="flex justify-between items-center text-xs font-semibold">
                       <span className="text-slate-500">Tentativas:</span>
-                      <span className="text-foreground">{attemptsCount}x</span>
+                      <span className="text-foreground">{attemptsCount}</span>
                     </div>
                     <div className="border-t border-purple-500/10 my-2 pt-2 space-y-1">
                       <div className="flex justify-between items-center text-xs font-semibold">

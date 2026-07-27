@@ -588,114 +588,20 @@ export function UnifiedNodeConfigPanel({
   const isGroup = isGroupProp !== undefined ? isGroupProp : mode === "group";
 
   if (resolvedNodeType === "ura") {
-    const audio = currentConfig.audio || { type: "tts", value: "Olá, por favor digite 1 para sim ou 2 para não.", voice: "pt-BR", fileUrl: "", mosAudioName: "" };
+    const mosConfig = {
+      mosCampaignId: "",
+      mosUraId: "",
+      idType: "campaign",
+      configuredExternally: true,
+      ...(currentConfig.mos || {})
+    };
+    if (!mosConfig.idType) {
+      mosConfig.idType = mosConfig.mosUraId ? "ura" : "campaign";
+    }
+
     const dtmf = currentConfig.dtmf || { enabled: true, timeoutSeconds: 10, maxDigits: 1, actions: [] };
     const attempts = currentConfig.attempts || { enabled: true, maxAttempts: 2, retryDelayMs: 3600000, retryOn: ["no_answer", "busy", "failed"], businessHoursOnly: true };
     const outputs = currentConfig.outputs || { no_digit: true, no_answer: true, busy: true, failed: true, attempts_exhausted: true, error: true };
-    const uraMode = currentConfig.uraMode || "simple";
-
-    const approval = currentConfig.approval || {
-      status: "draft",
-      requestId: null,
-      requestedAt: null,
-      requestedBy: null,
-      reviewedAt: null,
-      reviewedBy: null,
-      adminNotes: "",
-      rejectionReason: ""
-    };
-    const mosConfig = currentConfig.mos || {
-      mosCampaignId: null,
-      mosUraId: null,
-      mosCampaignName: "",
-      configuredManually: true
-    };
-
-    const isFieldsDisabled = approval.status !== "draft" && approval.status !== "needs_adjustment" && approval.status !== "rejected";
-
-    const handleSubmitForSetup = async () => {
-      if (audio.type === "tts" && !audio.value?.trim()) {
-        toast({ title: "Erro de Validação", description: "Informe o texto do TTS antes de enviar.", variant: "destructive" });
-        return;
-      }
-      if (audio.type === "audio" && !audio.fileUrl) {
-        toast({ title: "Erro de Validação", description: "Faça o upload do arquivo de áudio antes de enviar.", variant: "destructive" });
-        return;
-      }
-      if (audio.type === "mos_ura" && !audio.mosAudioName) {
-        toast({ title: "Erro de Validação", description: "Selecione uma URA pré-configurada.", variant: "destructive" });
-        return;
-      }
-
-      setIsSubmittingUra(true);
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error("Usuário não autenticado");
-
-        const { data: requestData, error: reqError } = await supabase
-          .from("ura_setup_requests")
-          .insert({
-            company_id: activeCompanyId,
-            workflow_id: node.sequenceId || null,
-            node_id: node.id,
-            requested_by: user.id,
-            status: "pending_admin_setup",
-            ura_name: currentConfig.label || "URA",
-            ura_mode: uraMode,
-            audio_type: audio.type,
-            audio_value: audio.type === "tts" ? audio.value : (audio.type === "mos_ura" ? audio.mosAudioName : null),
-            audio_file_url: audio.type === "audio" ? audio.fileUrl : null,
-            audio_file_name: audio.type === "audio" ? audio.fileName : null,
-            dtmf_actions: dtmf.actions || [],
-            attempts_config: attempts || {}
-          })
-          .select("id")
-          .single();
-
-        if (reqError) throw reqError;
-
-        const updatedApproval = {
-          status: "pending_admin_setup",
-          requestId: requestData.id,
-          requestedAt: new Date().toISOString(),
-          requestedBy: user.id,
-          reviewedAt: null,
-          reviewedBy: null,
-          adminNotes: "",
-          rejectionReason: ""
-        };
-
-        updateMultipleConfigs({
-          approval: updatedApproval,
-          mos: mosConfig
-        });
-
-        toast({ title: "Sucesso", description: "Sua URA foi enviada para configuração com sucesso." });
-      } catch (err: any) {
-        toast({ title: "Erro ao enviar", description: err.message || "Erro desconhecido", variant: "destructive" });
-      } finally {
-        setIsSubmittingUra(false);
-      }
-    };
-
-    const handleRevertToDraft = () => {
-      updateMultipleConfigs({
-        approval: {
-          status: "draft",
-          requestId: null,
-          requestedAt: null,
-          requestedBy: null,
-          reviewedAt: null,
-          reviewedBy: null,
-          adminNotes: "",
-          rejectionReason: ""
-        }
-      });
-    };
-
-    const updateAudio = (key: string, val: any) => {
-      updateConfig("audio", { ...audio, [key]: val });
-    };
 
     const updateDtmf = (key: string, val: any) => {
       updateConfig("dtmf", { ...dtmf, [key]: val });
@@ -709,46 +615,24 @@ export function UnifiedNodeConfigPanel({
       updateConfig("outputs", { ...outputs, [key]: val });
     };
 
-    const handleUploadAudio = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      setIsUploadingAudio(true);
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData?.session?.access_token;
-        const projectUrl = import.meta.env.VITE_SUPABASE_URL as string;
-
-        const formData = new FormData();
-        formData.append("node_id", node.id);
-        formData.append("audio", file, file.name);
-        formData.append("nome", file.name.replace(/\.[^/.]+$/, "").toUpperCase());
-
-        const res = await fetch(`${projectUrl}/functions/v1/ura-campaign-sync`, {
-          method: "POST",
-          headers: { Authorization: token ? `Bearer ${token}` : "" },
-          body: formData,
-        });
-
-        if (!res.ok) {
-          const err = await res.text();
-          throw new Error(err);
-        }
-
-        const data = await res.json();
-        updateConfig("audio", {
-          type: "audio",
-          value: "",
-          voice: "pt-BR",
-          fileUrl: data.fileUrl || "",
-          mosAudioName: data.nome || data.audio_name || file.name.replace(/\.[^/.]+$/, "").toUpperCase()
-        });
-        toast({ title: "Sucesso", description: "Áudio enviado com sucesso!" });
-      } catch (err: any) {
-        toast({ title: "Erro", description: `Falha no upload do áudio: ${err.message}`, variant: "destructive" });
-      } finally {
-        setIsUploadingAudio(false);
+    const handleIdChange = (val: string) => {
+      if (mosConfig.idType === "ura") {
+        updateConfig("mos", { ...mosConfig, mosUraId: val, mosCampaignId: "" });
+      } else {
+        updateConfig("mos", { ...mosConfig, mosCampaignId: val, mosUraId: "" });
       }
     };
+
+    const handleIdTypeChange = (newType: string) => {
+      const currentId = newType === "campaign" ? (mosConfig.mosUraId || "") : (mosConfig.mosCampaignId || "");
+      if (newType === "campaign") {
+        updateConfig("mos", { ...mosConfig, idType: newType, mosCampaignId: currentId, mosUraId: "" });
+      } else {
+        updateConfig("mos", { ...mosConfig, idType: newType, mosUraId: currentId, mosCampaignId: "" });
+      }
+    };
+
+    const currentIdValue = mosConfig.idType === "ura" ? (mosConfig.mosUraId || "") : (mosConfig.mosCampaignId || "");
 
     const addDtmfAction = () => {
       const actions = dtmf.actions || [];
@@ -805,7 +689,7 @@ export function UnifiedNodeConfigPanel({
           <div className="space-y-1">
             <h4 className="text-sm font-bold text-slate-800">Parâmetros de URA</h4>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              O nó de URA possui configurações detalhadas de Áudio, Teclas de Interação e Retentativas.
+              O nó de URA possui configurações de ID MOS BR, Teclas de Interação e Retentativas.
             </p>
           </div>
           <Button
@@ -818,544 +702,230 @@ export function UnifiedNodeConfigPanel({
         </div>
 
         <Dialog open={isPopupOpen} onOpenChange={(v) => { if (!v) { setIsPopupOpen(false); onClose(); } }}>
-          <DialogContent className="max-w-4xl w-[90vw] p-6 rounded-2xl bg-white border border-slate-100 shadow-2xl overflow-y-auto max-h-[90vh]">
-            <DialogHeader className="border-b pb-4 mb-4 flex flex-row items-center justify-between">
+          <DialogContent className="max-w-2xl w-[90vw] p-6 rounded-2xl bg-white border border-slate-100 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <DialogHeader className="border-b pb-4 mb-4">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-xl bg-purple-600 text-white shadow-sm">
                   <PhoneCall className="h-5 w-5" />
                 </div>
                 <div>
                   <DialogTitle className="text-lg font-bold text-slate-800">Configurar Bloco de URA</DialogTitle>
-                  <p className="text-xs text-muted-foreground">Configure o áudio de reprodução (TTS ou upload), opções DTMF de teclado e retentativas automáticas.</p>
+                  <p className="text-xs text-muted-foreground font-medium">Configure o ID da URA/Campanha MOS BR, teclas DTMF de teclado e retentativas automáticas.</p>
                 </div>
               </div>
             </DialogHeader>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div className="md:col-span-1 space-y-4 border-r pr-6">
-                <div className="space-y-2">
-                  <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Identificação do Nó</Label>
-                  <Input
-                    value={(node.config.label as string) || "URA"}
-                    onChange={(e) => updateConfig("label", e.target.value)}
-                    placeholder="Ex: URA Atendimento"
-                    className="rounded-xl border-slate-200"
-                  />
-                </div>
+            <div className="space-y-6">
+              {/* Identificação do Nó */}
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Identificação do Nó</Label>
+                <Input
+                  value={(node.config.label as string) || "URA"}
+                  onChange={(e) => updateConfig("label", e.target.value)}
+                  placeholder="Ex: URA Atendimento"
+                  className="rounded-xl border-slate-200"
+                />
+              </div>
 
-                <div className="space-y-2">
-                  <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Modo da URA</Label>
-                  <Select
-                    value={uraMode}
-                    onValueChange={(val) => updateConfig("uraMode", val)}
-                  >
-                    <SelectTrigger className="rounded-xl border-slate-200 bg-background text-sm">
-                      <SelectValue placeholder="Modo da URA..." />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl border-slate-200">
-                      <SelectItem value="simple" className="rounded-lg m-0.5">Simple (Reproduzir e Capturar)</SelectItem>
-                      <SelectItem value="reverse" className="rounded-lg m-0.5">Reverse (Interativa / Roteamento)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              {/* ID MOS BR Section */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/60 space-y-4">
+                <p className="text-xs text-slate-600">Configure a URA usando o ID configurado na MOS BR.</p>
 
-                <div className="p-4 rounded-xl bg-purple-50 border border-purple-100 space-y-2">
-                  <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wider block">Integrado via MOS BR</span>
-                  <p className="text-[11px] text-purple-700 leading-relaxed">
-                    A URA realiza chamadas discadas pela MOS BR. Custos de chamada: R$ 0,15 por bloco de 30 segundos, debitados diretamente da carteira da empresa.
-                  </p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="md:col-span-2 space-y-2">
+                    <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">ID da URA/Campanha MOS BR</Label>
+                    <Input
+                      value={currentIdValue}
+                      onChange={(e) => handleIdChange(e.target.value)}
+                      placeholder="Ex: 12345"
+                      className="rounded-xl border-slate-200"
+                    />
+                    <p className="text-[10px] text-slate-400">Informe o ID configurado manualmente na MOS BR. Esse ID será usado para disparar a URA neste workflow.</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tipo de ID</Label>
+                    <Select
+                      value={mosConfig.idType || "campaign"}
+                      onValueChange={handleIdTypeChange}
+                    >
+                      <SelectTrigger className="rounded-xl border-slate-200 bg-background text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl border-slate-200">
+                        <SelectItem value="campaign" className="rounded-lg m-0.5">Campanha MOS BR</SelectItem>
+                        <SelectItem value="ura" className="rounded-lg m-0.5">URA MOS BR</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
 
-              <div className="md:col-span-3 space-y-6">
-                {/* URA Status Banner and Actions */}
-                {(() => {
-                  const status = approval.status || "draft";
-                  switch (status) {
-                    case "pending_admin_setup":
-                      return (
-                        <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 space-y-1">
-                          <div className="flex items-center gap-2 font-bold text-sm">
-                            <span className="text-base">⏳</span> URA Pendente de Configuração
-                          </div>
-                          <p className="text-xs text-amber-700">
-                            A solicitação foi encaminhada para a equipe técnica. Esta URA ainda não pode ser utilizada em produção até que o administrador a configure e libere.
-                          </p>
-                          {approval.requestedAt && (
-                            <p className="text-[10px] text-amber-500 font-semibold">
-                              Solicitado em: {new Date(approval.requestedAt).toLocaleString("pt-BR")}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    case "in_setup":
-                      return (
-                        <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 space-y-1">
-                          <div className="flex items-center gap-2 font-bold text-sm">
-                            <span className="text-base">⚙️</span> Em Configuração pelo Administrador
-                          </div>
-                          <p className="text-xs text-blue-700">
-                            Um administrador técnico iniciou a configuração manual do fluxo na plataforma MOS BR. Alterações nos parâmetros agora estão temporariamente desabilitadas.
-                          </p>
-                        </div>
-                      );
-                    case "approved":
-                      return (
-                        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 space-y-1">
-                          <div className="flex items-center gap-2 font-bold text-sm">
-                            <span className="text-base">✅</span> URA Aprovada e Pronta para Uso
-                          </div>
-                          <p className="text-xs text-emerald-700">
-                            A configuração foi concluída com sucesso pelo administrador técnico. O nó está liberado para disparo de chamadas.
-                          </p>
-                          <div className="flex items-center gap-4 text-[10px] text-emerald-600 font-semibold mt-1">
-                            <span>ID MOS BR: <code className="bg-emerald-500/10 px-1 py-0.5 rounded font-mono">{mosConfig.mosCampaignId}</code></span>
-                            {approval.reviewedAt && (
-                              <span>Aprovada em: {new Date(approval.reviewedAt).toLocaleString("pt-BR")}</span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    case "needs_adjustment":
-                      return (
-                        <div className="p-4 rounded-xl bg-purple-50 border border-purple-200 text-purple-800 space-y-1">
-                          <div className="flex items-center gap-2 font-bold text-sm">
-                            <span className="text-base">✏️</span> Ajustes Solicitados pelo Administrador
-                          </div>
-                          <p className="text-xs text-purple-700 font-semibold">
-                            Motivo: {approval.adminNotes || "Sem justificativa informada."}
-                          </p>
-                          <p className="text-xs text-purple-600">
-                            Revise as opções indicadas e clique no botão abaixo para reenviar para configuração.
-                          </p>
-                        </div>
-                      );
-                    case "rejected":
-                      return (
-                        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 space-y-1">
-                          <div className="flex items-center gap-2 font-bold text-sm">
-                            <span className="text-base">❌</span> Solicitação Rejeitada
-                          </div>
-                          <p className="text-xs text-rose-700 font-semibold">
-                            Motivo: {approval.rejectionReason || "Sem justificativa informada."}
-                          </p>
-                          <p className="text-xs text-rose-600">
-                            Revise as configurações para submeter uma nova solicitação se necessário.
-                          </p>
-                        </div>
-                      );
-                    case "draft":
-                    default:
-                      return (
-                        <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 space-y-1">
-                          <div className="flex items-center gap-2 font-bold text-sm">
-                            <span className="text-base">📝</span> Rascunho de URA
-                          </div>
-                          <p className="text-xs text-slate-600">
-                            Esta URA está em modo rascunho. Configure o áudio, digitações e retentativas e clique em <b>Enviar para configuração</b> para enviá-la para revisão técnica.
-                          </p>
-                        </div>
-                      );
-                  }
-                })()}
-
-                {approval.status === "draft" && (
-                  <div className="flex justify-end">
-                    <Button
-                      type="button"
-                      disabled={isSubmittingUra}
-                      onClick={handleSubmitForSetup}
-                      className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-semibold text-xs px-4 py-2"
-                    >
-                      {isSubmittingUra ? "Enviando..." : "Enviar para configuração"}
-                    </Button>
-                  </div>
-                )}
-
-                {(approval.status === "needs_adjustment" || approval.status === "rejected") && (
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleRevertToDraft}
-                      className="rounded-xl text-xs"
-                    >
-                      Editar Configurações
-                    </Button>
-                    <Button
-                      type="button"
-                      disabled={isSubmittingUra}
-                      onClick={handleSubmitForSetup}
-                      className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-semibold text-xs px-4 py-2"
-                    >
-                      {isSubmittingUra ? "Reenviando..." : "Reenviar para configuração"}
-                    </Button>
-                  </div>
-                )}
-
-                {approval.status === "pending_admin_setup" && (
-                  <div className="flex justify-end">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleRevertToDraft}
-                      className="rounded-xl text-xs text-slate-500 border-slate-200 hover:bg-slate-50"
-                    >
-                      Cancelar Solicitação e Voltar para Rascunho
-                    </Button>
-                  </div>
-                )}
-
-                <div className="flex border-b border-slate-100 gap-4">
-                  {(["audio", "dtmf", "attempts", "outputs"] as const).map((tab) => {
-                    const isActive = activeUraTab === tab;
-                    const labels = { audio: "1. Áudio / TTS", dtmf: "2. Teclas DTMF", attempts: "3. Retentativas", outputs: "4. Saídas do Nó" };
-                    return (
-                      <button
-                        key={tab}
-                        type="button"
-                        onClick={() => setActiveUraTab(tab)}
-                        className={cn(
-                          "pb-2 text-sm font-semibold border-b-2 px-1 transition-all",
-                          isActive ? "border-purple-600 text-purple-600" : "border-transparent text-slate-400 hover:text-slate-600"
-                        )}
-                      >
-                        {labels[tab]}
-                      </button>
-                    );
-                  })}
+              {/* DTMF Section */}
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Opções DTMF</Label>
+                  <Button
+                    type="button"
+                    onClick={addDtmfAction}
+                    className="h-8 rounded-lg px-2.5 text-xs bg-purple-600 hover:bg-purple-700 text-white font-semibold gap-1"
+                  >
+                    <Plus className="h-3 w-3" /> Adicionar opção DTMF
+                  </Button>
                 </div>
 
-                {activeUraTab === "audio" && (
-                  <fieldset disabled={isFieldsDisabled} className="space-y-4">
+                <div className="space-y-3 max-h-[250px] overflow-y-auto pr-2">
+                  {(dtmf.actions || []).length === 0 ? (
+                    <div className="p-6 border border-dashed border-slate-200 rounded-xl text-center text-xs text-muted-foreground">
+                      Nenhuma tecla configurada. O workflow continuará pelo output "Não digitou" se o tempo limite se esgotar.
+                    </div>
+                  ) : (
+                    (dtmf.actions || []).map((act: any, idx: number) => (
+                      <div key={act.id || idx} className="p-4 border border-slate-100 rounded-xl bg-slate-50/50 flex items-center gap-4 relative">
+                        <div className="w-20">
+                          <Label className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block mb-1">Dígito</Label>
+                          <Select
+                            value={act.digit}
+                            onValueChange={(val) => updateDtmfActionField(idx, "digit", val)}
+                          >
+                            <SelectTrigger className="h-8 rounded-lg border-slate-200 bg-background text-xs font-bold text-center">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl border-slate-200">
+                              {["0","1","2","3","4","5","6","7","8","9","*","#"].map((d) => (
+                                <SelectItem key={d} value={d} className="rounded-lg text-xs m-0.5">{d}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="flex-1">
+                          <Label className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block mb-1">Nome/Rótulo do Output</Label>
+                          <Input
+                            value={act.label || ""}
+                            onChange={(e) => updateDtmfActionField(idx, "label", e.target.value)}
+                            placeholder="Ex: Tecla 1 — Tenho interesse"
+                            className="h-8 rounded-lg border-slate-200 text-xs"
+                          />
+                        </div>
+
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => removeDtmfAction(idx)}
+                          className="h-8 w-8 text-rose-500 hover:bg-rose-50 hover:text-rose-600 rounded-lg absolute right-2 top-2 p-0"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Retentativas Section */}
+              <div className="space-y-4 border-t pt-4">
+                <div className="flex items-center justify-between p-4 border rounded-xl bg-slate-50/50">
+                  <div className="space-y-1">
+                    <span className="text-xs font-bold text-slate-700 block">Retentativas</span>
+                    <p className="text-[10px] text-slate-400">Ativar retentativas automáticas se o lead estiver ocupado, indisponível ou não atender.</p>
+                  </div>
+                  <Switch
+                    checked={attempts.enabled ?? true}
+                    onCheckedChange={(val) => updateAttempts("enabled", val)}
+                  />
+                </div>
+
+                {attempts.enabled && (
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Origem do Áudio</Label>
+                      <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Máximo de tentativas</Label>
                       <Select
-                        value={audio.type || "tts"}
-                        onValueChange={(val) => updateAudio("type", val)}
+                        value={String(attempts.maxAttempts || 2)}
+                        onValueChange={(val) => updateAttempts("maxAttempts", Number(val))}
                       >
                         <SelectTrigger className="rounded-xl border-slate-200 bg-background text-sm">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="rounded-xl border-slate-200">
-                          <SelectItem value="tts">Texto para Fala (TTS)</SelectItem>
-                          <SelectItem value="audio">Upload de Arquivo de Áudio (MP3/WAV)</SelectItem>
-                          <SelectItem value="mos_ura">URA Pré-configurada na MOS BR</SelectItem>
+                          <SelectItem value="1" className="rounded-lg m-0.5">1 tentativa (Sem retentar)</SelectItem>
+                          <SelectItem value="2" className="rounded-lg m-0.5">2 tentativas</SelectItem>
+                          <SelectItem value="3" className="rounded-lg m-0.5">3 tentativas</SelectItem>
+                          <SelectItem value="4" className="rounded-lg m-0.5">4 tentativas</SelectItem>
+                          <SelectItem value="5" className="rounded-lg m-0.5">5 tentativas</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
 
-                    {audio.type === "tts" && (
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Texto da Mensagem (TTS)</Label>
-                          <Textarea
-                            value={audio.value || ""}
-                            onChange={(e) => updateAudio("value", e.target.value)}
-                            placeholder="Digite a mensagem a ser lida para o lead. Use variáveis como {{name}} se necessário."
-                            rows={4}
-                            className="rounded-xl border-slate-200 resize-none"
-                          />
-                          <p className="text-[10px] text-slate-400">Variáveis suportadas: {"{{name}}"}</p>
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Idioma / Voz</Label>
-                          <Select
-                            value={audio.voice || "pt-BR"}
-                            onValueChange={(val) => updateAudio("voice", val)}
-                          >
-                            <SelectTrigger className="rounded-xl border-slate-200 bg-background text-sm">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl border-slate-200">
-                              <SelectItem value="pt-BR">Português (Brasil)</SelectItem>
-                              <SelectItem value="pt-PT">Português (Portugal)</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    )}
-
-                    {audio.type === "audio" && (
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Arquivo de Áudio</Label>
-                          <div className="flex flex-col gap-3">
-                            {audio.mosAudioName && (
-                              <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-xs text-emerald-800 font-semibold flex items-center justify-between">
-                                <span>🎵 {audio.mosAudioName}</span>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => {
-                                    updateAudio("mosAudioName", "");
-                                    updateAudio("fileUrl", "");
-                                  }}
-                                  className="h-7 w-7 p-0 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-100/50 rounded-lg"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            )}
-                            <div className="relative">
-                              <Input
-                                type="file"
-                                accept="audio/mp3,audio/wav,audio/mpeg"
-                                onChange={handleUploadAudio}
-                                disabled={isUploadingAudio}
-                                className="rounded-xl border-slate-200 text-xs py-2 file:mr-2 file:py-0 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer"
-                              />
-                              {isUploadingAudio && (
-                                <div className="absolute inset-0 bg-white/80 flex items-center justify-center gap-1.5 text-xs font-semibold text-purple-600 rounded-xl border border-slate-200">
-                                  <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Sincronizando com a MOS BR...
-                                </div>
-                              )}
-                            </div>
-                            <p className="text-[10px] text-slate-400">Tamanho máximo recomendado: 5MB. Formatos: MP3 ou WAV.</p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {audio.type === "mos_ura" && (
-                      <div className="space-y-2">
-                        <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Selecionar URA Cadastrada</Label>
-                        <Select
-                          value={audio.mosAudioName || ""}
-                          onValueChange={(val) => updateAudio("mosAudioName", val)}
-                        >
-                          <SelectTrigger className="rounded-xl border-slate-200 bg-white">
-                            <SelectValue placeholder="Selecione uma URA..." />
-                          </SelectTrigger>
-                          <SelectContent className="rounded-xl">
-                            {registeredUras.length === 0 ? (
-                              <SelectItem value="empty" disabled>Nenhuma URA cadastrada</SelectItem>
-                            ) : (
-                              registeredUras.map((ura: any) => (
-                                <SelectItem key={ura.id} value={ura.mos_campaign_id}>
-                                  {ura.name} (ID: {ura.mos_campaign_id})
-                                </SelectItem>
-                              ))
-                            )}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-[10px] text-slate-400">Escolha uma das URAs cadastradas no painel administrativo em Gestão de URAs.</p>
-                      </div>
-                    )}
-                  </fieldset>
-                )}
-
-                {activeUraTab === "dtmf" && (
-                  <fieldset disabled={isFieldsDisabled} className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Mapeamento de Teclas (DTMF)</Label>
-                      <Button
-                        type="button"
-                        onClick={addDtmfAction}
-                        className="h-8 rounded-lg px-2.5 text-xs bg-purple-600 hover:bg-purple-700 text-white font-semibold gap-1"
-                      >
-                        <Plus className="h-3 w-3" /> Adicionar Tecla
-                      </Button>
-                    </div>
-
-                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
-                      {(dtmf.actions || []).length === 0 ? (
-                        <div className="p-6 border border-dashed border-slate-200 rounded-xl text-center text-xs text-muted-foreground">
-                          Nenhuma tecla configurada. O workflow continuará pelo output "Sem digitação" se o tempo limite se esgotar.
-                        </div>
-                      ) : (
-                        (dtmf.actions || []).map((act: any, idx: number) => (
-                          <div key={act.id || idx} className="p-4 border border-slate-100 rounded-xl bg-slate-50/50 flex items-center gap-4 relative">
-                            <div className="w-20">
-                              <Label className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block mb-1">Dígito</Label>
-                              <Select
-                                value={act.digit}
-                                onValueChange={(val) => updateDtmfActionField(idx, "digit", val)}
-                              >
-                                <SelectTrigger className="h-8 rounded-lg border-slate-200 bg-background text-xs font-bold text-center">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent className="rounded-xl border-slate-200">
-                                  {["0","1","2","3","4","5","6","7","8","9","*","#"].map((d) => (
-                                    <SelectItem key={d} value={d} className="rounded-lg text-xs m-0.5">{d}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-
-                            <div className="flex-1">
-                              <Label className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block mb-1">Nome/Rótulo do Output</Label>
-                              <Input
-                                value={act.label || ""}
-                                onChange={(e) => updateDtmfActionField(idx, "label", e.target.value)}
-                                placeholder="Ex: Rota Falar com Atendente"
-                                className="h-8 rounded-lg border-slate-200 text-xs"
-                              />
-                            </div>
-
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              onClick={() => removeDtmfAction(idx)}
-                              className="h-8 w-8 text-rose-500 hover:bg-rose-50 hover:text-rose-600 rounded-lg absolute right-2 top-2 p-0"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ))
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4 border-t pt-4">
-                      <div className="space-y-2">
-                        <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tempo Limite para Digitação (s)</Label>
-                        <Input
-                          type="number"
-                          value={dtmf.timeoutSeconds ?? 10}
-                          onChange={(e) => updateDtmf("timeoutSeconds", Number(e.target.value))}
-                          min={5}
-                          max={30}
-                          className="rounded-xl border-slate-200"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Máximo de Dígitos Aceitos</Label>
-                        <Input
-                          type="number"
-                          value={dtmf.maxDigits ?? 1}
-                          onChange={(e) => updateDtmf("maxDigits", Number(e.target.value))}
-                          min={1}
-                          max={5}
-                          className="rounded-xl border-slate-200"
-                        />
-                      </div>
-                    </div>
-                  </fieldset>
-                )}
-
-                {activeUraTab === "attempts" && (
-                  <fieldset disabled={isFieldsDisabled} className="space-y-6">
-                    <div className="flex items-center justify-between p-4 border rounded-xl bg-slate-50/50">
-                      <div className="space-y-1">
-                        <span className="text-xs font-bold text-slate-700 block">Ativar Retentativas Automáticas</span>
-                        <p className="text-[10px] text-slate-400">Dispara novas chamadas se o lead estiver ocupado, indisponível ou não atender.</p>
-                      </div>
-                      <Switch
-                        checked={attempts.enabled ?? true}
-                        onCheckedChange={(val) => updateAttempts("enabled", val)}
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Intervalo entre tentativas (Minutos)</Label>
+                      <Input
+                        type="number"
+                        value={Math.round((attempts.retryDelayMs || 3600000) / 60000)}
+                        onChange={(e) => updateAttempts("retryDelayMs", Number(e.target.value) * 60000)}
+                        min={1}
+                        max={1440}
+                        className="rounded-xl border-slate-200"
                       />
                     </div>
 
-                    {attempts.enabled && (
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Número Máximo de Tentativas</Label>
-                          <Select
-                            value={String(attempts.maxAttempts || 2)}
-                            onValueChange={(val) => updateAttempts("maxAttempts", Number(val))}
-                          >
-                            <SelectTrigger className="rounded-xl border-slate-200 bg-background text-sm">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl border-slate-200">
-                              <SelectItem value="1" className="rounded-lg m-0.5">1 tentativa (Sem retentar)</SelectItem>
-                              <SelectItem value="2" className="rounded-lg m-0.5">2 tentativas</SelectItem>
-                              <SelectItem value="3" className="rounded-lg m-0.5">3 tentativas</SelectItem>
-                              <SelectItem value="4" className="rounded-lg m-0.5">4 tentativas</SelectItem>
-                              <SelectItem value="5" className="rounded-lg m-0.5">5 tentativas</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Intervalo entre Tentativas (Minutos)</Label>
-                          <Input
-                            type="number"
-                            value={Math.round((attempts.retryDelayMs || 3600000) / 60000)}
-                            onChange={(e) => updateAttempts("retryDelayMs", Number(e.target.value) * 60000)}
-                            min={1}
-                            max={1440}
-                            className="rounded-xl border-slate-200 animate-none"
-                          />
-                        </div>
-
-                        <div className="col-span-2 space-y-2">
-                          <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Tentar novamente em caso de:</Label>
-                          <div className="grid grid-cols-3 gap-2">
-                            {[
-                              { id: "no_answer", label: "Não Atendeu" },
-                              { id: "busy", label: "Ocupado" },
-                              { id: "failed", label: "Falhou (Erro de Linha)" }
-                            ].map((cond) => {
-                              const activeOn = attempts.retryOn || [];
-                              const isActive = activeOn.includes(cond.id);
-                              return (
-                                <div key={cond.id} className="flex items-center gap-2">
-                                  <Checkbox
-                                    id={`retry-${cond.id}`}
-                                    checked={isActive}
-                                    onCheckedChange={(checked) => {
-                                      const newRetryOn = checked
-                                        ? [...activeOn, cond.id]
-                                        : activeOn.filter((c: string) => c !== cond.id);
-                                      updateAttempts("retryOn", newRetryOn);
-                                    }}
-                                  />
-                                  <label htmlFor={`retry-${cond.id}`} className="text-xs font-semibold text-slate-700 cursor-pointer">{cond.label}</label>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        <div className="col-span-2 flex items-center justify-between p-4 border rounded-xl bg-slate-50/50">
-                          <div className="space-y-1">
-                            <span className="text-xs font-bold text-slate-700 block">Apenas em Horário Comercial</span>
-                            <p className="text-[10px] text-slate-400">Evita realizar chamadas em finais de semana ou fora das 08:00 às 18:00.</p>
-                          </div>
-                          <Switch
-                            checked={attempts.businessHoursOnly ?? true}
-                            onCheckedChange={(val) => updateAttempts("businessHoursOnly", val)}
-                          />
-                        </div>
+                    <div className="col-span-2 space-y-2">
+                      <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Tentar novamente quando:</Label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { id: "no_answer", label: "Não Atendeu" },
+                          { id: "busy", label: "Ocupado" },
+                          { id: "failed", label: "Falhou" }
+                        ].map((cond) => {
+                          const activeOn = attempts.retryOn || [];
+                          const isActive = activeOn.includes(cond.id);
+                          return (
+                            <div key={cond.id} className="flex items-center gap-2">
+                              <Checkbox
+                                id={`retry-${cond.id}`}
+                                checked={isActive}
+                                onCheckedChange={(checked) => {
+                                  const newRetryOn = checked
+                                    ? [...activeOn, cond.id]
+                                    : activeOn.filter((c: string) => c !== cond.id);
+                                  updateAttempts("retryOn", newRetryOn);
+                                }}
+                              />
+                              <label htmlFor={`retry-${cond.id}`} className="text-xs font-semibold text-slate-700 cursor-pointer">{cond.label}</label>
+                            </div>
+                          );
+                        })}
                       </div>
-                    )}
-                  </fieldset>
-                )}
-
-                {activeUraTab === "outputs" && (
-                  <fieldset disabled={isFieldsDisabled} className="space-y-4">
-                    <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Configuração de Portas de Saída do Nó</Label>
-                    <p className="text-[11px] text-slate-400 leading-relaxed mb-2">
-                      Marque abaixo quais resultados de ligação você deseja expor no canvas como portas de saída para continuar o fluxo. As teclas DTMF configuradas sempre aparecem como saídas.
-                    </p>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      {[
-                        { id: "no_digit", label: "Não digitou (Timeout / Sem resposta)" },
-                        { id: "no_answer", label: "Não atendeu / Não disponível" },
-                        { id: "busy", label: "Número ocupado" },
-                        { id: "failed", label: "Falha técnica na operadora" },
-                        { id: "attempts_exhausted", label: "Tentativas esgotadas" },
-                        { id: "pending_approval", label: "Pendente de aprovação" },
-                        { id: "error", label: "Erro na carteira / saldo insuficiente" }
-                      ].map((item) => {
-                        const isEnabled = outputs[item.id] !== false;
-                        return (
-                          <div key={item.id} className="flex items-center gap-2 p-3 border border-slate-100 bg-slate-50/20 rounded-xl">
-                            <Checkbox
-                              id={`out-${item.id}`}
-                              checked={isEnabled}
-                              onCheckedChange={(checked) => updateOutputs(item.id, !!checked)}
-                            />
-                            <label htmlFor={`out-${item.id}`} className="text-xs font-semibold text-slate-700 cursor-pointer">{item.label}</label>
-                          </div>
-                        );
-                      })}
                     </div>
-                  </fieldset>
+                  </div>
                 )}
+              </div>
+
+              {/* Outputs Section */}
+              <div className="space-y-4 border-t pt-4">
+                <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Outputs</Label>
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    { id: "no_digit", label: "Não digitou" },
+                    { id: "no_answer", label: "Não atendeu" },
+                    { id: "busy", label: "Ocupado" },
+                    { id: "failed", label: "Falhou" },
+                    { id: "attempts_exhausted", label: "Tentativas encerradas" },
+                    { id: "error", label: "Erro" }
+                  ].map((item) => {
+                    const isEnabled = outputs[item.id] !== false;
+                    return (
+                      <div key={item.id} className="flex items-center gap-2 p-3 border border-slate-100 bg-slate-50/20 rounded-xl">
+                        <Checkbox
+                          id={`out-${item.id}`}
+                          checked={isEnabled}
+                          onCheckedChange={(checked) => updateOutputs(item.id, !!checked)}
+                        />
+                        <label htmlFor={`out-${item.id}`} className="text-xs font-semibold text-slate-700 cursor-pointer">{item.label}</label>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 

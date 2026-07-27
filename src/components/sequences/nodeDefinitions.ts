@@ -208,30 +208,12 @@ export function getDefaultConfigForBlock(blockType: string): Record<string, unkn
       outputs: { success: true, no_success: true, no_answer: true, attempts_exhausted: true, error: true }
     };
     case "ura": return {
-      uraMode: "simple",
       provider: "mos_br",
-      approval: {
-        status: "draft",
-        requestId: null,
-        requestedAt: null,
-        requestedBy: null,
-        reviewedAt: null,
-        reviewedBy: null,
-        adminNotes: "",
-        rejectionReason: ""
-      },
       mos: {
-        mosCampaignId: null,
-        mosUraId: null,
-        mosCampaignName: "",
-        configuredManually: true
-      },
-      audio: {
-        type: "tts",
-        value: "Olá, por favor digite 1 para sim ou 2 para não.",
-        voice: "pt-BR",
-        fileUrl: "",
-        mosAudioName: ""
+        mosUraId: "",
+        mosCampaignId: "",
+        idType: "campaign",
+        configuredExternally: true
       },
       dtmf: {
         enabled: true,
@@ -241,7 +223,7 @@ export function getDefaultConfigForBlock(blockType: string): Record<string, unkn
           {
             id: "dtmf_1",
             digit: "1",
-            label: "Tenho interesse",
+            label: "Tecla 1",
             output: "dtmf_1",
             actionType: "workflow_output",
             actionConfig: {}
@@ -249,7 +231,7 @@ export function getDefaultConfigForBlock(blockType: string): Record<string, unkn
           {
             id: "dtmf_2",
             digit: "2",
-            label: "Receber WhatsApp",
+            label: "Tecla 2",
             output: "dtmf_2",
             actionType: "workflow_output",
             actionConfig: {}
@@ -263,11 +245,6 @@ export function getDefaultConfigForBlock(blockType: string): Record<string, unkn
         retryOn: ["no_answer", "busy", "failed"],
         businessHoursOnly: true
       },
-      assignment: {
-        createCallPanelTaskOnDtmf: false,
-        queueId: null,
-        operatorId: null
-      },
       billing: {
         walletDebitEnabled: true
       },
@@ -277,7 +254,6 @@ export function getDefaultConfigForBlock(blockType: string): Record<string, unkn
         busy: true,
         failed: true,
         attempts_exhausted: true,
-        pending_approval: true,
         error: true
       }
     };

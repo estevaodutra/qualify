@@ -1847,7 +1847,9 @@ export function UnifiedSequenceBuilder({
                         </div>
                       ) : node.nodeType === "ura" ? (
                         (() => {
-                          const isUraConfigured = !!(node.config.audio?.value || node.config.audio?.fileUrl || node.config.audio?.mosAudioName);
+                          const mosId = node.config.mos?.idType === "ura" ? (node.config.mos?.mosUraId || "") : (node.config.mos?.mosCampaignId || "");
+                          const isUraConfigured = !!mosId;
+
                           if (!isUraConfigured) {
                             return (
                               <div className="flex flex-col w-full text-left h-full">
@@ -1856,68 +1858,27 @@ export function UnifiedSequenceBuilder({
                                   <div className="p-1.5 rounded-lg text-white shrink-0 shadow-sm bg-purple-600">
                                     <PhoneCall className="h-3.5 w-3.5" />
                                   </div>
-                                  {(() => {
-                                    const approvalStatus = node.config.approval?.status || "draft";
-                                    const getBadge = () => {
-                                      switch (approvalStatus) {
-                                        case "pending_admin_setup":
-                                          return { label: "Pendente", className: "bg-amber-100 text-amber-700 border-amber-200" };
-                                        case "in_setup":
-                                          return { label: "Em Configuração", className: "bg-blue-100 text-blue-700 border-blue-200" };
-                                        case "approved":
-                                          return { label: "Aprovada", className: "bg-emerald-100 text-emerald-700 border-emerald-200" };
-                                        case "needs_adjustment":
-                                          return { label: "Ajuste", className: "bg-purple-100 text-purple-700 border-purple-200" };
-                                        case "rejected":
-                                          return { label: "Rejeitada", className: "bg-rose-100 text-rose-700 border-rose-200" };
-                                        case "disabled":
-                                          return { label: "Desativada", className: "bg-slate-100 text-slate-700 border-slate-200" };
-                                        case "draft":
-                                        default:
-                                          return { label: "Rascunho", className: "bg-slate-100 text-slate-500 border-slate-200" };
-                                      }
-                                    };
-                                    const badge = getBadge();
-                                    return (
-                                      <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-1.5 justify-between">
-                                          <p className="font-bold text-xs text-slate-800 truncate">
-                                            {(node.config.label as string) || "URA"}
-                                          </p>
-                                          <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full border shrink-0", badge.className)}>
-                                            {badge.label}
-                                          </span>
-                                        </div>
-                                        <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                                          Não configurado
-                                        </p>
-                                      </div>
-                                    );
-                                  })()}
-                                </div>
-
-                                <p className="text-[10px] text-slate-500 mb-4 leading-relaxed font-medium">
-                                  Configure áudio, DTMF e retentativas para disparar chamadas automáticas.
-                                </p>
-
-                                <div className="p-4 border border-dashed border-slate-200 rounded-xl bg-slate-50/50 flex flex-col items-center justify-center text-center mb-4">
-                                  <span className="text-xs font-semibold text-slate-600 mb-1">Clique para configurar a URA</span>
-                                  <span className="text-[10px] text-slate-400">Parâmetros pendentes</span>
-                                </div>
-
-                                {/* Default outcomes for unconfigured state */}
-                                <div className="relative flex items-center justify-end w-full mt-auto mb-2 pr-1">
-                                  <span className="text-[8px] font-bold text-slate-500 select-none mr-2">Próximo passo</span>
-                                  <div
-                                    data-node-port="true" data-node-id={node.id} data-port-id="default"
-                                    onMouseDown={(e) => handlePortMouseDown(e, node.id, "out")}
-                                    className="absolute -right-[19.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-purple-500 bg-background hover:bg-purple-500 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
-                                    title="Próximo passo"
-                                  >
-                                    <div className="h-1.5 w-1.5 rounded-full bg-purple-500" />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1.5 justify-between">
+                                      <p className="font-bold text-xs text-slate-800 truncate">
+                                        {(node.config.label as string) || "URA"}
+                                      </p>
+                                    </div>
+                                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                      Sem ID configurado
+                                    </p>
                                   </div>
                                 </div>
 
+                                <p className="text-[10px] text-slate-500 mb-4 leading-relaxed font-medium">
+                                  Informe o ID da URA/Campanha MOS BR para liberar o disparo deste node.
+                                </p>
+
+                                <div className="p-4 border border-dashed border-slate-200 rounded-xl bg-slate-50/50 flex flex-col items-center justify-center text-center mb-4">
+                                  <span className="text-xs font-semibold text-slate-600 mb-1">Clique para informar o ID MOS BR</span>
+                                </div>
+
+                                {/* Only Erro output handle */}
                                 <div className="relative flex items-center justify-end w-full mb-2 pr-1">
                                   <span className="text-[8px] font-bold text-slate-500 select-none mr-2">Erro</span>
                                   <div
@@ -1933,25 +1894,21 @@ export function UnifiedSequenceBuilder({
                             );
                           }
 
-                          const audioType = node.config.audio?.type || "tts";
-                          const audioValue = audioType === "tts"
-                            ? `TTS: ${node.config.audio?.value || "Sem texto"}`
-                            : audioType === "audio"
-                            ? `Áudio: ${node.config.audio?.mosAudioName || node.config.audio?.fileUrl || "Sem arquivo"}`
-                            : `URA: ${node.config.audio?.mosAudioName || "Sem fluxo"}`;
-                          
                           const actions = node.config.dtmf?.actions || [];
                           const maxAttempts = node.config.attempts?.maxAttempts || 1;
 
                           const systemOutputs = [
                             { id: "no_digit", label: "Não digitou", border: "border-slate-500", hover: "hover:bg-slate-500", dot: "bg-slate-500", icon: "⏳", borderOutline: "border-slate-200 hover:border-slate-300" },
-                            { id: "no_answer", label: "Não atendeu / Retentativa", border: "border-amber-500", hover: "hover:bg-amber-500", dot: "bg-amber-500", icon: "🔁", borderOutline: "border-amber-500/20 hover:border-amber-500/40" },
+                            { id: "no_answer", label: "Não atendeu", border: "border-amber-500", hover: "hover:bg-amber-500", dot: "bg-amber-500", icon: "🔁", borderOutline: "border-amber-500/20 hover:border-amber-500/40" },
                             { id: "busy", label: "Ocupado", border: "border-rose-500", hover: "hover:bg-rose-500", dot: "bg-rose-500", icon: "🚫", borderOutline: "border-rose-500/20 hover:border-rose-500/40" },
                             { id: "failed", label: "Falhou", border: "border-rose-500", hover: "hover:bg-rose-500", dot: "bg-rose-500", icon: "❌", borderOutline: "border-rose-500/20 hover:border-rose-500/40" },
                             { id: "attempts_exhausted", label: "Tentativas encerradas", border: "border-indigo-500", hover: "hover:bg-indigo-500", dot: "bg-indigo-500", icon: "🚫", borderOutline: "border-indigo-500/20 hover:border-indigo-500/40" },
-                            { id: "pending_approval", label: "Pendente de aprovação", border: "border-purple-500", hover: "hover:bg-purple-500", dot: "bg-purple-500", icon: "📋", borderOutline: "border-purple-500/20 hover:border-purple-500/40" },
-                            { id: "error", label: "Erro técnico", border: "border-destructive", hover: "hover:bg-destructive", dot: "bg-destructive", icon: "⚠️", borderOutline: "border-destructive/20 hover:border-destructive/40" }
+                            { id: "error", label: "Erro", border: "border-destructive", hover: "hover:bg-destructive", dot: "bg-destructive", icon: "⚠️", borderOutline: "border-destructive/20 hover:border-destructive/40" }
                           ];
+
+                          const enabledSystemOutputs = systemOutputs.filter(
+                            (out) => node.config.outputs?.[out.id] !== false
+                          );
 
                           return (
                             <div className="flex flex-col w-full text-left h-full">
@@ -1960,59 +1917,47 @@ export function UnifiedSequenceBuilder({
                                 <div className="p-1.5 rounded-lg text-white shrink-0 shadow-sm bg-purple-600">
                                   <PhoneCall className="h-3.5 w-3.5" />
                                 </div>
-                                {(() => {
-                                  const approvalStatus = node.config.approval?.status || "draft";
-                                  const getBadge = () => {
-                                    switch (approvalStatus) {
-                                      case "pending_admin_setup":
-                                        return { label: "Pendente", className: "bg-amber-100 text-amber-700 border-amber-200" };
-                                      case "in_setup":
-                                        return { label: "Em Configuração", className: "bg-blue-100 text-blue-700 border-blue-200" };
-                                      case "approved":
-                                        return { label: "Aprovada", className: "bg-emerald-100 text-emerald-700 border-emerald-200" };
-                                      case "needs_adjustment":
-                                        return { label: "Ajuste", className: "bg-purple-100 text-purple-700 border-purple-200" };
-                                      case "rejected":
-                                        return { label: "Rejeitada", className: "bg-rose-100 text-rose-700 border-rose-200" };
-                                      case "disabled":
-                                        return { label: "Desativada", className: "bg-slate-100 text-slate-700 border-slate-200" };
-                                      case "draft":
-                                      default:
-                                        return { label: "Rascunho", className: "bg-slate-100 text-slate-500 border-slate-200" };
-                                    }
-                                  };
-                                  const badge = getBadge();
-                                  return (
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-1.5 justify-between">
-                                        <p className="font-bold text-xs text-slate-800 truncate">
-                                          {(node.config.label as string) || "URA"}
-                                        </p>
-                                        <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full border shrink-0", badge.className)}>
-                                          {badge.label}
-                                        </span>
-                                      </div>
-                                      <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                                        {node.config.uraMode === "reverse" ? "URA Reversa" : "URA Simples"}
-                                      </p>
-                                    </div>
-                                  );
-                                })()}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5 justify-between">
+                                    <p className="font-bold text-xs text-slate-800 truncate">
+                                      {(node.config.label as string) || "URA"}
+                                    </p>
+                                  </div>
+                                  <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                    {node.config.mos?.idType === "ura" ? "URA MOS BR" : "Campanha MOS BR"}
+                                  </p>
+                                </div>
                               </div>
 
                               {/* Card Content / Description */}
                               <p className="text-[10px] text-slate-500 mb-3 leading-relaxed font-medium">
-                                Dispare uma chamada automática com áudio, TTS e saídas por tecla DTMF.
+                                Dispare uma URA configurada na MOS BR usando o ID informado.
                               </p>
 
-                              {/* Audio/TTS display block */}
-                              <div className="p-3 border border-slate-200 rounded-xl bg-white shadow-sm mb-3">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-base">🔊</span>
-                                  <div className="text-left min-w-0 flex-1">
-                                    <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Áudio da Chamada</span>
-                                    <p className="text-xs font-bold text-slate-800 truncate">{audioValue}</p>
-                                  </div>
+                              {/* ID MOS BR display block */}
+                              <div className="p-2 border border-slate-200 rounded-xl bg-slate-50/50 mb-2 flex items-center gap-2">
+                                <span className="text-xs">🆔</span>
+                                <div className="text-left min-w-0 flex-1">
+                                  <span className="text-[8px] font-bold uppercase tracking-wider text-slate-400">ID MOS BR</span>
+                                  <p className="text-xs font-bold text-slate-800 truncate">{mosId}</p>
+                                </div>
+                              </div>
+
+                              {/* DTMF Options display block */}
+                              <div className="p-2 border border-slate-200 rounded-xl bg-slate-50/50 mb-2 flex items-center gap-2">
+                                <span className="text-xs">🔢</span>
+                                <div className="text-left min-w-0 flex-1">
+                                  <span className="text-[8px] font-bold uppercase tracking-wider text-slate-400">Opções DTMF</span>
+                                  <p className="text-xs font-bold text-slate-800 truncate">{actions.length} opção(ões)</p>
+                                </div>
+                              </div>
+
+                              {/* Attempts display block */}
+                              <div className="p-2 border border-slate-200 rounded-xl bg-slate-50/50 mb-3 flex items-center gap-2">
+                                <span className="text-xs">🔁</span>
+                                <div className="text-left min-w-0 flex-1">
+                                  <span className="text-[8px] font-bold uppercase tracking-wider text-slate-400">Retentativas</span>
+                                  <p className="text-xs font-bold text-slate-800 truncate">Até {maxAttempts} tentativa(s)</p>
                                 </div>
                               </div>
 
@@ -2040,7 +1985,7 @@ export function UnifiedSequenceBuilder({
                               ))}
 
                               {/* System Outputs Blocks */}
-                              {systemOutputs.map((out) => (
+                              {enabledSystemOutputs.map((out) => (
                                 <div key={out.id} className={cn("group relative flex flex-col gap-1 p-3 border rounded-xl bg-white shadow-sm mb-3 cursor-pointer transition-colors", out.borderOutline)}>
                                   <div className="flex items-center gap-2">
                                     <span className="text-base">{out.icon}</span>

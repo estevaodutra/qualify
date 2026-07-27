@@ -2419,12 +2419,11 @@ Deno.serve(async (req) => {
           console.log(`[ExecuteMessage] 🔊 Processing URA node ${node.id}`);
           const config = node.config || {};
 
-          // Verify approval status before dispatching
-          const approvalStatus = config.approval?.status || "draft";
-          const mosCampaignId = config.mos?.mosCampaignId;
+          // Verify MOS Campaign or URA ID before dispatching
+          const mosCampaignId = config.mos?.idType === "ura" ? config.mos?.mosUraId : config.mos?.mosCampaignId;
 
-          if (approvalStatus !== "approved" || !mosCampaignId) {
-            console.warn(`[ExecuteMessage] ⚠️ URA node ${node.id} execution blocked. Approval status: ${approvalStatus}. Campaign ID: ${mosCampaignId}`);
+          if (!mosCampaignId) {
+            console.warn(`[ExecuteMessage] ⚠️ URA node ${node.id} execution blocked. ID MOS BR empty.`);
             
             // Log warning execution
             await logNodeExecution(supabase, {
@@ -2436,17 +2435,13 @@ Deno.serve(async (req) => {
               startedAt: nodeStartedAt,
               input: node.config,
               output: { 
-                error: "URA pendente de configuração pelo administrador", 
-                approvalStatus,
+                error: "Informe o ID da URA/Campanha MOS BR antes de ativar o workflow.", 
                 mosCampaignId
               },
             });
 
-            // Route to pending_approval or error outcome port
-            let nextConn = connections.find(c => c.source_node_id === node.id && c.condition_path === "pending_approval");
-            if (!nextConn) {
-              nextConn = connections.find(c => c.source_node_id === node.id && c.condition_path === "error");
-            }
+            // Route to error outcome port
+            const nextConn = connections.find(c => c.source_node_id === node.id && c.condition_path === "error");
             currentNodeId = nextConn ? nextConn.target_node_id : null;
             nodesProcessed++;
             continue;
@@ -2551,6 +2546,9 @@ Deno.serve(async (req) => {
             audio_type: config.audio?.type || "tts",
             audio_value: audioValue,
             dtmf_actions: config.dtmf?.actions || [],
+            mos_campaign_id: config.mos?.mosCampaignId || null,
+            mos_ura_id: config.mos?.mosUraId || null,
+            mos_id_type: config.mos?.idType || "campaign",
           };
 
           const { data: taskData, error: taskError } = await supabase

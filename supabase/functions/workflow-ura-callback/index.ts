@@ -48,11 +48,12 @@ Deno.serve(async (req) => {
     }
 
     if (!task && phone && mosCampaignId) {
+      const cleanPhone = phone.replace(/\D/g, "");
       const { data } = await supabase
         .from("workflow_ura_tasks")
         .select("*")
-        .eq("phone", phone.replace(/\D/g, ""))
-        .eq("mos_campaign_id", mosCampaignId)
+        .eq("phone", cleanPhone)
+        .or(`mos_campaign_id.eq.${mosCampaignId},mos_ura_id.eq.${mosCampaignId}`)
         .in("status", ["calling", "pending"])
         .order("created_at", { ascending: false })
         .limit(1)
