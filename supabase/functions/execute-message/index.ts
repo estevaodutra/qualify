@@ -788,7 +788,9 @@ Deno.serve(async (req) => {
                                    (targetPhones && targetPhones.length > 0) || 
                                    isManualNodeExecution || 
                                    !!(triggerContext?.groupJid) || 
-                                   !!(triggerContext?.triggerId);
+                                   !!(triggerContext?.triggerId) ||
+                                   !!(triggerContext?.respondentPhone) ||
+                                   !!(triggerContext?.uraResult);
 
     if (!hasPrivateDestinations && (groupsError || !linkedGroups || linkedGroups.length === 0)) {
       return new Response(
@@ -1077,9 +1079,9 @@ Deno.serve(async (req) => {
             group_name: phone,
             isPrivate: true,
           }))
-        : sendToPrivate && triggerContext
+        : (sendToPrivate || triggerContext?.uraResult || triggerContext?.respondentPhone) && triggerContext
           ? [{ 
-              group_jid: triggerContext.respondentJid, 
+              group_jid: triggerContext.respondentJid || `${triggerContext.respondentPhone}@s.whatsapp.net`, 
               group_name: triggerContext.respondentName || triggerContext.respondentPhone,
               isPrivate: true
             }]
