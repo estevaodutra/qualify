@@ -67,8 +67,9 @@ export function useWallet() {
   // Realtime: refresh wallet when balance changes
   useEffect(() => {
     if (!activeCompanyId) return;
+    const uniqueChannelId = `wallet:${activeCompanyId}:${Math.random().toString(36).substring(2, 9)}`;
     const channel = supabase
-      .channel(`wallet:${activeCompanyId}`)
+      .channel(uniqueChannelId)
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "wallets", filter: `company_id=eq.${activeCompanyId}` },
