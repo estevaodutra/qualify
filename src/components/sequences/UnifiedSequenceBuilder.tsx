@@ -1347,6 +1347,33 @@ export function UnifiedSequenceBuilder({
                                     type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
+                                      updateNodesAndSave(prev => prev.map(n => {
+                                        if (n.id !== node.id) return n;
+                                        const triggers = [...(n.config.triggers as TriggerItem[] || [])];
+                                        const triggerToDuplicate = triggers[idx];
+                                        const duplicatedTrigger = {
+                                          ...triggerToDuplicate,
+                                          id: crypto.randomUUID(),
+                                        };
+                                        triggers.splice(idx + 1, 0, duplicatedTrigger);
+                                        return {
+                                          ...n,
+                                          config: {
+                                            ...n.config,
+                                            triggers
+                                          }
+                                        };
+                                      }));
+                                    }}
+                                    className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                    title="Duplicar gatilho"
+                                  >
+                                    <Copy className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
                                       updateNodesAndSave(prev => prev.map(n => 
                                         n.id === node.id ? { 
                                           ...n, 
