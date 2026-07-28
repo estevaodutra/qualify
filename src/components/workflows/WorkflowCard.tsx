@@ -6,7 +6,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub,
   DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreVertical, FolderInput, ExternalLink, Send, Users, Skull, Activity, PhoneCall, Trash2 } from "lucide-react";
+import { MoreVertical, FolderInput, ExternalLink, Send, Users, Skull, Activity, PhoneCall, Trash2, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WorkflowDefinition, WorkflowSourceType } from "@/hooks/useWorkflowDefinitions";
 import type { WorkflowFolder } from "@/hooks/useWorkflowFolders";
@@ -46,9 +46,10 @@ interface WorkflowCardProps {
   folders: WorkflowFolder[];
   onMoveToFolder: (folderId: string | null) => void;
   onDelete?: () => void;
+  onDuplicate?: () => void;
 }
 
-export function WorkflowCard({ workflow, folders, onMoveToFolder, onDelete }: WorkflowCardProps) {
+export function WorkflowCard({ workflow, folders, onMoveToFolder, onDelete, onDuplicate }: WorkflowCardProps) {
   const navigate = useNavigate();
   const meta = SOURCE_TYPE_META[workflow.sourceType];
   const Icon = meta.icon;
@@ -89,6 +90,11 @@ export function WorkflowCard({ workflow, folders, onMoveToFolder, onDelete }: Wo
             <DropdownMenuItem onClick={openBuilder}>
               <ExternalLink className="h-3.5 w-3.5 mr-2" /> Abrir automação
             </DropdownMenuItem>
+            {onDuplicate && (
+              <DropdownMenuItem onClick={onDuplicate}>
+                <Copy className="h-3.5 w-3.5 mr-2" /> Duplicar automação
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
                 <FolderInput className="h-3.5 w-3.5 mr-2" /> Mover para pasta

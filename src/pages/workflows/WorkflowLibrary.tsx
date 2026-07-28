@@ -29,7 +29,7 @@ export default function WorkflowLibrary() {
   const [workflowPendingDelete, setWorkflowPendingDelete] = useState<any | null>(null);
 
   const { folders, isLoading: loadingFolders, createFolder, renameFolder, reorderFolders, deleteFolder } = useWorkflowFolders();
-  const { definitions: allDefinitions, isLoading: loadingDefinitions, moveToFolder, deleteWorkflowDefinition } = useWorkflowDefinitions();
+  const { definitions: allDefinitions, isLoading: loadingDefinitions, moveToFolder, deleteWorkflowDefinition, duplicateWorkflowDefinition } = useWorkflowDefinitions();
 
   const countByFolder = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -150,6 +150,7 @@ export default function WorkflowLibrary() {
                     folders={folders}
                     onMoveToFolder={(folderId) => moveToFolder({ id: def.id, folderId })}
                     onDelete={() => setWorkflowPendingDelete(def)}
+                    onDuplicate={() => duplicateWorkflowDefinition(def.id)}
                   />
                 </div>
               ))}

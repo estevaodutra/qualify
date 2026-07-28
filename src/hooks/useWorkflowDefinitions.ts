@@ -178,6 +178,177 @@ export function useWorkflowDefinitions(filters?: { folderId?: string | null; sta
     onError: (error: Error) => toast.error("Erro ao excluir automação", { description: error.message }),
   });
 
+  const duplicateWorkflowDefinition = useMutation({
+    mutationFn: async (id: string) => {
+      if (!user || !activeCompanyId) throw new Error("Selecione uma empresa ativa");
+
+      // 1. Fetch original workflow definition
+      const { data: originalWf, error: wfError } = await supabase
+        .from("workflow_definitions" as any)
+        .select("*")
+        .eq("id", id)
+        .single();
+      if (wfError) throw wfError;
+
+      const typedWf = originalWf as any;
+      let newSourceId = typedWf.source_id;
+
+      // 2. Clone the source based on sourceType
+      if (typedWf.source_type === "group_sequence" || typedWf.source_type === "dispatch_sequence") {
+        // A. Fetch original message_sequence
+        const { data: originalSeq } = await supabase
+          .from("message_sequences")
+          .select("*")
+          .eq("id", typedWf.source_id)
+          .single();
+
+        if (originalSeq) {
+          // B. Duplicate group_campaign if group_campaign_id exists
+          let newCampaignId = (originalSeq as any).group_campaign_id;
+          if (newCampaignId) {
+            const { data: originalCamp } = await supabase
+              .from("group_campaigns")
+              .select("*")
+              .eq("id", newCampaignId)
+              .single();
+            if (originalCamp) {
+              const { data: newCamp } = await supabase
+                .from("group_campaigns")
+                .insert({
+                  user_id: user.id,
+                  company_id: activeCompanyId,
+                  name: `Cópia de ${originalCamp.name}`,
+                  description: originalCamp.description,
+                  status: "draft"
+                })
+                .select()
+                .single();
+              if (newCamp) newCampaignId = newCamp.id;
+            }
+          }
+
+          // C. Duplicate message_sequence
+          const { data: newSeq, error: seqError } = await supabase
+            .from("message_sequences")
+            .insert({
+              user_id: user.id,
+              company_id: activeCompanyId,
+              group_campaign_id: newCampaignId,
+              name: `Cópia de ${originalSeq.name}`,
+              description: originalSeq.description,
+              trigger_type: originalSeq.trigger_type,
+              trigger_config: originalSeq.trigger_config,
+              active: false,
+            })
+            .select()
+            .single();
+          if (seqError) throw seqError;
+          newSourceId = newSeq.id;
+
+          // D. Fetch and clone nodes and connections
+          const { data: originalNodes } = await supabase
+            .from("sequence_nodes")
+            .select("*")
+            .eq("sequence_id", typedWf.source_id)
+            .order("node_order", { ascending: true });
+
+          const idMapping: Record<string, string> = {};
+
+          if (originalNodes && originalNodes.length > 0) {
+            const { data: newNodes, error: nodesError } = await supabase
+              .from("sequence_nodes")
+              .insert(originalNodes.map((n: any) => ({
+                sequence_id: newSeq.id,
+                user_id: user.id,
+                company_id: activeCompanyId,
+                node_type: n.node_type,
+                position_x: n.position_x,
+                position_y: n.position_y,
+                node_order: n.node_order,
+                config: n.config,
+              })))
+              .select("id");
+            if (nodesError) throw nodesError;
+
+            originalNodes.forEach((n: any, i: number) => {
+              if (newNodes?.[i]) idMapping[n.id] = newNodes[i].id;
+            });
+
+            // Clone connections
+            const { data: originalConns } = await supabase
+              .from("sequence_connections")
+              .select("*")
+              .eq("sequence_id", typedWf.source_id);
+
+            if (originalConns && originalConns.length > 0) {
+              const { error: connsError } = await supabase
+                .from("sequence_connections")
+                .insert(originalConns.map((c: any) => ({
+                  sequence_id: newSeq.id,
+                  user_id: user.id,
+                  company_id: activeCompanyId,
+                  source_node_id: idMapping[c.source_node_id] || c.source_node_id,
+                  target_node_id: idMapping[c.target_node_id] || c.target_node_id,
+                  condition_path: c.condition_path,
+                })));
+              if (connsError) throw connsError;
+            }
+          }
+        }
+      } else {
+        // Fallback or copy other campaign types
+        try {
+          if (typedWf.source_type === "context_campaign") {
+            const { data: original } = await supabase.from("context_campaigns" as any).select("*").eq("id", typedWf.source_id).single();
+            if (original) {
+              const { data: inserted } = await supabase.from("context_campaigns" as any).insert({ ...original, id: undefined, name: `Cópia de ${original.name}`, company_id: activeCompanyId }).select().single();
+              if (inserted) newSourceId = inserted.id;
+            }
+          } else if (typedWf.source_type === "pirate_campaign") {
+            const { data: original } = await supabase.from("pirate_campaigns" as any).select("*").eq("id", typedWf.source_id).single();
+            if (original) {
+              const { data: inserted } = await supabase.from("pirate_campaigns" as any).insert({ ...original, id: undefined, name: `Cópia de ${original.name}`, company_id: activeCompanyId }).select().single();
+              if (inserted) newSourceId = inserted.id;
+            }
+          } else if (typedWf.source_type === "call_campaign") {
+            const { data: original } = await supabase.from("call_campaigns" as any).select("*").eq("id", typedWf.source_id).single();
+            if (original) {
+              const { data: inserted } = await supabase.from("call_campaigns" as any).insert({ ...original, id: undefined, name: `Cópia de ${original.name}`, company_id: activeCompanyId }).select().single();
+              if (inserted) newSourceId = inserted.id;
+            }
+          }
+        } catch (e) {
+          console.warn("[duplicateWorkflowDefinition] Failed to duplicate legacy campaign:", e);
+        }
+      }
+
+      // 3. Insert the new workflow definition
+      const { data: newWf, error: newWfError } = await supabase
+        .from("workflow_definitions" as any)
+        .insert({
+          company_id: activeCompanyId,
+          folder_id: typedWf.folder_id || null,
+          name: `Cópia de ${typedWf.name}`,
+          description: typedWf.description || null,
+          status: "draft",
+          source_type: typedWf.source_type,
+          source_id: newSourceId,
+          trigger_type: typedWf.trigger_type || "manual",
+          created_by: user.id,
+        })
+        .select()
+        .single();
+
+      if (newWfError) throw newWfError;
+      return transformDbToFrontend(newWf as unknown as DbWorkflowDefinition);
+    },
+    onSuccess: () => {
+      invalidate();
+      toast.success("Automação duplicada com sucesso");
+    },
+    onError: (error: Error) => toast.error("Erro ao duplicar automação", { description: error.message }),
+  });
+
   return {
     definitions,
     isLoading,
@@ -185,5 +356,6 @@ export function useWorkflowDefinitions(filters?: { folderId?: string | null; sta
     moveToFolder: moveToFolder.mutateAsync,
     updateStatus: updateStatus.mutateAsync,
     deleteWorkflowDefinition: deleteWorkflowDefinition.mutateAsync,
+    duplicateWorkflowDefinition: duplicateWorkflowDefinition.mutateAsync,
   };
 }
