@@ -216,7 +216,7 @@ export default function AdminInstances() {
       const toUri = (v: string) => v.startsWith("data:image") ? v : `data:image/png;base64,${v.replace(/\s/g, "")}`;
 
       if (isImg(nd?.code)) nd = { ...nd, qrcode_image: toUri(nd.code), code: undefined };
-      for (const f of ["qrcode_image", "value", "qrCode", "qrCodeUrl"] as const) {
+      for (const f of ["qrcode_image", "value", "qrCode", "qrCodeUrl", "base64", "dataUrl"] as const) {
         if (nd?.[f] && isImg(nd[f]) && !nd[f].startsWith("data:image") && !nd[f].startsWith("http")) {
           nd = { ...nd, [f]: toUri(nd[f]) };
         }
@@ -492,7 +492,7 @@ export default function AdminInstances() {
           {connectionStep === "select" && (
             <div className="space-y-3 py-4">
               <Button variant="outline" className="w-full justify-start h-auto p-4" disabled={isConnecting}
-                onClick={async () => { try { const r = await triggerAdminConnect("qr"); if (r?.qrcode_image || r?.value || r?.qrCode || r?.qrCodeUrl) setConnectionStep("qr"); else if (r?.code) setConnectionStep("code"); else setConnectionStep("qr"); } catch {} }}>
+                onClick={async () => { try { const r = await triggerAdminConnect("qr"); if (r?.qrcode_image || r?.value || r?.qrCode || r?.qrCodeUrl || r?.base64 || r?.dataUrl) setConnectionStep("qr"); else if (r?.code) setConnectionStep("code"); else setConnectionStep("qr"); } catch {} }}>
                 {isConnecting ? <Loader2 className="h-5 w-5 mr-3 animate-spin" /> : <QrCode className="h-5 w-5 mr-3" />}
                 <div className="text-left"><p className="font-medium">Conectar com QR Code</p><p className="text-xs text-muted-foreground">Escaneie o código com o WhatsApp</p></div>
               </Button>
@@ -508,14 +508,14 @@ export default function AdminInstances() {
               <div className="flex flex-col items-center justify-center p-6 border rounded-lg bg-muted/30">
                 <div className="relative w-48 h-48 bg-background border rounded-lg flex items-center justify-center mb-4 overflow-hidden">
                   {isConnecting ? <Loader2 className="h-12 w-12 animate-spin text-muted-foreground" />
-                    : (webhookResponse?.qrcode_image || webhookResponse?.value || webhookResponse?.qrCode || webhookResponse?.qrCodeUrl) ? (
-                      <><img src={webhookResponse.qrcode_image || webhookResponse.value || webhookResponse.qrCode || webhookResponse.qrCodeUrl} alt="QR Code" className={`w-full h-full object-contain ${isQrExpired ? "opacity-20 blur-sm" : ""}`} />
+                    : (webhookResponse?.qrcode_image || webhookResponse?.value || webhookResponse?.qrCode || webhookResponse?.qrCodeUrl || webhookResponse?.base64 || webhookResponse?.dataUrl) ? (
+                      <><img src={webhookResponse.qrcode_image || webhookResponse.value || webhookResponse.qrCode || webhookResponse.qrCodeUrl || webhookResponse.dataUrl || webhookResponse.base64} alt="QR Code" className={`w-full h-full object-contain ${isQrExpired ? "opacity-20 blur-sm" : ""}`} />
                         {isQrExpired && <div className="absolute inset-0 flex items-center justify-center"><div className="text-center"><XCircle className="h-12 w-12 text-destructive mx-auto mb-2" /><p className="text-sm font-medium text-destructive">QR Code expirado</p></div></div>}
                       </>
                     ) : <QrCode className="h-24 w-24 text-muted-foreground" />
                   }
                 </div>
-                {(webhookResponse?.qrcode_image || webhookResponse?.value) && !isConnecting && <TimerDisplay timeLeft={qrTimeLeft} isExpired={isQrExpired} />}
+                {(webhookResponse?.qrcode_image || webhookResponse?.value || webhookResponse?.base64 || webhookResponse?.dataUrl) && !isConnecting && <TimerDisplay timeLeft={qrTimeLeft} isExpired={isQrExpired} />}
                 <p className="text-sm text-muted-foreground text-center mt-2">
                   {isConnecting ? "Gerando QR Code..." : isQrExpired ? "Clique em 'Gerar Novo QR' para continuar" : "Abra o WhatsApp e escaneie o código"}
                 </p>

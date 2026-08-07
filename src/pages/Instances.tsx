@@ -321,7 +321,7 @@ export default function Instances() {
       }
 
       // Garantir prefixo data URI em campos de QR existentes
-      for (const field of ['qrcode_image', 'value', 'qrCode', 'qrCodeUrl'] as const) {
+      for (const field of ['qrcode_image', 'value', 'qrCode', 'qrCodeUrl', 'base64', 'dataUrl'] as const) {
         if (normalizedData?.[field] && typeof normalizedData[field] === 'string' && isImageData(normalizedData[field]) && !normalizedData[field].startsWith('data:image') && !normalizedData[field].startsWith('http')) {
           normalizedData = { ...normalizedData, [field]: ensureDataUri(normalizedData[field]) };
         }
@@ -373,7 +373,7 @@ export default function Instances() {
 
   // Timer countdown for QR/Code validity - fixed to avoid state updates during render
   useEffect(() => {
-    const hasQrOrCode = webhookResponse?.qrcode_image || webhookResponse?.value || webhookResponse?.qrCode || webhookResponse?.qrCodeUrl || webhookResponse?.code;
+    const hasQrOrCode = webhookResponse?.qrcode_image || webhookResponse?.value || webhookResponse?.qrCode || webhookResponse?.qrCodeUrl || webhookResponse?.code || webhookResponse?.base64 || webhookResponse?.dataUrl;
     
     if ((connectionStep === "qr" || connectionStep === "code") && hasQrOrCode && !isConnecting) {
       setQrTimeLeft(20);
@@ -928,7 +928,7 @@ export default function Instances() {
                 <Button variant="outline" className="w-full justify-start h-auto p-4" disabled={isConnecting} onClick={async () => {
               try {
                 const response = await triggerConnectionWebhook("qr");
-                if (response?.qrcode_image || response?.value || response?.qrCode || response?.qrCodeUrl) {
+                 if (response?.qrcode_image || response?.value || response?.qrCode || response?.qrCodeUrl || response?.base64 || response?.dataUrl) {
                   setConnectionStep("qr");
                 } else if (response?.code) {
                   setConnectionStep("code");
@@ -974,10 +974,10 @@ export default function Instances() {
                 <div className="relative w-48 h-48 bg-background border rounded-lg flex items-center justify-center mb-4 overflow-hidden">
                   {isConnecting ? (
                     <Loader2 className="h-12 w-12 animate-spin text-muted-foreground" />
-                  ) : webhookResponse?.qrcode_image || webhookResponse?.value || webhookResponse?.qrCode || webhookResponse?.qrCodeUrl ? (
+                  ) : webhookResponse?.qrcode_image || webhookResponse?.value || webhookResponse?.qrCode || webhookResponse?.qrCodeUrl || webhookResponse?.base64 || webhookResponse?.dataUrl ? (
                     <>
                       <img 
-                        src={webhookResponse.qrcode_image || webhookResponse.value || webhookResponse.qrCode || webhookResponse.qrCodeUrl} 
+                        src={webhookResponse.qrcode_image || webhookResponse.value || webhookResponse.qrCode || webhookResponse.qrCodeUrl || webhookResponse.dataUrl || webhookResponse.base64} 
                         alt="QR Code" 
                         className={`w-full h-full object-contain ${isQrExpired ? "opacity-20 blur-sm" : ""}`}
                       />
@@ -996,7 +996,7 @@ export default function Instances() {
                 </div>
                 
                 {/* Timer Display */}
-                {(webhookResponse?.qrcode_image || webhookResponse?.value || webhookResponse?.qrCode || webhookResponse?.qrCodeUrl) && !isConnecting && (
+                 {(webhookResponse?.qrcode_image || webhookResponse?.value || webhookResponse?.qrCode || webhookResponse?.qrCodeUrl || webhookResponse?.base64 || webhookResponse?.dataUrl) && !isConnecting && (
                   <TimerDisplay timeLeft={qrTimeLeft} isExpired={isQrExpired} />
                 )}
                 
