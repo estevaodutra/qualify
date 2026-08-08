@@ -355,8 +355,8 @@ export default function Instances() {
 
       // Salvar credenciais se presentes na resposta (novo formato com instance.id/token)
       const instanceData = normalizedData.instance || normalizedData;
-      const instanceId = instanceData.id || normalizedData.id_instance;
-      const instanceToken = instanceData.token || normalizedData.token_instance;
+      const instanceId = instanceData.id || normalizedData.id_instance || normalizedData.instance_id;
+      const instanceToken = instanceData.token || normalizedData.token_instance || normalizedData.instance_token;
       const paymentStatus = instanceData.paymentStatus;
       const expirationDate = instanceData.expirationDate;
 

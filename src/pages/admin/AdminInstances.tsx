@@ -250,8 +250,8 @@ export default function AdminInstances() {
       setIsQrExpired(false);
 
       const iData = nd.instance || nd;
-      const iId = iData.id || nd.id_instance;
-      const iToken = iData.token || nd.token_instance;
+      const iId = iData.id || nd.id_instance || nd.instance_id;
+      const iToken = iData.token || nd.token_instance || nd.instance_token;
       if (iId && iToken) {
         await (supabase as any).from("instances").update({
           external_instance_id: iId,
