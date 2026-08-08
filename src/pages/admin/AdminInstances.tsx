@@ -311,7 +311,13 @@ export default function AdminInstances() {
     if (!cancelingInstance) return;
     setIsCanceling(true);
     try {
-      await (supabase as any).from("instances").update({ status: "disconnected", payment_status: "CANCELED" }).eq("id", cancelingInstance.id);
+      await (supabase as any).from("instances").update({
+        status: "disconnected",
+        payment_status: "CANCELED",
+        external_instance_id: null,
+        external_instance_token: null,
+        phone: ""
+      }).eq("id", cancelingInstance.id);
       toast({ title: "Instância cancelada e desativada!" });
       setShowCancelDialog(false);
       refetch();

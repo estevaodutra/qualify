@@ -443,7 +443,12 @@ export default function Instances() {
           try {
             await updateInstance({
               id: inst.id,
-              updates: { status: "disconnected" }
+              updates: {
+                status: "disconnected",
+                external_instance_id: "",
+                external_instance_token: "",
+                phone: ""
+              }
             });
 
             // Create alert for the user
