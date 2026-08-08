@@ -20,7 +20,7 @@ import {
 import {
   Search, Copy, Eye, EyeOff, RefreshCw, Smartphone,
   RefreshCcw, Loader2, Plug, QrCode, Phone, ArrowLeft, XCircle,
-  MoreVertical, Pencil, Building2, Ban,
+  MoreVertical, Pencil, Building2, Ban, Trash2,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -159,6 +159,11 @@ export default function AdminInstances() {
   const [cancelingInstance, setCancelingInstance] = useState<AdminInstance | null>(null);
   const [isCanceling, setIsCanceling] = useState(false);
 
+  // — Delete dialog —
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deletingInstance, setDeletingInstance] = useState<AdminInstance | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   // — Fetch phones —
   const [isFetchingPhones, setIsFetchingPhones] = useState(false);
   const [fetchingPhoneId, setFetchingPhoneId] = useState<string | null>(null);
@@ -195,6 +200,10 @@ export default function AdminInstances() {
   const openCancelDialog = (inst: AdminInstance) => {
     setCancelingInstance(inst);
     setShowCancelDialog(true);
+  };
+  const openDeleteDialog = (inst: AdminInstance) => {
+    setDeletingInstance(inst);
+    setShowDeleteDialog(true);
   };
 
   const filtered = instances.filter((inst: AdminInstance) => {
@@ -309,6 +318,21 @@ export default function AdminInstances() {
     } catch (e: any) {
       toast({ title: "Erro ao cancelar", description: e.message, variant: "destructive" });
     } finally { setIsCanceling(false); }
+  };
+
+  // Delete
+  const handleDelete = async () => {
+    if (!deletingInstance) return;
+    setIsDeleting(true);
+    try {
+      const { error } = await (supabase as any).from("instances").delete().eq("id", deletingInstance.id);
+      if (error) throw error;
+      toast({ title: "Instância excluída com sucesso!" });
+      setShowDeleteDialog(false);
+      refetch();
+    } catch (e: any) {
+      toast({ title: "Erro ao excluir", description: e.message, variant: "destructive" });
+    } finally { setIsDeleting(false); }
   };
 
   // Fetch phone numbers for connected instances sequentially
@@ -482,6 +506,9 @@ export default function AdminInstances() {
                               <DropdownMenuItem onClick={() => openCancelDialog(inst)} className="text-destructive focus:text-destructive">
                                 <Ban className="h-4 w-4 mr-2" /> Cancelar Instância
                               </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openDeleteDialog(inst)} className="text-destructive focus:text-destructive">
+                                <Trash2 className="h-4 w-4 mr-2" /> Excluir Instância
+                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </td>
@@ -631,6 +658,25 @@ export default function AdminInstances() {
             <Button variant="ghost" onClick={() => setShowCancelDialog(false)}>Voltar</Button>
             <Button variant="destructive" onClick={handleCancel} disabled={isCanceling}>
               {isCanceling ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Cancelando...</> : "Confirmar Cancelamento"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Dialog Excluir ─── */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive"><Trash2 className="h-4 w-4" /> Excluir Instância</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja excluir permanentemente a instância <strong>{deletingInstance?.name}</strong>?
+              Esta ação não pode ser desfeita e removerá os dados do banco de dados.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowDeleteDialog(false)}>Cancelar</Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
+              {isDeleting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Excluindo...</> : "Confirmar Exclusão"}
             </Button>
           </DialogFooter>
         </DialogContent>
