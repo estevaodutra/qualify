@@ -34,6 +34,30 @@ const formatPhoneNumber = (value: string): string => {
   return `+${limited.slice(0, 2)} (${limited.slice(2, 4)}) ${limited.slice(4, 9)}-${limited.slice(9)}`;
 };
 
+// Helper to parse QR code format and return a renderable image URL
+const getQrImageUrl = (val: string | null | undefined): string => {
+  if (!val || typeof val !== 'string') return "";
+  
+  // Remove potential incorrect prefix prepended by n8n
+  let clean = val;
+  if (val.startsWith("data:image/png;base64,")) {
+    clean = val.replace("data:image/png;base64,", "");
+  }
+  
+  // Detect if it is a raw WhatsApp pairing code string (starts with "2@" or contains "@" and ",")
+  if (clean.startsWith("2@") || (clean.includes("@") && clean.includes(","))) {
+    return `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(clean)}`;
+  }
+  
+  // If it's a data URI or HTTP link, return it as-is
+  if (clean.startsWith("data:image") || clean.startsWith("http")) {
+    return clean;
+  }
+  
+  // Otherwise assume it is raw base64 of the image and append prefix
+  return `data:image/png;base64,${clean.replace(/\s/g, "")}`;
+};
+
 // Timer Display Component - defined OUTSIDE the main component to avoid React hooks issues
 const TimerDisplay = ({ timeLeft, isExpired }: { timeLeft: number; isExpired: boolean }) => {
   const percentage = (timeLeft / 20) * 100;
@@ -977,7 +1001,7 @@ export default function Instances() {
                   ) : webhookResponse?.qrcode_image || webhookResponse?.value || webhookResponse?.qrCode || webhookResponse?.qrCodeUrl || webhookResponse?.base64 || webhookResponse?.dataUrl ? (
                     <>
                       <img 
-                        src={webhookResponse.qrcode_image || webhookResponse.value || webhookResponse.qrCode || webhookResponse.qrCodeUrl || webhookResponse.dataUrl || webhookResponse.base64} 
+                        src={getQrImageUrl(webhookResponse.qrcode_image || webhookResponse.value || webhookResponse.qrCode || webhookResponse.qrCodeUrl || webhookResponse.dataUrl || webhookResponse.base64)} 
                         alt="QR Code" 
                         className={`w-full h-full object-contain ${isQrExpired ? "opacity-20 blur-sm" : ""}`}
                       />

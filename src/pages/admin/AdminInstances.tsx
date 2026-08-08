@@ -56,6 +56,30 @@ function MaskedToken({ value }: { value: string | null }) {
   );
 }
 
+// Helper to parse QR code format and return a renderable image URL
+const getQrImageUrl = (val: string | null | undefined): string => {
+  if (!val || typeof val !== 'string') return "";
+  
+  // Remove potential incorrect prefix prepended by n8n
+  let clean = val;
+  if (val.startsWith("data:image/png;base64,")) {
+    clean = val.replace("data:image/png;base64,", "");
+  }
+  
+  // Detect if it is a raw WhatsApp pairing code string (starts with "2@" or contains "@" and ",")
+  if (clean.startsWith("2@") || (clean.includes("@") && clean.includes(","))) {
+    return `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(clean)}`;
+  }
+  
+  // If it's a data URI or HTTP link, return it as-is
+  if (clean.startsWith("data:image") || clean.startsWith("http")) {
+    return clean;
+  }
+  
+  // Otherwise assume it is raw base64 of the image and append prefix
+  return `data:image/png;base64,${clean.replace(/\s/g, "")}`;
+};
+
 const TimerDisplay = ({ timeLeft, isExpired }: { timeLeft: number; isExpired: boolean }) => {
   const percentage = (timeLeft / 20) * 100;
   const circumference = 2 * Math.PI * 18;
@@ -509,7 +533,7 @@ export default function AdminInstances() {
                 <div className="relative w-48 h-48 bg-background border rounded-lg flex items-center justify-center mb-4 overflow-hidden">
                   {isConnecting ? <Loader2 className="h-12 w-12 animate-spin text-muted-foreground" />
                     : (webhookResponse?.qrcode_image || webhookResponse?.value || webhookResponse?.qrCode || webhookResponse?.qrCodeUrl || webhookResponse?.base64 || webhookResponse?.dataUrl) ? (
-                      <><img src={webhookResponse.qrcode_image || webhookResponse.value || webhookResponse.qrCode || webhookResponse.qrCodeUrl || webhookResponse.dataUrl || webhookResponse.base64} alt="QR Code" className={`w-full h-full object-contain ${isQrExpired ? "opacity-20 blur-sm" : ""}`} />
+                      <><img src={getQrImageUrl(webhookResponse.qrcode_image || webhookResponse.value || webhookResponse.qrCode || webhookResponse.qrCodeUrl || webhookResponse.dataUrl || webhookResponse.base64)} alt="QR Code" className={`w-full h-full object-contain ${isQrExpired ? "opacity-20 blur-sm" : ""}`} />
                         {isQrExpired && <div className="absolute inset-0 flex items-center justify-center"><div className="text-center"><XCircle className="h-12 w-12 text-destructive mx-auto mb-2" /><p className="text-sm font-medium text-destructive">QR Code expirado</p></div></div>}
                       </>
                     ) : <QrCode className="h-24 w-24 text-muted-foreground" />
