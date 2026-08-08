@@ -179,6 +179,49 @@ export default function AdminInstances() {
     return () => clearInterval(t);
   }, [showConnectDialog, connectionStep, qrTimeLeft, isQrExpired]);
 
+  // Realtime subscription for instance status updates
+  useEffect(() => {
+    const channel = supabase
+      .channel("admin-instances-status-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "instances",
+        },
+        async (payload) => {
+          const updatedInstance = payload.new;
+          console.log("Admin Realtime update for instance:", updatedInstance);
+
+          // If the status changed to connected, and this was the connecting instance being configured
+          if (
+            connectingInstance &&
+            updatedInstance.id === connectingInstance.id &&
+            updatedInstance.status === "connected" &&
+            connectingInstance.status !== "connected"
+          ) {
+            toast({
+              title: "Conectado com sucesso!",
+              description: `A instância ${updatedInstance.name} foi conectada com sucesso.`,
+            });
+            setShowConnectDialog(false);
+            setConnectingInstance(null);
+            setConnectionStep("select");
+            setWebhookResponse(null);
+          }
+
+          // Trigger data refetch to update UI automatically
+          await refetch();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [connectingInstance, refetch]);
+
   const openConnectDialog = (inst: AdminInstance) => {
     setConnectingInstance(inst);
     setConnectionStep("select");

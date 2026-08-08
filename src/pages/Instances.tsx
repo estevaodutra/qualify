@@ -426,6 +426,51 @@ export default function Instances() {
 
   const { user } = useAuth();
 
+  // Realtime subscription for instance status updates
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel("instances-status-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "instances",
+        },
+        async (payload) => {
+          const updatedInstance = payload.new;
+          console.log("Realtime update for instance:", updatedInstance);
+
+          // If the status changed to connected, and this was the selected instance being configured
+          if (
+            selectedInstance &&
+            updatedInstance.id === selectedInstance.id &&
+            updatedInstance.status === "connected" &&
+            selectedInstance.status !== "connected"
+          ) {
+            toast({
+              title: "Conectado com sucesso!",
+              description: `A instância ${updatedInstance.name} foi conectada com sucesso.`,
+            });
+            setShowConfigDialog(false);
+            setConnectionStep("select");
+            setPhoneForConnection("");
+            setWebhookResponse(null);
+          }
+
+          // Trigger data refetch to update UI automatically
+          await refetch();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, selectedInstance, refetch]);
+
   // Auto-disconnect instances expiring in < 1 hour
   const autoDisconnectedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
