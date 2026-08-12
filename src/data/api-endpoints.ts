@@ -2459,6 +2459,159 @@ response = requests.post(
         }
       }
     ]
+  },
+  {
+    id: "integrations",
+    name: "Integrações de Entrada",
+    description: "Endpoints para recebimento de dados de sistemas externos (ex: n8n, Make, Zapier)",
+    endpoints: [
+      {
+        id: "n8n-webhook-inbound",
+        method: "POST",
+        path: "/n8n-webhook-inbound",
+        description: "Recebe mensagens formatadas do n8n para inserção direta no CRM, ignorando regras de IA e classificação.",
+        attributes: [
+          {
+            name: "instance_id",
+            type: "string",
+            required: true,
+            description: "O ID da instância (interno ou externo/token)."
+          },
+          {
+            name: "source",
+            type: "string",
+            required: false,
+            description: "A origem da mensagem (ex: n8n, waha, evolution)."
+          },
+          {
+            name: "type",
+            type: "string",
+            required: true,
+            description: "O tipo de mídia da mensagem: text, image, audio, video, sticker, document, etc."
+          },
+          {
+            name: "direction",
+            type: "string",
+            required: false,
+            description: "A direção da mensagem: inbound ou outbound (padrão: inbound)."
+          },
+          {
+            name: "chat_jid",
+            type: "string",
+            required: false,
+            description: "O JID do chat no WhatsApp (se não enviado, será inferido do telefone)."
+          },
+          {
+            name: "sender_phone",
+            type: "string",
+            required: true,
+            description: "Telefone do remetente (apenas números)."
+          },
+          {
+            name: "sender_name",
+            type: "string",
+            required: false,
+            description: "Nome do remetente."
+          },
+          {
+            name: "message_id",
+            type: "string",
+            required: false,
+            description: "ID único da mensagem (se não enviado, será gerado automaticamente)."
+          },
+          {
+            name: "timestamp",
+            type: "string",
+            required: false,
+            description: "Data/hora ISO da mensagem."
+          },
+          {
+            name: "content",
+            type: "object",
+            required: true,
+            description: "O conteúdo da mensagem { text?, media_url?, mime_type?, file_name? }."
+          },
+          {
+            name: "raw_n8n_event",
+            type: "object",
+            required: false,
+            description: "O payload original do n8n, para registro e auditoria."
+          }
+        ],
+        examples: {
+          curl: `curl -X POST "${API_BASE_URL}/n8n-webhook-inbound" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "instance_id": "ID_DA_INSTANCIA_NO_SUPABASE",
+    "source": "n8n",
+    "type": "text",
+    "direction": "inbound",
+    "sender_phone": "5511999999999",
+    "sender_name": "Nome do Cliente",
+    "content": {
+      "text": "Conteúdo da mensagem de texto"
+    }
+  }'`,
+          nodejs: `const axios = require('axios');
+
+const response = await axios.post(
+  '${API_BASE_URL}/n8n-webhook-inbound',
+  {
+    instance_id: "ID_DA_INSTANCIA_NO_SUPABASE",
+    source: "n8n",
+    type: "text",
+    direction: "inbound",
+    sender_phone: "5511999999999",
+    sender_name: "Nome do Cliente",
+    content: {
+      text: "Conteúdo da mensagem de texto"
+    }
+  },
+  {
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  }
+);`,
+          python: `import requests
+
+response = requests.post(
+    '${API_BASE_URL}/n8n-webhook-inbound',
+    json={
+        'instance_id': 'ID_DA_INSTANCIA_NO_SUPABASE',
+        'source': 'n8n',
+        'type': 'text',
+        'direction': 'inbound',
+        'sender_phone': '5511999999999',
+        'sender_name': 'Nome do Cliente',
+        'content': {
+            'text': 'Conteúdo da mensagem de texto'
+        }
+    },
+    headers={
+        'Content-Type': 'application/json'
+    }
+)`
+        },
+        responses: {
+          success: {
+            code: 200,
+            body: {
+              success: true,
+              message: "Evento registrado com sucesso e pronto para processamento",
+              id: "6e4dfba8-80f2-4e4c-8517-74be1beea320"
+            }
+          },
+          error: {
+            code: 400,
+            body: {
+              success: false,
+              error: "Missing required fields: instance_id, type, or sender_phone"
+            }
+          }
+        }
+      }
+    ]
   }
 ];
 
