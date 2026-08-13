@@ -16,7 +16,7 @@ interface AddToQueueDialogProps {
 }
 
 export function AddToQueueDialog({ open, onOpenChange, selectedCount, onSubmit, isLoading }: AddToQueueDialogProps) {
-  const [campaignId, setCampaignId] = useState("");
+  const [campaignId, setCampaignId] = useState("open");
   const [position, setPosition] = useState<"end" | "start">("end");
   const { campaigns } = useCallCampaigns();
 
@@ -33,6 +33,7 @@ export function AddToQueueDialog({ open, onOpenChange, selectedCount, onSubmit, 
             <Select value={campaignId} onValueChange={setCampaignId}>
               <SelectTrigger><SelectValue placeholder="Selecione uma campanha" /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="open">Fila Aberta (Geral)</SelectItem>
                 {campaigns.map((c) => (
                   <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                 ))}

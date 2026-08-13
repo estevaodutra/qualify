@@ -356,6 +356,7 @@ export default function Leads() {
         allSelected={selectAllResults}
         onSelectAll={handleSelectAllResults}
         onAddToCampaign={() => setCampaignDialogOpen(true)}
+        onAddToQueue={() => setQueueOpen(true)}
         onAddTag={() => setTagDialogMode("add")}
         onRemoveTag={() => setTagDialogMode("remove")}
         onTriggerWorkflow={() => setWorkflowDialogOpen(true)}
@@ -462,6 +463,7 @@ export default function Leads() {
                     onHistory={setHistoryLead}
                     onAddTag={(l) => { setSelectedIds(new Set([l.id])); setTagDialogMode("add"); }}
                     onAddToCampaign={(l) => { setSelectedIds(new Set([l.id])); setCampaignDialogOpen(true); }}
+                    onAddToQueue={(l) => { setSelectedIds(new Set([l.id])); setQueueOpen(true); }}
                     onBlock={(l) => updateLead.mutate({ id: l.id, status: "blocked" })}
                     onDelete={(l) => deleteLead.mutate(l.id)}
                   />

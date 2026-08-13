@@ -1,6 +1,6 @@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, Pencil, History, Megaphone, Tag, Copy, ExternalLink, Ban, Trash2 } from "lucide-react";
+import { MoreHorizontal, Pencil, History, Megaphone, Tag, Copy, ExternalLink, Ban, Trash2, Phone } from "lucide-react";
 import { toast } from "sonner";
 import type { Lead } from "@/hooks/useLeads";
 
@@ -10,6 +10,7 @@ interface LeadActionsMenuProps {
   onHistory: (lead: Lead) => void;
   onAddTag: (lead: Lead) => void;
   onAddToCampaign: (lead: Lead) => void;
+  onAddToQueue?: (lead: Lead) => void;
   onBlock: (lead: Lead) => void;
   onDelete: (lead: Lead) => void;
 }
@@ -43,6 +44,11 @@ export function LeadActionsMenu({ lead, onEdit, onHistory, onAddTag, onAddToCamp
         <DropdownMenuItem onClick={() => onAddToCampaign(lead)}>
           <Megaphone className="h-4 w-4 mr-2" /> Adicionar à campanha
         </DropdownMenuItem>
+        {onAddToQueue && (
+          <DropdownMenuItem onClick={() => onAddToQueue(lead)} className="text-green-600 focus:text-green-600 focus:bg-green-500/10">
+            <Phone className="h-4 w-4 mr-2" /> Ligar / Fila Aberta
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem onClick={() => onAddTag(lead)}>
           <Tag className="h-4 w-4 mr-2" /> Gerenciar tags
         </DropdownMenuItem>

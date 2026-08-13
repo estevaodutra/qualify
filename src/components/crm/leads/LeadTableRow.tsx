@@ -34,6 +34,7 @@ interface LeadTableRowProps {
   onHistory: (lead: Lead) => void;
   onAddTag: (lead: Lead) => void;
   onAddToCampaign: (lead: Lead) => void;
+  onAddToQueue?: (lead: Lead) => void;
   onBlock: (lead: Lead) => void;
   onDelete: (lead: Lead) => void;
 }
@@ -57,6 +58,7 @@ export function LeadTableRow({
   onHistory,
   onAddTag,
   onAddToCampaign,
+  onAddToQueue,
   onBlock,
   onDelete,
 }: LeadTableRowProps) {
@@ -135,6 +137,7 @@ export function LeadTableRow({
             onHistory={() => onHistory(lead)}
             onAddTag={() => onAddTag(lead)}
             onAddToCampaign={() => onAddToCampaign(lead)}
+            onAddToQueue={onAddToQueue ? () => onAddToQueue(lead) : undefined}
             onBlock={() => onBlock(lead)}
             onDelete={() => onDelete(lead)}
           />

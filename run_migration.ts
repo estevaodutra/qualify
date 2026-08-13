@@ -5,7 +5,7 @@ dotenv.config();
 
 const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
-const sqlQuery = fs.readFileSync('supabase/migrations/20260711194500_optimize_chat_realtime.sql', 'utf8');
+const sqlQuery = fs.readFileSync('supabase/migrations/20260813000000_make_call_queue_campaign_id_nullable.sql', 'utf8');
 
 async function main() {
   console.log("Executing SQL...");

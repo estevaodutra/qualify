@@ -273,6 +273,26 @@ export function useCallQueue(options: UseCallQueueOptions = {}) {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) throw new Error("Not authenticated");
 
+      let finalCampaignId = cId;
+      if (cId === "open") {
+        let query = (supabase as any).from("call_campaigns").select("id").eq("name", "Fila Aberta (Geral)");
+        if (activeCompanyId) query = query.eq("company_id", activeCompanyId);
+        let { data: openCamp } = await query.maybeSingle();
+
+        if (!openCamp) {
+          const { data: newCamp, error: campErr } = await (supabase as any).from("call_campaigns").insert({
+            user_id: authUser.id,
+            company_id: activeCompanyId || null,
+            name: "Fila Aberta (Geral)",
+            description: "Fila de ligação geral (sem campanha específica)",
+            status: "active",
+          }).select().single();
+          if (campErr) throw campErr;
+          openCamp = newCamp;
+        }
+        finalCampaignId = openCamp.id;
+      }
+
       // Fetch lead data
       const { data: leadsData } = await (supabase as any)
         .from("call_leads")
@@ -285,7 +305,7 @@ export function useCallQueue(options: UseCallQueueOptions = {}) {
       const { data: posData } = await (supabase as any)
         .from("call_queue")
         .select("position")
-        .eq("campaign_id", cId)
+        .eq("campaign_id", finalCampaignId)
         .order("position", { ascending: position === "start" })
         .limit(1);
 
@@ -303,7 +323,7 @@ export function useCallQueue(options: UseCallQueueOptions = {}) {
         const { error } = await (supabase as any).from("call_queue").insert({
           user_id: authUser.id,
           company_id: activeCompanyId || null,
-          campaign_id: cId,
+          campaign_id: finalCampaignId,
           lead_id: lead.id,
           phone: lead.phone,
           lead_name: lead.name || null,

@@ -7,6 +7,7 @@ interface BulkActionsBarProps {
   allSelected?: boolean;
   onSelectAll?: () => void;
   onAddToCampaign: () => void;
+  onAddToQueue?: () => void;
   onAddTag: () => void;
   onRemoveTag: () => void;
   onDelete: () => void;
@@ -14,7 +15,7 @@ interface BulkActionsBarProps {
   onTriggerWorkflow?: () => void;
 }
 
-export function BulkActionsBar({ count, totalCount, allSelected, onSelectAll, onAddToCampaign, onAddTag, onRemoveTag, onDelete, onCancel, onTriggerWorkflow }: BulkActionsBarProps) {
+export function BulkActionsBar({ count, totalCount, allSelected, onSelectAll, onAddToCampaign, onAddToQueue, onAddTag, onRemoveTag, onDelete, onCancel, onTriggerWorkflow }: BulkActionsBarProps) {
   if (count === 0) return null;
   return (
     <div className="sticky top-0 z-10 bg-primary text-primary-foreground rounded-lg px-4 py-3 space-y-2">
@@ -36,6 +37,11 @@ export function BulkActionsBar({ count, totalCount, allSelected, onSelectAll, on
           <Button size="sm" variant="secondary" onClick={onAddToCampaign} className="gap-1">
             <Megaphone className="h-3.5 w-3.5" /> Campanha
           </Button>
+          {onAddToQueue && (
+            <Button size="sm" variant="secondary" onClick={onAddToQueue} className="gap-1 bg-green-500/10 text-green-600 hover:bg-green-500/20 hover:text-green-700">
+              <Play className="h-3.5 w-3.5 fill-current" /> Ligar / Fila
+            </Button>
+          )}
           <Button size="sm" variant="secondary" onClick={onAddTag} className="gap-1">
             <Tag className="h-3.5 w-3.5" /> Adicionar Tag
           </Button>

@@ -8,7 +8,9 @@
       "PowerShell(Get-Command node,npm -ErrorAction SilentlyContinue)",
       "Bash(bun --version)",
       "PowerShell(Get-ChildItem \"C:\\\\Program Files\\\\nodejs\" -ErrorAction SilentlyContinue; Get-ChildItem \"$env:APPDATA\\\\npm\" -ErrorAction SilentlyContinue; where.exe node 2>&1)",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Bash(xargs grep -l \"company_id\")",
+      "Bash(npx vercel *)"
     ]
   }
 }
