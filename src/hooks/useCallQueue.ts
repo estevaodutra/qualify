@@ -294,8 +294,8 @@ export function useCallQueue(options: UseCallQueueOptions = {}) {
       }
 
       // Fetch lead data
-      const { data: leadsData } = await (supabase as any)
-        .from("call_leads")
+      const { data: leadsData, error: leadsErr } = await (supabase as any)
+        .from("leads")
         .select("id, phone, name")
         .in("id", leadIds);
 
@@ -339,7 +339,10 @@ export function useCallQueue(options: UseCallQueueOptions = {}) {
       queryClient.invalidateQueries({ queryKey: ["call-queue-items"] });
       toast({ title: "Leads adicionados à fila", description: `${result.added} adicionados, ${result.skipped} ignorados` });
     },
-    onError: () => toast({ title: "Erro ao adicionar à fila", variant: "destructive" }),
+    onError: (error) => {
+      console.error("[useCallQueue] Error adding to queue:", error);
+      toast({ title: "Erro ao adicionar à fila", description: error.message, variant: "destructive" });
+    },
   });
 
   const removeFromQueue = useMutation({
