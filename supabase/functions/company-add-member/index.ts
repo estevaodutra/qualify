@@ -20,7 +20,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const envUrl = Deno.env.get("SUPABASE_URL")!;
+    // Use internal docker network to avoid 2s wall-clock timeouts when connecting to public IP
+    const supabaseUrl = envUrl.includes("qualify.app") || envUrl.includes("108.174") ? "http://kong:8000" : envUrl;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
