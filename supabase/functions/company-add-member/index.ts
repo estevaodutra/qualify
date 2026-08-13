@@ -53,16 +53,34 @@ Deno.serve(async (req) => {
     // Use service role for privileged operations
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-    // Verify caller is admin of the company
-    const { data: callerMember } = await adminClient
-      .from("company_members")
-      .select("role")
-      .eq("company_id", company_id)
-      .eq("user_id", callerId)
-      .eq("is_active", true)
-      .single();
+    // Check if user is superadmin
+    let isAdmin = user.email === "estevaodutra.pmss@gmail.com";
+    if (!isAdmin) {
+      const { data: superAdminRole } = await adminClient
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", callerId)
+        .eq("role", "superadmin")
+        .maybeSingle();
+      if (superAdminRole) isAdmin = true;
+    }
 
-    if (!callerMember || callerMember.role !== "admin") {
+    if (!isAdmin) {
+      // Verify caller is admin of the company
+      const { data: callerMember } = await adminClient
+        .from("company_members")
+        .select("role")
+        .eq("company_id", company_id)
+        .eq("user_id", callerId)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (callerMember && callerMember.role === "admin") {
+        isAdmin = true;
+      }
+    }
+
+    if (!isAdmin) {
       return new Response(JSON.stringify({ error: "not_admin" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
