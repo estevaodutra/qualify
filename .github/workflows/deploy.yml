@@ -22,9 +22,9 @@ jobs:
       - name: Copy functions to VPS via Rsync
         run: |
           # Copia a pasta de functions local para o volume do Supabase na VPS
-          sshpass -p "${{ secrets.VPS_PASSWORD }}" rsync -avz -e "ssh -o StrictHostKeyChecking=no" supabase/functions/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/supabase-qualify/volumes/functions/
+          sshpass -p "${{ secrets.VPS_PASSWORD }}" rsync -avz -e "ssh -o StrictHostKeyChecking=no -p 22022" supabase/functions/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/supabase-qualify/volumes/functions/
 
       - name: Restart functions container
         run: |
           # Reinicia o container que roda as Edge Functions para carregar o novo código
-          sshpass -p "${{ secrets.VPS_PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker restart qualify-functions-1"
+          sshpass -p "${{ secrets.VPS_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p 22022 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker restart qualify-functions-1"
