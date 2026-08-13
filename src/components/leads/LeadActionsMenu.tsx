@@ -15,7 +15,7 @@ interface LeadActionsMenuProps {
   onDelete: (lead: Lead) => void;
 }
 
-export function LeadActionsMenu({ lead, onEdit, onHistory, onAddTag, onAddToCampaign, onBlock, onDelete }: LeadActionsMenuProps) {
+export function LeadActionsMenu({ lead, onEdit, onHistory, onAddTag, onAddToCampaign, onAddToQueue, onBlock, onDelete }: LeadActionsMenuProps) {
   const copyPhone = () => {
     navigator.clipboard.writeText(lead.phone);
     toast.success("Telefone copiado!");
