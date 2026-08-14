@@ -450,7 +450,6 @@ export default function CallPanel() {
         .from("call_logs")
         .select("*, call_leads(name, phone, attempts), call_campaigns(name, is_priority), call_operators(operator_name, extension), call_script_actions(name, color)")
         .eq("call_status", "completed")
-        .not("started_at", "is", null)
         .gte("created_at", todayStr)
         .order("ended_at", { ascending: false, nullsFirst: false })
         .limit(500);
@@ -906,7 +905,9 @@ export default function CallPanel() {
         let externalCallId = null;
         try {
           const responseBody = typeof proxyData?.body === "string" ? JSON.parse(proxyData.body) : proxyData?.body;
-          const externalId = Array.isArray(responseBody) ? responseBody[0]?.id : responseBody?.id;
+          const externalId = Array.isArray(responseBody) 
+            ? (responseBody[0]?.id || responseBody[0]?.call_id) 
+            : (responseBody?.id || responseBody?.call_id);
           if (externalId) {
             externalCallId = String(externalId);
           }
@@ -918,7 +919,7 @@ export default function CallPanel() {
         await supabase
           .from("workflow_call_tasks")
           .update({ 
-            status: "ringing",
+            status: "in_call",
             ...(externalCallId ? { external_call_id: externalCallId } : {})
           })
           .eq("id", realId);
@@ -1307,9 +1308,7 @@ export default function CallPanel() {
 
       {/* ── Aba Fila ── */}
       {activeTab === "queue" && (
-        (queueLoading || scheduledLogsLoading || workflowTasksLoading) ? (
-          <div className="text-center py-12 text-muted-foreground">Carregando fila...</div>
-        ) : paginatedQueue.length === 0 ? (
+        paginatedQueue.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="mb-4 rounded-full bg-muted p-4">
               <ListOrdered className="h-8 w-8 text-muted-foreground" />

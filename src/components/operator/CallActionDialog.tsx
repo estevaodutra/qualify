@@ -609,7 +609,9 @@ export function CallActionDialog({
         let externalCallId = null;
         try {
           const responseBody = typeof proxyData?.body === "string" ? JSON.parse(proxyData.body) : proxyData?.body;
-          const externalId = Array.isArray(responseBody) ? responseBody[0]?.id : responseBody?.id;
+          const externalId = Array.isArray(responseBody) 
+            ? (responseBody[0]?.id || responseBody[0]?.call_id) 
+            : (responseBody?.id || responseBody?.call_id);
           if (externalId) {
             externalCallId = String(externalId);
           }
@@ -618,13 +620,17 @@ export function CallActionDialog({
         }
 
         toast({ title: "Ligação iniciada", description: "A chamada foi disparada para o webhook." });
-        // Set local state to ringing
-        setCurrentData(prev => ({ ...prev, callStatus: "ringing" }));
-        // Update database to ringing
+        // Set local state to in_call
+        setCurrentData(prev => ({ 
+          ...prev, 
+          callStatus: "in_call",
+          ...(externalCallId ? { externalCallId } : {})
+        }));
+        // Update database to in_call
         await supabase
           .from("workflow_call_tasks")
           .update({ 
-            status: "ringing",
+            status: "in_call",
             ...(externalCallId ? { external_call_id: externalCallId } : {})
           })
           .eq("id", realTaskId);

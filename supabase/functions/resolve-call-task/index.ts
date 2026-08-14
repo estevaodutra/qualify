@@ -75,6 +75,7 @@ Deno.serve(async (req) => {
       // Create a historical log entry if needed
       await supabase.from("call_logs").insert({
         company_id: task.company_id,
+        user_id: task.user_id,
         lead_id: task.lead_id,
         operator_id: operatorId || null,
         call_status: "no_answer",
@@ -83,6 +84,9 @@ Deno.serve(async (req) => {
         notes: notes || null,
         scheduled_for: nextAttemptAt,
         action_id: null,
+        started_at: task.created_at || new Date().toISOString(),
+        ended_at: new Date().toISOString(),
+        external_call_id: task.external_call_id || null,
       });
 
       return new Response(
@@ -110,6 +114,7 @@ Deno.serve(async (req) => {
       // Create a call log entry for history
       await supabase.from("call_logs").insert({
         company_id: task.company_id,
+        user_id: task.user_id,
         lead_id: task.lead_id,
         operator_id: operatorId || null,
         call_status: action.output === "success" ? "completed" : "failed",
@@ -117,6 +122,9 @@ Deno.serve(async (req) => {
         max_attempts: maxAttempts,
         notes: notes || null,
         action_id: null,
+        started_at: task.created_at || new Date().toISOString(),
+        ended_at: new Date().toISOString(),
+        external_call_id: task.external_call_id || null,
       });
 
       // 4. Resume parent workflow
