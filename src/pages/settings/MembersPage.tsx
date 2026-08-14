@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Trash2, ShieldAlert, UserPlus } from "lucide-react";
+import { Loader2, Trash2, ShieldAlert, UserPlus, Edit2, Check, X } from "lucide-react";
 
 const ERROR_MESSAGES: Record<string, string> = {
   not_admin: "Você precisa ser administrador desta empresa.",
@@ -19,12 +19,15 @@ const ERROR_MESSAGES: Record<string, string> = {
 
 export default function MembersPage() {
   const { activeCompany, isAdmin } = useCompany();
-  const { members, isLoading, addMember, removeMember } = useCompanyMembers();
+  const { members, isLoading, addMember, removeMember, updateMemberExtension } = useCompanyMembers();
   const { toast } = useToast();
 
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"admin" | "operator">("operator");
   const [extension, setExtension] = useState("");
+
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editExtension, setEditExtension] = useState("");
 
   if (!isAdmin) {
     return (
@@ -79,6 +82,25 @@ export default function MembersPage() {
     } catch (err) {
       toast({
         title: "Erro ao remover",
+        description: (err as Error).message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const startEditing = (userId: string, currentExt: string) => {
+    setEditingUserId(userId);
+    setEditExtension(currentExt || "");
+  };
+
+  const handleSaveExtension = async (userId: string) => {
+    try {
+      await updateMemberExtension.mutateAsync({ userId, extension: editExtension.trim() });
+      toast({ title: "Ramal atualizado" });
+      setEditingUserId(null);
+    } catch (err) {
+      toast({
+        title: "Erro ao salvar",
         description: (err as Error).message,
         variant: "destructive",
       });
@@ -170,6 +192,7 @@ export default function MembersPage() {
                   <TableHead>Nome</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Papel</TableHead>
+                  <TableHead>Ramal</TableHead>
                   <TableHead>Entrou em</TableHead>
                   <TableHead className="w-12" />
                 </TableRow>
@@ -183,6 +206,53 @@ export default function MembersPage() {
                       <Badge variant={m.role === "admin" ? "default" : "secondary"}>
                         {m.role === "admin" ? "Administrador" : "Operador"}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {editingUserId === m.user_id ? (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            autoFocus
+                            className="w-24 h-8"
+                            value={editExtension}
+                            onChange={(e) => setEditExtension(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleSaveExtension(m.user_id);
+                              if (e.key === "Escape") setEditingUserId(null);
+                            }}
+                          />
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-green-600"
+                            onClick={() => handleSaveExtension(m.user_id)}
+                          >
+                            <Check className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-muted-foreground"
+                            onClick={() => setEditingUserId(null)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 group">
+                          <span className={!m.extension ? "text-muted-foreground italic" : ""}>
+                            {m.extension || "—"}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => startEditing(m.user_id, m.extension || "")}
+                            title="Editar ramal"
+                          >
+                            <Edit2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {new Date(m.joined_at).toLocaleDateString("pt-BR")}

@@ -10,6 +10,7 @@ export interface CompanyMember {
   joined_at: string;
   full_name: string | null;
   email: string | null;
+  extension?: string | null;
 }
 
 export function useCompanyMembers() {
@@ -30,12 +31,21 @@ export function useCompanyMembers() {
       if (!members || members.length === 0) return [];
 
       const userIds = members.map((m: any) => m.user_id);
-      const { data: profiles } = await (supabase as any)
-        .from("profiles")
-        .select("id, full_name, email")
-        .in("id", userIds);
+      
+      const [profilesRes, opsRes] = await Promise.all([
+        (supabase as any)
+          .from("profiles")
+          .select("id, full_name, email")
+          .in("id", userIds),
+        (supabase as any)
+          .from("call_operators")
+          .select("user_id, extension")
+          .eq("company_id", activeCompanyId)
+          .in("user_id", userIds)
+      ]);
 
-      const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
+      const profileMap = new Map((profilesRes.data || []).map((p: any) => [p.id, p]));
+      const opMap = new Map((opsRes.data || []).map((o: any) => [o.user_id, o.extension]));
 
       return members.map((m: any) => {
         const p = profileMap.get(m.user_id) as any;
@@ -47,6 +57,7 @@ export function useCompanyMembers() {
           joined_at: m.joined_at,
           full_name: p?.full_name ?? null,
           email: p?.email ?? null,
+          extension: opMap.get(m.user_id) ?? null,
         };
       });
     },
@@ -85,11 +96,27 @@ export function useCompanyMembers() {
     },
   });
 
+  const updateMemberExtension = useMutation({
+    mutationFn: async (params: { userId: string; extension: string }) => {
+      const { error } = await (supabase as any)
+        .from("call_operators")
+        .update({ extension: params.extension || null })
+        .eq("user_id", params.userId)
+        .eq("company_id", activeCompanyId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["company-members", activeCompanyId] });
+    },
+  });
+
   return {
     members: query.data || [],
     isLoading: query.isLoading,
     refetch: query.refetch,
     addMember,
     removeMember,
+    updateMemberExtension,
   };
 }
