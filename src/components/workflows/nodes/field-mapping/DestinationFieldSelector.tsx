@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, ChevronDown, Check, Type, Hash, Calendar, ToggleLeft, List } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { QuickCreateCustomFieldDialog } from "./QuickCreateCustomFieldDialog";
 
 interface FieldItem {
   id: string;
@@ -145,12 +146,14 @@ interface DestinationFieldSelectorProps {
   value: string;
   onChange: (value: string, label?: string) => void;
   customFields?: any[]; // pass fetched custom fields here
+  onFieldCreated?: () => void;
 }
 
-export function DestinationFieldSelector({ value, onChange, customFields = [] }: DestinationFieldSelectorProps) {
+export function DestinationFieldSelector({ value, onChange, customFields = [], onFieldCreated }: DestinationFieldSelectorProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>("lead");
+  const [createModalOpen, setCreateModalOpen] = useState(false);
 
   const categories = useMemo(() => {
     const cats = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES)) as Category[];
@@ -278,7 +281,7 @@ export function DestinationFieldSelector({ value, onChange, customFields = [] }:
                    className="w-full text-xs h-8 border-dashed text-[#8A3CFF] hover:text-[#8A3CFF] hover:bg-[#8A3CFF]/5 font-semibold"
                    onClick={(e) => {
                      e.stopPropagation();
-                     window.open("/settings?tab=custom_fields", "_blank");
+                     setCreateModalOpen(true);
                    }}
                  >
                    + Criar nova variável
@@ -293,7 +296,7 @@ export function DestinationFieldSelector({ value, onChange, customFields = [] }:
                    className="w-full text-xs h-8 border-dashed text-[#8A3CFF] hover:text-[#8A3CFF] hover:bg-[#8A3CFF]/5 font-semibold"
                    onClick={(e) => {
                      e.stopPropagation();
-                     window.open("/settings?tab=custom_fields", "_blank");
+                     setCreateModalOpen(true);
                    }}
                  >
                    + Criar novo campo
@@ -303,6 +306,18 @@ export function DestinationFieldSelector({ value, onChange, customFields = [] }:
           </div>
         </div>
       </PopoverContent>
+      <QuickCreateCustomFieldDialog 
+        open={createModalOpen} 
+        onOpenChange={setCreateModalOpen} 
+        defaultCategory={
+          activeCategory === "custom_company" ? "company" : 
+          activeCategory === "custom_deal" ? "deal" : 
+          "lead"
+        } 
+        onSuccess={() => {
+          if (onFieldCreated) onFieldCreated();
+        }}
+      />
     </Popover>
   );
 }

@@ -20,11 +20,12 @@ export function FieldMappingEditor({ mapping, onChange, referencePayload }: Fiel
   const [customFields, setCustomFields] = useState<any[]>([]);
   const [previewResult, setPreviewResult] = useState<string>("Preview não disponível");
 
+  const fetchCustomFields = async () => {
+    const { data } = await supabase.from("custom_fields_metadata").select("*");
+    if (data) setCustomFields(data);
+  };
+
   useEffect(() => {
-    const fetchCustomFields = async () => {
-      const { data } = await supabase.from("custom_fields_metadata").select("*");
-      if (data) setCustomFields(data);
-    };
     fetchCustomFields();
   }, []);
 
@@ -95,6 +96,7 @@ export function FieldMappingEditor({ mapping, onChange, referencePayload }: Fiel
               if (label) setTargetLabel(label);
             }} 
             customFields={customFields}
+            onFieldCreated={fetchCustomFields}
           />
         </section>
 
