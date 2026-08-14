@@ -161,6 +161,12 @@ export function NodeEditorModal({
         t.id === activeTrigger.id ? { ...t, config: localConfig } : t
       );
       onUpdateNodeConfig(currentNodeId, { ...node.config, triggers: updatedTriggers });
+    } else if (node?.nodeType === "field_op" && activeMapping) {
+      const currentMappings = (node.config.mappings as any[]) || [];
+      const updatedMappings = currentMappings.map(m => 
+        m.id === activeMapping.id ? localConfig : m
+      );
+      onUpdateNodeConfig(currentNodeId, { ...node.config, mappings: updatedMappings });
     } else {
       onUpdateNodeConfig(currentNodeId, localConfig);
     }
