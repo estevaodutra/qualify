@@ -1005,23 +1005,31 @@ export default function CallPanel() {
           <TabsTrigger value="calls" className="gap-2">
             <Phone className="h-4 w-4" /> Ligações
           </TabsTrigger>
-          <TabsTrigger value="operators" className="gap-2">
-            <Users className="h-4 w-4" /> Operadores
-          </TabsTrigger>
-          <TabsTrigger value="settings" className="gap-2">
-            <SettingsIcon className="h-4 w-4" /> Configurações
-          </TabsTrigger>
+          {isAdmin && (
+            <>
+              <TabsTrigger value="operators" className="gap-2">
+                <Users className="h-4 w-4" /> Operadores
+              </TabsTrigger>
+              <TabsTrigger value="settings" className="gap-2">
+                <SettingsIcon className="h-4 w-4" /> Configurações
+              </TabsTrigger>
+            </>
+          )}
         </TabsList>
 
-        <TabsContent value="operators" className="mt-6">
-          <OperatorsPanel />
-        </TabsContent>
+        {isAdmin && (
+          <>
+            <TabsContent value="operators" className="mt-6">
+              <OperatorsPanel />
+            </TabsContent>
 
-        <TabsContent value="settings" className="mt-6">
-          <div className="text-center py-12 text-muted-foreground">
-            Configurações gerais de telefonia (em breve)
-          </div>
-        </TabsContent>
+            <TabsContent value="settings" className="mt-6">
+              <div className="text-center py-12 text-muted-foreground">
+                Configurações gerais de telefonia (em breve)
+              </div>
+            </TabsContent>
+          </>
+        )}
 
         <TabsContent value="calls" className="mt-6">
           <div className="space-y-6">
