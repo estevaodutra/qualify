@@ -2027,10 +2027,7 @@ export function UnifiedSequenceBuilder({
                               <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
                             </div>
                           </div>
-
-
                           </div>
-                        </div>
                       ) : (
                         <>
                           {/* Header/Title */}
