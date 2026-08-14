@@ -1446,9 +1446,9 @@ Deno.serve(async (req) => {
                   .from("leads")
                   .insert({
                     company_id: typedCampaign.company_id || typedCampaign.company_id,
+                    user_id: typedCampaign.user_id,
                     phone: phoneClean,
                     name: triggerContext?.respondentName || phoneClean,
-                    source: "Webhook / API",
                     custom_fields: {}
                   })
                   .select("id, name, phone, email, company_name, document, source, tags, custom_fields")

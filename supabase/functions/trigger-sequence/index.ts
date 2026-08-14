@@ -341,9 +341,9 @@ Deno.serve(async (req) => {
             .from("leads")
             .insert({
               company_id: resolvedCompanyId,
+              user_id: typedSequence.user_id,
               phone: destinationPhone,
               name: respondentName || destinationPhone,
-              source: "Webhook / API",
               custom_fields: customFields
             })
             .select("id")
