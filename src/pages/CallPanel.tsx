@@ -973,7 +973,7 @@ export default function CallPanel() {
   const nextInQueue = combinedQueue[0];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" translate="no">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
