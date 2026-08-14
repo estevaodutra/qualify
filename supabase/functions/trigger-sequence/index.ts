@@ -309,13 +309,27 @@ Deno.serve(async (req) => {
     
     // Auto-create lead if in private mode
     let resolvedLeadId = null;
+    let resolvedCompanyId = typedSequence.company_id || typedCampaign.company_id;
+    
+    // Fallback: If companyId is missing, fetch it from the user's profile
+    if (!resolvedCompanyId && typedSequence.user_id) {
+      const { data: userProfile } = await supabase
+        .from("users")
+        .select("company_id")
+        .eq("id", typedSequence.user_id)
+        .maybeSingle();
+      if (userProfile?.company_id) {
+        resolvedCompanyId = userProfile.company_id;
+        console.log(`[TriggerSequence] Fetched company_id ${resolvedCompanyId} from users table as fallback.`);
+      }
+    }
+
     if (!shouldSendToGroup && destinationPhone) {
-      const companyId = typedSequence.company_id || typedCampaign.company_id;
-      if (companyId) {
+      if (resolvedCompanyId) {
         const { data: existingLead } = await supabase
           .from("leads")
           .select("id")
-          .eq("company_id", companyId)
+          .eq("company_id", resolvedCompanyId)
           .eq("phone", destinationPhone)
           .maybeSingle();
 
@@ -326,7 +340,7 @@ Deno.serve(async (req) => {
           const { data: newLead, error: leadErr } = await supabase
             .from("leads")
             .insert({
-              company_id: companyId,
+              company_id: resolvedCompanyId,
               phone: destinationPhone,
               name: respondentName || destinationPhone,
               source: "Webhook / API",
@@ -369,6 +383,7 @@ Deno.serve(async (req) => {
         customFields,
         webhookPayload,
         leadId: resolvedLeadId,
+        companyId: resolvedCompanyId,
         triggerId: triggerIdFromUrl || payload.triggerId || payload.trigger_id,
       };
 

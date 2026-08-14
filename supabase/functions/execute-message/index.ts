@@ -542,6 +542,7 @@ Deno.serve(async (req) => {
         instance_id,
         config,
         user_id,
+        company_id,
         instances(
           id,
           name,
@@ -586,6 +587,7 @@ Deno.serve(async (req) => {
             instance_id,
             config,
             user_id,
+            company_id,
             instances(
               id,
               name,
