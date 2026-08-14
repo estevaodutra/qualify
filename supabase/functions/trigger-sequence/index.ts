@@ -127,7 +127,7 @@ Deno.serve(async (req) => {
     // Fetch the sequence
     const { data: sequence, error: sequenceError } = await supabase
       .from("message_sequences")
-      .select("id, name, active, group_campaign_id, user_id, trigger_type, trigger_config")
+      .select("id, name, active, group_campaign_id, user_id, company_id, trigger_type, trigger_config")
       .eq("id", sequenceId)
       .single();
 
@@ -153,7 +153,7 @@ Deno.serve(async (req) => {
     // Fetch the legacy campaign for backwards compatibility (fallback instance_id)
     const { data: campaign } = await supabase
       .from("group_campaigns")
-      .select("id, name, instance_id, config")
+      .select("id, name, instance_id, config, company_id")
       .eq("id", typedSequence.group_campaign_id)
       .maybeSingle();
 
@@ -305,10 +305,50 @@ Deno.serve(async (req) => {
       }
     }
 
+    const respondentName = extractField(payload, "name") || extractField(payload, "user.name") || "";
+    
+    // Auto-create lead if in private mode
+    let resolvedLeadId = null;
+    if (!shouldSendToGroup && destinationPhone) {
+      const companyId = typedSequence.company_id || typedCampaign.company_id;
+      if (companyId) {
+        const { data: existingLead } = await supabase
+          .from("leads")
+          .select("id")
+          .eq("company_id", companyId)
+          .eq("phone", destinationPhone)
+          .maybeSingle();
+
+        if (existingLead) {
+          resolvedLeadId = existingLead.id;
+        } else {
+          // Create the lead immediately
+          const { data: newLead, error: leadErr } = await supabase
+            .from("leads")
+            .insert({
+              company_id: companyId,
+              phone: destinationPhone,
+              name: respondentName || destinationPhone,
+              source: "Webhook / API",
+              custom_fields: customFields
+            })
+            .select("id")
+            .single();
+
+          if (newLead) {
+            resolvedLeadId = newLead.id;
+            console.log(`[TriggerSequence] 🆕 Auto-created lead ${newLead.id} for phone ${destinationPhone}`);
+          } else {
+            console.error(`[TriggerSequence] ❌ Failed to auto-create lead:`, leadErr);
+          }
+        }
+      }
+    }
+
     // Build the list of (respondentJid, respondentName, groupJid) destinations
     const destinations = shouldSendToGroup
       ? targetGroups.map((g) => ({ respondentJid: g.group_jid, respondentName: g.group_name || "", groupJid: g.group_jid, instanceId: g.instance_id }))
-      : [{ respondentJid: `${destinationPhone}@s.whatsapp.net`, respondentName: extractField(payload, "name") || extractField(payload, "user.name") || "", groupJid: "" }];
+      : [{ respondentJid: `${destinationPhone}@s.whatsapp.net`, respondentName, groupJid: "" }];
 
     console.log(`[TriggerSequence] Resolved ${destinations.length} destination(s) for this trigger`);
 
@@ -328,6 +368,7 @@ Deno.serve(async (req) => {
         sendPrivate: !shouldSendToGroup,
         customFields,
         webhookPayload,
+        leadId: resolvedLeadId,
         triggerId: triggerIdFromUrl || payload.triggerId || payload.trigger_id,
       };
 
