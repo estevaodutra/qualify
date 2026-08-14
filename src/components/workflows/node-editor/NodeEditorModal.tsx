@@ -164,7 +164,7 @@ export function NodeEditorModal({
     } else if (node?.nodeType === "field_op" && activeMapping) {
       const currentMappings = (node.config.mappings as any[]) || [];
       const updatedMappings = currentMappings.map(m => 
-        m.id === activeMapping.id ? localConfig : m
+        m.id === activeMapping.id ? { ...m, ...localConfig, id: m.id } : m
       );
       onUpdateNodeConfig(currentNodeId, { ...node.config, mappings: updatedMappings });
     } else {
@@ -678,7 +678,7 @@ export function NodeEditorModal({
                   setHasUnsavedChanges(true);
                   // Update the mapping array directly in the node config state if we want to save it later
                   const currentMappings = (node.config.mappings as any[]) || [];
-                  const newMappings = currentMappings.map(m => m.id === activeTriggerId ? updatedMapping : m);
+                  const newMappings = currentMappings.map(m => m.id === activeTriggerId ? { ...m, ...updatedMapping, id: m.id } : m);
                   onUpdateNodeConfig(node.id, { ...node.config, mappings: newMappings });
                 };
 

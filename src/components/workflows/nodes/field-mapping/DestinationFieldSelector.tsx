@@ -255,7 +255,8 @@ export function DestinationFieldSelector({ value, onChange, customFields = [], o
               currentCategoryFields.map(field => (
                 <div
                   key={field.id}
-                  onClick={() => {
+                  onPointerDown={(e) => {
+                    e.preventDefault();
                     onChange(field.id, field.label);
                     setOpen(false);
                   }}
