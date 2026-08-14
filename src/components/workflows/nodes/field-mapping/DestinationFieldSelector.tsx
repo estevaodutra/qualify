@@ -59,6 +59,25 @@ const DEFAULT_CATEGORIES: Category[] = [
     ]
   },
   {
+    id: "company",
+    label: "Campos da empresa",
+    fields: [
+      { id: "company.id", label: "ID da empresa", type: "text" },
+      { id: "company.name", label: "Nome da empresa", type: "text" },
+      { id: "company.document", label: "Documento / CNPJ", type: "text" },
+      { id: "company.phone", label: "Telefone da empresa", type: "text" },
+      { id: "company.email", label: "E-mail da empresa", type: "text" },
+      { id: "company.website", label: "Site da empresa", type: "text" },
+      { id: "company.address.street", label: "Endereço da empresa", type: "text" },
+      { id: "company.address.number", label: "Número da empresa", type: "text" },
+      { id: "company.address.neighborhood", label: "Bairro da empresa", type: "text" },
+      { id: "company.address.city", label: "Cidade da empresa", type: "text" },
+      { id: "company.address.state", label: "Estado da empresa", type: "text" },
+      { id: "company.address.zipcode", label: "CEP da empresa", type: "text" },
+      { id: "company.segment", label: "Segmento de atuação", type: "text" },
+    ]
+  },
+  {
     id: "product",
     label: "Campos do produto",
     fields: [
@@ -253,14 +272,30 @@ export function DestinationFieldSelector({ value, onChange, customFields = [] }:
             
             {activeCategory === "variables" && !search && (
                <div className="px-3 py-3 border-t mt-2">
-                 <Button variant="outline" size="sm" className="w-full text-xs h-8 border-dashed text-[#8A3CFF] hover:text-[#8A3CFF] hover:bg-[#8A3CFF]/5 font-semibold">
+                 <Button 
+                   variant="outline" 
+                   size="sm" 
+                   className="w-full text-xs h-8 border-dashed text-[#8A3CFF] hover:text-[#8A3CFF] hover:bg-[#8A3CFF]/5 font-semibold"
+                   onClick={(e) => {
+                     e.stopPropagation();
+                     window.open("/settings?tab=custom_fields", "_blank");
+                   }}
+                 >
                    + Criar nova variável
                  </Button>
                </div>
             )}
             {(activeCategory === "custom_lead" || activeCategory === "custom_deal" || activeCategory === "custom_company") && !search && (
                <div className="px-3 py-3 border-t mt-2">
-                 <Button variant="outline" size="sm" className="w-full text-xs h-8 border-dashed text-[#8A3CFF] hover:text-[#8A3CFF] hover:bg-[#8A3CFF]/5 font-semibold">
+                 <Button 
+                   variant="outline" 
+                   size="sm" 
+                   className="w-full text-xs h-8 border-dashed text-[#8A3CFF] hover:text-[#8A3CFF] hover:bg-[#8A3CFF]/5 font-semibold"
+                   onClick={(e) => {
+                     e.stopPropagation();
+                     window.open("/settings?tab=custom_fields", "_blank");
+                   }}
+                 >
                    + Criar novo campo
                  </Button>
                </div>
