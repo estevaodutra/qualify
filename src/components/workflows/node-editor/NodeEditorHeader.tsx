@@ -139,6 +139,26 @@ export function NodeEditorHeader({
           )
         )}
 
+        {/* Save Button */}
+        <Button
+          variant={isUnsaved ? "default" : "outline"}
+          size="sm"
+          onClick={onSave}
+          className={`h-8 text-xs rounded-xl font-semibold shrink-0 ${
+            isUnsaved 
+              ? "bg-[#8A3CFF] hover:bg-[#8A3CFF]/90 text-white" 
+              : "border-slate-200 text-slate-500"
+          }`}
+          title="Salvar alterações e fechar"
+        >
+          {isUnsaved ? (
+            <Save className="h-3.5 w-3.5 mr-1" />
+          ) : (
+            <Check className="h-3.5 w-3.5 mr-1 text-emerald-500" />
+          )}
+          {isUnsaved ? "Salvar e fechar" : "Salvo"}
+        </Button>
+
         {/* Close Button */}
         <Button
           variant="ghost"
