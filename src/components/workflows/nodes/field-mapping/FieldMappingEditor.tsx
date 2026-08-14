@@ -69,6 +69,10 @@ export function FieldMappingEditor({ mapping, onChange, referencePayload }: Fiel
     }
   }, [sourceValue, referencePayload, transform]);
 
+  const handleChange = (updates: Partial<any>) => {
+    onChange({ ...mapping, ...updates });
+  };
+
   return (
     <div className="flex flex-col h-full bg-slate-50/30">
       <div className="flex-1 overflow-y-auto p-6 space-y-8">
