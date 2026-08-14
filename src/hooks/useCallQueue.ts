@@ -320,18 +320,45 @@ export function useCallQueue(options: UseCallQueueOptions = {}) {
       let skipped = 0;
       for (let i = 0; i < leadsData.length; i++) {
         const lead = leadsData[i];
+
+        // 1. Ensure lead is in call_leads table first to satisfy foreign key constraint
+        const { data: callLead, error: callLeadErr } = await (supabase as any)
+          .from("call_leads")
+          .upsert({
+             campaign_id: finalCampaignId,
+             user_id: authUser.id,
+             phone: lead.phone,
+             name: lead.name,
+             status: "pendente",
+             company_id: activeCompanyId || null
+          }, { onConflict: "phone,campaign_id" })
+          .select("id")
+          .single();
+
+        if (callLeadErr || !callLead) {
+          console.error("[useCallQueue] Error creating call_lead:", callLeadErr);
+          skipped++;
+          continue;
+        }
+
+        // 2. Insert into call_queue
         const { error } = await (supabase as any).from("call_queue").insert({
           user_id: authUser.id,
           company_id: activeCompanyId || null,
           campaign_id: finalCampaignId,
-          lead_id: lead.id,
+          lead_id: callLead.id,
           phone: lead.phone,
           lead_name: lead.name || null,
           position: startPos + i,
           source: "manual",
         });
-        if (error) skipped++;
-        else added++;
+
+        if (error) {
+          console.error("[useCallQueue] Error adding to queue:", lead.id, error);
+          skipped++;
+        } else {
+          added++;
+        }
       }
       return { added, skipped };
     },

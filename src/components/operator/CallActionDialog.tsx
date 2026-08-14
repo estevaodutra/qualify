@@ -128,6 +128,17 @@ export function CallActionDialog({
     }
   }, [open, callId, userId]);
 
+  // Sync specific props that might change while dialog is open (like status or externalCallId)
+  useEffect(() => {
+    if (open) {
+      setCurrentData(prev => ({
+        ...prev,
+        callStatus: callStatus || prev.callStatus,
+        externalCallId: externalCallId || prev.externalCallId,
+      }));
+    }
+  }, [callStatus, externalCallId, open]);
+
   // --- Per-view state ---
   const { actions, isLoading: actionsLoading } = useCallActions(currentData.campaignId);
   const { toast } = useToast();

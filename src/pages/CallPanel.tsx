@@ -895,6 +895,7 @@ export default function CallPanel() {
 
       if (proxyError) {
         toast({ title: "Erro no Webhook", description: proxyError.message, variant: "destructive" });
+        setViewingQueueLead(prev => prev && prev.id === realId ? { ...prev, callStatus: "failed" } : prev);
         await supabase
           .from("workflow_call_tasks")
           .update({ status: "failed" })
@@ -916,6 +917,7 @@ export default function CallPanel() {
         }
 
         toast({ title: "Ligação iniciada", description: `Disparo enviado para o webhook.` });
+        setViewingQueueLead(prev => prev && prev.id === qe.id ? { ...prev, callStatus: "in_call", externalCallId } : prev);
         await supabase
           .from("workflow_call_tasks")
           .update({ 
@@ -2041,7 +2043,8 @@ export default function CallPanel() {
           attemptNumber={viewingQueueLead.attemptNumber || 0}
           maxAttempts={viewingQueueLead.maxAttempts || 3}
           isPriority={viewingQueueLead.isPriority || false}
-          callStatus="queued"
+          callStatus={viewingQueueLead.callStatus || viewingQueueLead.status || "queued"}
+          externalCallId={viewingQueueLead.externalCallId || undefined}
           initialObservations={viewingQueueLead.observations || ""}
           audioUrl={viewingQueueLead.audioUrl || null}
           userId={viewingQueueLead.userId}

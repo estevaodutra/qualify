@@ -1383,6 +1383,7 @@ export function UnifiedSequenceBuilder({
                                           } 
                                         } : n
                                       ));
+                                      updateConnectionsAndSave(prev => prev.filter(c => !(c.sourceNodeId === node.id && c.conditionPath === trigger.id)));
                                     }}
                                     className="p-1.5 text-slate-400 hover:text-destructive hover:bg-destructive/10 rounded-md opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                                     title="Remover gatilho"
