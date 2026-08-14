@@ -79,35 +79,44 @@ export function useCompanyMembers() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["company-members", activeCompanyId] });
+      queryClient.invalidateQueries({ queryKey: ["call_operators"] });
     },
   });
 
   const removeMember = useMutation({
     mutationFn: async (memberId: string) => {
-      const { error } = await (supabase as any)
-        .from("company_members")
-        .delete()
-        .eq("id", memberId)
-        .eq("company_id", activeCompanyId);
+      const { data, error } = await supabase.functions.invoke("company-add-member", {
+        body: {
+          action: "remove",
+          member_id: memberId,
+          company_id: activeCompanyId,
+        },
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["company-members", activeCompanyId] });
+      queryClient.invalidateQueries({ queryKey: ["call_operators"] });
     },
   });
 
   const updateMemberExtension = useMutation({
     mutationFn: async (params: { userId: string; extension: string }) => {
-      const { error } = await (supabase as any)
-        .from("call_operators")
-        .update({ extension: params.extension || null })
-        .eq("user_id", params.userId)
-        .eq("company_id", activeCompanyId);
-      
+      const { data, error } = await supabase.functions.invoke("company-add-member", {
+        body: {
+          action: "update_extension",
+          user_id: params.userId,
+          extension: params.extension || null,
+          company_id: activeCompanyId,
+        },
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["company-members", activeCompanyId] });
+      queryClient.invalidateQueries({ queryKey: ["call_operators"] });
     },
   });
 

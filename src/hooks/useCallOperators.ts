@@ -117,20 +117,40 @@ export function useCallOperators() {
       id: string;
       updates: Partial<{ operatorName: string; extension: string; isActive: boolean; personalIntervalSeconds: number | null }>;
     }) => {
+      // For extension, use the Edge Function to bypass RLS
+      if (updates.extension !== undefined) {
+        // We need the user_id for the Edge Function.
+        const { data: op } = await (supabase as any).from("call_operators").select("user_id").eq("id", id).single();
+        if (op) {
+          const { data, error } = await supabase.functions.invoke("company-add-member", {
+            body: {
+              action: "update_extension",
+              user_id: op.user_id,
+              extension: updates.extension || null,
+              company_id: activeCompanyId,
+            },
+          });
+          if (error) throw error;
+          if (data?.error) throw new Error(data.error);
+        }
+      }
+
+      // For other fields, keep using frontend client (which works because they are likely allowed by RLS or not updated often)
       const dbUpdates: Record<string, unknown> = {};
       if (updates.operatorName !== undefined) dbUpdates.operator_name = updates.operatorName;
-      if (updates.extension !== undefined) dbUpdates.extension = updates.extension;
       if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
       if (updates.personalIntervalSeconds !== undefined) dbUpdates.personal_interval_seconds = updates.personalIntervalSeconds;
 
-      const { error } = await (supabase as any)
-        .from("call_operators")
-        .update(dbUpdates)
-        .eq("id", id);
+      if (Object.keys(dbUpdates).length > 0) {
+        const { error } = await (supabase as any)
+          .from("call_operators")
+          .update(dbUpdates)
+          .eq("id", id);
 
-      if (error) {
-        if (error.code === "23505") throw new Error("Já existe um operador com este ramal.");
-        throw error;
+        if (error) {
+          if (error.code === "23505") throw new Error("Já existe um operador com este ramal.");
+          throw error;
+        }
       }
     },
     onSuccess: () => {
@@ -144,11 +164,19 @@ export function useCallOperators() {
 
   const removeOperatorMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await (supabase as any)
-        .from("call_operators")
-        .delete()
-        .eq("id", id);
+      // We need user_id to remove via Edge Function (or just use a new edge function param)
+      const { data: op } = await (supabase as any).from("call_operators").select("user_id").eq("id", id).single();
+      if (!op) throw new Error("Operador não encontrado");
+
+      const { data, error } = await supabase.functions.invoke("company-add-member", {
+        body: {
+          action: "remove",
+          user_id: op.user_id,
+          company_id: activeCompanyId,
+        },
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["call_operators"] });

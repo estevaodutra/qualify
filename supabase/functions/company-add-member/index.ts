@@ -41,10 +41,10 @@ Deno.serve(async (req) => {
     }
     const callerId = user.id;
 
-    const { email, role, extension, company_id } = await req.json();
+    const { action, email, role, extension, company_id, member_id, user_id } = await req.json();
 
-    if (!email || !company_id) {
-      return new Response(JSON.stringify({ error: "email and company_id required" }), {
+    if (!company_id) {
+      return new Response(JSON.stringify({ error: "company_id required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -83,6 +83,52 @@ Deno.serve(async (req) => {
     if (!isAdmin) {
       return new Response(JSON.stringify({ error: "not_admin" }), {
         status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (action === "remove") {
+      if (!member_id && !user_id) {
+         return new Response(JSON.stringify({ error: "member_id or user_id required for remove" }), { status: 400, headers: corsHeaders });
+      }
+      
+      let targetUserId = user_id;
+      if (!targetUserId) {
+        const { data: member } = await adminClient.from("company_members").select("user_id").eq("id", member_id).single();
+        if (member) targetUserId = member.user_id;
+      }
+
+      if (member_id) {
+        await adminClient.from("company_members").delete().eq("id", member_id).eq("company_id", company_id);
+      }
+      if (targetUserId) {
+        await adminClient.from("company_members").delete().eq("user_id", targetUserId).eq("company_id", company_id);
+        await adminClient.from("call_operators").delete().eq("user_id", targetUserId).eq("company_id", company_id);
+      }
+
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (action === "update_extension") {
+      if (!user_id) {
+         return new Response(JSON.stringify({ error: "user_id required for update_extension" }), { status: 400, headers: corsHeaders });
+      }
+      
+      await adminClient.from("call_operators").update({ extension: extension || null }).eq("user_id", user_id).eq("company_id", company_id);
+
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Default: Add member
+    if (!email) {
+      return new Response(JSON.stringify({ error: "email required for adding member" }), {
+        status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
