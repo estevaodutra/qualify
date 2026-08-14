@@ -13,12 +13,13 @@ interface FieldMappingEditorProps {
 }
 
 export function FieldMappingEditor({ mapping, onChange, referencePayload }: FieldMappingEditorProps) {
-  const [targetField, setTargetField] = useState(mapping.targetField || "");
-  const [targetLabel, setTargetLabel] = useState(mapping.targetLabel || "");
-  const [sourceValue, setSourceValue] = useState(mapping.source || "");
-  const [transform, setTransform] = useState(mapping.transform || "none");
   const [customFields, setCustomFields] = useState<any[]>([]);
   const [previewResult, setPreviewResult] = useState<string>("Preview não disponível");
+
+  const targetField = mapping.targetField || "";
+  const targetLabel = mapping.targetLabel || "";
+  const sourceValue = mapping.source || "";
+  const transform = mapping.transform || "none";
 
   const fetchCustomFields = async () => {
     const { data } = await supabase.from("custom_fields_metadata").select("*");
@@ -28,17 +29,6 @@ export function FieldMappingEditor({ mapping, onChange, referencePayload }: Fiel
   useEffect(() => {
     fetchCustomFields();
   }, []);
-
-  // Sync internal state to parent when it changes
-  useEffect(() => {
-    onChange({
-      ...mapping,
-      targetField,
-      targetLabel,
-      source: sourceValue,
-      transform
-    });
-  }, [targetField, targetLabel, sourceValue, transform]);
 
   // Compute preview based on referencePayload and sourceValue expression
   useEffect(() => {
@@ -92,8 +82,9 @@ export function FieldMappingEditor({ mapping, onChange, referencePayload }: Fiel
           <DestinationFieldSelector 
             value={targetField} 
             onChange={(val, label) => {
-              setTargetField(val);
-              if (label) setTargetLabel(label);
+              const updates: any = { targetField: val };
+              if (label) updates.targetLabel = label;
+              handleChange(updates);
             }} 
             customFields={customFields}
             onFieldCreated={fetchCustomFields}
@@ -108,7 +99,7 @@ export function FieldMappingEditor({ mapping, onChange, referencePayload }: Fiel
           </div>
           <ValueInputSelector 
             value={sourceValue}
-            onChange={setSourceValue}
+            onChange={(val) => handleChange({ source: val })}
             referencePayload={referencePayload}
           />
         </section>
@@ -119,7 +110,7 @@ export function FieldMappingEditor({ mapping, onChange, referencePayload }: Fiel
             <h3 className="text-sm font-bold text-slate-800">Transformação de dados (opcional)</h3>
             <p className="text-xs text-slate-500 font-medium">Modifique o dado recebido antes de gravar</p>
           </div>
-          <Select value={transform} onValueChange={setTransform}>
+          <Select value={transform} onValueChange={(val) => handleChange({ transform: val })}>
             <SelectTrigger className="w-full h-10 bg-white border-slate-200 rounded-xl text-slate-700">
               <SelectValue placeholder="Selecione uma transformação" />
             </SelectTrigger>
