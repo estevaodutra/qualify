@@ -1417,20 +1417,7 @@ export function UnifiedSequenceBuilder({
                             <Plus className="h-3.5 w-3.5" /> Adicionar gatilho
                           </button>
                           
-                          <div className="flex items-center justify-between pt-4 border-t border-slate-100 px-2 mt-auto">
-                            <div className="text-center">
-                              <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
-                              <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Sucessos</p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
-                              <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Alertas</p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
-                              <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Erros</p>
-                            </div>
-                          </div>
+
                         </div>
                       ) : isFieldOp ? (
                         <div className="flex flex-col w-full text-left h-full">
@@ -1548,20 +1535,7 @@ export function UnifiedSequenceBuilder({
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between pt-2 mt-2 border-t border-slate-100 px-1">
-                            <div className="text-center">
-                              <p className="text-sm font-bold text-slate-800 leading-none mb-1">0</p>
-                              <p className="text-[9px] font-semibold text-[#8A3CFF] leading-none">Sucessos</p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-sm font-bold text-slate-800 leading-none mb-1">0</p>
-                              <p className="text-[9px] font-semibold text-[#8A3CFF] leading-none">Alertas</p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-sm font-bold text-slate-800 leading-none mb-1">0</p>
-                              <p className="text-[9px] font-semibold text-[#8A3CFF] leading-none">Erros</p>
-                            </div>
-                          </div>
+
                         </div>
                       ) : isGroupManagement ? (
                         <div className="flex flex-col w-full text-left h-full">
@@ -1629,20 +1603,7 @@ export function UnifiedSequenceBuilder({
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between pt-2 mt-2 border-t border-slate-100 px-1">
-                            <div className="text-center">
-                              <p className="text-sm font-bold text-slate-800 leading-none mb-1">0</p>
-                              <p className="text-[9px] font-semibold text-[#8A3CFF] leading-none">Sucessos</p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-sm font-bold text-slate-800 leading-none mb-1">0</p>
-                              <p className="text-[9px] font-semibold text-[#8A3CFF] leading-none">Alertas</p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-sm font-bold text-slate-800 leading-none mb-1">0</p>
-                              <p className="text-[9px] font-semibold text-[#8A3CFF] leading-none">Erros</p>
-                            </div>
-                          </div>
+
                         </div>
                       ) : isContent ? (
                         <div className="flex flex-col w-full text-left h-full">
@@ -1751,20 +1712,7 @@ export function UnifiedSequenceBuilder({
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between pt-4 border-t border-slate-100 px-2 mt-auto">
-                            <div className="text-center">
-                              <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
-                              <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Sucessos</p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
-                              <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Alertas</p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
-                              <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Erros</p>
-                            </div>
-                          </div>
+
                         </div>
                       ) : node.nodeType === "phone_call" ? (
                         <div className="flex flex-col w-full text-left h-full">
@@ -2033,21 +1981,7 @@ export function UnifiedSequenceBuilder({
                                 </div>
                               ))}
 
-                              {/* Stats counters */}
-                              <div className="flex items-center justify-between pt-4 border-t border-slate-100 px-2 mt-2">
-                                <div className="text-center">
-                                  <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
-                                  <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Sucessos</p>
-                                </div>
-                                <div className="text-center">
-                                  <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
-                                  <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Alertas</p>
-                                </div>
-                                <div className="text-center">
-                                  <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
-                                  <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Erros</p>
-                                </div>
-                              </div>
+
                             </div>
                           );
                         })()
@@ -2094,20 +2028,7 @@ export function UnifiedSequenceBuilder({
                             </div>
                           </div>
 
-                          {/* Stats counters */}
-                          <div className="flex items-center justify-between pt-4 border-t border-slate-100 px-2 mt-2">
-                            <div className="text-center">
-                              <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
-                              <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Sucessos</p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
-                              <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Alertas</p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
-                              <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Erros</p>
-                            </div>
+
                           </div>
                         </div>
                       ) : (
@@ -2171,31 +2092,9 @@ export function UnifiedSequenceBuilder({
                         </>
                       )}
 
-                      {/* Mock Stats (DataCray aesthetic) */}
-                      {!isTrigger && !isFieldOp && !isContent && !isGroupManagement && (
-                        <div className="flex justify-between items-center text-[9px] font-bold text-slate-400/80 border-t border-slate-100 pt-2 mt-2 select-none">
-                          <span className="flex items-center gap-0.5">🟢 0</span>
-                          <span className="flex items-center gap-0.5">🟡 0</span>
-                          <span className="flex items-center gap-0.5">🔴 0</span>
-                        </div>
-                      )}
+
                       
-                      {isFieldOp && (
-                        <div className="flex items-center justify-between pt-4 border-t border-slate-100 px-2 mt-auto">
-                          <div className="text-center">
-                            <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
-                            <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Sucessos</p>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
-                            <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Alertas</p>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-base font-bold text-slate-800 leading-none mb-1">0</p>
-                            <p className="text-[10px] font-semibold text-[#8A3CFF] leading-none">Erros</p>
-                          </div>
-                        </div>
-                      )}
+
 
                       {/* Card footer: node order only — editing is now a click on the card body, deletion lives in the hover toolbar */}
                       <div className="flex items-center justify-between border-t border-slate-100 pt-2 mt-2">
