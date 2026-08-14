@@ -161,10 +161,10 @@ export function DestinationFieldSelector({ value, onChange, customFields = [], o
     // Populate custom fields
     customFields.forEach(cf => {
       const type = cf.type as any;
-      const fieldItem = { id: `custom.${cf.entity_type}.${cf.key}`, label: cf.name, type };
-      if (cf.entity_type === "lead") cats.find(c => c.id === "custom_lead")?.fields.push(fieldItem);
-      if (cf.entity_type === "deal") cats.find(c => c.id === "custom_deal")?.fields.push(fieldItem);
-      if (cf.entity_type === "company") cats.find(c => c.id === "custom_company")?.fields.push(fieldItem);
+      const fieldItem = { id: `custom.${cf.category}.${cf.key}`, label: cf.name, type };
+      if (cf.category === "lead") cats.find(c => c.id === "custom_lead")?.fields.push(fieldItem);
+      if (cf.category === "deal") cats.find(c => c.id === "custom_deal")?.fields.push(fieldItem);
+      if (cf.category === "company") cats.find(c => c.id === "custom_company")?.fields.push(fieldItem);
     });
 
     return cats;
