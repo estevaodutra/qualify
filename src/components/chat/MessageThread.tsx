@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import {  Loader2, FileText, Lock, MapPin, Check, CheckCheck, User , Play, Pause, Clock, AlertCircle } from "lucide-react";
+import {  Loader2, FileText, Lock, MapPin, Check, CheckCheck, User , Play, Pause, Clock, AlertCircle, Volume2, VolumeX } from "lucide-react";
 import { ChatMessage, ChatConversation } from "@/hooks/useChat";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
@@ -126,12 +126,28 @@ function CustomPtvPlayer({ src, isOperator, isInternal, timeString, status }: { 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [isMuted, setIsMuted] = useState(false);
+  const [hasError, setHasError] = useState(false);
 
   const togglePlay = () => {
+    if (videoRef.current && !hasError) {
+      if (isPlaying) {
+        videoRef.current.pause();
+        setIsPlaying(false);
+      } else {
+        videoRef.current.play().then(() => setIsPlaying(true)).catch((e) => {
+          console.error("Playback failed", e);
+          setIsPlaying(false);
+        });
+      }
+    }
+  };
+
+  const toggleMute = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (videoRef.current) {
-      if (isPlaying) videoRef.current.pause();
-      else videoRef.current.play();
-      setIsPlaying(!isPlaying);
+      videoRef.current.muted = !isMuted;
+      setIsMuted(!isMuted);
     }
   };
 
@@ -147,39 +163,49 @@ function CustomPtvPlayer({ src, isOperator, isInternal, timeString, status }: { 
       {/* Video Circle */}
       <div 
         className={cn(
-          "relative w-56 h-56 rounded-full overflow-hidden shadow-sm cursor-pointer bg-black",
+          "relative w-56 h-56 rounded-full overflow-hidden shadow-sm cursor-pointer bg-black flex items-center justify-center",
           isOperator && !isInternal ? "border-4 border-primary/20" : "border-4 border-card"
         )} 
         onClick={togglePlay}
       >
-        <video 
-          ref={videoRef}
-          src={src} 
-          className="w-full h-full object-cover"
-          onTimeUpdate={handleTimeUpdate}
-          onEnded={() => setIsPlaying(false)}
-          playsInline
-          preload="metadata"
-        />
-        {/* Play Overlay when paused */}
-        {!isPlaying && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover:bg-black/20 transition-colors">
-            <div className="h-12 w-12 rounded-full bg-black/40 text-white flex items-center justify-center backdrop-blur-sm shadow-md">
-              <Play className="h-6 w-6 ml-1" fill="currentColor" />
-            </div>
+        {hasError ? (
+          <div className="flex flex-col items-center text-muted-foreground">
+            <AlertCircle className="h-8 w-8 mb-1 opacity-50" />
+            <span className="text-[10px]">Erro na mídia</span>
           </div>
+        ) : (
+          <>
+            <video 
+              ref={videoRef}
+              src={src} 
+              className="w-full h-full object-cover"
+              onTimeUpdate={handleTimeUpdate}
+              onEnded={() => setIsPlaying(false)}
+              onError={() => setHasError(true)}
+              playsInline
+              preload="metadata"
+            />
+            {/* Play Overlay when paused */}
+            {!isPlaying && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover:bg-black/20 transition-colors">
+                <div className="h-12 w-12 rounded-full bg-black/40 text-white flex items-center justify-center backdrop-blur-sm shadow-md">
+                  <Play className="h-6 w-6 ml-1" fill="currentColor" />
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
       
       {/* HUD (Controls Below) */}
       <div className="flex items-center w-52 bg-card/80 backdrop-blur-md rounded-full px-3 py-1.5 shadow-sm border border-border/40 gap-2">
-        <button onClick={togglePlay} className="text-muted-foreground hover:text-foreground transition-colors">
+        <button onClick={togglePlay} disabled={hasError} className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50">
           {isPlaying ? <Pause className="h-4 w-4" fill="currentColor" /> : <Play className="h-4 w-4" fill="currentColor" />}
         </button>
         
         {/* Progress Bar */}
         <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden relative cursor-pointer" onClick={(e) => {
-             if(videoRef.current && videoRef.current.duration) {
+             if(videoRef.current && videoRef.current.duration && !hasError) {
                 const rect = e.currentTarget.getBoundingClientRect();
                 const pos = (e.clientX - rect.left) / rect.width;
                 videoRef.current.currentTime = pos * videoRef.current.duration;
@@ -187,6 +213,11 @@ function CustomPtvPlayer({ src, isOperator, isInternal, timeString, status }: { 
           }}>
            <div className="h-full absolute top-0 left-0 bg-primary transition-all duration-75" style={{ width: `${progress}%` }} />
         </div>
+
+        {/* Mute Button */}
+        <button onClick={toggleMute} disabled={hasError} className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50">
+          {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+        </button>
       </div>
       
       {/* Timestamp */}
