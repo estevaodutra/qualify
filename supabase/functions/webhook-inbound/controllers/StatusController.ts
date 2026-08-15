@@ -20,12 +20,13 @@ export async function processStatusEvent(
   if (isStatusAck && rawEvent.id) {
     try {
       const statusValue = classification.eventType.replace("message.", "");
-      console.log(`[StatusController] Updating message status ${rawEvent.id} to ${statusValue}`);
+      const shortId = rawEvent.id.split("_").pop() || rawEvent.id;
+      console.log(`[StatusController] Updating message status ${rawEvent.id} (short: ${shortId}) to ${statusValue}`);
 
       const { data, error } = await supabase
         .from("chat_messages")
         .update({ status: statusValue })
-        .or(`message_id.eq.${rawEvent.id},zaap_id.eq.${rawEvent.id}`)
+        .or(`message_id.eq.${rawEvent.id},zaap_id.eq.${rawEvent.id},message_id.ilike.%${shortId}%,zaap_id.ilike.%${shortId}%`)
         .select("id")
         .maybeSingle();
 
