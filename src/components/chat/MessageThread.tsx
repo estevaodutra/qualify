@@ -169,9 +169,10 @@ function CustomPtvPlayer({ src, isOperator, isInternal, timeString, status }: { 
         onClick={togglePlay}
       >
         {hasError ? (
-          <div className="flex flex-col items-center text-muted-foreground">
+          <div className="flex flex-col items-center text-muted-foreground p-4 text-center break-all">
             <AlertCircle className="h-8 w-8 mb-1 opacity-50" />
-            <span className="text-[10px]">Erro na mídia</span>
+            <span className="text-[10px] font-bold">Erro na mídia</span>
+            <span className="text-[8px] mt-1 opacity-50 select-all">{src}</span>
           </div>
         ) : (
           <>
