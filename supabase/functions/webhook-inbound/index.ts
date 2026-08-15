@@ -80,7 +80,8 @@ Deno.serve(async (req) => {
             
           if (!uploadError && uploadData) {
             const { data: publicUrlData } = supabase.storage.from("media").getPublicUrl(fileName);
-            rawEvent.mediaUrl = publicUrlData.publicUrl;
+            // Corrige a URL gerada caso o Supabase esteja rodando localmente (Kong)
+            rawEvent.mediaUrl = publicUrlData.publicUrl.replace("http://kong:8000", "https://qualify-supabase.d2x.site");
             console.log(`[webhook-inbound] Successfully uploaded to Supabase: ${rawEvent.mediaUrl}`);
           } else {
             console.error(`[webhook-inbound] Error uploading to storage:`, uploadError);
