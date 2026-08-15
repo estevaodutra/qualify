@@ -81,7 +81,7 @@ async function dispatchSingleTask(supabase: any, task: any, supabaseUrl: string,
 
     const n8nWebhookUrl = (webConfig?.is_active && webConfig?.url) 
       ? webConfig.url 
-      : "https://n8n.6ksfuf.easypanel.host/webhook/ura";
+      : "https://n8n.d2x.site/webhook/ura";
 
     // 3. Fetch lead details
     const { data: lead } = await supabase

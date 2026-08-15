@@ -19,6 +19,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Copy, RefreshCw, Upload, Link2, Trash2, Shuffle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ConfigTabProps {
   campaign: GroupCampaign;
@@ -102,18 +103,12 @@ export function ConfigTab({ campaign, onUpdate }: ConfigTabProps) {
   const handleUpdateGroups = async () => {
     setIsSyncingGroups(true);
     try {
-      const response = await fetch("https://qualify.6ksfuf.easypanel.host/functions/v1/schedule-group-updates", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ campaign_id: campaign.id })
+      const { data: result, error } = await supabase.functions.invoke("schedule-group-updates", {
+        body: { campaign_id: campaign.id }
       });
       
-      const result = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(result.error || "Erro ao agendar atualização");
+      if (error) {
+        throw new Error(error.message || "Erro ao agendar atualização");
       }
       
       toast({

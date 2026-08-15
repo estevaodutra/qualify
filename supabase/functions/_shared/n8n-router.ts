@@ -23,7 +23,7 @@ export function routeZApiRequest(endpoint: string, method: string, requestBody: 
     else if (cleanEndpoint.includes("/list-status")) action = "status.list";
 
     return {
-      url: "https://n8n.6ksfuf.easypanel.host/webhook/manager_status",
+      url: "https://n8n.d2x.site/webhook/manager_status",
       action
     };
   }
@@ -53,7 +53,7 @@ export function routeZApiRequest(endpoint: string, method: string, requestBody: 
       else action = "group.update_members";
     }
     return {
-      url: "https://n8n.6ksfuf.easypanel.host/webhook/manager_groups",
+      url: "https://n8n.d2x.site/webhook/manager_groups",
       action
     };
   }
@@ -83,7 +83,7 @@ export function routeZApiRequest(endpoint: string, method: string, requestBody: 
     else if (cleanEndpoint.includes("/read-message")) action = "message.read";
 
     return {
-      url: "https://n8n.6ksfuf.easypanel.host/webhook/manager_messages",
+      url: "https://n8n.d2x.site/webhook/manager_messages",
       action
     };
   }
@@ -107,7 +107,7 @@ export function routeZApiRequest(endpoint: string, method: string, requestBody: 
     else if (cleanEndpoint.includes("/business-info")) action = "contact.get_business_info";
 
     return {
-      url: "https://n8n.6ksfuf.easypanel.host/webhook/manager_contacts",
+      url: "https://n8n.d2x.site/webhook/manager_contacts",
       action
     };
   }
@@ -133,7 +133,7 @@ export function routeZApiRequest(endpoint: string, method: string, requestBody: 
     else if (cleanEndpoint.includes("/delete-chat")) action = "chat.delete";
 
     return {
-      url: "https://n8n.6ksfuf.easypanel.host/webhook/manager_chats",
+      url: "https://n8n.d2x.site/webhook/manager_chats",
       action
     };
   }
@@ -150,7 +150,7 @@ export function routeZApiRequest(endpoint: string, method: string, requestBody: 
     else if (cleanEndpoint.includes("/business-profile")) action = "business.get_profile";
 
     return {
-      url: "https://n8n.6ksfuf.easypanel.host/webhook/manager_whatsapp_business",
+      url: "https://n8n.d2x.site/webhook/manager_whatsapp_business",
       action
     };
   }
@@ -167,7 +167,7 @@ export function routeZApiRequest(endpoint: string, method: string, requestBody: 
   else if (cleanEndpoint.includes("/update-webhook")) instanceAction = "instance.update_webhook";
 
   return {
-    url: "https://n8n.6ksfuf.easypanel.host/webhook/manager_instance",
+    url: "https://n8n.d2x.site/webhook/manager_instance",
     action: instanceAction
   };
 }

@@ -18,7 +18,7 @@ export const webhookCategories: WebhookCategory[] = [
     id: "messages",
     name: "Mensagens",
     description: "Eventos relacionados a envio e recebimento de mensagens",
-    defaultUrl: "https://n8n.6ksfuf.easypanel.host/webhook/manager_messages",
+    defaultUrl: "https://n8n.d2x.site/webhook/manager_messages",
     actions: [
       // Request actions (Dispatch -> n8n)
       { id: "message.send_text", name: "message.send_text", description: "Enviar mensagem de texto", type: "request" },
@@ -49,7 +49,7 @@ export const webhookCategories: WebhookCategory[] = [
     id: "instance",
     name: "Instância",
     description: "Eventos de status e conexão da instância WhatsApp",
-    defaultUrl: "https://n8n.6ksfuf.easypanel.host/webhook/manager_instance",
+    defaultUrl: "https://n8n.d2x.site/webhook/manager_instance",
     actions: [
       // Request actions (Dispatch -> n8n)
       { id: "instance.connect", name: "instance.connect", description: "Conectar instância (QR/telefone)", type: "request" },
@@ -72,7 +72,7 @@ export const webhookCategories: WebhookCategory[] = [
     id: "groups",
     name: "Grupos",
     description: "Eventos de grupos do WhatsApp",
-    defaultUrl: "https://n8n.6ksfuf.easypanel.host/webhook/manager_groups",
+    defaultUrl: "https://n8n.d2x.site/webhook/manager_groups",
     actions: [
       // Request actions (Dispatch -> n8n)
       { id: "group.list", name: "group.list", description: "Listar grupos", type: "request" },
@@ -100,7 +100,7 @@ export const webhookCategories: WebhookCategory[] = [
     id: "calls",
     name: "Ligações",
     description: "Eventos relacionados a campanhas de ligação telefônica",
-    defaultUrl: "https://n8n.6ksfuf.easypanel.host/webhook/calls",
+    defaultUrl: "https://n8n.d2x.site/webhook/calls",
     actions: [
       // Request actions (Dispatch -> n8n)
       { id: "call.dial", name: "call.dial", description: "Iniciar ligação", type: "request" },
@@ -121,7 +121,7 @@ export const webhookCategories: WebhookCategory[] = [
     id: "contacts",
     name: "Contatos",
     description: "Eventos relacionados a contatos e números",
-    defaultUrl: "https://n8n.6ksfuf.easypanel.host/webhook/manager_contacts",
+    defaultUrl: "https://n8n.d2x.site/webhook/manager_contacts",
     actions: [
       // Request actions (Dispatch -> n8n)
       { id: "contact.list", name: "contact.list", description: "Listar contatos", type: "request" },
@@ -141,7 +141,7 @@ export const webhookCategories: WebhookCategory[] = [
     id: "chat",
     name: "Conversas / Chat Presence",
     description: "Eventos de conversas, histórico e status de presença (online/digitando)",
-    defaultUrl: "https://n8n.6ksfuf.easypanel.host/webhook/manager_chats",
+    defaultUrl: "https://n8n.d2x.site/webhook/manager_chats",
     actions: [
       // Request actions (Dispatch -> n8n)
       { id: "chat.list", name: "chat.list", description: "Listar conversas", type: "request" },
@@ -165,7 +165,7 @@ export const webhookCategories: WebhookCategory[] = [
     id: "status",
     name: "Status",
     description: "Eventos e envios de status do WhatsApp",
-    defaultUrl: "https://n8n.6ksfuf.easypanel.host/webhook/manager_status",
+    defaultUrl: "https://n8n.d2x.site/webhook/manager_status",
     actions: [
       { id: "status.text", name: "status.text", description: "Enviar status de texto", type: "request" },
       { id: "status.image", name: "status.image", description: "Enviar status de imagem", type: "request" },
@@ -179,7 +179,7 @@ export const webhookCategories: WebhookCategory[] = [
     id: "business",
     name: "Business / Comercial",
     description: "Gerenciamento de produtos, catálogos e recursos de WhatsApp Business",
-    defaultUrl: "https://n8n.6ksfuf.easypanel.host/webhook/manager_whatsapp_business",
+    defaultUrl: "https://n8n.d2x.site/webhook/manager_whatsapp_business",
     actions: [
       { id: "business.get_catalog", name: "business.get_catalog", description: "Obter catálogo de produtos", type: "request" },
       { id: "business.send_product", name: "business.send_product", description: "Enviar produto comercial", type: "request" },
@@ -240,7 +240,7 @@ export const webhookCategories: WebhookCategory[] = [
     id: "ura",
     name: "URA",
     description: "Eventos relacionados a disparos de URA",
-    defaultUrl: "https://n8n.6ksfuf.easypanel.host/webhook/ura",
+    defaultUrl: "https://n8n.d2x.site/webhook/ura",
     actions: [
       { id: "ura.dispatch", name: "ura.dispatch", description: "Disparar chamada de URA", type: "request" },
       { id: "ura.completed", name: "ura.completed", description: "Chamada de URA finalizada", type: "event" },
