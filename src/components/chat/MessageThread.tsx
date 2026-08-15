@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import {  Loader2, FileText, Lock, MapPin, Check, CheckCheck, User , Play, Pause } from "lucide-react";
+import {  Loader2, FileText, Lock, MapPin, Check, CheckCheck, User , Play, Pause, Clock, AlertCircle } from "lucide-react";
 import { ChatMessage, ChatConversation } from "@/hooks/useChat";
 import { cn } from "@/lib/utils";
 
@@ -291,7 +291,12 @@ export default function MessageThread({
                       {formatTime(msg.created_at)}
                       {isOperator && (
                         <span className="ml-0.5">
-                          {msg.status === "sent" ? <Check className="h-3 w-3" /> : <CheckCheck className="h-3 w-3 text-blue-400" />}
+                          {msg.status === "pending" ? <Clock className="h-3 w-3 opacity-80" /> :
+                           msg.status === "sent" ? <Check className="h-3 w-3" /> :
+                           msg.status === "delivered" ? <CheckCheck className="h-3 w-3 opacity-80" /> :
+                           msg.status === "read" ? <CheckCheck className="h-3 w-3 text-blue-400" /> :
+                           msg.status === "failed" ? <AlertCircle className="h-3 w-3 text-red-400" /> :
+                           <Check className="h-3 w-3 opacity-80" />}
                         </span>
                       )}
                     </div>
@@ -390,7 +395,12 @@ export default function MessageThread({
                     {formatTime(msg.created_at)}
                     {isOperator && (
                       <span className="ml-0.5">
-                        {msg.status === "sent" ? <Check className="h-3 w-3" /> : <CheckCheck className="h-3 w-3 text-blue-400" />}
+                        {msg.status === "pending" ? <Clock className="h-3 w-3 opacity-80" /> :
+                         msg.status === "sent" ? <Check className="h-3 w-3" /> :
+                         msg.status === "delivered" ? <CheckCheck className="h-3 w-3 opacity-80" /> :
+                         msg.status === "read" ? <CheckCheck className="h-3 w-3 text-blue-400" /> :
+                         msg.status === "failed" ? <AlertCircle className="h-3 w-3 text-red-400" /> :
+                         <Check className="h-3 w-3 opacity-80" />}
                       </span>
                     )}
                   </div>
