@@ -38,6 +38,7 @@ import Alerts from "./pages/Alerts";
 import Billing from "./pages/Billing";
 import Settings from "./pages/Settings";
 import ApiDocs from "./pages/ApiDocs";
+import WebhookDocs from "./pages/WebhookDocs";
 import WebhookEvents from "./pages/WebhookEvents";
 import Auth from "./pages/Auth";
 import Chat from "./pages/Chat";
@@ -87,6 +88,7 @@ const App = () => {
                   <Routes>
                     {/* Public routes */}
                     <Route path="/auth" element={<Auth />} />
+                    <Route path="/webhook-docs" element={<WebhookDocs />} />
                     <Route path="/q/:slug" element={<QuizPublicPage />} />
 
                     {/* Awaiting access — authenticated but no company */}
