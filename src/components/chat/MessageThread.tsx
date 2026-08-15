@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {  Loader2, FileText, Lock, MapPin, Check, CheckCheck, User , Play, Pause, Clock, AlertCircle } from "lucide-react";
 import { ChatMessage, ChatConversation } from "@/hooks/useChat";
 import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 
 interface MessageThreadProps {
   conversation: ChatConversation;
@@ -328,9 +329,16 @@ export default function MessageThread({
 
                   {msg.message_type === "image" && (
                     <div className="space-y-1">
-                      <a href={msg.media_url || "#"} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg border border-border/20 max-w-[240px]">
-                        <img src={msg.media_url || ""} alt="Anexo" className="w-full h-auto object-cover max-h-60 hover:scale-105 transition-transform duration-300" />
-                      </a>
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <div className="block overflow-hidden rounded-lg border border-border/20 max-w-[240px] cursor-pointer">
+                            <img src={msg.media_url || ""} alt="Anexo" className="w-full h-auto object-cover max-h-60 hover:scale-105 transition-transform duration-300" />
+                          </div>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-4xl w-full h-auto max-h-[90vh] p-1 border-none bg-transparent shadow-none flex justify-center items-center">
+                          <img src={msg.media_url || ""} alt="Anexo Ampliado" className="max-w-full max-h-[85vh] object-contain rounded-md" />
+                        </DialogContent>
+                      </Dialog>
                       {msg.body && <p className="mt-1.5 whitespace-pre-wrap break-words leading-relaxed">{msg.body}</p>}
                     </div>
                   )}
