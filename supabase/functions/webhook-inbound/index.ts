@@ -23,7 +23,8 @@ export interface InboundPayload {
   provider?: string;
   instance_id: string;
   received_at?: string;
-  raw_event: Record<string, unknown>;
+  waha_api_key?: string;
+  raw_event: Record<string, any>;
 }
 
 Deno.serve(async (req) => {
@@ -52,6 +53,45 @@ Deno.serve(async (req) => {
     const externalInstanceId = payload.instance_id;
     const receivedAt = payload.received_at || new Date().toISOString();
     const rawEvent = payload.raw_event;
+    const wahaApiKey = payload.waha_api_key;
+
+    // ==========================================
+    // AUTO-DOWNLOAD WAHA MEDIA
+    // ==========================================
+    if (rawEvent.mediaUrl && wahaApiKey && typeof rawEvent.mediaUrl === "string" && rawEvent.mediaUrl.startsWith("http")) {
+      try {
+        console.log(`[webhook-inbound] Intercepting media URL: ${rawEvent.mediaUrl}`);
+        const mediaRes = await fetch(rawEvent.mediaUrl, {
+          headers: { "X-Api-Key": wahaApiKey }
+        });
+        
+        if (mediaRes.ok) {
+          const arrayBuffer = await mediaRes.arrayBuffer();
+          const mime = (rawEvent.mimetype as string) || "application/octet-stream";
+          const ext = mime.split("/")[1] || "bin";
+          const fileName = `chat_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+          
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from("media")
+            .upload(fileName, arrayBuffer, {
+              contentType: mime,
+              upsert: true
+            });
+            
+          if (!uploadError && uploadData) {
+            const { data: publicUrlData } = supabase.storage.from("media").getPublicUrl(fileName);
+            rawEvent.mediaUrl = publicUrlData.publicUrl;
+            console.log(`[webhook-inbound] Successfully uploaded to Supabase: ${rawEvent.mediaUrl}`);
+          } else {
+            console.error(`[webhook-inbound] Error uploading to storage:`, uploadError);
+          }
+        } else {
+          console.error(`[webhook-inbound] Error fetching media from WAHA: ${mediaRes.status}`);
+        }
+      } catch (err) {
+        console.error(`[webhook-inbound] Exception during media upload:`, err);
+      }
+    }
 
     console.log(`[webhook-inbound] Received action '${action}' from ${source}, instance: ${externalInstanceId}`);
 
