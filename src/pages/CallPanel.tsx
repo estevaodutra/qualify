@@ -956,6 +956,48 @@ export default function CallPanel() {
     setSelectedOperatorId(entry.operatorId || "");
   };
 
+  // ── AUTO-DIALER LOGIC ──
+  const isAutoDialingRef = useRef(false);
+
+  useEffect(() => {
+    // Condições: fila global ativa, operador disponível, operador sem ligação no momento,
+    // não há painel de chamada aberto, e a fila tem itens pendentes.
+    if (
+      queueGlobalStatus === "running" &&
+      myOperator?.status === "available" &&
+      inProgressEntries.length === 0 &&
+      !viewingQueueLead &&
+      combinedQueue.length > 0 &&
+      !isAutoDialingRef.current
+    ) {
+      const nextLead = combinedQueue[0];
+      
+      // Se for um agendamento futuro, não dispara auto-dial ainda
+      if (nextLead.scheduledTo && new Date(nextLead.scheduledTo).getTime() > Date.now()) {
+        return;
+      }
+
+      isAutoDialingRef.current = true;
+      console.log("[Auto-Dialer] Starting auto-dial for:", nextLead.leadName || nextLead.leadPhone);
+      
+      // Define a view para abrir o popup e inicia o disparo
+      setViewingQueueLead(nextLead);
+      handleWorkflowDial(nextLead).finally(() => {
+        // Libera a trava após alguns segundos (suficiente para o status da fila/operador atualizar)
+        setTimeout(() => {
+          isAutoDialingRef.current = false;
+        }, 5000);
+      });
+    }
+  }, [
+    queueGlobalStatus,
+    myOperator?.status,
+    inProgressEntries.length,
+    viewingQueueLead,
+    combinedQueue,
+    handleWorkflowDial
+  ]);
+
   const [panelTab, setPanelTab] = useState("calls");
 
   // Queue status helpers
