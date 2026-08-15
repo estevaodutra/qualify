@@ -147,7 +147,7 @@ function CustomPtvPlayer({ src, isOperator, isInternal, timeString, status }: { 
       {/* Video Circle */}
       <div 
         className={cn(
-          "relative w-56 h-56 rounded-full overflow-hidden shadow-sm cursor-pointer",
+          "relative w-56 h-56 rounded-full overflow-hidden shadow-sm cursor-pointer bg-black",
           isOperator && !isInternal ? "border-4 border-primary/20" : "border-4 border-card"
         )} 
         onClick={togglePlay}
@@ -159,6 +159,7 @@ function CustomPtvPlayer({ src, isOperator, isInternal, timeString, status }: { 
           onTimeUpdate={handleTimeUpdate}
           onEnded={() => setIsPlaying(false)}
           playsInline
+          preload="metadata"
         />
         {/* Play Overlay when paused */}
         {!isPlaying && (
