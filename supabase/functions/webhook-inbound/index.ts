@@ -68,7 +68,9 @@ Deno.serve(async (req) => {
         if (mediaRes.ok) {
           const arrayBuffer = await mediaRes.arrayBuffer();
           const mime = (rawEvent.mimetype as string) || "application/octet-stream";
-          const ext = mime.split("/")[1] || "bin";
+          // Extrai corretamente a extensão do mimetype, mesmo se houver codecs (ex: video/mp4; codecs=...)
+          const extMatch = mime.match(/\/([^;]+)/);
+          const ext = extMatch ? extMatch[1] : "bin";
           const fileName = `chat_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
           
           const { data: uploadData, error: uploadError } = await supabase.storage
