@@ -19,7 +19,8 @@ const corsHeaders = {
 
 export interface InboundPayload {
   action: string;
-  source: string;
+  source?: string;
+  provider?: string;
   instance_id: string;
   received_at?: string;
   raw_event: Record<string, unknown>;
@@ -39,15 +40,15 @@ Deno.serve(async (req) => {
     const payload = await req.json() as Partial<InboundPayload>;
 
     // Validação estrita
-    if (!payload.action || !payload.source || !payload.instance_id || !payload.raw_event) {
+    if (!payload.action || (!payload.source && !payload.provider) || !payload.instance_id || !payload.raw_event) {
       return new Response(
-        JSON.stringify({ success: false, error: "Missing required fields: action, source, instance_id, raw_event" }),
+        JSON.stringify({ success: false, error: "Missing required fields: action, provider (or source), instance_id, raw_event" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const action = payload.action;
-    const source = payload.source;
+    const source = payload.provider || payload.source || "unknown";
     const externalInstanceId = payload.instance_id;
     const receivedAt = payload.received_at || new Date().toISOString();
     const rawEvent = payload.raw_event;

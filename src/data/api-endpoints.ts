@@ -2468,6 +2468,124 @@ response = requests.post(
     description: "Endpoints para recebimento de dados de sistemas externos (ex: n8n, Make, Zapier)",
     endpoints: [
       {
+        id: "webhook-inbound",
+        method: "POST",
+        path: "/webhook-inbound",
+        description: "Super Endpoint universal para recebimento de webhooks normalizados (via n8n). Ele identifica a ação, aplica regras de IA, salva no banco e executa gatilhos automaticamente.",
+        attributes: [
+          {
+            name: "action",
+            type: "string",
+            required: true,
+            description: "Ação realizada (ex: 'message.received', 'message.sent', 'message.delivered', 'group.joined')"
+          },
+          {
+            name: "provider",
+            type: "string",
+            required: true,
+            description: "Provedor que originou o evento (ex: 'waha', 'evolution', 'z-api')"
+          },
+          {
+            name: "instance_id",
+            type: "string",
+            required: true,
+            description: "O session_id ou ID da instância conectada."
+          },
+          {
+            name: "raw_event",
+            type: "object",
+            required: true,
+            description: "Objeto padronizado com os dados da mensagem (is_group, from_phone, body, media_url, etc)."
+          }
+        ],
+        examples: {
+          curl: `curl -X POST "${API_BASE_URL}/webhook-inbound" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "action": "message.received",
+    "provider": "waha",
+    "instance_id": "session_01m...",
+    "raw_event": {
+      "id": "evt_123",
+      "timestamp": 1786814412074,
+      "type": "text",
+      "is_group": false,
+      "from_phone": "5512982402981",
+      "from_lid": "171296717553783@lid",
+      "from_name": "Estevão",
+      "body": "Conteúdo da mensagem"
+    }
+  }'`,
+          nodejs: `const axios = require('axios');
+
+const response = await axios.post(
+  '${API_BASE_URL}/webhook-inbound',
+  {
+    action: "message.received",
+    provider: "waha",
+    instance_id: "session_01m...",
+    raw_event: {
+      id: "evt_123",
+      timestamp: 1786814412074,
+      type: "text",
+      is_group: false,
+      from_phone: "5512982402981",
+      from_lid: "171296717553783@lid",
+      from_name: "Estevão",
+      body: "Conteúdo da mensagem"
+    }
+  },
+  {
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  }
+);`,
+          python: `import requests
+
+response = requests.post(
+    '${API_BASE_URL}/webhook-inbound',
+    json={
+        'action': 'message.received',
+        'provider': 'waha',
+        'instance_id': 'session_01m...',
+        'raw_event': {
+            'id': 'evt_123',
+            'timestamp': 1786814412074,
+            'type': 'text',
+            'is_group': False,
+            'from_phone': '5512982402981',
+            'from_lid': '171296717553783@lid',
+            'from_name': 'Estevão',
+            'body': 'Conteúdo da mensagem'
+        }
+    },
+    headers={
+        'Content-Type': 'application/json'
+    }
+)`
+        },
+        responses: {
+          success: {
+            code: 201,
+            body: {
+              success: true,
+              provider: "waha",
+              event_id: "b45a2781-...",
+              action: "message.received",
+              message: "Routed to corresponding controller for message.received"
+            }
+          },
+          error: {
+            code: 400,
+            body: {
+              success: false,
+              error: "Missing required fields: action, provider (or source), instance_id, raw_event"
+            }
+          }
+        }
+      },
+      {
         id: "n8n-webhook-inbound",
         method: "POST",
         path: "/n8n-webhook-inbound",
