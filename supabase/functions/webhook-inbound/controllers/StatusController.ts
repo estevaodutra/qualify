@@ -10,6 +10,50 @@ export async function processStatusEvent(
   eventId: string
 ) {
   // ==========================================
+  // MESSAGE DELIVERY STATUS UPDATES
+  // ==========================================
+  const isStatusAck = classification.eventType === "message.delivered" || 
+                      classification.eventType === "message.read" || 
+                      classification.eventType === "message.failed" || 
+                      classification.eventType === "message.sent";
+
+  if (isStatusAck && rawEvent.id) {
+    try {
+      const statusValue = classification.eventType.replace("message.", "");
+      console.log(`[StatusController] Updating message status ${rawEvent.id} to ${statusValue}`);
+
+      const { data, error } = await supabase
+        .from("chat_messages")
+        .update({ status: statusValue })
+        .or(`message_id.eq.${rawEvent.id},zaap_id.eq.${rawEvent.id}`)
+        .select("id")
+        .maybeSingle();
+
+      if (error) throw error;
+
+      await supabase
+        .from("webhook_events")
+        .update({
+          processing_status: "processed",
+          processed_at: new Date().toISOString(),
+          processing_result: { message_updated: !!data, status: statusValue }
+        })
+        .eq("id", eventId);
+        
+    } catch (err) {
+      console.error("[StatusController] Error updating message status:", err);
+      await supabase
+        .from("webhook_events")
+        .update({
+          processing_status: "error",
+          processing_error: err instanceof Error ? err.message : "Unknown error",
+        })
+        .eq("id", eventId);
+    }
+    return;
+  }
+
+  // ==========================================
   // AUTO-PROCESS POLL RESPONSES
   // ==========================================
   if (classification.eventType === "message.poll_update" || classification.eventType === "poll_response") {

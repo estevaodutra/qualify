@@ -130,10 +130,12 @@ Deno.serve(async (req) => {
     const actionPrefix = action.split('.')[0]; 
 
     // Roteamento baseado na action informada pelo n8n
-    if (action === "message.received" || action === "message.sent") {
+    const isStatusAck = action === "message.delivered" || action === "message.read" || action === "message.failed" || (action === "message.sent" && !rawEvent.type);
+
+    if (action === "message.received" || (action === "message.sent" && rawEvent.type)) {
       await processMessageEvent(supabase, instance, classification, context, rawEvent);
     } 
-    else if (action === "message.delivered" || action === "message.read" || action === "message.failed" || action === "message.poll_update") {
+    else if (isStatusAck || action === "message.poll_update") {
       await processStatusEvent(supabase, instance, classification, context, rawEvent, insertedEvent.id);
     }
     else if (actionPrefix === "status" || action === "chat_presence") {
