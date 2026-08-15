@@ -66,9 +66,14 @@ Deno.serve(async (req) => {
       console.warn(`[webhook-inbound] Instance not found for external_instance_id="${externalInstanceId}". Event will be saved with user_id=null.`);
     }
 
-    // Criar a classificação baseada na action vinda do n8n
+    // Criar a classificação baseada na action vinda do n8n e no tipo de mídia
+    let eventType = action;
+    if ((action === "message.received" || action === "message.sent") && rawEvent.type) {
+      eventType = `${rawEvent.type}_message`;
+    }
+
     const classification: ClassificationResult = {
-      eventType: action,
+      eventType: eventType,
       eventSubtype: rawEvent.event as string | null || action,
       classification: "identified",
       direction: action.includes("sent") ? "outbound" : (action.includes("message") && !action.includes("status") && !action.includes("poll") ? "inbound" : "system"),

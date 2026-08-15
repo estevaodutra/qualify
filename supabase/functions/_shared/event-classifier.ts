@@ -586,6 +586,8 @@ export function classifyEvent(source: string, rawEvent: Record<string, unknown>)
 export function extractContext(source: string, rawEvent: Record<string, unknown>): EventContext {
   // Bypass inteligente para Payload Normalizado do n8n
   if (rawEvent.from_phone || rawEvent.from_name) {
+    const ts = rawEvent.timestamp as number;
+    const finalTs = ts ? (ts > 9999999999 ? ts : ts * 1000) : Date.now();
     return {
       chatJid: rawEvent.is_group ? (rawEvent.group_id as string) : `${rawEvent.from_phone}@s.whatsapp.net`,
       chatType: rawEvent.is_group ? "group" : "private",
@@ -594,9 +596,7 @@ export function extractContext(source: string, rawEvent: Record<string, unknown>
       senderLid: (rawEvent.from_lid as string) || null,
       senderName: (rawEvent.from_name as string) || null,
       messageId: (rawEvent.id as string) || null,
-      eventTimestamp: rawEvent.timestamp 
-        ? new Date(rawEvent.timestamp as number).toISOString() 
-        : new Date().toISOString()
+      eventTimestamp: new Date(finalTs).toISOString()
     };
   }
 
