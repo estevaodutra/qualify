@@ -122,6 +122,92 @@ function CustomAudioPlayer({ src, isOperator, isInternal, timeString }: { src: s
   );
 }
 
+function CustomPtvPlayer({ src, isOperator, isInternal, timeString, status }: { src: string; isOperator: boolean; isInternal: boolean; timeString: string; status: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  const togglePlay = () => {
+    if (videoRef.current) {
+      if (isPlaying) videoRef.current.pause();
+      else videoRef.current.play();
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  const handleTimeUpdate = () => {
+    if (videoRef.current) {
+      const p = (videoRef.current.currentTime / (videoRef.current.duration || 1)) * 100;
+      setProgress(p || 0);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-2 relative group">
+      {/* Video Circle */}
+      <div 
+        className={cn(
+          "relative w-56 h-56 rounded-full overflow-hidden shadow-sm cursor-pointer",
+          isOperator && !isInternal ? "border-4 border-primary/20" : "border-4 border-card"
+        )} 
+        onClick={togglePlay}
+      >
+        <video 
+          ref={videoRef}
+          src={src} 
+          className="w-full h-full object-cover"
+          onTimeUpdate={handleTimeUpdate}
+          onEnded={() => setIsPlaying(false)}
+          playsInline
+        />
+        {/* Play Overlay when paused */}
+        {!isPlaying && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover:bg-black/20 transition-colors">
+            <div className="h-12 w-12 rounded-full bg-black/40 text-white flex items-center justify-center backdrop-blur-sm shadow-md">
+              <Play className="h-6 w-6 ml-1" fill="currentColor" />
+            </div>
+          </div>
+        )}
+      </div>
+      
+      {/* HUD (Controls Below) */}
+      <div className="flex items-center w-52 bg-card/80 backdrop-blur-md rounded-full px-3 py-1.5 shadow-sm border border-border/40 gap-2">
+        <button onClick={togglePlay} className="text-muted-foreground hover:text-foreground transition-colors">
+          {isPlaying ? <Pause className="h-4 w-4" fill="currentColor" /> : <Play className="h-4 w-4" fill="currentColor" />}
+        </button>
+        
+        {/* Progress Bar */}
+        <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden relative cursor-pointer" onClick={(e) => {
+             if(videoRef.current && videoRef.current.duration) {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const pos = (e.clientX - rect.left) / rect.width;
+                videoRef.current.currentTime = pos * videoRef.current.duration;
+             }
+          }}>
+           <div className="h-full absolute top-0 left-0 bg-primary transition-all duration-75" style={{ width: `${progress}%` }} />
+        </div>
+      </div>
+      
+      {/* Timestamp */}
+      <div className={cn(
+        "absolute bottom-12 right-2 bg-background/60 backdrop-blur-md px-2 py-0.5 rounded-full text-[9px] flex items-center gap-1 shadow-sm font-medium",
+        isOperator && !isInternal ? "text-primary-foreground/90" : "text-muted-foreground"
+      )}>
+        {timeString}
+        {isOperator && (
+          <span className="ml-0.5">
+            {status === "pending" ? <Clock className="h-3 w-3 opacity-80" /> :
+             status === "sent" ? <Check className="h-3 w-3" /> :
+             status === "delivered" ? <CheckCheck className="h-3 w-3 opacity-80" /> :
+             status === "read" ? <CheckCheck className="h-3 w-3 text-blue-400" /> :
+             status === "failed" ? <AlertCircle className="h-3 w-3 text-red-400" /> :
+             <Check className="h-3 w-3 opacity-80" />}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function MessageThread({ 
   conversation, 
@@ -276,32 +362,13 @@ export default function MessageThread({
                     timeString={formatTime(msg.created_at)} 
                   />
                 ) : msg.message_type === "ptv" ? (
-                  <div className="flex flex-col items-center gap-1 relative group">
-                    <video 
-                      src={msg.media_url || ""} 
-                      controls 
-                      className={cn(
-                        "w-56 h-56 rounded-full object-cover shadow-sm transition-transform duration-300",
-                        isOperator && !isInternal ? "border-4 border-primary/20" : "border-4 border-card"
-                      )} 
-                    />
-                    <div className={cn(
-                      "absolute bottom-4 right-4 bg-background/60 backdrop-blur-md px-2 py-0.5 rounded-full text-[9px] flex items-center gap-1 shadow-sm font-medium",
-                      isOperator && !isInternal ? "text-primary-foreground/90" : "text-muted-foreground"
-                    )}>
-                      {formatTime(msg.created_at)}
-                      {isOperator && (
-                        <span className="ml-0.5">
-                          {msg.status === "pending" ? <Clock className="h-3 w-3 opacity-80" /> :
-                           msg.status === "sent" ? <Check className="h-3 w-3" /> :
-                           msg.status === "delivered" ? <CheckCheck className="h-3 w-3 opacity-80" /> :
-                           msg.status === "read" ? <CheckCheck className="h-3 w-3 text-blue-400" /> :
-                           msg.status === "failed" ? <AlertCircle className="h-3 w-3 text-red-400" /> :
-                           <Check className="h-3 w-3 opacity-80" />}
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                  <CustomPtvPlayer 
+                    src={msg.media_url || ""}
+                    isOperator={isOperator}
+                    isInternal={isInternal}
+                    timeString={formatTime(msg.created_at)}
+                    status={msg.status}
+                  />
                 ) : (
                   <div
                     className={cn(
