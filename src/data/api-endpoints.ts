@@ -1548,13 +1548,19 @@ response = requests.post(
         id: "webhook-inbound",
         method: "POST",
         path: "/webhook-inbound",
-        description: "Recebe eventos de WhatsApp repassados pelo n8n. O sistema classifica automaticamente o tipo de evento e extrai contexto (chat, remetente, message_id). Este endpoint é público e não requer autenticação.",
+        description: "Recebe eventos de WhatsApp repassados e normalizados pelo n8n. O endpoint atua como um roteador central, processando o evento de acordo com a `action` especificada.",
         attributes: [
+          {
+            name: "action",
+            type: "string",
+            required: true,
+            description: "Tipo de evento normalizado pelo n8n. Valores suportados:\n\n**1. Mensagens:** `message.received`, `message.sent`\n**2. Status:** `message.delivered`, `message.read`, `message.failed`, `message.poll_update`\n**3. Presença:** `status.online`, `status.typing`\n**4. Conexão:** `connection.connected`, `connection.disconnected`\n**5. Grupos:** `group.joined`, `group.left`, `group.settings`"
+          },
           {
             name: "source",
             type: "string",
             required: true,
-            description: "Origem do evento: 'z-api', 'evolution' ou 'meta'"
+            description: "Origem do evento: 'z-api', 'evolution', 'waha' ou 'meta'"
           },
           {
             name: "instance_id",
@@ -1572,23 +1578,22 @@ response = requests.post(
             name: "raw_event",
             type: "object",
             required: true,
-            description: "Payload original do provedor sem modificações"
+            description: "Payload original do provedor sem modificações (usado para processamento detalhado pelo controller específico)"
           }
         ],
         examples: {
           curl: `curl -X POST "${API_BASE_URL}/webhook-inbound" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "source": "z-api",
+    "action": "message.received",
+    "source": "waha",
     "instance_id": "instance_001",
     "raw_event": {
-      "event": "message.received",
-      "data": {
-        "key": { "remoteJid": "5511999999999@s.whatsapp.net", "id": "MSG123" },
-        "message": { "conversation": "Olá!" },
-        "pushName": "João Silva",
-        "messageTimestamp": 1706284200
-      }
+      "id": "false_5511999999999@c.us_3EB0191BA58CF690D254A1",
+      "timestamp": 1706284200,
+      "from": "5511999999999@c.us",
+      "body": "Olá, tudo bem?",
+      "type": "chat"
     }
   }'`,
           nodejs: `const axios = require('axios');
@@ -1596,16 +1601,15 @@ response = requests.post(
 const response = await axios.post(
   '${API_BASE_URL}/webhook-inbound',
   {
-    source: 'z-api',
+    action: 'message.received',
+    source: 'waha',
     instance_id: 'instance_001',
     raw_event: {
-      event: 'message.received',
-      data: {
-        key: { remoteJid: '5511999999999@s.whatsapp.net', id: 'MSG123' },
-        message: { conversation: 'Olá!' },
-        pushName: 'João Silva',
-        messageTimestamp: 1706284200
-      }
+      id: "false_5511999999999@c.us_3EB0191BA58CF690D254A1",
+      timestamp: 1706284200,
+      from: "5511999999999@c.us",
+      body: "Olá, tudo bem?",
+      type: "chat"
     }
   },
   {
@@ -1619,16 +1623,15 @@ const response = await axios.post(
 response = requests.post(
     '${API_BASE_URL}/webhook-inbound',
     json={
-        'source': 'z-api',
+        'action': 'message.received',
+        'source': 'waha',
         'instance_id': 'instance_001',
         'raw_event': {
-            'event': 'message.received',
-            'data': {
-                'key': { 'remoteJid': '5511999999999@s.whatsapp.net', 'id': 'MSG123' },
-                'message': { 'conversation': 'Olá!' },
-                'pushName': 'João Silva',
-                'messageTimestamp': 1706284200
-            }
+            'id': 'false_5511999999999@c.us_3EB0191BA58CF690D254A1',
+            'timestamp': 1706284200,
+            'from': '5511999999999@c.us',
+            'body': 'Olá, tudo bem?',
+            'type': 'chat'
         }
     },
     headers={
@@ -1641,16 +1644,15 @@ response = requests.post(
             code: 201,
             body: {
               success: true,
-              event_id: "uuid-do-evento",
-              event_type: "text_message",
-              classification: "identified"
+              message: "Event routed successfully to MessageController",
+              action: "message.received"
             }
           },
           error: {
             code: 400,
             body: {
               success: false,
-              error: "Missing required fields: source, instance_id, raw_event"
+              error: "Missing required fields: action, source, instance_id, raw_event"
             }
           }
         }

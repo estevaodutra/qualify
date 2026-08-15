@@ -1,21 +1,25 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendWhatsAppMessage } from "../_shared/whatsapp-client.ts";
 import {
-  classifyEvent,
   extractContext,
   type ClassificationResult,
   type EventContext,
 } from "../_shared/event-classifier.ts";
-import { logProspectingEvent } from "../_shared/prospecting-events.ts";
-import { triggerSystemWebhook } from "../_shared/system-webhook.ts";
+
+// Import Controllers
+import { processMessageEvent } from "./controllers/MessageController.ts";
+import { processStatusEvent } from "./controllers/StatusController.ts";
+import { processPresenceEvent } from "./controllers/PresenceController.ts";
+import { processConnectionEvent } from "./controllers/ConnectionController.ts";
+import { processGroupEvent } from "./controllers/GroupController.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface InboundPayload {
-  source: "z-api" | "evolution" | "meta" | "waha";
+export interface InboundPayload {
+  action: string;
+  source: string;
   instance_id: string;
   received_at?: string;
   raw_event: Record<string, unknown>;
@@ -32,56 +36,25 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const body = await req.json();
+    const payload = await req.json() as Partial<InboundPayload>;
 
-    // Detect payload format and normalize
-    let payload: InboundPayload;
-
-    if (body.raw_event && body.instance_id) {
-      payload = body as InboundPayload;
-    } else {
-      const nestedBody = body.body as Record<string, unknown> | undefined;
-      
-      // Auto-detect WAHA
-      let detectedSource: "z-api" | "waha" = "z-api";
-      if (body.event || nestedBody?.event || (typeof nestedBody?.session === 'string' && nestedBody.session.startsWith('session_')) || nestedBody?.engine === "NOWEB") {
-         detectedSource = "waha";
-      }
-
-      const instanceId = body.instanceId ||
-        nestedBody?.instanceId ||
-        body.instance ||
-        body.session ||
-        nestedBody?.session ||
-        nestedBody?.connectedPhone ||
-        body.phone ||
-        body.sender?.phone ||
-        "unknown";
-
-      payload = {
-        source: detectedSource,
-        instance_id: String(instanceId),
-        raw_event: body,
-      };
-
-      console.log(`[webhook-inbound] Auto-wrapped raw payload, detected source: ${detectedSource}, instance_id: ${instanceId}`);
-    }
-
-    if (!payload.instance_id || !payload.raw_event) {
+    // Validação estrita
+    if (!payload.action || !payload.source || !payload.instance_id || !payload.raw_event) {
       return new Response(
-        JSON.stringify({ success: false, error: "Missing required fields: instance_id and raw_event" }),
+        JSON.stringify({ success: false, error: "Missing required fields: action, source, instance_id, raw_event" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const source = payload.source || "z-api";
+    const action = payload.action;
+    const source = payload.source;
     const externalInstanceId = payload.instance_id;
     const receivedAt = payload.received_at || new Date().toISOString();
     const rawEvent = payload.raw_event;
 
-    console.log(`[webhook-inbound] Received event from ${source}, instance: ${externalInstanceId}`);
+    console.log(`[webhook-inbound] Received action '${action}' from ${source}, instance: ${externalInstanceId}`);
 
-    // Find internal instance
+    // Buscar a instância interna no banco
     const { data: instance } = await supabase
       .from("instances")
       .select("id, user_id, name, phone, provider, status")
@@ -89,73 +62,23 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (!instance) {
-      console.warn(`[webhook-inbound] Instance not found for external_instance_id="${externalInstanceId}". Event will be saved with user_id=null (visible via external_instance_id RLS fallback).`);
+      console.warn(`[webhook-inbound] Instance not found for external_instance_id="${externalInstanceId}". Event will be saved with user_id=null.`);
     }
 
-    // Classify using shared classifier
-    let classification: ClassificationResult = classifyEvent(source, rawEvent);
-    
-    // Auto-correct unknown using dynamic mappings
-    if (classification.eventType === "unknown" && classification.eventSubtype) {
-      const { data: dynamicMapping } = await supabase
-        .from("dynamic_event_mappings")
-        .select("mapped_type")
-        .eq("source", source)
-        .eq("event_subtype", classification.eventSubtype)
-        .eq("status", "active")
-        .maybeSingle();
-        
-      if (dynamicMapping) {
-        classification.eventType = dynamicMapping.mapped_type;
-        classification.classification = "identified";
-        classification.matchedRule = "dynamic_mapping";
-        classification.confidence = "medium";
-        console.log(`[webhook-inbound] Dynamically reclassified as: ${classification.eventType} via mapping`);
-      } else {
-        // SYNCHRONOUS AI CLASSIFICATION
-        console.log(`[webhook-inbound] Event still unknown. Requesting sync AI classification for: ${classification.eventSubtype}`);
-        try {
-          const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-          const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-          
-          const aiRes = await fetch(`${supabaseUrl}/functions/v1/auto-classify-event`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${supabaseServiceKey}`,
-            },
-            body: JSON.stringify({
-              source,
-              event_subtype: classification.eventSubtype,
-              raw_event: rawEvent,
-              user_id: instance?.user_id
-            }),
-          });
-          
-          if (aiRes.ok) {
-            const aiData = await aiRes.json();
-            if (aiData.success && aiData.mapped_type) {
-              classification.eventType = aiData.mapped_type;
-              classification.classification = "identified";
-              classification.matchedRule = "ai_auto_correction";
-              classification.confidence = "medium";
-              console.log(`[webhook-inbound] Synchronously reclassified as: ${classification.eventType} via AI`);
-            }
-          } else {
-             console.error("[webhook-inbound] AI returned status:", aiRes.status);
-          }
-        } catch (err) {
-          console.error("[webhook-inbound] Sync AI classification failed:", err);
-        }
-      }
-    }
+    // Criar a classificação baseada na action vinda do n8n
+    const classification: ClassificationResult = {
+      eventType: action,
+      eventSubtype: rawEvent.event as string | null || action,
+      classification: "identified",
+      direction: action.includes("sent") ? "outbound" : (action.includes("message") && !action.includes("status") && !action.includes("poll") ? "inbound" : "system"),
+      confidence: "high",
+      matchedRule: "n8n_action_route",
+    };
 
-    console.log(`[webhook-inbound] Classified as: ${classification.eventType} (${classification.classification}, rule: ${classification.matchedRule}, confidence: ${classification.confidence})`);
-
-    // Extract context using shared extractor
+    // Extrair o contexto real da mensagem (chatJid, mensagemId) usando o extrator que suporta múltiplos provedores
     const context: EventContext = extractContext(source, rawEvent);
 
-    // Insert event with new classification fields
+    // Salvar o evento bruto no webhook_events
     const { data: insertedEvent, error: insertError } = await supabase
       .from("webhook_events")
       .insert({
@@ -178,7 +101,7 @@ Deno.serve(async (req) => {
         raw_event: rawEvent,
         event_timestamp: context.eventTimestamp,
         received_at: receivedAt,
-        processing_status: classification.classification === "identified" ? "processed" : "pending",
+        processing_status: "processed",
       })
       .select("id")
       .single();
@@ -194,792 +117,41 @@ Deno.serve(async (req) => {
     console.log(`[webhook-inbound] Event saved with ID: ${insertedEvent.id}`);
 
     // ==========================================
-    // AUTO-PROCESS CONNECTION STATUS
+    // ROTEADOR CENTRAL (SWITCH)
     // ==========================================
-    if (classification.eventType === "connection_status" && instance?.id) {
-      const eventBody = (rawEvent.body as Record<string, unknown>) || rawEvent;
-      const payloadObj = eventBody?.payload as Record<string, unknown> | undefined;
+    
+    // As actions podem vir como `message.received`, `message.delivered`, `group.joined`
+    const actionPrefix = action.split('.')[0]; 
+
+    // Roteamento baseado na action informada pelo n8n
+    if (action === "message.received" || action === "message.sent") {
+      await processMessageEvent(supabase, instance, classification, context, rawEvent);
+    } 
+    else if (action === "message.delivered" || action === "message.read" || action === "message.failed" || action === "message.poll_update") {
+      await processStatusEvent(supabase, instance, classification, context, rawEvent, insertedEvent.id);
+    }
+    else if (actionPrefix === "status" || action === "chat_presence") {
+      await processPresenceEvent(supabase, instance, classification, context, rawEvent, insertedEvent.id);
+    }
+    else if (actionPrefix === "connection") {
+      await processConnectionEvent(supabase, instance, classification, context, rawEvent);
+    }
+    else if (actionPrefix === "group") {
+      await processGroupEvent(supabase, instance, classification, context, rawEvent, insertedEvent.id);
+    }
+    else {
+      console.log(`[webhook-inbound] Action '${action}' não mapeada para nenhum controller específico. Apenas salvo no banco.`);
       
-      let newStatus: "connected" | "disconnected" = "disconnected";
-      let statusResolved = false;
-
-      if (eventBody?.connected !== undefined) {
-        newStatus = eventBody.connected ? "connected" : "disconnected";
-        statusResolved = true;
-      } else if (rawEvent.connected !== undefined) {
-        newStatus = rawEvent.connected ? "connected" : "disconnected";
-        statusResolved = true;
-      } else {
-        const statusRaw = (eventBody?.status || payloadObj?.status || payloadObj?.state || (rawEvent as any).status) as string | undefined;
-        if (statusRaw) {
-          const s = statusRaw.toUpperCase();
-          newStatus = (s === "WORKING" || s === "CONNECTED" || s === "CONNECTED_TO_WHATSAPP") ? "connected" : "disconnected";
-          statusResolved = true;
-        } else {
-          const typeStr = String(eventBody?.type || rawEvent.type || "").toUpperCase();
-          if (typeStr === "CONNECTEDCALLBACK" || typeStr === "CONNECTED") {
-            newStatus = "connected";
-            statusResolved = true;
-          } else if (typeStr === "DISCONNECTEDCALLBACK" || typeStr === "DISCONNECTED") {
-            newStatus = "disconnected";
-            statusResolved = true;
-          }
-        }
-      }
-
-      if (statusResolved) {
-        const statusChanged = newStatus !== instance.status;
-        console.log(`[webhook-inbound] Updating instance ${instance.id} status to ${newStatus} (changed: ${statusChanged})`);
-        
-        const updates: Record<string, any> = { status: newStatus };
-        if (newStatus === "disconnected") {
-          updates.external_instance_id = null;
-          updates.external_instance_token = null;
-          updates.phone = "";
-        }
-
-        const { error: updateError } = await supabase
-          .from("instances")
-          .update(updates)
-          .eq("id", instance.id);
-          
-        if (updateError) {
-          console.error(`[webhook-inbound] Failed to update instance status:`, updateError.message);
-        }
-
-        if (statusChanged && !updateError) {
-          const eventId = newStatus === "connected" ? "instance.connected" : "instance.disconnected";
-          
-          await triggerSystemWebhook(supabase, eventId, {
-            id: instance.id,
-            name: instance.name,
-            phone: newStatus === "connected" ? (eventBody?.phone || rawEvent.phone || instance.phone) : instance.phone,
-            provider: instance.provider || "z-api",
-            user_id: instance.user_id
-          });
-        }
-      }
-    }
-
-    // ==========================================
-    // AUTO-PROCESS POLL RESPONSES
-    // ==========================================
-    let pollProcessingResult: Record<string, unknown> | null = null;
-
-    if (classification.eventType === "poll_response") {
-      try {
-        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-        const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-        const eventBody = rawEvent.body as Record<string, unknown> | undefined;
-        const pollVote = eventBody?.pollVote as Record<string, unknown> | undefined;
-
-        if (pollVote) {
-          const options = pollVote.options as Array<{ name: string }> | undefined;
-          const pollMessageId = pollVote.pollMessageId as string;
-
-          if (pollMessageId && options?.length) {
-            const participantPhone = (eventBody?.participantPhone as string) ||
-              String(eventBody?.phone || "").split("-")[0];
-            const senderName = (eventBody?.senderName as string) || (eventBody?.pushName as string) || "";
-            const groupJid = (eventBody?.phone as string) || context.chatJid || "";
-
-            console.log(`[webhook-inbound] Auto-processing poll vote from ${participantPhone} for message ${pollMessageId}`);
-
-            const { data: pollMessage } = await supabase
-              .from("poll_messages")
-              .select("id, options, instance_id")
-              .or(`message_id.eq.${pollMessageId},zaap_id.eq.${pollMessageId}`)
-              .maybeSingle();
-
-            // FALLBACK: If poll not registered (legacy bug or send race), try auto-register from group_message_logs
-            let resolvedPoll = pollMessage;
-            if (!resolvedPoll) {
-              console.log(`[webhook-inbound] Poll ${pollMessageId} not in poll_messages, trying auto-register from logs...`);
-              
-              const { data: logEntry } = await supabase
-                .from("group_message_logs")
-                .select("id, user_id, group_campaign_id, sequence_id, group_jid, instance_id, payload, zaap_id, external_message_id")
-                .or(`external_message_id.eq.${pollMessageId},zaap_id.eq.${pollMessageId}`)
-                .eq("node_type", "poll")
-                .eq("status", "sent")
-                .order("sent_at", { ascending: false })
-                .limit(1)
-                .maybeSingle();
-
-              if (logEntry) {
-                const logPayload = logEntry.payload as Record<string, unknown> | null;
-                const logNode = logPayload?.node as Record<string, unknown> | undefined;
-                const nodeId = logNode?.id as string | undefined;
-
-                if (nodeId) {
-                  const { data: nodeRecord } = await supabase
-                    .from("sequence_nodes")
-                    .select("config")
-                    .eq("id", nodeId)
-                    .maybeSingle();
-
-                  if (nodeRecord) {
-                    const nodeConfig = nodeRecord.config as Record<string, unknown>;
-                    const messageIdForInsert = logEntry.external_message_id || logEntry.zaap_id;
-
-                    // Prefer the resolved values stored in the log payload (variables already substituted)
-                    // over the raw template in sequence_nodes.config (which contains {{var}} placeholders).
-                    const logConfig = (logNode?.config as Record<string, unknown>) || {};
-
-                    if (messageIdForInsert) {
-                      const { data: insertedPoll, error: registerError } = await supabase
-                        .from("poll_messages")
-                        .insert({
-                          user_id: logEntry.user_id,
-                          message_id: messageIdForInsert,
-                          zaap_id: logEntry.zaap_id,
-                          node_id: nodeId,
-                          sequence_id: logEntry.sequence_id,
-                          campaign_id: logEntry.group_campaign_id,
-                          group_jid: logEntry.group_jid || groupJid,
-                          instance_id: logEntry.instance_id,
-                          question_text: (logConfig.question as string) || (logConfig.label as string)
-                                       || (nodeConfig.question as string) || (nodeConfig.label as string) || "",
-                          options: (logConfig.options as unknown[]) || nodeConfig.options || [],
-                          option_actions: nodeConfig.optionActions || {},
-                          sent_at: new Date().toISOString(),
-                        })
-                        .select("id, options, instance_id")
-                        .single();
-
-                      if (registerError) {
-                        console.error(`[webhook-inbound] Auto-register failed:`, registerError.message);
-                        await supabase
-                          .from("webhook_events")
-                          .update({
-                            processing_status: "error",
-                            processing_error: `poll_auto_register_failed: ${registerError.message}`,
-                          })
-                          .eq("id", insertedEvent.id);
-                      } else {
-                        resolvedPoll = insertedPoll;
-                        console.log(`[webhook-inbound] ✅ Auto-registered poll ${pollMessageId} from log ${logEntry.id}`);
-                      }
-                    }
-                  }
-                }
-              } else {
-                console.log(`[webhook-inbound] No matching log found for poll ${pollMessageId}`);
-                await supabase
-                  .from("webhook_events")
-                  .update({
-                    processing_status: "error",
-                    processing_error: `poll_message_not_registered: ${pollMessageId}`,
-                  })
-                  .eq("id", insertedEvent.id);
-              }
-            }
-
-            if (resolvedPoll) {
-              const votedOptionText = options[0]?.name || "";
-              const pollOptions = resolvedPoll.options as string[];
-              let optionIndex = pollOptions.findIndex(
-                (opt) => opt.toLowerCase() === votedOptionText.toLowerCase()
-              );
-
-              if (optionIndex === -1) {
-                optionIndex = pollOptions.findIndex(
-                  (opt) =>
-                    opt.toLowerCase().includes(votedOptionText.toLowerCase()) ||
-                    votedOptionText.toLowerCase().includes(opt.toLowerCase())
-                );
-              }
-
-              if (optionIndex >= 0) {
-                const pollPayload = {
-                  message_id: pollMessageId,
-                  instance_id: resolvedPoll.instance_id || instance?.id || "",
-                  group_jid: groupJid,
-                  respondent: {
-                    phone: participantPhone,
-                    name: senderName,
-                    jid: `${participantPhone}@s.whatsapp.net`,
-                  },
-                  response: {
-                    option_index: optionIndex,
-                    option_text: votedOptionText,
-                  },
-                  timestamp: new Date().toISOString(),
-                  _raw_event: rawEvent,
-                };
-
-                const pollResponse = await fetch(
-                  `${supabaseUrl}/functions/v1/handle-poll-response`,
-                  {
-                    method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                      Authorization: `Bearer ${supabaseServiceKey}`,
-                    },
-                    body: JSON.stringify(pollPayload),
-                  }
-                );
-
-                pollProcessingResult = await pollResponse.json();
-                console.log(`[webhook-inbound] Auto-processed poll response: ${JSON.stringify(pollProcessingResult)}`);
-
-                await supabase
-                  .from("webhook_events")
-                  .update({
-                    processing_result: pollProcessingResult,
-                    processing_status: "processed",
-                    processed_at: new Date().toISOString(),
-                  })
-                  .eq("id", insertedEvent.id);
-              } else {
-                console.log(`[webhook-inbound] Could not match voted option "${votedOptionText}" to poll options`);
-                await supabase
-                  .from("webhook_events")
-                  .update({
-                    processing_status: "error",
-                    processing_error: `poll_option_no_match: "${votedOptionText}"`,
-                  })
-                  .eq("id", insertedEvent.id);
-              }
-            }
-          }
-        }
-      } catch (pollError) {
-        console.error("[webhook-inbound] Error auto-processing poll:", pollError);
-        await supabase
-          .from("webhook_events")
-          .update({
-            processing_error: pollError instanceof Error ? pollError.message : "Unknown error",
-            processing_status: "error",
-          })
-          .eq("id", insertedEvent.id);
-      }
-    }
-
-    // ==========================================
-    // AUTO-PROCESS GROUP JOIN for Pirate Campaigns
-    // ==========================================
-    if (classification.eventType === "group_join" && context.chatJid && (context.senderPhone || context.senderLid)) {
-      try {
-        const phoneToSend = context.senderPhone || null;
-        const lidToSend = context.senderLid || null;
-
-        console.log(`[webhook-inbound] Detected group_join: group=${context.chatJid}, phone=${phoneToSend}, lid=${lidToSend}`);
-
-        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-        const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-        const pirateResponse = await fetch(
-          `${supabaseUrl}/functions/v1/pirate-process-join`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${supabaseServiceKey}`,
-            },
-            body: JSON.stringify({
-              group_jid: context.chatJid,
-              phone: phoneToSend,
-              lid: lidToSend,
-              instance_id: instance?.id || null,
-              raw_event: rawEvent,
-            }),
-          }
-        );
-
-        const pirateResult = await pirateResponse.json();
-        console.log(`[webhook-inbound] Pirate process result: ${JSON.stringify(pirateResult)}`);
-      } catch (pirateError) {
-        console.error("[webhook-inbound] Error processing pirate join:", pirateError);
-      }
-    }
-
-    // ==========================================
-    // AUTO-SYNC GROUP MEMBERS on join/leave via full list comparison
-    // ==========================================
-    console.log(`[webhook-inbound] group event check: type=${classification.eventType}, jid=${context.chatJid}, phone=${context.senderPhone}, lid=${context.senderLid}, userId=${instance?.user_id}`);
-    if (
-      (classification.eventType === "group_join" || classification.eventType === "group_leave") &&
-      context.chatJid &&
-      instance?.user_id
-    ) {
-      try {
-        // Find group_campaigns linked to this group_jid via campaign_groups junction table
-        const { data: linkedCampaigns } = await supabase
-          .from("campaign_groups")
-          .select("campaign_id, instance_id")
-          .eq("group_jid", context.chatJid);
-
-        const campaignIds = (linkedCampaigns || []).map((c: { campaign_id: string }) => c.campaign_id);
-        console.log(`[webhook-inbound] Found ${campaignIds.length} linked campaigns for group ${context.chatJid}`);
-
-        const { data: groupCampaigns } = campaignIds.length > 0
-          ? await supabase
-              .from("group_campaigns")
-              .select("id, user_id, instance_id")
-              .in("id", campaignIds)
-              .eq("user_id", instance.user_id)
-          : { data: [] as { id: string; user_id: string; instance_id: string | null }[] };
-
-        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-        const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-        for (const gc of (groupCampaigns || [])) {
-          const syncInstanceId = gc.instance_id || instance?.id;
-          if (!syncInstanceId) {
-            console.log(`[webhook-inbound] No instance for campaign ${gc.id}, skipping sync`);
-            continue;
-          }
-
-          try {
-            const syncResp = await fetch(
-              `${supabaseUrl}/functions/v1/sync-group-members`,
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${supabaseServiceKey}`,
-                },
-                body: JSON.stringify({
-                  groupJid: context.chatJid,
-                  campaignId: gc.id,
-                  instanceId: syncInstanceId,
-                  userId: gc.user_id,
-                  trigger: classification.eventType === "group_join" ? "join" : "leave",
-                  senderLid: context.senderLid || null,
-                }),
-              }
-            );
-
-            const syncResult = await syncResp.json();
-            console.log(`[webhook-inbound] sync-group-members result for campaign ${gc.id}:`, JSON.stringify(syncResult));
-
-            // Update context.senderPhone if sync resolved the LID
-            if (syncResult.resolvedPhone && !context.senderPhone) {
-              context.senderPhone = syncResult.resolvedPhone;
-              console.log(`[webhook-inbound] Updated senderPhone from sync: ${context.senderPhone}`);
-            }
-          } catch (syncErr) {
-            console.error(`[webhook-inbound] sync-group-members error for campaign ${gc.id}:`, syncErr);
-          }
-        }
-      } catch (memberSyncError) {
-        console.error("[webhook-inbound] Error syncing group members:", memberSyncError);
-      }
-    }
-
-    // ==========================================
-    // AUTO-ALERT FOR UNKNOWN EVENTS
-    // ==========================================
-    if (classification.eventType === "unknown" && instance?.user_id) {
-      try {
-        await supabase
-          .from("alerts")
-          .insert({
-            user_id: instance.user_id,
-            severity: "warning",
-            title: "Evento não identificado",
-            description: `Recebido payload do tipo '${classification.eventSubtype || "desconhecido"}' sem mapeamento técnico. A IA não conseguiu classificá-lo.`,
-            entity: "webhook",
-            read: false
-          });
-      } catch (alertError) {
-        console.error("[webhook-inbound] Error creating alert for unknown event:", alertError);
-      }
-    }
-
-
-    // ==========================================
-    // AUTO-ACCUMULATE LEADS for Group Execution Lists
-    // ==========================================
-    if (classification.eventType === "group_join" || classification.eventType === "group_leave") {
-      console.log(`[webhook-inbound] Group event: type=${classification.eventType}, chatJid=${context.chatJid}, phone=${context.senderPhone}, lid=${context.senderLid}`);
-      if (!context.senderPhone && !context.senderLid) {
-        console.warn(`[webhook-inbound] SKIP execution list: no participant identifier. raw_event keys: ${Object.keys(rawEvent).join(", ")}`);
-      }
-    }
-    if (context.chatJid && (context.senderPhone || context.senderLid)) {
-      try {
-        // Find group campaign by group_jid via campaign_groups
-        const { data: campaignGroup } = await supabase
-          .from("campaign_groups")
-          .select("campaign_id")
-          .eq("group_jid", context.chatJid)
-          .maybeSingle();
-
-        const campaignId = campaignGroup?.campaign_id || null;
-
-        if (campaignId) {
-          // Fetch ALL active execution lists for this campaign that monitor this event
-          const { data: execLists } = await supabase
-            .from("group_execution_lists")
-            .select("id, current_cycle_id, monitored_events, user_id, execution_schedule_type, current_window_end, window_type, window_start_time, window_end_time")
-            .eq("campaign_id", campaignId)
-            .eq("is_active", true);
-
-          // Resolve real phone from LID via group_members (if needed)
-          let resolvedPhone = context.senderPhone || null;
-          let resolvedLid = context.senderLid || null;
-
-          // Heuristic: if "phone" looks like a LID (>14 digits and missing country code prefix), treat it as LID
-          const looksLikeLid = (val: string | null | undefined): boolean => {
-            if (!val) return false;
-            const digits = val.replace(/\D/g, "");
-            // Real BR phones: 10-13 digits with 55 prefix usually 12-13. LIDs are typically 15+.
-            return digits.length >= 14 && !digits.startsWith("55") && !digits.startsWith("1");
-          };
-
-          if (!resolvedLid && looksLikeLid(resolvedPhone)) {
-            // The "phone" we got is actually a LID
-            resolvedLid = resolvedPhone;
-            resolvedPhone = null;
-          }
-
-          // If we have a LID but no phone, try to look up the real phone from group_members
-          if (resolvedLid && !resolvedPhone) {
-            const lidNumeric = resolvedLid.split("@")[0].replace(/\D/g, "");
-            const { data: memberMatch } = await supabase
-              .from("group_members")
-              .select("phone, lid")
-              .or(`lid.eq.${resolvedLid},lid.eq.${lidNumeric},lid.eq.${lidNumeric}@lid`)
-              .not("phone", "is", null)
-              .limit(1)
-              .maybeSingle();
-            if (memberMatch?.phone) {
-              resolvedPhone = memberMatch.phone;
-              console.log(`[webhook-inbound] Resolved LID ${resolvedLid} → phone ${resolvedPhone}`);
-            }
-          }
-
-          for (const execList of (execLists || [])) {
-            // Check if event is monitored
-            if (!(execList.monitored_events as string[]).includes(classification.eventType)) continue;
-
-            // Detect fulltime (24h) lists — always open, skip window check
-            const isFulltime = execList.window_type === "fixed" &&
-              String(execList.window_start_time || "").startsWith("00:00") &&
-              String(execList.window_end_time || "").startsWith("23:59");
-
-            // For non-immediate, non-fulltime lists, check window
-            if (execList.execution_schedule_type !== "immediate" && !isFulltime) {
-              if (!execList.current_window_end || new Date(execList.current_window_end) <= new Date()) continue;
-            }
-
-            // Use real phone if available, otherwise use LID numeric as fallback identifier
-            const execPhone = resolvedPhone || (resolvedLid ? resolvedLid.split("@")[0] : null);
-            if (!execPhone) continue;
-
-            // Build full event detail (JSON) for later inspection in UI
-            const originDetailPayload = {
-              chatName: context.chatName || null,
-              chatJid: context.chatJid || null,
-              senderPhone: resolvedPhone,
-              senderLid: resolvedLid,
-              senderName: context.senderName || null,
-              eventType: classification.eventType,
-              receivedAt: new Date().toISOString(),
-              raw: payload.raw_event,
-            };
-
-            const { error: upsertError } = await supabase
-              .from("group_execution_leads")
-              .upsert(
-                {
-                  list_id: execList.id,
-                  user_id: execList.user_id,
-                  cycle_id: execList.current_cycle_id,
-                  phone: execPhone,
-                  lid: resolvedLid,
-                  name: context.senderName || null,
-                  origin_event: classification.eventType,
-                  origin_detail: JSON.stringify(originDetailPayload),
-                  status: "pending",
-                },
-                { onConflict: "list_id,phone,cycle_id", ignoreDuplicates: true }
-              );
-
-            if (upsertError) {
-              console.error("[webhook-inbound] Execution list upsert error:", upsertError);
-              continue;
-            }
-
-            console.log(`[webhook-inbound] Lead ${context.senderPhone} added to execution list ${execList.id}`);
-
-            // For immediate lists, trigger processor right away
-            if (execList.execution_schedule_type === "immediate") {
-              try {
-                const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-                const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-                const procResp = await fetch(
-                  `${supabaseUrl}/functions/v1/group-execution-processor`,
-                  {
-                    method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                      Authorization: `Bearer ${supabaseServiceKey}`,
-                    },
-                    body: JSON.stringify({ list_id: execList.id }),
-                  }
-                );
-                const procResult = await procResp.json();
-                console.log(`[webhook-inbound] Immediate execution result for list ${execList.id}:`, JSON.stringify(procResult));
-              } catch (procErr) {
-                console.error(`[webhook-inbound] Immediate execution error for list ${execList.id}:`, procErr);
-              }
-            }
-          }
-        }
-      } catch (execListError) {
-        console.error("[webhook-inbound] Error processing execution list:", execListError);
-      }
-    }
-
-    // ==========================================
-    // PROCESS CUSTOM EVENT ACTION RULES
-    // ==========================================
-    if (instance?.user_id) {
-      try {
-        const { data: rules } = await supabase
-          .from("event_action_rules")
-          .select("*")
-          .eq("user_id", instance.user_id)
-          .eq("event_type", classification.eventType)
-          .eq("is_active", true);
-
-        if (rules && rules.length > 0) {
-          console.log(`[webhook-inbound] Found ${rules.length} custom rules for event ${classification.eventType}`);
-          for (const rule of rules) {
-            // Trigger action
-            console.log(`[webhook-inbound] Triggering action ${rule.action_type} for rule ${rule.name}`);
-            
-            if (rule.action_type === "webhook") {
-              const config = rule.action_config as any;
-              if (config.url) {
-                fetch(config.url, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    rule_name: rule.name,
-                    event_type: classification.eventType,
-                    context: context,
-                    payload: rawEvent
-                  })
-                }).catch(err => console.error(`[webhook-inbound] Rule webhook error:`, err));
-              }
-            }
-          }
-        }
-      } catch (ruleError) {
-        console.error("[webhook-inbound] Error processing custom rules:", ruleError);
-      }
-    }
-
-    // ==========================================
-    // AUTO-TRIGGER CONTEXT CAMPAIGNS (KEYWORDS & FIRST MESSAGE)
-    // ==========================================
-    const CONTEXT_TRIGGER_TYPES = ["text_message", "image_message", "audio_message", "video_message", "document_message", "sticker_message"];
-    if (CONTEXT_TRIGGER_TYPES.includes(classification.eventType) && context.chatJid && context.chatType === "group" && classification.direction === "inbound") {
-      try {
-        const bodyText = (rawEvent.body?.text?.message || rawEvent.body?.text || rawEvent.message?.conversation || rawEvent.message?.extendedTextMessage?.text || "") as string;
-        const rawBody = rawEvent.body as any;
-        const mediaCaption = (rawBody?.image?.caption || rawBody?.video?.caption || rawBody?.document?.fileName || "") as string;
-        const triggerLabel = bodyText || mediaCaption || `[${classification.eventType}]`;
-
-        // Normalize the group JID to match any stored format
-        // e.g. "1203634269161998032@g.us" → base "1203634269161998032"
-        const groupBase = context.chatJid
-          .replace(/@g\.us$/, "")
-          .replace(/-group$/, "");
-
-        // Find ALL active context campaigns for this group (any JID format)
-        const { data: activeCampaigns } = await supabase
-          .from("context_campaigns")
-          .select("*")
-          .or(`group_jid.eq.${context.chatJid},group_jid.eq.${groupBase}-group,group_jid.eq.${groupBase}@g.us,group_jid.eq.${groupBase}`)
-          .eq("is_active", true);
-
-        if (!activeCampaigns || activeCampaigns.length === 0) {
-          // No campaigns for this group, skip
-        } else {
-
-        // Check if there is already an active (collecting) window for this group
-        const campaignIds = activeCampaigns.map((c: { id: string }) => c.id);
-        const { data: activeExecs } = await supabase
-          .from("context_executions")
-          .select("id")
-          .eq("status", "collecting")
-          .in("campaign_id", campaignIds)
-          .limit(1);
-
-        const hasActiveWindow = activeExecs && activeExecs.length > 0;
-
-        for (const campaign of activeCampaigns) {
-          const config = campaign.trigger_config as any;
-          let shouldTrigger = false;
-
-          // Type 1: Keyword match — only on text_message (needs text content)
-          const keyword = config?.keyword;
-          if (campaign.trigger_type === "keyword" && keyword && classification.eventType === "text_message" && bodyText.toLowerCase().startsWith(keyword.toLowerCase())) {
-            shouldTrigger = true;
-          }
-
-          // Type 2: First Message — any inbound message type opens the window
-          if (campaign.trigger_type === "first_message" && !hasActiveWindow) {
-            shouldTrigger = true;
-          }
-
-          if (shouldTrigger) {
-            console.log(`[webhook-inbound] 🎯 Context Trigger! Campaign: ${campaign.name}, Type: ${campaign.trigger_type}, EventType: ${classification.eventType}`);
-
-            const durationMinutes = config?.duration_minutes || 30;
-            // Go back 30s so the triggering message itself is inside the window
-            const startAt = new Date(Date.now() - 30000).toISOString();
-            const endAt = new Date(Date.now() + durationMinutes * 60000).toISOString();
-
-            const { data: execution, error: execError } = await supabase
-              .from("context_executions")
-              .insert({
-                campaign_id: campaign.id,
-                user_id: campaign.user_id,
-                company_id: campaign.company_id,
-                start_at: startAt,
-                end_at: endAt,
-                status: "collecting",
-                trigger_message: triggerLabel
-              })
-              .select()
-              .single();
-
-            if (!execError && execution) {
-              console.log(`[webhook-inbound] Context window started: ${execution.id}`);
-
-              // AUTO-SEND OPENING MESSAGE
-              const instanceId = campaign.instance_id || instance?.id;
-              if (campaign.opening_message && instanceId) {
-                console.log(`[webhook-inbound] Sending opening message for campaign ${campaign.id}`);
-
-                // Prefer campaign's configured instance; fall back to webhook instance
-                const { data: fullInstance } = await supabase
-                  .from("instances")
-                  .select("*")
-                  .eq("id", instanceId)
-                  .single();
-
-                if (fullInstance) {
-                  const payload = {
-                    action: "message.send_text",
-                    campaign: { id: campaign.id, name: campaign.name },
-                    instance: {
-                      id: fullInstance.id,
-                      name: fullInstance.name,
-                      phone: fullInstance.phone || "",
-                      provider: fullInstance.provider,
-                      externalId: fullInstance.external_instance_id,
-                      externalToken: fullInstance.external_instance_token
-                    },
-                    destination: {
-                      phone: context.chatJid.split("@")[0],
-                      jid: context.chatJid,
-                      name: context.chatName || ""
-                    },
-                    node: {
-                      id: "context_opening",
-                      type: "text",
-                      order: 0,
-                      config: { text: campaign.opening_message }
-                    }
-                  };
-
-                  sendWhatsAppMessage(payload as any).catch(e => console.error("[webhook-inbound] Error sending opening message:", e));
-                }
-              }
-            }
-          }
-        }
-        } // end else (activeCampaigns found)
-      } catch (contextErr) {
-        console.error("[webhook-inbound] Error processing context trigger:", contextErr);
-      }
-    }
-
-    // ==========================================
-    // PROSPECTING PAUSE-ON-REPLY
-    // ==========================================
-    // A reply from a prospected lead pauses/cancels its remaining automated
-    // steps. Scoped by instance + lead phone (not by instance.company_id or
-    // dispatch_campaigns.company_id -- neither of those legacy tables is
-    // reliably company-scoped -- prospecting_queue.company_id, populated at
-    // enqueue time from prospecting_campaigns.company_id, is the source of
-    // truth here). Wrapped in try/catch: a bug here must never break the
-    // core webhook ingestion above.
-    if (
-      CONTEXT_TRIGGER_TYPES.includes(classification.eventType) &&
-      classification.direction === "inbound" &&
-      context.chatType !== "group" &&
-      context.senderPhone &&
-      instance?.id
-    ) {
-      try {
-        const normalizedPhone = context.senderPhone.replace(/\D/g, "");
-
-        const { data: candidateQueueItems } = await supabase
-          .from("prospecting_queue")
-          .select("id, prospecting_campaign_id, lead_id, company_id, status")
-          .eq("instance_id", instance.id)
-          .in("status", ["pending", "scheduled", "processing", "completed"])
-          .order("created_at", { ascending: false })
-          .limit(50);
-
-        if (candidateQueueItems && candidateQueueItems.length > 0) {
-          const candidateLeadIds = Array.from(new Set(candidateQueueItems.map((q) => q.lead_id)));
-          const { data: matchingLead } = await supabase
-            .from("leads")
-            .select("id, phone")
-            .in("id", candidateLeadIds)
-            .eq("phone", normalizedPhone)
-            .maybeSingle();
-
-          if (matchingLead) {
-            const queueRow = candidateQueueItems.find((q) => q.lead_id === matchingLead.id);
-            if (queueRow && queueRow.status !== "replied") {
-              await supabase
-                .from("prospecting_queue")
-                .update({ status: "replied", replied_at: new Date().toISOString() })
-                .eq("id", queueRow.id);
-
-              const { data: parentCampaign } = await supabase
-                .from("prospecting_campaigns")
-                .select("queue_policy")
-                .eq("id", queueRow.prospecting_campaign_id)
-                .maybeSingle();
-
-              const pauseOnReply = (parentCampaign?.queue_policy as any)?.pause_on_reply !== false;
-
-              if (pauseOnReply) {
-                await supabase
-                  .from("prospecting_queue")
-                  .update({ status: "cancelled" })
-                  .eq("lead_id", matchingLead.id)
-                  .eq("prospecting_campaign_id", queueRow.prospecting_campaign_id)
-                  .in("status", ["pending", "scheduled"]);
-              }
-
-              await logProspectingEvent(supabase, {
-                companyId: queueRow.company_id,
-                campaignId: queueRow.prospecting_campaign_id,
-                leadId: matchingLead.id,
-                eventType: "prospecting.lead_replied",
-                payload: { senderPhone: normalizedPhone, pausedRemaining: pauseOnReply },
-              });
-              // No separate "forward to Chat CRM" step needed here -- webhook_events
-              // already stores this inbound event by sender_phone/instance_id, and
-              // the existing Chat CRM view already reads conversations from there.
-            }
-          }
-        }
-      } catch (pauseErr) {
-        console.error("[webhook-inbound] Error processing prospecting pause-on-reply:", pauseErr);
+      // Auto-Alert for unknown mapped events
+      if (instance?.user_id && action === "unmapped_event") {
+        await supabase.from("alerts").insert({
+          user_id: instance.user_id,
+          severity: "warning",
+          title: "Evento não identificado no n8n",
+          description: `O n8n enviou um evento com action 'unmapped_event'. Payload: ${classification.eventSubtype}`,
+          entity: "webhook",
+          read: false
+        }).catch(err => console.error(err));
       }
     }
 
@@ -988,12 +160,8 @@ Deno.serve(async (req) => {
         success: true,
         provider: source,
         event_id: insertedEvent.id,
-        event_type: classification.eventType,
-        classification: classification.classification,
-        direction: classification.direction,
-        confidence: classification.confidence,
-        matched_rule: classification.matchedRule,
-        poll_processing: pollProcessingResult,
+        action: action,
+        message: `Routed to corresponding controller for ${action}`
       }),
       { status: 201, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
