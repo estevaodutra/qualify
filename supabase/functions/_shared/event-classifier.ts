@@ -619,6 +619,7 @@ function extractZApiContext(rawEvent: Record<string, unknown>): EventContext {
   let chatJid = (
     key?.remoteJid ||
     data?.chatId ||
+    rawEvent.group_id ||
     rawEvent.chatId ||
     rawEvent.from ||
     body?.chatId ||
@@ -639,6 +640,7 @@ function extractZApiContext(rawEvent: Record<string, unknown>): EventContext {
     wahaPayload?._data?.key?.remoteJidAlt ||
     rawEvent._data?.key?.remoteJidAlt ||
     sender?.phone ||
+    rawEvent.participant_phone ||
     rawEvent.senderPhone ||
     body?.senderPhone ||
     body?.participantPhone ||    // Z-API poll votes use this field
@@ -656,7 +658,8 @@ function extractZApiContext(rawEvent: Record<string, unknown>): EventContext {
   }
 
   // For group participant notifications, extract participant identifier
-  let senderLid: string | null = null;
+  let senderLid = (rawEvent.participant_lid as string) || null;
+  
   const notification = body?.notification as string | undefined;
   if (notification?.startsWith("GROUP_PARTICIPANT")) {
     const notifParams = body?.notificationParameters as string[] | undefined;
