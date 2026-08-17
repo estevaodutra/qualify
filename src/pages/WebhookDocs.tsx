@@ -171,65 +171,32 @@ const WebhookDocs = () => {
             />
           </div>
           
-          {/* Script n8n */}
+          {/* Mensagem de Grupo (Sistema) */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-8 hover:shadow-md transition-shadow">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold shadow-inner">4</div>
-              <h3 className="text-xl font-bold text-slate-900">Script n8n Recomendado (Code Node)</h3>
+              <h3 className="text-xl font-bold text-slate-900">Eventos de Grupo (Join, Leave, etc)</h3>
             </div>
             <p className="text-slate-600 mb-4">
-              Se você está usando o <strong>WAHA</strong>, o jeito mais fácil de transformar o webhook do WAHA no formato exato que o CRM precisa (incluindo tratamento de <strong>Eventos de Grupo</strong> e <strong>Vídeos Redondos / PTV</strong>) é colocar o script abaixo em um nó "Code" logo após o Webhook do n8n:
+              Para notificar o CRM de que alguém entrou, saiu, ou houve mudança no grupo, o middleware (n8n) deve formatar o JSON exatamente como abaixo. A ação (<code className="text-sm bg-slate-100 px-1 rounded font-mono">action</code>) deve ser estritamente uma de: <code className="text-indigo-600 font-bold">group_join</code>, <code className="text-indigo-600 font-bold">group_leave</code>, <code className="text-indigo-600 font-bold">group_participants</code>, ou <code className="text-indigo-600 font-bold">group_update</code>.
+            </p>
+            <p className="text-slate-600 mb-4 text-sm bg-slate-50 p-3 rounded border border-slate-100">
+              <strong>Responsabilidade do n8n:</strong> O n8n é quem deve ler o evento bagunçado do provedor (ex: <code>group.v2.join</code> do WAHA) e traduzi-lo para o nosso padrão oficial (<code>group_join</code>) <strong>antes</strong> de enviar para esta API. O ID do grupo e a lista de participantes também devem vir nos campos raízes de <code>raw_event</code> conforme o modelo.
             </p>
             <CodeBlock 
-              id="n8n-script"
-              code={`// Pega os dados brutos que chegaram do WAHA
-const data = $input.item.json.body || $input.item.json;
-const event = data.event;
-const session = data.session;
-const payload = data.payload || {};
-
-let action = event; // Ex: 'message.any', 'group.v2.join', etc.
-let rawEvent = { ...payload }; // Copia tudo do WAHA para não perder nada
-
-// 1. TRATAMENTO PARA EVENTOS DE GRUPO
-if (event && event.startsWith("group.")) {
-    // WAHA manda o JID do grupo no campo 'id', vamos duplicar para 'chatId'
-    // que é onde a nossa Edge Function sempre procura.
-    rawEvent.chatId = payload.id || ""; 
-    rawEvent.participants = payload.participants || []; // Lista de quem entrou/saiu
-    rawEvent.author = payload.author || ""; // Quem fez a ação (ex: quem removeu)
-}
-
-// 2. TRATAMENTO PARA MENSAGENS (E A CORREÇÃO DO PTV)
-if (event === "message.any") {
-    let type = payload.type;
-    let mediaUrl = payload.mediaUrl || "";
-    
-    // Detector de PTV (Video Note / Bolinha)
-    const isPtv = payload._data?.message?.ptvMessage || payload.message?.ptvMessage;
-    if (isPtv) {
-        type = "ptv";
-        if (!mediaUrl && payload.hasMedia) {
-            const fileId = payload.id.split("_").pop();
-            mediaUrl = \`https://waha.d2x.site/api/files/\${session}/\${fileId}.mp4\`;
-        }
-    }
-    
-    rawEvent.type = type;
-    rawEvent.mediaUrl = mediaUrl;
-    
-    // Garante que o JID da conversa esteja no campo chatId pro CRM
-    rawEvent.chatId = payload.from || payload.to || "";
-}
-
-// 3. MONTA O BODY EXATO PARA A EDGE FUNCTION
-return {
-  action: action,
-  provider: "waha",
-  instance_id: session,
-  waha_api_key: "SUA_API_KEY_AQUI", // Substitua pela sua chave (ex: 21e88...)
-  raw_event: rawEvent
-};`} 
+              id="group-event"
+              code={`{
+  "action": "group_join", // Obrigatório usar nome canônico: group_join, group_leave, etc
+  "provider": "waha",
+  "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
+  "raw_event": {
+    "chatId": "120363425932296878@g.us", // JID do Grupo
+    "author": "5512982402981@c.us", // JID ou número de quem executou a ação
+    "participants": [
+      "5511999999999@c.us" // Lista de JIDs/números afetados (ex: quem entrou)
+    ]
+  }
+}`} 
             />
           </div>
           

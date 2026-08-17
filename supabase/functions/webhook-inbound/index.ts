@@ -112,20 +112,7 @@ Deno.serve(async (req) => {
     // Criar a classificação baseada na action vinda do n8n e no tipo de mídia
     let eventType = action;
     
-    // Mapeamento de eventos WAHA brutos para Canonical
-    const wahaToCanonical: Record<string, string> = {
-      "group.v2.join": "group_join",
-      "group.v2.leave": "group_leave",
-      "group.v2.participants": "group_participants",
-      "group.v2.update": "group_update",
-      "message.reaction": "message_reaction",
-      "message.edited": "message_edited",
-      "message.revoked": "message_revoked",
-    };
-    
-    if (wahaToCanonical[action]) {
-      eventType = wahaToCanonical[action];
-    } else if ((action === "message.received" || action === "message.sent") && rawEvent.type) {
+    if ((action === "message.received" || action === "message.sent") && rawEvent.type) {
       eventType = `${rawEvent.type}_message`;
     }
 
@@ -204,7 +191,7 @@ Deno.serve(async (req) => {
     else if (actionPrefix === "group") {
       await processGroupEvent(supabase, instance, classification, context, rawEvent, insertedEvent.id);
     }
-    else if (action === "message.reaction" || action === "message.edited" || action === "message.revoked") {
+    else if (action === "message_reaction" || action === "message_edited" || action === "message_revoked") {
       console.log(`[webhook-inbound] Action '${action}' mapeada, mas sem controller específico ativo por enquanto. Salvo em webhook_events.`);
       // Opcional: futuramente podemos enviar para processMessageEvent ou um MessageReactionController
     }
