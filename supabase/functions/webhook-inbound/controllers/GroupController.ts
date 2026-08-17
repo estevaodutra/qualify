@@ -19,7 +19,7 @@ export async function processGroupEvent(
   // ==========================================
   if (context.chatJid && instance?.id && instance?.user_id) {
     try {
-      if (context.senderPhone && (classification.eventType === "group_join" || classification.eventType === "group_leave")) {
+      if (classification.eventType === "group_join" || classification.eventType === "group_leave") {
         // Resolve Company ID
         let companyId = null;
         const { data: company } = await supabase.from("companies").select("id").eq("owner_id", instance.user_id).limit(1).maybeSingle();
@@ -31,38 +31,38 @@ export async function processGroupEvent(
         }
 
         if (companyId) {
-          // Find or create Lead
-          let { data: lead } = await supabase.from("leads")
+          // Find or create the GROUP as a Lead
+          let { data: groupLead } = await supabase.from("leads")
             .select("id")
             .eq("company_id", companyId)
-            .eq("phone", context.senderPhone)
+            .eq("phone", context.chatJid)
             .limit(1)
             .maybeSingle();
 
-          if (!lead) {
-            const { data: newLead } = await supabase.from("leads").insert({
+          if (!groupLead) {
+            const { data: newGroupLead } = await supabase.from("leads").insert({
               user_id: instance.user_id,
               company_id: companyId,
-              phone: context.senderPhone,
-              name: context.senderName || context.senderPhone,
+              phone: context.chatJid,
+              name: context.chatName || context.chatJid, // Default to group name or JID
               status: 'active'
             }).select("id").maybeSingle();
-            lead = newLead;
+            groupLead = newGroupLead;
           }
 
-          if (lead?.id) {
-            // Find or create Conversation
+          if (groupLead?.id) {
+            // Find or create Conversation for the Group
             let { data: conv } = await supabase.from("chat_conversations")
               .select("id")
               .eq("company_id", companyId)
-              .eq("lead_id", lead.id)
+              .eq("lead_id", groupLead.id)
               .eq("instance_id", instance.id)
               .maybeSingle();
 
             if (!conv) {
               const { data: newConv } = await supabase.from("chat_conversations").insert({
                 company_id: companyId,
-                lead_id: lead.id,
+                lead_id: groupLead.id,
                 instance_id: instance.id,
                 status: 'open'
               }).select("id").maybeSingle();
@@ -70,10 +70,10 @@ export async function processGroupEvent(
             }
 
             if (conv?.id) {
-              const groupName = context.chatName ? `"${context.chatName}"` : context.chatJid;
+              const participantName = context.senderName || context.senderPhone || "Um participante";
               let systemBody = "Evento de grupo";
-              if (classification.eventType === "group_join") systemBody = `Entrou no grupo: ${groupName}`;
-              else if (classification.eventType === "group_leave") systemBody = `Saiu do grupo: ${groupName}`;
+              if (classification.eventType === "group_join") systemBody = `${participantName} entrou no grupo.`;
+              else if (classification.eventType === "group_leave") systemBody = `${participantName} saiu do grupo.`;
 
               await supabase.from("chat_messages").insert({
                 message_id: crypto.randomUUID(),
@@ -84,7 +84,13 @@ export async function processGroupEvent(
                 status: "read",
                 is_internal: false
               });
-              console.log(`[GroupController] System message inserted into private conversation for ${classification.eventType}`);
+              
+              // Touch the conversation to bring it to the top of the inbox
+              await supabase.from("chat_conversations").update({
+                last_message_at: new Date().toISOString()
+              }).eq("id", conv.id);
+              
+              console.log(`[GroupController] System message inserted into GROUP conversation for ${classification.eventType}`);
             }
           }
         }
