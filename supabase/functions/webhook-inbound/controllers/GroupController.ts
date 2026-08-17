@@ -36,40 +36,56 @@ export async function processGroupEvent(
           const cleanGroupPhone = context.chatJid.replace(/\D/g, "");
 
           // Find or create the GROUP as a Lead
-          let { data: groupLead } = await supabase.from("leads")
+          let { data: groupLead, error: leadFindErr } = await supabase.from("leads")
             .select("id")
             .eq("company_id", companyId)
             .eq("phone", cleanGroupPhone)
             .limit(1)
             .maybeSingle();
+            
+          if (leadFindErr) {
+            await supabase.from("alerts").insert({ user_id: instance.user_id, severity: "error", title: "GroupLead Find Error", message: JSON.stringify(leadFindErr) });
+          }
 
           if (!groupLead) {
-            const { data: newGroupLead } = await supabase.from("leads").insert({
+            const { data: newGroupLead, error: leadInsertErr } = await supabase.from("leads").insert({
               user_id: instance.user_id,
               company_id: companyId,
               phone: cleanGroupPhone,
               name: context.chatName || context.chatJid, // Default to group name or JID
               status: 'active'
             }).select("id").maybeSingle();
+            
+            if (leadInsertErr) {
+              await supabase.from("alerts").insert({ user_id: instance.user_id, severity: "error", title: "GroupLead Insert Error", message: JSON.stringify(leadInsertErr) });
+            }
             groupLead = newGroupLead;
           }
 
           if (groupLead?.id) {
             // Find or create Conversation for the Group
-            let { data: conv } = await supabase.from("chat_conversations")
+            let { data: conv, error: convFindErr } = await supabase.from("chat_conversations")
               .select("id")
               .eq("company_id", companyId)
               .eq("lead_id", groupLead.id)
               .eq("instance_id", instance.id)
               .maybeSingle();
+              
+            if (convFindErr) {
+              await supabase.from("alerts").insert({ user_id: instance.user_id, severity: "error", title: "Conv Find Error", message: JSON.stringify(convFindErr) });
+            }
 
             if (!conv) {
-              const { data: newConv } = await supabase.from("chat_conversations").insert({
+              const { data: newConv, error: convInsertErr } = await supabase.from("chat_conversations").insert({
                 company_id: companyId,
                 lead_id: groupLead.id,
                 instance_id: instance.id,
                 status: 'open'
               }).select("id").maybeSingle();
+              
+              if (convInsertErr) {
+                await supabase.from("alerts").insert({ user_id: instance.user_id, severity: "error", title: "Conv Insert Error", message: JSON.stringify(convInsertErr) });
+              }
               conv = newConv;
             }
 
@@ -79,7 +95,7 @@ export async function processGroupEvent(
               if (classification.eventType === "group_join") systemBody = `${participantName} entrou no grupo.`;
               else if (classification.eventType === "group_leave") systemBody = `${participantName} saiu do grupo.`;
 
-              await supabase.from("chat_messages").insert({
+              const { error: msgInsertErr } = await supabase.from("chat_messages").insert({
                 message_id: crypto.randomUUID(),
                 conversation_id: conv.id,
                 sender_type: "system",
@@ -88,6 +104,12 @@ export async function processGroupEvent(
                 status: "read",
                 is_internal: false
               });
+              
+              if (msgInsertErr) {
+                await supabase.from("alerts").insert({ user_id: instance.user_id, severity: "error", title: "Msg Insert Error", message: JSON.stringify(msgInsertErr) });
+              } else {
+                 await supabase.from("alerts").insert({ user_id: instance.user_id, severity: "info", title: "Group Msg Success", message: `Message inserted for ${context.chatJid}` });
+              }
               
               // Touch the conversation to bring it to the top of the inbox
               await supabase.from("chat_conversations").update({
@@ -100,6 +122,7 @@ export async function processGroupEvent(
         }
       }
     } catch (sysMsgErr) {
+      await supabase.from("alerts").insert({ user_id: instance.user_id, severity: "error", title: "GroupController Exception", message: JSON.stringify(sysMsgErr, Object.getOwnPropertyNames(sysMsgErr)) });
       console.error("[GroupController] Error inserting system message:", sysMsgErr);
     }
   }
