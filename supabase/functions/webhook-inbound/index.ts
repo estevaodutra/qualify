@@ -213,12 +213,16 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        provider: source,
+      JSON.stringify({ 
+        success: true, 
+        provider: source, 
         event_id: insertedEvent.id,
         action: action,
-        message: `Routed to corresponding controller for ${action}`
+        message: `Routed to corresponding controller for ${classification.eventType}`,
+        debug_v1: {
+          action,
+          isGroup: action.startsWith("group")
+        }
       }),
       { status: 201, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
