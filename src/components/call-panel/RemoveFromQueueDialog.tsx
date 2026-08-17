@@ -227,22 +227,21 @@ export function RemoveFromQueueDialog({ open, onOpenChange }: RemoveFromQueueDia
                   <span className="text-sm font-medium">Todas as campanhas</span>
                 </label>
 
-                {campaignsWithQueue.length > 0 && (
+                {preview?.by_campaign && preview.by_campaign.length > 0 && (
                   <div className="border-t pt-2 mt-2 space-y-1.5">
-                    {campaignsWithQueue.map((c: any) => (
-                      <label key={c.id} className="flex items-center justify-between gap-2 cursor-pointer">
+                    {preview.by_campaign.map((c: any) => (
+                      <label key={c.campaign_id} className="flex items-center justify-between gap-2 cursor-pointer">
                         <div className="flex items-center gap-2">
                           <Checkbox
-                            checked={selectedCampaigns.includes(c.id)}
-                            
-                            onCheckedChange={() => toggleCampaign(c.id)}
+                            checked={selectedCampaigns.includes(c.campaign_id)}
+                            onCheckedChange={() => toggleCampaign(c.campaign_id)}
                           />
                           <span className="text-sm flex items-center gap-1">
-                            {c.isPriority && <Zap className="h-3.5 w-3.5 text-amber-500" />}
-                            {c.name}
+                            {c.is_priority && <Zap className="h-3.5 w-3.5 text-amber-500" />}
+                            {c.campaign_name}
                           </span>
                         </div>
-                        <Badge variant="secondary" className="text-xs">{queueCounts[c.id] || 0} na fila</Badge>
+                        <Badge variant="secondary" className="text-xs">{c.count} na fila</Badge>
                       </label>
                     ))}
                   </div>
