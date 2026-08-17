@@ -265,12 +265,26 @@ Deno.serve(async (req) => {
         console.log(`[TriggerSequence] Manual test: falling back to destinationPhone = ${destinationPhone}`);
       } else {
         console.warn(`[TriggerSequence] Individual conversation mode, but no destination phone found in payload. Accepting payload for mapping purposes but skipping execution.`);
-        
         // Remove processing lock since we are skipping
         await supabase.from("sequence_executions")
           .update({ status: "skipped", trigger_context: { payload, warning: "No destination phone found" } })
           .eq("sequence_id", typedSequence.id)
           .eq("status", "processing");
+
+        // Add a row to workflow_executions so the frontend UI can display this ignored run and allow mapping
+        try {
+          await supabase.from("workflow_executions").insert({
+            sequence_id: typedSequence.id,
+            sequence_type: "message",
+            campaign_id: typedCampaign.id || typedSequence.id,
+            status: "skipped",
+            trigger_type: "webhook",
+            trigger_payload: payload,
+            error_message: "Telefone não encontrado no payload. Mapeamento necessário.",
+          });
+        } catch (weErr) {
+          console.error("[TriggerSequence] Failed to insert skipped workflow_execution:", weErr);
+        }
 
         return new Response(
           JSON.stringify({ 
