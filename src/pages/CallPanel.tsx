@@ -956,6 +956,10 @@ export default function CallPanel() {
     setSelectedOperatorId(entry.operatorId || "");
   };
 
+  // Queue status helpers
+  const queueGlobalStatus = callQueue.globalStatus;
+  const queueSummary = callQueue.summary;
+
   // ── AUTO-DIALER LOGIC ──
   const isAutoDialingRef = useRef(false);
 
@@ -999,10 +1003,6 @@ export default function CallPanel() {
   ]);
 
   const [panelTab, setPanelTab] = useState("calls");
-
-  // Queue status helpers
-  const queueGlobalStatus = callQueue.globalStatus;
-  const queueSummary = callQueue.summary;
 
   const statusConfig: Record<string, { label: string; dotClass: string; className: string }> = {
     running: { label: "🟢 Fila Ativa", dotClass: "bg-emerald-500 animate-pulse", className: "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400" },
