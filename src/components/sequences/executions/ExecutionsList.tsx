@@ -23,6 +23,7 @@ const STATUS_META: Record<WorkflowExecutionStatus, { label: string; icon: typeof
   running: { label: "Em andamento", icon: Loader2, className: "text-amber-600 bg-amber-50 border-amber-200" },
   waiting: { label: "Aguardando", icon: Clock, className: "text-sky-600 bg-sky-50 border-sky-200" },
   cancelled: { label: "Cancelado", icon: Ban, className: "text-slate-500 bg-slate-100 border-slate-200" },
+  skipped: { label: "Ignorado", icon: Ban, className: "text-slate-500 bg-slate-100 border-slate-200" },
 };
 
 function formatDuration(ms: number | null): string {
@@ -77,6 +78,7 @@ export function ExecutionsList({ executions, isLoading, error, selectedExecution
             <SelectItem value="running">Em andamento</SelectItem>
             <SelectItem value="waiting">Aguardando</SelectItem>
             <SelectItem value="cancelled">Cancelado</SelectItem>
+            <SelectItem value="skipped">Ignorado</SelectItem>
           </SelectContent>
         </Select>
       </div>

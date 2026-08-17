@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
-export type WorkflowExecutionStatus = "running" | "success" | "error" | "waiting" | "cancelled";
+export type WorkflowExecutionStatus = "running" | "success" | "error" | "waiting" | "cancelled" | "skipped";
 export type WorkflowNodeExecutionStatus = "success" | "error" | "running" | "not_executed";
 
 export interface WorkflowExecution {
