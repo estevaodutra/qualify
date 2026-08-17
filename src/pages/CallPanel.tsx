@@ -680,14 +680,14 @@ export default function CallPanel() {
       if (campaignFilter !== "all") query = query.eq("campaign_id", campaignFilter);
       if (historyOperatorFilter !== "all") query = query.eq("operator_id", historyOperatorFilter);
       if (dateFrom) {
-        const from = new Date(dateFrom);
-        from.setHours(0, 0, 0, 0);
-        query = query.gte("created_at", from.toISOString());
+        const startDate = new Date(dateFrom);
+        startDate.setHours(0, 0, 0, 0);
+        query = query.gte("created_at", startDate.toISOString());
       }
       if (dateTo) {
-        const to = new Date(dateTo);
-        to.setHours(23, 59, 59, 999);
-        query = query.lte("created_at", to.toISOString());
+        const endDate = new Date(dateTo);
+        endDate.setHours(23, 59, 59, 999);
+        query = query.lte("created_at", endDate.toISOString());
       }
 
       const { data, error } = await query;
