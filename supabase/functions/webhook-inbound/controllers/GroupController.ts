@@ -31,11 +31,15 @@ export async function processGroupEvent(
         }
 
         if (companyId) {
+          // The database automatically strips non-numeric characters from 'phone' using a trigger.
+          // Therefore, we must clean the JID before querying or it will never be found, leading to a unique constraint error on insertion.
+          const cleanGroupPhone = context.chatJid.replace(/\D/g, "");
+
           // Find or create the GROUP as a Lead
           let { data: groupLead } = await supabase.from("leads")
             .select("id")
             .eq("company_id", companyId)
-            .eq("phone", context.chatJid)
+            .eq("phone", cleanGroupPhone)
             .limit(1)
             .maybeSingle();
 
@@ -43,7 +47,7 @@ export async function processGroupEvent(
             const { data: newGroupLead } = await supabase.from("leads").insert({
               user_id: instance.user_id,
               company_id: companyId,
-              phone: context.chatJid,
+              phone: cleanGroupPhone,
               name: context.chatName || context.chatJid, // Default to group name or JID
               status: 'active'
             }).select("id").maybeSingle();
