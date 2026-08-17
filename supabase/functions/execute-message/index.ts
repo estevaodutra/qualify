@@ -1525,6 +1525,9 @@ Deno.serve(async (req) => {
                       if (fieldKey === "phone") {
                         triggerContext.respondentPhone = rawVal;
                         (triggerContext.customFields as Record<string, string>)["phone"] = rawVal;
+                        // Also update the active destination so subsequent nodes send to the correct number
+                        dest.group_jid = `${rawVal}@s.whatsapp.net`;
+                        dest.respondentJid = `${rawVal}@s.whatsapp.net`;
                       }
                     } else if (fieldKey === "tags") {
                       const existingTags = Array.isArray(targetLead.tags) ? targetLead.tags : [];
