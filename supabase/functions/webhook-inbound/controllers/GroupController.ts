@@ -15,21 +15,22 @@ export async function processGroupEvent(
   if (!validGroupEvents.includes(classification.eventType)) return;
 
   // 0. ==========================================
-  // INSERT SYSTEM MESSAGE INTO CHAT
+  // INSERT SYSTEM MESSAGE INTO CHAT(S)
   // ==========================================
   if (context.chatJid && instance?.id) {
     try {
-      const { data: chat } = await supabase
+      // 0.1 Insert into the Group Chat (if it exists)
+      const { data: groupChat } = await supabase
         .from("chats")
         .select("id")
         .eq("jid", context.chatJid)
         .eq("instance_id", instance.id)
         .maybeSingle();
 
-      if (chat?.id) {
-        let systemBody = "Evento de grupo";
-        const senderName = context.senderName || context.senderPhone || "Um participante";
+      const senderName = context.senderName || context.senderPhone || "Um participante";
 
+      if (groupChat?.id) {
+        let systemBody = "Evento de grupo";
         if (classification.eventType === "group_join") systemBody = `${senderName} entrou no grupo.`;
         else if (classification.eventType === "group_leave") systemBody = `${senderName} saiu do grupo.`;
         else if (classification.eventType === "group_participants") systemBody = `Participantes do grupo foram atualizados.`;
@@ -38,14 +39,56 @@ export async function processGroupEvent(
         await supabase.from("chat_messages").insert({
           message_id: context.messageId || eventId || crypto.randomUUID(),
           instance_id: instance.id,
-          chat_id: chat.id,
+          chat_id: groupChat.id,
           sender_type: "system",
           message_type: "system",
           body: systemBody,
           status: "received"
-        }).select("id").maybeSingle();
+        });
+        console.log(`[GroupController] System message inserted into group chat for ${classification.eventType}`);
+      }
+
+      // 0.2 Insert into the Participant's Private Chat
+      // If the event is about a specific participant joining or leaving, log it in their private chat timeline
+      if (context.senderPhone && (classification.eventType === "group_join" || classification.eventType === "group_leave")) {
+        const privateJid = `${context.senderPhone}@s.whatsapp.net`;
         
-        console.log(`[GroupController] System message inserted for ${classification.eventType}`);
+        // Find or create private chat
+        let { data: privateChat } = await supabase
+          .from("chats")
+          .select("id")
+          .eq("jid", privateJid)
+          .eq("instance_id", instance.id)
+          .maybeSingle();
+
+        if (!privateChat) {
+          const { data: newChat, error: newChatErr } = await supabase.from("chats").insert({
+            instance_id: instance.id,
+            jid: privateJid,
+            chat_type: "private",
+            name: context.senderName || context.senderPhone,
+            unread_count: 0
+          }).select("id").maybeSingle();
+          if (!newChatErr && newChat) privateChat = newChat;
+        }
+
+        if (privateChat?.id) {
+          const groupName = context.chatName ? `"${context.chatName}"` : context.chatJid;
+          let privateSystemBody = "Evento de grupo";
+          if (classification.eventType === "group_join") privateSystemBody = `Entrou no grupo ${groupName}`;
+          else if (classification.eventType === "group_leave") privateSystemBody = `Saiu do grupo ${groupName}`;
+
+          await supabase.from("chat_messages").insert({
+            message_id: crypto.randomUUID(),
+            instance_id: instance.id,
+            chat_id: privateChat.id,
+            sender_type: "system",
+            message_type: "system",
+            body: privateSystemBody,
+            status: "received"
+          });
+          console.log(`[GroupController] System message inserted into private chat for ${classification.eventType}`);
+        }
       }
     } catch (sysMsgErr) {
       console.error("[GroupController] Error inserting system message:", sysMsgErr);
