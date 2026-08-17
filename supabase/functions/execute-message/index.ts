@@ -1475,7 +1475,7 @@ Deno.serve(async (req) => {
                 }
 
                 // Normalization for phone
-                if (mapping.targetField === "phone" || mapping.targetField.endsWith(".phone")) {
+                if (mapping.targetField === "phone" || mapping.targetField?.endsWith(".phone")) {
                   rawVal = rawVal.replace(/\D/g, "");
                 }
                 let targetType = mapping.targetType;
