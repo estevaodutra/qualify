@@ -10,7 +10,47 @@ export async function processGroupEvent(
   eventId: string
 ) {
   const isGroupJoinOrLeave = classification.eventType === "group_join" || classification.eventType === "group_leave";
-  if (!isGroupJoinOrLeave && classification.eventType !== "group_settings") return;
+  const validGroupEvents = ["group_join", "group_leave", "group_participants", "group_update", "group_settings"];
+  
+  if (!validGroupEvents.includes(classification.eventType)) return;
+
+  // 0. ==========================================
+  // INSERT SYSTEM MESSAGE INTO CHAT
+  // ==========================================
+  if (context.chatJid && instance?.id) {
+    try {
+      const { data: chat } = await supabase
+        .from("chats")
+        .select("id")
+        .eq("jid", context.chatJid)
+        .eq("instance_id", instance.id)
+        .maybeSingle();
+
+      if (chat?.id) {
+        let systemBody = "Evento de grupo";
+        const senderName = context.senderName || context.senderPhone || "Um participante";
+
+        if (classification.eventType === "group_join") systemBody = `${senderName} entrou no grupo.`;
+        else if (classification.eventType === "group_leave") systemBody = `${senderName} saiu do grupo.`;
+        else if (classification.eventType === "group_participants") systemBody = `Participantes do grupo foram atualizados.`;
+        else if (classification.eventType === "group_update" || classification.eventType === "group_settings") systemBody = `Configurações do grupo foram alteradas.`;
+
+        await supabase.from("chat_messages").insert({
+          message_id: context.messageId || eventId || crypto.randomUUID(),
+          instance_id: instance.id,
+          chat_id: chat.id,
+          sender_type: "system",
+          message_type: "system",
+          body: systemBody,
+          status: "received"
+        }).select("id").maybeSingle();
+        
+        console.log(`[GroupController] System message inserted for ${classification.eventType}`);
+      }
+    } catch (sysMsgErr) {
+      console.error("[GroupController] Error inserting system message:", sysMsgErr);
+    }
+  }
 
   // 1. ==========================================
   // AUTO-PROCESS GROUP JOIN for Pirate Campaigns
