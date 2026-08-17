@@ -239,7 +239,8 @@ Deno.serve(async (req) => {
     console.log(`[TriggerSequence] Applied ${fieldMappings.length} field mappings + fallback keys:`, customFields);
 
     // Check if payload contains destination phone for private sending
-    let destinationPhone = extractField(payload, "destination.phone") ||
+    let destinationPhone = customFields.phone || customFields["destination.phone"] || customFields.to ||
+                           extractField(payload, "destination.phone") ||
                            extractField(payload, "phone") ||
                            extractField(payload, "to");
 
@@ -263,10 +264,22 @@ Deno.serve(async (req) => {
         destinationPhone = testPhone;
         console.log(`[TriggerSequence] Manual test: falling back to destinationPhone = ${destinationPhone}`);
       } else {
-        console.error(`[TriggerSequence] Individual conversation mode, but no destination phone found in payload`);
+        console.warn(`[TriggerSequence] Individual conversation mode, but no destination phone found in payload. Accepting payload for mapping purposes but skipping execution.`);
+        
+        // Remove processing lock since we are skipping
+        await supabase.from("sequence_executions")
+          .update({ status: "skipped", trigger_context: { payload, warning: "No destination phone found" } })
+          .eq("sequence_id", typedSequence.id)
+          .eq("status", "processing");
+
         return new Response(
-          JSON.stringify({ error: "No destination phone found in payload for individual conversation mode" }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ 
+            success: true, 
+            skipped: true, 
+            message: "Payload received successfully for mapping, but sequence was skipped because no valid destination phone was found. Please map the phone variable in the sequence trigger config.",
+            received_payload: payload 
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
     }
