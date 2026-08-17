@@ -153,7 +153,7 @@ Deno.serve(async (req) => {
     // Fetch the legacy campaign for backwards compatibility (fallback instance_id)
     const { data: campaign } = await supabase
       .from("group_campaigns")
-      .select("id, name, instance_id, config, company_id")
+      .select("id, name, instance_id, config, company_id, user_id")
       .eq("id", typedSequence.group_campaign_id)
       .maybeSingle();
 
