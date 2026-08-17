@@ -181,20 +181,36 @@ const WebhookDocs = () => {
               Para notificar o CRM de que alguém entrou, saiu, ou houve mudança no grupo, o middleware (n8n) deve formatar o JSON exatamente como abaixo. A ação (<code className="text-sm bg-slate-100 px-1 rounded font-mono">action</code>) deve ser estritamente uma de: <code className="text-indigo-600 font-bold">group_join</code>, <code className="text-indigo-600 font-bold">group_leave</code>, <code className="text-indigo-600 font-bold">group_participants</code>, ou <code className="text-indigo-600 font-bold">group_update</code>.
             </p>
             <p className="text-slate-600 mb-4 text-sm bg-slate-50 p-3 rounded border border-slate-100">
-              <strong>Responsabilidade do n8n:</strong> O n8n é quem deve ler o evento bagunçado do provedor (ex: <code>group.v2.join</code> do WAHA) e traduzi-lo para o nosso padrão oficial (<code>group_join</code>) <strong>antes</strong> de enviar para esta API. O ID do grupo e a lista de participantes também devem vir nos campos raízes de <code>raw_event</code> conforme o modelo.
+              <strong>Responsabilidade do n8n:</strong> O n8n é quem deve ler o evento bagunçado do provedor (ex: <code>group.v2.join</code> do WAHA) e traduzi-lo para o nosso padrão oficial (<code>group_join</code>) <strong>antes</strong> de enviar para esta API. O ID do grupo, o telefone e o LID do participante devem vir nos campos de <code>raw_event</code> conforme os modelos abaixo.
             </p>
+            <h4 className="text-lg font-semibold text-slate-800 mb-2 mt-6">Exemplo: Saída de Grupo (group_leave)</h4>
             <CodeBlock 
-              id="group-event"
+              id="group-leave-event"
               code={`{
-  "action": "group_join", // Obrigatório usar nome canônico: group_join, group_leave, etc
+  "action": "group_leave",
   "provider": "waha",
   "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
   "raw_event": {
-    "chatId": "120363425932296878@g.us", // JID do Grupo
-    "author": "5512982402981@c.us", // JID ou número de quem executou a ação
-    "participants": [
-      "5511999999999@c.us" // Lista de JIDs/números afetados (ex: quem entrou)
-    ]
+    "timestamp": 1786998671007,
+    "group_id": "120363407169795131@g.us",
+    "participant_phone": "5512982402981",
+    "participant_lid": "171296717553783@lid"
+  }
+}`} 
+            />
+
+            <h4 className="text-lg font-semibold text-slate-800 mb-2 mt-6">Exemplo: Entrada de Grupo (group_join)</h4>
+            <CodeBlock 
+              id="group-join-event"
+              code={`{
+  "action": "group_join",
+  "provider": "waha",
+  "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
+  "raw_event": {
+    "timestamp": 1786998671007,
+    "group_id": "120363407169795131@g.us",
+    "participant_phone": "5512982402981",
+    "participant_lid": "171296717553783@lid"
   }
 }`} 
             />
