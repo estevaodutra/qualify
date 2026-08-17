@@ -275,9 +275,10 @@ Deno.serve(async (req) => {
         try {
           await supabase.from("workflow_executions").insert({
             sequence_id: typedSequence.id,
+            user_id: typedSequence.user_id,
             sequence_type: "message",
             campaign_id: typedCampaign.id || typedSequence.id,
-            status: "skipped",
+            status: "cancelled", // DB check constraint only allows running, success, error, waiting, cancelled
             trigger_type: "webhook",
             trigger_payload: payload,
             error_message: "Telefone não encontrado no payload. Mapeamento necessário.",
