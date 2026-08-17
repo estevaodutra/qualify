@@ -1548,7 +1548,7 @@ Deno.serve(async (req) => {
               if (phoneClean) {
                 const { data: leadData } = await supabase
                   .from("leads")
-                  .select("id, name, phone, email, company_name, document, source, tags, custom_fields")
+                  .select("id, name, phone, email, company_name, document, source_type, tags, custom_fields")
                   .eq("company_id", typedCampaign.company_id || typedCampaign.company_id)
                   .eq("phone", phoneClean)
                   .maybeSingle();
@@ -1567,9 +1567,10 @@ Deno.serve(async (req) => {
                       user_id: typedCampaign.user_id,
                       phone: phoneClean,
                       name: leadUpdates.name || triggerContext?.respondentName || phoneClean,
-                      custom_fields: cfUpdates
+                      custom_fields: cfUpdates,
+                      source_type: "sequence"
                     })
-                    .select("id, name, phone, email, company_name, document, source, tags, custom_fields")
+                    .select("id, name, phone, email, company_name, document, source_type, tags, custom_fields")
                     .single();
                     
                   if (newLead) {
