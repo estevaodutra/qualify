@@ -171,6 +171,68 @@ const WebhookDocs = () => {
             />
           </div>
           
+          {/* Script n8n */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-8 hover:shadow-md transition-shadow">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold shadow-inner">4</div>
+              <h3 className="text-xl font-bold text-slate-900">Script n8n Recomendado (Code Node)</h3>
+            </div>
+            <p className="text-slate-600 mb-4">
+              Se você está usando o <strong>WAHA</strong>, o jeito mais fácil de transformar o webhook do WAHA no formato exato que o CRM precisa (incluindo tratamento de <strong>Eventos de Grupo</strong> e <strong>Vídeos Redondos / PTV</strong>) é colocar o script abaixo em um nó "Code" logo após o Webhook do n8n:
+            </p>
+            <CodeBlock 
+              id="n8n-script"
+              code={`// Pega os dados brutos que chegaram do WAHA
+const data = $input.item.json.body || $input.item.json;
+const event = data.event;
+const session = data.session;
+const payload = data.payload || {};
+
+let action = event; // Ex: 'message.any', 'group.v2.join', etc.
+let rawEvent = { ...payload }; // Copia tudo do WAHA para não perder nada
+
+// 1. TRATAMENTO PARA EVENTOS DE GRUPO
+if (event && event.startsWith("group.")) {
+    // WAHA manda o JID do grupo no campo 'id', vamos duplicar para 'chatId'
+    // que é onde a nossa Edge Function sempre procura.
+    rawEvent.chatId = payload.id || ""; 
+    rawEvent.participants = payload.participants || []; // Lista de quem entrou/saiu
+    rawEvent.author = payload.author || ""; // Quem fez a ação (ex: quem removeu)
+}
+
+// 2. TRATAMENTO PARA MENSAGENS (E A CORREÇÃO DO PTV)
+if (event === "message.any") {
+    let type = payload.type;
+    let mediaUrl = payload.mediaUrl || "";
+    
+    // Detector de PTV (Video Note / Bolinha)
+    const isPtv = payload._data?.message?.ptvMessage || payload.message?.ptvMessage;
+    if (isPtv) {
+        type = "ptv";
+        if (!mediaUrl && payload.hasMedia) {
+            const fileId = payload.id.split("_").pop();
+            mediaUrl = \`https://waha.d2x.site/api/files/\${session}/\${fileId}.mp4\`;
+        }
+    }
+    
+    rawEvent.type = type;
+    rawEvent.mediaUrl = mediaUrl;
+    
+    // Garante que o JID da conversa esteja no campo chatId pro CRM
+    rawEvent.chatId = payload.from || payload.to || "";
+}
+
+// 3. MONTA O BODY EXATO PARA A EDGE FUNCTION
+return {
+  action: action,
+  provider: "waha",
+  instance_id: session,
+  waha_api_key: "SUA_API_KEY_AQUI", // Substitua pela sua chave (ex: 21e88...)
+  raw_event: rawEvent
+};`} 
+            />
+          </div>
+          
         </div>
       </div>
     </div>
