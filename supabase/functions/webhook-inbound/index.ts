@@ -188,7 +188,8 @@ Deno.serve(async (req) => {
     else if (actionPrefix === "connection") {
       await processConnectionEvent(supabase, instance, classification, context, rawEvent);
     }
-    else if (actionPrefix === "group") {
+    else if (action.startsWith("group")) {
+      await supabase.from("alerts").insert({ user_id: instance?.user_id, severity: "info", title: "Webhook Route", message: `Routing action ${action} to GroupController` });
       await processGroupEvent(supabase, instance, classification, context, rawEvent, insertedEvent.id);
     }
     else if (action === "message_reaction" || action === "message_edited" || action === "message_revoked") {
