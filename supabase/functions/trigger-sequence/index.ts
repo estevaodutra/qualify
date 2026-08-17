@@ -239,8 +239,9 @@ Deno.serve(async (req) => {
     console.log(`[TriggerSequence] Applied ${fieldMappings.length} field mappings + fallback keys:`, customFields);
 
     // Check if payload contains destination phone for private sending
-    let destinationPhone = customFields.phone || customFields["destination.phone"] || customFields.to ||
+    let destinationPhone = customFields.phone || customFields["destination.phone"] || customFields["lead.phone"] || customFields.to ||
                            extractField(payload, "destination.phone") ||
+                           extractField(payload, "lead.phone") ||
                            extractField(payload, "phone") ||
                            extractField(payload, "to");
 
