@@ -216,7 +216,7 @@ Deno.serve(async (req) => {
     // 10. Trigger Automations for member_join and member_leave
     if (entered.length > 0 || leftPhones.length > 0) {
       const { data: sequences } = await supabase
-        .from("sequences")
+        .from("message_sequences")
         .select("id, trigger_type, trigger_config")
         .eq("group_campaign_id", campaignId)
         .eq("active", true)

@@ -225,11 +225,10 @@ export async function processGroupEvent(
       // NEW: Trigger GENERIC sequences (dispatch_sequence) that listen to this group
       const targetTriggerType = classification.eventType === "group_join" ? "member_join" : "member_leave";
       const { data: genericSequences } = await supabase
-        .from("sequences")
+        .from("dispatch_sequences")
         .select("id, trigger_config")
         .eq("trigger_type", targetTriggerType)
-        .eq("active", true)
-        .is("group_campaign_id", null);
+        .eq("is_active", true);
 
       if (genericSequences && genericSequences.length > 0) {
         const phoneToUse = context.senderPhone || context.senderLid;
