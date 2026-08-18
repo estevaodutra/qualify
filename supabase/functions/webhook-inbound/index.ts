@@ -32,20 +32,28 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const startTime = Date.now();
+  let requestBodyObj = null;
+  const ipAddress = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "";
+  let responseBodyObj = null;
+  let statusCode = 200;
+  let companyId = null;
+
   try {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const payload = await req.json() as Partial<InboundPayload>;
+    const bodyText = await req.text();
+    try { requestBodyObj = JSON.parse(bodyText); } catch { requestBodyObj = { rawText: bodyText }; }
+    const payload = requestBodyObj as Partial<InboundPayload>;
 
     // Validação estrita
     if (!payload.action || (!payload.source && !payload.provider) || !payload.instance_id || !payload.raw_event) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Missing required fields: action, provider (or source), instance_id, raw_event" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      responseBodyObj = { success: false, error: "Missing required fields: action, provider (or source), instance_id, raw_event" };
+      statusCode = 400;
+      throw new Error("Missing required fields");
     }
 
     const action = payload.action;
@@ -212,8 +220,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    return new Response(
-      JSON.stringify({ 
+    responseBodyObj = { 
         success: true, 
         provider: source, 
         event_id: insertedEvent.id,
@@ -223,17 +230,40 @@ Deno.serve(async (req) => {
           action,
           isGroup: action.startsWith("group")
         }
-      }),
-      { status: 201, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+      };
+      statusCode = 201;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     console.error("[webhook-inbound] Error:", errorMessage);
-    return new Response(
-      JSON.stringify({ success: false, error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    if (!responseBodyObj) {
+      responseBodyObj = { success: false, error: errorMessage };
+      statusCode = 500;
+    }
   }
+
+  try {
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+    await supabaseAdmin.from("api_logs").insert({
+      method: req.method,
+      endpoint: "/functions/v1/webhook-inbound",
+      status_code: statusCode,
+      response_time_ms: Date.now() - startTime,
+      ip_address: ipAddress,
+      request_body: requestBodyObj,
+      response_body: responseBodyObj,
+      company_id: companyId || null
+    });
+  } catch (logErr) {
+    console.error("[webhook-inbound] Failed to write to api_logs:", logErr);
+  }
+
+  return new Response(
+    JSON.stringify(responseBodyObj),
+    { status: statusCode, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
 });
 
 // fix deploy
