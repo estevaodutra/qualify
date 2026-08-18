@@ -33,11 +33,12 @@ Deno.serve(async (req) => {
   }
 
   const startTime = Date.now();
-  let requestBodyObj = null;
+  let requestBodyObj: any = null;
   const ipAddress = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "";
-  let responseBodyObj = null;
+  let responseBodyObj: any = null;
   let statusCode = 200;
-  let companyId = null;
+  let companyId: string | null = null;
+  let instanceUserId: string | null = null;
 
   try {
     const supabase = createClient(
@@ -113,7 +114,9 @@ Deno.serve(async (req) => {
       .eq("external_instance_id", externalInstanceId)
       .maybeSingle();
 
-    if (!instance) {
+    if (instance) {
+      instanceUserId = instance.user_id;
+    } else {
       console.warn(`[webhook-inbound] Instance not found for external_instance_id="${externalInstanceId}". Event will be saved with user_id=null.`);
     }
 
@@ -254,7 +257,7 @@ Deno.serve(async (req) => {
       ip_address: ipAddress,
       request_body: requestBodyObj,
       response_body: responseBodyObj,
-      user_id: instance?.user_id || null
+      user_id: instanceUserId || null
     });
   } catch (logErr) {
     console.error("[webhook-inbound] Failed to write to api_logs:", logErr);
