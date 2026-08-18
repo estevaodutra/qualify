@@ -11,7 +11,7 @@ DECLARE
   v_scheduled bigint;
   v_by_campaign jsonb;
 BEGIN
-  -- Count from both call_queue AND call_logs (scheduled/ready)
+  -- Count from call_queue, call_logs, AND workflow_call_tasks
   WITH combined AS (
     -- Items from call_queue
     SELECT cq.campaign_id, cq.attempt_number, cq.max_attempts, cq.scheduled_for,
@@ -38,6 +38,18 @@ BEGIN
         OR (p_attempt_filter = 'first' AND COALESCE(cl.attempt_number, 1) = 1)
         OR (p_attempt_filter = 'retry' AND COALESCE(cl.attempt_number, 1) > 1)
         OR (p_attempt_filter = 'last' AND COALESCE(cl.attempt_number, 1) = COALESCE(cl.max_attempts, 3)))
+    UNION ALL
+    -- Items from workflow_call_tasks
+    SELECT wt.queue_id as campaign_id, (COALESCE(wt.attempt_count, 0) + 1) as attempt_number, wt.max_attempts, wt.next_attempt_at as scheduled_for,
+           true as is_priority
+    FROM workflow_call_tasks wt
+    WHERE wt.company_id = p_company_id
+      AND wt.status IN ('queued', 'retry_scheduled', 'assigned', 'in_progress')
+      AND (p_campaign_ids IS NULL OR wt.queue_id = ANY(p_campaign_ids) OR (array_length(p_campaign_ids, 1) = 0))
+      AND (p_attempt_filter IS NULL
+        OR (p_attempt_filter = 'first' AND COALESCE(wt.attempt_count + 1, 1) = 1)
+        OR (p_attempt_filter = 'retry' AND COALESCE(wt.attempt_count + 1, 1) > 1)
+        OR (p_attempt_filter = 'last' AND COALESCE(wt.attempt_count + 1, 1) = COALESCE(wt.max_attempts, 3)))
   )
   SELECT
     COUNT(*),
@@ -49,7 +61,7 @@ BEGIN
 
   -- Breakdown by campaign from both sources
   WITH combined AS (
-    SELECT cq.campaign_id, cq.attempt_number, cq.max_attempts
+    SELECT cq.campaign_id, cq.attempt_number, cq.max_attempts, false as is_workflow
     FROM call_queue cq
     WHERE cq.company_id = p_company_id
       AND cq.status = 'waiting'
@@ -59,7 +71,7 @@ BEGIN
         OR (p_attempt_filter = 'retry' AND COALESCE(cq.attempt_number, 1) > 1)
         OR (p_attempt_filter = 'last' AND COALESCE(cq.attempt_number, 1) = COALESCE(cq.max_attempts, 3)))
     UNION ALL
-    SELECT cl.campaign_id, cl.attempt_number, cl.max_attempts
+    SELECT cl.campaign_id, cl.attempt_number, cl.max_attempts, false as is_workflow
     FROM call_logs cl
     WHERE cl.company_id = p_company_id
       AND cl.call_status IN ('scheduled', 'ready')
@@ -68,16 +80,35 @@ BEGIN
         OR (p_attempt_filter = 'first' AND COALESCE(cl.attempt_number, 1) = 1)
         OR (p_attempt_filter = 'retry' AND COALESCE(cl.attempt_number, 1) > 1)
         OR (p_attempt_filter = 'last' AND COALESCE(cl.attempt_number, 1) = COALESCE(cl.max_attempts, 3)))
+    UNION ALL
+    SELECT wt.queue_id as campaign_id, (COALESCE(wt.attempt_count, 0) + 1) as attempt_number, wt.max_attempts, true as is_workflow
+    FROM workflow_call_tasks wt
+    WHERE wt.company_id = p_company_id
+      AND wt.status IN ('queued', 'retry_scheduled', 'assigned', 'in_progress')
+      AND (p_campaign_ids IS NULL OR wt.queue_id = ANY(p_campaign_ids) OR (array_length(p_campaign_ids, 1) = 0))
+      AND (p_attempt_filter IS NULL
+        OR (p_attempt_filter = 'first' AND COALESCE(wt.attempt_count + 1, 1) = 1)
+        OR (p_attempt_filter = 'retry' AND COALESCE(wt.attempt_count + 1, 1) > 1)
+        OR (p_attempt_filter = 'last' AND COALESCE(wt.attempt_count + 1, 1) = COALESCE(wt.max_attempts, 3)))
   )
   SELECT COALESCE(jsonb_agg(row_to_json(sub)), '[]'::jsonb)
   INTO v_by_campaign
   FROM (
-    SELECT c.campaign_id, COALESCE(cc.name, s.name, 'Fila Aberta (Geral)') as campaign_name, COALESCE(cc.is_priority, false) as is_priority, COUNT(*) as count
+    SELECT c.campaign_id, 
+           CASE 
+             WHEN c.is_workflow THEN 'Workflow / Fila'
+             ELSE COALESCE(cc.name, s.name, 'Fila Aberta (Geral)')
+           END as campaign_name, 
+           CASE 
+             WHEN c.is_workflow THEN true
+             ELSE COALESCE(cc.is_priority, false)
+           END as is_priority, 
+           COUNT(*) as count
     FROM combined c
     LEFT JOIN call_campaigns cc ON cc.id = c.campaign_id
-    LEFT JOIN sequences s ON s.id = c.campaign_id
-    GROUP BY c.campaign_id, cc.name, s.name, cc.is_priority
-    ORDER BY cc.is_priority DESC, campaign_name
+    LEFT JOIN workflow_definitions s ON s.id = c.campaign_id
+    GROUP BY c.campaign_id, cc.name, s.name, cc.is_priority, c.is_workflow
+    ORDER BY is_priority DESC, campaign_name
   ) sub;
 
   RETURN QUERY SELECT v_total, v_priority, v_normal, v_scheduled, v_by_campaign;
@@ -93,6 +124,7 @@ AS $function$
 DECLARE
   v_queue_ids uuid[];
   v_log_ids uuid[];
+  v_workflow_ids uuid[];
   v_removed bigint := 0;
   v_priority bigint := 0;
   v_normal bigint := 0;
@@ -102,6 +134,9 @@ DECLARE
   v_l_removed bigint := 0;
   v_l_priority bigint := 0;
   v_l_normal bigint := 0;
+  v_w_removed bigint := 0;
+  v_w_priority bigint := 0;
+  v_w_normal bigint := 0;
 BEGIN
   -- Collect call_queue IDs
   SELECT ARRAY_AGG(cq.id)
@@ -128,6 +163,18 @@ BEGIN
       OR (p_attempt_filter = 'first' AND COALESCE(cl.attempt_number, 1) = 1)
       OR (p_attempt_filter = 'retry' AND COALESCE(cl.attempt_number, 1) > 1)
       OR (p_attempt_filter = 'last' AND COALESCE(cl.attempt_number, 1) = COALESCE(cl.max_attempts, 3)));
+
+  -- Collect workflow_call_tasks IDs
+  SELECT ARRAY_AGG(wt.id)
+  INTO v_workflow_ids
+  FROM workflow_call_tasks wt
+  WHERE wt.company_id = p_company_id
+    AND wt.status IN ('queued', 'retry_scheduled', 'assigned', 'in_progress')
+    AND (p_campaign_ids IS NULL OR wt.queue_id = ANY(p_campaign_ids) OR (array_length(p_campaign_ids, 1) = 0))
+    AND (p_attempt_filter IS NULL
+      OR (p_attempt_filter = 'first' AND COALESCE(wt.attempt_count + 1, 1) = 1)
+      OR (p_attempt_filter = 'retry' AND COALESCE(wt.attempt_count + 1, 1) > 1)
+      OR (p_attempt_filter = 'last' AND COALESCE(wt.attempt_count + 1, 1) = COALESCE(wt.max_attempts, 3)));
 
   -- Process call_queue removals (delete)
   IF v_queue_ids IS NOT NULL AND array_length(v_queue_ids, 1) > 0 THEN
@@ -157,9 +204,22 @@ BEGIN
     UPDATE call_logs SET call_status = 'cancelled', ended_at = now() WHERE id = ANY(v_log_ids);
   END IF;
 
-  v_removed := v_q_removed + v_l_removed;
-  v_priority := v_q_priority + v_l_priority;
-  v_normal := v_q_normal + v_l_normal;
+  -- Process workflow_call_tasks removals (update status to cancelled)
+  IF v_workflow_ids IS NOT NULL AND array_length(v_workflow_ids, 1) > 0 THEN
+    SELECT
+      COUNT(*),
+      COUNT(*), -- all workflow are priority=true based on UI definition
+      0
+    INTO v_w_removed, v_w_priority, v_w_normal
+    FROM workflow_call_tasks wt
+    WHERE wt.id = ANY(v_workflow_ids);
+
+    UPDATE workflow_call_tasks SET status = 'cancelled' WHERE id = ANY(v_workflow_ids);
+  END IF;
+
+  v_removed := v_q_removed + v_l_removed + v_w_removed;
+  v_priority := v_q_priority + v_l_priority + v_w_priority;
+  v_normal := v_q_normal + v_l_normal + v_w_normal;
 
   IF v_removed = 0 THEN
     RETURN QUERY SELECT 0::bigint, 0::bigint, 0::bigint;

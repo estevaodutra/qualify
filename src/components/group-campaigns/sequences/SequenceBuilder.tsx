@@ -86,10 +86,19 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
     name: string, 
     localNodes: LocalNode[], 
     localConnections: { sourceNodeId: string; targetNodeId: string; conditionPath?: string }[],
-    workflowConfig: Record<string, unknown>
+    _workflowConfig: Record<string, unknown>
   ) => {
-    const triggerNode = localNodes.find(n => n.nodeType === TRIGGER_NODE_TYPE);
-    const triggerType = (triggerNode?.config.triggerType as TriggerType) || "manual";
+    const triggerNode = localNodes.find(n => n.nodeType === "trigger");
+    const triggersArray = (triggerNode?.config?.triggers as any[]) || [];
+    let triggerType = (triggerNode?.config.triggerType as TriggerType);
+    if (!triggerType && triggersArray.length > 0) {
+      triggerType = triggersArray[0].type as TriggerType;
+    }
+    triggerType = triggerType || "manual";
+
+    const workflowConfig = (triggerNode?.config.triggerConfig as TriggerConfig) || 
+      (triggersArray.length > 0 ? triggersArray[0].config : {});
+
     await onUpdate({ 
       id: sequence.id, 
       updates: { 

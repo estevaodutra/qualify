@@ -280,7 +280,10 @@ Deno.serve(async (req) => {
     let targetGroups: { group_jid: string; group_name: string | null; instance_id: string | null }[] = [];
 
     if (shouldSendToGroup) {
-      if (groupScope === "all" || groupScope === "selected") {
+      if (payload.group_jid) {
+        // If triggered by a specific group event (member_join/leave), ONLY target that specific group!
+        targetGroups = [{ group_jid: payload.group_jid as string, group_name: null, instance_id: instanceId || null }];
+      } else if (groupScope === "all" || groupScope === "selected") {
         let query = supabase
           .from("campaign_groups")
           .select("group_jid, group_name, instance_id")

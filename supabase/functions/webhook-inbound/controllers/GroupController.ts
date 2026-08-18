@@ -226,7 +226,7 @@ export async function processGroupEvent(
       const targetTriggerType = classification.eventType === "group_join" ? "member_join" : "member_leave";
       const { data: genericSequences } = await supabase
         .from("dispatch_sequences")
-        .select("id, trigger_config")
+        .select("id, campaign_id, trigger_config")
         .eq("trigger_type", targetTriggerType)
         .eq("is_active", true);
 
@@ -234,6 +234,42 @@ export async function processGroupEvent(
         const phoneToUse = context.senderPhone || context.senderLid;
         if (phoneToUse) {
           for (const seq of genericSequences) {
+            const config = seq.trigger_config as any;
+            if (config && Array.isArray(config.selectedGroupJids) && config.selectedGroupJids.includes(context.chatJid)) {
+              try {
+                await fetch(`${supabaseUrl}/functions/v1/execute-dispatch-sequence`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${supabaseServiceKey}`,
+                  },
+                  body: JSON.stringify({ 
+                    campaignId: seq.campaign_id,
+                    sequenceId: seq.id, 
+                    contactPhone: phoneToUse, 
+                    contactName: context.senderName || phoneToUse 
+                  }),
+                });
+                console.log(`[GroupController] Triggered generic dispatch sequence ${seq.id} for ${phoneToUse}`);
+              } catch (e) {
+                console.error(`[GroupController] Error triggering generic dispatch sequence ${seq.id}:`, e);
+              }
+            }
+          }
+        }
+      }
+
+      // ALSO trigger generic message_sequences (new Workflows engine)
+      const { data: genericMessageSequences } = await supabase
+        .from("message_sequences")
+        .select("id, trigger_config")
+        .eq("trigger_type", targetTriggerType)
+        .eq("active", true);
+
+      if (genericMessageSequences && genericMessageSequences.length > 0) {
+        const phoneToUse = context.senderPhone || context.senderLid;
+        if (phoneToUse) {
+          for (const seq of genericMessageSequences) {
             const config = seq.trigger_config as any;
             if (config && Array.isArray(config.selectedGroupJids) && config.selectedGroupJids.includes(context.chatJid)) {
               try {
@@ -245,9 +281,9 @@ export async function processGroupEvent(
                   },
                   body: JSON.stringify({ sequenceId: seq.id, phone: phoneToUse, group_jid: context.chatJid }),
                 });
-                console.log(`[GroupController] Triggered generic sequence ${seq.id} for ${phoneToUse}`);
+                console.log(`[GroupController] Triggered generic message sequence ${seq.id} for ${phoneToUse}`);
               } catch (e) {
-                console.error(`[GroupController] Error triggering generic sequence ${seq.id}:`, e);
+                console.error(`[GroupController] Error triggering generic message sequence ${seq.id}:`, e);
               }
             }
           }
