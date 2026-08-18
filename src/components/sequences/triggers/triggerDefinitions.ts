@@ -7,6 +7,7 @@ import {
 import type { TriggerDefinition } from "./types";
 import { ScheduledTriggerConfig } from "./configs/ScheduledTriggerConfig";
 import { ApiTriggerConfig } from "./configs/ApiTriggerConfig";
+import { GroupEventTriggerConfig } from "./configs/GroupEventTriggerConfig";
 
 const weekdayLabel = (days: any): string => {
   if (!Array.isArray(days) || days.length === 0) return "nenhum dia";
@@ -123,10 +124,16 @@ export const TRIGGER_DEFINITIONS: Record<string, TriggerDefinition> = {
     icon: Users,
     color: "bg-green-500",
     status: "available",
-    supportedBy: ["group_sequence"],
+    supportedBy: ["dispatch_sequence", "group_sequence"],
     defaultConfig: { sendPrivate: false },
     summaryBuilder: () => ({ title: "Membro entrar no grupo" }),
-    validate: () => [],
+    validate: (config) => {
+      const errors: string[] = [];
+      if (!config.instanceId) errors.push("Selecione a instância.");
+      if (!config.selectedGroupJids || (config.selectedGroupJids as string[]).length === 0) errors.push("Selecione pelo menos um grupo monitorado.");
+      return errors;
+    },
+    configComponent: GroupEventTriggerConfig,
   },
   member_leave: {
     type: "member_leave",
@@ -136,10 +143,16 @@ export const TRIGGER_DEFINITIONS: Record<string, TriggerDefinition> = {
     icon: LogOut,
     color: "bg-red-500",
     status: "available",
-    supportedBy: ["group_sequence"],
+    supportedBy: ["dispatch_sequence", "group_sequence"],
     defaultConfig: { sendPrivate: false },
     summaryBuilder: () => ({ title: "Membro sair do grupo" }),
-    validate: () => [],
+    validate: (config) => {
+      const errors: string[] = [];
+      if (!config.instanceId) errors.push("Selecione a instância.");
+      if (!config.selectedGroupJids || (config.selectedGroupJids as string[]).length === 0) errors.push("Selecione pelo menos um grupo monitorado.");
+      return errors;
+    },
+    configComponent: GroupEventTriggerConfig,
   },
   on_add: {
     type: "on_add",
