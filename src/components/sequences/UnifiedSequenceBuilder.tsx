@@ -1008,7 +1008,7 @@ export function UnifiedSequenceBuilder({
 
                   // Output port on the right side of the card
                   const portIdOut = conn.conditionPath || "default";
-                  const coordsOut = getPortCoords(srcNode.id, portIdOut, (srcNode.nodeType === "trigger" || srcNode.nodeType === "content" || srcNode.nodeType === "phone_call" || srcNode.nodeType === "ura" ? 320 : 220), 45);
+                  const coordsOut = getPortCoords(srcNode.id, portIdOut, (srcNode.nodeType === "trigger" ? 380 : srcNode.nodeType === "content" || srcNode.nodeType === "phone_call" || srcNode.nodeType === "ura" ? 320 : 220), 45);
                   let portX1 = sX + coordsOut.x;
                   let portY1 = sY + coordsOut.y;
 
@@ -1093,7 +1093,8 @@ export function UnifiedSequenceBuilder({
                   return (
                     <div
                       key={node.id}
-                                style={{
+                      data-node-wrapper={node.id}
+                      style={{
                         position: "absolute",
                         left: posX,
                         top: posY,
