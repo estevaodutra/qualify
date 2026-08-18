@@ -365,7 +365,7 @@ Deno.serve(async (req) => {
     // Build the list of (respondentJid, respondentName, groupJid) destinations
     const destinations = shouldSendToGroup
       ? targetGroups.map((g) => ({ respondentJid: g.group_jid, respondentName: g.group_name || "", groupJid: g.group_jid, instanceId: g.instance_id }))
-      : [{ respondentJid: `${destinationPhone}@s.whatsapp.net`, respondentName, groupJid: "" }];
+      : [{ respondentJid: destinationPhone.includes('@') ? destinationPhone : `${destinationPhone}@s.whatsapp.net`, respondentName, groupJid: "" }];
 
     console.log(`[TriggerSequence] Resolved ${destinations.length} destination(s) for this trigger`);
 

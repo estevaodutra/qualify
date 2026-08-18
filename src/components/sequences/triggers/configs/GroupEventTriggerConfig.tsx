@@ -80,7 +80,7 @@ export function GroupEventTriggerConfig({ config, onChange }: any) {
     const next = selectedGroups.includes(jid)
       ? selectedGroups.filter((id: string) => id !== jid)
       : [...selectedGroups, jid];
-    onChange({ ...config, selectedGroupJids: next });
+    onChange({ ...config, selectedGroupJids: next, isGroup: false, destinationMode: 'private' });
   };
 
   const filteredGroups = useMemo(() => {
@@ -96,7 +96,7 @@ export function GroupEventTriggerConfig({ config, onChange }: any) {
         <Select 
           value={targetInstanceId} 
           onValueChange={(val) => {
-            onChange({ ...config, instanceId: val, selectedGroupJids: [] });
+            onChange({ ...config, instanceId: val, selectedGroupJids: [], isGroup: false, destinationMode: 'private' });
             fetchInstanceGroups(val);
           }}
         >
