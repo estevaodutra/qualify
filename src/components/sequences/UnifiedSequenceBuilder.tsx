@@ -1093,12 +1093,11 @@ export function UnifiedSequenceBuilder({
                   return (
                     <div
                       key={node.id}
-                      data-node-wrapper={node.id}
-                      style={{
+                                style={{
                         position: "absolute",
                         left: posX,
                         top: posY,
-                        width: isTrigger || isContent || node.nodeType === "phone_call" || node.nodeType === "ura" ? 320 : 220,
+                        width: isTrigger ? 380 : isContent || node.nodeType === "phone_call" || node.nodeType === "ura" ? 320 : 220,
                         minHeight: isRandomizer ? Math.max(140, 40 + randomizerBranches.length * RANDOMIZER_PORT_SPACING) : undefined,
                         pointerEvents: "auto"
                       }}
@@ -1205,7 +1204,7 @@ export function UnifiedSequenceBuilder({
                           >
                             <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                           </div>
-                          <span className="absolute right-2 top-[24px] text-[8px] font-bold text-emerald-500 select-none">Sim</span>
+                          <span className="absolute right-2 top-[24px] text-[8px] font-bold text-emerald-600 select-none">Sim</span>
 
                           {/* "Não" (False) output handle */}
                           <div
@@ -1264,7 +1263,7 @@ export function UnifiedSequenceBuilder({
                             return (
                               <div 
                                 key={trigger.id} 
-                                className="group relative flex flex-col gap-2 p-3 border border-slate-200 rounded-xl bg-white shadow-sm mb-3 cursor-pointer hover:border-[#8A3CFF]/50 transition-colors"
+                                className="group relative flex flex-col gap-1.5 p-3.5 border border-slate-200/90 rounded-xl bg-white shadow-sm mb-3 cursor-pointer hover:border-[#8A3CFF]/60 hover:shadow-md transition-all"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setEditingTriggerId(trigger.id);
@@ -1272,14 +1271,8 @@ export function UnifiedSequenceBuilder({
                                   setNodeEditorOpen(true);
                                 }}
                               >
-                                <div className="flex items-center justify-between gap-3">
-                                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                                    <ArrowRight className="h-4 w-4 text-slate-600 shrink-0" />
-                                    <div className="min-w-0">
-                                      <p className="text-xs font-bold text-slate-800 truncate">{title}</p>
-                                      <p className="text-[10px] text-slate-500 truncate">{subtitle}</p>
-                                    </div>
-                                  </div>
+                                {/* Floating action buttons on hover (top right overlay) */}
+                                <div className="absolute top-2 right-2 flex items-center gap-0.5 bg-white/95 backdrop-blur-sm border border-slate-200/90 rounded-lg p-0.5 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-10">
                                   {idx > 0 && (
                                     <button
                                       type="button"
@@ -1300,7 +1293,7 @@ export function UnifiedSequenceBuilder({
                                           };
                                         }));
                                       }}
-                                      className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                      className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded"
                                       title="Mover para cima"
                                     >
                                       <ChevronUp className="h-3.5 w-3.5" />
@@ -1326,7 +1319,7 @@ export function UnifiedSequenceBuilder({
                                           };
                                         }));
                                       }}
-                                      className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                      className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded"
                                       title="Mover para baixo"
                                     >
                                       <ChevronDown className="h-3.5 w-3.5" />
@@ -1338,7 +1331,7 @@ export function UnifiedSequenceBuilder({
                                       e.stopPropagation();
                                       await handleManualTriggerExecution(trigger.id);
                                     }}
-                                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                    className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded"
                                     title="Executar agora (teste manual)"
                                   >
                                     <Play className="h-3.5 w-3.5" />
@@ -1365,7 +1358,7 @@ export function UnifiedSequenceBuilder({
                                         };
                                       }));
                                     }}
-                                    className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                    className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded"
                                     title="Duplicar gatilho"
                                   >
                                     <Copy className="h-3.5 w-3.5" />
@@ -1385,15 +1378,28 @@ export function UnifiedSequenceBuilder({
                                       ));
                                       updateConnectionsAndSave(prev => prev.filter(c => !(c.sourceNodeId === node.id && c.conditionPath === trigger.id)));
                                     }}
-                                    className="p-1.5 text-slate-400 hover:text-destructive hover:bg-destructive/10 rounded-md opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                    className="p-1 text-slate-400 hover:text-destructive hover:bg-destructive/10 rounded"
                                     title="Remover gatilho"
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </button>
                                 </div>
+
+                                <div className="flex items-start justify-between gap-2 pr-6">
+                                  <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                                    <ArrowRight className="h-4 w-4 text-slate-600 shrink-0 mt-0.5" />
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-xs font-bold text-slate-800 leading-snug">{title}</p>
+                                      {subtitle && (
+                                        <p className="text-[11px] text-slate-500 leading-snug mt-0.5 line-clamp-2">{subtitle}</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
                                 {trigger.dataSource && (
                                   <div className="self-end mt-1">
-                                    <Badge className="bg-blue-500 hover:bg-blue-600 text-[9px] px-2 py-0 rounded-md font-bold text-white">
+                                    <Badge className="bg-blue-500 hover:bg-blue-600 text-[9px] px-2 py-0.5 rounded-md font-bold text-white shadow-none">
                                       {trigger.dataSource}
                                     </Badge>
                                   </div>
@@ -1417,8 +1423,6 @@ export function UnifiedSequenceBuilder({
                           >
                             <Plus className="h-3.5 w-3.5" /> Adicionar gatilho
                           </button>
-                          
-
                         </div>
                       ) : isFieldOp ? (
                         <div className="flex flex-col w-full text-left h-full">
