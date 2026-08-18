@@ -213,6 +213,54 @@ Deno.serve(async (req) => {
         .eq("phone", resolvedPhone);
     }
 
+    // 10. Trigger Automations for member_join and member_leave
+    if (entered.length > 0 || leftPhones.length > 0) {
+      const { data: sequences } = await supabase
+        .from("sequences")
+        .select("id, trigger_type, trigger_config")
+        .eq("group_campaign_id", campaignId)
+        .eq("active", true)
+        .in("trigger_type", ["member_join", "member_leave"]);
+
+      if (sequences && sequences.length > 0) {
+        const joinSequences = sequences.filter((s: any) => s.trigger_type === "member_join");
+        const leaveSequences = sequences.filter((s: any) => s.trigger_type === "member_leave");
+
+        const triggerSeq = async (seqId: string, phone: string) => {
+          try {
+            await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/trigger-sequence`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+              },
+              body: JSON.stringify({ sequenceId: seqId, phone, group_jid: groupJid }),
+            });
+          } catch (e) {
+            console.error(`[sync] Error triggering sequence ${seqId} for phone ${phone}:`, e);
+          }
+        };
+
+        if (entered.length > 0 && joinSequences.length > 0) {
+          console.log(`[sync] Triggering ${joinSequences.length} member_join sequences for ${entered.length} members`);
+          for (const s of joinSequences) {
+            for (const member of entered) {
+              await triggerSeq(s.id, member.phone);
+            }
+          }
+        }
+
+        if (leftPhones.length > 0 && leaveSequences.length > 0) {
+          console.log(`[sync] Triggering ${leaveSequences.length} member_leave sequences for ${leftPhones.length} members`);
+          for (const s of leaveSequences) {
+            for (const phone of leftPhones) {
+              await triggerSeq(s.id, phone);
+            }
+          }
+        }
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
