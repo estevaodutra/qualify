@@ -253,8 +253,8 @@ export default function MessageThread({
 
             if (isSystem) {
               return (
-                <div key={msg.id} className="flex justify-center">
-                  <span className="text-[10px] text-muted-foreground bg-muted/30 px-3 py-1 rounded text-center max-w-sm italic">
+                <div key={msg.id} className="flex justify-center my-2">
+                  <span className="text-[11px] font-medium text-slate-200 bg-slate-800/80 px-3 py-1.5 rounded-xl text-center max-w-[85%] shadow-sm">
                     {msg.body}
                   </span>
                 </div>

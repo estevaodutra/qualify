@@ -90,23 +90,24 @@ export async function processGroupEvent(
             }
 
             if (conv?.id) {
-              const participantName = context.senderName || context.senderPhone || "Um participante";
-              let systemBody = "Evento de grupo";
-              if (classification.eventType === "group_join") systemBody = `${participantName} entrou no grupo.`;
-              else if (classification.eventType === "group_leave") systemBody = `${participantName} saiu do grupo.`;
+              const cleanSenderPhone = context.senderName || context.senderPhone || "Um participante";
+              const systemBody = classification.eventType === "group_join"
+                ? `${cleanSenderPhone} entrou no grupo.`
+                : `${cleanSenderPhone} saiu do grupo.`;
 
-              const { error: msgInsertErr } = await supabase.from("chat_messages").insert({
-                message_id: crypto.randomUUID(),
+              const { error: sysMsgErr } = await supabase.from("chat_messages").insert({
+                company_id: companyId,
                 conversation_id: conv.id,
                 sender_type: "system",
                 message_type: "system",
                 body: systemBody,
                 status: "read",
-                is_internal: false
+                is_internal: false,
+                message_id: crypto.randomUUID()
               });
               
-              if (msgInsertErr) {
-                await supabase.from("alerts").insert({ user_id: instance.user_id, severity: "error", title: "Msg Insert Error", message: JSON.stringify(msgInsertErr) });
+              if (sysMsgErr) {
+                await supabase.from("alerts").insert({ user_id: instance.user_id, severity: "error", title: "Msg Insert Error", message: JSON.stringify(sysMsgErr) });
               } else {
                  await supabase.from("alerts").insert({ user_id: instance.user_id, severity: "info", title: "Group Msg Success", message: `Message inserted for ${context.chatJid}` });
               }
