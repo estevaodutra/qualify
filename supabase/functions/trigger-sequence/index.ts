@@ -175,8 +175,27 @@ Deno.serve(async (req) => {
         name: typedSequence.name || "Default Workflow Campaign",
         instance_id: null,
       };
+    let triggerConfig = (typedSequence.trigger_config as Record<string, unknown>) || {};
+    const effectiveTriggerId = (triggerIdFromUrl || payload.triggerId || payload.trigger_id) as string | undefined;
+
+    if (effectiveTriggerId) {
+      try {
+        const { data: trigNode } = await supabase
+          .from("sequence_nodes")
+          .select("config")
+          .eq("sequence_id", typedSequence.id)
+          .eq("node_type", "trigger")
+          .maybeSingle();
+
+        const triggers = (trigNode?.config as any)?.triggers || [];
+        const matchedTrig = triggers.find((t: any) => t.id === effectiveTriggerId);
+        if (matchedTrig && matchedTrig.config) {
+          triggerConfig = { ...triggerConfig, ...matchedTrig.config };
+        }
+      } catch (e) {
+        console.warn("[TriggerSequence] Could not fetch node triggers for triggerId:", e);
+      }
     }
-    const triggerConfig = typedSequence.trigger_config as Record<string, unknown> || {};
 
     // ── Deduplication guard (best-effort) ───────────────────────────────────
     // Prevent the same sequence from firing multiple times within 15 seconds.
@@ -245,7 +264,7 @@ Deno.serve(async (req) => {
                            extractField(payload, "phone") ||
                            extractField(payload, "to");
 
-    const isGroupMode = triggerConfig.destinationMode ? triggerConfig.destinationMode === "groups" : triggerConfig.isGroup !== false;
+    const isGroupMode = triggerConfig.destinationMode === "groups" || (triggerConfig.isGroup === true && !destinationPhone);
 
     if (!isGroupMode && !destinationPhone) {
       if (isManualTest) {
