@@ -27,6 +27,7 @@ import {
 import { cn } from "@/lib/utils";
 import { TriggerTypeSelector } from "@/components/sequences/triggers/TriggerTypeSelector";
 import { ScheduledTriggerConfig } from "@/components/sequences/triggers/configs/ScheduledTriggerConfig";
+import { GroupEventTriggerConfig } from "@/components/sequences/triggers/configs/GroupEventTriggerConfig";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 
@@ -619,8 +620,8 @@ export function NodeEditorModal({
 
                     return (
                       <div className="space-y-6 pb-4">
-                        <div className="text-[10px] text-red-500 font-mono mb-2">
-                          DEBUG: activeTriggerId={activeTriggerId}, triggerType={triggerType}, selectorValue={selectorValue}, activeTrigger.type={activeTrigger?.type}
+                        <div className="text-[10px] text-muted-foreground mb-2">
+                          Configuração do gatilho
                         </div>
 
                         {selectorValue === "webhook" && (
@@ -628,6 +629,13 @@ export function NodeEditorModal({
                             triggerConfig={triggerConfig}
                             onTriggerConfigChange={handleTriggerConfigChange}
                             webhookUrl={webhookUrl}
+                          />
+                        )}
+
+                        {(selectorValue === "member_join" || selectorValue === "member_leave") && (
+                          <GroupEventTriggerConfig
+                            config={triggerConfig}
+                            onChange={handleTriggerConfigChange}
                           />
                         )}
 
