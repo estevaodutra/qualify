@@ -254,7 +254,7 @@ Deno.serve(async (req) => {
       ip_address: ipAddress,
       request_body: requestBodyObj,
       response_body: responseBodyObj,
-      company_id: companyId || null
+      user_id: instance?.user_id || null
     });
   } catch (logErr) {
     console.error("[webhook-inbound] Failed to write to api_logs:", logErr);

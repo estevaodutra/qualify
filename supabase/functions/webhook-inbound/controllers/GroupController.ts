@@ -222,20 +222,26 @@ export async function processGroupEvent(
           console.error(`[GroupController] sync-group-members error:`, syncErr);
         }
       }
-      // NEW: Trigger GENERIC sequences (dispatch_sequence) that listen to this group
+      // NEW: Trigger GENERIC sequences (dispatch_sequence & message_sequences) that listen to this group
       const targetTriggerType = classification.eventType === "group_join" ? "member_join" : "member_leave";
-      const { data: genericSequences } = await supabase
-        .from("dispatch_sequences")
-        .select("id, campaign_id, trigger_config")
-        .eq("trigger_type", targetTriggerType)
-        .eq("is_active", true);
+      const normalizeJid = (j: string | null | undefined) => (j || "").replace("-group", "").replace("@g.us", "").trim();
+      const rawChatJid = context.chatJid || "";
+      const normChatJid = normalizeJid(rawChatJid);
+      const phoneToUse = context.senderPhone || context.senderLid;
 
-      if (genericSequences && genericSequences.length > 0) {
-        const phoneToUse = context.senderPhone || context.senderLid;
-        if (phoneToUse) {
+      if (phoneToUse) {
+        // 1. Dispatch sequences (legacy/standalone automations)
+        const { data: genericSequences } = await supabase
+          .from("dispatch_sequences")
+          .select("id, campaign_id, trigger_config")
+          .eq("trigger_type", targetTriggerType)
+          .eq("is_active", true);
+
+        if (genericSequences && genericSequences.length > 0) {
           for (const seq of genericSequences) {
             const config = seq.trigger_config as any;
-            if (config && Array.isArray(config.selectedGroupJids) && config.selectedGroupJids.includes(context.chatJid)) {
+            const groups = ((config && config.selectedGroupJids) || []).map(normalizeJid);
+            if (groups.length === 0 || groups.includes(normChatJid)) {
               try {
                 await fetch(`${supabaseUrl}/functions/v1/execute-dispatch-sequence`, {
                   method: "POST",
@@ -257,33 +263,69 @@ export async function processGroupEvent(
             }
           }
         }
-      }
 
-      // ALSO trigger generic message_sequences (new Workflows engine)
-      const { data: genericMessageSequences } = await supabase
-        .from("message_sequences")
-        .select("id, trigger_config")
-        .eq("trigger_type", targetTriggerType)
-        .eq("active", true);
+        // 2. Message sequences (new Workflows engine)
+        const { data: activeMessageSequences } = await supabase
+          .from("message_sequences")
+          .select("id, trigger_type, trigger_config")
+          .eq("active", true);
 
-      if (genericMessageSequences && genericMessageSequences.length > 0) {
-        const phoneToUse = context.senderPhone || context.senderLid;
-        if (phoneToUse) {
-          for (const seq of genericMessageSequences) {
-            const config = seq.trigger_config as any;
-            if (config && Array.isArray(config.selectedGroupJids) && config.selectedGroupJids.includes(context.chatJid)) {
+        const { data: triggerNodes } = await supabase
+          .from("sequence_nodes")
+          .select("id, sequence_id, config")
+          .eq("node_type", "trigger");
+
+        if (activeMessageSequences && activeMessageSequences.length > 0) {
+          for (const seq of activeMessageSequences) {
+            const nodes = (triggerNodes || []).filter(n => n.sequence_id === seq.id);
+            let isMatch = false;
+            let matchedTriggerId: string | null = null;
+
+            // Direct check on message_sequences table
+            if (seq.trigger_type === targetTriggerType) {
+              const config = (seq.trigger_config as any) || {};
+              const groups = ((config && config.selectedGroupJids) || []).map(normalizeJid);
+              if (groups.length === 0 || groups.includes(normChatJid)) {
+                isMatch = true;
+              }
+            }
+
+            // Check triggers defined in sequence_nodes (Workflow Builder multi-trigger support)
+            for (const node of nodes) {
+              const triggers = ((node.config as any) && (node.config as any).triggers) || [];
+              for (const t of triggers) {
+                if (t.type === targetTriggerType) {
+                  const groups = ((t.config && t.config.selectedGroupJids) || []).map(normalizeJid);
+                  if (groups.length === 0 || groups.includes(normChatJid)) {
+                    isMatch = true;
+                    matchedTriggerId = t.id;
+                    break;
+                  }
+                }
+              }
+              if (isMatch) break;
+            }
+
+            if (isMatch) {
               try {
-                await fetch(`${supabaseUrl}/functions/v1/trigger-sequence`, {
+                console.log(`[GroupController] Triggering workflow sequence ${seq.id} (triggerId=${matchedTriggerId}) for ${phoneToUse}`);
+                const triggerResp = await fetch(`${supabaseUrl}/functions/v1/trigger-sequence`, {
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${supabaseServiceKey}`,
                   },
-                  body: JSON.stringify({ sequenceId: seq.id, phone: phoneToUse, group_jid: context.chatJid }),
+                  body: JSON.stringify({ 
+                    sequenceId: seq.id, 
+                    phone: phoneToUse, 
+                    group_jid: context.chatJid,
+                    triggerId: matchedTriggerId || undefined
+                  }),
                 });
-                console.log(`[GroupController] Triggered generic message sequence ${seq.id} for ${phoneToUse}`);
+                const triggerJson = await triggerResp.json();
+                console.log(`[GroupController] Triggered workflow sequence result:`, triggerJson);
               } catch (e) {
-                console.error(`[GroupController] Error triggering generic message sequence ${seq.id}:`, e);
+                console.error(`[GroupController] Error triggering workflow sequence ${seq.id}:`, e);
               }
             }
           }
