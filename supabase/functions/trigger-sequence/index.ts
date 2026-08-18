@@ -175,6 +175,7 @@ Deno.serve(async (req) => {
         name: typedSequence.name || "Default Workflow Campaign",
         instance_id: null,
       };
+    }
     let triggerConfig = (typedSequence.trigger_config as Record<string, unknown>) || {};
     const effectiveTriggerId = (triggerIdFromUrl || payload.triggerId || payload.trigger_id) as string | undefined;
 
