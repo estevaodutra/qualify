@@ -45,14 +45,14 @@ export function NodeEditorHeader({
         <div>
           <div className="flex items-center gap-2">
             <span className="font-semibold text-sm text-slate-800">
-              {node.nodeType === "delay" ? "Delay / Espera" : ((node.config.label as string) || node.nodeType)}
+              {node.nodeType === "trigger" ? "Início / Gatilhos" : node.nodeType === "delay" ? "Delay / Espera" : ((node.config.label as string) || node.nodeType)}
             </span>
             <Badge variant="outline" className="text-[9px] uppercase tracking-wider h-5 font-bold text-slate-400">
-              {node.nodeType === "delay" ? "Delay" : node.nodeType}
+              {node.nodeType === "delay" ? "Delay" : node.nodeType === "trigger" ? "Gatilho" : node.nodeType}
             </Badge>
           </div>
           <p className="text-[10px] text-muted-foreground mt-0.5">
-            {node.nodeType === "delay" ? "Aguarde um tempo antes de continuar o fluxo." : "Editor de Etapa"}
+            {node.nodeType === "trigger" ? "Configuração dos gatilhos de entrada do fluxo." : node.nodeType === "delay" ? "Aguarde um tempo antes de continuar o fluxo." : "Editor de Etapa"}
           </p>
         </div>
       </div>

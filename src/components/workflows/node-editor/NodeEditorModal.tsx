@@ -107,6 +107,7 @@ export function NodeEditorModal({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [localConfig, setLocalConfig] = useState<Record<string, unknown>>({});
   const [lastLoadedNodeId, setLastLoadedNodeId] = useState<string | null>(null);
+  const [lastLoadedSubId, setLastLoadedSubId] = useState<string | null>(null);
   const [wasOpen, setWasOpen] = useState(false);
   const [simulatedData, setSimulatedData] = useState<Record<string, { input: any; output: any; status: "success" | "error" | "not_run"; error?: string }>>({});
   const [mockData, setMockData] = useState<any>({
@@ -210,9 +211,10 @@ export function NodeEditorModal({
   useEffect(() => {
     if (isOpen && node) {
       const isNewNode = currentNodeId !== lastLoadedNodeId;
+      const isNewSub = (activeTriggerId || null) !== lastLoadedSubId;
       const isNewlyOpened = !wasOpen && isOpen;
 
-      if (isNewNode || isNewlyOpened) {
+      if (isNewNode || isNewSub || isNewlyOpened) {
         if (node.nodeType === "trigger" && activeTrigger) {
           setLocalConfig(activeTrigger.config || {});
         } else if (node.nodeType === "field_op" && activeMapping) {
@@ -222,13 +224,15 @@ export function NodeEditorModal({
         }
         setHasUnsavedChanges(false);
         setLastLoadedNodeId(currentNodeId);
+        setLastLoadedSubId(activeTriggerId || null);
         setWasOpen(true);
       }
     } else if (!isOpen) {
       setWasOpen(false);
       setLastLoadedNodeId(null);
+      setLastLoadedSubId(null);
     }
-  }, [isOpen, node, activeTrigger, activeMapping, currentNodeId, lastLoadedNodeId, wasOpen]);
+  }, [isOpen, node, activeTrigger, activeMapping, currentNodeId, activeTriggerId, lastLoadedNodeId, lastLoadedSubId, wasOpen]);
 
   if (!isOpen || !currentNodeId || !node) return null;
 
@@ -597,10 +601,25 @@ export function NodeEditorModal({
           {node.nodeType === "trigger" ? (
             <div className="flex-1 flex justify-center overflow-y-auto px-6 py-6 bg-slate-50/30">
               <div className="w-full max-w-3xl bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col">
-                <div className="pb-4 mb-4 border-b shrink-0">
+                <div className="pb-4 mb-4 border-b shrink-0 flex items-center justify-between">
                   <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                    ⚡ Gatilho de Entrada
+                    ⚡ {activeTrigger?.type === "member_leave"
+                      ? "Gatilho: Membro sair do grupo"
+                      : activeTrigger?.type === "member_join"
+                      ? "Gatilho: Membro entrar no grupo"
+                      : activeTrigger?.type === "webhook"
+                      ? "Gatilho: Webhook (HTTP)"
+                      : activeTrigger?.type === "scheduled"
+                      ? "Gatilho: Agendado"
+                      : activeTrigger?.type === "manual"
+                      ? "Gatilho: Execução manual"
+                      : `Gatilho: ${activeTrigger?.type || "Início"}`}
                   </h2>
+                  {activeTrigger?.dataSource && (
+                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                      {activeTrigger.dataSource}
+                    </span>
+                  )}
                 </div>
 
                 <div className="space-y-6 pb-4">
