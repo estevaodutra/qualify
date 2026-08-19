@@ -11,6 +11,7 @@ interface InboxListProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
   operators: { id: string; name: string }[];
+  instances?: Array<{ id: string; name: string; phoneNumber?: string; status: string }>;
   filters: ChatFilters;
   setFilters: (filters: ChatFilters) => void;
   fetchNextPage: () => void;
@@ -23,6 +24,7 @@ export default function InboxList({
   selectedId, 
   onSelect, 
   operators,
+  instances = [],
   filters,
   setFilters,
   fetchNextPage,
@@ -112,35 +114,52 @@ export default function InboxList({
           />
         </div>
 
-        {/* Sort & Quick Filter Toggle */}
-        <div className="flex gap-2">
-          <select
-            value={filters.status || "all"}
-            onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-            className="flex-1 bg-background/50 border border-primary/5 rounded-lg px-2 py-1 text-xs outline-none cursor-pointer focus:border-primary/30 transition-colors"
-          >
-            <option value="all">Todos os Status</option>
-            <option value="open">Abertas</option>
-            <option value="in_progress">Em Atendimento</option>
-            <option value="waiting">Aguardando</option>
-            <option value="resolved">Resolvidas</option>
-            <option value="unread">Não Lidas</option>
-          </select>
+        {/* Sort & Quick Filter Toggles */}
+        <div className="space-y-1.5">
+          <div className="flex gap-2">
+            <select
+              value={filters.status || "all"}
+              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              className="flex-1 bg-background/50 border border-primary/5 rounded-lg px-2 py-1 text-xs outline-none cursor-pointer focus:border-primary/30 transition-colors"
+            >
+              <option value="all">Todos os Status</option>
+              <option value="open">Abertas</option>
+              <option value="in_progress">Em Atendimento</option>
+              <option value="waiting">Aguardando</option>
+              <option value="resolved">Resolvidas</option>
+              <option value="unread">Não Lidas</option>
+            </select>
 
-          <select
-            value={filters.operatorId || "all"}
-            onChange={(e) => setFilters({ ...filters, operatorId: e.target.value })}
-            className="flex-1 bg-background/50 border border-primary/5 rounded-lg px-2 py-1 text-xs outline-none cursor-pointer focus:border-primary/30 transition-colors"
-          >
-            <option value="all">Todos Operadores</option>
-            <option value={user?.id || "me"}>Minhas</option>
-            <option value="unassigned">Sem Atribuição</option>
-            {operators.map((op) => (
-              <option key={op.id} value={op.id}>
-                {op.name}
-              </option>
-            ))}
-          </select>
+            <select
+              value={filters.operatorId || "all"}
+              onChange={(e) => setFilters({ ...filters, operatorId: e.target.value })}
+              className="flex-1 bg-background/50 border border-primary/5 rounded-lg px-2 py-1 text-xs outline-none cursor-pointer focus:border-primary/30 transition-colors"
+            >
+              <option value="all">Todos Operadores</option>
+              <option value={user?.id || "me"}>Minhas</option>
+              <option value="unassigned">Sem Atribuição</option>
+              {operators.map((op) => (
+                <option key={op.id} value={op.id}>
+                  {op.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {instances && instances.length > 0 && (
+            <select
+              value={filters.instanceId || "all"}
+              onChange={(e) => setFilters({ ...filters, instanceId: e.target.value === "all" ? undefined : e.target.value })}
+              className="w-full bg-background/50 border border-primary/5 rounded-lg px-2 py-1 text-xs outline-none cursor-pointer focus:border-primary/30 transition-colors"
+            >
+              <option value="all">Todas as Conexões / Instâncias</option>
+              {instances.map((inst) => (
+                <option key={inst.id} value={inst.id}>
+                  {inst.name} {inst.phoneNumber ? `(${inst.phoneNumber})` : ""} {inst.status === "connected" ? "🟢" : "⚪"}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* Sort By Toggle */}
@@ -205,6 +224,27 @@ export default function InboxList({
                       <span className="text-[10px] flex items-center gap-1 font-bold text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded-full animate-pulse">
                         <Clock className="h-2.5 w-2.5" />
                         {waitTime}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Instance Tag under name */}
+                  <div className="flex items-center gap-1">
+                    {conv.instance?.name ? (
+                      <span 
+                        className="text-[10px] font-medium text-muted-foreground/80 flex items-center gap-1 bg-muted/40 px-1.5 py-0.2 rounded border border-border/30 max-w-[200px] truncate"
+                        title={`Conexão: ${conv.instance.name}`}
+                      >
+                        <span className={cn(
+                          "h-1.5 w-1.5 rounded-full shrink-0",
+                          conv.instance.status === "connected" ? "bg-emerald-500" : "bg-muted-foreground/50"
+                        )} />
+                        <span className="truncate">{conv.instance.name}</span>
+                      </span>
+                    ) : (
+                      <span className="text-[9.5px] font-medium text-amber-500/80 flex items-center gap-1 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20 max-w-[130px] truncate">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
+                        <span className="truncate">Sem conexão</span>
                       </span>
                     )}
                   </div>

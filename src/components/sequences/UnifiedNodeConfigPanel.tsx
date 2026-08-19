@@ -587,6 +587,12 @@ export function UnifiedNodeConfigPanel({
 
   const isGroup = isGroupProp !== undefined ? isGroupProp : mode === "group";
 
+  const triggerNode = nodes?.find(n => n.nodeType === "trigger" || n.nodeType === "webhook");
+  const referencePayload = (triggerNode?.config?.triggerConfig as any)?.referencePayload 
+    || (triggerNode?.config?.triggers as any[])?.find((t: any) => t?.config?.referencePayload)?.config?.referencePayload
+    || (node.config?.referencePayload);
+  const triggerName = triggerNode?.config?.triggerType === "webhook" ? "Webhook 1" : "Webhook 1";
+
   if (resolvedNodeType === "ura") {
     const mosConfig = {
       mosCampaignId: "",

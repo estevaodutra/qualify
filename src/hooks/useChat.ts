@@ -32,6 +32,13 @@ export interface ChatConversation {
     full_name: string | null;
     email: string | null;
   };
+  instance?: {
+    id: string;
+    name: string;
+    phone: string | null;
+    provider: string | null;
+    status: string | null;
+  } | null;
 }
 
 export interface ChatMessage {
@@ -138,7 +145,8 @@ export function useChat(filters?: ChatFilters, activeConversationId?: string | n
           created_at,
           updated_at,
           lead:leads(id, name, phone, email, tags, custom_fields),
-          operator:profiles(id, full_name, email)
+          operator:profiles(id, full_name, email),
+          instance:instances(id, name, phone, provider, status)
         `)
         .eq("company_id", activeCompanyId);
 
@@ -401,6 +409,57 @@ export function useChat(filters?: ChatFilters, activeConversationId?: string | n
     },
   });
 
+  // 6.5. Update Conversation Instance Mutation (Select connection)
+  const updateConversationInstanceMutation = useMutation({
+    mutationFn: async ({
+      conversationId,
+      instanceId,
+    }: {
+      conversationId: string;
+      instanceId: string | null;
+    }) => {
+      const { data, error } = await supabase
+        .from("chat_conversations")
+        .update({ instance_id: instanceId })
+        .eq("id", conversationId)
+        .select(`
+          id,
+          company_id,
+          instance_id,
+          status,
+          operator_id,
+          unread_count,
+          last_message_preview,
+          last_message_at,
+          tags,
+          waiting_since,
+          created_at,
+          updated_at,
+          lead:leads(id, name, phone, email, tags, custom_fields),
+          operator:profiles(id, full_name, email),
+          instance:instances(id, name, phone, provider, status)
+        `)
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (updatedConv) => {
+      queryClient.setQueriesData({ queryKey: ["chat-conversations", activeCompanyId] }, (oldData: any) => {
+        if (!oldData || !oldData.pages) return oldData;
+        const newPages = oldData.pages.map((page: any[]) => {
+          return page.map((conv) => (conv.id === updatedConv.id ? { ...conv, ...updatedConv } : conv));
+        });
+        return { ...oldData, pages: newPages };
+      });
+      queryClient.invalidateQueries({ queryKey: ["chat-conversations", activeCompanyId] });
+      toast({ title: "Conexão atualizada", description: "A instância desta conversa foi alterada com sucesso." });
+    },
+    onError: (err: any) => {
+      toast({ title: "Erro ao trocar conexão", description: err.message, variant: "destructive" });
+    },
+  });
+
   // 7. Update Lead Stage Mutation
   const updateLeadStageMutation = useMutation({
     mutationFn: async ({ leadId, stageId }: { leadId: string; stageId: string }) => {
@@ -420,7 +479,7 @@ export function useChat(filters?: ChatFilters, activeConversationId?: string | n
 
   // 8. Create Conversation
   const createConversationMutation = useMutation({
-    mutationFn: async ({ leadId }: { leadId: string }) => {
+    mutationFn: async ({ leadId, instanceId }: { leadId: string; instanceId?: string }) => {
       if (!activeCompanyId) throw new Error("Sem empresa ativa");
       
       const { data: existing } = await supabase
@@ -430,13 +489,19 @@ export function useChat(filters?: ChatFilters, activeConversationId?: string | n
         .eq("lead_id", leadId)
         .maybeSingle();
 
-      if (existing) return existing as ChatConversation;
+      if (existing) {
+        if (instanceId) {
+          await supabase.from("chat_conversations").update({ instance_id: instanceId }).eq("id", existing.id);
+        }
+        return existing as ChatConversation;
+      }
 
       const { data, error } = await supabase
         .from("chat_conversations")
         .insert({
           company_id: activeCompanyId,
           lead_id: leadId,
+          instance_id: instanceId || null,
           status: "open",
           unread_count: 0,
         })
@@ -579,6 +644,7 @@ export function useChat(filters?: ChatFilters, activeConversationId?: string | n
     sendMessage: sendMessageMutation.mutateAsync,
     isSending: sendMessageMutation.isPending,
     updateConversationStatus: updateConversationStatusMutation.mutateAsync,
+    updateConversationInstance: updateConversationInstanceMutation.mutateAsync,
     assignOperator: assignOperatorMutation.mutateAsync,
     updateLeadStage: updateLeadStageMutation.mutateAsync,
     createTemplate: createTemplateMutation.mutateAsync,

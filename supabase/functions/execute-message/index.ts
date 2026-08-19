@@ -1053,6 +1053,18 @@ Deno.serve(async (req) => {
       // ============= SEQUENCE NODE-BY-NODE PROCESSING =============
       const sortedNodes = [...sequenceNodes].sort((a, b) => a.node_order - b.node_order);
 
+      // Helper function to resolve nested property path e.g. "body.user.name"
+      const getNestedProp = (obj: any, path: string): any => {
+        if (!obj || typeof obj !== 'object') return undefined;
+        const parts = path.split('.');
+        let curr = obj;
+        for (const p of parts) {
+          if (curr === undefined || curr === null) return undefined;
+          curr = curr[p];
+        }
+        return curr;
+      };
+
       // Helper function to replace variables in text
       const replaceVariables = (text: string): string => {
         if (!text) return text;
@@ -1068,7 +1080,28 @@ Deno.serve(async (req) => {
             for (const [key, value] of Object.entries(triggerContext.customFields)) {
               const regex = new RegExp(`\\{\\{${key}\\}\\}`, "g");
               result = result.replace(regex, value || "");
+              const regexSingle = new RegExp(`\\{${key}\\}`, "g");
+              result = result.replace(regexSingle, value || "");
             }
+          }
+
+          // Direct payload / webhook resolution (e.g. {{body.nome}}, {{webhook.body.id}}, {{body.phone}})
+          const payloadObj = triggerContext.webhookPayload || (triggerContext as any).payload || triggerContext;
+          if (payloadObj && typeof payloadObj === "object") {
+            result = result.replace(/\{\{([^{}]+)\}\}/g, (match, rawKey) => {
+              const key = rawKey.trim();
+              const val = getNestedProp(payloadObj, key) 
+                ?? getNestedProp(payloadObj, key.replace(/^webhook\./, ''))
+                ?? getNestedProp(payloadObj.body || payloadObj, key.replace(/^body\./, ''));
+              return val !== undefined && val !== null ? (typeof val === 'object' ? JSON.stringify(val) : String(val)) : match;
+            });
+            result = result.replace(/\{([^{}]+)\}/g, (match, rawKey) => {
+              const key = rawKey.trim();
+              const val = getNestedProp(payloadObj, key)
+                ?? getNestedProp(payloadObj, key.replace(/^webhook\./, ''))
+                ?? getNestedProp(payloadObj.body || payloadObj, key.replace(/^body\./, ''));
+              return val !== undefined && val !== null ? (typeof val === 'object' ? JSON.stringify(val) : String(val)) : match;
+            });
           }
         }
         return result;

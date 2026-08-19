@@ -1,11 +1,19 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { MessageSquare, RefreshCw, Loader2, Info, ChevronLeft } from "lucide-react";
+import { MessageSquare, RefreshCw, Loader2, Info, ChevronLeft, Smartphone, Radio } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useChat, useChatMessages, ChatFilters } from "@/hooks/useChat";
+import { useInstances } from "@/hooks/useInstances";
 import { cn } from "@/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import InboxList from "@/components/chat/InboxList";
 import MessageThread from "@/components/chat/MessageThread";
@@ -38,10 +46,13 @@ export default function Chat() {
     sendMessage,
     isSending,
     updateConversationStatus,
+    updateConversationInstance,
     assignOperator,
     updateLeadStage,
     createConversation,
   } = useChat(filters, selectedConvId);
+
+  const { instances = [] } = useInstances();
 
   // Load selected conversation messages
   const {
@@ -140,6 +151,14 @@ export default function Chat() {
       }
     }
 
+    // If conversation doesn't have an instance assigned and sending outbound message, assign default connected instance
+    if (selectedConv && !selectedConv.instance_id && !isInternal) {
+      const connectedInst = instances.find(i => i.status === "connected") || instances[0];
+      if (connectedInst) {
+        await updateConversationInstance({ conversationId: selectedConvId, instanceId: connectedInst.id });
+      }
+    }
+
     return sendMessage({
       conversationId: selectedConvId,
       body: text,
@@ -170,6 +189,7 @@ export default function Chat() {
             selectedId={selectedConvId}
             onSelect={(id) => setSelectedConvId(id)}
             operators={operators}
+            instances={instances}
             filters={filters}
             setFilters={setFilters}
             fetchNextPage={fetchNextConversations}
@@ -187,21 +207,100 @@ export default function Chat() {
         {selectedConv ? (
           <>
             {/* Header info */}
-            <div className="p-4 border-b border-border/40 bg-card/10 flex justify-between items-center shrink-0">
-              <div className="flex items-center gap-2">
+            <div className="p-3.5 px-4 border-b border-border/40 bg-card/10 flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
                 <button 
                   onClick={() => setSelectedConvId(null)}
                   className="md:hidden p-1.5 -ml-2 rounded-lg text-muted-foreground hover:bg-muted transition-colors"
                 >
                   <ChevronLeft className="h-5 w-5" />
                 </button>
-                <div>
-                  <h3 className="font-bold text-sm text-card-foreground leading-snug">
+                <div className="space-y-1 min-w-0">
+                  <h3 className="font-bold text-sm text-card-foreground leading-snug truncate">
                     {selectedConv.lead?.name || selectedConv.lead?.phone || "Lead Sem Nome"}
                   </h3>
-                  <p className="text-[10px] text-muted-foreground font-mono leading-none mt-0.5">
-                    {selectedConv.lead?.phone}
-                  </p>
+
+                  {/* Below Name: Phone + Connection/Instance Selector */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {selectedConv.lead?.phone && (
+                      <span className="text-[11px] text-muted-foreground font-mono leading-none">
+                        {selectedConv.lead?.phone}
+                      </span>
+                    )}
+
+                    {selectedConv.lead?.phone && (
+                      <span className="text-muted-foreground/30 text-[10px]">•</span>
+                    )}
+
+                    {/* Instance Connection Selector */}
+                    <div className="flex items-center gap-1.5">
+                      <Select
+                        value={selectedConv.instance_id || "none"}
+                        onValueChange={(val) => {
+                          updateConversationInstance({
+                            conversationId: selectedConv.id,
+                            instanceId: val === "none" ? null : val,
+                          });
+                        }}
+                      >
+                        <SelectTrigger className="h-6 px-2 py-0.5 text-[11px] font-medium bg-background/60 hover:bg-background border-border/50 rounded-lg shadow-none focus:ring-0 gap-1.5 min-w-0 w-auto">
+                          <div className="flex items-center gap-1.5 truncate">
+                            {selectedConv.instance_id ? (
+                              <>
+                                <span className={cn(
+                                  "h-2 w-2 rounded-full shrink-0",
+                                  selectedConv.instance?.status === "connected" || instances.find(i => i.id === selectedConv.instance_id)?.status === "connected"
+                                    ? "bg-emerald-500 animate-pulse"
+                                    : "bg-amber-500"
+                                )} />
+                                <span className="font-semibold text-card-foreground truncate max-w-[170px]">
+                                  {selectedConv.instance?.name || instances.find(i => i.id === selectedConv.instance_id)?.name || "Instância Conectada"}
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="h-2 w-2 rounded-full bg-amber-500 shrink-0 animate-ping" />
+                                <span className="text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1">
+                                  <Radio className="h-3 w-3" />
+                                  Selecionar Conexão
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </SelectTrigger>
+                        <SelectContent className="z-[9999]">
+                          <SelectItem value="none" className="text-xs text-muted-foreground">
+                            Nenhuma Conexão
+                          </SelectItem>
+                          {instances.map((inst) => (
+                            <SelectItem key={inst.id} value={inst.id} className="text-xs">
+                              <div className="flex items-center gap-2">
+                                <span className={cn(
+                                  "h-2 w-2 rounded-full shrink-0",
+                                  inst.status === "connected" ? "bg-emerald-500" : "bg-muted-foreground/40"
+                                )} />
+                                <span className="font-medium">{inst.name}</span>
+                                {inst.phoneNumber && (
+                                  <span className="text-[10px] text-muted-foreground font-mono">
+                                    ({inst.phoneNumber})
+                                  </span>
+                                )}
+                                {inst.status === "connected" ? (
+                                  <span className="text-[9px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1 py-0.2 rounded font-bold">
+                                    Conectado
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] bg-muted px-1 py-0.2 rounded text-muted-foreground">
+                                    Desconectado
+                                  </span>
+                                )}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                 </div>
               </div>
 

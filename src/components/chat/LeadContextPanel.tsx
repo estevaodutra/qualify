@@ -259,6 +259,26 @@ export default function LeadContextPanel({ conversation, stages }: LeadContextPa
                     <Label className="text-[10px] text-muted-foreground font-semibold">Telefone / WhatsApp</Label>
                     <Input value={phone} disabled className="h-8 text-xs rounded-xl border-border/40 bg-muted/30 font-mono text-muted-foreground" />
                   </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground font-semibold">Conexão WhatsApp / Instância</Label>
+                    <div className="flex items-center justify-between p-2 rounded-xl bg-background/80 border border-border/40 text-xs">
+                      <div className="flex items-center gap-2 truncate">
+                        <span className={cn(
+                          "h-2 w-2 rounded-full shrink-0",
+                          conversation.instance?.status === "connected" ? "bg-emerald-500" : "bg-amber-500"
+                        )} />
+                        <span className="font-medium truncate">
+                          {conversation.instance?.name || "Nenhuma conexão atribuída"}
+                        </span>
+                      </div>
+                      {conversation.instance?.provider && (
+                        <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-primary/10 text-primary shrink-0">
+                          {conversation.instance.provider}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                   
                   <Button onClick={handleSaveProfile} disabled={isSaving} size="sm" className="w-full h-8 rounded-xl text-[10px] font-bold gap-1 mt-2">
                     <Save className="h-3.5 w-3.5" />
