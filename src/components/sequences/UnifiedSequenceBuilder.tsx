@@ -97,6 +97,15 @@ export function UnifiedSequenceBuilder({
   const [localConnections, setLocalConnections] = useState<LocalConnection[]>([]);
   const [localWorkflowConfig, setLocalWorkflowConfig] = useState<Record<string, unknown>>(initialWorkflowConfig);
   const [sequenceName, setSequenceName] = useState(initialName);
+
+  useEffect(() => {
+    if (initialWorkflowConfig && Object.keys(initialWorkflowConfig).length > 0) {
+      setLocalWorkflowConfig(prev => ({
+        ...initialWorkflowConfig,
+        ...prev,
+      }));
+    }
+  }, [initialWorkflowConfig]);
   
   // Canvas State (Pan & Zoom)
   const [panOffset, setPanOffset] = useState({ x: 80, y: 80 });

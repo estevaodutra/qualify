@@ -179,24 +179,44 @@ Deno.serve(async (req) => {
     let triggerConfig = (typedSequence.trigger_config as Record<string, unknown>) || {};
     const effectiveTriggerId = (triggerIdFromUrl || payload.triggerId || payload.trigger_id) as string | undefined;
 
-    if (effectiveTriggerId) {
-      try {
-        const { data: trigNode } = await supabase
-          .from("sequence_nodes")
-          .select("config")
-          .eq("sequence_id", typedSequence.id)
-          .eq("node_type", "trigger")
-          .maybeSingle();
+    try {
+      const { data: trigNode } = await supabase
+        .from("sequence_nodes")
+        .select("config")
+        .eq("sequence_id", typedSequence.id)
+        .in("node_type", ["trigger", "webhook"])
+        .maybeSingle();
 
-        const triggers = (trigNode?.config as any)?.triggers || [];
-        const matchedTrig = triggers.find((t: any) => t.id === effectiveTriggerId);
-        if (matchedTrig && matchedTrig.config) {
-          triggerConfig = { ...triggerConfig, ...matchedTrig.config };
-        }
-      } catch (e) {
-        console.warn("[TriggerSequence] Could not fetch node triggers for triggerId:", e);
+      if (trigNode?.config) {
+        const nodeCfg = trigNode.config as Record<string, any>;
+        const nodeTriggerConfig = nodeCfg.triggerConfig || {};
+        const triggers = nodeCfg.triggers || [];
+        const matchedTrig = effectiveTriggerId 
+          ? triggers.find((t: any) => t.id === effectiveTriggerId)
+          : (triggers.length > 0 ? triggers[0] : null);
+
+        triggerConfig = {
+          ...nodeTriggerConfig,
+          ...(matchedTrig?.config || {}),
+          ...triggerConfig,
+          destinationMode: triggerConfig.destinationMode || nodeTriggerConfig.destinationMode || nodeCfg.destinationMode,
+          instanceIds: triggerConfig.instanceIds || nodeTriggerConfig.instanceIds || nodeCfg.instanceIds,
+          instanceId: triggerConfig.instanceId || nodeTriggerConfig.instanceId || nodeCfg.instanceId,
+          selectedGroupJids: triggerConfig.selectedGroupJids || nodeTriggerConfig.selectedGroupJids || nodeCfg.selectedGroupJids,
+          groupScope: triggerConfig.groupScope || nodeTriggerConfig.groupScope || nodeCfg.groupScope,
+        };
       }
+    } catch (e) {
+      console.warn("[TriggerSequence] Could not fetch sequence_nodes config:", e);
     }
+
+    // Check existing linked groups in campaign_groups table for this workflow
+    const { data: existingLinkedGroups } = await supabase
+      .from("campaign_groups")
+      .select("group_jid, group_name, instance_id")
+      .in("campaign_id", [typedSequence.id, typedSequence.group_campaign_id, typedCampaign.id].filter(Boolean));
+
+    const hasLinkedGroups = existingLinkedGroups && existingLinkedGroups.length > 0;
 
     // ── Deduplication guard (best-effort) ───────────────────────────────────
     // Prevent the same sequence from firing multiple times within 15 seconds.
@@ -265,18 +285,43 @@ Deno.serve(async (req) => {
                            extractField(payload, "phone") ||
                            extractField(payload, "to");
 
-    const isGroupMode = triggerConfig.destinationMode === "groups" || (triggerConfig.isGroup === true && !destinationPhone);
+    const isGroupMode = triggerConfig.destinationMode === "groups" || 
+                        hasLinkedGroups || 
+                        (triggerConfig.isGroup === true && !destinationPhone);
+
+    const instanceId = (triggerConfig as Record<string, unknown>).instanceId as string | undefined;
+    const instanceIds = (triggerConfig as Record<string, unknown>).instanceIds as string[] | undefined;
+    let primaryInstanceId = instanceId || (instanceIds && instanceIds.length > 0 ? instanceIds[0] : undefined);
+
+    // If no instance specified in config, resolve active connected instance for company/user
+    if (!primaryInstanceId) {
+      const companyId = typedSequence.company_id || typedCampaign.company_id;
+      let instQuery = supabase
+        .from("instances")
+        .select("id, name, status");
+        
+      if (companyId) {
+        instQuery = instQuery.eq("company_id", companyId);
+      } else if (typedSequence.user_id) {
+        instQuery = instQuery.eq("user_id", typedSequence.user_id);
+      }
+      
+      const { data: availableInsts } = await instQuery.limit(10);
+      if (availableInsts && availableInsts.length > 0) {
+        const connectedInst = availableInsts.find(i => i.status === "connected");
+        primaryInstanceId = (connectedInst || availableInsts[0]).id;
+        console.log(`[TriggerSequence] Auto-selected connected instance ${primaryInstanceId} (${(connectedInst || availableInsts[0]).name})`);
+      }
+    }
 
     if (!isGroupMode && !destinationPhone) {
       if (isManualTest) {
-        const instanceIds = (triggerConfig.instanceIds as string[]) || (triggerConfig.instanceId ? [triggerConfig.instanceId as string] : []);
-        const instanceId = instanceIds[0];
         let testPhone = "5511999999999";
-        if (instanceId) {
+        if (primaryInstanceId) {
           const { data: inst } = await supabase
             .from("instances")
             .select("phone")
-            .eq("id", instanceId)
+            .eq("id", primaryInstanceId)
             .maybeSingle();
           if (inst?.phone) {
             testPhone = inst.phone.replace(/\D/g, "");
@@ -286,14 +331,10 @@ Deno.serve(async (req) => {
         console.log(`[TriggerSequence] Manual test: falling back to destinationPhone = ${destinationPhone}`);
       } else {
         console.warn(`[TriggerSequence] Individual conversation mode, but no destination phone found in payload. Proceeding anyway because phone might be mapped in a subsequent FIELD_OP node.`);
-        // Remove the early return so the workflow engine (execute-message) can run and let FIELD_OP nodes extract the phone.
         destinationPhone = "";
       }
     }
 
-    const instanceId = (triggerConfig as Record<string, unknown>).instanceId as string | undefined;
-    const instanceIds = (triggerConfig as Record<string, unknown>).instanceIds as string[] | undefined;
-    const primaryInstanceId = instanceId || (instanceIds && instanceIds.length > 0 ? instanceIds[0] : undefined);
     const groupScope = (triggerConfig as Record<string, unknown>).groupScope as "all" | "selected" | undefined;
     const selectedGroupJids = (triggerConfig as Record<string, unknown>).selectedGroupJids as string[] | undefined;
 
@@ -304,42 +345,21 @@ Deno.serve(async (req) => {
       if (payload.group_jid) {
         // If triggered by a specific group event (member_join/leave), ONLY target that specific group!
         targetGroups = [{ group_jid: payload.group_jid as string, group_name: null, instance_id: primaryInstanceId || null }];
-      } else if (groupScope === "all" || groupScope === "selected") {
-        let query = supabase
-          .from("campaign_groups")
-          .select("group_jid, group_name, instance_id")
-          .in("campaign_id", [typedSequence.id, typedSequence.group_campaign_id, typedCampaign.id].filter(Boolean));
-        const { data: groups } = await query;
-        let resolved = (groups || []) as { group_jid: string; group_name: string | null; instance_id: string | null }[];
+      } else if (existingLinkedGroups && existingLinkedGroups.length > 0) {
+        let resolved = [...existingLinkedGroups];
         if (groupScope === "selected" && selectedGroupJids && selectedGroupJids.length > 0) {
-          resolved = resolved.filter((g) => selectedGroupJids.includes(g.group_jid));
-          // If campaign_groups table didn't have entries yet, fallback to selectedGroupJids directly
-          if (resolved.length === 0) {
-            resolved = selectedGroupJids.map((jid) => ({
-              group_jid: jid,
-              group_name: null,
-              instance_id: primaryInstanceId || null
-            }));
-          }
+          const filtered = resolved.filter((g) => selectedGroupJids.includes(g.group_jid));
+          if (filtered.length > 0) resolved = filtered;
         }
         targetGroups = resolved.map((g) => ({ group_jid: g.group_jid, group_name: g.group_name, instance_id: g.instance_id || primaryInstanceId || null }));
-        console.log(`[TriggerSequence] Group scope "${groupScope}" resolved ${targetGroups.length} target group(s)`);
+        console.log(`[TriggerSequence] Group scope "${groupScope || 'all'}" resolved ${targetGroups.length} target group(s) from campaign_groups`);
       } else if (selectedGroupJids && selectedGroupJids.length > 0) {
         targetGroups = selectedGroupJids.map((jid) => ({
           group_jid: jid,
           group_name: null,
           instance_id: primaryInstanceId || null
         }));
-      } else {
-        const { data: firstGroup } = await supabase
-          .from("campaign_groups")
-          .select("group_jid, group_name, instance_id")
-          .in("campaign_id", [typedSequence.id, typedSequence.group_campaign_id, typedCampaign.id].filter(Boolean))
-          .limit(1)
-          .maybeSingle();
-
-        if (firstGroup) targetGroups = [{ ...firstGroup, instance_id: firstGroup.instance_id || primaryInstanceId || null }];
-        console.log(`[TriggerSequence] No phone in payload, using first group as destination: ${firstGroup?.group_jid}`);
+        console.log(`[TriggerSequence] Resolved ${targetGroups.length} target group(s) directly from selectedGroupJids`);
       }
     }
 

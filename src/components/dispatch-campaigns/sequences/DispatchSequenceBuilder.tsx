@@ -148,11 +148,21 @@ export function DispatchSequenceBuilder({ sequence, onBack, onUpdate }: Dispatch
 
   const initialNodes = [triggerNode, ...stepsToNodes(steps)];
 
-  const handleSave = async (name: string, localNodes: LocalNode[]) => {
-    const savedTriggerNode = localNodes.find((n) => n.id === TRIGGER_NODE_ID);
+  const handleSave = async (
+    name: string, 
+    localNodes: LocalNode[],
+    _localConnections?: unknown,
+    workflowConfig?: Record<string, unknown>
+  ) => {
+    const savedTriggerNode = localNodes.find((n) => n.id === TRIGGER_NODE_ID || n.nodeType === "trigger");
     const triggerType = (savedTriggerNode?.config.triggerType as DispatchTriggerType) || "manual";
-    const triggerConfig = (savedTriggerNode?.config.triggerConfig as DispatchTriggerConfig) || {};
-    await onUpdate({ id: sequence.id, updates: { name, triggerType, triggerConfig: triggerConfig as Record<string, unknown> } });
+    const nodeTriggerConfig = (savedTriggerNode?.config.triggerConfig as DispatchTriggerConfig) || {};
+    const mergedWorkflowConfig = {
+      ...(sequence.triggerConfig || {}),
+      ...(nodeTriggerConfig || {}),
+      ...(workflowConfig || {}),
+    };
+    await onUpdate({ id: sequence.id, updates: { name, triggerType, triggerConfig: mergedWorkflowConfig as Record<string, unknown> } });
     await saveAllSteps(nodesToSteps([...localNodes].sort((a, b) => a.nodeOrder - b.nodeOrder)));
   };
 
@@ -169,6 +179,7 @@ export function DispatchSequenceBuilder({ sequence, onBack, onUpdate }: Dispatch
       sequenceName={sequence.name}
       isActive={sequence.isActive}
       sequenceId={sequence.id}
+      workflowConfig={(sequence.triggerConfig as Record<string, unknown>) || {}}
       nodeCategories={NODE_CATEGORIES}
       getDefaultConfig={getDefaultConfig}
       renderConfigPanel={(node, onUpdateConfig, onClose, onManualSend, isSendingManual, isGroup, nodes) => {

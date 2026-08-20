@@ -86,7 +86,7 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
     name: string, 
     localNodes: LocalNode[], 
     localConnections: { sourceNodeId: string; targetNodeId: string; conditionPath?: string }[],
-    _workflowConfig: Record<string, unknown>
+    workflowConfig: Record<string, unknown>
   ) => {
     const triggerNode = localNodes.find(n => n.nodeType === "trigger");
     const triggersArray = (triggerNode?.config?.triggers as any[]) || [];
@@ -96,15 +96,32 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
     }
     triggerType = triggerType || "manual";
 
-    const workflowConfig = (triggerNode?.config.triggerConfig as TriggerConfig) || 
+    const nodeTriggerConfig = (triggerNode?.config.triggerConfig as TriggerConfig) || 
       (triggersArray.length > 0 ? triggersArray[0].config : {});
+
+    const mergedWorkflowConfig = {
+      ...(sequence.triggerConfig || {}),
+      ...(nodeTriggerConfig || {}),
+      ...(workflowConfig || {}),
+    };
+
+    if (triggerNode) {
+      triggerNode.config = {
+        ...triggerNode.config,
+        triggerConfig: mergedWorkflowConfig,
+        destinationMode: mergedWorkflowConfig.destinationMode || "groups",
+        instanceIds: mergedWorkflowConfig.instanceIds,
+        groupScope: mergedWorkflowConfig.groupScope,
+        selectedGroupJids: mergedWorkflowConfig.selectedGroupJids,
+      };
+    }
 
     await onUpdate({ 
       id: sequence.id, 
       updates: { 
         name, 
         triggerType, 
-        triggerConfig: workflowConfig 
+        triggerConfig: mergedWorkflowConfig 
       } 
     });
     const idMapping = await saveNodes(localNodes.map(lowerToLegacyNode).map(node => ({
@@ -156,6 +173,7 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
       isActive={sequence.active}
       sequenceId={sequence.id}
       campaignId={sequence.id}
+      workflowConfig={(sequence.triggerConfig as Record<string, unknown>) || {}}
       nodeCategories={NODE_CATEGORIES}
       getDefaultConfig={getDefaultConfig}
       renderConfigPanel={(node, onUpdateConfig, onClose, onManualSend, isSendingManual, isGroup, nodes) => {

@@ -771,6 +771,31 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (!instance || instance.status !== "connected") {
+      const companyId = typedCampaign.company_id;
+      let instQuery = supabase
+        .from("instances")
+        .select("id, name, phone, provider, external_instance_id, external_instance_token, status");
+        
+      if (companyId) {
+        instQuery = instQuery.eq("company_id", companyId);
+      } else if (typedCampaign.user_id) {
+        instQuery = instQuery.eq("user_id", typedCampaign.user_id);
+      }
+      
+      const { data: dbInsts } = await instQuery.limit(10);
+      if (dbInsts && dbInsts.length > 0) {
+        const connected = dbInsts.find(i => i.status === "connected");
+        if (connected) {
+          instance = connected as any;
+          console.log(`[ExecuteMessage] Auto-resolved connected instance from account: ${instance.name}`);
+        } else if (!instance) {
+          instance = dbInsts[0] as any;
+          console.log(`[ExecuteMessage] Auto-resolved fallback instance from account: ${instance.name}`);
+        }
+      }
+    }
+
     if (!instance && !isManualNodeExecution) {
       console.warn(`[ExecuteMessage] Campaign ${effectiveCampaignId} has no instance linked. Creating dummy context for execution.`);
       instance = {
