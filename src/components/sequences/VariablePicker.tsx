@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { 
-  Braces, Plus, Search, X, ChevronRight, ChevronDown
+  Braces, Plus, Search, X, ChevronRight, ChevronDown, RefreshCw
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { supabase } from "@/integrations/supabase/client";
+import { toCanonicalPayload } from "@/lib/workflows/canonicalPayload";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -17,28 +19,6 @@ interface VariablePickerProps {
   referencePayload?: any;
   triggerName?: string;
 }
-
-const DEFAULT_SAMPLE_PAYLOAD = {
-  body: {
-    nome: "Carlos Eduardo",
-    primeiro_nome: "Carlos",
-    telefone: "5511999887766",
-    email: "carlos@exemplo.com",
-    cpf: "123.456.789-00",
-    id_externo: "USR-9482",
-    valor: "249.90",
-    status: "aprovado",
-    cidade: "São Paulo",
-    uf: "SP"
-  },
-  headers: {
-    "content-type": "application/json"
-  },
-  query_params: {
-    source: "webhook_api",
-    utm_campaign: "campanha_vendas"
-  }
-};
 
 // Componente recursivo para listar e selecionar propriedades do JSON (estilo Data Trace)
 function JsonExplorerList({ 
@@ -187,18 +167,91 @@ export function VariablePicker({ onSelect, isGroup, referencePayload, triggerNam
   // Estado do Modal "Dado de entrada da api" (Data Trace)
   const [payloadModalOpen, setPayloadModalOpen] = useState(false);
   const [tempValue, setTempValue] = useState<string>("");
+  const [isLoadingPayload, setIsLoadingPayload] = useState(false);
+
+  // Payload real carregado
+  const [fetchedPayload, setFetchedPayload] = useState<any>(null);
 
   // Estado para criar novo campo
   const [newFieldOpen, setNewFieldOpen] = useState(false);
   const [newFieldName, setNewFieldName] = useState("");
   const [localCustomFields, setLocalCustomFields] = useState<Array<{ label: string; value: string }>>([]);
 
+  // Busca payload real do banco caso não tenha sido passado como prop
+  const fetchRealPayload = async () => {
+    if (referencePayload && typeof referencePayload === "object" && Object.keys(referencePayload).length > 0) {
+      setFetchedPayload(toCanonicalPayload(referencePayload));
+      return;
+    }
+
+    setIsLoadingPayload(true);
+    try {
+      // 1. Tenta última execução de workflow
+      const { data: wfData } = await supabase
+        .from("workflow_executions")
+        .select("trigger_payload")
+        .not("trigger_payload", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (wfData?.trigger_payload && typeof wfData.trigger_payload === "object" && Object.keys(wfData.trigger_payload).length > 0) {
+        setFetchedPayload(toCanonicalPayload(wfData.trigger_payload));
+        setIsLoadingPayload(false);
+        return;
+      }
+
+      // 2. Tenta última execução de sequência
+      const { data: seqData } = await supabase
+        .from("sequence_executions")
+        .select("trigger_context")
+        .not("trigger_context", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (seqData?.trigger_context && typeof seqData.trigger_context === "object" && Object.keys(seqData.trigger_context).length > 0) {
+        setFetchedPayload(toCanonicalPayload(seqData.trigger_context));
+        setIsLoadingPayload(false);
+        return;
+      }
+
+      // 3. Tenta último evento de webhook gravado
+      const { data: hookData } = await supabase
+        .from("webhook_events")
+        .select("raw_event")
+        .not("raw_event", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (hookData?.raw_event && typeof hookData.raw_event === "object" && Object.keys(hookData.raw_event).length > 0) {
+        setFetchedPayload(toCanonicalPayload(hookData.raw_event));
+        setIsLoadingPayload(false);
+        return;
+      }
+
+      setFetchedPayload(null);
+    } catch (err) {
+      console.error("Erro ao buscar payload real em VariablePicker:", err);
+      setFetchedPayload(null);
+    } finally {
+      setIsLoadingPayload(false);
+    }
+  };
+
+  useEffect(() => {
+    if (open || payloadModalOpen) {
+      fetchRealPayload();
+    }
+  }, [open, payloadModalOpen, referencePayload]);
+
   const currentPayload = useMemo(() => {
     if (referencePayload && typeof referencePayload === "object" && Object.keys(referencePayload).length > 0) {
-      return referencePayload;
+      return toCanonicalPayload(referencePayload);
     }
-    return DEFAULT_SAMPLE_PAYLOAD;
-  }, [referencePayload]);
+    return fetchedPayload;
+  }, [referencePayload, fetchedPayload]);
 
   // Lista de Categorias e Itens
   const categories = useMemo(() => {
@@ -515,20 +568,39 @@ export function VariablePicker({ onSelect, isGroup, referencePayload, triggerNam
 
             {/* Seção: Dados recebidos */}
             <div className="space-y-2">
-              <label className="text-sm font-bold text-slate-700">Dados recebidos</label>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-bold text-slate-700">Dados recebidos</label>
+                <button
+                  type="button"
+                  onClick={fetchRealPayload}
+                  className="text-xs text-slate-500 hover:text-primary flex items-center gap-1 transition-colors"
+                  title="Atualizar dados recebidos"
+                >
+                  <RefreshCw className={cn("h-3 w-3", isLoadingPayload && "animate-spin")} />
+                  Atualizar
+                </button>
+              </div>
+
               <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50/50 max-h-[300px] flex flex-col shadow-inner">
                 <div className="bg-slate-100/70 px-4 py-2 border-b border-slate-200 text-xs font-mono text-slate-500 shrink-0">
                   {`{ }`}
                 </div>
                 <div className="p-3 overflow-y-auto space-y-1">
-                  {currentPayload && Object.keys(currentPayload).length > 0 ? (
+                  {isLoadingPayload ? (
+                    <div className="p-8 text-center text-xs text-slate-400">
+                      Carregando dados recebidos...
+                    </div>
+                  ) : currentPayload && Object.keys(currentPayload).length > 0 ? (
                     <JsonExplorerList 
-                      data={currentPayload} 
+                      data={currentPayload.body || currentPayload} 
                       onSelectPath={handleSelectPayloadPath}
                       selectedPath={tempValue}
                     />
                   ) : (
-                    <p className="text-xs text-slate-400 text-center py-4">Nenhum dado de entrada recebido no gatilho.</p>
+                    <div className="p-8 text-center text-xs text-slate-400 space-y-1">
+                      <p className="font-semibold text-slate-500">Nenhum dado recebido ainda.</p>
+                      <p className="text-[11px] text-slate-400">Envie uma requisição para o webhook para visualizar as variáveis reais aqui.</p>
+                    </div>
                   )}
                 </div>
               </div>
@@ -581,4 +653,5 @@ export function VariablePicker({ onSelect, isGroup, referencePayload, triggerNam
     </>
   );
 }
+
 
