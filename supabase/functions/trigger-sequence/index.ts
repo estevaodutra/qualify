@@ -293,6 +293,7 @@ Deno.serve(async (req) => {
 
     const instanceId = (triggerConfig as Record<string, unknown>).instanceId as string | undefined;
     const instanceIds = (triggerConfig as Record<string, unknown>).instanceIds as string[] | undefined;
+    const primaryInstanceId = instanceId || (instanceIds && instanceIds.length > 0 ? instanceIds[0] : undefined);
     const groupScope = (triggerConfig as Record<string, unknown>).groupScope as "all" | "selected" | undefined;
     const selectedGroupJids = (triggerConfig as Record<string, unknown>).selectedGroupJids as string[] | undefined;
 
@@ -302,28 +303,42 @@ Deno.serve(async (req) => {
     if (shouldSendToGroup) {
       if (payload.group_jid) {
         // If triggered by a specific group event (member_join/leave), ONLY target that specific group!
-        targetGroups = [{ group_jid: payload.group_jid as string, group_name: null, instance_id: instanceId || null }];
+        targetGroups = [{ group_jid: payload.group_jid as string, group_name: null, instance_id: primaryInstanceId || null }];
       } else if (groupScope === "all" || groupScope === "selected") {
         let query = supabase
           .from("campaign_groups")
           .select("group_jid, group_name, instance_id")
-          .in("campaign_id", [typedSequence.id, typedSequence.group_campaign_id].filter(Boolean));
+          .in("campaign_id", [typedSequence.id, typedSequence.group_campaign_id, typedCampaign.id].filter(Boolean));
         const { data: groups } = await query;
         let resolved = (groups || []) as { group_jid: string; group_name: string | null; instance_id: string | null }[];
         if (groupScope === "selected" && selectedGroupJids && selectedGroupJids.length > 0) {
           resolved = resolved.filter((g) => selectedGroupJids.includes(g.group_jid));
+          // If campaign_groups table didn't have entries yet, fallback to selectedGroupJids directly
+          if (resolved.length === 0) {
+            resolved = selectedGroupJids.map((jid) => ({
+              group_jid: jid,
+              group_name: null,
+              instance_id: primaryInstanceId || null
+            }));
+          }
         }
-        targetGroups = resolved.map((g) => ({ group_jid: g.group_jid, group_name: g.group_name, instance_id: g.instance_id }));
+        targetGroups = resolved.map((g) => ({ group_jid: g.group_jid, group_name: g.group_name, instance_id: g.instance_id || primaryInstanceId || null }));
         console.log(`[TriggerSequence] Group scope "${groupScope}" resolved ${targetGroups.length} target group(s)`);
+      } else if (selectedGroupJids && selectedGroupJids.length > 0) {
+        targetGroups = selectedGroupJids.map((jid) => ({
+          group_jid: jid,
+          group_name: null,
+          instance_id: primaryInstanceId || null
+        }));
       } else {
         const { data: firstGroup } = await supabase
           .from("campaign_groups")
           .select("group_jid, group_name, instance_id")
-          .in("campaign_id", [typedSequence.id, typedSequence.group_campaign_id].filter(Boolean))
+          .in("campaign_id", [typedSequence.id, typedSequence.group_campaign_id, typedCampaign.id].filter(Boolean))
           .limit(1)
           .maybeSingle();
 
-        if (firstGroup) targetGroups = [firstGroup];
+        if (firstGroup) targetGroups = [{ ...firstGroup, instance_id: firstGroup.instance_id || primaryInstanceId || null }];
         console.log(`[TriggerSequence] No phone in payload, using first group as destination: ${firstGroup?.group_jid}`);
       }
     }
@@ -384,8 +399,8 @@ Deno.serve(async (req) => {
 
     // Build the list of (respondentJid, respondentName, groupJid) destinations
     const destinations = shouldSendToGroup
-      ? targetGroups.map((g) => ({ respondentJid: g.group_jid, respondentName: g.group_name || "", groupJid: g.group_jid, instanceId: g.instance_id }))
-      : [{ respondentJid: destinationPhone.includes('@') ? destinationPhone : `${destinationPhone}@s.whatsapp.net`, respondentName, groupJid: "" }];
+      ? targetGroups.map((g) => ({ respondentJid: g.group_jid, respondentName: g.group_name || "", groupJid: g.group_jid, instanceId: g.instance_id || primaryInstanceId || null }))
+      : [{ respondentJid: destinationPhone.includes('@') ? destinationPhone : `${destinationPhone}@s.whatsapp.net`, respondentName, groupJid: "", instanceId: primaryInstanceId || null }];
 
     console.log(`[TriggerSequence] Resolved ${destinations.length} destination(s) for this trigger`);
 
@@ -400,8 +415,8 @@ Deno.serve(async (req) => {
         respondentName: dest.respondentName,
         respondentJid: dest.respondentJid,
         groupJid: dest.groupJid,
-        instanceId: dest.instanceId,
-        instanceIds,
+        instanceId: dest.instanceId || primaryInstanceId || null,
+        instanceIds: instanceIds && instanceIds.length > 0 ? instanceIds : (primaryInstanceId ? [primaryInstanceId] : []),
         sendPrivate: !shouldSendToGroup,
         customFields,
         webhookPayload,

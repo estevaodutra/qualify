@@ -67,16 +67,13 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
     target = jid.includes("@") ? jid : `${jid.replace("-group", "")}@g.us`;
   } else if (phone.includes("-group") || phone.endsWith("@g.us")) {
     target = phone.includes("@") ? phone : `${phone.replace("-group", "")}@g.us`;
-  } else {
+  } else if (phone) {
     target = phone.replace("@s.whatsapp.net", "");
+  } else if (jid) {
+    target = jid.replace("@s.whatsapp.net", "");
   }
 
   console.log(`[whatsapp-client] Sending action ${action} to ${target} via provider ${provider}`);
-
-  if (provider?.toLowerCase() === "evolution") {
-    // Evolution API placeholder / custom setup can be implemented here if requested.
-    // Cover Z-API as primary.
-  }
 
   // Z-API base URL:
   const baseUrl = `https://api.z-api.io/instances/${externalId}/token/${externalToken}`;
@@ -204,12 +201,12 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
         endpoint = "/send-image";
         body.image = mediaUrl;
       } else if (mediaType === "video") {
-          endpoint = "/send-video";
-          body.video = mediaUrl;
-        } else if (mediaType === "ptv") {
-          endpoint = "/send-video";
-          body.video = mediaUrl;
-          body.PTV = true;
+        endpoint = "/send-video";
+        body.video = mediaUrl;
+      } else if (mediaType === "ptv") {
+        endpoint = "/send-video";
+        body.video = mediaUrl;
+        body.PTV = true;
       } else if (mediaType === "audio") {
         endpoint = "/send-audio";
         body.audio = mediaUrl;
@@ -284,6 +281,7 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
         action: "DEMOTE",
       };
       break;
+
     case "status.post": {
       const statusType = (config.statusType as string) || "text";
       if (statusType === "text") {
@@ -343,12 +341,13 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
 
   try {
     const response = await fetchZApi(
-      externalId,
-      externalToken,
+      externalId || instance.id || "",
+      externalToken || "",
       endpoint,
       "POST",
       body,
-      headers
+      headers,
+      instance.id
     );
 
     const text = await response.text();
@@ -410,7 +409,6 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
 // Fetch group members directly from Z-API
 export async function groupGetMembers(instance: any, groupJid: string): Promise<any[]> {
   const { external_instance_id: id, external_instance_token: token } = instance;
-  const baseUrl = `https://api.z-api.io/instances/${id}/token/${token}`;
   
   // Z-API uses normalized JID (e.g. 123456789-group or 123456789@g.us depending on exact endpoint)
   // Standard format for query param is groupId. Usually Z-API expects groupId
@@ -424,7 +422,8 @@ export async function groupGetMembers(instance: any, groupJid: string): Promise<
     `/group-members?groupId=${groupId}`,
     "GET",
     null,
-    getZApiHeaders()
+    getZApiHeaders(),
+    instance.id
   );
   
   if (!response.ok) {
@@ -448,15 +447,15 @@ export async function getInstanceStatus(instance: any, triggerN8n: boolean = tru
     "GET",
     null,
     getZApiHeaders(),
-    undefined,
+    instance.id,
     triggerN8n
   );
-  
+
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`Z-API status error (${response.status}): ${errorText}`);
   }
-  
+
   const data = await response.json();
   const item = Array.isArray(data) ? data[0] : data;
 
@@ -496,7 +495,6 @@ export async function getInstanceStatus(instance: any, triggerN8n: boolean = tru
 // Register all webhooks in Z-API
 export async function registerZApiWebhooks(instance: any, webhookUrl: string): Promise<void> {
   const { external_instance_id: id, external_instance_token: token } = instance;
-  const baseUrl = `https://api.z-api.io/instances/${id}/token/${token}`;
   
   const endpoints = [
     "/update-webhook-received",
@@ -514,7 +512,7 @@ export async function registerZApiWebhooks(instance: any, webhookUrl: string): P
         "PUT",
         { value: webhookUrl },
         getZApiHeaders(),
-        undefined,
+        instance.id,
         false // triggerN8n = false
       );
       if (!response.ok) {
@@ -526,4 +524,3 @@ export async function registerZApiWebhooks(instance: any, webhookUrl: string): P
     }
   }
 }
-

@@ -280,37 +280,50 @@ export async function fetchZApi(
   let actualProvider = "z_api";
   let webhookUrl = "";
   let instanceName = "";
+  let resolvedInstanceId = instanceId;
+  let resolvedInstanceToken = instanceToken;
+  let resolvedInternalDbId = internalDbId;
+
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (supabaseUrl && supabaseServiceKey) {
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
-      let query = supabase.from("instances").select("user_id, name, provider");
+      let query = supabase.from("instances").select("id, user_id, name, provider, external_instance_id, external_instance_token");
       if (internalDbId) {
         query = query.eq("id", internalDbId);
-      } else {
-        query = query.eq("external_instance_id", instanceId);
+      } else if (instanceId) {
+        query = query.or(`id.eq.${instanceId},external_instance_id.eq.${instanceId}`);
       }
       const { data: instances } = await query.limit(1);
       
       const instance = instances && instances.length > 0 ? instances[0] : null;
 
-      if (instance?.provider === "WAHA") actualProvider = "waha";
-      else if (instance?.provider === "Evolution API") actualProvider = "evolution";
-      else if (instance?.provider === "Meta Business API") actualProvider = "meta";
+      if (instance) {
+        const prov = (instance.provider || "").toLowerCase();
+        if (prov.includes("waha")) actualProvider = "waha";
+        else if (prov.includes("evolution")) actualProvider = "evolution";
+        else if (prov.includes("meta")) actualProvider = "meta";
+        else if (prov.includes("z-api") || prov.includes("z_api") || prov.includes("zapi")) actualProvider = "z_api";
+        else if (instance.provider) actualProvider = instance.provider.toLowerCase().replace(/[^a-z0-9_]/g, "_");
 
-      if (instance?.user_id && triggerN8n) {
         instanceName = instance.name || "";
-        const categoryKey = getCategoryKeyForEndpoint(endpoint);
-        const { data: webhookConfig } = await supabase
-          .from("webhook_configs")
-          .select("url, is_active")
-          .eq("user_id", instance.user_id)
-          .eq("category", categoryKey)
-          .maybeSingle();
+        resolvedInstanceId = instance.external_instance_id || instance.id || instanceId;
+        resolvedInstanceToken = instance.external_instance_token || instanceToken;
+        resolvedInternalDbId = instance.id;
 
-        if (webhookConfig?.is_active && webhookConfig?.url) {
-          webhookUrl = webhookConfig.url;
+        if (instance.user_id && triggerN8n) {
+          const categoryKey = getCategoryKeyForEndpoint(endpoint);
+          const { data: webhookConfig } = await supabase
+            .from("webhook_configs")
+            .select("url, is_active")
+            .eq("user_id", instance.user_id)
+            .eq("category", categoryKey)
+            .maybeSingle();
+
+          if (webhookConfig?.is_active && webhookConfig?.url) {
+            webhookUrl = webhookConfig.url;
+          }
         }
       }
     }
@@ -325,10 +338,10 @@ export async function fetchZApi(
 
   const n8nPayload = {
     provider: actualProvider,
-    instance_id: instanceId,
-    instance_token: instanceToken,
-    internal_db_id: internalDbId,
-    instance_name: instanceName,
+    instance_id: resolvedInstanceId || "",
+    instance_token: resolvedInstanceToken || "",
+    internal_db_id: resolvedInternalDbId || "",
+    instance_name: instanceName || "",
     api_key: apiKey,
     action: routed.action,
     content: content

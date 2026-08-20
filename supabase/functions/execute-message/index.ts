@@ -657,7 +657,7 @@ Deno.serve(async (req) => {
       }
     }
     // Fallback: resolve instance from triggerContext if provided (carries the group's instance_id or the individual instanceIds)
-    // triggerContext is already available
+    // Fallback: resolve instance from triggerContext if provided (carries the group's instance_id or the individual instanceIds)
     if (triggerContext?.instanceId) {
       const { data: ctxInst } = await supabase
         .from("instances")
@@ -666,9 +666,11 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (ctxInst) {
         instance = ctxInst as any;
-        console.log(`[ExecuteMessage] Resolved instance from triggerContext.instanceId: ${instance.name}`);
+        console.log(`[ExecuteMessage] Resolved instance from triggerContext.instanceId: ${instance.name} (${instance.status})`);
       }
-    } else if (triggerContext?.instanceIds && Array.isArray(triggerContext.instanceIds) && triggerContext.instanceIds.length > 0) {
+    }
+    
+    if ((!instance || instance.status !== "connected") && triggerContext?.instanceIds && Array.isArray(triggerContext.instanceIds) && triggerContext.instanceIds.length > 0) {
       const poolIds = triggerContext.instanceIds as string[];
       const { data: pool } = await supabase
         .from("instances")
@@ -679,14 +681,14 @@ Deno.serve(async (req) => {
         if (connected.length > 0) {
           instance = connected[Math.floor(Math.random() * connected.length)] as any;
           console.log(`[ExecuteMessage] Selected connected instance from triggerContext.instanceIds pool: ${(instance as any)?.name}`);
-        } else {
+        } else if (!instance) {
           instance = pool[Math.floor(Math.random() * pool.length)] as any;
-          console.log(`[ExecuteMessage] Selected disconnected instance from triggerContext.instanceIds pool: ${(instance as any)?.name}`);
+          console.log(`[ExecuteMessage] Selected instance from triggerContext.instanceIds pool: ${(instance as any)?.name}`);
         }
       }
     }
 
-    // Fallback: resolve instance from sequence trigger config if not linked to campaign
+    // Fallback: resolve instance from sequence trigger config or sequence_nodes if not linked to campaign
     if ((!instance || instance.status !== "connected") && effectiveSequenceId) {
       console.log(`[ExecuteMessage] Campaign instance not connected or null, attempting to resolve from sequence ${effectiveSequenceId} trigger config...`);
       
@@ -696,7 +698,20 @@ Deno.serve(async (req) => {
         .eq("id", effectiveSequenceId)
         .maybeSingle();
 
-      const triggerConfig = triggerSeqData?.trigger_config as Record<string, any> | undefined;
+      let triggerConfig = triggerSeqData?.trigger_config as Record<string, any> | undefined;
+
+      if (!triggerConfig || (!triggerConfig.instanceId && !triggerConfig.instanceIds)) {
+        const { data: trigNode } = await supabase
+          .from("sequence_nodes")
+          .select("config")
+          .eq("sequence_id", effectiveSequenceId)
+          .in("node_type", ["trigger", "webhook"])
+          .maybeSingle();
+        if (trigNode?.config) {
+          triggerConfig = (trigNode.config.triggerConfig || trigNode.config) as Record<string, any>;
+        }
+      }
+
       const configInstanceId = triggerConfig?.instanceId;
       const configInstanceIds = triggerConfig?.instanceIds as string[] | undefined;
 
@@ -726,7 +741,7 @@ Deno.serve(async (req) => {
           console.log(`[ExecuteMessage] Resolved connected instance from sequence trigger config: ${instance.name}`);
         } else if (inst && !instance) {
           instance = inst as any;
-          console.log(`[ExecuteMessage] Resolved instance from sequence trigger config (disconnected): ${instance.name}`);
+          console.log(`[ExecuteMessage] Resolved instance from sequence trigger config: ${instance.name}`);
         }
       }
     }
@@ -964,7 +979,7 @@ Deno.serve(async (req) => {
             name: instance.name,
             phone: instance.phone || "",
             provider: instance.provider,
-            externalId: instance.external_instance_id || "",
+            externalId: instance.external_instance_id || instance.id || "",
             externalToken: instance.external_instance_token || "",
           },
           destination: {
@@ -1114,7 +1129,7 @@ Deno.serve(async (req) => {
             group_name: phone,
             isPrivate: true,
           }))
-        : (sendToPrivate || triggerContext?.uraResult || triggerContext?.respondentPhone) && triggerContext
+        : (sendToPrivate || triggerContext?.uraResult || (triggerContext?.respondentPhone && !triggerContext?.groupJid)) && triggerContext
           ? [{ 
               group_jid: triggerContext.respondentJid || `${triggerContext.respondentPhone}@s.whatsapp.net`, 
               group_name: triggerContext.respondentName || triggerContext.respondentPhone,
@@ -1928,7 +1943,7 @@ Deno.serve(async (req) => {
                 campaign: { id: typedCampaign.id || effectiveSequenceId, name: typedCampaign.name || (typedCampaign.name || 'Workflow') },
                 instance: {
                   id: activeInstanceId, name: instance.name, phone: instance.phone || "",
-                  provider: instance.provider, externalId: instance.external_instance_id || "",
+                  provider: instance.provider, externalId: instance.external_instance_id || instance.id || "",
                   externalToken: instance.external_instance_token || "",
                 },
                 destination: { jid: dest.group_jid, name: dest.group_name },
@@ -2045,7 +2060,7 @@ Deno.serve(async (req) => {
               campaign: { id: typedCampaign.id || effectiveSequenceId, name: typedCampaign.name || (typedCampaign.name || 'Workflow') },
               instance: {
                 id: activeInstanceId, name: instance.name, phone: instance.phone || "",
-                provider: instance.provider, externalId: instance.external_instance_id || "",
+                provider: instance.provider, externalId: instance.external_instance_id || instance.id || "",
                 externalToken: instance.external_instance_token || "",
               },
               destination: { jid: dest.group_jid, name: dest.group_name },
@@ -2421,7 +2436,7 @@ Deno.serve(async (req) => {
                   name: instance.name,
                   phone: instance.phone || "",
                   provider: instance.provider,
-                  externalId: instance.external_instance_id || "",
+                  externalId: instance.external_instance_id || instance.id || "",
                   externalToken: instance.external_instance_token || "",
                 },
                 destination: {
@@ -3086,7 +3101,7 @@ Deno.serve(async (req) => {
               name: instance.name,
               phone: instance.phone || "",
               provider: instance.provider,
-              externalId: instance.external_instance_id || "",
+              externalId: instance.external_instance_id || instance.id || "",
               externalToken: instance.external_instance_token || "",
             },
             destination: {
