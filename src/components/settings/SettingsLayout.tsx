@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { UserCircle, Settings, Users, Radio, Wallet, CreditCard, FileText } from "lucide-react";
+import { UserCircle, Settings, Users, Radio, Wallet, CreditCard, FileText, Sliders } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 
 interface SettingsLayoutProps {
@@ -19,6 +19,12 @@ export function SettingsLayout({ children }: SettingsLayoutProps) {
         { title: "Meu Perfil", url: "/settings/profile", icon: UserCircle },
         { title: "Conta", url: "/settings/account", icon: Settings },
         ...(isAdmin ? [{ title: "Membros", url: "/settings/members", icon: Users }] : []),
+      ],
+    },
+    {
+      title: "CRM",
+      items: [
+        { title: "Campos Adicionais", url: "/settings/custom-fields", icon: Sliders },
       ],
     },
     {
@@ -63,7 +69,10 @@ export function SettingsLayout({ children }: SettingsLayoutProps) {
               </div>
               <div className="space-y-1">
                 {group.items.map((item) => {
-                  const isActive = location.pathname === item.url || (item.url === "/settings/profile" && location.pathname === "/settings");
+                  const isActive =
+                    location.pathname === item.url ||
+                    (item.url === "/settings/profile" && location.pathname === "/settings") ||
+                    (item.url === "/settings/custom-fields" && location.pathname === "/settings/fields");
                   return (
                     <NavLink
                       key={item.url}

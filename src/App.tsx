@@ -119,6 +119,7 @@ const App = () => {
                       <Route path="/settings/account" element={<Settings />} />
                       <Route path="/settings/members" element={<Settings />} />
                       <Route path="/settings/connections" element={<Settings />} />
+                      <Route path="/settings/custom-fields" element={<Settings />} />
                       <Route path="/settings/logs" element={<Settings />} />
                       <Route path="/settings/fields" element={<Settings />} />
 

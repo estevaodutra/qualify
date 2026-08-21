@@ -355,6 +355,8 @@ export default function Settings() {
         <MembersPage />
       ) : location.pathname === "/settings/connections" ? (
         <Instances />
+      ) : location.pathname === "/settings/custom-fields" || location.pathname === "/settings/fields" ? (
+        <CustomFieldsTab />
       ) : (
         <div className="space-y-8">
           <PageHeader
