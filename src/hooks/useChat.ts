@@ -138,9 +138,8 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
     queryFn: async ({ pageParam }) => {
       if (!activeCompanyId) return [];
 
-      let query = supabase
-        .from("chat_conversations")
-        .select(`
+      const executeQuery = async (includeArchiveFields: boolean) => {
+        let selectStr = `
           id,
           company_id,
           instance_id,
@@ -151,228 +150,246 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
           last_message_at,
           tags,
           waiting_since,
-          is_archived,
-          archived_at,
-          archived_by,
           created_at,
           updated_at,
           lead:leads(id, name, phone, email, tags, custom_fields),
           operator:profiles(id, full_name, email),
           instance:instances(id, name, phone, provider, status)
-        `)
-        .eq("company_id", activeCompanyId);
+        `;
 
-      const advFilters = filters as AdvancedChatFilters | undefined;
-
-      // 0. Archive Mode (Active / Archived / All)
-      if (advFilters?.archiveMode === "archived_only") {
-        query = query.eq("is_archived", true);
-      } else if (advFilters?.archiveMode === "all") {
-        // do not filter by is_archived
-      } else {
-        // default: active_only
-        query = query.or("is_archived.is.null,is_archived.eq.false");
-      }
-
-      // 1. Statuses (Multi-select / Legacy)
-      if (advFilters?.statuses && advFilters.statuses.length > 0) {
-        const hasUnread = advFilters.statuses.includes("unread");
-        const hasUnassigned = advFilters.statuses.includes("unassigned");
-        const standardStatuses = advFilters.statuses.filter(s => s !== "unread" && s !== "unassigned");
-
-        const statusOrClauses: string[] = [];
-        if (standardStatuses.length > 0) {
-          statusOrClauses.push(`status.in.(${standardStatuses.join(",")})`);
-        }
-        if (hasUnread) {
-          statusOrClauses.push("unread_count.gt.0");
-        }
-        if (hasUnassigned) {
-          statusOrClauses.push("operator_id.is.null");
+        if (includeArchiveFields) {
+          selectStr += `, is_archived, archived_at, archived_by`;
         }
 
-        if (statusOrClauses.length > 0) {
-          query = query.or(statusOrClauses.join(","));
-        }
-      } else if (filters?.status && filters.status !== "all") {
-        if (filters.status === "unread") {
-          query = query.gt("unread_count", 0);
-        } else if (filters.status === "unassigned") {
-          query = query.is("operator_id", null);
-        } else {
-          query = query.eq("status", filters.status);
-        }
-      }
+        let query = supabase
+          .from("chat_conversations")
+          .select(selectStr)
+          .eq("company_id", activeCompanyId);
 
-      // 2. Operators
-      if (advFilters?.operatorIds && advFilters.operatorIds.length > 0) {
-        const hasUnassigned = advFilters.operatorIds.includes("unassigned");
-        const specificIds = advFilters.operatorIds.filter(id => id !== "unassigned" && id !== "has_operator");
-        const opOrClauses: string[] = [];
-        if (specificIds.length > 0) {
-          opOrClauses.push(`operator_id.in.(${specificIds.join(",")})`);
-        }
-        if (hasUnassigned) {
-          opOrClauses.push("operator_id.is.null");
-        }
-        if (opOrClauses.length > 0) {
-          query = query.or(opOrClauses.join(","));
-        }
-      } else if (filters?.operatorId && filters.operatorId !== "all") {
-        if (filters.operatorId === "unassigned") {
-          query = query.is("operator_id", null);
-        } else {
-          query = query.eq("operator_id", filters.operatorId);
-        }
-      }
+        const advFilters = filters as AdvancedChatFilters | undefined;
 
-      // 3. Instances
-      if (advFilters?.instanceIds && advFilters.instanceIds.length > 0) {
-        query = query.in("instance_id", advFilters.instanceIds);
-      } else if (filters?.instanceId) {
-        query = query.eq("instance_id", filters.instanceId);
-      }
-
-      // 4. Tags
-      if (advFilters?.tagPresence === "no_tags") {
-        query = query.or("tags.is.null,tags.eq.{}");
-      } else if (advFilters?.tagPresence === "has_tags") {
-        query = query.not("tags", "is", null);
-      }
-
-      if (advFilters?.tags && advFilters.tags.length > 0) {
-        if (advFilters.tagMode === "all") {
-          query = query.contains("tags", advFilters.tags);
-        } else {
-          query = query.overlaps("tags", advFilters.tags);
-        }
-      } else if (filters?.tags && filters.tags.length > 0) {
-        query = query.contains("tags", filters.tags);
-      }
-
-      // 5. CRM Pipeline & Stage & Deals Filter
-      if (
-        advFilters?.pipelineId ||
-        (advFilters?.stageIds && advFilters.stageIds.length > 0) ||
-        (advFilters?.dealPresence && advFilters.dealPresence !== "all") ||
-        (advFilters?.dealStatus && advFilters.dealStatus !== "all")
-      ) {
-        if (advFilters.dealPresence === "no_deal") {
-          const { data: dealLeads } = await supabase
-            .from("deals")
-            .select("lead_id")
-            .eq("company_id", activeCompanyId);
-          
-          const leadIdsWithDeals = Array.from(new Set((dealLeads || []).map(d => d.lead_id)));
-          if (leadIdsWithDeals.length > 0) {
-            query = query.not("lead_id", "in", `(${leadIdsWithDeals.join(",")})`);
-          }
-        } else {
-          let dealQuery = supabase
-            .from("deals")
-            .select("lead_id")
-            .eq("company_id", activeCompanyId);
-
-          if (advFilters.pipelineId) dealQuery = dealQuery.eq("pipeline_id", advFilters.pipelineId);
-          if (advFilters.stageIds && advFilters.stageIds.length > 0) dealQuery = dealQuery.in("stage_id", advFilters.stageIds);
-          if (advFilters.dealStatus && advFilters.dealStatus !== "all") dealQuery = dealQuery.eq("status", advFilters.dealStatus);
-
-          const { data: matchedDeals } = await dealQuery;
-          const matchedLeadIds = Array.from(new Set((matchedDeals || []).map(d => d.lead_id)));
-          
-          if (matchedLeadIds.length === 0) {
-            return []; // No lead matches criteria
-          }
-          query = query.in("lead_id", matchedLeadIds);
-        }
-      }
-
-      // 6. Dates (Last Message Date Preset)
-      if (advFilters?.lastMessageAtPreset) {
-        const now = new Date();
-        let targetDate: Date | null = null;
-        let isOlderThan = false;
-
-        switch (advFilters.lastMessageAtPreset) {
-          case "today":
-            targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            break;
-          case "last_24h":
-            targetDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-            break;
-          case "last_3d":
-            targetDate = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
-            break;
-          case "last_7d":
-            targetDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-            break;
-          case "last_30d":
-            targetDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-            break;
-          case "more_than_7d":
-            targetDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-            isOlderThan = true;
-            break;
-          case "more_than_30d":
-            targetDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-            isOlderThan = true;
-            break;
-        }
-
-        if (targetDate) {
-          if (isOlderThan) {
-            query = query.lt("last_message_at", targetDate.toISOString());
+        // 0. Archive Mode (Active / Archived / All)
+        if (includeArchiveFields) {
+          if (advFilters?.archiveMode === "archived_only") {
+            query = query.eq("is_archived", true);
+          } else if (advFilters?.archiveMode === "all") {
+            // do not filter by is_archived
           } else {
-            query = query.gte("last_message_at", targetDate.toISOString());
+            // default: active_only
+            query = query.or("is_archived.is.null,is_archived.eq.false");
           }
         }
-      }
 
-      // 7. Search Filter (Text)
-      if (filters?.search && filters.search.trim()) {
-        const s = filters.search.trim();
-        const { data: matchedLeads } = await supabase
-          .from("leads")
-          .select("id")
-          .eq("company_id", activeCompanyId)
-          .or(`name.ilike.%${s}%,phone.ilike.%${s}%,email.ilike.%${s}%`);
+        // 1. Statuses (Multi-select / Legacy)
+        if (advFilters?.statuses && advFilters.statuses.length > 0) {
+          const hasUnread = advFilters.statuses.includes("unread");
+          const hasUnassigned = advFilters.statuses.includes("unassigned");
+          const standardStatuses = advFilters.statuses.filter(s => s !== "unread" && s !== "unassigned");
 
-        const leadIds = (matchedLeads || []).map(l => l.id);
-        if (leadIds.length > 0) {
-          query = query.or(`last_message_preview.ilike.%${s}%,lead_id.in.(${leadIds.join(",")})`);
-        } else {
-          query = query.ilike("last_message_preview", `%${s}%`);
+          const statusOrClauses: string[] = [];
+          if (standardStatuses.length > 0) {
+            statusOrClauses.push(`status.in.(${standardStatuses.join(",")})`);
+          }
+          if (hasUnread) {
+            statusOrClauses.push("unread_count.gt.0");
+          }
+          if (hasUnassigned) {
+            statusOrClauses.push("operator_id.is.null");
+          }
+
+          if (statusOrClauses.length > 0) {
+            query = query.or(statusOrClauses.join(","));
+          }
+        } else if (filters?.status && filters.status !== "all") {
+          if (filters.status === "unread") {
+            query = query.gt("unread_count", 0);
+          } else if (filters.status === "unassigned") {
+            query = query.is("operator_id", null);
+          } else {
+            query = query.eq("status", filters.status);
+          }
         }
+
+        // 2. Operators
+        if (advFilters?.operatorIds && advFilters.operatorIds.length > 0) {
+          const hasUnassigned = advFilters.operatorIds.includes("unassigned");
+          const specificIds = advFilters.operatorIds.filter(id => id !== "unassigned" && id !== "has_operator");
+          const opOrClauses: string[] = [];
+          if (specificIds.length > 0) {
+            opOrClauses.push(`operator_id.in.(${specificIds.join(",")})`);
+          }
+          if (hasUnassigned) {
+            opOrClauses.push("operator_id.is.null");
+          }
+          if (opOrClauses.length > 0) {
+            query = query.or(opOrClauses.join(","));
+          }
+        } else if (filters?.operatorId && filters.operatorId !== "all") {
+          if (filters.operatorId === "unassigned") {
+            query = query.is("operator_id", null);
+          } else {
+            query = query.eq("operator_id", filters.operatorId);
+          }
+        }
+
+        // 3. Instances
+        if (advFilters?.instanceIds && advFilters.instanceIds.length > 0) {
+          query = query.in("instance_id", advFilters.instanceIds);
+        } else if (filters?.instanceId) {
+          query = query.eq("instance_id", filters.instanceId);
+        }
+
+        // 4. Tags
+        if (advFilters?.tagPresence === "no_tags") {
+          query = query.or("tags.is.null,tags.eq.{}");
+        } else if (advFilters?.tagPresence === "has_tags") {
+          query = query.not("tags", "is", null);
+        }
+
+        if (advFilters?.tags && advFilters.tags.length > 0) {
+          if (advFilters.tagMode === "all") {
+            query = query.contains("tags", advFilters.tags);
+          } else {
+            query = query.overlaps("tags", advFilters.tags);
+          }
+        } else if (filters?.tags && filters.tags.length > 0) {
+          query = query.contains("tags", filters.tags);
+        }
+
+        // 5. CRM Pipeline & Stage & Deals Filter
+        if (
+          advFilters?.pipelineId ||
+          (advFilters?.stageIds && advFilters.stageIds.length > 0) ||
+          (advFilters?.dealPresence && advFilters.dealPresence !== "all") ||
+          (advFilters?.dealStatus && advFilters.dealStatus !== "all")
+        ) {
+          if (advFilters.dealPresence === "no_deal") {
+            const { data: dealLeads } = await supabase
+              .from("deals")
+              .select("lead_id")
+              .eq("company_id", activeCompanyId);
+            
+            const leadIdsWithDeals = Array.from(new Set((dealLeads || []).map(d => d.lead_id)));
+            if (leadIdsWithDeals.length > 0) {
+              query = query.not("lead_id", "in", `(${leadIdsWithDeals.join(",")})`);
+            }
+          } else {
+            let dealQuery = supabase
+              .from("deals")
+              .select("lead_id")
+              .eq("company_id", activeCompanyId);
+
+            if (advFilters.pipelineId) dealQuery = dealQuery.eq("pipeline_id", advFilters.pipelineId);
+            if (advFilters.stageIds && advFilters.stageIds.length > 0) dealQuery = dealQuery.in("stage_id", advFilters.stageIds);
+            if (advFilters.dealStatus && advFilters.dealStatus !== "all") dealQuery = dealQuery.eq("status", advFilters.dealStatus);
+
+            const { data: matchedDeals } = await dealQuery;
+            const matchedLeadIds = Array.from(new Set((matchedDeals || []).map(d => d.lead_id)));
+            
+            if (matchedLeadIds.length === 0) {
+              return { data: [], error: null }; // No lead matches criteria
+            }
+            query = query.in("lead_id", matchedLeadIds);
+          }
+        }
+
+        // 6. Dates (Last Message Date Preset)
+        if (advFilters?.lastMessageAtPreset) {
+          const now = new Date();
+          let targetDate: Date | null = null;
+          let isOlderThan = false;
+
+          switch (advFilters.lastMessageAtPreset) {
+            case "today":
+              targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              break;
+            case "last_24h":
+              targetDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+              break;
+            case "last_3d":
+              targetDate = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+              break;
+            case "last_7d":
+              targetDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+              break;
+            case "last_30d":
+              targetDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+              break;
+            case "more_than_7d":
+              targetDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+              isOlderThan = true;
+              break;
+            case "more_than_30d":
+              targetDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+              isOlderThan = true;
+              break;
+          }
+
+          if (targetDate) {
+            if (isOlderThan) {
+              query = query.lt("last_message_at", targetDate.toISOString());
+            } else {
+              query = query.gte("last_message_at", targetDate.toISOString());
+            }
+          }
+        }
+
+        // 7. Search Filter (Text)
+        if (filters?.search && filters.search.trim()) {
+          const s = filters.search.trim();
+          const { data: matchedLeads } = await supabase
+            .from("leads")
+            .select("id")
+            .eq("company_id", activeCompanyId)
+            .or(`name.ilike.%${s}%,phone.ilike.%${s}%,email.ilike.%${s}%`);
+
+          const leadIds = (matchedLeads || []).map(l => l.id);
+          if (leadIds.length > 0) {
+            query = query.or(`last_message_preview.ilike.%${s}%,lead_id.in.(${leadIds.join(",")})`);
+          } else {
+            query = query.ilike("last_message_preview", `%${s}%`);
+          }
+        }
+
+        // Pagination cursor
+        if (pageParam) {
+          query = query.or(`last_message_at.lt.${pageParam.last_message_at},and(last_message_at.eq.${pageParam.last_message_at},id.lt.${pageParam.id})`);
+        }
+
+        // Sort Order
+        const sortBy = advFilters?.sortBy || "last_message_desc";
+        const limit = 30;
+
+        if (sortBy === "last_message_asc") {
+          query = query.order("last_message_at", { ascending: true }).order("id", { ascending: true }).limit(limit);
+        } else if (sortBy === "created_desc") {
+          query = query.order("created_at", { ascending: false }).order("id", { ascending: false }).limit(limit);
+        } else if (sortBy === "created_asc") {
+          query = query.order("created_at", { ascending: true }).order("id", { ascending: true }).limit(limit);
+        } else {
+          query = query.order("last_message_at", { ascending: false }).order("id", { ascending: false }).limit(limit);
+        }
+
+        return await query;
+      };
+
+      let res = await executeQuery(true);
+
+      // Fallback if is_archived column is missing on DB schema
+      if (res.error && (res.error.message?.includes("is_archived") || res.error.message?.includes("column"))) {
+        res = await executeQuery(false);
       }
 
-      // Pagination cursor
-      if (pageParam) {
-        query = query.or(`last_message_at.lt.${pageParam.last_message_at},and(last_message_at.eq.${pageParam.last_message_at},id.lt.${pageParam.id})`);
+      if (res.error) {
+        console.error("Error fetching conversations:", res.error);
+        toast({ title: "Erro ao buscar conversas", description: res.error.message, variant: "destructive" });
+        throw res.error;
       }
 
-      // Sort Order
-      const sortBy = advFilters?.sortBy || "last_message_desc";
-      const limit = 30;
-
-      if (sortBy === "last_message_asc") {
-        query = query.order("last_message_at", { ascending: true }).order("id", { ascending: true }).limit(limit);
-      } else if (sortBy === "created_desc") {
-        query = query.order("created_at", { ascending: false }).order("id", { ascending: false }).limit(limit);
-      } else if (sortBy === "created_asc") {
-        query = query.order("created_at", { ascending: true }).order("id", { ascending: true }).limit(limit);
-      } else {
-        query = query.order("last_message_at", { ascending: false }).order("id", { ascending: false }).limit(limit);
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        console.error("Error fetching conversations:", error);
-        toast({ title: "Erro ao buscar conversas", description: error.message, variant: "destructive" });
-        throw error;
-      }
-
-      return data as unknown as ChatConversation[];
+      return (res.data || []).map((item: any) => ({
+        ...item,
+        is_archived: item.is_archived ?? false,
+      })) as unknown as ChatConversation[];
     },
     getNextPageParam: (lastPage) => {
       if (!lastPage || lastPage.length < 30) return undefined;

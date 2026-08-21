@@ -38,7 +38,8 @@ export default function InboxList({
   setFilters,
   fetchNextPage,
   hasNextPage,
-  isFetchingNextPage
+  isFetchingNextPage,
+  archivedCount = 0,
 }: InboxListProps) {
   const { user } = useAuth();
   
@@ -168,40 +169,42 @@ export default function InboxList({
           onOpenChange={setIsManagerOpen}
         />
         
-        {/* View Tabs: Inbox vs Archived */}
-        <div className="flex bg-muted/40 p-1 rounded-xl gap-1 border border-border/30">
-          <button
-            type="button"
-            onClick={() => setFilters({ ...filters, archiveMode: "active_only" } as any)}
-            className={cn(
-              "flex-1 py-1 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
-              (filters as AdvancedChatFilters).archiveMode !== "archived_only"
-                ? "bg-background text-primary shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Inbox className="h-3.5 w-3.5" />
-            <span>Entrada</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setFilters({ ...filters, archiveMode: "archived_only" } as any)}
-            className={cn(
-              "flex-1 py-1 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer relative",
-              (filters as AdvancedChatFilters).archiveMode === "archived_only"
-                ? "bg-background text-primary shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Archive className="h-3.5 w-3.5" />
-            <span>Arquivadas</span>
-            {(archivedCount || 0) > 0 && (
-              <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.2 rounded-full font-extrabold ml-0.5">
-                {archivedCount}
-              </span>
-            )}
-          </button>
-        </div>
+        {/* View Tabs: Inbox vs Archived (Only rendered if there are archived conversations or currently viewing archived) */}
+        {(archivedCount > 0 || (filters as AdvancedChatFilters).archiveMode === "archived_only") && (
+          <div className="flex bg-muted/40 p-1 rounded-xl gap-1 border border-border/30">
+            <button
+              type="button"
+              onClick={() => setFilters({ ...filters, archiveMode: "active_only" } as any)}
+              className={cn(
+                "flex-1 py-1 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
+                (filters as AdvancedChatFilters).archiveMode !== "archived_only"
+                  ? "bg-background text-primary shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Inbox className="h-3.5 w-3.5" />
+              <span>Entrada</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilters({ ...filters, archiveMode: "archived_only" } as any)}
+              className={cn(
+                "flex-1 py-1 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer relative",
+                (filters as AdvancedChatFilters).archiveMode === "archived_only"
+                  ? "bg-background text-primary shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Archive className="h-3.5 w-3.5" />
+              <span>Arquivadas</span>
+              {archivedCount > 0 && (
+                <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.2 rounded-full font-extrabold ml-0.5">
+                  {archivedCount}
+                </span>
+              )}
+            </button>
+          </div>
+        )}
 
         {/* Search & Unified Filter Button */}
         <div className="flex gap-2 items-center">
