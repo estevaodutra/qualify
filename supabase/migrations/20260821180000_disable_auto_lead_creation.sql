@@ -1,18 +1,24 @@
--- Migration: Disable automatic lead creation on inbound WhatsApp messages
--- Allows conversations to exist without a registered CRM Lead, storing contact_phone and contact_name instead.
+-- Migration: Disable automatic lead creation on inbound WhatsApp messages & add missing columns
+-- Allows conversations to exist without a registered CRM Lead, storing contact_phone, contact_name, and archiving columns.
 
--- 1. Make lead_id nullable and add contact fields to chat_conversations
+-- 1. Make lead_id nullable and add missing columns to chat_conversations
 ALTER TABLE public.chat_conversations 
   ALTER COLUMN lead_id DROP NOT NULL;
 
 ALTER TABLE public.chat_conversations 
   ADD COLUMN IF NOT EXISTS contact_phone TEXT,
-  ADD COLUMN IF NOT EXISTS contact_name TEXT;
+  ADD COLUMN IF NOT EXISTS contact_name TEXT,
+  ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT false,
+  ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS archived_by UUID;
 
 CREATE INDEX IF NOT EXISTS idx_chat_conversations_contact_phone 
   ON public.chat_conversations(company_id, contact_phone);
 
--- 2. Update process_webhook_event_for_crm_chat function to NOT create leads automatically
+CREATE INDEX IF NOT EXISTS idx_chat_conversations_is_archived 
+  ON public.chat_conversations(company_id, is_archived);
+
+-- 2. Update process_webhook_event_for_crm_chat function
 CREATE OR REPLACE FUNCTION public.process_webhook_event_for_crm_chat()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -201,7 +207,7 @@ BEGIN
     COALESCE(NEW.event_timestamp, NEW.received_at)
   );
 
-  -- Atualizar a conversa (last_message_at, preview, unread_count, etc.)
+  -- Atualizar a conversa (last_message_at, preview, unread_count, is_archived, etc.)
   UPDATE public.chat_conversations
   SET 
     last_message_at = COALESCE(NEW.event_timestamp, NEW.received_at),
