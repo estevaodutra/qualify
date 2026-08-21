@@ -37,7 +37,7 @@ export const ACTION_REGISTRY: Record<string, ActionDefinition> = {
     type: 'create_lead',
     category: 'lead',
     label: 'Criar lead',
-    description: 'Cria um novo lead utilizando informações configuradas no workflow',
+    description: 'Cria o lead com as informações guardadas nos parâmetros da sessão. Caso o lead já existir, não será criado um novo lead',
     defaultParameters: {
       name: '',
       phone: '',

@@ -99,65 +99,10 @@ export const ActionEditors: React.FC<ActionEditorsProps> = ({
       // ================= LEADS =================
       case "create_lead": {
         return (
-          <div className="space-y-3 text-xs">
-            <div className="space-y-1">
-              <Label className="text-[11px] font-semibold text-slate-700">Nome do Lead</Label>
-              <Input
-                value={(parameters.name as string) || ""}
-                onChange={(e) => updateParam("name", e.target.value)}
-                placeholder="Ex: {{ trigger.lead_name }}"
-                className="h-8 rounded-xl text-xs"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-[11px] font-semibold text-slate-700">Telefone</Label>
-                <Input
-                  value={(parameters.phone as string) || ""}
-                  onChange={(e) => updateParam("phone", e.target.value)}
-                  placeholder="Ex: {{ trigger.phone }}"
-                  className="h-8 rounded-xl text-xs"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-[11px] font-semibold text-slate-700">E-mail</Label>
-                <Input
-                  value={(parameters.email as string) || ""}
-                  onChange={(e) => updateParam("email", e.target.value)}
-                  placeholder="Ex: contato@empresa.com"
-                  className="h-8 rounded-xl text-xs"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-[11px] font-semibold text-slate-700">CPF</Label>
-                <Input
-                  value={(parameters.cpf as string) || ""}
-                  onChange={(e) => updateParam("cpf", e.target.value)}
-                  placeholder="000.000.000-00"
-                  className="h-8 rounded-xl text-xs"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-[11px] font-semibold text-slate-700">Origem</Label>
-                <Input
-                  value={(parameters.source as string) || ""}
-                  onChange={(e) => updateParam("source", e.target.value)}
-                  placeholder="Ex: Workflow"
-                  className="h-8 rounded-xl text-xs"
-                />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[11px] font-semibold text-slate-700">Empresa</Label>
-              <Input
-                value={(parameters.companyName as string) || ""}
-                onChange={(e) => updateParam("companyName", e.target.value)}
-                placeholder="Nome da empresa do lead"
-                className="h-8 rounded-xl text-xs"
-              />
-            </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-2 text-xs">
+            <p className="text-slate-600 leading-relaxed font-medium">
+              Cria o lead com as informações guardadas nos parâmetros da sessão. Caso o lead já existir, não será criado um novo lead.
+            </p>
           </div>
         );
       }
