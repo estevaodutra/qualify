@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { getLocalPins, getLocalArchived } from "@/hooks/useConversationActions";
 
 export interface ChatConversation {
   id: string;
@@ -401,41 +402,44 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
     refetchInterval: 3000,
   });
 
-  // Fetch User Pins
+  // Fetch User Pins (combines DB pins + local storage pins)
   const { data: userPins = [] } = useQuery({
     queryKey: ["chat-pins", activeCompanyId, user?.id],
     queryFn: async () => {
       if (!activeCompanyId || !user) return [];
+      let dbPins: string[] = [];
       try {
         const { data } = await supabase
           .from("chat_conversation_pins" as any)
           .select("conversation_id")
           .eq("company_id", activeCompanyId)
           .eq("user_id", user.id);
-        return (data || []).map((p: any) => p.conversation_id as string);
-      } catch {
-        return [];
-      }
+        if (data) dbPins = data.map((p: any) => p.conversation_id as string);
+      } catch {}
+
+      const localPins = getLocalPins(activeCompanyId, user.id);
+      return Array.from(new Set([...dbPins, ...localPins]));
     },
     enabled: !!activeCompanyId && !!user,
   });
 
-  // Fetch Count of Archived Conversations
+  // Fetch Count of Archived Conversations (combines DB count + local storage count)
   const { data: archivedCount = 0 } = useQuery({
     queryKey: ["chat-archived-count", activeCompanyId],
     queryFn: async () => {
       if (!activeCompanyId) return 0;
+      let dbCount = 0;
       try {
         const { count, error } = await supabase
           .from("chat_conversations")
           .select("id", { count: "exact", head: true })
           .eq("company_id", activeCompanyId)
           .eq("is_archived", true);
-        if (error) return 0;
-        return count || 0;
-      } catch {
-        return 0;
-      }
+        if (!error && count) dbCount = count;
+      } catch {}
+
+      const localArchived = getLocalArchived(activeCompanyId);
+      return Math.max(dbCount, localArchived.length);
     },
     enabled: !!activeCompanyId && !!user,
     refetchInterval: 5000,
@@ -445,8 +449,11 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
   const pinnedSet = useMemo(() => new Set(userPins), [userPins]);
 
   const conversations = useMemo(() => {
+    const localArchivedSet = activeCompanyId ? new Set(getLocalArchived(activeCompanyId)) : new Set<string>();
+
     const mapped = rawConversations.map((c) => ({
       ...c,
+      is_archived: c.is_archived || localArchivedSet.has(c.id),
       is_pinned: pinnedSet.has(c.id),
     }));
 
@@ -455,7 +462,7 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
       if (!a.is_pinned && b.is_pinned) return 1;
       return 0;
     });
-  }, [rawConversations, pinnedSet]);
+  }, [rawConversations, pinnedSet, activeCompanyId]);
 
 
   // 2. Fetch Pipeline Stages

@@ -4,6 +4,51 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
+const LOCAL_PINS_KEY = (companyId: string, userId: string) => `qualify_pins_${companyId}_${userId}`;
+const LOCAL_ARCHIVED_KEY = (companyId: string) => `qualify_archived_${companyId}`;
+
+export function getLocalPins(companyId: string, userId: string): string[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_PINS_KEY(companyId, userId));
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveLocalPin(companyId: string, userId: string, convId: string) {
+  const current = getLocalPins(companyId, userId);
+  if (!current.includes(convId)) {
+    localStorage.setItem(LOCAL_PINS_KEY(companyId, userId), JSON.stringify([...current, convId]));
+  }
+}
+
+export function removeLocalPin(companyId: string, userId: string, convId: string) {
+  const current = getLocalPins(companyId, userId);
+  localStorage.setItem(LOCAL_PINS_KEY(companyId, userId), JSON.stringify(current.filter(id => id !== convId)));
+}
+
+export function getLocalArchived(companyId: string): string[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_ARCHIVED_KEY(companyId));
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveLocalArchived(companyId: string, convId: string) {
+  const current = getLocalArchived(companyId);
+  if (!current.includes(convId)) {
+    localStorage.setItem(LOCAL_ARCHIVED_KEY(companyId), JSON.stringify([...current, convId]));
+  }
+}
+
+export function removeLocalArchived(companyId: string, convId: string) {
+  const current = getLocalArchived(companyId);
+  localStorage.setItem(LOCAL_ARCHIVED_KEY(companyId), JSON.stringify(current.filter(id => id !== convId)));
+}
+
 export function useConversationActions() {
   const { activeCompanyId } = useCompany();
   const { user } = useAuth();
@@ -20,19 +65,24 @@ export function useConversationActions() {
     mutationFn: async (conversationId: string) => {
       if (!activeCompanyId || !user) throw new Error("Usuário ou empresa não selecionada");
 
-      const { error } = await supabase
-        .from("chat_conversation_pins" as any)
-        .upsert(
-          {
-            company_id: activeCompanyId,
-            conversation_id: conversationId,
-            user_id: user.id,
-            created_at: new Date().toISOString(),
-          },
-          { onConflict: "conversation_id,user_id" }
-        );
+      saveLocalPin(activeCompanyId, user.id, conversationId);
 
-      if (error) throw error;
+      try {
+        const { error } = await supabase
+          .from("chat_conversation_pins" as any)
+          .upsert(
+            {
+              company_id: activeCompanyId,
+              conversation_id: conversationId,
+              user_id: user.id,
+              created_at: new Date().toISOString(),
+            },
+            { onConflict: "conversation_id,user_id" }
+          );
+        if (error) console.warn("DB pin error, fallback to local state:", error);
+      } catch (err) {
+        console.warn("DB pin exception, fallback to local state:", err);
+      }
     },
     onSuccess: () => {
       toast.success("Conversa fixada no topo!");
@@ -49,13 +99,18 @@ export function useConversationActions() {
     mutationFn: async (conversationId: string) => {
       if (!activeCompanyId || !user) throw new Error("Usuário ou empresa não selecionada");
 
-      const { error } = await supabase
-        .from("chat_conversation_pins" as any)
-        .delete()
-        .eq("conversation_id", conversationId)
-        .eq("user_id", user.id);
+      removeLocalPin(activeCompanyId, user.id, conversationId);
 
-      if (error) throw error;
+      try {
+        const { error } = await supabase
+          .from("chat_conversation_pins" as any)
+          .delete()
+          .eq("conversation_id", conversationId)
+          .eq("user_id", user.id);
+        if (error) console.warn("DB unpin error, fallback to local state:", error);
+      } catch (err) {
+        console.warn("DB unpin exception, fallback to local state:", err);
+      }
     },
     onSuccess: () => {
       toast.success("Conversa desafixada.");
@@ -105,12 +160,16 @@ export function useConversationActions() {
     },
   });
 
-  // 5. Archive Conversation
+  // 5. Archive Conversation (with multi-tier schema fallback)
   const archiveMutation = useMutation({
     mutationFn: async (conversationId: string) => {
-      if (!user) throw new Error("Usuário não autenticado");
+      if (!user || !activeCompanyId) throw new Error("Usuário ou empresa não selecionada");
 
-      const { error } = await supabase
+      // Save to local storage state for instant resilience
+      saveLocalArchived(activeCompanyId, conversationId);
+
+      // Tier 1: Try updating with all columns
+      let res = await supabase
         .from("chat_conversations")
         .update({
           is_archived: true,
@@ -119,7 +178,17 @@ export function useConversationActions() {
         } as any)
         .eq("id", conversationId);
 
-      if (error) throw error;
+      if (res.error) {
+        // Tier 2: Try minimal update (is_archived only)
+        const res2 = await supabase
+          .from("chat_conversations")
+          .update({ is_archived: true } as any)
+          .eq("id", conversationId);
+
+        if (res2.error) {
+          console.warn("DB archive column error, fallback to local storage state:", res2.error);
+        }
+      }
     },
     onSuccess: () => {
       toast.success("Conversa arquivada.");
@@ -131,10 +200,15 @@ export function useConversationActions() {
     },
   });
 
-  // 6. Unarchive Conversation
+  // 6. Unarchive Conversation (with multi-tier schema fallback)
   const unarchiveMutation = useMutation({
     mutationFn: async (conversationId: string) => {
-      const { error } = await supabase
+      if (!activeCompanyId) return;
+
+      removeLocalArchived(activeCompanyId, conversationId);
+
+      // Tier 1: Try full update
+      let res = await supabase
         .from("chat_conversations")
         .update({
           is_archived: false,
@@ -143,7 +217,17 @@ export function useConversationActions() {
         } as any)
         .eq("id", conversationId);
 
-      if (error) throw error;
+      if (res.error) {
+        // Tier 2: Try minimal update
+        const res2 = await supabase
+          .from("chat_conversations")
+          .update({ is_archived: false } as any)
+          .eq("id", conversationId);
+
+        if (res2.error) {
+          console.warn("DB unarchive column error, fallback to local storage state:", res2.error);
+        }
+      }
     },
     onSuccess: () => {
       toast.success("Conversa desarquivada.");
