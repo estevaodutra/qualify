@@ -2158,7 +2158,7 @@ export function UnifiedSequenceBuilder({
                                 {isCondition
                                   ? (getConditionDefinition(node.config.conditionType as string)?.label || (node.config.label as string) || "Condição")
                                   : (node.nodeType === "action" || node.nodeType === "tag_add" || node.nodeType === "tag_remove" || node.nodeType === "deal_move")
-                                  ? (getActionDefinition(node.config.actionType as string)?.label || (node.config.label as string) || nodeInfo.label)
+                                  ? (getActionDefinition(node.config.actionType as string)?.label || (node.config.label as string) || "Ações")
                                   : ((node.config.label as string) || nodeInfo.label)}
                               </p>
                               <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">

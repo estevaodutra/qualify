@@ -55,7 +55,7 @@ export const NODE_DEFINITIONS: NodeBlockDefinition[] = [
   { blockType: "condition", label: "Condição", icon: GitBranch, color: "bg-purple-500" },
   { blockType: "randomizer", label: "Randomizador", icon: Shuffle, color: "bg-fuchsia-500" },
   {
-    blockType: "action", label: "Ação", icon: Tag, color: "bg-orange-600",
+    blockType: "action", label: "Ações", icon: Tag, color: "bg-orange-600",
     subTypes: [
       { subType: "tag_add", label: "Adicionar Tag", icon: Tag, color: "bg-orange-600" },
       { subType: "tag_remove", label: "Remover Tag", icon: Tag, color: "bg-rose-600" },
@@ -166,7 +166,7 @@ export function getDefaultConfigForSubType(blockType: string, subType: string): 
 export function getDefaultConfigForBlock(blockType: string): Record<string, unknown> {
   switch (blockType) {
     case "content": return { contentType: "message", ...getDefaultConfigForSubType("content", "message") };
-    case "action": return { actionType: "tag_add", ...getDefaultConfigForSubType("action", "tag_add") };
+    case "action": return {};
     case "delay": return { delayMs: 300000, value: 5, unit: "minutes" };
     case "condition": return { field: "member_count", operator: "greater_than", value: 0 };
     case "group_management": return {
