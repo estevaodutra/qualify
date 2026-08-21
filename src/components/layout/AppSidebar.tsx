@@ -124,20 +124,14 @@ export function AppSidebar() {
       {/* 1. HEAD (SidebarHeader): Logo + Organization Switcher */}
       <SidebarHeader className={cn("py-6 space-y-4 shrink-0", isCollapsed ? "px-2" : "px-5")}>
         {/* Logo */}
-        <div className={cn("flex items-center", isCollapsed ? "justify-center" : "gap-3.5")}>
+        <div className={cn("flex items-center", isCollapsed ? "justify-center" : "px-1")}>
           <div className="flex items-center justify-center shrink-0">
             <img
               src="/logo-fundo-transparente-branco.png"
               alt="Qualify Logo"
-              className={cn("transition-all duration-300", isCollapsed ? "h-8 w-8" : "h-10 w-auto")}
+              className={cn("transition-all duration-300", isCollapsed ? "h-8 w-8" : "h-9 w-auto")}
             />
           </div>
-          {!isCollapsed && (
-            <div className="flex flex-col">
-              <span className="text-lg font-black tracking-tighter text-white uppercase leading-none">Qualify</span>
-              <span className="text-[10px] font-black text-primary tracking-[0.2em] uppercase mt-1">Intelligence</span>
-            </div>
-          )}
         </div>
 
         {/* Organization Switcher */}
