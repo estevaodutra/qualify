@@ -32,7 +32,7 @@ interface CustomFieldMetadata {
   is_visible: boolean;
 }
 
-export default function LeadContextPanel({ conversation, stages }: LeadContextPanelProps) {
+export default function LeadContextPanel({ conversation, stages, onClose }: LeadContextPanelProps) {
   const { lead } = conversation;
   const { toast } = useToast();
   const queryClient = useQueryClient();
