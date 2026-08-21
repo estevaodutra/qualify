@@ -82,19 +82,6 @@ export function AppHeader() {
         {/* Left */}
         <div className="flex items-center gap-4 flex-1">
           <SidebarTrigger className="h-9 w-9 shrink-0 rounded-xl text-muted-foreground hover:bg-accent hover:text-foreground transition-colors" />
-
-          <div className="relative group hidden md:flex items-center w-72">
-            <Search className="absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/50 group-focus-within:text-primary transition-colors duration-200 pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Pesquisar..."
-              className="h-9 w-full rounded-xl border border-border/60 bg-muted/40
-                         pl-10 pr-4 text-[13px] font-medium text-foreground
-                         placeholder:text-muted-foreground/40
-                         focus:bg-background focus:border-primary/40 focus:ring-2 focus:ring-primary/10
-                         outline-none transition-all duration-200"
-            />
-          </div>
         </div>
 
         {/* Right */}
