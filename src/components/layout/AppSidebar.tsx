@@ -76,7 +76,7 @@ export function AppSidebar() {
 
   const [appsOpen, setAppsOpen] = useState(() => {
     const saved = localStorage.getItem("sidebar_apps_open");
-    return saved === null ? true : saved === "true";
+    return saved === null ? false : saved === "true";
   });
 
   useEffect(() => {
