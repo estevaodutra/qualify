@@ -4,14 +4,16 @@ import { DndContext, DragEndEvent, PointerSensor, closestCenter, useSensor, useS
 import { SortableContext, horizontalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
-import { Deal, Pipeline, PipelineGroup } from "@/types/crm.types";
+import { Deal, Pipeline, PipelineGroup, PipelineStage } from "@/types/crm.types";
 import { DealDrawer } from "@/components/crm/deals/DealDrawer";
 import { LeadDrawer } from "@/components/crm/leads/LeadDrawer";
 import { PipelineSidebar } from "@/components/crm/pipelines/PipelineSidebar";
 import { PipelineHeader } from "@/components/crm/pipelines/PipelineHeader";
 import { PipelineStageColumn } from "@/components/crm/pipelines/PipelineStageColumn";
+import { CreateStageDialog } from "@/components/crm/pipelines/CreateStageDialog";
 import { EditStageDialog } from "@/components/crm/pipelines/EditStageDialog";
 import { EditPipelineDialog } from "@/components/crm/pipelines/EditPipelineDialog";
+import { toast } from "sonner";
 
 export default function Pipelines() {
   const { activeCompany } = useCompany();
@@ -25,6 +27,7 @@ export default function Pipelines() {
   const [dealDrawerOpen, setDealDrawerOpen] = useState(false);
   const [leadDrawerOpen, setLeadDrawerOpen] = useState(false);
   
+  const [createStageOpen, setCreateStageOpen] = useState(false);
   const [editStageOpen, setEditStageOpen] = useState(false);
   const [selectedStageToEdit, setSelectedStageToEdit] = useState<any>(null);
   
@@ -128,7 +131,7 @@ export default function Pipelines() {
     return [...activePipeline.stages].sort((a, b) => a.order_index - b.order_index);
   }, [activePipeline]);
 
-  const [orderedStages, setOrderedStages] = useState(stages);
+  const [orderedStages, setOrderedStages] = useState<PipelineStage[]>(stages);
 
   useEffect(() => {
     setOrderedStages(stages);
@@ -147,8 +150,6 @@ export default function Pipelines() {
       const updates = newStages.map((stage, index) => ({
         id: stage.id,
         order_index: index,
-        // Since we are updating multiple rows, we can do it via a loop or RPC.
-        // For simplicity, we'll do individual updates, or you could do bulk update.
       }));
       
       for (const update of updates) {
@@ -157,6 +158,72 @@ export default function Pipelines() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["pipeline", activePipelineId] });
+    }
+  });
+
+  // Move deal to new stage mutation
+  const moveDealMutation = useMutation({
+    mutationFn: async ({ dealId, targetStageId }: { dealId: string; targetStageId: string }) => {
+      const targetStage = stages.find(s => s.id === targetStageId);
+      const newStatus = targetStage?.stage_type === 'won' ? 'won' : targetStage?.stage_type === 'lost' ? 'lost' : 'open';
+
+      const { error } = await supabase
+        .from('deals')
+        .update({
+          stage_id: targetStageId,
+          status: newStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', dealId);
+
+      if (error) throw error;
+      return { dealId, targetStageId, targetStageName: targetStage?.name };
+    },
+    onMutate: async ({ dealId, targetStageId }) => {
+      await queryClient.cancelQueries({ queryKey: ['deals', activePipelineId] });
+      const previousDeals = queryClient.getQueryData(['deals', activePipelineId]);
+
+      queryClient.setQueryData(['deals', activePipelineId], (old: any[]) => {
+        if (!old) return [];
+        return old.map(d => d.id === dealId ? { ...d, stage_id: targetStageId } : d);
+      });
+
+      return { previousDeals };
+    },
+    onError: (err: any, _vars, context) => {
+      if (context?.previousDeals) {
+        queryClient.setQueryData(['deals', activePipelineId], context.previousDeals);
+      }
+      toast.error(`Erro ao mover negócio: ${err.message}`);
+    },
+    onSuccess: (data) => {
+      toast.success(`Negócio movido para "${data.targetStageName || "nova etapa"}"!`);
+      queryClient.invalidateQueries({ queryKey: ['deals', activePipelineId] });
+      queryClient.invalidateQueries({ queryKey: ['lead-deals'] });
+    },
+  });
+
+  // Delete stage mutation
+  const deleteStageMutation = useMutation({
+    mutationFn: async (stage: PipelineStage) => {
+      const stageDeals = (deals || []).filter(d => d.stage_id === stage.id);
+      if (stageDeals.length > 0) {
+        throw new Error(`Esta etapa possui ${stageDeals.length} negócio(s). Mova ou exclua os negócios antes de excluir a etapa.`);
+      }
+
+      const { error } = await supabase
+        .from('pipeline_stages')
+        .delete()
+        .eq('id', stage.id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Etapa excluída com sucesso!");
+      queryClient.invalidateQueries({ queryKey: ['pipeline', activePipelineId] });
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Erro ao excluir etapa");
     }
   });
 
@@ -179,7 +246,6 @@ export default function Pipelines() {
     stages.forEach(s => acc[s.id] = []);
     if (deals) {
       deals.forEach(deal => {
-        // Simple search filter
         if (search) {
           const s = search.toLowerCase();
           const matchTitle = deal.title?.toLowerCase().includes(s);
@@ -192,25 +258,16 @@ export default function Pipelines() {
         }
       });
     }
-    // Sort deals by position
     Object.keys(acc).forEach(key => {
       acc[key].sort((a, b) => (a.position || 0) - (b.position || 0));
     });
     return acc;
-  }, [deals, orderedStages, search]);
+  }, [deals, stages, search]);
 
   const handleOpenDeal = (deal: any) => {
     setSelectedDeal(deal as Deal);
     setSelectedLead(deal.lead || null);
     setDealDrawerOpen(true);
-  };
-
-  const handleOpenLead = (leadId: string) => {
-    const deal = deals?.find(d => d.lead_id === leadId);
-    if (deal?.lead) {
-      setSelectedLead(deal.lead);
-      setLeadDrawerOpen(true);
-    }
   };
 
   return (
@@ -252,6 +309,10 @@ export default function Pipelines() {
                           setSelectedStageToEdit(s);
                           setEditStageOpen(true);
                         }}
+                        onDeleteStage={(s) => deleteStageMutation.mutate(s)}
+                        onDropDeal={(dealId, targetStageId) => {
+                          moveDealMutation.mutate({ dealId, targetStageId });
+                        }}
                       />
                     ))}
                   </SortableContext>
@@ -260,12 +321,22 @@ export default function Pipelines() {
                 {orderedStages.length === 0 && (
                   <div className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-border rounded-xl text-center p-8 space-y-4 text-muted-foreground max-w-md mx-auto mt-20">
                     <p>Esta pipeline ainda não possui etapas.</p>
-                    <button className="text-primary font-medium hover:underline">Adicionar Primeira Etapa</button>
+                    <button 
+                      type="button"
+                      onClick={() => setCreateStageOpen(true)}
+                      className="text-primary font-medium hover:underline"
+                    >
+                      Adicionar Primeira Etapa
+                    </button>
                   </div>
                 )}
                 
                 {orderedStages.length > 0 && (
-                  <button className="flex-shrink-0 w-[300px] h-[48px] rounded-xl border-2 border-dashed border-border/60 hover:border-primary/50 hover:bg-primary/5 text-muted-foreground flex items-center justify-center text-sm font-medium transition-colors">
+                  <button 
+                    type="button"
+                    onClick={() => setCreateStageOpen(true)}
+                    className="flex-shrink-0 w-[300px] h-[48px] rounded-xl border-2 border-dashed border-border/60 hover:border-primary/50 hover:bg-primary/5 text-muted-foreground flex items-center justify-center text-sm font-medium transition-colors cursor-pointer"
+                  >
                     + Nova Etapa
                   </button>
                 )}
@@ -297,6 +368,13 @@ export default function Pipelines() {
         open={leadDrawerOpen} 
         onOpenChange={setLeadDrawerOpen}
         leadId={selectedLead?.id}
+      />
+
+      <CreateStageDialog
+        open={createStageOpen}
+        onOpenChange={setCreateStageOpen}
+        pipelineId={activePipelineId}
+        currentStagesCount={orderedStages.length}
       />
       
       <EditStageDialog
