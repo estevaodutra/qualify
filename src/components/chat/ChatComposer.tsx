@@ -35,7 +35,7 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, ext
   const [isInternal, setIsInternal] = useState(false);
 
   // Quick Replies Hook
-  const { quickReplies, incrementUsage } = useQuickReplies();
+  const { quickReplies = [], groups = [], incrementUsage } = useQuickReplies();
   const [pendingQuickReplyId, setPendingQuickReplyId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -372,17 +372,17 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, ext
   const handleTextChange = (val: string) => {
     setText(val);
 
-    const match = val.match(/\/([\w\-]*)$/);
+    const match = val.match(/\/([^\s]*)$/);
     if (match && !isInternal) {
       const query = match[1].toLowerCase();
       setTemplateSearch(query);
 
       // Match multimedia Quick Replies
       const activeGroupsMap: Record<string, boolean> = {};
-      groups.forEach(g => { activeGroupsMap[g.id] = g.active !== false; });
+      (groups || []).forEach(g => { activeGroupsMap[g.id] = g.active !== false; });
 
-      const matchedQuickReplies = quickReplies
-        .filter(r => (r.active !== false) && (!r.group_id || activeGroupsMap[r.group_id] !== false) && (r.shortcut.toLowerCase().includes(query) || r.name.toLowerCase().includes(query)))
+      const matchedQuickReplies = (quickReplies || [])
+        .filter(r => (r.active !== false) && (!r.group_id || activeGroupsMap[r.group_id] !== false) && (!query || (r.shortcut && r.shortcut.toLowerCase().includes(query)) || (r.name && r.name.toLowerCase().includes(query))))
         .map(r => {
           const payload = r.content_json?.content as any;
           let bodyPreview = "";
@@ -392,7 +392,7 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, ext
           return {
             type: "quick_reply" as const,
             id: r.id,
-            shortcut: r.shortcut,
+            shortcut: r.shortcut || r.name,
             title: r.name,
             body: bodyPreview,
             data: r,
@@ -400,28 +400,28 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, ext
         });
 
       // Match legacy templates
-      const matchedTemplates = templates
+      const matchedTemplates = (templates || [])
         .filter(
-          (t) => t.shortcut.toLowerCase().includes(query) || t.title.toLowerCase().includes(query)
+          (t) => !query || (t.shortcut && t.shortcut.toLowerCase().includes(query)) || (t.title && t.title.toLowerCase().includes(query))
         )
         .map((t) => ({
           type: "template" as const,
           id: t.id,
-          shortcut: t.shortcut,
+          shortcut: t.shortcut || t.title,
           title: t.title,
           body: t.body,
           data: t
         }));
 
       // Match Workflows
-      const matchedWorkflows = workflows
+      const matchedWorkflows = (workflows || [])
         .filter(
-          (w) => w.name.toLowerCase().includes(query) || (w.description && w.description.toLowerCase().includes(query))
+          (w) => !query || (w.name && w.name.toLowerCase().includes(query)) || (w.description && w.description.toLowerCase().includes(query))
         )
         .map((w) => ({
           type: "workflow" as const,
           id: w.id,
-          shortcut: `workflow:${w.name.toLowerCase().replace(/\s+/g, "-")}`,
+          shortcut: `workflow:${(w.name || "").toLowerCase().replace(/\s+/g, "-")}`,
           title: w.name,
           body: w.description || "Disparar este workflow para o lead atual",
           data: w
