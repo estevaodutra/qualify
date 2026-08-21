@@ -41,7 +41,7 @@ export default function LeadPipelineSummary({
   } | null>(null);
 
   // Fetch Deals for this lead
-  const { data: deals = [], isLoading } = useQuery<DealWithPipeline[]>({
+  const { data: deals = [], isLoading, refetch } = useQuery<DealWithPipeline[]>({
     queryKey: ["lead-deals", activeCompanyId, leadId],
     queryFn: async () => {
       if (!activeCompanyId || !leadId) return [];
@@ -68,7 +68,8 @@ export default function LeadPipelineSummary({
       return (data || []) as unknown as DealWithPipeline[];
     },
     enabled: !!activeCompanyId && !!leadId,
-    staleTime: 30000,
+    staleTime: 0,
+    refetchInterval: 2000,
   });
 
   // Realtime subscription for deals
@@ -83,13 +84,10 @@ export default function LeadPipelineSummary({
           event: "*",
           schema: "public",
           table: "deals",
-          filter: `company_id=eq.${activeCompanyId}`,
         },
-        (payload) => {
-          const newDeal = payload.new as Deal;
-          if (newDeal && newDeal.lead_id === leadId) {
-            queryClient.invalidateQueries({ queryKey: ["lead-deals", activeCompanyId, leadId] });
-          }
+        () => {
+          refetch();
+          queryClient.invalidateQueries({ queryKey: ["lead-deals"] });
         }
       )
       .subscribe();
@@ -97,7 +95,7 @@ export default function LeadPipelineSummary({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [activeCompanyId, leadId, queryClient]);
+  }, [activeCompanyId, leadId, refetch, queryClient]);
 
   // Move deal stage mutation with optimistic update
   const moveDealMutation = useMutation({
