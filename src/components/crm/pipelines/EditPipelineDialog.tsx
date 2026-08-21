@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Pipeline, PipelineGroup } from "@/types/crm.types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CreatePipelineGroupDialog } from "./CreatePipelineGroupDialog";
 
 interface EditPipelineDialogProps {
   open: boolean;
@@ -29,6 +30,7 @@ export function EditPipelineDialog({ open, onOpenChange, pipeline }: EditPipelin
   const [description, setDescription] = useState("");
   const [selectedGroupId, setSelectedGroupId] = useState<string>("unassigned");
   const [color, setColor] = useState(PRESET_COLORS[0]);
+  const [createGroupOpen, setCreateGroupOpen] = useState(false);
 
   useEffect(() => {
     if (pipeline && open) {
@@ -113,7 +115,16 @@ export function EditPipelineDialog({ open, onOpenChange, pipeline }: EditPipelin
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="edit-pipe-group">Grupo</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="edit-pipe-group">Grupo</Label>
+              <button
+                type="button"
+                onClick={() => setCreateGroupOpen(true)}
+                className="text-xs font-semibold text-primary hover:underline"
+              >
+                + Criar novo grupo
+              </button>
+            </div>
             <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
               <SelectTrigger id="edit-pipe-group">
                 <SelectValue placeholder="Selecione um grupo" />
@@ -163,6 +174,12 @@ export function EditPipelineDialog({ open, onOpenChange, pipeline }: EditPipelin
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <CreatePipelineGroupDialog
+        open={createGroupOpen}
+        onOpenChange={setCreateGroupOpen}
+        onSuccess={(group) => setSelectedGroupId(group.id)}
+      />
     </Dialog>
   );
 }

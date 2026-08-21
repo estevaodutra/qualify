@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { Pipeline, PipelineGroup } from "@/types/crm.types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { CreatePipelineGroupDialog } from "./CreatePipelineGroupDialog";
 
 interface CreatePipelineDialogProps {
   open: boolean;
@@ -32,6 +33,7 @@ export function CreatePipelineDialog({ open, onOpenChange, groupId, onSuccess }:
   const [selectedGroupId, setSelectedGroupId] = useState<string>(groupId || "unassigned");
   const [color, setColor] = useState(PRESET_COLORS[0]);
   const [useTemplate, setUseTemplate] = useState(true);
+  const [createGroupOpen, setCreateGroupOpen] = useState(false);
 
   // Fetch groups to populate the dropdown
   const { data: groups } = useQuery({
@@ -128,7 +130,16 @@ export function CreatePipelineDialog({ open, onOpenChange, groupId, onSuccess }:
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="pipe-group">Grupo</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="pipe-group">Grupo</Label>
+              <button
+                type="button"
+                onClick={() => setCreateGroupOpen(true)}
+                className="text-xs font-semibold text-primary hover:underline"
+              >
+                + Criar novo grupo
+              </button>
+            </div>
             <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
               <SelectTrigger id="pipe-group">
                 <SelectValue placeholder="Selecione um grupo" />
@@ -190,6 +201,12 @@ export function CreatePipelineDialog({ open, onOpenChange, groupId, onSuccess }:
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <CreatePipelineGroupDialog
+        open={createGroupOpen}
+        onOpenChange={setCreateGroupOpen}
+        onSuccess={(group) => setSelectedGroupId(group.id)}
+      />
     </Dialog>
   );
 }
