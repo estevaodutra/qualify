@@ -2106,14 +2106,41 @@ Deno.serve(async (req) => {
             }
           }
 
-          const { matched, branch } = await evaluateExtensibleCondition(
-            node.config,
-            leadData,
-            supabase,
-            companyId
-          );
+          const rules = (Array.isArray(node.config.rules) && node.config.rules.length > 0)
+            ? (node.config.rules as any[])
+            : node.config.conditionType
+            ? [{ id: "yes", category: node.config.category, conditionType: node.config.conditionType, parameters: node.config.parameters }]
+            : [];
 
-          console.log(`[ExecuteMessage] Extensible condition node ${node.id} (${node.config.conditionType || 'legacy'}) evaluated as: ${matched} (${branch} branch)`);
+          let matched = false;
+          let branch = "fallback";
+
+          if (rules.length > 0) {
+            for (const rule of rules) {
+              const ruleResult = await evaluateExtensibleCondition(
+                { conditionType: rule.conditionType, parameters: rule.parameters },
+                leadData,
+                supabase,
+                companyId
+              );
+              if (ruleResult.matched) {
+                matched = true;
+                branch = rule.id || "yes";
+                break;
+              }
+            }
+          } else {
+            const singleResult = await evaluateExtensibleCondition(
+              node.config,
+              leadData,
+              supabase,
+              companyId
+            );
+            matched = singleResult.matched;
+            branch = singleResult.branch;
+          }
+
+          console.log(`[ExecuteMessage] Extensible condition node ${node.id} evaluated as: ${matched} (${branch} branch)`);
 
           await logNodeExecution(supabase, {
             executionId: workflowExecutionId,
@@ -2131,7 +2158,10 @@ Deno.serve(async (req) => {
             },
           });
 
-          const matchConn = connections.find(c => c.source_node_id === node.id && c.condition_path === branch);
+          const matchConn = connections.find(c =>
+            c.source_node_id === node.id &&
+            (c.condition_path === branch || (branch === "fallback" && (c.condition_path === "no" || c.condition_path === "not_found" || c.condition_path === "not_matched" || c.condition_path === "fallback")))
+          );
           currentNodeId = matchConn ? matchConn.target_node_id : null;
           nodesProcessed++;
           continue;

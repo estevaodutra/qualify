@@ -2473,52 +2473,64 @@ export function UnifiedNodeConfigPanel({
             );
           })()}
 
-          {/* CONDITION - Novo Motor Extensível de Condições */}
+          {/* CONDITION - Novo Motor Extensível de Condições Múltiplas */}
           {node.nodeType === "condition" && (() => {
-            const conditionType = currentConfig.conditionType as string | undefined;
-            const activeDef = getConditionDefinition(conditionType);
+            const rules = (Array.isArray(currentConfig.rules) && currentConfig.rules.length > 0)
+              ? (currentConfig.rules as any[])
+              : currentConfig.conditionType
+              ? [{
+                  id: "yes",
+                  category: (currentConfig.category as string) || "lead",
+                  conditionType: currentConfig.conditionType as string,
+                  parameters: (currentConfig.parameters as Record<string, unknown>) || {},
+                }]
+              : [];
+
+            const updateRuleParameters = (ruleId: string, newParams: Record<string, unknown>) => {
+              const updatedRules = rules.map((r) =>
+                r.id === ruleId ? { ...r, parameters: newParams } : r
+              );
+              const first = updatedRules[0];
+              onUpdate({
+                ...currentConfig,
+                category: first?.category || currentConfig.category,
+                conditionType: first?.conditionType || currentConfig.conditionType,
+                parameters: first?.parameters || currentConfig.parameters,
+                rules: updatedRules,
+              });
+            };
+
+            const removeRule = (ruleId: string) => {
+              const filtered = rules.filter((r) => r.id !== ruleId);
+              const first = filtered[0];
+              onUpdate({
+                ...currentConfig,
+                category: first ? first.category : "",
+                conditionType: first ? first.conditionType : "",
+                parameters: first ? first.parameters : {},
+                rules: filtered,
+              });
+            };
 
             return (
               <div className="space-y-5">
-                {/* Header card for selected condition */}
-                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wider">
-                        {activeDef ? `Categoria: ${activeDef.category.toUpperCase()}` : "Condição Nenhuma"}
-                      </span>
-                      <h3 className="text-sm font-bold text-slate-800 mt-0.5">
-                        {activeDef ? activeDef.label : "Selecione uma Regra"}
-                      </h3>
-                      <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                        {activeDef ? activeDef.description : "Escolha qual verificação este bloco fará durante a execução do fluxo."}
-                      </p>
-                    </div>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setConditionModalOpen(true)}
-                      className="rounded-xl text-xs shrink-0 font-semibold border-purple-200 text-purple-700 hover:bg-purple-50"
-                    >
-                      {activeDef ? "Alterar Regra" : "Selecionar Regra"}
-                    </Button>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-800">Regras da Condição</h3>
+                    <p className="text-[11px] text-slate-500">Cada regra criará uma saída "Se esta condição for verdadeira".</p>
                   </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setConditionModalOpen(true)}
+                    className="rounded-xl text-xs shrink-0 font-semibold border-purple-200 text-purple-700 hover:bg-purple-50"
+                  >
+                    + Adicionar Condição
+                  </Button>
                 </div>
 
-                {/* Condition Specific Form */}
-                {activeDef ? (
-                  <ConditionEditors
-                    conditionDef={activeDef}
-                    config={currentConfig}
-                    onChangeConfig={(newConfig) => {
-                      onUpdate(newConfig);
-                    }}
-                    activeCompanyId={activeCompanyId}
-                    customFieldsMetadata={customFieldsMetadata}
-                  />
-                ) : (
+                {rules.length === 0 ? (
                   <div className="text-center py-8 px-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/30">
                     <p className="text-xs font-medium text-slate-600">Nenhuma condição selecionada</p>
                     <p className="text-[11px] text-slate-400 mt-1 mb-4">
@@ -2532,6 +2544,48 @@ export function UnifiedNodeConfigPanel({
                       Abrir Catálogo de Condições
                     </Button>
                   </div>
+                ) : (
+                  <div className="space-y-4">
+                    {rules.map((rule, idx) => {
+                      const activeDef = getConditionDefinition(rule.conditionType);
+                      return (
+                        <div key={rule.id || idx} className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 shadow-sm relative">
+                          <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2">
+                            <div>
+                              <span className="text-[9px] font-bold text-purple-600 uppercase tracking-wider">
+                                {activeDef ? `Regra #${idx + 1} — ${activeDef.category.toUpperCase()}` : `Regra #${idx + 1}`}
+                              </span>
+                              <h4 className="text-xs font-bold text-slate-800">
+                                {activeDef ? activeDef.label : "Condição"}
+                              </h4>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeRule(rule.id)}
+                              className="h-6 w-6 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
+                              title="Remover regra"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+
+                          {activeDef && (
+                            <ConditionEditors
+                              conditionDef={activeDef}
+                              config={{ parameters: rule.parameters }}
+                              onChangeConfig={(newCfg) => {
+                                updateRuleParameters(rule.id, (newCfg.parameters as Record<string, unknown>) || {});
+                              }}
+                              activeCompanyId={activeCompanyId}
+                              customFieldsMetadata={customFieldsMetadata}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
 
                 {/* Condition Selector Modal */}
@@ -2539,15 +2593,23 @@ export function UnifiedNodeConfigPanel({
                   open={conditionModalOpen}
                   onOpenChange={setConditionModalOpen}
                   onSelectCondition={(selectedCond) => {
-                    const updated = {
-                      ...currentConfig,
+                    const newRule = {
+                      id: "rule_" + crypto.randomUUID().substring(0, 8),
                       category: selectedCond.category,
                       conditionType: selectedCond.type,
                       parameters: {
                         ...(selectedCond.defaultParameters || {}),
                       },
                     };
-                    onUpdate(updated);
+                    const updatedRules = [...rules, newRule];
+                    const first = updatedRules[0];
+                    onUpdate({
+                      ...currentConfig,
+                      category: first.category,
+                      conditionType: first.conditionType,
+                      parameters: first.parameters,
+                      rules: updatedRules,
+                    });
                   }}
                 />
               </div>

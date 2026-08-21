@@ -173,12 +173,26 @@ export function getConditionDefinition(conditionType?: string): ConditionDefinit
 }
 
 export function getConditionOutputs(nodeConfig: Record<string, unknown>): ConditionOutput[] {
-  const conditionType = nodeConfig?.conditionType as string;
-  const def = getConditionDefinition(conditionType);
-  if (def) {
-    return def.outputs;
+  const rules = (Array.isArray(nodeConfig?.rules) && nodeConfig.rules.length > 0)
+    ? (nodeConfig.rules as Array<{ id: string; category: string; conditionType: string }>)
+    : nodeConfig?.conditionType
+    ? [{ id: 'yes', category: (nodeConfig.category as string) || 'lead', conditionType: nodeConfig.conditionType as string }]
+    : [];
+
+  if (rules.length > 0) {
+    const list: ConditionOutput[] = rules.map((r, idx) => ({
+      id: r.id || `rule_${idx}`,
+      label: 'Se esta condição for verdadeira',
+      color: 'purple',
+    }));
+    list.push({
+      id: 'fallback',
+      label: 'Quando não atender a nenhuma condição',
+      color: 'destructive',
+    });
+    return list;
   }
-  // Fallback for legacy condition nodes
+
   return [
     { id: 'yes', label: 'Sim', color: 'emerald' },
     { id: 'no', label: 'Não', color: 'destructive' },

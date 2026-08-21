@@ -1205,38 +1205,131 @@ export function UnifiedSequenceBuilder({
                           </div>
                         </>
                       ) : isCondition ? (
-                        <>
-                          {getConditionOutputs(node.config).map((out, i) => {
-                            const portY = 28 + i * 30;
-                            const isEmerald = out.color === "emerald";
-                            const isDestructive = out.color === "destructive";
-                            const borderColor = isEmerald ? "border-emerald-500" : isDestructive ? "border-destructive" : "border-purple-500";
-                            const bgColor = isEmerald ? "bg-emerald-500" : isDestructive ? "bg-destructive" : "bg-purple-500";
-                            const textColor = isEmerald ? "text-emerald-600" : isDestructive ? "text-destructive" : "text-purple-600";
+                        <div className="flex flex-col w-full text-left h-full">
+                          {/* Header / Title */}
+                          <div className="flex items-center gap-2 border-b border-slate-100 pb-2 mb-3">
+                            <div className="p-1.5 rounded-lg text-white shrink-0 shadow-sm bg-purple-600">
+                              <Filter className="h-3.5 w-3.5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-bold text-xs text-slate-800 truncate">
+                                Condição
+                              </p>
+                              <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                Decisões do CRM
+                              </p>
+                            </div>
+                          </div>
+
+                          <p className="text-[10px] text-slate-500 mb-2 leading-relaxed font-medium">
+                            Faça filtros para seguir caminhos diferentes.
+                          </p>
+
+                          <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block mb-2">
+                            Clique para adicionar uma condição:
+                          </span>
+
+                          {/* Condition Rules List */}
+                          {(() => {
+                            const rules = (Array.isArray(node.config.rules) && node.config.rules.length > 0)
+                              ? (node.config.rules as any[])
+                              : node.config.conditionType
+                              ? [{
+                                  id: "yes",
+                                  category: (node.config.category as string) || "lead",
+                                  conditionType: node.config.conditionType as string,
+                                  parameters: (node.config.parameters as Record<string, unknown>) || {},
+                                }]
+                              : [];
 
                             return (
-                              <Fragment key={out.id}>
-                                <div
-                                  data-node-port="true"
-                                  data-node-id={node.id}
-                                  data-port-id={out.id}
-                                  onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", out.id)}
-                                  style={{ top: `${portY}px` }}
-                                  className={`absolute -right-1.5 h-3.5 w-3.5 rounded-full border-2 ${borderColor} bg-background hover:${bgColor} cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm`}
-                                  title={out.label}
+                              <div className="space-y-2 mb-2">
+                                {rules.map((rule: any, idx: number) => {
+                                  const ruleDef = getConditionDefinition(rule.conditionType);
+                                  const portId = rule.id || (idx === 0 ? "yes" : `rule_${idx}`);
+                                  const RuleIcon = ruleDef?.category === "deal" ? Briefcase : User;
+
+                                  return (
+                                    <div
+                                      key={portId}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedNodeId(node.id);
+                                        setEditingNodeId(node.id);
+                                        setNodeEditorOpen(true);
+                                      }}
+                                      className="group relative flex flex-col gap-1 p-3 border border-slate-200 hover:border-cyan-400 rounded-xl bg-white shadow-sm cursor-pointer transition-colors"
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <div className="p-1 rounded-md bg-purple-50 text-purple-600 shrink-0">
+                                          <RuleIcon className="h-3.5 w-3.5" />
+                                        </div>
+                                        <div className="text-left min-w-0 flex-1">
+                                          <p className="text-xs font-bold text-slate-800 truncate">
+                                            {ruleDef?.label || "Condição " + (idx + 1)}
+                                          </p>
+                                          <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                                            {ruleDef?.description || "Verificação de regra"}
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      {/* Handle label right below */}
+                                      <div className="flex justify-end mt-1">
+                                        <span className="text-[9px] font-bold text-cyan-600 select-none">
+                                          Se esta condição for verdadeira
+                                        </span>
+                                      </div>
+
+                                      {/* Handle output port on the right edge */}
+                                      <div
+                                        data-node-port="true"
+                                        data-node-id={node.id}
+                                        data-port-id={portId}
+                                        onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", portId)}
+                                        className="absolute -right-[19.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-cyan-500 bg-background hover:bg-cyan-500 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
+                                        title="Se esta condição for verdadeira"
+                                      >
+                                        <div className="h-1.5 w-1.5 rounded-full bg-cyan-500 hover:bg-white" />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+
+                                {/* Add condition button */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedNodeId(node.id);
+                                    setEditingNodeId(node.id);
+                                    setNodeEditorOpen(true);
+                                  }}
+                                  className="w-full border border-dashed border-cyan-300 hover:border-cyan-500 bg-cyan-50/20 hover:bg-cyan-50 text-cyan-600 rounded-xl p-2 font-semibold text-xs transition-colors flex items-center justify-center gap-1 my-2"
                                 >
-                                  <div className={`h-1.5 w-1.5 rounded-full ${bgColor}`} />
+                                  <span>+ Adicionar condição</span>
+                                </button>
+
+                                {/* Fallback output handle */}
+                                <div className="relative flex items-center justify-end w-full pt-1 pr-1">
+                                  <span className="text-[9px] font-bold text-rose-500 select-none mr-2">
+                                    Quando não atender a nenhuma condição
+                                  </span>
+                                  <div
+                                    data-node-port="true"
+                                    data-node-id={node.id}
+                                    data-port-id="fallback"
+                                    onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", "fallback")}
+                                    className="absolute -right-[19.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-rose-500 bg-background hover:bg-rose-500 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
+                                    title="Quando não atender a nenhuma condição"
+                                  >
+                                    <div className="h-1.5 w-1.5 rounded-full bg-rose-500 hover:bg-white" />
+                                  </div>
                                 </div>
-                                <span
-                                  style={{ top: `${portY - 4}px` }}
-                                  className={`absolute right-2 text-[8px] font-bold ${textColor} select-none truncate max-w-[120px]`}
-                                >
-                                  {out.label}
-                                </span>
-                              </Fragment>
+                              </div>
                             );
-                          })}
-                        </>
+                          })()}
+                        </div>
                       ) : (node.nodeType === "phone_call" || node.nodeType === "ura") ? null : isFieldOp ? (
                         <>{/* Handles moved to inline flow inside the node body to prevent overlapping */}</>
                       ) : (
