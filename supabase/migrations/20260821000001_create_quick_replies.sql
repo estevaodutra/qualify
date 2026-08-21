@@ -41,125 +41,45 @@ CREATE INDEX IF NOT EXISTS idx_quick_replies_usage ON public.quick_replies (comp
 ALTER TABLE public.quick_reply_groups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.quick_replies ENABLE ROW LEVEL SECURITY;
 
--- Helper function or direct RLS policy based on company_members
-CREATE POLICY "Users can view quick reply groups of their company"
-  ON public.quick_reply_groups FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.company_members
-      WHERE company_members.company_id = quick_reply_groups.company_id
-        AND company_members.user_id = auth.uid()
-        AND company_members.is_active = true
-    )
-    OR EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid() AND profiles.is_superadmin = true
-    )
-  );
+-- Drop old policies if existing to avoid conflicts
+DROP POLICY IF EXISTS "Users can view quick reply groups of their company" ON public.quick_reply_groups;
+DROP POLICY IF EXISTS "Users can insert quick reply groups of their company" ON public.quick_reply_groups;
+DROP POLICY IF EXISTS "Users can update quick reply groups of their company" ON public.quick_reply_groups;
+DROP POLICY IF EXISTS "Users can delete quick reply groups of their company" ON public.quick_reply_groups;
+DROP POLICY IF EXISTS "Users can manage quick reply groups" ON public.quick_reply_groups;
 
-CREATE POLICY "Users can insert quick reply groups of their company"
-  ON public.quick_reply_groups FOR INSERT
+DROP POLICY IF EXISTS "Users can view quick replies of their company" ON public.quick_replies;
+DROP POLICY IF EXISTS "Users can insert quick replies of their company" ON public.quick_replies;
+DROP POLICY IF EXISTS "Users can update quick replies of their company" ON public.quick_replies;
+DROP POLICY IF EXISTS "Users can delete quick replies of their company" ON public.quick_replies;
+DROP POLICY IF EXISTS "Users can manage quick replies" ON public.quick_replies;
+
+-- Clean policies based on company_members
+CREATE POLICY "Users can manage quick reply groups"
+  ON public.quick_reply_groups
+  FOR ALL TO authenticated
+  USING (
+    company_id IN (
+      SELECT company_id FROM public.company_members WHERE user_id = auth.uid() AND is_active = true
+    )
+  )
   WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM public.company_members
-      WHERE company_members.company_id = quick_reply_groups.company_id
-        AND company_members.user_id = auth.uid()
-        AND company_members.is_active = true
-    )
-    OR EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid() AND profiles.is_superadmin = true
+    company_id IN (
+      SELECT company_id FROM public.company_members WHERE user_id = auth.uid() AND is_active = true
     )
   );
 
-CREATE POLICY "Users can update quick reply groups of their company"
-  ON public.quick_reply_groups FOR UPDATE
+CREATE POLICY "Users can manage quick replies"
+  ON public.quick_replies
+  FOR ALL TO authenticated
   USING (
-    EXISTS (
-      SELECT 1 FROM public.company_members
-      WHERE company_members.company_id = quick_reply_groups.company_id
-        AND company_members.user_id = auth.uid()
-        AND company_members.is_active = true
+    company_id IN (
+      SELECT company_id FROM public.company_members WHERE user_id = auth.uid() AND is_active = true
     )
-    OR EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid() AND profiles.is_superadmin = true
-    )
-  );
-
-CREATE POLICY "Users can delete quick reply groups of their company"
-  ON public.quick_reply_groups FOR DELETE
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.company_members
-      WHERE company_members.company_id = quick_reply_groups.company_id
-        AND company_members.user_id = auth.uid()
-        AND company_members.is_active = true
-    )
-    OR EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid() AND profiles.is_superadmin = true
-    )
-  );
-
--- RLS policies for quick_replies
-CREATE POLICY "Users can view quick replies of their company"
-  ON public.quick_replies FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.company_members
-      WHERE company_members.company_id = quick_replies.company_id
-        AND company_members.user_id = auth.uid()
-        AND company_members.is_active = true
-    )
-    OR EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid() AND profiles.is_superadmin = true
-    )
-  );
-
-CREATE POLICY "Users can insert quick replies of their company"
-  ON public.quick_replies FOR INSERT
+  )
   WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM public.company_members
-      WHERE company_members.company_id = quick_replies.company_id
-        AND company_members.user_id = auth.uid()
-        AND company_members.is_active = true
-    )
-    OR EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid() AND profiles.is_superadmin = true
-    )
-  );
-
-CREATE POLICY "Users can update quick replies of their company"
-  ON public.quick_replies FOR UPDATE
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.company_members
-      WHERE company_members.company_id = quick_replies.company_id
-        AND company_members.user_id = auth.uid()
-        AND company_members.is_active = true
-    )
-    OR EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid() AND profiles.is_superadmin = true
-    )
-  );
-
-CREATE POLICY "Users can delete quick replies of their company"
-  ON public.quick_replies FOR DELETE
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.company_members
-      WHERE company_members.company_id = quick_replies.company_id
-        AND company_members.user_id = auth.uid()
-        AND company_members.is_active = true
-    )
-    OR EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid() AND profiles.is_superadmin = true
+    company_id IN (
+      SELECT company_id FROM public.company_members WHERE user_id = auth.uid() AND is_active = true
     )
   );
 
