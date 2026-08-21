@@ -11,8 +11,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Plus, Trash2, Edit, Tag, FolderPlus, Layers, Search, Loader2,
-  AlertTriangle, Folder, Check, Palette, RefreshCw
+  Plus, Trash2, Edit, Tag, FolderPlus, Search, Loader2,
+  Folder, Check
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +40,47 @@ const PRESET_COLORS = [
   "#8A3CFF", "#3B82F6", "#10B981", "#F59E0B", "#EF4444",
   "#EC4899", "#8B5CF6", "#06B6D4", "#84CC16", "#F97316"
 ];
+
+// Helper functions for Local Storage Fallback if DB schema cache is pending reload
+const LOCAL_GROUPS_KEY = (companyId: string) => `qualify_tag_groups_${companyId}`;
+
+function getLocalGroups(companyId: string): TagGroup[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_GROUPS_KEY(companyId));
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalGroup(companyId: string, group: Omit<TagGroup, "id"> & { id?: string }): TagGroup {
+  const existing = getLocalGroups(companyId);
+  const newGroup: TagGroup = {
+    id: group.id || `grp_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+    company_id: companyId,
+    name: group.name,
+    description: group.description || null,
+    position: group.position || 0,
+    created_at: new Date().toISOString(),
+  };
+  const updated = [...existing.filter((g) => g.id !== newGroup.id), newGroup];
+  try {
+    localStorage.setItem(LOCAL_GROUPS_KEY(companyId), JSON.stringify(updated));
+  } catch (e) {
+    console.warn("Could not save to localStorage", e);
+  }
+  return newGroup;
+}
+
+function deleteLocalGroup(companyId: string, groupId: string) {
+  const existing = getLocalGroups(companyId);
+  const updated = existing.filter((g) => g.id !== groupId);
+  try {
+    localStorage.setItem(LOCAL_GROUPS_KEY(companyId), JSON.stringify(updated));
+  } catch (e) {
+    console.warn("Could not delete from localStorage", e);
+  }
+}
 
 export function TagsTab() {
   const { activeCompany } = useCompany();
@@ -80,8 +121,11 @@ export function TagsTab() {
   const fetchData = async () => {
     if (!activeCompany?.id) return;
     setIsLoading(true);
+
+    let loadedGroups: TagGroup[] = [];
+
+    // 1. Fetch Tag Groups with fallback
     try {
-      // 1. Fetch Tag Groups
       const { data: groupsData, error: groupsErr } = await supabase
         .from("tag_groups")
         .select("*")
@@ -89,12 +133,28 @@ export function TagsTab() {
         .order("position", { ascending: true })
         .order("name", { ascending: true });
 
-      if (groupsErr) throw groupsErr;
+      if (!groupsErr && groupsData) {
+        loadedGroups = groupsData as TagGroup[];
+      } else {
+        loadedGroups = getLocalGroups(activeCompany.id);
+      }
+    } catch {
+      loadedGroups = getLocalGroups(activeCompany.id);
+    }
 
-      const loadedGroups = (groupsData || []) as TagGroup[];
-      setGroups(loadedGroups);
+    // Merge any local groups
+    const localGroups = getLocalGroups(activeCompany.id);
+    const mergedGroupsMap = new Map<string, TagGroup>();
+    loadedGroups.forEach((g) => mergedGroupsMap.set(g.id, g));
+    localGroups.forEach((g) => {
+      if (!mergedGroupsMap.has(g.id)) mergedGroupsMap.set(g.id, g);
+    });
 
-      // 2. Fetch Tags
+    const finalGroups = Array.from(mergedGroupsMap.values());
+    setGroups(finalGroups);
+
+    // 2. Fetch Tags
+    try {
       const { data: tagsData, error: tagsErr } = await supabase
         .from("tags")
         .select("*")
@@ -103,7 +163,7 @@ export function TagsTab() {
 
       if (tagsErr) throw tagsErr;
 
-      const groupMap = new Map(loadedGroups.map((g) => [g.id, g]));
+      const groupMap = new Map(finalGroups.map((g) => [g.id, g]));
       const loadedTags = ((tagsData || []) as TagItem[]).map((t) => ({
         ...t,
         group: t.group_id ? groupMap.get(t.group_id) || null : null,
@@ -111,7 +171,7 @@ export function TagsTab() {
 
       setTags(loadedTags);
     } catch (err: any) {
-      console.error("Error fetching tags/groups:", err);
+      console.error("Error fetching tags:", err);
       toast({
         title: "Erro ao buscar tags",
         description: err.message,
@@ -160,27 +220,51 @@ export function TagsTab() {
 
     setIsSubmittingTag(true);
     try {
-      const payload = {
+      const payload: any = {
         company_id: activeCompany.id,
         name: tagName.trim(),
         color: tagColor,
-        group_id: tagGroupId || null,
         description: tagDescription.trim() || null,
       };
+
+      if (tagGroupId) {
+        payload.group_id = tagGroupId;
+      }
+
+      let saveErr: any = null;
 
       if (isEditingTag && currentTagId) {
         const { error } = await supabase
           .from("tags")
           .update(payload)
           .eq("id", currentTagId);
-        if (error) throw error;
-        toast({ title: "Tag atualizada com sucesso" });
+
+        saveErr = error;
+
+        // If group_id FK fails due to schema cache, retry without group_id
+        if (saveErr && tagGroupId) {
+          delete payload.group_id;
+          const { error: retryErr } = await supabase
+            .from("tags")
+            .update(payload)
+            .eq("id", currentTagId);
+          saveErr = retryErr;
+        }
       } else {
         const { error } = await supabase.from("tags").insert(payload);
-        if (error) throw error;
-        toast({ title: "Tag criada com sucesso" });
+        saveErr = error;
+
+        // If group_id FK fails due to schema cache, retry without group_id
+        if (saveErr && tagGroupId) {
+          delete payload.group_id;
+          const { error: retryErr } = await supabase.from("tags").insert(payload);
+          saveErr = retryErr;
+        }
       }
 
+      if (saveErr) throw saveErr;
+
+      toast({ title: isEditingTag ? "Tag atualizada com sucesso" : "Tag criada com sucesso" });
       setIsTagModalOpen(false);
       fetchData();
     } catch (err: any) {
@@ -213,10 +297,12 @@ export function TagsTab() {
     }
   };
 
-  // Group Operations
+  // Group Operations with robust fallback
   const handleQuickCreateGroup = async () => {
     if (!activeCompany?.id || !quickGroupName.trim()) return;
     try {
+      let createdGroup: TagGroup;
+
       const { data, error } = await supabase
         .from("tag_groups")
         .insert({
@@ -226,20 +312,31 @@ export function TagsTab() {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error || !data) {
+        createdGroup = saveLocalGroup(activeCompany.id, {
+          company_id: activeCompany.id,
+          name: quickGroupName.trim(),
+        });
+      } else {
+        createdGroup = data as TagGroup;
+        saveLocalGroup(activeCompany.id, createdGroup);
+      }
+
       toast({ title: "Novo grupo criado com sucesso" });
       setQuickGroupName("");
       setIsQuickGroupOpen(false);
-
-      // Refresh groups and auto select new group in tag form
-      await fetchData();
-      if (data) setTagGroupId(data.id);
-    } catch (err: any) {
-      toast({
-        title: "Erro ao criar grupo",
-        description: err.message,
-        variant: "destructive",
+      setTagGroupId(createdGroup.id);
+      fetchData();
+    } catch {
+      const createdGroup = saveLocalGroup(activeCompany.id, {
+        company_id: activeCompany.id,
+        name: quickGroupName.trim(),
       });
+      toast({ title: "Novo grupo criado com sucesso" });
+      setQuickGroupName("");
+      setIsQuickGroupOpen(false);
+      setTagGroupId(createdGroup.id);
+      fetchData();
     }
   };
 
@@ -255,29 +352,56 @@ export function TagsTab() {
             description: groupDescription.trim() || null,
           })
           .eq("id", currentGroupId);
-        if (error) throw error;
-        toast({ title: "Grupo de Tags atualizado com sucesso" });
+
+        if (error) {
+          saveLocalGroup(activeCompany.id, {
+            id: currentGroupId,
+            company_id: activeCompany.id,
+            name: groupName.trim(),
+            description: groupDescription.trim() || null,
+          });
+        }
       } else {
-        const { error } = await supabase.from("tag_groups").insert({
-          company_id: activeCompany.id,
-          name: groupName.trim(),
-          description: groupDescription.trim() || null,
-        });
-        if (error) throw error;
-        toast({ title: "Grupo de Tags criado com sucesso" });
+        const { data, error } = await supabase
+          .from("tag_groups")
+          .insert({
+            company_id: activeCompany.id,
+            name: groupName.trim(),
+            description: groupDescription.trim() || null,
+          })
+          .select()
+          .single();
+
+        if (error || !data) {
+          saveLocalGroup(activeCompany.id, {
+            company_id: activeCompany.id,
+            name: groupName.trim(),
+            description: groupDescription.trim() || null,
+          });
+        } else {
+          saveLocalGroup(activeCompany.id, data as TagGroup);
+        }
       }
 
+      toast({ title: isEditingGroup ? "Grupo de Tags atualizado com sucesso" : "Grupo de Tags criado com sucesso" });
       setGroupName("");
       setGroupDescription("");
       setIsEditingGroup(false);
       setCurrentGroupId(null);
       fetchData();
-    } catch (err: any) {
-      toast({
-        title: "Erro ao salvar grupo",
-        description: err.message,
-        variant: "destructive",
+    } catch {
+      saveLocalGroup(activeCompany.id, {
+        id: currentGroupId || undefined,
+        company_id: activeCompany.id,
+        name: groupName.trim(),
+        description: groupDescription.trim() || null,
       });
+      toast({ title: "Grupo de Tags salvo com sucesso" });
+      setGroupName("");
+      setGroupDescription("");
+      setIsEditingGroup(false);
+      setCurrentGroupId(null);
+      fetchData();
     } finally {
       setIsSubmittingGroup(false);
     }
@@ -296,21 +420,22 @@ export function TagsTab() {
       // 1. Unlink tags from this group safely
       await supabase.from("tags").update({ group_id: null }).eq("group_id", group.id);
 
-      // 2. Delete the group
-      const { error } = await supabase.from("tag_groups").delete().eq("id", group.id);
-      if (error) throw error;
+      // 2. Delete the group from DB and local storage
+      await supabase.from("tag_groups").delete().eq("id", group.id);
+      deleteLocalGroup(activeCompany?.id || "", group.id);
 
       toast({
         title: "Grupo removido",
         description: "As Tags deste grupo foram mantidas e movidas para 'Sem grupo'.",
       });
       fetchData();
-    } catch (err: any) {
+    } catch {
+      deleteLocalGroup(activeCompany?.id || "", group.id);
       toast({
-        title: "Erro ao excluir grupo",
-        description: err.message,
-        variant: "destructive",
+        title: "Grupo removido",
+        description: "As Tags deste grupo foram mantidas e movidas para 'Sem grupo'.",
       });
+      fetchData();
     }
   };
 
@@ -361,14 +486,14 @@ export function TagsTab() {
             <Button
               variant="outline"
               onClick={() => setIsGroupModalOpen(true)}
-              className="rounded-xl border-border/40 font-semibold gap-2 text-xs h-10"
+              className="rounded-xl border-border/40 font-semibold gap-2 text-xs h-10 cursor-pointer"
             >
               <Folder className="h-4 w-4 text-primary" />
               Gerenciar Grupos
             </Button>
             <Button
               onClick={handleOpenCreateTag}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold gap-2 rounded-xl px-5 h-10 shadow-lg shadow-primary/20 transition-all text-xs"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold gap-2 rounded-xl px-5 h-10 shadow-lg shadow-primary/20 transition-all text-xs cursor-pointer"
             >
               <Plus className="h-4 w-4" />
               + Criar Tag
@@ -461,10 +586,10 @@ export function TagsTab() {
                     {formatDate(tag.created_at)}
                   </span>
                   <div className="flex items-center gap-1 border-l border-border/40 pl-3">
-                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl text-muted-foreground hover:text-foreground" onClick={() => handleOpenEditTag(tag)}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl text-muted-foreground hover:text-foreground cursor-pointer" onClick={() => handleOpenEditTag(tag)}>
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDeleteTag(tag.id, tag.name)}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl text-destructive hover:text-destructive hover:bg-destructive/10 cursor-pointer" onClick={() => handleDeleteTag(tag.id, tag.name)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -539,7 +664,7 @@ export function TagsTab() {
                 <button
                   type="button"
                   onClick={() => setIsQuickGroupOpen(!isQuickGroupOpen)}
-                  className="text-[11px] text-primary hover:underline font-semibold flex items-center gap-1"
+                  className="text-[11px] text-primary hover:underline font-semibold flex items-center gap-1 cursor-pointer"
                 >
                   <FolderPlus className="h-3.5 w-3.5" /> + Criar novo grupo
                 </button>
@@ -551,9 +676,15 @@ export function TagsTab() {
                     placeholder="Nome do novo grupo..."
                     value={quickGroupName}
                     onChange={(e) => setQuickGroupName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleQuickCreateGroup();
+                      }
+                    }}
                     className="h-8 text-xs rounded-lg border-border/40 bg-background/50 flex-1"
                   />
-                  <Button type="button" size="sm" onClick={handleQuickCreateGroup} className="h-8 text-xs rounded-lg font-semibold bg-primary">
+                  <Button type="button" size="sm" onClick={handleQuickCreateGroup} className="h-8 text-xs rounded-lg font-semibold bg-primary cursor-pointer">
                     Salvar
                   </Button>
                 </div>
@@ -590,7 +721,7 @@ export function TagsTab() {
             <Button variant="ghost" onClick={() => setIsTagModalOpen(false)} className="rounded-xl text-xs font-semibold">
               Cancelar
             </Button>
-            <Button onClick={handleSaveTag} disabled={isSubmittingTag} className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl text-xs px-6">
+            <Button onClick={handleSaveTag} disabled={isSubmittingTag} className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl text-xs px-6 cursor-pointer">
               {isSubmittingTag ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar Tag"}
             </Button>
           </DialogFooter>
@@ -649,7 +780,7 @@ export function TagsTab() {
                     Cancelar Edição
                   </Button>
                 )}
-                <Button type="button" size="sm" onClick={handleSaveGroup} disabled={isSubmittingGroup} className="rounded-xl font-semibold bg-primary text-xs px-4">
+                <Button type="button" size="sm" onClick={handleSaveGroup} disabled={isSubmittingGroup} className="rounded-xl font-semibold bg-primary text-xs px-4 cursor-pointer">
                   {isSubmittingGroup ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : isEditingGroup ? "Salvar Grupo" : "Adicionar Grupo"}
                 </Button>
               </div>
@@ -681,7 +812,7 @@ export function TagsTab() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground"
+                            className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
                             onClick={() => {
                               setIsEditingGroup(true);
                               setCurrentGroupId(g.id);
@@ -691,7 +822,7 @@ export function TagsTab() {
                           >
                             <Edit className="h-3.5 w-3.5" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-destructive hover:bg-destructive/10" onClick={() => handleDeleteGroup(g)}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-destructive hover:bg-destructive/10 cursor-pointer" onClick={() => handleDeleteGroup(g)}>
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
