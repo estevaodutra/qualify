@@ -34,6 +34,7 @@ import { useLanguage } from "@/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { ImageUpload } from "@/components/settings/ImageUpload";
 import { CompanyLogsTab } from "@/components/settings/CompanyLogsTab";
 import { useLocation, useNavigate } from "react-router-dom";
 import { CustomFieldsTab } from "@/components/settings/CustomFieldsTab";
