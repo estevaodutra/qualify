@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { Search, Filter, MessageSquare, Clock, User, CheckCircle, HelpCircle, Loader2 } from "lucide-react";
+import { Search, Filter, MessageSquare, Clock, User, CheckCircle, HelpCircle, Loader2, Settings } from "lucide-react";
+import QuickRepliesManagerModal from "@/components/chat/quick-replies/QuickRepliesManagerModal";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ChatConversation, ChatFilters } from "@/hooks/useChat";
@@ -36,6 +37,7 @@ export default function InboxList({
   // Search & Filter State
   const [localSearch, setLocalSearch] = useState(filters.search || "");
   const [sortBy, setSortBy] = useState<"recent" | "waiting">("recent");
+  const [isManagerOpen, setIsManagerOpen] = useState(false);
   
   // Debounce search
   useEffect(() => {
@@ -99,9 +101,23 @@ export default function InboxList({
     <div className="w-[320px] shrink-0 border-r border-border/40 bg-card/10 flex flex-col h-full overflow-hidden">
       {/* Header Search & Sort */}
       <div className="p-4 border-b border-border/40 space-y-3 shrink-0">
-        <h2 className="text-lg font-bold tracking-tight bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
-          Caixa de Entrada
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold tracking-tight bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+            Caixa de Entrada
+          </h2>
+          <button
+            onClick={() => setIsManagerOpen(true)}
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors cursor-pointer"
+            title="Respostas Rápidas"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
+        </div>
+
+        <QuickRepliesManagerModal
+          open={isManagerOpen}
+          onOpenChange={setIsManagerOpen}
+        />
         
         {/* Search */}
         <div className="relative">
