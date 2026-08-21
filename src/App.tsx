@@ -30,9 +30,7 @@ import ProspectingCampaignLeads from "./pages/prospecting/ProspectingCampaignLea
 import GroupSequenceBuilderPage from "./pages/campaigns/GroupSequenceBuilderPage";
 import DispatchSequenceBuilderPage from "./pages/campaigns/DispatchSequenceBuilderPage";
 import WorkflowLibrary from "./pages/workflows/WorkflowLibrary";
-import WorkflowBuilderPage from "./pages/workflows/WorkflowBuilderPage";
-import PhoneNumbers from "./pages/PhoneNumbers";
-import Logs from "./pages/Logs";
+import WorkflowBuilderPage from "./pages/workflows/WorkflowBuilderPage";import Logs from "./pages/Logs";
 import Instances from "./pages/Instances";
 import Alerts from "./pages/Alerts";
 import Billing from "./pages/Billing";
@@ -113,13 +111,14 @@ const App = () => {
                       <Route path="/painel-ligacoes" element={<CallPanel />} />
                       <Route path="/leads" element={<Leads />} />
                       <Route path="/pipelines" element={<Pipelines />} />
-                      <Route path="/numbers" element={<PhoneNumbers />} />
                       <Route path="/instances" element={<Instances />} />
                       <Route path="/alerts" element={<Alerts />} />
                       <Route path="/billing" element={<Billing />} />
                       <Route path="/settings" element={<Settings />} />
                       <Route path="/settings/profile" element={<Settings />} />
                       <Route path="/settings/account" element={<Settings />} />
+                      <Route path="/settings/members" element={<Settings />} />
+                      <Route path="/settings/connections" element={<Settings />} />
                       <Route path="/settings/logs" element={<Settings />} />
                       <Route path="/settings/fields" element={<Settings />} />
 
@@ -129,7 +128,7 @@ const App = () => {
                       <Route path="/carteira/configuracoes" element={<WalletSettingsPage />} />
 
                       {/* Settings sub-routes */}
-                      <Route path="/configuracoes/membros" element={<MembersPage />} />
+                      <Route path="/configuracoes/membros" element={<Settings />} />
 
                       {/* Quiz / Funnel routes (inside AppLayout with sidebar support) */}
                       <Route path="/quiz" element={<QuizFunnelsPage />} />

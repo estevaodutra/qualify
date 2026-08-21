@@ -35,9 +35,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { ImageUpload } from "@/components/settings/ImageUpload";
-import { CompanyLogsTab } from "@/components/settings/CompanyLogsTab";
-import { useLocation, useNavigate } from "react-router-dom";
 import { CustomFieldsTab } from "@/components/settings/CustomFieldsTab";
+import { SettingsLayout } from "@/components/settings/SettingsLayout";
+import MembersPage from "@/pages/settings/MembersPage";
+import Instances from "@/pages/Instances";
 
 
 interface ApiKey {
@@ -347,32 +348,38 @@ export default function Settings() {
   };
 
   return (
-    <div className="space-y-10 pb-10">
-      <PageHeader
-        title={t("settings.title")}
-        description={t("settings.description")}
-        actions={
-          <Button className="h-10 px-6 gap-2.5 rounded-xl gradient-primary glow-primary font-['Sora'] font-semibold shadow-lg transition-all hover:opacity-90 active:scale-95" onClick={handleSaveChanges} disabled={isSaving}>
-            {isSaving ? (
-              <Loader2 className="h-4.5 w-4.5 animate-spin" />
-            ) : (
-              <Save className="h-4.5 w-4.5" />
-            )}
-            {isSaving ? t("settings.saving") : t("settings.saveChanges")}
-          </Button>
-        }
-      />
+    <SettingsLayout>
+      {location.pathname === "/settings/members" || location.pathname === "/configuracoes/membros" ? (
+        <MembersPage />
+      ) : location.pathname === "/settings/connections" ? (
+        <Instances />
+      ) : (
+        <div className="space-y-8">
+          <PageHeader
+            title={activeTab === "profile" ? "Meu Perfil" : activeTab === "security" ? "Conta e Segurança" : activeTab === "logs" ? "Logs do Sistema" : "Configurações"}
+            description={activeTab === "profile" ? "Gerencie suas informações pessoais e foto de perfil." : "Gerencie as preferências e segurança da sua organização."}
+            actions={
+              <Button className="h-10 px-6 gap-2.5 rounded-xl gradient-primary glow-primary font-['Sora'] font-semibold shadow-lg transition-all hover:opacity-90 active:scale-95" onClick={handleSaveChanges} disabled={isSaving}>
+                {isSaving ? (
+                  <Loader2 className="h-4.5 w-4.5 animate-spin" />
+                ) : (
+                  <Save className="h-4.5 w-4.5" />
+                )}
+                {isSaving ? t("settings.saving") : t("settings.saveChanges")}
+              </Button>
+            }
+          />
 
-      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-        <TabsList className="w-full justify-start border-b border-border/20 bg-transparent rounded-none p-0 mb-8 overflow-x-auto flex-nowrap hide-scrollbar">
-          <TabsTrigger value="company" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Empresa</TabsTrigger>
-          <TabsTrigger value="profile" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Perfil</TabsTrigger>
-          <TabsTrigger value="security" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Segurança</TabsTrigger>
-          <TabsTrigger value="notifications" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Notificações</TabsTrigger>
-          <TabsTrigger value="appearance" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Aparência</TabsTrigger>
-          <TabsTrigger value="logs" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Logs</TabsTrigger>
-          <TabsTrigger value="fields" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Campos Adicionais</TabsTrigger>
-        </TabsList>
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+            <TabsList className="w-full justify-start border-b border-border/20 bg-transparent rounded-none p-0 mb-8 overflow-x-auto flex-nowrap hide-scrollbar">
+              <TabsTrigger value="profile" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Perfil</TabsTrigger>
+              <TabsTrigger value="company" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Empresa</TabsTrigger>
+              <TabsTrigger value="security" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Segurança</TabsTrigger>
+              <TabsTrigger value="notifications" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Notificações</TabsTrigger>
+              <TabsTrigger value="appearance" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Aparência</TabsTrigger>
+              <TabsTrigger value="logs" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Logs</TabsTrigger>
+              <TabsTrigger value="fields" className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#8A3CFF] data-[state=active]:text-[#8A3CFF] data-[state=active]:font-semibold text-muted-foreground hover:text-foreground bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none px-6 py-3 transition-colors">Campos Adicionais</TabsTrigger>
+            </TabsList>
 
         <TabsContent value="company" className="space-y-8 outline-none animate-fade-in">
           <Card className="border-white/40 bg-card/60 backdrop-blur-xl shadow-sm rounded-2xl overflow-hidden transition-colors hover:border-[#8A3CFF]/20">
@@ -908,6 +915,8 @@ export default function Settings() {
           </DialogContent>
         </Dialog>
       )}
-    </div>
+        </div>
+      )}
+    </SettingsLayout>
   );
 }
