@@ -315,7 +315,7 @@ export default function InboxList({
                         <Pin className="h-3.5 w-3.5 text-amber-500 shrink-0 fill-amber-500/20" title="Conversa Fixada" />
                       )}
                       <span className="font-semibold text-sm truncate text-card-foreground">
-                        {conv.lead?.name || conv.lead?.phone || "Lead Sem Nome"}
+                        {conv.lead?.name || conv.lead?.phone || conv.contact_name || conv.contact_phone || "Contato Sem Nome"}
                       </span>
                     </div>
                     

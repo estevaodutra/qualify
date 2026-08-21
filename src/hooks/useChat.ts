@@ -9,7 +9,9 @@ import { getLocalPins, getLocalArchived } from "@/hooks/useConversationActions";
 export interface ChatConversation {
   id: string;
   company_id: string;
-  lead_id: string;
+  lead_id?: string | null;
+  contact_phone?: string | null;
+  contact_name?: string | null;
   instance_id: string | null;
   status: "open" | "in_progress" | "waiting" | "resolved";
   operator_id: string | null;
@@ -24,14 +26,14 @@ export interface ChatConversation {
   is_pinned?: boolean;
   created_at: string;
   updated_at: string;
-  lead: {
+  lead?: {
     id: string;
     name: string | null;
     phone: string;
     email: string | null;
-    custom_fields?: any;
-    custom_fields: Record<string, any> | null;
-  };
+    tags?: string[];
+    custom_fields?: Record<string, any> | null;
+  } | null;
   operator?: {
     id: string;
     full_name: string | null;
@@ -43,7 +45,9 @@ export interface ChatConversation {
     phone: string | null;
     provider: string | null;
     status: string | null;
-  } | null;
+  };
+  allLeadConversations?: any[];
+  instanceCount?: number;
 }
 
 export interface ChatMessage {
@@ -143,6 +147,9 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
         let selectStr = `
           id,
           company_id,
+          lead_id,
+          contact_phone,
+          contact_name,
           instance_id,
           status,
           operator_id,

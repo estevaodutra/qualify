@@ -23,8 +23,9 @@ import ChatComposer from "@/components/chat/ChatComposer";
 import ChatSidebar, { ChatSidebarMode } from "@/components/chat/ChatSidebar";
 import LeadPipelineSummary from "@/components/chat/pipeline/LeadPipelineSummary";
 import ConversationActionsMenu from "@/components/chat/actions/ConversationActionsMenu";
+import { useConversationActions } from "@/hooks/useConversationActions";
 import { QuickReply } from "@/types/quickReplyTypes";
-import { Pin, Archive } from "lucide-react";
+import { Pin, Archive, UserPlus, Loader2 } from "lucide-react";
 
 import { AdvancedChatFilters, DEFAULT_ADVANCED_CHAT_FILTERS } from "@/types/chatFilterTypes";
 
@@ -68,6 +69,7 @@ export default function Chat() {
   } = useChat(filters, selectedConvId);
 
   const { instances = [] } = useInstances();
+  const { createLeadFromConversation, isCreatingLead } = useConversationActions();
 
   // Load selected conversation messages
   const {
@@ -421,11 +423,34 @@ export default function Chat() {
                     </div>
                   </div>
 
-                  {/* Lead Pipeline Summary */}
-                  <LeadPipelineSummary
-                    leadId={selectedConv.lead?.id}
-                    leadName={selectedConv.lead?.name || selectedConv.lead?.phone}
-                  />
+                  {/* Lead Pipeline Summary / Non-CRM Lead button */}
+                  {(!selectedConv.lead_id || !selectedConv.lead) ? (
+                    <button
+                      type="button"
+                      disabled={isCreatingLead}
+                      onClick={async () => {
+                        await createLeadFromConversation({
+                          conversationId: selectedConv.id,
+                          phone: selectedConv.lead?.phone || selectedConv.contact_phone || "",
+                          name: selectedConv.lead?.name || selectedConv.contact_name || "",
+                        });
+                      }}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-xs font-bold transition-all cursor-pointer shadow-sm shrink-0"
+                      title="Este contato não está cadastrado no CRM. Clique para cadastrar."
+                    >
+                      {isCreatingLead ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <UserPlus className="h-3.5 w-3.5" />
+                      )}
+                      <span>+ Criar Lead no CRM</span>
+                    </button>
+                  ) : (
+                    <LeadPipelineSummary
+                      leadId={selectedConv.lead?.id}
+                      leadName={selectedConv.lead?.name || selectedConv.lead?.phone}
+                    />
+                  )}
                 </div>
               </div>
 

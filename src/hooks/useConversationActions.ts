@@ -239,6 +239,63 @@ export function useConversationActions() {
     },
   });
 
+  // 7. Create Lead from Conversation (Manual creation when lead is not in CRM)
+  const createLeadMutation = useMutation({
+    mutationFn: async ({ conversationId, phone, name }: { conversationId: string; phone: string; name?: string | null }) => {
+      if (!activeCompanyId || !user) throw new Error("Usuário ou empresa não selecionada");
+      if (!phone) throw new Error("Telefone do contato é obrigatório");
+
+      const cleanPhone = phone.trim();
+      const cleanName = (name && name !== cleanPhone) ? name.trim() : cleanPhone;
+
+      // 1. Check if lead already exists in CRM
+      let { data: existingLead } = await supabase
+        .from("leads")
+        .select("id")
+        .eq("company_id", activeCompanyId)
+        .eq("phone", cleanPhone)
+        .maybeSingle();
+
+      let leadId = existingLead?.id;
+
+      if (!leadId) {
+        // Insert new lead into CRM
+        const { data: newLead, error: insertError } = await supabase
+          .from("leads")
+          .insert({
+            company_id: activeCompanyId,
+            user_id: user.id,
+            phone: cleanPhone,
+            name: cleanName,
+            status: "active",
+          })
+          .select("id")
+          .single();
+
+        if (insertError) throw insertError;
+        leadId = newLead.id;
+      }
+
+      // 2. Link conversation with the created lead_id
+      const { error: updateConvError } = await supabase
+        .from("chat_conversations")
+        .update({ lead_id: leadId })
+        .eq("id", conversationId);
+
+      if (updateConvError) throw updateConvError;
+
+      return leadId;
+    },
+    onSuccess: () => {
+      toast.success("Lead cadastrado com sucesso no CRM!");
+      invalidateChatQueries();
+    },
+    onError: (err: any) => {
+      console.error("Error creating lead from conversation:", err);
+      toast.error(`Erro ao cadastrar lead: ${err.message}`);
+    },
+  });
+
   return {
     pinConversation: pinMutation.mutateAsync,
     unpinConversation: unpinMutation.mutateAsync,
@@ -246,12 +303,15 @@ export function useConversationActions() {
     markConversationRead: markReadMutation.mutateAsync,
     archiveConversation: archiveMutation.mutateAsync,
     unarchiveConversation: unarchiveMutation.mutateAsync,
+    createLeadFromConversation: createLeadMutation.mutateAsync,
+    isCreatingLead: createLeadMutation.isPending,
     isPending:
       pinMutation.isPending ||
       unpinMutation.isPending ||
       markUnreadMutation.isPending ||
       markReadMutation.isPending ||
       archiveMutation.isPending ||
-      unarchiveMutation.isPending,
+      unarchiveMutation.isPending ||
+      createLeadMutation.isPending,
   };
 }

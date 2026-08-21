@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { 
-  User, Plus, X, FileText, Tag, ChevronDown, ChevronRight, Save, Award, Calendar, ListTodo, Paperclip, LayoutList, Download
+  User, Plus, X, FileText, Tag, ChevronDown, ChevronRight, Save, Award, Calendar, ListTodo, Paperclip, LayoutList, Download, UserPlus, Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { ChatConversation, PipelineStage } from "@/hooks/useChat";
+import { useConversationActions } from "@/hooks/useConversationActions";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { LeadAvatar, LeadTags, DealPipelineStage, DealValue } from "../crm/shared";
@@ -36,8 +37,7 @@ interface CustomFieldMetadata {
 
 export default function LeadContextPanel({ conversation, stages, onClose }: LeadContextPanelProps) {
   const { lead } = conversation;
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const { createLeadFromConversation, isCreatingLead } = useConversationActions();
 
   const [activeTab, setActiveTab] = useState<"info" | "negocios" | "tarefas" | "arquivos">("info");
 
@@ -45,9 +45,12 @@ export default function LeadContextPanel({ conversation, stages, onClose }: Lead
   const [localTags, setLocalTags] = useState<string[]>(lead?.tags || []);
   
   const [customFieldsMetadata, setCustomFieldsMetadata] = useState<CustomFieldMetadata[]>([]);
-  const [name, setName] = useState(lead?.name || "");
+  const displayName = lead?.name || conversation.contact_name || conversation.contact_phone || "Sem Nome";
+  const displayPhone = lead?.phone || conversation.contact_phone || "";
+
+  const [name, setName] = useState(displayName);
   const [email, setEmail] = useState(lead?.email || "");
-  const [phone, setPhone] = useState(lead?.phone || "");
+  const [phone, setPhone] = useState(displayPhone);
   const [customFields, setCustomFields] = useState<Record<string, any>>((lead?.custom_fields as Record<string, any>) || {});
   
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -58,12 +61,12 @@ export default function LeadContextPanel({ conversation, stages, onClose }: Lead
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    setName(lead?.name || "");
+    setName(lead?.name || conversation.contact_name || conversation.contact_phone || "Sem Nome");
     setEmail(lead?.email || "");
-    setPhone(lead?.phone || "");
+    setPhone(lead?.phone || conversation.contact_phone || "");
     setCustomFields((lead?.custom_fields as Record<string, any>) || {});
     setLocalTags(lead?.tags || []);
-  }, [lead]);
+  }, [lead, conversation.contact_name, conversation.contact_phone]);
 
   useEffect(() => {
     const fetchMetadata = async () => {
@@ -210,40 +213,75 @@ export default function LeadContextPanel({ conversation, stages, onClose }: Lead
           <span className="text-[10px] text-muted-foreground font-mono mt-0.5 inline-block">{phone}</span>
         </div>
 
-        {/* Tags right below name/phone */}
-        <div className="flex items-center justify-center gap-1.5 flex-wrap pt-1 max-w-[280px]">
-          {localTags.map((tag) => (
-            <Badge
-              key={tag}
-              variant="secondary"
-              className="text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full flex items-center gap-1"
+        {/* Non-CRM Lead Prompt Card */}
+        {(!conversation.lead_id || !lead) && (
+          <div className="w-full bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-center space-y-2 mt-2">
+            <div className="flex items-center justify-center gap-1.5 text-amber-600 dark:text-amber-400 font-bold text-xs">
+              <UserPlus className="h-4 w-4 shrink-0" />
+              <span>Não cadastrado no CRM</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-tight">
+              Este contato não está cadastrado como Lead no CRM. Deseja criar o lead?
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              className="w-full h-8 text-xs font-bold gap-1.5 bg-amber-500 hover:bg-amber-600 text-white shadow-sm cursor-pointer"
+              disabled={isCreatingLead}
+              onClick={async () => {
+                await createLeadFromConversation({
+                  conversationId: conversation.id,
+                  phone: conversation.lead?.phone || conversation.contact_phone || "",
+                  name: conversation.lead?.name || conversation.contact_name || "",
+                });
+              }}
             >
-              <span>{tag}</span>
-              <button
-                type="button"
-                onClick={() => handleRemoveTag(tag)}
-                className="hover:text-destructive transition-colors cursor-pointer"
-                title="Remover tag"
+              {isCreatingLead ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <UserPlus className="h-3.5 w-3.5" />
+              )}
+              <span>Criar Lead no CRM</span>
+            </Button>
+          </div>
+        )}
+
+        {/* Tags right below name/phone (Only if lead exists) */}
+        {conversation.lead_id && (
+          <div className="flex items-center justify-center gap-1.5 flex-wrap pt-1 max-w-[280px]">
+            {localTags.map((tag) => (
+              <Badge
+                key={tag}
+                variant="secondary"
+                className="text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full flex items-center gap-1"
               >
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
-          ))}
-          <TagSelectorPopover
-            leadId={lead?.id}
-            currentTags={localTags}
-            onTagsChange={(newTags) => setLocalTags(newTags)}
-            trigger={
-              <button
-                type="button"
-                className="h-6 w-6 rounded-full bg-primary/10 text-primary hover:bg-primary/20 flex items-center justify-center transition-all cursor-pointer border border-primary/20 shadow-none shrink-0"
-                title="Adicionar Tag"
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </button>
-            }
-          />
-        </div>
+                <span>{tag}</span>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveTag(tag)}
+                  className="hover:text-destructive transition-colors cursor-pointer"
+                  title="Remover tag"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            ))}
+            <TagSelectorPopover
+              leadId={lead?.id}
+              currentTags={localTags}
+              onTagsChange={(newTags) => setLocalTags(newTags)}
+              trigger={
+                <button
+                  type="button"
+                  className="h-6 w-6 rounded-full bg-primary/10 text-primary hover:bg-primary/20 flex items-center justify-center transition-all cursor-pointer border border-primary/20 shadow-none shrink-0"
+                  title="Adicionar Tag"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+              }
+            />
+          </div>
+        )}
         
         {/* Tab Navigation */}
         <div className="flex bg-muted/40 p-1 rounded-xl mt-3 w-full border border-border/40 shadow-inner">
