@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { UserCircle, Settings, Users, Radio, Wallet, CreditCard, FileText, Sliders } from "lucide-react";
+import { UserCircle, Settings, Users, Radio, Wallet, CreditCard, FileText, Sliders, Tag } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 
 interface SettingsLayoutProps {
@@ -25,6 +25,7 @@ export function SettingsLayout({ children }: SettingsLayoutProps) {
       title: "CRM",
       items: [
         { title: "Campos Adicionais", url: "/settings/custom-fields", icon: Sliders },
+        { title: "Tags", url: "/settings/tags", icon: Tag },
       ],
     },
     {

@@ -41,6 +41,7 @@ import { CustomFieldsTab } from "@/components/settings/CustomFieldsTab";
 import { SettingsLayout } from "@/components/settings/SettingsLayout";
 import MembersPage from "@/pages/settings/MembersPage";
 import Instances from "@/pages/Instances";
+import { TagsTab } from "@/components/settings/TagsTab";
 
 
 interface ApiKey {
@@ -357,6 +358,8 @@ export default function Settings() {
         <Instances />
       ) : location.pathname === "/settings/custom-fields" || location.pathname === "/settings/fields" ? (
         <CustomFieldsTab />
+      ) : location.pathname === "/settings/tags" ? (
+        <TagsTab />
       ) : (
         <div className="space-y-8">
           <PageHeader
