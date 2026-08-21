@@ -152,6 +152,14 @@ BEGIN
     v_media_type := v_msg_type;
   END IF;
 
+  IF v_body IS NULL AND v_media_type IS NOT NULL THEN
+    v_body := '[' || v_media_type || ']';
+  END IF;
+  
+  IF v_body IS NULL THEN
+    v_body := '[Mensagem do WhatsApp]';
+  END IF;
+
   IF v_direction = 'outbound' THEN
     SELECT operator_id INTO v_operator_id
     FROM public.chat_conversations
@@ -162,25 +170,26 @@ BEGIN
     company_id,
     conversation_id,
     sender_type,
-    sender_name,
+    sender_id,
     message_type,
     body,
     media_url,
     media_type,
+    status,
+    message_id,
     created_at
   )
   VALUES (
     v_company_id,
     v_conv_id,
     CASE WHEN v_direction = 'inbound' THEN 'lead' ELSE 'operator' END,
-    CASE 
-      WHEN v_direction = 'inbound' THEN COALESCE(NEW.sender_name, NEW.sender_phone, 'Contato')
-      ELSE 'Atendente'
-    END,
+    CASE WHEN v_direction = 'outbound' THEN v_operator_id ELSE NULL END,
     COALESCE(v_media_type, 'text'),
     COALESCE(v_body, ''),
     v_media_url,
     v_media_type,
+    CASE WHEN v_direction = 'inbound' THEN 'received' ELSE 'sent' END,
+    NEW.message_id,
     COALESCE(NEW.event_timestamp, NEW.received_at)
   );
 
@@ -195,5 +204,9 @@ BEGIN
   WHERE id = v_conv_id;
 
   RETURN NEW;
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE WARNING 'Erro no process_webhook_event_for_crm_chat: %', SQLERRM;
+    RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
