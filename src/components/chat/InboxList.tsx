@@ -7,14 +7,19 @@ import { ChatConversation, ChatFilters } from "@/hooks/useChat";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 
+import { AdvancedChatFilters, getActiveCategoryCount } from "@/types/chatFilterTypes";
+import ChatFilterDrawer from "./filters/ChatFilterDrawer";
+import ActiveFilterChips from "./filters/ActiveFilterChips";
+import { Button } from "@/components/ui/button";
+
 interface InboxListProps {
   conversations: ChatConversation[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   operators: { id: string; name: string }[];
   instances?: Array<{ id: string; name: string; phoneNumber?: string; status: string }>;
-  filters: ChatFilters;
-  setFilters: (filters: ChatFilters) => void;
+  filters: AdvancedChatFilters | ChatFilters;
+  setFilters: (filters: AdvancedChatFilters | ChatFilters) => void;
   fetchNextPage: () => void;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
@@ -35,9 +40,12 @@ export default function InboxList({
   const { user } = useAuth();
   
   // Search & Filter State
-  const [localSearch, setLocalSearch] = useState(filters.search || "");
+  const [localSearch, setLocalSearch] = useState((filters as AdvancedChatFilters).search || "");
   const [sortBy, setSortBy] = useState<"recent" | "waiting">("recent");
   const [isManagerOpen, setIsManagerOpen] = useState(false);
+  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
+
+  const activeCategoryCount = getActiveCategoryCount(filters as AdvancedChatFilters);
   
   // Debounce search
   useEffect(() => {
@@ -119,64 +127,56 @@ export default function InboxList({
           onOpenChange={setIsManagerOpen}
         />
         
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por nome ou número..."
-            value={localSearch}
-            onChange={(e) => setLocalSearch(e.target.value)}
-            className="pl-9 h-9 text-xs rounded-lg border-primary/5 bg-background/50 hover:bg-background/80 focus:bg-background transition-colors duration-200"
-          />
-        </div>
-
-        {/* Sort & Quick Filter Toggles */}
-        <div className="space-y-1.5">
-          <div className="flex gap-2">
-            <select
-              value={filters.status || "all"}
-              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-              className="flex-1 bg-background/50 border border-primary/5 rounded-lg px-2 py-1 text-xs outline-none cursor-pointer focus:border-primary/30 transition-colors"
-            >
-              <option value="all">Todos os Status</option>
-              <option value="open">Abertas</option>
-              <option value="in_progress">Em Atendimento</option>
-              <option value="waiting">Aguardando</option>
-              <option value="resolved">Resolvidas</option>
-              <option value="unread">Não Lidas</option>
-            </select>
-
-            <select
-              value={filters.operatorId || "all"}
-              onChange={(e) => setFilters({ ...filters, operatorId: e.target.value })}
-              className="flex-1 bg-background/50 border border-primary/5 rounded-lg px-2 py-1 text-xs outline-none cursor-pointer focus:border-primary/30 transition-colors"
-            >
-              <option value="all">Todos Operadores</option>
-              <option value={user?.id || "me"}>Minhas</option>
-              <option value="unassigned">Sem Atribuição</option>
-              {operators.map((op) => (
-                <option key={op.id} value={op.id}>
-                  {op.name}
-                </option>
-              ))}
-            </select>
+        {/* Search & Unified Filter Button */}
+        <div className="flex gap-2 items-center">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nome ou número..."
+              value={localSearch}
+              onChange={(e) => setLocalSearch(e.target.value)}
+              className="pl-9 h-9 text-xs rounded-xl border-primary/5 bg-background/50 hover:bg-background/80 focus:bg-background transition-colors duration-200"
+            />
           </div>
 
-          {instances && instances.length > 0 && (
-            <select
-              value={filters.instanceId || "all"}
-              onChange={(e) => setFilters({ ...filters, instanceId: e.target.value === "all" ? undefined : e.target.value })}
-              className="w-full bg-background/50 border border-primary/5 rounded-lg px-2 py-1 text-xs outline-none cursor-pointer focus:border-primary/30 transition-colors"
-            >
-              <option value="all">Todas as Conexões / Instâncias</option>
-              {instances.map((inst) => (
-                <option key={inst.id} value={inst.id}>
-                  {inst.name} {inst.phoneNumber ? `(${inst.phoneNumber})` : ""} {inst.status === "connected" ? "🟢" : "⚪"}
-                </option>
-              ))}
-            </select>
-          )}
+          <Button
+            variant={activeCategoryCount > 0 ? "default" : "outline"}
+            size="sm"
+            onClick={() => setIsFilterDrawerOpen(true)}
+            className={cn(
+              "h-9 px-3 text-xs font-bold rounded-xl gap-1.5 shrink-0 transition-all cursor-pointer",
+              activeCategoryCount > 0
+                ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
+                : "border-border/50 text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Filter className="h-3.5 w-3.5" />
+            <span>Filtros</span>
+            {activeCategoryCount > 0 && (
+              <Badge variant="secondary" className="h-4 px-1.5 text-[10px] font-bold rounded-full bg-background/30 text-current ml-0.5">
+                {activeCategoryCount}
+              </Badge>
+            )}
+          </Button>
         </div>
+
+        {/* Active Filter Chips */}
+        <ActiveFilterChips
+          filters={filters as AdvancedChatFilters}
+          onUpdateFilters={(next) => setFilters(next)}
+          operators={operators}
+          instances={instances}
+        />
+
+        {/* Drawer Component */}
+        <ChatFilterDrawer
+          open={isFilterDrawerOpen}
+          onOpenChange={setIsFilterDrawerOpen}
+          appliedFilters={filters as AdvancedChatFilters}
+          onApplyFilters={(next) => setFilters(next)}
+          operators={operators}
+          instances={instances}
+        />
 
         {/* Sort By Toggle */}
         <div className="flex justify-between items-center text-[10px] text-muted-foreground font-semibold pt-1 uppercase tracking-wider">

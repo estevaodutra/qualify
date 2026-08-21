@@ -83,7 +83,9 @@ export interface ChatFilters {
 
 import { useRef } from "react";
 
-export function useChat(filters?: ChatFilters, activeConversationId?: string | null) {
+import { AdvancedChatFilters, normalizeFilters } from "@/types/chatFilterTypes";
+
+export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConversationId?: string | null) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -98,7 +100,6 @@ export function useChat(filters?: ChatFilters, activeConversationId?: string | n
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        console.log("Tab returned to focus, forcefully refetching chat queries...");
         queryClient.invalidateQueries({ queryKey: ["chat-conversations", activeCompanyId] });
         if (activeConversationIdRef.current) {
           queryClient.invalidateQueries({ queryKey: ["chat-messages", activeConversationIdRef.current] });
@@ -115,6 +116,12 @@ export function useChat(filters?: ChatFilters, activeConversationId?: string | n
     };
   }, [activeCompanyId, queryClient]);
 
+  // Normalized filters for queryKey
+  const normalizedFilters = useMemo(() => {
+    if (!filters) return {};
+    return normalizeFilters(filters as AdvancedChatFilters);
+  }, [filters]);
+
   // 1. Fetch Conversations
   const {
     data: conversationsData,
@@ -124,7 +131,7 @@ export function useChat(filters?: ChatFilters, activeConversationId?: string | n
     isFetchingNextPage: isFetchingNextConversations,
     refetch: refetchConversations,
   } = useInfiniteQuery({
-    queryKey: ["chat-conversations", activeCompanyId, filters],
+    queryKey: ["chat-conversations", activeCompanyId, normalizedFilters],
     initialPageParam: null as { last_message_at: string; id: string } | null,
     queryFn: async ({ pageParam }) => {
       if (!activeCompanyId) return [];
@@ -150,8 +157,29 @@ export function useChat(filters?: ChatFilters, activeConversationId?: string | n
         `)
         .eq("company_id", activeCompanyId);
 
-      // Filters
-      if (filters?.status && filters.status !== "all") {
+      const advFilters = filters as AdvancedChatFilters | undefined;
+
+      // 1. Statuses (Multi-select / Legacy)
+      if (advFilters?.statuses && advFilters.statuses.length > 0) {
+        const hasUnread = advFilters.statuses.includes("unread");
+        const hasUnassigned = advFilters.statuses.includes("unassigned");
+        const standardStatuses = advFilters.statuses.filter(s => s !== "unread" && s !== "unassigned");
+
+        const statusOrClauses: string[] = [];
+        if (standardStatuses.length > 0) {
+          statusOrClauses.push(`status.in.(${standardStatuses.join(",")})`);
+        }
+        if (hasUnread) {
+          statusOrClauses.push("unread_count.gt.0");
+        }
+        if (hasUnassigned) {
+          statusOrClauses.push("operator_id.is.null");
+        }
+
+        if (statusOrClauses.length > 0) {
+          query = query.or(statusOrClauses.join(","));
+        }
+      } else if (filters?.status && filters.status !== "all") {
         if (filters.status === "unread") {
           query = query.gt("unread_count", 0);
         } else if (filters.status === "unassigned") {
@@ -160,28 +188,146 @@ export function useChat(filters?: ChatFilters, activeConversationId?: string | n
           query = query.eq("status", filters.status);
         }
       }
-      
-      if (filters?.instanceId) {
-        query = query.eq("instance_id", filters.instanceId);
-      }
-      
-      if (filters?.operatorId && filters.operatorId !== "all") {
+
+      // 2. Operators
+      if (advFilters?.operatorIds && advFilters.operatorIds.length > 0) {
+        const hasUnassigned = advFilters.operatorIds.includes("unassigned");
+        const specificIds = advFilters.operatorIds.filter(id => id !== "unassigned" && id !== "has_operator");
+        const opOrClauses: string[] = [];
+        if (specificIds.length > 0) {
+          opOrClauses.push(`operator_id.in.(${specificIds.join(",")})`);
+        }
+        if (hasUnassigned) {
+          opOrClauses.push("operator_id.is.null");
+        }
+        if (opOrClauses.length > 0) {
+          query = query.or(opOrClauses.join(","));
+        }
+      } else if (filters?.operatorId && filters.operatorId !== "all") {
         if (filters.operatorId === "unassigned") {
-           query = query.is("operator_id", null);
+          query = query.is("operator_id", null);
         } else {
-           query = query.eq("operator_id", filters.operatorId);
+          query = query.eq("operator_id", filters.operatorId);
         }
       }
 
-      if (filters?.tags && filters.tags.length > 0) {
+      // 3. Instances
+      if (advFilters?.instanceIds && advFilters.instanceIds.length > 0) {
+        query = query.in("instance_id", advFilters.instanceIds);
+      } else if (filters?.instanceId) {
+        query = query.eq("instance_id", filters.instanceId);
+      }
+
+      // 4. Tags
+      if (advFilters?.tagPresence === "no_tags") {
+        query = query.or("tags.is.null,tags.eq.{}");
+      } else if (advFilters?.tagPresence === "has_tags") {
+        query = query.not("tags", "is", null);
+      }
+
+      if (advFilters?.tags && advFilters.tags.length > 0) {
+        if (advFilters.tagMode === "all") {
+          query = query.contains("tags", advFilters.tags);
+        } else {
+          query = query.overlaps("tags", advFilters.tags);
+        }
+      } else if (filters?.tags && filters.tags.length > 0) {
         query = query.contains("tags", filters.tags);
       }
 
-      if (filters?.search) {
-        // Simple search on lead name or phone via joined table
-        // This requires an inner join to filter correctly
-        // Or we just do a text search on preview
-        query = query.or(`last_message_preview.ilike.%${filters.search}%`);
+      // 5. CRM Pipeline & Stage & Deals Filter
+      if (
+        advFilters?.pipelineId ||
+        (advFilters?.stageIds && advFilters.stageIds.length > 0) ||
+        (advFilters?.dealPresence && advFilters.dealPresence !== "all") ||
+        (advFilters?.dealStatus && advFilters.dealStatus !== "all")
+      ) {
+        if (advFilters.dealPresence === "no_deal") {
+          const { data: dealLeads } = await supabase
+            .from("deals")
+            .select("lead_id")
+            .eq("company_id", activeCompanyId);
+          
+          const leadIdsWithDeals = Array.from(new Set((dealLeads || []).map(d => d.lead_id)));
+          if (leadIdsWithDeals.length > 0) {
+            query = query.not("lead_id", "in", `(${leadIdsWithDeals.join(",")})`);
+          }
+        } else {
+          let dealQuery = supabase
+            .from("deals")
+            .select("lead_id")
+            .eq("company_id", activeCompanyId);
+
+          if (advFilters.pipelineId) dealQuery = dealQuery.eq("pipeline_id", advFilters.pipelineId);
+          if (advFilters.stageIds && advFilters.stageIds.length > 0) dealQuery = dealQuery.in("stage_id", advFilters.stageIds);
+          if (advFilters.dealStatus && advFilters.dealStatus !== "all") dealQuery = dealQuery.eq("status", advFilters.dealStatus);
+
+          const { data: matchedDeals } = await dealQuery;
+          const matchedLeadIds = Array.from(new Set((matchedDeals || []).map(d => d.lead_id)));
+          
+          if (matchedLeadIds.length === 0) {
+            return []; // No lead matches criteria
+          }
+          query = query.in("lead_id", matchedLeadIds);
+        }
+      }
+
+      // 6. Dates (Last Message Date Preset)
+      if (advFilters?.lastMessageAtPreset) {
+        const now = new Date();
+        let targetDate: Date | null = null;
+        let isOlderThan = false;
+
+        switch (advFilters.lastMessageAtPreset) {
+          case "today":
+            targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            break;
+          case "last_24h":
+            targetDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            break;
+          case "last_3d":
+            targetDate = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+            break;
+          case "last_7d":
+            targetDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            break;
+          case "last_30d":
+            targetDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            break;
+          case "more_than_7d":
+            targetDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            isOlderThan = true;
+            break;
+          case "more_than_30d":
+            targetDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            isOlderThan = true;
+            break;
+        }
+
+        if (targetDate) {
+          if (isOlderThan) {
+            query = query.lt("last_message_at", targetDate.toISOString());
+          } else {
+            query = query.gte("last_message_at", targetDate.toISOString());
+          }
+        }
+      }
+
+      // 7. Search Filter (Text)
+      if (filters?.search && filters.search.trim()) {
+        const s = filters.search.trim();
+        const { data: matchedLeads } = await supabase
+          .from("leads")
+          .select("id")
+          .eq("company_id", activeCompanyId)
+          .or(`name.ilike.%${s}%,phone.ilike.%${s}%,email.ilike.%${s}%`);
+
+        const leadIds = (matchedLeads || []).map(l => l.id);
+        if (leadIds.length > 0) {
+          query = query.or(`last_message_preview.ilike.%${s}%,lead_id.in.(${leadIds.join(",")})`);
+        } else {
+          query = query.ilike("last_message_preview", `%${s}%`);
+        }
       }
 
       // Pagination cursor
@@ -189,8 +335,19 @@ export function useChat(filters?: ChatFilters, activeConversationId?: string | n
         query = query.or(`last_message_at.lt.${pageParam.last_message_at},and(last_message_at.eq.${pageParam.last_message_at},id.lt.${pageParam.id})`);
       }
 
+      // Sort Order
+      const sortBy = advFilters?.sortBy || "last_message_desc";
       const limit = 30;
-      query = query.order("last_message_at", { ascending: false }).order("id", { ascending: false }).limit(limit);
+
+      if (sortBy === "last_message_asc") {
+        query = query.order("last_message_at", { ascending: true }).order("id", { ascending: true }).limit(limit);
+      } else if (sortBy === "created_desc") {
+        query = query.order("created_at", { ascending: false }).order("id", { ascending: false }).limit(limit);
+      } else if (sortBy === "created_asc") {
+        query = query.order("created_at", { ascending: true }).order("id", { ascending: true }).limit(limit);
+      } else {
+        query = query.order("last_message_at", { ascending: false }).order("id", { ascending: false }).limit(limit);
+      }
 
       const { data, error } = await query;
 
@@ -208,8 +365,8 @@ export function useChat(filters?: ChatFilters, activeConversationId?: string | n
       return { last_message_at: last.last_message_at, id: last.id };
     },
     enabled: !!activeCompanyId && !!user,
-    staleTime: 30000,
-    refetchInterval: 5000, // Fallback garantido para atualizar a barra lateral
+    staleTime: 0,
+    refetchInterval: 3000,
   });
 
   const conversations = conversationsData?.pages.flat() || [];

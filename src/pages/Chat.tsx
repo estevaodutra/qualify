@@ -24,6 +24,8 @@ import ChatSidebar, { ChatSidebarMode } from "@/components/chat/ChatSidebar";
 import LeadPipelineSummary from "@/components/chat/pipeline/LeadPipelineSummary";
 import { QuickReply } from "@/types/quickReplyTypes";
 
+import { AdvancedChatFilters, DEFAULT_ADVANCED_CHAT_FILTERS } from "@/types/chatFilterTypes";
+
 export default function Chat() {
   const { activeCompanyId } = useCompany();
   const [searchParams] = useSearchParams();
@@ -38,9 +40,8 @@ export default function Chat() {
     setSidebarMode("quick_replies");
   }, [selectedConvId]);
 
-  const [filters, setFilters] = useState<ChatFilters>({
-    status: "all",
-    operatorId: "all",
+  const [filters, setFilters] = useState<AdvancedChatFilters>({
+    ...DEFAULT_ADVANCED_CHAT_FILTERS,
     search: phoneParam || "",
   });
 
