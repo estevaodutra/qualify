@@ -20,6 +20,7 @@ interface ChatComposerProps {
   isSending: boolean;
   templates: ChatTemplate[];
   leadId?: string;
+  externalQuickReply?: QuickReply | null;
 }
 
 type DropdownItem =
@@ -27,7 +28,7 @@ type DropdownItem =
   | { type: 'template'; id: string; shortcut: string; title: string; body: string; data: ChatTemplate }
   | { type: 'workflow'; id: string; shortcut: string; title: string; body: string; data: any };
 
-export default function ChatComposer({ onSend, isSending, templates, leadId }: ChatComposerProps) {
+export default function ChatComposer({ onSend, isSending, templates, leadId, externalQuickReply }: ChatComposerProps) {
   const { activeCompanyId } = useCompany();
   const { user } = useAuth();
   const [text, setText] = useState("");
@@ -36,6 +37,12 @@ export default function ChatComposer({ onSend, isSending, templates, leadId }: C
   // Quick Replies Hook
   const { quickReplies, incrementUsage } = useQuickReplies();
   const [pendingQuickReplyId, setPendingQuickReplyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (externalQuickReply) {
+      applyQuickReply(externalQuickReply);
+    }
+  }, [externalQuickReply]);
 
   // Fetch lead data for context resolution
   const { data: leadData } = useQuery({

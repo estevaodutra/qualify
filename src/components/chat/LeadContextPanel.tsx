@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 interface LeadContextPanelProps {
   conversation: ChatConversation;
   stages: PipelineStage[];
+  onClose?: () => void;
 }
 
 interface CustomFieldMetadata {
@@ -190,7 +191,17 @@ export default function LeadContextPanel({ conversation, stages }: LeadContextPa
   return (
     <div className="w-[340px] shrink-0 border-l border-border/40 bg-card/20 flex flex-col h-full overflow-hidden">
       {/* Contact Profile Header */}
-      <div className="flex flex-col items-center text-center p-4 space-y-2 border-b border-border/20 shrink-0 bg-background/30 backdrop-blur-md">
+      <div className="flex flex-col items-center text-center p-4 space-y-2 border-b border-border/20 shrink-0 bg-background/30 backdrop-blur-md relative">
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute top-3 right-3 p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            title="Voltar para Respostas Rápidas"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
         <LeadAvatar name={name} className="h-16 w-16 shadow-lg border-2 border-primary/20" fallbackClassName="text-2xl" />
         <div>
           <h3 className="font-bold text-base text-card-foreground leading-tight">{name || "Sem Nome"}</h3>

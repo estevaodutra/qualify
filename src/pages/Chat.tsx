@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { MessageSquare, RefreshCw, Loader2, Info, ChevronLeft, Smartphone, Radio } from "lucide-react";
+import { MessageSquare, RefreshCw, Loader2, Info, ChevronLeft, Smartphone, Radio, Eye, EyeOff } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -14,12 +14,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 import { toast } from "sonner";
 import InboxList from "@/components/chat/InboxList";
 import MessageThread from "@/components/chat/MessageThread";
 import ChatComposer from "@/components/chat/ChatComposer";
-import LeadContextPanel from "@/components/chat/LeadContextPanel";
+import ChatSidebar, { ChatSidebarMode } from "@/components/chat/ChatSidebar";
+import LeadPipelineSummary from "@/components/chat/pipeline/LeadPipelineSummary";
+import { QuickReply } from "@/types/quickReplyTypes";
 
 export default function Chat() {
   const { activeCompanyId } = useCompany();
@@ -27,6 +30,13 @@ export default function Chat() {
   const phoneParam = searchParams.get("phone");
   const leadIdParam = searchParams.get("leadId");
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
+  const [sidebarMode, setSidebarMode] = useState<ChatSidebarMode>("quick_replies");
+  const [selectedQuickReply, setSelectedQuickReply] = useState<QuickReply | null>(null);
+
+  // Reset sidebar to quick_replies when switching conversation
+  useEffect(() => {
+    setSidebarMode("quick_replies");
+  }, [selectedConvId]);
 
   const [filters, setFilters] = useState<ChatFilters>({
     status: "all",
@@ -220,9 +230,32 @@ export default function Chat() {
                   <ChevronLeft className="h-5 w-5" />
                 </button>
                 <div className="space-y-1 min-w-0">
-                  <h3 className="font-bold text-sm text-card-foreground leading-snug truncate">
-                    {selectedConv.lead?.name || selectedConv.lead?.phone || "Lead Sem Nome"}
-                  </h3>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <h3 className="font-bold text-sm text-card-foreground leading-snug truncate">
+                      {selectedConv.lead?.name || selectedConv.lead?.phone || "Lead Sem Nome"}
+                    </h3>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={() => setSidebarMode(prev => prev === "quick_replies" ? "lead_details" : "quick_replies")}
+                            className={cn(
+                              "p-1 rounded-lg transition-all duration-200 cursor-pointer shrink-0",
+                              sidebarMode === "lead_details"
+                                ? "bg-primary/20 text-primary border border-primary/30 shadow-sm"
+                                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                            )}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="text-xs font-semibold z-[10000]">
+                          {sidebarMode === "quick_replies" ? "Ver detalhes do lead" : "Voltar para respostas rápidas"}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
 
                   {/* Below Name: Phone + Connection/Instance Selector */}
                   <div className="flex items-center gap-2 flex-wrap">
@@ -305,6 +338,12 @@ export default function Chat() {
                       </Select>
                     </div>
                   </div>
+
+                  {/* Lead Pipeline Summary */}
+                  <LeadPipelineSummary
+                    leadId={selectedConv.lead?.id}
+                    leadName={selectedConv.lead?.name || selectedConv.lead?.phone}
+                  />
                 </div>
               </div>
 
@@ -344,6 +383,7 @@ export default function Chat() {
               isSending={isSending}
               templates={templates}
               leadId={selectedConv?.lead?.id}
+              externalQuickReply={selectedQuickReply}
             />
           </>
         ) : (
@@ -361,12 +401,18 @@ export default function Chat() {
         )}
       </div>
 
-      {/* 3. Lead Details Panel Column (Right) */}
+      {/* 3. Chat Sidebar Column (Right) */}
       {selectedConv && (
         <div className="hidden lg:block h-full shrink-0">
-          <LeadContextPanel
+          <ChatSidebar
             conversation={selectedConv}
             stages={pipelineStages}
+            sidebarMode={sidebarMode}
+            onSetSidebarMode={setSidebarMode}
+            onSelectQuickReply={(reply) => {
+              setSelectedQuickReply(reply);
+              setTimeout(() => setSelectedQuickReply(null), 100);
+            }}
           />
         </div>
       )}
