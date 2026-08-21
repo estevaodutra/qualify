@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import { toast } from "sonner";
 import InboxList from "@/components/chat/InboxList";
 import MessageThread from "@/components/chat/MessageThread";
 import ChatComposer from "@/components/chat/ChatComposer";
@@ -156,6 +157,9 @@ export default function Chat() {
       const connectedInst = instances.find(i => i.status === "connected") || instances[0];
       if (connectedInst) {
         await updateConversationInstance({ conversationId: selectedConvId, instanceId: connectedInst.id });
+      } else {
+        toast.error("Selecione uma instância para enviar a mensagem");
+        return;
       }
     }
 

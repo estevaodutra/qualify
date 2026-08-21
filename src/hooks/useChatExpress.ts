@@ -57,36 +57,40 @@ export function useChatExpress() {
          targetInstanceId = connectedInstances[0]?.id;
       }
 
+      // Check if instance is selected before doing any DB operation for public messages
+      if (!payload.isInternal && !targetInstanceId) {
+        throw new Error("Selecione uma instância para enviar a mensagem");
+      }
+
       if (!convId) {
-        const { data: newConv, error: createError } = await supabase
+        // Query existing conversation first to prevent unique constraint violation
+        const { data: existing } = await supabase
           .from("chat_conversations")
-          .insert({
-            company_id: activeCompanyId,
-            lead_id: payload.leadId,
-            instance_id: targetInstanceId || null,
-            status: "open",
-            unread_count: 0,
-          })
-          .select()
-          .single();
-          
-        if (createError) {
-            const { data: existing } = await supabase
-                .from("chat_conversations")
-                .select("id")
-                .eq("company_id", activeCompanyId)
-                .eq("lead_id", payload.leadId)
-                .maybeSingle();
-            
-            if (existing) {
-                convId = existing.id;
-                // Since we found an existing one concurrently, ensure it has the right instance
-                await supabase.from("chat_conversations").update({ instance_id: targetInstanceId }).eq("id", convId);
-            } else {
-                throw createError;
-            }
+          .select("id, instance_id")
+          .eq("company_id", activeCompanyId)
+          .eq("lead_id", payload.leadId)
+          .maybeSingle();
+
+        if (existing) {
+          convId = existing.id;
+          if (targetInstanceId && existing.instance_id !== targetInstanceId) {
+            await supabase.from("chat_conversations").update({ instance_id: targetInstanceId }).eq("id", convId);
+          }
         } else {
-            convId = newConv.id;
+          const { data: newConv, error: createError } = await supabase
+            .from("chat_conversations")
+            .insert({
+              company_id: activeCompanyId,
+              lead_id: payload.leadId,
+              instance_id: targetInstanceId || null,
+              status: "open",
+              unread_count: 0,
+            })
+            .select()
+            .single();
+
+          if (createError) throw createError;
+          convId = newConv.id;
         }
 
         updateSession(payload.leadId, {
@@ -96,16 +100,12 @@ export function useChatExpress() {
         });
         
         queryClient.invalidateQueries({ queryKey: ["chat-conversations", activeCompanyId] });
-      } else {
+      } else if (targetInstanceId) {
         // Conversation already exists, ensure the DB has the selected instance_id
         await supabase
           .from("chat_conversations")
-          .update({ instance_id: targetInstanceId || null })
+          .update({ instance_id: targetInstanceId })
           .eq("id", convId);
-      }
-
-      if (!targetInstanceId) {
-        throw new Error("Nenhuma instância conectada ou selecionada para enviar a mensagem.");
       }
 
       const { data, error } = await supabase.functions.invoke("chat-send-message", {
@@ -146,7 +146,7 @@ export function useChatExpress() {
        setDraft(leadId, "");
     },
     onError: (error) => {
-      toast.error("Falha ao enviar: " + error.message);
+      toast.error(error.message || "Erro ao enviar mensagem");
     }
   });
 
