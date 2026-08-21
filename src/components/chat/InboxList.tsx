@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { Search, Filter, MessageSquare, Clock, User, CheckCircle, HelpCircle, Loader2, Settings } from "lucide-react";
+import { Search, Filter, MessageSquare, Clock, User, CheckCircle, HelpCircle, Loader2, Settings, Info } from "lucide-react";
 import QuickRepliesManagerModal from "@/components/chat/quick-replies/QuickRepliesManagerModal";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
