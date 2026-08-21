@@ -2509,8 +2509,7 @@ export function UnifiedNodeConfigPanel({
                     conditionDef={activeDef}
                     config={currentConfig}
                     onChangeConfig={(newConfig) => {
-                      setLocalConfig(newConfig);
-                      onUpdateConfig(newConfig);
+                      onUpdate(newConfig);
                     }}
                     activeCompanyId={activeCompanyId}
                     customFieldsMetadata={customFieldsMetadata}
@@ -2544,8 +2543,7 @@ export function UnifiedNodeConfigPanel({
                         ...(selectedCond.defaultParameters || {}),
                       },
                     };
-                    setLocalConfig(updated);
-                    onUpdateConfig(updated);
+                    onUpdate(updated);
                   }}
                 />
               </div>
