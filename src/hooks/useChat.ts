@@ -457,12 +457,25 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
       is_pinned: pinnedSet.has(c.id),
     }));
 
-    return mapped.sort((a, b) => {
+    const archiveMode = (filters as AdvancedChatFilters)?.archiveMode || "active_only";
+
+    const filtered = mapped.filter((c) => {
+      if (archiveMode === "archived_only") {
+        return c.is_archived === true;
+      }
+      if (archiveMode === "all") {
+        return true;
+      }
+      // default: active_only
+      return !c.is_archived;
+    });
+
+    return filtered.sort((a, b) => {
       if (a.is_pinned && !b.is_pinned) return -1;
       if (!a.is_pinned && b.is_pinned) return 1;
       return 0;
     });
-  }, [rawConversations, pinnedSet, activeCompanyId]);
+  }, [rawConversations, pinnedSet, activeCompanyId, filters]);
 
 
   // 2. Fetch Pipeline Stages
