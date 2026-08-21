@@ -394,25 +394,8 @@ Deno.serve(async (req) => {
         if (existingLead) {
           resolvedLeadId = existingLead.id;
         } else {
-          // Create the lead immediately
-          const { data: newLead, error: leadErr } = await supabase
-            .from("leads")
-            .insert({
-              company_id: resolvedCompanyId,
-              user_id: typedSequence.user_id,
-              phone: destinationPhone,
-              name: respondentName || destinationPhone,
-              custom_fields: customFields
-            })
-            .select("id")
-            .single();
-
-          if (newLead) {
-            resolvedLeadId = newLead.id;
-            console.log(`[TriggerSequence] 🆕 Auto-created lead ${newLead.id} for phone ${destinationPhone}`);
-          } else {
-            console.error(`[TriggerSequence] ❌ Failed to auto-create lead:`, leadErr);
-          }
+          resolvedLeadId = null;
+          console.log(`[TriggerSequence] ℹ️ Lead com telefone ${destinationPhone} não existe no banco (empresa ${resolvedCompanyId}). Criação automática desativada; o fluxo utilizará a ação Criar Lead.`);
         }
       }
     }

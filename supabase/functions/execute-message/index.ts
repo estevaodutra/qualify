@@ -396,23 +396,57 @@ const evaluateExtensibleCondition = async (
       const identifierField = (params.identifierField as string) || "phone";
       let isFound = false;
 
-      if (leadData) {
-        if (identifierField === "phone") {
-          isFound = cleanPhone(leadData.phone).length >= 8;
-        } else if (identifierField === "email") {
-          isFound = !!(leadData.email && String(leadData.email).trim() !== "");
-        } else if (identifierField === "cpf") {
-          const cpfVal = leadData.cpf || leadData.custom_fields?.cpf;
-          isFound = cleanCpf(cpfVal).length >= 11;
-        } else if (identifierField === "id") {
-          isFound = !!leadData.id;
-        } else if (identifierField.startsWith("custom:")) {
-          const key = identifierField.replace("custom:", "");
-          const val = leadData.custom_fields?.[key];
-          isFound = val !== undefined && val !== null && String(val).trim() !== "";
-        } else {
-          isFound = true;
+      if (identifierField === "phone") {
+        const rawPhone = (params.phone as string) || leadData?.phone || "";
+        const phoneToSearch = cleanPhone(rawPhone);
+
+        if (phoneToSearch) {
+          const { data: dbLead } = await supabase
+            .from("leads")
+            .select("id, name, phone")
+            .eq("company_id", companyId)
+            .eq("phone", phoneToSearch)
+            .maybeSingle();
+
+          if (dbLead) {
+            isFound = true;
+          } else {
+            // Suffix check for 8+ trailing digits
+            const suffix = phoneToSearch.slice(-8);
+            if (suffix.length >= 8) {
+              const { data: flexLeads } = await supabase
+                .from("leads")
+                .select("id")
+                .eq("company_id", companyId)
+                .ilike("phone", `%${suffix}`);
+              isFound = flexLeads && flexLeads.length > 0;
+            }
+          }
         }
+      } else if (identifierField === "email") {
+        const targetEmail = (params.email as string) || leadData?.email;
+        if (targetEmail) {
+          const { data: dbLead } = await supabase
+            .from("leads")
+            .select("id")
+            .eq("company_id", companyId)
+            .eq("email", targetEmail)
+            .maybeSingle();
+          isFound = !!dbLead;
+        }
+      } else if (identifierField === "cpf") {
+        const targetCpf = cleanCpf((params.cpf as string) || leadData?.cpf || leadData?.document);
+        if (targetCpf) {
+          const { data: dbLead } = await supabase
+            .from("leads")
+            .select("id")
+            .eq("company_id", companyId)
+            .eq("document", targetCpf)
+            .maybeSingle();
+          isFound = !!dbLead;
+        }
+      } else if (leadData?.id) {
+        isFound = true;
       }
 
       return { matched: isFound, branch: isFound ? "found" : "not_found" };
@@ -1648,37 +1682,49 @@ Deno.serve(async (req) => {
               .maybeSingle();
 
             if (actionType === "create_lead") {
-              const name = params.name || dest.group_name || "Novo Lead";
-              const phone = params.phone || phoneClean;
-              const email = params.email || null;
-              const cpf = params.cpf || null;
-              const source = params.source || "Workflow Action";
-              const companyName = params.companyName || null;
+              const rawName = (params.name as string) || (triggerContext?.respondentName as string) || dest.group_name || "Novo Lead";
+              const rawPhone = (params.phone as string) || (triggerContext?.respondentPhone as string) || phoneClean;
+
+              const resolvedName = resolveVariables(rawName, triggerContext, leadData) || phoneClean;
+              const resolvedPhone = cleanPhone(resolveVariables(rawPhone, triggerContext, leadData) || phoneClean);
+              const resolvedEmail = resolveVariables(params.email as string, triggerContext, leadData) || null;
+              const resolvedCpf = cleanCpf(resolveVariables(params.cpf as string, triggerContext, leadData) || "");
+              const resolvedSource = resolveVariables(params.source as string, triggerContext, leadData) || "Workflow Action";
+              const resolvedCompanyName = resolveVariables(params.companyName as string, triggerContext, leadData) || null;
               const tags = Array.isArray(params.tags) ? params.tags : [];
 
-              const { data: existing } = await supabase
-                .from("leads")
-                .select("id")
-                .eq("company_id", companyId)
-                .eq("phone", phone)
-                .maybeSingle();
-
-              if (!existing) {
-                const { data: created } = await supabase
+              if (resolvedPhone) {
+                const { data: existing } = await supabase
                   .from("leads")
-                  .insert({
-                    company_id: companyId,
-                    name,
-                    phone,
-                    email,
-                    document: cpf,
-                    source_name: source,
-                    company_name: companyName,
-                    tags,
-                  })
                   .select("id")
-                  .single();
-                if (created) affectedLeadIds.push(created.id);
+                  .eq("company_id", companyId)
+                  .eq("phone", resolvedPhone)
+                  .maybeSingle();
+
+                if (!existing) {
+                  const { data: created } = await supabase
+                    .from("leads")
+                    .insert({
+                      company_id: companyId,
+                      name: resolvedName,
+                      phone: resolvedPhone,
+                      email: resolvedEmail,
+                      document: resolvedCpf || null,
+                      source_name: resolvedSource,
+                      company_name: resolvedCompanyName,
+                      tags,
+                    })
+                    .select("*")
+                    .single();
+
+                  if (created) {
+                    affectedLeadIds.push(created.id);
+                    console.log(`[ExecuteMessage] 🆕 Lead ${created.id} created via Action Node for phone ${resolvedPhone}`);
+                  }
+                } else {
+                  affectedLeadIds.push(existing.id);
+                  console.log(`[ExecuteMessage] Lead ${existing.id} already exists for phone ${resolvedPhone}`);
+                }
               }
             } else if (leadData) {
               affectedLeadIds.push(leadData.id);
@@ -1978,33 +2024,7 @@ Deno.serve(async (req) => {
                 }
                 
                 if (!targetLead) {
-                  // Auto-create lead if it doesn't exist so the pipeline can continue
-                  const { data: newLead, error: newLeadErr } = await supabase
-                    .from("leads")
-                    .insert({
-                      company_id: typedCampaign.company_id || typedCampaign.company_id,
-                      user_id: typedCampaign.user_id,
-                      phone: phoneClean,
-                      name: leadUpdates.name || triggerContext?.respondentName || phoneClean,
-                      custom_fields: cfUpdates,
-                      source_type: "sequence"
-                    })
-                    .select("id, name, phone, email, company_name, document, source_type, tags, custom_fields")
-                    .single();
-                    
-                  if (newLead) {
-                    targetLead = newLead;
-                    if (triggerContext) triggerContext.leadId = newLead.id;
-                    console.log(`[ExecuteMessage] 🆕 Auto-created lead ${newLead.id} for phone ${phoneClean} in field_op`);
-                    // Skip the update step below since we just inserted everything correctly
-                    leadUpdated = false; 
-                    if (newTags && newTags.length > 0) {
-                      leadUpdates.tags = newTags;
-                      leadUpdated = true; // Need to update tags
-                    }
-                  } else {
-                    console.error(`[ExecuteMessage] ❌ Failed to auto-create lead in field_op:`, newLeadErr);
-                  }
+                  console.log(`[ExecuteMessage] ℹ️ Lead com telefone ${phoneClean} não encontrado para a operação de campo.`);
                 }
               }
 
