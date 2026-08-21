@@ -374,6 +374,228 @@ const evaluateCondition = (config: Record<string, unknown>, leadData: Record<str
   }
 };
 
+const evaluateExtensibleCondition = async (
+  config: Record<string, unknown>,
+  leadData: Record<string, any> | null,
+  supabase: any,
+  companyId: string
+): Promise<{ matched: boolean; branch: string }> => {
+  const conditionType = config.conditionType as string | undefined;
+  const params = (config.parameters as Record<string, unknown>) || {};
+
+  if (!conditionType) {
+    const isTrue = leadData ? evaluateCondition(config, leadData) : false;
+    return { matched: isTrue, branch: isTrue ? "yes" : "no" };
+  }
+
+  const cleanPhone = (phone?: string) => (phone || "").replace(/\D/g, "");
+  const cleanCpf = (cpf?: string) => (cpf || "").replace(/\D/g, "");
+
+  switch (conditionType) {
+    case "lead_exists": {
+      const identifierField = (params.identifierField as string) || "phone";
+      let isFound = false;
+
+      if (leadData) {
+        if (identifierField === "phone") {
+          isFound = cleanPhone(leadData.phone).length >= 8;
+        } else if (identifierField === "email") {
+          isFound = !!(leadData.email && String(leadData.email).trim() !== "");
+        } else if (identifierField === "cpf") {
+          const cpfVal = leadData.cpf || leadData.custom_fields?.cpf;
+          isFound = cleanCpf(cpfVal).length >= 11;
+        } else if (identifierField === "id") {
+          isFound = !!leadData.id;
+        } else if (identifierField.startsWith("custom:")) {
+          const key = identifierField.replace("custom:", "");
+          const val = leadData.custom_fields?.[key];
+          isFound = val !== undefined && val !== null && String(val).trim() !== "";
+        } else {
+          isFound = true;
+        }
+      }
+
+      return { matched: isFound, branch: isFound ? "found" : "not_found" };
+    }
+
+    case "lead_has_pipeline_deal": {
+      const pipelineId = params.pipelineId as string;
+      if (!pipelineId || !leadData?.id) {
+        return { matched: false, branch: "no" };
+      }
+      const { data: deal } = await supabase
+        .from("deals")
+        .select("id")
+        .eq("company_id", companyId)
+        .eq("lead_id", leadData.id)
+        .eq("pipeline_id", pipelineId)
+        .maybeSingle();
+
+      const hasDeal = !!deal;
+      return { matched: hasDeal, branch: hasDeal ? "yes" : "no" };
+    }
+
+    case "lead_has_stage_deal": {
+      const pipelineId = params.pipelineId as string;
+      const stageId = params.stageId as string;
+      if (!pipelineId || !stageId || !leadData?.id) {
+        return { matched: false, branch: "no" };
+      }
+      const { data: deal } = await supabase
+        .from("deals")
+        .select("id")
+        .eq("company_id", companyId)
+        .eq("lead_id", leadData.id)
+        .eq("pipeline_id", pipelineId)
+        .eq("stage_id", stageId)
+        .maybeSingle();
+
+      const hasDeal = !!deal;
+      return { matched: hasDeal, branch: hasDeal ? "yes" : "no" };
+    }
+
+    case "lead_has_email": {
+      const hasEmail = !!(leadData?.email && String(leadData.email).trim() !== "");
+      return { matched: hasEmail, branch: hasEmail ? "yes" : "no" };
+    }
+
+    case "lead_has_name": {
+      const hasName = !!(leadData?.name && String(leadData.name).trim() !== "");
+      return { matched: hasName, branch: hasName ? "yes" : "no" };
+    }
+
+    case "lead_has_phone": {
+      const phoneNorm = cleanPhone(leadData?.phone);
+      const hasPhone = phoneNorm.length >= 8;
+      return { matched: hasPhone, branch: hasPhone ? "yes" : "no" };
+    }
+
+    case "lead_has_cpf": {
+      const cpfRaw = leadData?.cpf || leadData?.custom_fields?.cpf;
+      const cpfNorm = cleanCpf(cpfRaw);
+      const hasCpf = cpfNorm.length >= 11;
+      return { matched: hasCpf, branch: hasCpf ? "yes" : "no" };
+    }
+
+    case "lead_has_tag": {
+      const targetTags = (params.tags as string[]) || [];
+      const matchMode = (params.matchMode as string) || "ANY";
+      const leadTags: string[] = (leadData?.tags as string[]) || [];
+
+      let isMatched = false;
+      if (targetTags.length === 0) {
+        isMatched = false;
+      } else if (matchMode === "ANY") {
+        isMatched = targetTags.some((t) => leadTags.includes(t));
+      } else if (matchMode === "ALL") {
+        isMatched = targetTags.every((t) => leadTags.includes(t));
+      } else if (matchMode === "NONE") {
+        isMatched = !targetTags.some((t) => leadTags.includes(t));
+      }
+
+      return { matched: isMatched, branch: isMatched ? "matched" : "not_matched" };
+    }
+
+    case "lead_has_assignee": {
+      const assigneeMode = (params.assigneeMode as string) || "ANY";
+      const assigneeId = params.assigneeId as string;
+      const leadOwner = leadData?.crm_owner_id || leadData?.assigned_user_id || leadData?.attendant_id;
+
+      let isMatched = false;
+      if (assigneeMode === "ANY") {
+        isMatched = !!leadOwner;
+      } else if (assigneeMode === "NONE") {
+        isMatched = !leadOwner;
+      } else if (assigneeMode === "SPECIFIC") {
+        isMatched = !!(assigneeId && leadOwner === assigneeId);
+      }
+
+      return { matched: isMatched, branch: isMatched ? "yes" : "no" };
+    }
+
+    case "lead_custom_field": {
+      const fieldKey = params.fieldKey as string;
+      const operator = (params.operator as string) || "equals";
+      const paramVal = params.value;
+
+      if (!fieldKey || !leadData) {
+        return { matched: false, branch: "not_matched" };
+      }
+
+      const customFields = (leadData.custom_fields as Record<string, unknown>) || {};
+      const fieldValue = customFields[fieldKey] ?? leadData[fieldKey];
+
+      let isMatched = false;
+      const strVal = fieldValue === null || fieldValue === undefined ? "" : String(fieldValue);
+      const strCmp = paramVal === null || paramVal === undefined ? "" : String(paramVal);
+
+      switch (operator) {
+        case "equals":
+          isMatched = strVal.trim().toLowerCase() === strCmp.trim().toLowerCase();
+          break;
+        case "not_equals":
+          isMatched = strVal.trim().toLowerCase() !== strCmp.trim().toLowerCase();
+          break;
+        case "contains":
+          isMatched = strVal.toLowerCase().includes(strCmp.toLowerCase());
+          break;
+        case "not_contains":
+          isMatched = !strVal.toLowerCase().includes(strCmp.toLowerCase());
+          break;
+        case "starts_with":
+          isMatched = strVal.toLowerCase().startsWith(strCmp.toLowerCase());
+          break;
+        case "ends_with":
+          isMatched = strVal.toLowerCase().endsWith(strCmp.toLowerCase());
+          break;
+        case "is_empty":
+          isMatched = strVal.trim() === "";
+          break;
+        case "is_set":
+          isMatched = strVal.trim() !== "";
+          break;
+        case "greater_than":
+        case ">":
+          isMatched = parseFloat(strVal) > parseFloat(strCmp);
+          break;
+        case "less_than":
+        case "<":
+          isMatched = parseFloat(strVal) < parseFloat(strCmp);
+          break;
+        case "greater_or_equals":
+        case "≥":
+          isMatched = parseFloat(strVal) >= parseFloat(strCmp);
+          break;
+        case "less_or_equals":
+        case "≤":
+          isMatched = parseFloat(strVal) <= parseFloat(strCmp);
+          break;
+        case "is_true":
+          isMatched = strVal.toLowerCase() === "true" || strVal === "1";
+          break;
+        case "is_false":
+          isMatched = strVal.toLowerCase() === "false" || strVal === "0" || strVal === "";
+          break;
+        case "before":
+          isMatched = new Date(strVal).getTime() < new Date(strCmp).getTime();
+          break;
+        case "after":
+          isMatched = new Date(strVal).getTime() > new Date(strCmp).getTime();
+          break;
+        default:
+          isMatched = strVal.trim().toLowerCase() === strCmp.trim().toLowerCase();
+      }
+
+      return { matched: isMatched, branch: isMatched ? "matched" : "not_matched" };
+    }
+
+    default: {
+      const isTrue = leadData ? evaluateCondition(config, leadData) : false;
+      return { matched: isTrue, branch: isTrue ? "yes" : "no" };
+    }
+  }
+};
+
 const getActionForNodeType = (nodeType: string): string => {
   const actionMap: Record<string, string> = {
     message: "message.send_text",
@@ -1742,28 +1964,49 @@ Deno.serve(async (req) => {
 
         // ============= CONDITION / FORK NODES =============
         if (node.node_type === "condition") {
-          let isTrue = false;
+          let leadData: any = null;
+          const companyId = typedCampaign.company_id || typedCampaign.company_id;
+
           if (activeDestinations.length > 0) {
             const dest = activeDestinations[0];
             const phoneClean = dest.group_jid.split("@")[0].replace(/\D/g, "");
-            const { data: leadData } = await supabase
+            const { data } = await supabase
               .from("leads")
-              .select("id, name, phone, email, tags, custom_fields, pipeline_stage_id")
-              .eq("company_id", typedCampaign.company_id || typedCampaign.company_id)
+              .select("id, name, phone, email, tags, custom_fields, pipeline_stage_id, crm_owner_id, assigned_user_id, attendant_id, cpf")
+              .eq("company_id", companyId)
               .eq("phone", phoneClean)
               .maybeSingle();
 
-            if (leadData) {
-              isTrue = evaluateCondition(node.config, leadData);
+            if (data) {
+              leadData = data;
             }
           }
-          const branch = isTrue ? "yes" : "no";
-          console.log(`[ExecuteMessage] Condition node ${node.id} evaluated as: ${isTrue} (${branch} branch)`);
+
+          const { matched, branch } = await evaluateExtensibleCondition(
+            node.config,
+            leadData,
+            supabase,
+            companyId
+          );
+
+          console.log(`[ExecuteMessage] Extensible condition node ${node.id} (${node.config.conditionType || 'legacy'}) evaluated as: ${matched} (${branch} branch)`);
+
           await logNodeExecution(supabase, {
-            executionId: workflowExecutionId, userId, nodeId: node.id, nodeType: node.node_type,
-            status: "success", startedAt: nodeStartedAt,
-            input: node.config, output: { result: isTrue, branch },
+            executionId: workflowExecutionId,
+            userId,
+            nodeId: node.id,
+            nodeType: node.node_type,
+            status: "success",
+            startedAt: nodeStartedAt,
+            input: node.config,
+            output: {
+              result: matched,
+              branch,
+              category: node.config.category || "lead",
+              condition: node.config.conditionType || "legacy",
+            },
           });
+
           const matchConn = connections.find(c => c.source_node_id === node.id && c.condition_path === branch);
           currentNodeId = matchConn ? matchConn.target_node_id : null;
           nodesProcessed++;

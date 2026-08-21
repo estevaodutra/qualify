@@ -245,7 +245,6 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
       initialConnections={initialConnections}
       isSaving={isSaving}
       isLoading={isLoading}
-      workflowConfig={(sequence.triggerConfig as Record<string, unknown>) || {}}
     />
   );
 }

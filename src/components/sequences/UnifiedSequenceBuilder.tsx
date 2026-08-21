@@ -30,6 +30,7 @@ import { getNodeVisual, toNodeCategories } from "./nodeDefinitions";
 import { formatDelayLabel, normalizeDelayConfig } from "@/lib/workflows/delay";
 import { TriggerTypeSelector } from "./triggers/TriggerTypeSelector";
 import { getTriggerDefinition } from "./triggers/triggerDefinitions";
+import { getConditionOutputs } from "./conditions/conditionRegistry";
 
 export interface UnifiedSequenceBuilderProps {
   sequenceName: string;
@@ -1205,27 +1206,36 @@ export function UnifiedSequenceBuilder({
                         </>
                       ) : isCondition ? (
                         <>
-                          {/* "Sim" (True) output handle */}
-                          <div
-                            data-node-port="true" data-node-id={node.id} data-port-id="yes"
-                            onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", "yes")}
-                            className="absolute -right-1.5 top-[28px] h-3.5 w-3.5 rounded-full border-2 border-emerald-500 bg-background hover:bg-emerald-500 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
-                            title="Verdadeiro (Sim)"
-                          >
-                            <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                          </div>
-                          <span className="absolute right-2 top-[24px] text-[8px] font-bold text-emerald-600 select-none">Sim</span>
+                          {getConditionOutputs(node.config).map((out, i) => {
+                            const portY = 28 + i * 30;
+                            const isEmerald = out.color === "emerald";
+                            const isDestructive = out.color === "destructive";
+                            const borderColor = isEmerald ? "border-emerald-500" : isDestructive ? "border-destructive" : "border-purple-500";
+                            const bgColor = isEmerald ? "bg-emerald-500" : isDestructive ? "bg-destructive" : "bg-purple-500";
+                            const textColor = isEmerald ? "text-emerald-600" : isDestructive ? "text-destructive" : "text-purple-600";
 
-                          {/* "Não" (False) output handle */}
-                          <div
-                            data-node-port="true" data-node-id={node.id} data-port-id="no"
-                            onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", "no")}
-                            className="absolute -right-1.5 top-[58px] h-3.5 w-3.5 rounded-full border-2 border-destructive bg-background hover:bg-destructive cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
-                            title="Falso (Não)"
-                          >
-                            <div className="h-1.5 w-1.5 rounded-full bg-destructive" />
-                          </div>
-                          <span className="absolute right-2 top-[54px] text-[8px] font-bold text-destructive select-none">Não</span>
+                            return (
+                              <Fragment key={out.id}>
+                                <div
+                                  data-node-port="true"
+                                  data-node-id={node.id}
+                                  data-port-id={out.id}
+                                  onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", out.id)}
+                                  style={{ top: `${portY}px` }}
+                                  className={`absolute -right-1.5 h-3.5 w-3.5 rounded-full border-2 ${borderColor} bg-background hover:${bgColor} cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm`}
+                                  title={out.label}
+                                >
+                                  <div className={`h-1.5 w-1.5 rounded-full ${bgColor}`} />
+                                </div>
+                                <span
+                                  style={{ top: `${portY - 4}px` }}
+                                  className={`absolute right-2 text-[8px] font-bold ${textColor} select-none truncate max-w-[120px]`}
+                                >
+                                  {out.label}
+                                </span>
+                              </Fragment>
+                            );
+                          })}
                         </>
                       ) : (node.nodeType === "phone_call" || node.nodeType === "ura") ? null : isFieldOp ? (
                         <>{/* Handles moved to inline flow inside the node body to prevent overlapping */}</>
@@ -2052,10 +2062,14 @@ export function UnifiedSequenceBuilder({
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="font-bold text-xs text-slate-800 truncate">
-                                {(node.config.label as string) || nodeInfo.label}
+                                {isCondition
+                                  ? (getConditionDefinition(node.config.conditionType as string)?.label || (node.config.label as string) || "Condição")
+                                  : ((node.config.label as string) || nodeInfo.label)}
                               </p>
                               <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                                {nodeInfo.label}
+                                {isCondition
+                                  ? (getConditionDefinition(node.config.conditionType as string) ? "Leads" : "Condição")
+                                  : nodeInfo.label}
                               </p>
                             </div>
                           </div>
@@ -2065,7 +2079,9 @@ export function UnifiedSequenceBuilder({
                             className="pt-2 text-[10px] text-slate-500 font-medium line-clamp-2 min-h-[30px]"
                             title={isRandomizer ? randomizerBranches.map(b => b.label).join(node.config.mode === "round_robin" ? " → " : " · ") : undefined}
                           >
-                            {isRandomizer ? (
+                            {isCondition ? (
+                              getConditionDefinition(node.config.conditionType as string)?.description || "Clique para selecionar e configurar esta regra..."
+                            ) : isRandomizer ? (
                               randomizerBranches.length === 0 ? "Clique para configurar as ramificações..." :
                               node.config.mode === "round_robin"
                                 ? randomizerBranches.map(b => b.label).join(" → ")

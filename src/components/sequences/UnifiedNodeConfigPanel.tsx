@@ -49,6 +49,9 @@ import { VariablePicker } from "./VariablePicker";
 import { normalizeDelayConfig, toDelayMs, formatDelayLabel } from "@/lib/workflows/delay";
 import { useCallOperators } from "@/hooks/useCallOperators";
 import { useCallCampaigns } from "@/hooks/useCallCampaigns";
+import { getConditionDefinition } from "./conditions/conditionRegistry";
+import { ConditionSelectorModal } from "./conditions/ConditionSelectorModal";
+import { ConditionEditors } from "./conditions/ConditionEditors";
 
 function formatWhatsAppText(text: string) {
   const escaped = text
@@ -512,6 +515,7 @@ export function UnifiedNodeConfigPanel({
   const [customFieldsMetadata, setCustomFieldsMetadata] = useState<any[]>([]);
   const [pipelineStages, setPipelineStages] = useState<any[]>([]);
   const [activeInstances, setActiveInstances] = useState<any[]>([]);
+  const [conditionModalOpen, setConditionModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchPanelData = async () => {
@@ -2465,85 +2469,88 @@ export function UnifiedNodeConfigPanel({
             );
           })()}
 
-          {/* CONDITION - Unified Custom and Standard Fields Mapping */}
-          {node.nodeType === "condition" && (
-            <>
-              <div className="space-y-2">
-                <Label>Mapear Campo / Variável</Label>
-                <Select value={(currentConfig.field as string) || "name"} onValueChange={v => updateConfig("field", v)}>
-                  <SelectTrigger className="rounded-xl border-border/40"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="name">Nome do Lead</SelectItem>
-                    <SelectItem value="phone">Telefone</SelectItem>
-                    <SelectItem value="email">E-mail</SelectItem>
-                    <SelectItem value="tags">Etiquetas / Tags</SelectItem>
-                    <SelectItem value="pipeline_stage_id">Etapa do CRM</SelectItem>
-                    {customFieldsMetadata.map(f => (
-                      <SelectItem key={f.id} value={f.key}>
-                        {f.name} ({f.key})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Operador Lógico</Label>
-                <Select value={(currentConfig.operator as string) || "equals"} onValueChange={v => updateConfig("operator", v)}>
-                  <SelectTrigger className="rounded-xl border-border/40"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="equals">Igual a</SelectItem>
-                    <SelectItem value="not_equals">Diferente de</SelectItem>
-                    <SelectItem value="contains">Contém</SelectItem>
-                    <SelectItem value="not_contains">Não contém</SelectItem>
-                    <SelectItem value="starts_with">Começa com</SelectItem>
-                    <SelectItem value="ends_with">Termina com</SelectItem>
-                    <SelectItem value="is_set">Está preenchido</SelectItem>
-                    <SelectItem value="is_empty">Não está preenchido</SelectItem>
-                    <SelectItem value="between">Está entre (Mín / Máx)</SelectItem>
-                    <SelectItem value="greater_than">Maior que</SelectItem>
-                    <SelectItem value="less_than">Menor que</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+          {/* CONDITION - Novo Motor Extensível de Condições */}
+          {node.nodeType === "condition" && (() => {
+            const conditionType = currentConfig.conditionType as string | undefined;
+            const activeDef = getConditionDefinition(conditionType);
 
-              {((currentConfig.operator as string) !== "is_set" && (currentConfig.operator as string) !== "is_empty" && (currentConfig.operator as string) !== "between") && (
-                <div className="space-y-2">
-                  <Label>Valor Comparado</Label>
-                  <Input 
-                    value={(currentConfig.value as string) || ""} 
-                    onChange={e => updateConfig("value", e.target.value)} 
-                    placeholder="Digite o valor de comparação..." 
-                    className="rounded-xl border-border/40 bg-background/50 text-xs"
+            return (
+              <div className="space-y-5">
+                {/* Header card for selected condition */}
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wider">
+                        {activeDef ? `Categoria: ${activeDef.category.toUpperCase()}` : "Condição Nenhuma"}
+                      </span>
+                      <h3 className="text-sm font-bold text-slate-800 mt-0.5">
+                        {activeDef ? activeDef.label : "Selecione uma Regra"}
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                        {activeDef ? activeDef.description : "Escolha qual verificação este bloco fará durante a execução do fluxo."}
+                      </p>
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setConditionModalOpen(true)}
+                      className="rounded-xl text-xs shrink-0 font-semibold border-purple-200 text-purple-700 hover:bg-purple-50"
+                    >
+                      {activeDef ? "Alterar Regra" : "Selecionar Regra"}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Condition Specific Form */}
+                {activeDef ? (
+                  <ConditionEditors
+                    conditionDef={activeDef}
+                    config={currentConfig}
+                    onChangeConfig={(newConfig) => {
+                      setLocalConfig(newConfig);
+                      onUpdateConfig(newConfig);
+                    }}
+                    activeCompanyId={activeCompanyId}
+                    customFieldsMetadata={customFieldsMetadata}
                   />
-                </div>
-              )}
+                ) : (
+                  <div className="text-center py-8 px-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/30">
+                    <p className="text-xs font-medium text-slate-600">Nenhuma condição selecionada</p>
+                    <p className="text-[11px] text-slate-400 mt-1 mb-4">
+                      Clique no botão abaixo para abrir o catálogo e selecionar uma regra para este bloco.
+                    </p>
+                    <Button
+                      type="button"
+                      onClick={() => setConditionModalOpen(true)}
+                      className="rounded-xl bg-purple-600 text-white hover:bg-purple-700 text-xs shadow-sm font-semibold"
+                    >
+                      Abrir Catálogo de Condições
+                    </Button>
+                  </div>
+                )}
 
-              {(currentConfig.operator as string) === "between" && (
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-2">
-                    <Label>Valor Mínimo</Label>
-                    <Input 
-                      type="number"
-                      value={(currentConfig.minValue as string) || ""} 
-                      onChange={e => updateConfig("minValue", e.target.value)} 
-                      placeholder="Min" 
-                      className="rounded-xl border-border/40 bg-background/50 text-xs"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Valor Máximo</Label>
-                    <Input 
-                      type="number"
-                      value={(currentConfig.maxValue as string) || ""} 
-                      onChange={e => updateConfig("maxValue", e.target.value)} 
-                      placeholder="Max" 
-                      className="rounded-xl border-border/40 bg-background/50 text-xs"
-                    />
-                  </div>
-                </div>
-              )}
-            </>
-          )}
+                {/* Condition Selector Modal */}
+                <ConditionSelectorModal
+                  open={conditionModalOpen}
+                  onOpenChange={setConditionModalOpen}
+                  onSelectCondition={(selectedCond) => {
+                    const updated = {
+                      ...currentConfig,
+                      category: selectedCond.category,
+                      conditionType: selectedCond.type,
+                      parameters: {
+                        ...(selectedCond.defaultParameters || {}),
+                      },
+                    };
+                    setLocalConfig(updated);
+                    onUpdateConfig(updated);
+                  }}
+                />
+              </div>
+            );
+          })()}
 
           {/* RANDOMIZER - weighted random or round-robin branching */}
           {node.nodeType === "randomizer" && (() => {
