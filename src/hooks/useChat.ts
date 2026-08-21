@@ -352,11 +352,15 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
             .or(`name.ilike.%${s}%,phone.ilike.%${s}%,email.ilike.%${s}%`);
 
           const leadIds = (matchedLeads || []).map(l => l.id);
+          const searchOrs = [
+            `last_message_preview.ilike.%${s}%`,
+            `contact_name.ilike.%${s}%`,
+            `contact_phone.ilike.%${s}%`,
+          ];
           if (leadIds.length > 0) {
-            query = query.or(`last_message_preview.ilike.%${s}%,lead_id.in.(${leadIds.join(",")})`);
-          } else {
-            query = query.ilike("last_message_preview", `%${s}%`);
+            searchOrs.push(`lead_id.in.(${leadIds.join(",")})`);
           }
+          query = query.or(searchOrs.join(","));
         }
 
         // Pagination cursor

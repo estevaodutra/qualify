@@ -81,17 +81,25 @@ BEGIN
     AND phone = v_phone
   LIMIT 1;
 
-  -- Locate or Insert Conversation
-  SELECT id INTO v_conv_id
-  FROM public.chat_conversations
-  WHERE company_id = v_company_id
-    AND instance_id = v_instance_id
-    AND (
-      (v_lead_id IS NOT NULL AND lead_id = v_lead_id) OR
-      (v_lead_id IS NULL AND (contact_phone = v_phone OR (lead_id IS NULL AND contact_phone IS NULL)))
-    )
-  ORDER BY created_at DESC
-  LIMIT 1;
+  -- Locate existing conversation strictly
+  IF v_lead_id IS NOT NULL THEN
+    SELECT id INTO v_conv_id
+    FROM public.chat_conversations
+    WHERE company_id = v_company_id
+      AND instance_id = v_instance_id
+      AND lead_id = v_lead_id
+    ORDER BY created_at DESC
+    LIMIT 1;
+  ELSE
+    SELECT id INTO v_conv_id
+    FROM public.chat_conversations
+    WHERE company_id = v_company_id
+      AND instance_id = v_instance_id
+      AND lead_id IS NULL
+      AND contact_phone = v_phone
+    ORDER BY created_at DESC
+    LIMIT 1;
+  END IF;
 
   IF v_conv_id IS NULL THEN
     INSERT INTO public.chat_conversations (
@@ -118,7 +126,7 @@ BEGIN
     )
     RETURNING id INTO v_conv_id;
   ELSE
-    -- If conversation exists and now has a lead associated, ensure contact info is synced
+    -- If conversation exists, sync contact info
     UPDATE public.chat_conversations
     SET 
       contact_phone = COALESCE(contact_phone, v_phone),
