@@ -1,4 +1,4 @@
-import { MoreHorizontal, MessageCircle, Calendar, FileText, AlertCircle, Clock } from "lucide-react";
+import { MoreHorizontal, MessageCircle, Calendar, FileText, AlertCircle, Clock, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LeadAvatar, LeadTags, LeadOwner, DealValue } from "../shared";
 import { Deal, Lead } from "@/types/crm.types";
@@ -18,9 +18,10 @@ interface DealKanbanCardProps {
   onOpenLead?: (leadId: string) => void;
   onOpenChat?: (leadId: string) => void;
   onAddActivity?: (dealId: string) => void;
+  onDeleteDeal?: (dealId: string) => void;
 }
 
-export function DealKanbanCard({ deal, onClick, onOpenLead, onOpenChat, onAddActivity }: DealKanbanCardProps) {
+export function DealKanbanCard({ deal, onClick, onOpenLead, onOpenChat, onAddActivity, onDeleteDeal }: DealKanbanCardProps) {
   const lead = deal.lead;
   
   // Status definitions
@@ -68,6 +69,21 @@ export function DealKanbanCard({ deal, onClick, onOpenLead, onOpenChat, onAddAct
             <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onAddActivity?.(deal.id); }}>
               Nova Tarefa
             </DropdownMenuItem>
+            {onDeleteDeal && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer font-medium"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteDeal(deal.id);
+                  }}
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-2 text-destructive" />
+                  Excluir Negócio
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

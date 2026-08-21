@@ -16,6 +16,7 @@ interface PipelineStageColumnProps {
   onDeleteStage?: (stage: PipelineStage) => void;
   onDropDeal?: (dealId: string, targetStageId: string) => void;
   onAddDealInStage?: (stage: PipelineStage) => void;
+  onDeleteDeal?: (dealId: string) => void;
 }
 
 export function PipelineStageColumn({
@@ -26,6 +27,7 @@ export function PipelineStageColumn({
   onDeleteStage,
   onDropDeal,
   onAddDealInStage,
+  onDeleteDeal,
 }: PipelineStageColumnProps) {
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -152,7 +154,7 @@ export function PipelineStageColumn({
               onClick={() => onOpenDeal(deal)}
               className="cursor-grab active:cursor-grabbing hover:scale-[1.01] transition-transform duration-150"
             >
-              <DealKanbanCard deal={deal} />
+              <DealKanbanCard deal={deal} onDeleteDeal={onDeleteDeal} />
             </div>
           ))
         )}

@@ -227,6 +227,26 @@ export default function Pipelines() {
     }
   });
 
+  // Delete deal mutation
+  const deleteDealMutation = useMutation({
+    mutationFn: async (dealId: string) => {
+      const { error } = await supabase
+        .from('deals')
+        .delete()
+        .eq('id', dealId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Negócio excluído com sucesso!");
+      queryClient.invalidateQueries({ queryKey: ['deals', activePipelineId] });
+      queryClient.invalidateQueries({ queryKey: ['lead-deals'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Erro ao excluir negócio");
+    }
+  });
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over) return;
@@ -310,6 +330,7 @@ export default function Pipelines() {
                           setEditStageOpen(true);
                         }}
                         onDeleteStage={(s) => deleteStageMutation.mutate(s)}
+                        onDeleteDeal={(dealId) => deleteDealMutation.mutate(dealId)}
                         onDropDeal={(dealId, targetStageId) => {
                           moveDealMutation.mutate({ dealId, targetStageId });
                         }}
