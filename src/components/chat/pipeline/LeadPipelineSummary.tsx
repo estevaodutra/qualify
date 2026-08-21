@@ -51,7 +51,7 @@ export default function LeadPipelineSummary({
         .select(`
           *,
           pipeline:pipelines(
-            id, name, company_id, color,
+            id, name, company_id,
             stages:pipeline_stages(*)
           )
         `)

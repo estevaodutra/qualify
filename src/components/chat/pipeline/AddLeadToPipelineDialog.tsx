@@ -93,7 +93,7 @@ export default function AddLeadToPipelineDialog({
       if (error) throw error;
 
       toast.success("Negócio adicionado à pipeline com sucesso!");
-      queryClient.invalidateQueries({ queryKey: ["lead-deals", leadId] });
+      queryClient.invalidateQueries({ queryKey: ["lead-deals"] });
       queryClient.invalidateQueries({ queryKey: ["chat-conversations"] });
       onOpenChange(false);
     } catch (err: any) {
