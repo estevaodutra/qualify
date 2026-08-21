@@ -144,11 +144,7 @@ export function ExecutionCanvas({
               }
               const strokeColor = colorKey === "success" ? "#10b981" : colorKey === "error" ? "#ef4444" : "#cbd5e1";
 
-              const isTrigger = srcNode.nodeType === "trigger";
-              const isContent = srcNode.nodeType === "content";
-              const isPhoneCall = srcNode.nodeType === "phone_call";
-              const isUra = srcNode.nodeType === "ura";
-              const srcWidth = isTrigger || isContent || isPhoneCall || isUra ? 320 : 220;
+              const srcWidth = 320;
 
               const sX = srcNode.positionX || 0, sY = srcNode.positionY || 0;
               const tX = tgtNode.positionX || 0, tY = tgtNode.positionY || 0;

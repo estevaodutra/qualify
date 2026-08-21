@@ -31,6 +31,7 @@ import { formatDelayLabel, normalizeDelayConfig } from "@/lib/workflows/delay";
 import { TriggerTypeSelector } from "./triggers/TriggerTypeSelector";
 import { getTriggerDefinition } from "./triggers/triggerDefinitions";
 import { getConditionOutputs, getConditionDefinition } from "./conditions/conditionRegistry";
+import { getActionDefinition } from "./actions/actionRegistry";
 
 export interface UnifiedSequenceBuilderProps {
   sequenceName: string;
@@ -1018,7 +1019,7 @@ export function UnifiedSequenceBuilder({
 
                   // Output port on the right side of the card
                   const portIdOut = conn.conditionPath || "default";
-                  const coordsOut = getPortCoords(srcNode.id, portIdOut, (srcNode.nodeType === "trigger" ? 380 : srcNode.nodeType === "content" || srcNode.nodeType === "phone_call" || srcNode.nodeType === "ura" ? 320 : 220), 45);
+                  const coordsOut = getPortCoords(srcNode.id, portIdOut, 320, 45);
                   let portX1 = sX + coordsOut.x;
                   let portY1 = sY + coordsOut.y;
 
@@ -1108,7 +1109,7 @@ export function UnifiedSequenceBuilder({
                         position: "absolute",
                         left: posX,
                         top: posY,
-                        width: isTrigger ? 380 : isContent || node.nodeType === "phone_call" || node.nodeType === "ura" ? 320 : 220,
+                        width: 320,
                         minHeight: isRandomizer ? Math.max(140, 40 + randomizerBranches.length * RANDOMIZER_PORT_SPACING) : undefined,
                         pointerEvents: "auto"
                       }}
@@ -1128,8 +1129,7 @@ export function UnifiedSequenceBuilder({
                         setNodeEditorOpen(true);
                       }}
                       className={cn(
-                        "rounded-xl border border-slate-200 bg-white shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col transition-[border-color,box-shadow] duration-150 cursor-grab active:cursor-grabbing select-none",
-                        isTrigger || isContent ? "p-5" : "p-3",
+                        "rounded-xl border border-slate-200 bg-white shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col transition-[border-color,box-shadow] duration-150 cursor-grab active:cursor-grabbing select-none p-4",
                         isSelected && "border-[#8A3CFF] ring-2 ring-[#8A3CFF]/10"
                       )}
                     >
@@ -2064,11 +2064,15 @@ export function UnifiedSequenceBuilder({
                               <p className="font-bold text-xs text-slate-800 truncate">
                                 {isCondition
                                   ? (getConditionDefinition(node.config.conditionType as string)?.label || (node.config.label as string) || "Condição")
+                                  : (node.nodeType === "action" || node.nodeType === "tag_add" || node.nodeType === "tag_remove" || node.nodeType === "deal_move")
+                                  ? (getActionDefinition(node.config.actionType as string)?.label || (node.config.label as string) || nodeInfo.label)
                                   : ((node.config.label as string) || nodeInfo.label)}
                               </p>
                               <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
                                 {isCondition
                                   ? (getConditionDefinition(node.config.conditionType as string) ? "Leads" : "Condição")
+                                  : (node.nodeType === "action" || node.nodeType === "tag_add" || node.nodeType === "tag_remove" || node.nodeType === "deal_move")
+                                  ? (getActionDefinition(node.config.actionType as string)?.category.toUpperCase() || "Ação CRM")
                                   : nodeInfo.label}
                               </p>
                             </div>
@@ -2081,6 +2085,8 @@ export function UnifiedSequenceBuilder({
                           >
                             {isCondition ? (
                               getConditionDefinition(node.config.conditionType as string)?.description || "Clique para selecionar e configurar esta regra..."
+                            ) : (node.nodeType === "action" || node.nodeType === "tag_add" || node.nodeType === "tag_remove" || node.nodeType === "deal_move") ? (
+                              getActionDefinition(node.config.actionType as string)?.description || "Clique para selecionar e configurar esta ação..."
                             ) : isRandomizer ? (
                               randomizerBranches.length === 0 ? "Clique para configurar as ramificações..." :
                               node.config.mode === "round_robin"

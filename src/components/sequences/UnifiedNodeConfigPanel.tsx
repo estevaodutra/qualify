@@ -52,6 +52,9 @@ import { useCallCampaigns } from "@/hooks/useCallCampaigns";
 import { getConditionDefinition } from "./conditions/conditionRegistry";
 import { ConditionSelectorModal } from "./conditions/ConditionSelectorModal";
 import { ConditionEditors } from "./conditions/ConditionEditors";
+import { getActionDefinition } from "./actions/actionRegistry";
+import { ActionSelectorModal } from "./actions/ActionSelectorModal";
+import { ActionEditors } from "./actions/ActionEditors";
 
 function formatWhatsAppText(text: string) {
   const escaped = text
@@ -516,6 +519,7 @@ export function UnifiedNodeConfigPanel({
   const [pipelineStages, setPipelineStages] = useState<any[]>([]);
   const [activeInstances, setActiveInstances] = useState<any[]>([]);
   const [conditionModalOpen, setConditionModalOpen] = useState(false);
+  const [actionModalOpen, setActionModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchPanelData = async () => {
@@ -2730,34 +2734,86 @@ export function UnifiedNodeConfigPanel({
             );
           })()}
 
-          {/* ACTION - Add/Remove Tag, Move Deal Stage */}
-          {(type === "tag_add" || type === "tag_remove") && (
-            <div className="space-y-2">
-              <Label>Nome da Tag / Etiqueta</Label>
-              <Input 
-                value={(currentConfig.tag as string) || ""} 
-                onChange={e => updateConfig("tag", e.target.value)} 
-                placeholder="Ex: VIP, Frio..." 
-                className="rounded-xl border-border/40 bg-background/50 text-xs"
-              />
-            </div>
-          )}
+          {/* ACTION - Novo Motor Extensível de Ações CRM */}
+          {(node.nodeType === "action" || type === "action" || type === "tag_add" || type === "tag_remove" || type === "deal_move") && (() => {
+            const actionType = (currentConfig.actionType as string) || (type === "tag_add" ? "add_lead_tags" : type === "tag_remove" ? "remove_lead_tags" : type === "deal_move" ? "move_deal_stage" : undefined);
+            const activeDef = getActionDefinition(actionType);
 
-          {type === "deal_move" && (
-            <div className="space-y-2">
-              <Label>Mover para Etapa do CRM</Label>
-              <Select value={(currentConfig.stageId as string) || ""} onValueChange={v => updateConfig("stageId", v)}>
-                <SelectTrigger className="rounded-xl border-border/40"><SelectValue placeholder="Selecione a etapa..." /></SelectTrigger>
-                <SelectContent>
-                  {pipelineStages.map(s => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+            return (
+              <div className="space-y-5">
+                {/* Header card for selected action */}
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">
+                        {activeDef ? `Categoria: ${activeDef.category.toUpperCase()}` : "Ação Nenhuma"}
+                      </span>
+                      <h3 className="text-sm font-bold text-slate-800 mt-0.5">
+                        {activeDef ? activeDef.label : "Selecione uma Ação"}
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                        {activeDef ? activeDef.description : "Escolha qual mutação de CRM este bloco executará."}
+                      </p>
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setActionModalOpen(true)}
+                      className="rounded-xl text-xs shrink-0 font-semibold border-amber-200 text-amber-700 hover:bg-amber-50"
+                    >
+                      {activeDef ? "Alterar Ação" : "Selecionar Ação"}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Action Specific Form */}
+                {activeDef ? (
+                  <ActionEditors
+                    actionDef={activeDef}
+                    config={currentConfig}
+                    onChangeConfig={(newConfig) => {
+                      onUpdate(newConfig);
+                    }}
+                    activeCompanyId={activeCompanyId}
+                    customFieldsMetadata={customFieldsMetadata}
+                  />
+                ) : (
+                  <div className="text-center py-8 px-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/30">
+                    <p className="text-xs font-medium text-slate-600">Nenhuma ação selecionada</p>
+                    <p className="text-[11px] text-slate-400 mt-1 mb-4">
+                      Clique no botão abaixo para abrir o catálogo e selecionar uma ação para este bloco.
+                    </p>
+                    <Button
+                      type="button"
+                      onClick={() => setActionModalOpen(true)}
+                      className="rounded-xl bg-amber-500 text-white hover:bg-amber-600 text-xs shadow-sm font-semibold"
+                    >
+                      Abrir Catálogo de Ações
+                    </Button>
+                  </div>
+                )}
+
+                {/* Action Selector Modal */}
+                <ActionSelectorModal
+                  open={actionModalOpen}
+                  onOpenChange={setActionModalOpen}
+                  onSelectAction={(selectedAction) => {
+                    const updated = {
+                      ...currentConfig,
+                      category: selectedAction.category,
+                      actionType: selectedAction.type,
+                      parameters: {
+                        ...(selectedAction.defaultParameters || {}),
+                      },
+                    };
+                    onUpdate(updated);
+                  }}
+                />
+              </div>
+            );
+          })()}
 
           {type === "channel_select" && (
             <div className="space-y-4">
