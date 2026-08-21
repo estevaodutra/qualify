@@ -8,6 +8,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Deal, Pipeline, PipelineStage } from "@/types/crm.types";
 import AddLeadToPipelineDialog from "./AddLeadToPipelineDialog";
 import MoveDealConfirmPopover from "./MoveDealConfirmPopover";
+import { TagSelectorPopover } from "../tags/TagSelectorPopover";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Plus, Check, X as XIcon, GitBranch, ChevronDown, ChevronUp, Sparkles, Trash2 } from "lucide-react";
@@ -71,6 +72,19 @@ export default function LeadPipelineSummary({
     staleTime: 0,
     refetchInterval: 2000,
   });
+
+  // Fetch lead tags
+  const { data: leadData } = useQuery({
+    queryKey: ["lead-tags-summary", leadId],
+    queryFn: async () => {
+      if (!leadId) return null;
+      const { data } = await supabase.from("leads").select("tags").eq("id", leadId).single();
+      return data;
+    },
+    enabled: !!leadId,
+  });
+
+  const currentLeadTags = leadData?.tags || [];
 
   // Realtime subscription for deals
   useEffect(() => {
@@ -187,11 +201,25 @@ export default function LeadPipelineSummary({
               variant="outline"
               size="sm"
               onClick={() => setIsAddDialogOpen(true)}
-              className="h-6 px-2 text-[11px] font-bold text-primary border-primary/20 bg-primary/5 hover:bg-primary/10 rounded-lg shadow-none gap-1"
+              className="h-6 px-2 text-[11px] font-bold text-primary border-primary/20 bg-primary/5 hover:bg-primary/10 rounded-lg shadow-none gap-1 cursor-pointer"
             >
               <Plus className="h-3 w-3" />
               Pipeline
             </Button>
+            <TagSelectorPopover
+              leadId={leadId}
+              currentTags={currentLeadTags}
+              trigger={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-6 px-2 text-[11px] font-bold text-primary border-primary/20 bg-primary/5 hover:bg-primary/10 rounded-lg shadow-none gap-1 cursor-pointer"
+                >
+                  <Plus className="h-3 w-3" />
+                  Tag
+                </Button>
+              }
+            />
             <span className="text-[10px] text-muted-foreground italic">Nenhuma pipeline associada</span>
           </div>
         ) : (
@@ -301,17 +329,33 @@ export default function LeadPipelineSummary({
               );
             })}
 
-            {/* Bottom Actions: + Pipeline & Expansion toggle */}
+            {/* Bottom Actions: + Pipeline & + Tag & Expansion toggle */}
             <div className="flex items-center justify-between pt-0.5">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsAddDialogOpen(true)}
-                className="h-5 px-1.5 text-[10px] font-bold text-primary hover:bg-primary/10 rounded-md shadow-none gap-1"
-              >
-                <Plus className="h-3 w-3" />
-                Pipeline
-              </Button>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsAddDialogOpen(true)}
+                  className="h-5 px-1.5 text-[10px] font-bold text-primary hover:bg-primary/10 rounded-md shadow-none gap-1 cursor-pointer"
+                >
+                  <Plus className="h-3 w-3" />
+                  Pipeline
+                </Button>
+                <TagSelectorPopover
+                  leadId={leadId}
+                  currentTags={currentLeadTags}
+                  trigger={
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 px-1.5 text-[10px] font-bold text-primary hover:bg-primary/10 rounded-md shadow-none gap-1 cursor-pointer"
+                    >
+                      <Plus className="h-3 w-3" />
+                      Tag
+                    </Button>
+                  }
+                />
+              </div>
 
               {deals.length > 2 && (
                 <button

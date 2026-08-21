@@ -10,6 +10,8 @@ import { ChatConversation, PipelineStage } from "@/hooks/useChat";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { LeadAvatar, LeadTags, DealPipelineStage, DealValue } from "../crm/shared";
+import { Badge } from "@/components/ui/badge";
+import { TagSelectorPopover } from "./tags/TagSelectorPopover";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Deal } from "@/types/crm.types";
 import { format } from "date-fns";
@@ -207,6 +209,41 @@ export default function LeadContextPanel({ conversation, stages, onClose }: Lead
           <h3 className="font-bold text-base text-card-foreground leading-tight">{name || "Sem Nome"}</h3>
           <span className="text-[10px] text-muted-foreground font-mono mt-0.5 inline-block">{phone}</span>
         </div>
+
+        {/* Tags right below name/phone */}
+        <div className="flex items-center justify-center gap-1.5 flex-wrap pt-1 max-w-[280px]">
+          {localTags.map((tag) => (
+            <Badge
+              key={tag}
+              variant="secondary"
+              className="text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full flex items-center gap-1"
+            >
+              <span>{tag}</span>
+              <button
+                type="button"
+                onClick={() => handleRemoveTag(tag)}
+                className="hover:text-destructive transition-colors cursor-pointer"
+                title="Remover tag"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
+          <TagSelectorPopover
+            leadId={lead?.id}
+            currentTags={localTags}
+            onTagsChange={(newTags) => setLocalTags(newTags)}
+            trigger={
+              <button
+                type="button"
+                className="h-6 w-6 rounded-full bg-primary/10 text-primary hover:bg-primary/20 flex items-center justify-center transition-all cursor-pointer border border-primary/20 shadow-none shrink-0"
+                title="Adicionar Tag"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            }
+          />
+        </div>
         
         {/* Tab Navigation */}
         <div className="flex bg-muted/40 p-1 rounded-xl mt-3 w-full border border-border/40 shadow-inner">
@@ -362,23 +399,6 @@ export default function LeadContextPanel({ conversation, stages, onClose }: Lead
                 </div>
               );
             })}
-
-            {/* Etiquetas / Tags (Always open at bottom) */}
-            <div className="pt-2">
-              <h4 className="flex items-center gap-2 px-1 text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-3">
-                <Tag className="h-3.5 w-3.5" />
-                Etiquetas do Lead
-              </h4>
-              <div className="space-y-3 bg-background/40 border border-border/40 p-3 rounded-2xl shadow-sm">
-                <LeadTags tags={localTags} maxVisible={20} />
-                <div className="flex gap-2">
-                  <Input placeholder="Nova etiqueta..." value={newTag} onChange={(e) => setNewTag(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleAddTag()} className="h-8 text-[11px] bg-background/80 focus:bg-background rounded-xl flex-1" />
-                  <Button size="icon" onClick={handleAddTag} className="h-8 w-8 shrink-0 rounded-xl bg-primary/20 text-primary hover:bg-primary/30 shadow-none">
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </div>
           </div>
         )}
 
