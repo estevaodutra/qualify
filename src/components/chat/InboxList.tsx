@@ -10,7 +10,9 @@ import { cn } from "@/lib/utils";
 import { AdvancedChatFilters, getActiveCategoryCount } from "@/types/chatFilterTypes";
 import ChatFilterDrawer from "./filters/ChatFilterDrawer";
 import ActiveFilterChips from "./filters/ActiveFilterChips";
+import ConversationActionsMenu from "./actions/ConversationActionsMenu";
 import { Button } from "@/components/ui/button";
+import { Pin, Archive, Inbox } from "lucide-react";
 
 interface InboxListProps {
   conversations: ChatConversation[];
@@ -23,6 +25,7 @@ interface InboxListProps {
   fetchNextPage: () => void;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
+  archivedCount?: number;
 }
 
 export default function InboxList({ 
@@ -165,6 +168,41 @@ export default function InboxList({
           onOpenChange={setIsManagerOpen}
         />
         
+        {/* View Tabs: Inbox vs Archived */}
+        <div className="flex bg-muted/40 p-1 rounded-xl gap-1 border border-border/30">
+          <button
+            type="button"
+            onClick={() => setFilters({ ...filters, archiveMode: "active_only" } as any)}
+            className={cn(
+              "flex-1 py-1 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
+              (filters as AdvancedChatFilters).archiveMode !== "archived_only"
+                ? "bg-background text-primary shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Inbox className="h-3.5 w-3.5" />
+            <span>Entrada</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilters({ ...filters, archiveMode: "archived_only" } as any)}
+            className={cn(
+              "flex-1 py-1 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer relative",
+              (filters as AdvancedChatFilters).archiveMode === "archived_only"
+                ? "bg-background text-primary shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Archive className="h-3.5 w-3.5" />
+            <span>Arquivadas</span>
+            {(archivedCount || 0) > 0 && (
+              <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.2 rounded-full font-extrabold ml-0.5">
+                {archivedCount}
+              </span>
+            )}
+          </button>
+        </div>
+
         {/* Search & Unified Filter Button */}
         <div className="flex gap-2 items-center">
           <div className="relative flex-1">
@@ -262,24 +300,37 @@ export default function InboxList({
                   key={conv.id}
                   onClick={() => onSelect(conv.id)}
                   className={cn(
-                    "p-3.5 flex flex-col gap-1.5 cursor-pointer select-none transition-all duration-300 hover:bg-primary/5",
+                    "p-3.5 flex flex-col gap-1.5 cursor-pointer select-none transition-all duration-300 hover:bg-primary/5 group relative",
                     isSelected ? "bg-primary/10 border-l-[3px] border-primary" : "bg-transparent",
                     conv.unread_count > 0 && "bg-primary/[0.02] font-semibold"
                   )}
                 >
-                  {/* Line 1: Lead Name / Title & Wait Time */}
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-sm truncate max-w-[170px] text-card-foreground">
-                      {conv.lead?.name || conv.lead?.phone || "Lead Sem Nome"}
-                    </span>
-                    
-                    {/* Wait Time Indicator */}
-                    {waitTime && (
-                      <span className="text-[10px] flex items-center gap-1 font-bold text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded-full animate-pulse">
-                        <Clock className="h-2.5 w-2.5" />
-                        {waitTime}
+                  {/* Line 1: Lead Name / Title & Wait Time & Pin & Actions Menu */}
+                  <div className="flex justify-between items-center gap-1">
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                      {conv.is_pinned && (
+                        <Pin className="h-3.5 w-3.5 text-amber-500 shrink-0 fill-amber-500/20" title="Conversa Fixada" />
+                      )}
+                      <span className="font-semibold text-sm truncate text-card-foreground">
+                        {conv.lead?.name || conv.lead?.phone || "Lead Sem Nome"}
                       </span>
-                    )}
+                    </div>
+                    
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {/* Wait Time Indicator */}
+                      {waitTime && (
+                        <span className="text-[10px] flex items-center gap-1 font-bold text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded-full animate-pulse">
+                          <Clock className="h-2.5 w-2.5" />
+                          {waitTime}
+                        </span>
+                      )}
+
+                      {/* Conversation Actions Menu */}
+                      <ConversationActionsMenu
+                        conversation={conv}
+                        className="h-6 w-6 opacity-80 group-hover:opacity-100 transition-opacity"
+                      />
+                    </div>
                   </div>
 
                   {/* Instance Tag under name + (i) multi-connection indicator */}

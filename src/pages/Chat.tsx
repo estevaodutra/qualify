@@ -22,7 +22,9 @@ import MessageThread from "@/components/chat/MessageThread";
 import ChatComposer from "@/components/chat/ChatComposer";
 import ChatSidebar, { ChatSidebarMode } from "@/components/chat/ChatSidebar";
 import LeadPipelineSummary from "@/components/chat/pipeline/LeadPipelineSummary";
+import ConversationActionsMenu from "@/components/chat/actions/ConversationActionsMenu";
 import { QuickReply } from "@/types/quickReplyTypes";
+import { Pin, Archive } from "lucide-react";
 
 import { AdvancedChatFilters, DEFAULT_ADVANCED_CHAT_FILTERS } from "@/types/chatFilterTypes";
 
@@ -48,6 +50,7 @@ export default function Chat() {
   // Hook state logic
   const {
     conversations,
+    archivedCount,
     fetchNextConversations,
     hasNextConversations,
     isFetchingNextConversations,
@@ -257,6 +260,7 @@ export default function Chat() {
         ) : (
           <InboxList
             conversations={conversations}
+            archivedCount={archivedCount}
             selectedId={selectedConvId}
             onSelect={(id) => setSelectedConvId(id)}
             operators={operators}
@@ -288,9 +292,17 @@ export default function Chat() {
                 </button>
                 <div className="space-y-1 min-w-0">
                   <div className="flex items-center gap-1.5 min-w-0">
+                    {selectedConv.is_pinned && (
+                      <Pin className="h-3.5 w-3.5 text-amber-500 shrink-0 fill-amber-500/20" title="Conversa Fixada" />
+                    )}
                     <h3 className="font-bold text-sm text-card-foreground leading-snug truncate">
                       {selectedConv.lead?.name || selectedConv.lead?.phone || "Lead Sem Nome"}
                     </h3>
+                    {selectedConv.is_archived && (
+                      <span className="text-[10px] font-bold text-purple-600 bg-purple-500/10 px-1.5 py-0.2 rounded border border-purple-500/20 shrink-0">
+                        Arquivada
+                      </span>
+                    )}
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -417,8 +429,8 @@ export default function Chat() {
                 </div>
               </div>
 
-              {/* Status toggles */}
-              <div className="flex gap-2">
+              {/* Status toggles & Conversation Actions Menu */}
+              <div className="flex items-center gap-2">
                 {selectedConv.status !== "resolved" ? (
                   <button
                     onClick={() => updateConversationStatus({ conversationId: selectedConv.id, status: "resolved" })}
@@ -434,6 +446,11 @@ export default function Chat() {
                     Reabrir Conversa
                   </button>
                 )}
+
+                <ConversationActionsMenu
+                  conversation={selectedConv}
+                  className="h-8 w-8 rounded-xl border border-border/40 bg-background/60 hover:bg-background"
+                />
               </div>
             </div>
 

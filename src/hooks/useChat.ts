@@ -17,6 +17,10 @@ export interface ChatConversation {
   last_message_at: string;
   waiting_since: string | null;
   tags: string[];
+  is_archived?: boolean;
+  archived_at?: string | null;
+  archived_by?: string | null;
+  is_pinned?: boolean;
   created_at: string;
   updated_at: string;
   lead: {
@@ -147,6 +151,9 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
           last_message_at,
           tags,
           waiting_since,
+          is_archived,
+          archived_at,
+          archived_by,
           created_at,
           updated_at,
           lead:leads(id, name, phone, email, tags, custom_fields),
@@ -156,6 +163,16 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
         .eq("company_id", activeCompanyId);
 
       const advFilters = filters as AdvancedChatFilters | undefined;
+
+      // 0. Archive Mode (Active / Archived / All)
+      if (advFilters?.archiveMode === "archived_only") {
+        query = query.eq("is_archived", true);
+      } else if (advFilters?.archiveMode === "all") {
+        // do not filter by is_archived
+      } else {
+        // default: active_only
+        query = query.or("is_archived.is.null,is_archived.eq.false");
+      }
 
       // 1. Statuses (Multi-select / Legacy)
       if (advFilters?.statuses && advFilters.statuses.length > 0) {
@@ -367,7 +384,61 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
     refetchInterval: 3000,
   });
 
-  const conversations = conversationsData?.pages.flat() || [];
+  // Fetch User Pins
+  const { data: userPins = [] } = useQuery({
+    queryKey: ["chat-pins", activeCompanyId, user?.id],
+    queryFn: async () => {
+      if (!activeCompanyId || !user) return [];
+      try {
+        const { data } = await supabase
+          .from("chat_conversation_pins" as any)
+          .select("conversation_id")
+          .eq("company_id", activeCompanyId)
+          .eq("user_id", user.id);
+        return (data || []).map((p: any) => p.conversation_id as string);
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!activeCompanyId && !!user,
+  });
+
+  // Fetch Count of Archived Conversations
+  const { data: archivedCount = 0 } = useQuery({
+    queryKey: ["chat-archived-count", activeCompanyId],
+    queryFn: async () => {
+      if (!activeCompanyId) return 0;
+      try {
+        const { count, error } = await supabase
+          .from("chat_conversations")
+          .select("id", { count: "exact", head: true })
+          .eq("company_id", activeCompanyId)
+          .eq("is_archived", true);
+        if (error) return 0;
+        return count || 0;
+      } catch {
+        return 0;
+      }
+    },
+    enabled: !!activeCompanyId && !!user,
+    refetchInterval: 5000,
+  });
+
+  const rawConversations = useMemo(() => conversationsData?.pages.flat() || [], [conversationsData]);
+  const pinnedSet = useMemo(() => new Set(userPins), [userPins]);
+
+  const conversations = useMemo(() => {
+    const mapped = rawConversations.map((c) => ({
+      ...c,
+      is_pinned: pinnedSet.has(c.id),
+    }));
+
+    return mapped.sort((a, b) => {
+      if (a.is_pinned && !b.is_pinned) return -1;
+      if (!a.is_pinned && b.is_pinned) return 1;
+      return 0;
+    });
+  }, [rawConversations, pinnedSet]);
 
 
   // 2. Fetch Pipeline Stages
@@ -787,6 +858,8 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
 
   return {
     conversations,
+    archivedCount,
+    userPins,
     fetchNextConversations,
     hasNextConversations,
     isFetchingNextConversations,
