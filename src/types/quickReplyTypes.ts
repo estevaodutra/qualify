@@ -47,6 +47,19 @@ export interface LinkContentPayload {
   text?: string;
 }
 
+export interface QuickReplyActionAddTag {
+  type: 'add_tag';
+  tagName: string;
+}
+
+export interface QuickReplyActionMoveDeal {
+  type: 'move_deal';
+  pipelineId: string;
+  stageId: string;
+}
+
+export type QuickReplyAction = QuickReplyActionAddTag | QuickReplyActionMoveDeal;
+
 export type QuickReplyContentPayload = {
   contentType: QuickReplyContentType;
   content:
@@ -57,6 +70,8 @@ export type QuickReplyContentPayload = {
     | VideoNoteContentPayload
     | DocumentContentPayload
     | LinkContentPayload;
+  actions?: QuickReplyAction[];
+  auto_send?: boolean;
 };
 
 export interface QuickReplyGroup {

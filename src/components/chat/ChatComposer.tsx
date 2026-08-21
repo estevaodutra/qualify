@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Send, Lock, MessageSquare, Paperclip, Smile, Loader2, Sparkles, X, File, Image as ImageIcon, Video, Mic, Play, Pause, Trash2, Square, GitBranch, Zap, Radio, Link2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { ChatTemplate } from "@/hooks/useChat";
 import { useQuickReplies } from "@/hooks/useQuickReplies";
-import { QuickReply, QuickReplyContentType } from "@/types/quickReplyTypes";
+import { QuickReply, QuickReplyContentType, QuickReplyAction } from "@/types/quickReplyTypes";
 import { resolveVariables } from "@/utils/variableResolver";
 import QuickRepliesPanelPopover from "./quick-replies/QuickRepliesPanelPopover";
 import { cn } from "@/lib/utils";
@@ -219,71 +219,153 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, ext
     enabled: !!activeCompanyId,
   });
 
+  const queryClient = useQueryClient();
+
+  // Helper: execute automated actions configured on a quick reply
+  const executeQuickReplyActions = async (actions?: QuickReplyAction[]) => {
+    if (!actions || actions.length === 0 || !leadId || !activeCompanyId) return;
+
+    for (const act of actions) {
+      if (act.type === "add_tag" && act.tagName) {
+        try {
+          const { data: lead } = await supabase.from("leads").select("tags").eq("id", leadId).single();
+          const existingTags: string[] = lead?.tags || [];
+          if (!existingTags.some((t: string) => t.toLowerCase() === act.tagName.toLowerCase())) {
+            const updatedTags = [...existingTags, act.tagName];
+            await supabase.from("leads").update({ tags: updatedTags }).eq("id", leadId);
+            queryClient.invalidateQueries({ queryKey: ["chat-conversations"] });
+            queryClient.invalidateQueries({ queryKey: ["lead-deals"] });
+            toast.success(`Tag "${act.tagName}" adicionada!`);
+          }
+        } catch (err: any) {
+          console.error("Error executing add_tag action:", err);
+        }
+      } else if (act.type === "move_deal" && act.pipelineId && act.stageId) {
+        try {
+          const { data: deals } = await supabase
+            .from("deals")
+            .select("id")
+            .eq("company_id", activeCompanyId)
+            .eq("lead_id", leadId)
+            .neq("status", "archived")
+            .order("created_at", { ascending: false });
+
+          if (deals && deals.length > 0) {
+            const dealId = deals[0].id;
+            await supabase.from("deals").update({ pipeline_id: act.pipelineId, stage_id: act.stageId }).eq("id", dealId);
+          } else {
+            await supabase.from("deals").insert({
+              company_id: activeCompanyId,
+              lead_id: leadId,
+              pipeline_id: act.pipelineId,
+              stage_id: act.stageId,
+              title: leadData?.name || leadData?.phone || "Novo Negócio",
+            });
+          }
+          queryClient.invalidateQueries({ queryKey: ["lead-deals"] });
+          toast.success("Negócio movido na pipeline!");
+        } catch (err: any) {
+          console.error("Error executing move_deal action:", err);
+        }
+      }
+    }
+  };
+
   // Apply a Quick Reply (structured multimedia content) into the composer
-  const applyQuickReply = (reply: QuickReply) => {
+  const applyQuickReply = async (reply: QuickReply) => {
     const context = {
       lead: leadData || null,
       operator: user ? { name: user.email, full_name: user.email } : null,
     };
 
-    const payload = reply.content_json?.content as any;
+    const contentJson = reply.content_json as any;
+    const payload = contentJson?.content;
+    const actions: QuickReplyAction[] = contentJson?.actions || [];
+    const autoSend: boolean = contentJson?.auto_send ?? false;
+
     setPendingQuickReplyId(reply.id);
+
+    // Execute automated actions if present
+    if (actions.length > 0) {
+      executeQuickReplyActions(actions);
+    }
 
     if (!payload) return;
 
+    let sendText = "";
+    let sendMediaUrl: string | undefined;
+    let sendMediaType: string | undefined;
+    let isVNote = false;
+
     switch (reply.content_type) {
       case "text": {
-        const resolvedText = resolveVariables(payload.text || "", context);
-        const replaced = text.replace(/\/([\w\-]*)$/, resolvedText);
-        setText(replaced !== text ? replaced : (text ? `${text}\n${resolvedText}` : resolvedText));
+        sendText = resolveVariables(payload.text || "", context);
         break;
       }
       case "image": {
-        const resolvedCaption = resolveVariables(payload.caption || "", context);
-        const resolvedUrl = resolveVariables(payload.mediaUrl || "", context);
-        setAttachedFile({ url: resolvedUrl, type: "image", name: reply.name });
-        setText(resolvedCaption);
+        sendText = resolveVariables(payload.caption || "", context);
+        sendMediaUrl = resolveVariables(payload.mediaUrl || "", context);
+        sendMediaType = "image";
         break;
       }
       case "video": {
-        const resolvedCaption = resolveVariables(payload.caption || "", context);
-        const resolvedUrl = resolveVariables(payload.mediaUrl || "", context);
-        setAttachedFile({ url: resolvedUrl, type: "video", name: reply.name });
-        setIsVideoNote(false);
-        setText(resolvedCaption);
+        sendText = resolveVariables(payload.caption || "", context);
+        sendMediaUrl = resolveVariables(payload.mediaUrl || "", context);
+        sendMediaType = "video";
         break;
       }
       case "audio": {
-        const resolvedUrl = resolveVariables(payload.mediaUrl || "", context);
-        setAttachedFile({ url: resolvedUrl, type: "audio", name: reply.name });
+        sendMediaUrl = resolveVariables(payload.mediaUrl || "", context);
+        sendMediaType = "audio";
         break;
       }
       case "video_note": {
-        const resolvedUrl = resolveVariables(payload.mediaUrl || "", context);
-        setAttachedFile({ url: resolvedUrl, type: "video", name: reply.name });
-        setIsVideoNote(true);
+        sendMediaUrl = resolveVariables(payload.mediaUrl || "", context);
+        sendMediaType = "ptv";
+        isVNote = true;
         break;
       }
       case "document": {
-        const resolvedUrl = resolveVariables(payload.mediaUrl || "", context);
-        const resolvedFileName = resolveVariables(payload.fileName || "Documento", context);
-        const resolvedCaption = resolveVariables(payload.caption || "", context);
-        setAttachedFile({ url: resolvedUrl, type: "document", name: resolvedFileName });
-        if (resolvedCaption) setText(resolvedCaption);
+        sendText = resolveVariables(payload.caption || "", context);
+        sendMediaUrl = resolveVariables(payload.mediaUrl || "", context);
+        sendMediaType = "document";
         break;
       }
       case "link": {
         const resolvedUrl = resolveVariables(payload.url || "", context);
         const resolvedText = resolveVariables(payload.text || "", context);
-        const fullText = resolvedText ? `${resolvedText}\n${resolvedUrl}` : resolvedUrl;
-        const replaced = text.replace(/\/([\w\-]*)$/, fullText);
-        setText(replaced !== text ? replaced : (text ? `${text}\n${fullText}` : fullText));
+        sendText = resolvedText ? `${resolvedText}\n${resolvedUrl}` : resolvedUrl;
         break;
       }
     }
 
     setShowDropdown(false);
-    textareaRef.current?.focus();
+
+    if (autoSend) {
+      // Send immediately!
+      try {
+        await onSend(sendText, isInternal, sendMediaUrl, sendMediaType);
+        incrementUsage(reply.id).catch(console.error);
+        setPendingQuickReplyId(null);
+        setText("");
+        setAttachedFile(null);
+        toast.success("Resposta rápida enviada!");
+      } catch (err: any) {
+        console.error("Auto send quick reply error:", err);
+        toast.error("Erro ao enviar resposta rápida automaticamente.");
+      }
+    } else {
+      // Put into composer draft
+      if (reply.content_type === "text" || reply.content_type === "link") {
+        const replaced = text.replace(/\/([\w\-]*)$/, sendText);
+        setText(replaced !== text ? replaced : (text ? `${text}\n${sendText}` : sendText));
+      } else {
+        if (sendMediaType) setAttachedFile({ url: sendMediaUrl!, type: sendMediaType, name: reply.name });
+        if (isVNote) setIsVideoNote(true);
+        setText(sendText);
+      }
+      textareaRef.current?.focus();
+    }
   };
 
   // Handle template selection trigger via "/"

@@ -10,15 +10,17 @@ import {
   QuickReply,
   QuickReplyGroup,
   QuickReplyContentType,
-  QuickReplyContentPayload
+  QuickReplyContentPayload,
+  QuickReplyAction
 } from "@/types/quickReplyTypes";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   MessageSquare, Image as ImageIcon, Video, Mic, Radio, FileText, Link2,
-  Upload, Loader2, ArrowLeft, CheckCircle2, Sparkles, File, Play
+  Upload, Loader2, ArrowLeft, CheckCircle2, Sparkles, File, Play, Zap, Plus, Trash2, Tag, GitBranch, Send
 } from "lucide-react";
 
 interface QuickReplyEditorModalProps {
@@ -52,6 +54,17 @@ const CONTENT_TYPES: Array<{
   { type: "link", label: "Link / URL", description: "Link direto com texto personalizável", icon: Link2, color: "text-sky-500 bg-sky-500/10 border-sky-500/20" },
 ];
 
+const LOCAL_TAGS_KEY = (companyId: string) => `qualify_tags_${companyId}`;
+
+function getLocalTags(companyId: string): { id: string; name: string; color: string }[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_TAGS_KEY(companyId));
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function QuickReplyEditorModal({
   open,
   onOpenChange,
@@ -83,7 +96,50 @@ export default function QuickReplyEditorModal({
   const [linkUrl, setLinkUrl] = useState("");
   const [linkText, setLinkText] = useState("");
 
+  // Automation & Trigger State
+  const [autoSend, setAutoSend] = useState(false);
+  const [actions, setActions] = useState<QuickReplyAction[]>([]);
+
   const [isUploading, setIsUploading] = useState(false);
+
+  // Fetch Pipelines & Stages for move_deal actions
+  const { data: pipelines = [] } = useQuery({
+    queryKey: ["quick-reply-editor-pipelines", activeCompanyId],
+    queryFn: async () => {
+      if (!activeCompanyId) return [];
+      const { data } = await supabase
+        .from("pipelines")
+        .select("id, name, stages:pipeline_stages(id, name, order_index, color)")
+        .eq("company_id", activeCompanyId)
+        .order("created_at", { ascending: true });
+      return (data || []) as any[];
+    },
+    enabled: !!activeCompanyId && open,
+  });
+
+  // Fetch System Tags for add_tag actions
+  const { data: systemTags = [] } = useQuery({
+    queryKey: ["quick-reply-editor-tags", activeCompanyId],
+    queryFn: async () => {
+      if (!activeCompanyId) return [];
+      let dbTags: { id: string; name: string; color: string }[] = [];
+      try {
+        const { data } = await supabase
+          .from("tags")
+          .select("id, name, color")
+          .eq("company_id", activeCompanyId)
+          .order("name", { ascending: true });
+        if (data) dbTags = data;
+      } catch {}
+
+      const local = getLocalTags(activeCompanyId);
+      const map = new Map<string, { id: string; name: string; color: string }>();
+      dbTags.forEach((t) => map.set(t.name.toLowerCase(), t));
+      local.forEach((t) => { if (!map.has(t.name.toLowerCase())) map.set(t.name.toLowerCase(), t); });
+      return Array.from(map.values());
+    },
+    enabled: !!activeCompanyId && open,
+  });
 
   // Reset or populate fields when modal opens/changes
   useEffect(() => {
@@ -94,7 +150,11 @@ export default function QuickReplyEditorModal({
       setGroupId(replyToEdit.group_id || null);
       setContentType(replyToEdit.content_type);
 
-      const content = replyToEdit.content_json?.content as any;
+      const contentJson = replyToEdit.content_json as any;
+      setAutoSend(contentJson?.auto_send ?? false);
+      setActions(Array.isArray(contentJson?.actions) ? contentJson.actions : []);
+
+      const content = contentJson?.content as any;
       if (content) {
         setTextBody(content.text || "");
         setMediaUrl(content.mediaUrl || "");
@@ -121,6 +181,8 @@ export default function QuickReplyEditorModal({
       setAsVoice(true);
       setLinkUrl("");
       setLinkText("");
+      setAutoSend(false);
+      setActions([]);
     }
   }, [replyToEdit, open]);
 
@@ -158,25 +220,55 @@ export default function QuickReplyEditorModal({
     }
   };
 
+  // Actions Handlers
+  const handleAddAction = () => {
+    // Default action: add_tag if systemTags available, or move_deal
+    const defaultTag = systemTags.length > 0 ? systemTags[0].name : "Interessado";
+    setActions((prev) => [...prev, { type: "add_tag", tagName: defaultTag }]);
+  };
+
+  const handleRemoveAction = (index: number) => {
+    setActions((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleUpdateAction = (index: number, updated: QuickReplyAction) => {
+    setActions((prev) => prev.map((act, i) => (i === index ? updated : act)));
+  };
+
   const constructPayload = (): QuickReplyContentPayload => {
+    let rawPayload: any;
     switch (contentType) {
       case "text":
-        return { contentType: "text", content: { text: textBody } };
+        rawPayload = { contentType: "text", content: { text: textBody } };
+        break;
       case "image":
-        return { contentType: "image", content: { mediaUrl, storagePath, caption } };
+        rawPayload = { contentType: "image", content: { mediaUrl, storagePath, caption } };
+        break;
       case "video":
-        return { contentType: "video", content: { mediaUrl, storagePath, caption } };
+        rawPayload = { contentType: "video", content: { mediaUrl, storagePath, caption } };
+        break;
       case "audio":
-        return { contentType: "audio", content: { mediaUrl, storagePath, asVoice } };
+        rawPayload = { contentType: "audio", content: { mediaUrl, storagePath, asVoice } };
+        break;
       case "video_note":
-        return { contentType: "video_note", content: { mediaUrl, storagePath } };
+        rawPayload = { contentType: "video_note", content: { mediaUrl, storagePath } };
+        break;
       case "document":
-        return { contentType: "document", content: { mediaUrl, storagePath, fileName: fileName || "Documento", mimeType, caption } };
+        rawPayload = { contentType: "document", content: { mediaUrl, storagePath, fileName: fileName || "Documento", mimeType, caption } };
+        break;
       case "link":
-        return { contentType: "link", content: { url: linkUrl, text: linkText } };
+        rawPayload = { contentType: "link", content: { url: linkUrl, text: linkText } };
+        break;
       default:
-        return { contentType: "text", content: { text: textBody } };
+        rawPayload = { contentType: "text", content: { text: textBody } };
+        break;
     }
+
+    return {
+      ...rawPayload,
+      auto_send: autoSend,
+      actions: actions.length > 0 ? actions : undefined,
+    };
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -232,7 +324,7 @@ export default function QuickReplyEditorModal({
                 {replyToEdit ? "Editar Resposta Rápida" : step === 1 ? "Nova Resposta — Escolha o Tipo" : "Configurar Resposta Rápida"}
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
-                {step === 1 ? "Selecione o formato de conteúdo reutilizável" : "Preencha os detalhes e variáveis do seu conteúdo"}
+                {step === 1 ? "Selecione o formato de conteúdo reutilizável" : "Preencha os detalhes e ações automatizadas"}
               </DialogDescription>
             </div>
           </div>
@@ -318,7 +410,7 @@ export default function QuickReplyEditorModal({
                       <SelectItem key={g.id} value={g.id} className="text-xs">
                         <div className="flex items-center gap-2">
                           <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: g.color || "#10B981" }} />
-                          {g.name}
+                          <span>{g.name}</span>
                         </div>
                       </SelectItem>
                     ))}
@@ -327,123 +419,55 @@ export default function QuickReplyEditorModal({
               </div>
             </div>
 
-            {/* TYPE-SPECIFIC EDITORS */}
-            {/* 1. TEXT */}
+            {/* Content Field according to Content Type */}
             {contentType === "text" && (
-              <div className="space-y-1.5">
-                <div className="flex justify-between items-center">
-                  <Label className="text-xs font-semibold">Mensagem de Texto</Label>
-                  <span className="text-[10px] text-muted-foreground">Suporta variáveis como {'{{lead.name}}'}</span>
-                </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold flex justify-between">
+                  <span>Mensagem de Texto</span>
+                  <span className="text-[10px] text-muted-foreground">Suporta variáveis como {`{{lead.name}}`}</span>
+                </Label>
                 <Textarea
-                  placeholder="Olá {{lead.name}}, tudo bem? Segue a informação..."
+                  placeholder="Digite o texto da resposta rápida..."
                   value={textBody}
                   onChange={(e) => setTextBody(e.target.value)}
-                  className="min-h-[120px] text-xs rounded-xl leading-relaxed"
-                  required
+                  className="text-xs rounded-xl min-h-[100px]"
                 />
               </div>
             )}
 
-            {/* 2. MEDIA UPLOAD (IMAGE, VIDEO, AUDIO, VIDEO_NOTE, DOCUMENT) */}
             {["image", "video", "audio", "video_note", "document"].includes(contentType) && (
-              <div className="space-y-3 bg-card p-3 rounded-2xl border border-border/50">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Arquivo de Mídia</Label>
-
-                  {mediaUrl ? (
-                    <div className="flex items-center justify-between p-2.5 bg-primary/5 border border-primary/20 rounded-xl">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                          {contentType === "image" && <ImageIcon className="h-4 w-4" />}
-                          {contentType === "video" && <Video className="h-4 w-4" />}
-                          {contentType === "audio" && <Mic className="h-4 w-4" />}
-                          {contentType === "video_note" && <Radio className="h-4 w-4" />}
-                          {contentType === "document" && <FileText className="h-4 w-4" />}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold truncate text-foreground">{fileName || "Mídia anexa"}</p>
-                          <p className="text-[10px] text-muted-foreground truncate">{mediaUrl}</p>
-                        </div>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setMediaUrl("");
-                          setStoragePath("");
-                        }}
-                        className="text-xs text-destructive hover:bg-destructive/10 shrink-0"
-                      >
-                        Trocar
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={isUploading}
-                        className="flex-1 text-xs rounded-xl h-10 border-dashed border-primary/30 hover:border-primary"
-                      >
-                        {isUploading ? (
-                          <Loader2 className="h-4 w-4 animate-spin text-primary mr-2" />
-                        ) : (
-                          <Upload className="h-4 w-4 text-primary mr-2" />
-                        )}
-                        Fazer Upload de Arquivo
-                      </Button>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        className="hidden"
-                        onChange={handleFileUpload}
-                        accept={
-                          contentType === "image"
-                            ? "image/*"
-                            : contentType === "video" || contentType === "video_note"
-                            ? "video/*"
-                            : contentType === "audio"
-                            ? "audio/*"
-                            : "*/*"
-                        }
-                      />
-                    </div>
-                  )}
-
-                  {/* URL alternative input */}
-                  {!mediaUrl && (
-                    <div className="pt-1">
-                      <Input
-                        placeholder="Ou cole a URL direta do arquivo..."
-                        value={mediaUrl}
-                        onChange={(e) => setMediaUrl(e.target.value)}
-                        className="text-xs rounded-xl h-8"
-                      />
-                    </div>
-                  )}
+              <div className="space-y-3 bg-muted/20 p-3 rounded-2xl border border-border/40">
+                <Label className="text-xs font-semibold">Arquivo de Mídia</Label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="URL direta ou selecione um arquivo..."
+                    value={mediaUrl}
+                    onChange={(e) => setMediaUrl(e.target.value)}
+                    className="text-xs rounded-xl h-9 flex-1"
+                  />
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                    className="h-9 text-xs rounded-xl gap-1.5 shrink-0"
+                  >
+                    {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                    Upload
+                  </Button>
                 </div>
 
-                {/* Specifics per type */}
-                {/* Audio voice toggle */}
-                {contentType === "audio" && (
-                  <div className="flex items-center justify-between pt-1 border-t border-border/30">
-                    <div>
-                      <Label className="text-xs font-semibold">Mensagem de Voz (PTT)</Label>
-                      <p className="text-[10px] text-muted-foreground">Enviar como áudio gravado na hora pelo microfone</p>
-                    </div>
-                    <Switch checked={asVoice} onCheckedChange={setAsVoice} />
-                  </div>
-                )}
-
-                {/* Document File Name */}
                 {contentType === "document" && (
                   <div className="space-y-1">
                     <Label className="text-xs font-semibold">Nome do Arquivo</Label>
                     <Input
-                      placeholder="Ex: Proposta.pdf"
+                      placeholder="Ex: Apresentação.pdf"
                       value={fileName}
                       onChange={(e) => setFileName(e.target.value)}
                       className="text-xs rounded-xl h-9"
@@ -451,66 +475,226 @@ export default function QuickReplyEditorModal({
                   </div>
                 )}
 
-                {/* Caption for image, video, document */}
                 {["image", "video", "document"].includes(contentType) && (
                   <div className="space-y-1">
-                    <div className="flex justify-between items-center">
-                      <Label className="text-xs font-semibold">Legenda Opcional</Label>
-                      <span className="text-[10px] text-muted-foreground">Suporta variáveis</span>
-                    </div>
+                    <Label className="text-xs font-semibold">Legenda (Opcional)</Label>
                     <Textarea
-                      placeholder="Legenda que acompanha o arquivo..."
+                      placeholder="Legenda anexada à mídia..."
                       value={caption}
                       onChange={(e) => setCaption(e.target.value)}
-                      className="min-h-[70px] text-xs rounded-xl"
+                      className="text-xs rounded-xl h-16"
                     />
+                  </div>
+                )}
+
+                {contentType === "audio" && (
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-xs font-semibold">Enviar como Mensagem de Voz (Gravação)</span>
+                    <Switch checked={asVoice} onCheckedChange={setAsVoice} />
                   </div>
                 )}
               </div>
             )}
 
-            {/* 3. LINK */}
             {contentType === "link" && (
-              <div className="space-y-3 bg-card p-3 rounded-2xl border border-border/50">
+              <div className="space-y-3 bg-muted/20 p-3 rounded-2xl border border-border/40">
                 <div className="space-y-1">
-                  <Label className="text-xs font-semibold">URL do Link</Label>
+                  <Label className="text-xs font-semibold">URL do Link *</Label>
                   <Input
-                    placeholder="https://... ou {{deal.checkout_url}}"
+                    placeholder="https://..."
                     value={linkUrl}
                     onChange={(e) => setLinkUrl(e.target.value)}
                     className="text-xs rounded-xl h-9 font-mono"
-                    required
                   />
-                  <p className="text-[10px] text-muted-foreground">Suporta URLs dinâmicas como {'{{deal.checkout_url}}'}</p>
                 </div>
-
                 <div className="space-y-1">
-                  <Label className="text-xs font-semibold">Texto do Acompanhamento (Opcional)</Label>
-                  <Input
-                    placeholder="Ex: Acesse seu link de pagamento:"
+                  <Label className="text-xs font-semibold">Texto Explicativo (Opcional)</Label>
+                  <Textarea
+                    placeholder="Descrição para acompanhar o link..."
                     value={linkText}
                     onChange={(e) => setLinkText(e.target.value)}
-                    className="text-xs rounded-xl h-9"
+                    className="text-xs rounded-xl h-16"
                   />
                 </div>
               </div>
             )}
 
-            <DialogFooter className="pt-2">
+            {/* AUTO-SEND TRIGGER SWITCH */}
+            <div className="flex items-center justify-between p-3 border border-border/40 rounded-2xl bg-primary/5">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                  <Send className="h-3.5 w-3.5 text-primary" />
+                  <span>Enviar Diretamente ao Clicar</span>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Envia a resposta imediatamente e executa as ações sem precisar confirmar no composer.
+                </p>
+              </div>
+              <Switch checked={autoSend} onCheckedChange={setAutoSend} />
+            </div>
+
+            {/* AUTOMATED ACTIONS BUILDER */}
+            <div className="space-y-3 p-3.5 border border-primary/20 bg-primary/5 rounded-2xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-primary">
+                  <Zap className="h-4 w-4" />
+                  <span>Ações Automatizadas ao Executar ({actions.length})</span>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleAddAction}
+                  className="h-7 text-[11px] font-bold rounded-xl gap-1 border-primary/20 text-primary hover:bg-primary/10"
+                >
+                  <Plus className="h-3.5 w-3.5" /> + Adicionar Ação
+                </Button>
+              </div>
+
+              {actions.length === 0 ? (
+                <p className="text-[11px] text-muted-foreground italic text-center py-2">
+                  Nenhuma ação configurada. Adicione ações para mover o negócio na pipeline ou adicionar tags automaticamente.
+                </p>
+              ) : (
+                <div className="space-y-2 pt-1">
+                  {actions.map((act, index) => (
+                    <div key={index} className="p-3 border border-border/40 rounded-xl bg-card/60 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <Select
+                          value={act.type}
+                          onValueChange={(val: any) => {
+                            if (val === "add_tag") {
+                              const defaultTag = systemTags.length > 0 ? systemTags[0].name : "Interessado";
+                              handleUpdateAction(index, { type: "add_tag", tagName: defaultTag });
+                            } else {
+                              const defaultPipe = pipelines.length > 0 ? pipelines[0].id : "";
+                              const defaultStage = pipelines.length > 0 && pipelines[0].stages?.length > 0 ? pipelines[0].stages[0].id : "";
+                              handleUpdateAction(index, { type: "move_deal", pipelineId: defaultPipe, stageId: defaultStage });
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="h-8 text-xs rounded-lg w-48 font-bold">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="z-[10000]">
+                            <SelectItem value="add_tag" className="text-xs">
+                              <div className="flex items-center gap-1.5">
+                                <Tag className="h-3.5 w-3.5 text-purple-500" /> Adicionar Tag
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="move_deal" className="text-xs">
+                              <div className="flex items-center gap-1.5">
+                                <GitBranch className="h-3.5 w-3.5 text-emerald-500" /> Mover na Pipeline
+                              </div>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 rounded-lg text-destructive hover:bg-destructive/10 shrink-0"
+                          onClick={() => handleRemoveAction(index)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+
+                      {/* Action Details */}
+                      {act.type === "add_tag" ? (
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold text-muted-foreground uppercase">Tag a Adicionar</Label>
+                          <Select
+                            value={act.tagName}
+                            onValueChange={(val) => handleUpdateAction(index, { ...act, tagName: val })}
+                          >
+                            <SelectTrigger className="h-8 text-xs rounded-lg">
+                              <SelectValue placeholder="Selecione uma tag" />
+                            </SelectTrigger>
+                            <SelectContent className="z-[10000]">
+                              {systemTags.map((t) => (
+                                <SelectItem key={t.id || t.name} value={t.name} className="text-xs">
+                                  <div className="flex items-center gap-2">
+                                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: t.color || "#8A3CFF" }} />
+                                    <span>{t.name}</span>
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <Label className="text-[10px] font-bold text-muted-foreground uppercase">Pipeline</Label>
+                            <Select
+                              value={act.pipelineId}
+                              onValueChange={(pVal) => {
+                                const selectedPipe = pipelines.find((p) => p.id === pVal);
+                                const firstStage = selectedPipe?.stages?.[0]?.id || "";
+                                handleUpdateAction(index, { ...act, pipelineId: pVal, stageId: firstStage });
+                              }}
+                            >
+                              <SelectTrigger className="h-8 text-xs rounded-lg">
+                                <SelectValue placeholder="Selecione a pipeline" />
+                              </SelectTrigger>
+                              <SelectContent className="z-[10000]">
+                                {pipelines.map((p) => (
+                                  <SelectItem key={p.id} value={p.id} className="text-xs">
+                                    {p.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-1">
+                            <Label className="text-[10px] font-bold text-muted-foreground uppercase">Coluna / Etapa</Label>
+                            <Select
+                              value={act.stageId}
+                              onValueChange={(sVal) => handleUpdateAction(index, { ...act, stageId: sVal })}
+                            >
+                              <SelectTrigger className="h-8 text-xs rounded-lg">
+                                <SelectValue placeholder="Selecione a etapa" />
+                              </SelectTrigger>
+                              <SelectContent className="z-[10000]">
+                                {(pipelines.find((p) => p.id === act.pipelineId)?.stages || [])
+                                  .sort((a: any, b: any) => a.order_index - b.order_index)
+                                  .map((s: any) => (
+                                    <SelectItem key={s.id} value={s.id} className="text-xs">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color || "#3b82f6" }} />
+                                        <span>{s.name}</span>
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <DialogFooter className="pt-3 gap-2">
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 onClick={() => onOpenChange(false)}
-                className="rounded-xl text-xs"
+                className="rounded-xl text-xs font-semibold"
               >
                 Cancelar
               </Button>
               <Button
                 type="submit"
-                disabled={isSubmitting || !name.trim() || !shortcut.trim()}
-                className="rounded-xl text-xs font-bold"
+                disabled={isSubmitting}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl text-xs px-6"
               >
-                {replyToEdit ? "Salvar Resposta" : "Criar Resposta Rápida"}
+                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar Resposta"}
               </Button>
             </DialogFooter>
           </form>
