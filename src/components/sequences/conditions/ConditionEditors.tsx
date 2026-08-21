@@ -29,6 +29,7 @@ export const ConditionEditors: React.FC<ConditionEditorsProps> = ({
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [companyMembers, setCompanyMembers] = useState<any[]>([]);
   const [loadingData, setLoadingData] = useState(false);
+  const [tagSearch, setTagSearch] = useState("");
 
   // Fetch Pipelines, Stages, Tags and Members for activeCompanyId
   useEffect(() => {
@@ -248,7 +249,6 @@ export const ConditionEditors: React.FC<ConditionEditorsProps> = ({
       case "lead_has_tag": {
         const selectedTags = (parameters.tags as string[]) || [];
         const matchMode = (parameters.matchMode as string) || "ANY";
-        const [tagSearch, setTagSearch] = useState("");
 
         const filteredTags = availableTags.filter((t) =>
           t.toLowerCase().includes(tagSearch.toLowerCase())

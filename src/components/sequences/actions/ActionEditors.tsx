@@ -28,6 +28,7 @@ export const ActionEditors: React.FC<ActionEditorsProps> = ({
   const [pipelineStages, setPipelineStages] = useState<any[]>([]);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [companyMembers, setCompanyMembers] = useState<any[]>([]);
+  const [tagInput, setTagInput] = useState("");
 
   useEffect(() => {
     const loadResources = async () => {
@@ -234,7 +235,6 @@ export const ActionEditors: React.FC<ActionEditorsProps> = ({
       case "remove_lead_tags": {
         const selectedTags = (parameters.tags as string[]) || [];
         const isAdd = actionDef.type === "add_lead_tags";
-        const [tagInput, setTagInput] = useState("");
 
         const toggleTag = (tag: string) => {
           const updated = selectedTags.includes(tag)
