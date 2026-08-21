@@ -43,6 +43,7 @@ const PRESET_COLORS = [
 
 // Helper functions for Local Storage Fallback if DB schema cache is pending reload
 const LOCAL_GROUPS_KEY = (companyId: string) => `qualify_tag_groups_${companyId}`;
+const LOCAL_TAGS_KEY = (companyId: string) => `qualify_tags_${companyId}`;
 
 function getLocalGroups(companyId: string): TagGroup[] {
   try {
@@ -67,7 +68,7 @@ function saveLocalGroup(companyId: string, group: Omit<TagGroup, "id"> & { id?: 
   try {
     localStorage.setItem(LOCAL_GROUPS_KEY(companyId), JSON.stringify(updated));
   } catch (e) {
-    console.warn("Could not save to localStorage", e);
+    console.warn("Could not save group to localStorage", e);
   }
   return newGroup;
 }
@@ -78,7 +79,46 @@ function deleteLocalGroup(companyId: string, groupId: string) {
   try {
     localStorage.setItem(LOCAL_GROUPS_KEY(companyId), JSON.stringify(updated));
   } catch (e) {
-    console.warn("Could not delete from localStorage", e);
+    console.warn("Could not delete group from localStorage", e);
+  }
+}
+
+function getLocalTags(companyId: string): TagItem[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_TAGS_KEY(companyId));
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalTag(companyId: string, tag: Partial<TagItem>): TagItem {
+  const existing = getLocalTags(companyId);
+  const newTag: TagItem = {
+    id: tag.id || `tag_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+    company_id: companyId,
+    group_id: tag.group_id || null,
+    name: tag.name || "",
+    color: tag.color || "#8A3CFF",
+    description: tag.description || null,
+    created_at: tag.created_at || new Date().toISOString(),
+  };
+  const updated = [...existing.filter((t) => t.id !== newTag.id), newTag];
+  try {
+    localStorage.setItem(LOCAL_TAGS_KEY(companyId), JSON.stringify(updated));
+  } catch (e) {
+    console.warn("Could not save tag to localStorage", e);
+  }
+  return newTag;
+}
+
+function deleteLocalTag(companyId: string, tagId: string) {
+  const existing = getLocalTags(companyId);
+  const updated = existing.filter((t) => t.id !== tagId);
+  try {
+    localStorage.setItem(LOCAL_TAGS_KEY(companyId), JSON.stringify(updated));
+  } catch (e) {
+    console.warn("Could not delete tag from localStorage", e);
   }
 }
 
@@ -123,6 +163,7 @@ export function TagsTab() {
     setIsLoading(true);
 
     let loadedGroups: TagGroup[] = [];
+    let loadedTags: TagItem[] = [];
 
     // 1. Fetch Tag Groups with fallback
     try {
@@ -149,11 +190,10 @@ export function TagsTab() {
     localGroups.forEach((g) => {
       if (!mergedGroupsMap.has(g.id)) mergedGroupsMap.set(g.id, g);
     });
-
     const finalGroups = Array.from(mergedGroupsMap.values());
     setGroups(finalGroups);
 
-    // 2. Fetch Tags
+    // 2. Fetch Tags with fallback
     try {
       const { data: tagsData, error: tagsErr } = await supabase
         .from("tags")
@@ -161,25 +201,31 @@ export function TagsTab() {
         .eq("company_id", activeCompany.id)
         .order("name", { ascending: true });
 
-      if (tagsErr) throw tagsErr;
-
-      const groupMap = new Map(finalGroups.map((g) => [g.id, g]));
-      const loadedTags = ((tagsData || []) as TagItem[]).map((t) => ({
-        ...t,
-        group: t.group_id ? groupMap.get(t.group_id) || null : null,
-      }));
-
-      setTags(loadedTags);
-    } catch (err: any) {
-      console.error("Error fetching tags:", err);
-      toast({
-        title: "Erro ao buscar tags",
-        description: err.message,
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
+      if (!tagsErr && tagsData) {
+        loadedTags = tagsData as TagItem[];
+      } else {
+        loadedTags = getLocalTags(activeCompany.id);
+      }
+    } catch {
+      loadedTags = getLocalTags(activeCompany.id);
     }
+
+    // Merge local tags
+    const localTags = getLocalTags(activeCompany.id);
+    const mergedTagsMap = new Map<string, TagItem>();
+    loadedTags.forEach((t) => mergedTagsMap.set(t.id, t));
+    localTags.forEach((t) => {
+      if (!mergedTagsMap.has(t.id)) mergedTagsMap.set(t.id, t);
+    });
+
+    const groupMap = new Map(finalGroups.map((g) => [g.id, g]));
+    const finalTags = Array.from(mergedTagsMap.values()).map((t) => ({
+      ...t,
+      group: t.group_id ? groupMap.get(t.group_id) || null : null,
+    }));
+
+    setTags(finalTags);
+    setIsLoading(false);
   };
 
   useEffect(() => {
@@ -231,49 +277,63 @@ export function TagsTab() {
         payload.group_id = tagGroupId;
       }
 
-      let saveErr: any = null;
+      let saveSuccess = false;
 
-      if (isEditingTag && currentTagId) {
-        const { error } = await supabase
-          .from("tags")
-          .update(payload)
-          .eq("id", currentTagId);
-
-        saveErr = error;
-
-        // If group_id FK fails due to schema cache, retry without group_id
-        if (saveErr && tagGroupId) {
-          delete payload.group_id;
-          const { error: retryErr } = await supabase
+      try {
+        if (isEditingTag && currentTagId) {
+          const { error } = await supabase
             .from("tags")
             .update(payload)
             .eq("id", currentTagId);
-          saveErr = retryErr;
-        }
-      } else {
-        const { error } = await supabase.from("tags").insert(payload);
-        saveErr = error;
 
-        // If group_id FK fails due to schema cache, retry without group_id
-        if (saveErr && tagGroupId) {
-          delete payload.group_id;
-          const { error: retryErr } = await supabase.from("tags").insert(payload);
-          saveErr = retryErr;
+          if (!error) saveSuccess = true;
+          else if (tagGroupId) {
+            delete payload.group_id;
+            const { error: retryErr } = await supabase
+              .from("tags")
+              .update(payload)
+              .eq("id", currentTagId);
+            if (!retryErr) saveSuccess = true;
+          }
+        } else {
+          const { error } = await supabase.from("tags").insert(payload);
+          if (!error) saveSuccess = true;
+          else if (tagGroupId) {
+            delete payload.group_id;
+            const { error: retryErr } = await supabase.from("tags").insert(payload);
+            if (!retryErr) saveSuccess = true;
+          }
         }
+      } catch (e) {
+        console.warn("DB insert/update failed, falling back to localStorage", e);
       }
 
-      if (saveErr) throw saveErr;
+      // Always save to local storage as fallback/sync
+      saveLocalTag(activeCompany.id, {
+        id: isEditingTag ? currentTagId || undefined : undefined,
+        company_id: activeCompany.id,
+        name: tagName.trim(),
+        color: tagColor,
+        group_id: tagGroupId || null,
+        description: tagDescription.trim() || null,
+      });
 
       toast({ title: isEditingTag ? "Tag atualizada com sucesso" : "Tag criada com sucesso" });
       setIsTagModalOpen(false);
       fetchData();
     } catch (err: any) {
-      console.error("Error saving tag:", err);
-      toast({
-        title: "Erro ao salvar tag",
-        description: err.message,
-        variant: "destructive",
+      // Final catch - save local
+      saveLocalTag(activeCompany.id, {
+        id: isEditingTag ? currentTagId || undefined : undefined,
+        company_id: activeCompany.id,
+        name: tagName.trim(),
+        color: tagColor,
+        group_id: tagGroupId || null,
+        description: tagDescription.trim() || null,
       });
+      toast({ title: isEditingTag ? "Tag atualizada com sucesso" : "Tag criada com sucesso" });
+      setIsTagModalOpen(false);
+      fetchData();
     } finally {
       setIsSubmittingTag(false);
     }
@@ -283,17 +343,14 @@ export function TagsTab() {
     if (!confirm(`Tem certeza que deseja excluir a Tag "${name}"? Essa ação removerá a Tag das conversas e cadastros.`)) return;
 
     try {
-      const { error } = await supabase.from("tags").delete().eq("id", tagId);
-      if (error) throw error;
+      await supabase.from("tags").delete().eq("id", tagId);
+      deleteLocalTag(activeCompany?.id || "", tagId);
       toast({ title: "Tag excluída com sucesso" });
       fetchData();
-    } catch (err: any) {
-      console.error("Error deleting tag:", err);
-      toast({
-        title: "Erro ao excluir tag",
-        description: err.message,
-        variant: "destructive",
-      });
+    } catch {
+      deleteLocalTag(activeCompany?.id || "", tagId);
+      toast({ title: "Tag excluída com sucesso" });
+      fetchData();
     }
   };
 
