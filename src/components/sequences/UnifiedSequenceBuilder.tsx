@@ -30,7 +30,7 @@ import { getNodeVisual, toNodeCategories } from "./nodeDefinitions";
 import { formatDelayLabel, normalizeDelayConfig } from "@/lib/workflows/delay";
 import { TriggerTypeSelector } from "./triggers/TriggerTypeSelector";
 import { getTriggerDefinition } from "./triggers/triggerDefinitions";
-import { getConditionOutputs } from "./conditions/conditionRegistry";
+import { getConditionOutputs, getConditionDefinition } from "./conditions/conditionRegistry";
 
 export interface UnifiedSequenceBuilderProps {
   sequenceName: string;
