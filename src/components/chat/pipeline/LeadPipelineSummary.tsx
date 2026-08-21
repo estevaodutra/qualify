@@ -10,7 +10,7 @@ import AddLeadToPipelineDialog from "./AddLeadToPipelineDialog";
 import MoveDealConfirmPopover from "./MoveDealConfirmPopover";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Plus, Check, X as XIcon, GitBranch, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
+import { Plus, Check, X as XIcon, GitBranch, ChevronDown, ChevronUp, Sparkles, Trash2 } from "lucide-react";
 
 interface LeadPipelineSummaryProps {
   leadId?: string;
@@ -156,6 +156,21 @@ export default function LeadPipelineSummary({
     },
   });
 
+  // Remove deal mutation
+  const removeDealMutation = useMutation({
+    mutationFn: async (dealId: string) => {
+      const { error } = await supabase.from("deals").delete().eq("id", dealId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["lead-deals"] });
+      toast.success("Negócio removido da pipeline.");
+    },
+    onError: (err: any) => {
+      toast.error(`Erro ao remover negócio: ${err.message}`);
+    },
+  });
+
   const visibleDeals = useMemo(() => {
     if (isExpanded) return deals;
     return deals.slice(0, 2);
@@ -189,7 +204,7 @@ export default function LeadPipelineSummary({
               const currentOrderIndex = currentStage?.order_index ?? 0;
 
               return (
-                <div key={deal.id} className="flex flex-col gap-1 bg-background/40 border border-border/30 p-1.5 px-2 rounded-xl">
+                <div key={deal.id} className="flex flex-col gap-1 bg-background/40 border border-border/30 p-1.5 px-2 rounded-xl group/track">
                   {/* Pipeline Header */}
                   <div className="flex items-center justify-between gap-2 min-w-0">
                     <div className="flex items-center gap-1.5 min-w-0 truncate">
@@ -203,17 +218,34 @@ export default function LeadPipelineSummary({
                       </span>
                     </div>
 
-                    {/* Status Badge */}
-                    {deal.status === "won" && (
-                      <Badge className="h-4 px-1.5 text-[9px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 shrink-0 gap-0.5">
-                        <Check className="h-2.5 w-2.5" /> Ganho
-                      </Badge>
-                    )}
-                    {deal.status === "lost" && (
-                      <Badge className="h-4 px-1.5 text-[9px] font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 shrink-0 gap-0.5">
-                        <XIcon className="h-2.5 w-2.5" /> Perdido
-                      </Badge>
-                    )}
+                    {/* Status Badge & Delete Action */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {deal.status === "won" && (
+                        <Badge className="h-4 px-1.5 text-[9px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 gap-0.5">
+                          <Check className="h-2.5 w-2.5" /> Ganho
+                        </Badge>
+                      )}
+                      {deal.status === "lost" && (
+                        <Badge className="h-4 px-1.5 text-[9px] font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 gap-0.5">
+                          <XIcon className="h-2.5 w-2.5" /> Perdido
+                        </Badge>
+                      )}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={() => removeDealMutation.mutate(deal.id)}
+                            disabled={removeDealMutation.isPending}
+                            className="p-0.5 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-all opacity-0 group-hover/track:opacity-100"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="left" className="text-[10px] z-[10000]">
+                          Remover desta pipeline
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
                   </div>
 
                   {/* Visual Step Track (●━━━━●━━━━●────○) */}

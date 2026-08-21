@@ -76,6 +76,22 @@ export default function AddLeadToPipelineDialog({
 
     setIsSubmitting(true);
     try {
+      // Check if lead already has an open deal in the selected pipeline
+      const { data: existingDeal } = await supabase
+        .from("deals")
+        .select("id")
+        .eq("company_id", activeCompanyId)
+        .eq("lead_id", leadId)
+        .eq("pipeline_id", selectedPipelineId)
+        .eq("status", "open")
+        .maybeSingle();
+
+      if (existingDeal) {
+        toast.warning("Este lead já possui um negócio ativo nesta pipeline.");
+        setIsSubmitting(false);
+        return;
+      }
+
       const selectedStage = stages.find(s => s.id === selectedStageId);
       const stageType = selectedStage?.stage_type || "open";
 
