@@ -296,8 +296,11 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, ext
       setTemplateSearch(query);
 
       // Match multimedia Quick Replies
+      const activeGroupsMap: Record<string, boolean> = {};
+      groups.forEach(g => { activeGroupsMap[g.id] = g.active !== false; });
+
       const matchedQuickReplies = quickReplies
-        .filter(r => r.active && (r.shortcut.toLowerCase().includes(query) || r.name.toLowerCase().includes(query)))
+        .filter(r => (r.active !== false) && (!r.group_id || activeGroupsMap[r.group_id] !== false) && (r.shortcut.toLowerCase().includes(query) || r.name.toLowerCase().includes(query)))
         .map(r => {
           const payload = r.content_json?.content as any;
           let bodyPreview = "";

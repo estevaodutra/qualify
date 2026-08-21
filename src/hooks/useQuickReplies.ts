@@ -107,15 +107,18 @@ export function useQuickReplies() {
   });
 
   const updateGroupMutation = useMutation({
-    mutationFn: async (payload: { id: string; name: string; color?: string; position?: number }) => {
+    mutationFn: async (payload: { id: string; name?: string; color?: string; active?: boolean; position?: number }) => {
+      const updates: Record<string, any> = {
+        updated_at: new Date().toISOString(),
+      };
+      if (payload.name !== undefined) updates.name = payload.name;
+      if (payload.color !== undefined) updates.color = payload.color;
+      if (payload.active !== undefined) updates.active = payload.active;
+      if (payload.position !== undefined) updates.position = payload.position;
+
       const { data, error } = await supabase
         .from("quick_reply_groups")
-        .update({
-          name: payload.name,
-          color: payload.color,
-          ...(payload.position !== undefined && { position: payload.position }),
-          updated_at: new Date().toISOString(),
-        })
+        .update(updates)
         .eq("id", payload.id)
         .select()
         .single();

@@ -69,10 +69,28 @@ export default function QuickRepliesSidebarPanel({
     }
   };
 
-  // Filter active replies
+  // Map active groups
+  const activeGroupsMap = useMemo(() => {
+    const map: Record<string, boolean> = {};
+    groups.forEach(g => {
+      map[g.id] = g.active !== false;
+    });
+    return map;
+  }, [groups]);
+
+  // Active groups list
+  const activeGroups = useMemo(() => {
+    return groups.filter(g => g.active !== false);
+  }, [groups]);
+
+  // Filter active replies (reply itself must be active AND if in a group, group must be active)
   const activeReplies = useMemo(() => {
-    return quickReplies.filter(r => r.active);
-  }, [quickReplies]);
+    return quickReplies.filter(r => {
+      if (r.active === false) return false;
+      if (r.group_id && activeGroupsMap[r.group_id] === false) return false;
+      return true;
+    });
+  }, [quickReplies, activeGroupsMap]);
 
   // Filtered replies by search and tab
   const filteredReplies = useMemo(() => {
@@ -97,22 +115,22 @@ export default function QuickRepliesSidebarPanel({
     return list;
   }, [activeReplies, search, activeTab]);
 
-  // Grouped structure
+  // Grouped structure (only showing active groups)
   const groupedData = useMemo(() => {
     const result: Array<{ group: QuickReplyGroup | null; replies: QuickReply[] }> = [];
 
-    groups.forEach(g => {
+    activeGroups.forEach(g => {
       const replies = filteredReplies.filter(r => r.group_id === g.id);
       result.push({ group: g, replies });
     });
 
     const ungrouped = filteredReplies.filter(r => !r.group_id);
-    if (ungrouped.length > 0 || groups.length === 0) {
+    if (ungrouped.length > 0 || activeGroups.length === 0) {
       result.push({ group: null, replies: ungrouped });
     }
 
     return result;
-  }, [groups, filteredReplies]);
+  }, [activeGroups, filteredReplies]);
 
   return (
     <div className={cn("w-[340px] shrink-0 border-l border-border/40 bg-card/20 flex flex-col h-full overflow-hidden select-none", className)}>

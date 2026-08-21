@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { QuickReplyGroup, QUICK_REPLY_GROUP_COLORS } from "@/types/quickReplyTypes";
 import { cn } from "@/lib/utils";
 import { Check } from "lucide-react";
@@ -11,7 +12,7 @@ interface GroupEditorDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   groupToEdit?: QuickReplyGroup | null;
-  onSave: (data: { name: string; color: string }) => Promise<void>;
+  onSave: (data: { name: string; color: string; active?: boolean }) => Promise<void>;
   isSubmitting?: boolean;
 }
 
@@ -25,10 +26,12 @@ export default function GroupEditorDialog({
   const [name, setName] = useState("");
   const [color, setColor] = useState("#10B981");
   const [customColor, setCustomColor] = useState("");
+  const [active, setActive] = useState(true);
 
   useEffect(() => {
     if (groupToEdit) {
       setName(groupToEdit.name || "");
+      setActive(groupToEdit.active !== false);
       const groupColor = groupToEdit.color || "#10B981";
       setColor(groupColor);
       if (!QUICK_REPLY_GROUP_COLORS.some(c => c.value === groupColor)) {
@@ -38,6 +41,7 @@ export default function GroupEditorDialog({
       }
     } else {
       setName("");
+      setActive(true);
       setColor("#10B981");
       setCustomColor("");
     }
@@ -47,7 +51,7 @@ export default function GroupEditorDialog({
     e.preventDefault();
     if (!name.trim()) return;
     const finalColor = customColor.trim() || color;
-    await onSave({ name: name.trim(), color: finalColor });
+    await onSave({ name: name.trim(), color: finalColor, active });
     onOpenChange(false);
   };
 
@@ -132,6 +136,23 @@ export default function GroupEditorDialog({
                 className="text-xs rounded-xl font-mono"
               />
             </div>
+          </div>
+
+          {/* Group Active Toggle */}
+          <div className="flex items-center justify-between p-3 bg-muted/20 border border-border/40 rounded-2xl">
+            <div className="space-y-0.5">
+              <Label htmlFor="group-active-toggle" className="text-xs font-bold cursor-pointer">
+                Exibir na barra lateral do Chat
+              </Label>
+              <p className="text-[10px] text-muted-foreground">
+                Se desativado, o grupo e suas respostas serão ocultados do painel operacional.
+              </p>
+            </div>
+            <Switch
+              id="group-active-toggle"
+              checked={active}
+              onCheckedChange={setActive}
+            />
           </div>
 
           <DialogFooter className="pt-2">

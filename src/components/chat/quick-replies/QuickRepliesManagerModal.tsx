@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { useQuickReplies } from "@/hooks/useQuickReplies";
 import {
   QuickReplyGroup,
@@ -246,7 +247,20 @@ export default function QuickRepliesManagerModal({
 
                     {/* Group actions */}
                     {group && (
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 mr-1" title="Ativar/Desativar grupo na barra lateral do Chat">
+                          <Switch
+                            checked={group.active !== false}
+                            onCheckedChange={(val) => updateGroup({ id: group.id, active: val })}
+                            className="scale-75"
+                          />
+                          <span className={cn(
+                            "text-[10px] font-bold uppercase tracking-wider",
+                            group.active !== false ? "text-emerald-500" : "text-muted-foreground/60"
+                          )}>
+                            {group.active !== false ? "Ativo" : "Desativado"}
+                          </span>
+                        </div>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -286,11 +300,17 @@ export default function QuickRepliesManagerModal({
                         replies.map((reply) => {
                           const IconComp = getTypeIcon(reply.content_type);
                           const preview = getReplyPreview(reply);
+                          const isReplyActive = reply.active !== false;
 
                           return (
                             <div
                               key={reply.id}
-                              className="p-3 bg-background/80 hover:bg-background border border-border/40 rounded-2xl flex items-center justify-between gap-3 shadow-sm transition-all duration-200 group"
+                              className={cn(
+                                "p-3 border rounded-2xl flex items-center justify-between gap-3 shadow-sm transition-all duration-200 group",
+                                isReplyActive
+                                  ? "bg-background/80 hover:bg-background border-border/40"
+                                  : "bg-muted/30 border-dashed border-border/60 opacity-60"
+                              )}
                             >
                               <div className="flex items-center gap-3 min-w-0 flex-1">
                                 <GripVertical className="h-4 w-4 text-muted-foreground/40 cursor-grab shrink-0" />
@@ -315,6 +335,11 @@ export default function QuickRepliesManagerModal({
                                     <span className="text-[11px] font-mono font-bold text-primary bg-primary/10 px-1.5 py-0.2 rounded-md">
                                       /{reply.shortcut}
                                     </span>
+                                    {!isReplyActive && (
+                                      <Badge variant="outline" className="text-[9px] px-1 py-0 border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10 font-semibold">
+                                        Desativado
+                                      </Badge>
+                                    )}
                                   </div>
                                   <p className="text-[11px] text-muted-foreground truncate leading-snug">
                                     {preview || "Sem conteúdo textual"}
@@ -324,6 +349,13 @@ export default function QuickRepliesManagerModal({
 
                               {/* Card Action Buttons */}
                               <div className="flex items-center gap-1 opacity-90 group-hover:opacity-100 shrink-0">
+                                <div className="flex items-center gap-1 mr-1" title="Ativar/Desativar resposta na barra lateral">
+                                  <Switch
+                                    checked={isReplyActive}
+                                    onCheckedChange={(val) => updateQuickReply({ id: reply.id, active: val })}
+                                    className="scale-75"
+                                  />
+                                </div>
                                 <Button
                                   variant="ghost"
                                   size="icon"
