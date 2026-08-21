@@ -93,9 +93,47 @@ export default function InboxList({
     return `${Math.floor(diffHours / 24)}d`;
   };
 
-  // Client-side sort (Server already filtered it, we just handle sort order locally if needed)
+  // Group conversations by lead_id so each lead appears ONLY ONCE in the Inbox list.
+  // The conversation with the latest last_message_at is displayed as primary.
   const sortedConversations = useMemo(() => {
-    return [...conversations].sort((a, b) => {
+    const map = new Map<string, {
+      primary: ChatConversation;
+      all: ChatConversation[];
+      totalUnread: number;
+    }>();
+
+    conversations.forEach((conv) => {
+      const key = conv.lead_id || conv.lead?.phone || conv.id;
+      const existing = map.get(key);
+
+      if (!existing) {
+        map.set(key, {
+          primary: conv,
+          all: [conv],
+          totalUnread: conv.unread_count || 0,
+        });
+      } else {
+        existing.all.push(conv);
+        existing.totalUnread += (conv.unread_count || 0);
+
+        // Keep the conversation with the latest last_message_at as primary
+        if (new Date(conv.last_message_at).getTime() > new Date(existing.primary.last_message_at).getTime()) {
+          existing.primary = conv;
+        }
+      }
+    });
+
+    const list = Array.from(map.values()).map(item => {
+      const instanceCount = new Set(item.all.map(c => c.instance_id).filter(Boolean)).size;
+      return {
+        ...item.primary,
+        unread_count: item.totalUnread,
+        allLeadConversations: item.all,
+        instanceCount,
+      };
+    });
+
+    return list.sort((a, b) => {
       if (sortBy === "waiting") {
         if (!a.waiting_since) return 1;
         if (!b.waiting_since) return -1;
@@ -180,7 +218,7 @@ export default function InboxList({
 
         {/* Sort By Toggle */}
         <div className="flex justify-between items-center text-[10px] text-muted-foreground font-semibold pt-1 uppercase tracking-wider">
-          <span>{sortedConversations.length} Conversas</span>
+          <span>{sortedConversations.length} Contatos</span>
           <div className="flex gap-2">
             <button
               onClick={() => setSortBy("recent")}
@@ -215,7 +253,7 @@ export default function InboxList({
         ) : (
           <>
             {sortedConversations.map((conv) => {
-              const isSelected = conv.id === selectedId;
+              const isSelected = conv.id === selectedId || (conv.allLeadConversations && conv.allLeadConversations.some((c: any) => c.id === selectedId));
               const waitTime = getWaitTime(conv.waiting_since);
               const isUnassigned = !conv.operator_id;
 
@@ -244,8 +282,8 @@ export default function InboxList({
                     )}
                   </div>
 
-                  {/* Instance Tag under name */}
-                  <div className="flex items-center gap-1">
+                  {/* Instance Tag under name + (i) multi-connection indicator */}
+                  <div className="flex items-center gap-1 flex-wrap">
                     {conv.instance?.name ? (
                       <span 
                         className="text-[10px] font-medium text-muted-foreground/80 flex items-center gap-1 bg-muted/40 px-1.5 py-0.2 rounded border border-border/30 max-w-[200px] truncate"
@@ -261,6 +299,17 @@ export default function InboxList({
                       <span className="text-[9.5px] font-medium text-amber-500/80 flex items-center gap-1 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20 max-w-[130px] truncate">
                         <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
                         <span className="truncate">Sem conexão</span>
+                      </span>
+                    )}
+
+                    {/* (i) info icon badge when lead talks on multiple connections */}
+                    {conv.instanceCount > 1 && (
+                      <span 
+                        className="text-[9.5px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20 flex items-center gap-1 shrink-0 cursor-help"
+                        title={`Este contato possui histórico em ${conv.instanceCount} conexões diferentes. Exibindo a mais recente.`}
+                      >
+                        <Info className="h-2.5 w-2.5" />
+                        +{conv.instanceCount - 1} conexões
                       </span>
                     )}
                   </div>

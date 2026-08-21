@@ -114,6 +114,62 @@ export default function Chat() {
 
   const selectedConv = conversations.find((c) => c.id === selectedConvId);
 
+  // Find all conversations belonging to the currently selected lead
+  const leadConversations = useMemo(() => {
+    if (!selectedConv?.lead_id) return [];
+    return conversations.filter((c) => c.lead_id === selectedConv.lead_id);
+  }, [conversations, selectedConv?.lead_id]);
+
+  // Handle switching instance connection without database unique constraint errors
+  const handleSwitchInstance = async (val: string) => {
+    if (!selectedConv) return;
+    const targetInstanceId = val === "none" ? null : val;
+
+    // 1. Check if conversation already exists in memory for this lead on targetInstanceId
+    const existingConv = conversations.find(
+      (c) => c.lead_id === selectedConv.lead_id && (targetInstanceId === null ? c.instance_id === null : c.instance_id === targetInstanceId)
+    );
+
+    if (existingConv) {
+      setSelectedConvId(existingConv.id);
+      toast.success(`Alternado para a conversa na conexão ${existingConv.instance?.name || "selecionada"}`);
+      return;
+    }
+
+    // 2. Try updating current conversation's instance
+    try {
+      const updated = await updateConversationInstance({
+        conversationId: selectedConv.id,
+        instanceId: targetInstanceId,
+      });
+      if (updated?.id) {
+        setSelectedConvId(updated.id);
+        toast.success("Conexão atualizada com sucesso");
+      }
+    } catch (err: any) {
+      // 3. Fallback if duplicate key error occurred
+      if (err?.message?.includes("duplicate key value") || err?.code === "23505") {
+        const { data: dbConv } = await supabase
+          .from("chat_conversations")
+          .select("id")
+          .eq("company_id", activeCompanyId)
+          .eq("lead_id", selectedConv.lead_id)
+          .eq("instance_id", targetInstanceId)
+          .maybeSingle();
+
+        if (dbConv?.id) {
+          setSelectedConvId(dbConv.id);
+          toast.success("Alternado para a conversa existente nesta conexão.");
+          refetchConversations();
+        } else {
+          toast.error("Erro ao alterar conexão.");
+        }
+      } else {
+        toast.error(`Erro ao trocar conexão: ${err.message}`);
+      }
+    }
+  };
+
   const [isCreatingConv, setIsCreatingConv] = useState(false);
 
   // Auto-select conversation if leadIdParam or phoneParam is present
@@ -271,15 +327,10 @@ export default function Chat() {
                     )}
 
                     {/* Instance Connection Selector */}
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <Select
                         value={selectedConv.instance_id || "none"}
-                        onValueChange={(val) => {
-                          updateConversationInstance({
-                            conversationId: selectedConv.id,
-                            instanceId: val === "none" ? null : val,
-                          });
-                        }}
+                        onValueChange={handleSwitchInstance}
                       >
                         <SelectTrigger className="h-6 px-2 py-0.5 text-[11px] font-medium bg-background/60 hover:bg-background border-border/50 rounded-lg shadow-none focus:ring-0 gap-1.5 min-w-0 w-auto">
                           <div className="flex items-center gap-1.5 truncate">
@@ -310,33 +361,51 @@ export default function Chat() {
                           <SelectItem value="none" className="text-xs text-muted-foreground">
                             Nenhuma Conexão
                           </SelectItem>
-                          {instances.map((inst) => (
-                            <SelectItem key={inst.id} value={inst.id} className="text-xs">
-                              <div className="flex items-center gap-2">
-                                <span className={cn(
-                                  "h-2 w-2 rounded-full shrink-0",
-                                  inst.status === "connected" ? "bg-emerald-500" : "bg-muted-foreground/40"
-                                )} />
-                                <span className="font-medium">{inst.name}</span>
-                                {inst.phoneNumber && (
-                                  <span className="text-[10px] text-muted-foreground font-mono">
-                                    ({inst.phoneNumber})
-                                  </span>
-                                )}
-                                {inst.status === "connected" ? (
-                                  <span className="text-[9px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1 py-0.2 rounded font-bold">
-                                    Conectado
-                                  </span>
-                                ) : (
-                                  <span className="text-[9px] bg-muted px-1 py-0.2 rounded text-muted-foreground">
-                                    Desconectado
-                                  </span>
-                                )}
-                              </div>
-                            </SelectItem>
-                          ))}
+                          {instances.map((inst) => {
+                            const hasHistory = leadConversations.some(c => c.instance_id === inst.id);
+                            return (
+                              <SelectItem key={inst.id} value={inst.id} className="text-xs">
+                                <div className="flex items-center justify-between gap-3 w-full">
+                                  <div className="flex items-center gap-2">
+                                    <span className={cn(
+                                      "h-2 w-2 rounded-full shrink-0",
+                                      inst.status === "connected" ? "bg-emerald-500" : "bg-muted-foreground/40"
+                                    )} />
+                                    <span className="font-medium">{inst.name}</span>
+                                    {inst.phoneNumber && (
+                                      <span className="text-[10px] text-muted-foreground font-mono">
+                                        ({inst.phoneNumber})
+                                      </span>
+                                    )}
+                                  </div>
+                                  {hasHistory && (
+                                    <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.2 rounded font-bold">
+                                      Histórico
+                                    </span>
+                                  )}
+                                </div>
+                              </SelectItem>
+                            );
+                          })}
                         </SelectContent>
                       </Select>
+
+                      {/* (i) info icon badge when lead talks on multiple connections */}
+                      {leadConversations.length > 1 && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-md border border-amber-500/20 flex items-center gap-1 shrink-0 cursor-help">
+                                <Info className="h-3 w-3" />
+                                {leadConversations.length} conexões
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs max-w-[260px] z-[9999]">
+                              Este contato possui histórico em {leadConversations.length} conexões do WhatsApp. Selecione uma conexão no dropdown para alternar.
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
                     </div>
                   </div>
 
