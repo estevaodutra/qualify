@@ -17,8 +17,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   useCallQueue({ globalLoop: true });
   const location = useLocation();
 
-  // Check if current route is the Quiz Editor builder
+  // Check if current route is Quiz Editor or Chat
   const isQuizEditor = location.pathname.startsWith("/quiz/") && location.pathname !== "/quiz";
+  const isChat = location.pathname.startsWith("/chat");
 
   return (
     <SidebarProvider defaultOpen>
@@ -26,11 +27,17 @@ export function AppLayout({ children }: AppLayoutProps) {
         {/* System Sidebar */}
         <AppSidebar />
 
-        <div className="flex flex-1 flex-col relative z-10 min-w-0">
+        <div className="flex flex-1 flex-col relative z-10 min-w-0 h-screen overflow-hidden">
           <ImpersonationBanner />
           {!isQuizEditor && <AppHeader />}
           {!isQuizEditor && <InstanceStatusBanner />}
-          <main className={isQuizEditor ? "flex-1 overflow-hidden p-0 h-screen" : "flex-1 overflow-auto p-5 md:p-8 scrollbar-thin"}>
+          <main className={
+            isQuizEditor
+              ? "flex-1 overflow-hidden p-0 h-screen"
+              : isChat
+              ? "flex-1 overflow-hidden p-3 md:p-4 h-[calc(100vh-60px)]"
+              : "flex-1 overflow-auto p-5 md:p-8 scrollbar-thin"
+          }>
             {children || <Outlet />}
           </main>
         </div>

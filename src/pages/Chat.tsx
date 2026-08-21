@@ -169,7 +169,7 @@ export default function Chat() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] overflow-hidden bg-background/30 backdrop-blur-md border border-border/10 rounded-2xl m-4 shadow-xl">
+    <div className="flex h-full w-full overflow-hidden bg-background/30 backdrop-blur-md border border-border/10 rounded-2xl shadow-xl">
       {/* 1. Unified Inbox Column (Left) */}
       <div className={cn(
         "shrink-0 border-r border-border/40 h-full",
