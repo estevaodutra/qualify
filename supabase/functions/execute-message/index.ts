@@ -2669,6 +2669,19 @@ Deno.serve(async (req) => {
                 console.log(`[ExecuteMessage] ✅ Group mgmt ${node.node_type} on ${dest.group_name}`);
                 webhookResponses.push({ nodeType: node.node_type, nodeOrder: node.node_order, destination: dest.group_jid, status: "sent", data: responseData });
                 nodeResults.push({ destination: dest.group_jid, status: "sent" });
+                const msgText = formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.caption || "";
+                const destPhone = dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || "";
+                if (msgText && destPhone) {
+                  await syncSentMessageToChat(supabase, {
+                    companyId: typedCampaign.company_id,
+                    instanceId: activeInstanceId,
+                    phone: destPhone,
+                    name: dest.group_name || triggerContext?.respondentName,
+                    leadId: leadData?.id || triggerContext?.leadId || null,
+                    body: msgText,
+                    externalMessageId: result.messageId || null,
+                  });
+                }
               } else {
                 nodesFailed++;
                 console.log(`[ExecuteMessage] ❌ Group mgmt ${node.node_type} failed: HTTP ${result.status}`);
@@ -3066,6 +3079,19 @@ Deno.serve(async (req) => {
                   console.error(`[ExecuteMessage] ❌ Failed to send sub-message ${subNodeType} to ${dest.group_name}`);
                 } else {
                   console.log(`[ExecuteMessage] ✅ Sub-message ${subNodeType} sent to ${dest.group_name}`);
+                  const msgText = formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.caption || "";
+                  const destPhone = dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || "";
+                  if (msgText && destPhone) {
+                    await syncSentMessageToChat(supabase, {
+                      companyId: typedCampaign.company_id,
+                      instanceId: activeInstanceId,
+                      phone: destPhone,
+                      name: dest.group_name || triggerContext?.respondentName,
+                      leadId: leadData?.id || triggerContext?.leadId || null,
+                      body: msgText,
+                      externalMessageId: externalMessageId,
+                    });
+                  }
                 }
               } catch (err: any) {
                 subFailed = true;
