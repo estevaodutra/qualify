@@ -51,7 +51,13 @@ export function ExecutionCanvas({
     return allNodeTypes.find(n => n.type === type) || allNodeTypes[0];
   };
 
-  const getNodeExec = (nodeId: string) => nodeExecutions.find(e => e.nodeId === nodeId);
+  const getNodeExec = (nodeId: string) => {
+    return nodeExecutions.find(e => e.nodeId === nodeId) ||
+           nodeExecutions.find(e => {
+             const n = nodes.find(localN => localN.id === nodeId);
+             return n && (n.nodeType === "trigger" || n.nodeType === "start" || n.nodeType === "inicio") && (e.nodeType === "trigger" || e.nodeType === "start" || e.nodeType === "inicio");
+           });
+  };
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.target === canvasRef.current || (e.target as HTMLElement).classList.contains("canvas-grid")) {
@@ -83,7 +89,7 @@ export function ExecutionCanvas({
       </div>
 
       <div className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-white px-3 py-1.5 border border-slate-200/80 rounded-xl shadow-sm">
-        <span className="text-[10px] font-bold text-slate-500">Modo somente leitura — clique em um bloco para ver detalhes</span>
+        <span className="text-[10px] font-bold text-slate-500">Modo de Diagnóstico de Execução — clique nos blocos destacados para ver os dados salvos</span>
       </div>
 
       <div
@@ -133,15 +139,28 @@ export function ExecutionCanvas({
 
               let colorKey: "success" | "error" | "gray" = "gray";
               let isAnimating = false;
-              if (srcExec && tgtExec) {
+
+              if (srcExec) {
                 const srcOutput = srcExec.output as { branch?: string } | null;
                 const takenBranch = srcOutput?.branch;
-                const branchMatches = !conn.conditionPath || !takenBranch || takenBranch === conn.conditionPath;
-                if (branchMatches) {
-                  colorKey = tgtExec.status === "error" ? "error" : "success";
-                  isAnimating = execution.status === "running" && tgtExec.status === "running";
+
+                let isTakenPath = false;
+                if (!conn.conditionPath) {
+                  isTakenPath = true;
+                } else if (takenBranch) {
+                  if (takenBranch === conn.conditionPath) {
+                    isTakenPath = true;
+                  } else if (takenBranch === "fallback" && (conn.conditionPath === "no" || conn.conditionPath === "not_found" || conn.conditionPath === "not_matched" || conn.conditionPath === "fallback")) {
+                    isTakenPath = true;
+                  }
+                }
+
+                if (isTakenPath) {
+                  colorKey = tgtExec && tgtExec.status === "error" ? "error" : "success";
+                  isAnimating = execution.status === "running" && tgtExec?.status === "running";
                 }
               }
+
               const strokeColor = colorKey === "success" ? "#10b981" : colorKey === "error" ? "#ef4444" : "#cbd5e1";
 
               const srcWidth = 320;
@@ -188,10 +207,11 @@ export function ExecutionCanvas({
                   d={d}
                   fill="none"
                   stroke={strokeColor}
-                  strokeWidth="2"
+                  strokeWidth={colorKey === "gray" ? "1.5" : "3"}
                   strokeDasharray={colorKey === "gray" ? "4 4" : undefined}
                   markerEnd={`url(#exec-arrow-${colorKey})`}
                   className={isAnimating ? "animate-pulse" : undefined}
+                  style={{ opacity: colorKey === "gray" ? 0.4 : 1 }}
                 />
               );
             })}
@@ -209,16 +229,35 @@ export function ExecutionCanvas({
               const posX = node.positionX || 0;
               const posY = node.positionY || 0;
 
+              const outputObj = nodeExec?.output as { branch?: string; result?: boolean } | null;
+              const conditionResult = outputObj?.result;
+              const branchTaken = outputObj?.branch;
+
+              // Check if execution stopped at this node (executed but branch taken has no target connection)
+              let hasDisconnectedBranch = false;
+              if (nodeExec && (node.nodeType === "condition" || node.nodeType === "condicao")) {
+                const outgoingConns = connections.filter(c => c.sourceNodeId === node.id);
+                if (branchTaken) {
+                  const matchingConn = outgoingConns.find(c => 
+                    c.conditionPath === branchTaken || 
+                    (branchTaken === "fallback" && (c.conditionPath === "no" || c.conditionPath === "not_found" || c.conditionPath === "not_matched" || c.conditionPath === "fallback"))
+                  );
+                  if (!matchingConn) {
+                    hasDisconnectedBranch = true;
+                  }
+                }
+              }
+
               return (
                 <div
                   key={node.id}
                   style={{ position: "absolute", left: posX, top: posY, width: node.nodeType === "trigger" || node.nodeType === "content" || node.nodeType === "phone_call" || node.nodeType === "ura" ? 320 : 220, pointerEvents: "auto" }}
                   onClick={() => nodeExec && onSelectNode(node.id)}
                   className={cn(
-                    "rounded-xl border-2 bg-white shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col p-3",
+                    "rounded-xl border-2 bg-white shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col p-3 transition-all duration-200",
                     style.border, style.ring, "ring-2",
-                    nodeExec ? "cursor-pointer" : "cursor-default opacity-70",
-                    isSelected && "shadow-lg"
+                    nodeExec ? "cursor-pointer" : "cursor-default opacity-50 grayscale-[20%]",
+                    isSelected && "shadow-xl ring-4 ring-primary/30"
                   )}
                 >
                   <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
@@ -233,9 +272,32 @@ export function ExecutionCanvas({
                     </div>
                     <StatusIcon className={cn("h-4 w-4 shrink-0", style.iconColor, status === "running" && "animate-spin")} />
                   </div>
+
+                  {/* Condition Result Badge */}
+                  {nodeExec && (node.nodeType === "condition" || node.nodeType === "condicao") && (
+                    <div className="mt-2 p-1.5 rounded-lg bg-slate-50 border border-slate-100 flex flex-col gap-1">
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-slate-500 font-medium">Resultado:</span>
+                        {conditionResult === true ? (
+                          <span className="font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">VERDADEIRO</span>
+                        ) : conditionResult === false ? (
+                          <span className="font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">FALSO (Fallback)</span>
+                        ) : (
+                          <span className="font-mono text-slate-600">{branchTaken || "OK"}</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {hasDisconnectedBranch && (
+                    <div className="mt-1.5 px-2 py-1 rounded bg-amber-500/10 border border-amber-500/30 text-[9px] font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                      <span>⚠️ Parou aqui (saída desconectada)</span>
+                    </div>
+                  )}
+
                   <div className="pt-2 flex items-center justify-between text-[9px] font-bold uppercase tracking-wider">
                     <span className={style.iconColor}>
-                      {status === "success" ? "Sucesso" : status === "error" ? "Erro" : status === "running" ? "Executando" : "Não executado"}
+                      {status === "success" ? "Executado" : status === "error" ? "Erro" : status === "running" ? "Executando" : "Não percorrido"}
                     </span>
                     {nodeExec?.durationMs != null && <span className="text-slate-400">{nodeExec.durationMs}ms</span>}
                   </div>

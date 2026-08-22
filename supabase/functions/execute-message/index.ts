@@ -2111,7 +2111,34 @@ Deno.serve(async (req) => {
           let leadData: any = null;
           const companyId = typedCampaign.company_id || typedCampaign.company_id;
 
-          if (activeDestinations.length > 0) {
+          const ctxLeadId = triggerContext?.leadId || triggerContext?.lead_id || triggerContext?.contactId;
+          const ctxPhone = triggerContext?.contactPhone || triggerContext?.respondentPhone || triggerContext?.phone;
+
+          if (ctxLeadId) {
+            const { data } = await supabase
+              .from("leads")
+              .select("id, name, phone, email, tags, custom_fields, pipeline_stage_id, crm_owner_id, assigned_user_id, attendant_id, cpf")
+              .eq("id", ctxLeadId)
+              .maybeSingle();
+
+            if (data) leadData = data;
+          }
+
+          if (!leadData && ctxPhone) {
+            const cleanCtxPhone = (ctxPhone as string).replace(/\D/g, "");
+            if (cleanCtxPhone) {
+              const { data } = await supabase
+                .from("leads")
+                .select("id, name, phone, email, tags, custom_fields, pipeline_stage_id, crm_owner_id, assigned_user_id, attendant_id, cpf")
+                .eq("company_id", companyId)
+                .eq("phone", cleanCtxPhone)
+                .maybeSingle();
+
+              if (data) leadData = data;
+            }
+          }
+
+          if (!leadData && activeDestinations.length > 0) {
             const dest = activeDestinations[0];
             const phoneClean = dest.group_jid.split("@")[0].replace(/\D/g, "");
             const { data } = await supabase
