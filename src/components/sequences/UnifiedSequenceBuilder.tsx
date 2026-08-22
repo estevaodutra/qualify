@@ -2157,14 +2157,14 @@ export function UnifiedSequenceBuilder({
                               <p className="font-bold text-xs text-slate-800 truncate">
                                 {isCondition
                                   ? (getConditionDefinition(node.config.conditionType as string)?.label || (node.config.label as string) || "Condição")
-                                  : (node.nodeType === "action" || node.nodeType === "tag_add" || node.nodeType === "tag_remove" || node.nodeType === "deal_move")
+                                  : (node.nodeType === "action" || node.nodeType === "tag_add" || node.nodeType === "tag_remove" || node.nodeType === "deal_move" || node.nodeType === "create_deal" || node.nodeType === "deal_create" || node.nodeType === "move_deal_stage" || node.nodeType === "move_deal")
                                   ? (getActionDefinition(node.config.actionType as string)?.label || (node.config.label as string) || "Ações")
                                   : ((node.config.label as string) || nodeInfo.label)}
                               </p>
                               <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
                                 {isCondition
                                   ? (getConditionDefinition(node.config.conditionType as string) ? "Leads" : "Condição")
-                                  : (node.nodeType === "action" || node.nodeType === "tag_add" || node.nodeType === "tag_remove" || node.nodeType === "deal_move")
+                                  : (node.nodeType === "action" || node.nodeType === "tag_add" || node.nodeType === "tag_remove" || node.nodeType === "deal_move" || node.nodeType === "create_deal" || node.nodeType === "deal_create" || node.nodeType === "move_deal_stage" || node.nodeType === "move_deal")
                                   ? (getActionDefinition(node.config.actionType as string)?.category.toUpperCase() || "Ação CRM")
                                   : nodeInfo.label}
                               </p>
@@ -2178,7 +2178,7 @@ export function UnifiedSequenceBuilder({
                           >
                             {isCondition ? (
                               getConditionDefinition(node.config.conditionType as string)?.description || "Clique para selecionar e configurar esta regra..."
-                            ) : (node.nodeType === "action" || node.nodeType === "tag_add" || node.nodeType === "tag_remove" || node.nodeType === "deal_move") ? (
+                            ) : (node.nodeType === "action" || node.nodeType === "tag_add" || node.nodeType === "tag_remove" || node.nodeType === "deal_move" || node.nodeType === "create_deal" || node.nodeType === "deal_create" || node.nodeType === "move_deal_stage" || node.nodeType === "move_deal") ? (
                               getActionDefinition(node.config.actionType as string)?.description || "Clique para selecionar e configurar esta ação..."
                             ) : isRandomizer ? (
                               randomizerBranches.length === 0 ? "Clique para configurar as ramificações..." :

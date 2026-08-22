@@ -21,6 +21,9 @@ export function liftLegacyNode(node: LocalNode): LocalNode {
     }
     return node;
   }
+  if (node.nodeType === "action") {
+    return node;
+  }
   if (isContentSubType(node.nodeType)) {
     // Lift legacy literal node to a container node with 1 message
     const messageId = Math.random().toString(36).substring(2, 9);
@@ -36,8 +39,16 @@ export function liftLegacyNode(node: LocalNode): LocalNode {
       } 
     };
   }
-  if (isActionSubType(node.nodeType)) {
-    return { ...node, nodeType: "action", config: { ...node.config, actionType: node.nodeType } };
+  if (
+    isActionSubType(node.nodeType) ||
+    node.nodeType === "create_deal" ||
+    node.nodeType === "deal_create" ||
+    node.nodeType === "move_deal_stage" ||
+    node.nodeType === "move_deal" ||
+    node.nodeType === "deal_move"
+  ) {
+    const actionType = (node.config.actionType as string) || node.nodeType;
+    return { ...node, nodeType: "action", config: { ...node.config, actionType } };
   }
   return node;
 }
@@ -49,7 +60,8 @@ export function lowerToLegacyNode(node: LocalNode): LocalNode {
   }
   if (node.nodeType === "action") {
     const { actionType, ...rest } = node.config;
-    return { ...node, nodeType: (actionType as string) || "tag_add", config: rest };
+    const legacyType = (actionType as string) || "tag_add";
+    return { ...node, nodeType: legacyType, config: { ...rest, actionType: legacyType } };
   }
   return node;
 }
