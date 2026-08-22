@@ -7,6 +7,95 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const syncSentMessageToChat = async (
+  supabase: any,
+  params: {
+    companyId?: string;
+    instanceId?: string;
+    phone?: string;
+    name?: string;
+    leadId?: string | null;
+    body?: string;
+    externalMessageId?: string | null;
+  }
+) => {
+  if (!params.phone || !params.companyId || !params.body) return;
+  const cleanPhone = params.phone.replace(/\D/g, "");
+  if (!cleanPhone) return;
+
+  try {
+    let convId: string | null = null;
+
+    if (params.leadId) {
+      const { data } = await supabase
+        .from("chat_conversations")
+        .select("id")
+        .eq("company_id", params.companyId)
+        .eq("lead_id", params.leadId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (data) convId = data.id;
+    }
+
+    if (!convId) {
+      const { data } = await supabase
+        .from("chat_conversations")
+        .select("id")
+        .eq("company_id", params.companyId)
+        .eq("contact_phone", cleanPhone)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (data) convId = data.id;
+    }
+
+    if (!convId) {
+      const { data: newConv } = await supabase
+        .from("chat_conversations")
+        .insert({
+          company_id: params.companyId,
+          instance_id: params.instanceId || null,
+          lead_id: params.leadId || null,
+          contact_phone: cleanPhone,
+          contact_name: params.name || cleanPhone,
+          status: "open",
+          last_message_at: new Date().toISOString(),
+          last_message_preview: params.body,
+        })
+        .select("id")
+        .single();
+      if (newConv) convId = newConv.id;
+    }
+
+    if (convId) {
+      await supabase.from("chat_messages").insert({
+        company_id: params.companyId,
+        conversation_id: convId,
+        sender_type: "operator",
+        message_type: "text",
+        body: params.body,
+        status: "sent",
+        message_id: params.externalMessageId || null,
+        created_at: new Date().toISOString(),
+      });
+
+      await supabase
+        .from("chat_conversations")
+        .update({
+          last_message_at: new Date().toISOString(),
+          last_message_preview: params.body,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", convId);
+
+      console.log(`[ExecuteMessage] Synced sent message to chat conversation ${convId}`);
+    }
+  } catch (err) {
+    console.error("[ExecuteMessage] Failed to sync sent message to chat_messages:", err);
+  }
+};
+
 
 
 // Max delay per node (20 seconds to stay safe under timeout)
@@ -396,7 +485,9 @@ const evaluateExtensibleCondition = async (
       const identifierField = (params.identifierField as string) || "phone";
       let isFound = false;
 
-      if (identifierField === "phone") {
+      if (leadData?.id) {
+        isFound = true;
+      } else if (identifierField === "phone" || !identifierField) {
         const rawPhone = (params.phone as string) || leadData?.phone || "";
         const phoneToSearch = cleanPhone(rawPhone);
 
@@ -445,8 +536,6 @@ const evaluateExtensibleCondition = async (
             .maybeSingle();
           isFound = !!dbLead;
         }
-      } else if (leadData?.id) {
-        isFound = true;
       }
 
       return { matched: isFound, branch: isFound ? "found" : "not_found" };

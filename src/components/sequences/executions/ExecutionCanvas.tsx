@@ -52,11 +52,28 @@ export function ExecutionCanvas({
   };
 
   const getNodeExec = (nodeId: string) => {
-    return nodeExecutions.find(e => e.nodeId === nodeId) ||
-           nodeExecutions.find(e => {
-             const n = nodes.find(localN => localN.id === nodeId);
-             return n && (n.nodeType === "trigger" || n.nodeType === "start" || n.nodeType === "inicio") && (e.nodeType === "trigger" || e.nodeType === "start" || e.nodeType === "inicio");
-           });
+    const directMatch = nodeExecutions.find(e => e.nodeId === nodeId);
+    if (directMatch) return directMatch;
+
+    const targetNode = nodes.find(localN => localN.id === nodeId);
+    if (!targetNode) return undefined;
+
+    if (targetNode.nodeType === "trigger" || targetNode.nodeType === "start" || targetNode.nodeType === "inicio") {
+      return nodeExecutions.find(e => e.nodeType === "trigger" || e.nodeType === "start" || e.nodeType === "inicio");
+    }
+
+    const sameTypeExecs = nodeExecutions.filter(e => e.nodeType === targetNode.nodeType);
+    const sameTypeNodes = nodes.filter(n => n.nodeType === targetNode.nodeType);
+    if (sameTypeExecs.length === 1 && sameTypeNodes.length === 1) {
+      return sameTypeExecs[0];
+    }
+
+    const nodeIdx = sameTypeNodes.findIndex(n => n.id === nodeId);
+    if (nodeIdx >= 0 && nodeIdx < sameTypeExecs.length) {
+      return sameTypeExecs[nodeIdx];
+    }
+
+    return undefined;
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
