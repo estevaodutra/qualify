@@ -3079,11 +3079,12 @@ Deno.serve(async (req) => {
                   console.error(`[ExecuteMessage] ❌ Failed to send sub-message ${subNodeType} to ${dest.group_name}`);
                 } else {
                   console.log(`[ExecuteMessage] ✅ Sub-message ${subNodeType} sent to ${dest.group_name}`);
-                  const msgText = formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.caption || "";
-                  const destPhone = dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || "";
+                  const msgText = (subMsg.content || subMsg.text || subMsg.message || formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.caption || "") as string;
+                  const destPhone = (dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || triggerContext?.contactPhone || "") as string;
+                  const effectiveCompanyId = triggerContext?.companyId || typedCampaign?.company_id || "dcb34e9a-1510-4137-aecd-cec0c6d548c4";
                   if (msgText && destPhone) {
                     await syncSentMessageToChat(supabase, {
-                      companyId: triggerContext?.companyId || typedCampaign?.company_id,
+                      companyId: effectiveCompanyId,
                       instanceId: activeInstanceId,
                       phone: destPhone,
                       name: dest.group_name || triggerContext?.respondentName,
