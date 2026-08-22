@@ -467,7 +467,8 @@ const evaluateExtensibleCondition = async (
   config: Record<string, unknown>,
   leadData: Record<string, any> | null,
   supabase: any,
-  companyId: string
+  companyId: string,
+  triggerContext?: any
 ): Promise<{ matched: boolean; branch: string }> => {
   const conditionType = config.conditionType as string | undefined;
   const params = (config.parameters as Record<string, unknown>) || {};
@@ -485,11 +486,39 @@ const evaluateExtensibleCondition = async (
       const identifierField = (params.identifierField as string) || "phone";
       let isFound = false;
 
+      const rawPhone = (params.phone as string) || leadData?.phone || triggerContext?.respondentPhone || triggerContext?.contactPhone || triggerContext?.phone || "";
+      const phoneToSearch = cleanPhone(rawPhone);
+
+      console.log(`[ExecuteMessage DEBUG lead_exists] identifierField=${identifierField}, leadDataId=${leadData?.id}, rawPhone=${rawPhone}, phoneToSearch=${phoneToSearch}, companyId=${companyId}`);
+
       if (leadData?.id) {
         isFound = true;
-      } else if (identifierField === "phone" || !identifierField) {
-        const rawPhone = (params.phone as string) || leadData?.phone || "";
-        const phoneToSearch = cleanPhone(rawPhone);
+      } else if (phoneToSearch) {
+        const { data: dbLead } = await supabase
+          .from("leads")
+          .select("id, name, phone")
+          .eq("company_id", companyId)
+          .eq("phone", phoneToSearch)
+          .maybeSingle();
+
+        console.log(`[ExecuteMessage DEBUG lead_exists] exact query dbLead=${JSON.stringify(dbLead)}`);
+
+        if (dbLead) {
+          isFound = true;
+        } else {
+          // Suffix check for 8+ trailing digits
+          const suffix = phoneToSearch.slice(-8);
+          if (suffix.length >= 8) {
+            const { data: flexLeads } = await supabase
+              .from("leads")
+              .select("id")
+              .eq("company_id", companyId)
+              .ilike("phone", `%${suffix}`);
+            console.log(`[ExecuteMessage DEBUG lead_exists] suffix query count=${flexLeads?.length}`);
+            isFound = flexLeads && flexLeads.length > 0;
+          }
+        }
+      }
 
         if (phoneToSearch) {
           const { data: dbLead } = await supabase
@@ -2257,7 +2286,8 @@ Deno.serve(async (req) => {
                 { conditionType: rule.conditionType, parameters: rule.parameters },
                 leadData,
                 supabase,
-                companyId
+                companyId,
+                triggerContext
               );
               if (ruleResult.matched) {
                 matched = true;
@@ -2270,7 +2300,8 @@ Deno.serve(async (req) => {
               node.config,
               leadData,
               supabase,
-              companyId
+              companyId,
+              triggerContext
             );
             matched = singleResult.matched;
             branch = singleResult.branch;
