@@ -2677,7 +2677,7 @@ Deno.serve(async (req) => {
                     instanceId: activeInstanceId,
                     phone: destPhone,
                     name: dest.group_name || triggerContext?.respondentName,
-                    leadId: leadData?.id || triggerContext?.leadId || null,
+                    leadId: triggerContext?.leadId || null,
                     body: msgText,
                     externalMessageId: result.messageId || null,
                   });
@@ -3088,7 +3088,7 @@ Deno.serve(async (req) => {
                       instanceId: activeInstanceId,
                       phone: destPhone,
                       name: dest.group_name || triggerContext?.respondentName,
-                      leadId: leadData?.id || triggerContext?.leadId || null,
+                      leadId: triggerContext?.leadId || null,
                       body: msgText,
                       externalMessageId: externalMessageId,
                     });

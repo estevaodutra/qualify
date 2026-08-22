@@ -8,9 +8,11 @@ async function main() {
   const { data: logs } = await supabase
     .from('group_message_logs')
     .select('*')
-    .limit(3);
+    .eq('status', 'failed')
+    .order('created_at', { ascending: false })
+    .limit(10);
 
-  console.log("Latest group_message_logs:", JSON.stringify(logs, null, 2));
+  console.log("Failed group logs:", JSON.stringify(logs, null, 2));
 }
 
 main().catch(console.error);
