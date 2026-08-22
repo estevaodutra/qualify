@@ -2673,7 +2673,7 @@ Deno.serve(async (req) => {
                 const destPhone = dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || "";
                 if (msgText && destPhone) {
                   await syncSentMessageToChat(supabase, {
-                    companyId: typedCampaign.company_id,
+                    companyId: triggerContext?.companyId || typedCampaign?.company_id,
                     instanceId: activeInstanceId,
                     phone: destPhone,
                     name: dest.group_name || triggerContext?.respondentName,
@@ -3083,7 +3083,7 @@ Deno.serve(async (req) => {
                   const destPhone = dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || "";
                   if (msgText && destPhone) {
                     await syncSentMessageToChat(supabase, {
-                      companyId: typedCampaign.company_id,
+                      companyId: triggerContext?.companyId || typedCampaign?.company_id,
                       instanceId: activeInstanceId,
                       phone: destPhone,
                       name: dest.group_name || triggerContext?.respondentName,
