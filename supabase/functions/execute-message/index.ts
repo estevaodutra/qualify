@@ -1803,8 +1803,12 @@ Deno.serve(async (req) => {
           node.node_type === "tag_add" ||
           node.node_type === "tag_remove" ||
           node.node_type === "deal_move" ||
+          node.node_type === "move_deal" ||
+          node.node_type === "move_deal_stage" ||
           node.node_type === "create_deal" ||
-          node.node_type === "deal_create"
+          node.node_type === "deal_create" ||
+          node.config?.category === "deal" ||
+          node.config?.category === "lead"
         ) {
           const actionType =
             (node.config.actionType as string) ||
@@ -1813,9 +1817,9 @@ Deno.serve(async (req) => {
               ? "add_lead_tags"
               : node.node_type === "tag_remove"
               ? "remove_lead_tags"
-              : node.node_type === "deal_move"
+              : (node.node_type === "deal_move" || node.node_type === "move_deal" || node.node_type === "move_deal_stage" || (node.config.category === "deal" && (node.config.parameters as any)?.stageId && !(node.config.parameters as any)?.title))
               ? "move_deal_stage"
-              : (node.node_type === "create_deal" || node.node_type === "deal_create")
+              : (node.node_type === "create_deal" || node.node_type === "deal_create" || (node.config.category === "deal" && (node.config.parameters as any)?.title !== undefined))
               ? "create_deal"
               : "add_lead_tags");
           const params = (node.config.parameters as Record<string, any>) || node.config;
