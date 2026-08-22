@@ -493,7 +493,7 @@ const evaluateExtensibleCondition = async (
 
       if (leadData?.id) {
         isFound = true;
-      } else if (phoneToSearch) {
+      } else if (phoneToSearch && (identifierField === "phone" || !identifierField)) {
         const { data: dbLead } = await supabase
           .from("leads")
           .select("id, name, phone")
@@ -516,31 +516,6 @@ const evaluateExtensibleCondition = async (
               .ilike("phone", `%${suffix}`);
             console.log(`[ExecuteMessage DEBUG lead_exists] suffix query count=${flexLeads?.length}`);
             isFound = flexLeads && flexLeads.length > 0;
-          }
-        }
-      }
-
-        if (phoneToSearch) {
-          const { data: dbLead } = await supabase
-            .from("leads")
-            .select("id, name, phone")
-            .eq("company_id", companyId)
-            .eq("phone", phoneToSearch)
-            .maybeSingle();
-
-          if (dbLead) {
-            isFound = true;
-          } else {
-            // Suffix check for 8+ trailing digits
-            const suffix = phoneToSearch.slice(-8);
-            if (suffix.length >= 8) {
-              const { data: flexLeads } = await supabase
-                .from("leads")
-                .select("id")
-                .eq("company_id", companyId)
-                .ilike("phone", `%${suffix}`);
-              isFound = flexLeads && flexLeads.length > 0;
-            }
           }
         }
       } else if (identifierField === "email") {
