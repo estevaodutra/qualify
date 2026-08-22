@@ -1759,11 +1759,30 @@ Deno.serve(async (req) => {
         }
 
         // ============= ACTION CRM NODES (Extensible Engine for Leads & Deals) =============
-        if (node.node_type === "action" || node.node_type === "tag_add" || node.node_type === "tag_remove" || node.node_type === "deal_move") {
-          const actionType = (node.config.actionType as string) || (node.node_type === "tag_add" ? "add_lead_tags" : node.node_type === "tag_remove" ? "remove_lead_tags" : node.node_type === "deal_move" ? "move_deal_stage" : "add_lead_tags");
+        if (
+          node.node_type === "action" ||
+          node.node_type === "tag_add" ||
+          node.node_type === "tag_remove" ||
+          node.node_type === "deal_move" ||
+          node.node_type === "create_deal" ||
+          node.node_type === "deal_create"
+        ) {
+          const actionType =
+            (node.config.actionType as string) ||
+            ((node.config.parameters as Record<string, any>)?.actionType as string) ||
+            (node.node_type === "tag_add"
+              ? "add_lead_tags"
+              : node.node_type === "tag_remove"
+              ? "remove_lead_tags"
+              : node.node_type === "deal_move"
+              ? "move_deal_stage"
+              : (node.node_type === "create_deal" || node.node_type === "deal_create")
+              ? "create_deal"
+              : "add_lead_tags");
           const params = (node.config.parameters as Record<string, any>) || node.config;
-          const companyId = typedCampaign.company_id;
+          const companyId = typedCampaign.company_id || triggerContext?.companyId || "dcb34e9a-1510-4137-aecd-cec0c6d548c4";
           const affectedLeadIds: string[] = [];
+          const affectedDealIds: string[] = [];
 
           for (const dest of activeDestinations) {
             const phoneClean = dest.group_jid.split("@")[0].replace(/\D/g, "");
@@ -1819,64 +1838,116 @@ Deno.serve(async (req) => {
                   console.log(`[ExecuteMessage] Lead ${existing.id} already exists for phone ${resolvedPhone}`);
                 }
               }
-            } else if (leadData) {
-              affectedLeadIds.push(leadData.id);
+            } else if (leadData || triggerContext?.leadId || phoneClean) {
+              if (leadData) affectedLeadIds.push(leadData.id);
 
               if (actionType === "delete_lead") {
-                if (params.confirmed !== false) {
+                if (params.confirmed !== false && leadData) {
                   await supabase.from("leads").delete().eq("id", leadData.id);
                   console.log(`[ExecuteMessage] 🗑️ Lead ${leadData.id} deleted`);
                 }
               } else if (actionType === "add_lead_tags") {
-                const newTagsToAppend = Array.isArray(params.tags) ? params.tags : (params.tag ? [params.tag] : []);
-                const currentTags = leadData.tags || [];
-                const merged = Array.from(new Set([...currentTags, ...newTagsToAppend]));
-                await supabase.from("leads").update({ tags: merged }).eq("id", leadData.id);
-                console.log(`[ExecuteMessage] Tags ${newTagsToAppend.join(", ")} added to lead ${leadData.id}`);
+                if (leadData) {
+                  const newTagsToAppend = Array.isArray(params.tags) ? params.tags : (params.tag ? [params.tag] : []);
+                  const currentTags = leadData.tags || [];
+                  const merged = Array.from(new Set([...currentTags, ...newTagsToAppend]));
+                  await supabase.from("leads").update({ tags: merged }).eq("id", leadData.id);
+                  console.log(`[ExecuteMessage] Tags ${newTagsToAppend.join(", ")} added to lead ${leadData.id}`);
+                }
               } else if (actionType === "remove_lead_tags") {
-                const tagsToRemove = Array.isArray(params.tags) ? params.tags : (params.tag ? [params.tag] : []);
-                const currentTags = leadData.tags || [];
-                const filtered = currentTags.filter((t: string) => !tagsToRemove.includes(t));
-                await supabase.from("leads").update({ tags: filtered }).eq("id", leadData.id);
-                console.log(`[ExecuteMessage] Tags ${tagsToRemove.join(", ")} removed from lead ${leadData.id}`);
+                if (leadData) {
+                  const tagsToRemove = Array.isArray(params.tags) ? params.tags : (params.tag ? [params.tag] : []);
+                  const currentTags = leadData.tags || [];
+                  const filtered = currentTags.filter((t: string) => !tagsToRemove.includes(t));
+                  await supabase.from("leads").update({ tags: filtered }).eq("id", leadData.id);
+                  console.log(`[ExecuteMessage] Tags ${tagsToRemove.join(", ")} removed from lead ${leadData.id}`);
+                }
               } else if (actionType === "add_lead_comment") {
-                const comment = params.comment || "";
-                if (comment) {
-                  await supabase.from("lead_notes").insert({
-                    company_id: companyId,
-                    lead_id: leadData.id,
-                    content: comment,
-                  });
-                  console.log(`[ExecuteMessage] Comment added to lead ${leadData.id}`);
+                if (leadData) {
+                  const comment = params.comment || "";
+                  if (comment) {
+                    await supabase.from("lead_notes").insert({
+                      company_id: companyId,
+                      lead_id: leadData.id,
+                      content: comment,
+                    });
+                    console.log(`[ExecuteMessage] Comment added to lead ${leadData.id}`);
+                  }
                 }
               } else if (actionType === "transfer_lead_assignee") {
-                const assigneeId = params.assigneeId;
-                if (assigneeId) {
-                  await supabase.from("leads").update({ owner_id: assigneeId }).eq("id", leadData.id);
-                  console.log(`[ExecuteMessage] Lead ${leadData.id} transferred to ${assigneeId}`);
+                if (leadData) {
+                  const assigneeId = params.assigneeId;
+                  if (assigneeId) {
+                    await supabase.from("leads").update({ owner_id: assigneeId }).eq("id", leadData.id);
+                    console.log(`[ExecuteMessage] Lead ${leadData.id} transferred to ${assigneeId}`);
+                  }
                 }
               } else if (actionType === "remove_lead_assignee") {
-                await supabase.from("leads").update({ owner_id: null }).eq("id", leadData.id);
-                console.log(`[ExecuteMessage] Assignee removed from lead ${leadData.id}`);
+                if (leadData) {
+                  await supabase.from("leads").update({ owner_id: null }).eq("id", leadData.id);
+                  console.log(`[ExecuteMessage] Assignee removed from lead ${leadData.id}`);
+                }
               } else if (actionType === "create_deal") {
                 const pipelineId = params.pipelineId;
                 const stageId = params.stageId;
-                const title = params.title || `Negócio - ${leadData.name || phoneClean}`;
-                const value = Number(params.value) || 0;
-                const assigneeId = params.assigneeId || leadData.owner_id;
+                let targetLeadId = leadData?.id || triggerContext?.leadId || null;
+                const effectiveCompanyId = companyId || triggerContext?.companyId || "dcb34e9a-1510-4137-aecd-cec0c6d548c4";
 
-                if (pipelineId && stageId) {
-                  await supabase.from("deals").insert({
-                    company_id: companyId,
-                    lead_id: leadData.id,
-                    pipeline_id: pipelineId,
-                    stage_id: stageId,
-                    title,
-                    value,
-                    owner_id: assigneeId,
-                    status: "open",
-                  });
-                  console.log(`[ExecuteMessage] Deal created for lead ${leadData.id}`);
+                if (!targetLeadId && phoneClean) {
+                  const { data: existingLead } = await supabase
+                    .from("leads")
+                    .select("id")
+                    .eq("company_id", effectiveCompanyId)
+                    .eq("phone", phoneClean)
+                    .maybeSingle();
+
+                  if (existingLead) {
+                    targetLeadId = existingLead.id;
+                  } else {
+                    const leadName = triggerContext?.respondentName || phoneClean;
+                    const { data: newLead } = await supabase
+                      .from("leads")
+                      .insert({
+                        company_id: effectiveCompanyId,
+                        name: leadName,
+                        phone: phoneClean,
+                        source_name: "Criar Negócio (Workflow)",
+                      })
+                      .select("id")
+                      .single();
+
+                    if (newLead) {
+                      targetLeadId = newLead.id;
+                    }
+                  }
+                }
+
+                if (pipelineId && stageId && targetLeadId) {
+                  const dealTitle = (params.title && params.title.trim() !== "") ? params.title : `Negócio - ${leadData?.name || triggerContext?.respondentName || phoneClean}`;
+                  const dealValue = Number(params.value) || 0;
+                  const assigneeId = params.assigneeId || leadData?.owner_id || null;
+
+                  const { data: createdDeal, error: dealErr } = await supabase
+                    .from("deals")
+                    .insert({
+                      company_id: effectiveCompanyId,
+                      lead_id: targetLeadId,
+                      pipeline_id: pipelineId,
+                      stage_id: stageId,
+                      title: dealTitle,
+                      value: dealValue,
+                      owner_id: assigneeId || null,
+                      status: "open",
+                    })
+                    .select()
+                    .single();
+
+                  if (createdDeal) {
+                    affectedDealIds.push(createdDeal.id);
+                    console.log(`[ExecuteMessage] 💼 Deal ${createdDeal.id} created for lead ${targetLeadId} in pipeline ${pipelineId}`);
+                  } else if (dealErr) {
+                    console.error(`[ExecuteMessage] ❌ Error creating deal:`, dealErr);
+                  }
                 }
               } else if (actionType === "move_deal_stage") {
                 const targetStageId = params.stageId || params.stage_id;
