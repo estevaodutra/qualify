@@ -381,7 +381,7 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
     const wahaMessageId = normalizedData?.key?.id || null;
     const isMessageAction = action.startsWith("message.");
     const hasId = !!(zaapId || messageId || wahaMessageId);
-    const isSuccess = isMessageAction ? hasId : true;
+    const isSuccess = response.ok;
 
     return {
       ok: isSuccess,
