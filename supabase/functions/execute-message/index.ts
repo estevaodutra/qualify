@@ -1799,16 +1799,26 @@ Deno.serve(async (req) => {
 
         // ============= ACTION CRM NODES (Extensible Engine for Leads & Deals) =============
         if (
-          node.node_type === "action" ||
-          node.node_type === "tag_add" ||
-          node.node_type === "tag_remove" ||
-          node.node_type === "deal_move" ||
-          node.node_type === "move_deal" ||
-          node.node_type === "move_deal_stage" ||
-          node.node_type === "create_deal" ||
-          node.node_type === "deal_create" ||
-          node.config?.category === "deal" ||
-          node.config?.category === "lead"
+          node.node_type !== "condition" &&
+          node.node_type !== "trigger" &&
+          node.node_type !== "start" &&
+          node.node_type !== "inicio" &&
+          node.node_type !== "content" &&
+          node.node_type !== "message" &&
+          node.node_type !== "delay" &&
+          node.node_type !== "channel_select" &&
+          (
+            node.node_type === "action" ||
+            node.node_type === "tag_add" ||
+            node.node_type === "tag_remove" ||
+            node.node_type === "deal_move" ||
+            node.node_type === "move_deal" ||
+            node.node_type === "move_deal_stage" ||
+            node.node_type === "create_deal" ||
+            node.node_type === "deal_create" ||
+            node.config?.category === "deal" ||
+            node.config?.category === "lead"
+          )
         ) {
           const actionType =
             (node.config.actionType as string) ||
@@ -1817,10 +1827,12 @@ Deno.serve(async (req) => {
               ? "add_lead_tags"
               : node.node_type === "tag_remove"
               ? "remove_lead_tags"
-              : (node.node_type === "deal_move" || node.node_type === "move_deal" || node.node_type === "move_deal_stage" || (node.config.category === "deal" && (node.config.parameters as any)?.stageId && !(node.config.parameters as any)?.title))
+              : (node.node_type === "deal_move" || node.node_type === "move_deal" || node.node_type === "move_deal_stage")
               ? "move_deal_stage"
-              : (node.node_type === "create_deal" || node.node_type === "deal_create" || (node.config.category === "deal" && (node.config.parameters as any)?.title !== undefined))
+              : (node.node_type === "create_deal" || node.node_type === "deal_create")
               ? "create_deal"
+              : node.config?.category === "deal"
+              ? ((node.config.parameters as any)?.stageId && !(node.config.parameters as any)?.title ? "move_deal_stage" : "create_deal")
               : "add_lead_tags");
           const params = (node.config.parameters as Record<string, any>) || node.config;
           const companyId = typedCampaign.company_id || triggerContext?.companyId || "dcb34e9a-1510-4137-aecd-cec0c6d548c4";
