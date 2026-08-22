@@ -547,37 +547,76 @@ const evaluateExtensibleCondition = async (
 
     case "lead_has_pipeline_deal": {
       const pipelineId = params.pipelineId as string;
-      if (!pipelineId || !leadData?.id) {
+      let targetLeadId = leadData?.id || triggerContext?.leadId || null;
+
+      if (!targetLeadId) {
+        const rawPhone = (params.phone as string) || triggerContext?.respondentPhone || triggerContext?.contactPhone || triggerContext?.phone || "";
+        const phoneToSearch = cleanPhone(rawPhone);
+        if (phoneToSearch) {
+          const { data: dbLead } = await supabase
+            .from("leads")
+            .select("id")
+            .eq("company_id", companyId)
+            .eq("phone", phoneToSearch)
+            .maybeSingle();
+
+          if (dbLead) targetLeadId = dbLead.id;
+        }
+      }
+
+      console.log(`[ExecuteMessage DEBUG lead_has_pipeline_deal] pipelineId=${pipelineId}, targetLeadId=${targetLeadId}, companyId=${companyId}`);
+
+      if (!pipelineId || !targetLeadId) {
         return { matched: false, branch: "no" };
       }
-      const { data: deal } = await supabase
+
+      const { data: deals } = await supabase
         .from("deals")
         .select("id")
         .eq("company_id", companyId)
-        .eq("lead_id", leadData.id)
+        .eq("lead_id", targetLeadId)
         .eq("pipeline_id", pipelineId)
-        .maybeSingle();
+        .limit(1);
 
-      const hasDeal = !!deal;
+      const hasDeal = Array.isArray(deals) && deals.length > 0;
+      console.log(`[ExecuteMessage DEBUG lead_has_pipeline_deal RESULT] hasDeal=${hasDeal}`);
       return { matched: hasDeal, branch: hasDeal ? "yes" : "no" };
     }
 
     case "lead_has_stage_deal": {
       const pipelineId = params.pipelineId as string;
       const stageId = params.stageId as string;
-      if (!pipelineId || !stageId || !leadData?.id) {
+      let targetLeadId = leadData?.id || triggerContext?.leadId || null;
+
+      if (!targetLeadId) {
+        const rawPhone = (params.phone as string) || triggerContext?.respondentPhone || triggerContext?.contactPhone || triggerContext?.phone || "";
+        const phoneToSearch = cleanPhone(rawPhone);
+        if (phoneToSearch) {
+          const { data: dbLead } = await supabase
+            .from("leads")
+            .select("id")
+            .eq("company_id", companyId)
+            .eq("phone", phoneToSearch)
+            .maybeSingle();
+
+          if (dbLead) targetLeadId = dbLead.id;
+        }
+      }
+
+      if (!pipelineId || !stageId || !targetLeadId) {
         return { matched: false, branch: "no" };
       }
-      const { data: deal } = await supabase
+
+      const { data: deals } = await supabase
         .from("deals")
         .select("id")
         .eq("company_id", companyId)
-        .eq("lead_id", leadData.id)
+        .eq("lead_id", targetLeadId)
         .eq("pipeline_id", pipelineId)
         .eq("stage_id", stageId)
-        .maybeSingle();
+        .limit(1);
 
-      const hasDeal = !!deal;
+      const hasDeal = Array.isArray(deals) && deals.length > 0;
       return { matched: hasDeal, branch: hasDeal ? "yes" : "no" };
     }
 
@@ -1952,22 +1991,37 @@ Deno.serve(async (req) => {
               } else if (actionType === "move_deal_stage") {
                 const targetStageId = params.stageId || params.stage_id;
                 const targetPipelineId = params.pipelineId;
+                let targetLeadId = leadData?.id || triggerContext?.leadId || null;
 
-                const { data: existingDeal } = await supabase
-                  .from("deals")
-                  .select("id")
-                  .eq("company_id", companyId)
-                  .eq("lead_id", leadData.id)
-                  .eq("status", "open")
-                  .order("created_at", { ascending: false })
-                  .limit(1)
-                  .maybeSingle();
+                if (!targetLeadId && phoneClean) {
+                  const { data: existingLead } = await supabase
+                    .from("leads")
+                    .select("id")
+                    .eq("company_id", companyId)
+                    .eq("phone", phoneClean)
+                    .maybeSingle();
+                  if (existingLead) targetLeadId = existingLead.id;
+                }
 
-                if (existingDeal && targetStageId) {
-                  const updatePayload: Record<string, any> = { stage_id: targetStageId };
-                  if (targetPipelineId) updatePayload.pipeline_id = targetPipelineId;
-                  await supabase.from("deals").update(updatePayload).eq("id", existingDeal.id);
-                  console.log(`[ExecuteMessage] Deal ${existingDeal.id} moved to stage ${targetStageId}`);
+                if (targetLeadId && targetStageId) {
+                  const { data: deals } = await supabase
+                    .from("deals")
+                    .select("id")
+                    .eq("company_id", companyId)
+                    .eq("lead_id", targetLeadId)
+                    .eq("status", "open")
+                    .order("created_at", { ascending: false })
+                    .limit(1);
+
+                  const existingDeal = deals && deals[0];
+
+                  if (existingDeal) {
+                    const updatePayload: Record<string, any> = { stage_id: targetStageId };
+                    if (targetPipelineId) updatePayload.pipeline_id = targetPipelineId;
+                    await supabase.from("deals").update(updatePayload).eq("id", existingDeal.id);
+                    affectedDealIds.push(existingDeal.id);
+                    console.log(`[ExecuteMessage] 🔄 Deal ${existingDeal.id} moved to stage ${targetStageId}`);
+                  }
                 }
               } else if (actionType === "win_deal") {
                 await supabase
