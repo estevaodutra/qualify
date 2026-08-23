@@ -609,7 +609,7 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, ext
   };
 
   return (
-    <div className="p-4 border-t border-border/40 bg-card/10 space-y-3 shrink-0 relative flex flex-col">
+    <div className="p-2.5 sm:p-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-border/40 bg-card/10 space-y-2.5 sm:space-y-3 shrink-0 relative flex flex-col">
       {/* Templates & Workflows Dropdown Popover */}
       {showDropdown && filteredItems.length > 0 && (
         <div className="absolute bottom-full left-4 mb-3 w-80 max-h-64 bg-popover/95 backdrop-blur-xl border border-border/80 rounded-2xl shadow-2xl overflow-y-auto z-50 divide-y divide-border/40 animate-in slide-in-from-bottom-3 fade-in duration-200">

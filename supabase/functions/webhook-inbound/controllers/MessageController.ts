@@ -2,6 +2,7 @@ import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendWhatsAppMessage } from "../../_shared/whatsapp-client.ts";
 import { logProspectingEvent } from "../../_shared/prospecting-events.ts";
 import { type EventContext, type ClassificationResult } from "../../_shared/event-classifier.ts";
+import { dispatchWebPushNotification } from "../../_shared/push-dispatcher.ts";
 
 export async function processMessageEvent(
   supabase: SupabaseClient,
@@ -229,6 +230,35 @@ export async function processMessageEvent(
       }
     } catch (pauseErr) {
       console.error("[MessageController] Error processing prospecting pause-on-reply:", pauseErr);
+    }
+  }
+
+  // 4. ==========================================
+  // WEB PUSH NOTIFICATION DISPATCHER (INBOUND REAL MESSAGES)
+  // ==========================================
+  if (isInbound && context.chatType !== "group" && instance?.user_id) {
+    try {
+      const senderTitle = context.senderName || context.senderPhone || "Nova mensagem";
+      const rawMsgObj = rawEvent.body || rawEvent.payload || rawEvent;
+      const bodyText = (typeof rawMsgObj === "string" ? rawMsgObj : rawMsgObj?.text?.message || rawMsgObj?.text || rawMsgObj?.message?.conversation || rawMsgObj?.message?.extendedTextMessage?.text || rawMsgObj?.caption || "") as string;
+
+      let detectedMediaType: string | undefined = undefined;
+      if (rawEvent.type === "image" || rawMsgObj?.image) detectedMediaType = "image";
+      else if (rawEvent.type === "audio" || rawMsgObj?.audio) detectedMediaType = "audio";
+      else if (rawEvent.type === "video" || rawMsgObj?.video) detectedMediaType = "video";
+      else if (rawEvent.type === "document" || rawMsgObj?.document) detectedMediaType = "document";
+      else if (rawEvent.type === "location" || rawMsgObj?.location) detectedMediaType = "location";
+
+      await dispatchWebPushNotification(supabase, {
+        companyId: instance.company_id || "",
+        userIds: [instance.user_id],
+        title: senderTitle,
+        body: bodyText,
+        conversationId: context.messageId,
+        mediaType: detectedMediaType,
+      });
+    } catch (pushErr) {
+      console.error("[MessageController] Error dispatching push notification:", pushErr);
     }
   }
 }

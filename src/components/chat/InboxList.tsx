@@ -148,7 +148,7 @@ export default function InboxList({
   }, [conversations, sortBy]);
 
   return (
-    <div className="w-[320px] shrink-0 border-r border-border/40 bg-card/10 flex flex-col h-full overflow-hidden">
+    <div className="w-full h-full flex flex-col overflow-hidden bg-card/10 border-r border-border/40">
       {/* Header Search & Sort */}
       <div className="p-4 border-b border-border/40 space-y-3 shrink-0">
         <div className="flex items-center justify-between">

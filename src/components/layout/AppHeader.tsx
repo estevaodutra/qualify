@@ -1,4 +1,6 @@
-import { Bell, Search, LogOut, Settings, UserCircle, Wallet as WalletIcon } from "lucide-react";
+import { Bell, Search, LogOut, Settings, UserCircle, Wallet as WalletIcon, Menu, PanelLeft } from "lucide-react";
+
+// ... rest of imports unchanged ...
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -19,6 +21,7 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useWallet } from "@/hooks/useWallet";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 const SEVERITY_DOT: Record<string, string> = {
   info: "bg-info",
@@ -50,6 +53,7 @@ export function AppHeader() {
   const { alerts, unreadCount, markAsRead, markAllAsRead } = useAlerts();
   const { activeCompanyId } = useCompany();
   const { data: wallet } = useWallet();
+  const { isSubscribed, subscribe, isLoading: isPushLoading } = usePushNotifications();
 
   const handleSignOut = async () => {
     const { error } = await signOut();
@@ -80,8 +84,16 @@ export function AppHeader() {
       <div className="flex h-[60px] items-center justify-between px-6 gap-4">
 
         {/* Left */}
-        <div className="flex items-center gap-4 flex-1">
-          <SidebarTrigger className="h-9 w-9 shrink-0 rounded-xl text-muted-foreground hover:bg-accent hover:text-foreground transition-colors" />
+        <div className="flex items-center gap-3 flex-1">
+          <SidebarTrigger className="h-9 w-9 shrink-0 rounded-xl text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+            <Menu className="h-5 w-5 md:hidden" />
+            <PanelLeft className="h-5 w-5 hidden md:block" />
+          </SidebarTrigger>
+          <div className="flex items-center gap-2 md:hidden">
+            <img src="/logo-dark.png" alt="Qualify Logo" className="h-6 w-auto dark:hidden" />
+            <img src="/logo-fundo-transparente-branco.png" alt="Qualify Logo" className="h-6 w-auto hidden dark:block" />
+            <span className="font-extrabold text-sm tracking-widest text-foreground uppercase">QUALIFY</span>
+          </div>
         </div>
 
         {/* Right */}
@@ -131,6 +143,21 @@ export function AppHeader() {
                   </button>
                 )}
               </div>
+
+              {!isSubscribed && (
+                <div className="mx-2 my-1.5 p-2.5 rounded-xl bg-primary/10 border border-primary/20 flex flex-col gap-1.5">
+                  <p className="text-[11px] font-semibold text-foreground leading-tight">
+                    Receba avisos no celular quando chegarem novas mensagens.
+                  </p>
+                  <button
+                    onClick={() => subscribe()}
+                    disabled={isPushLoading}
+                    className="self-start text-[10px] font-bold bg-primary text-primary-foreground px-2.5 py-1 rounded-lg hover:bg-primary/90 transition-all cursor-pointer"
+                  >
+                    {isPushLoading ? "Ativando..." : "Ativar Notificações Push"}
+                  </button>
+                </div>
+              )}
               <DropdownMenuSeparator className="bg-border/50 my-1" />
               {alerts.length === 0 ? (
                 <p className="text-xs text-muted-foreground/60 text-center py-6">Nenhuma notificação por aqui.</p>

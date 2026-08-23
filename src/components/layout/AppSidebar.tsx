@@ -59,11 +59,20 @@ import {
 } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
+import { TOP_NAV_ITEMS, APP_SUB_ITEMS } from "@/config/navigationConfig";
+
 export function AppSidebar() {
-  const { state, toggleSidebar } = useSidebar();
+  const { state, toggleSidebar, isMobile, setOpenMobile } = useSidebar();
   const location = useLocation();
-  const isCollapsed = state === "collapsed";
+  const isCollapsed = state === "collapsed" && !isMobile;
   const { companies, activeCompany, setActiveCompany } = useCompany();
+
+  // Helper to handle link click on mobile
+  const handleNavClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
 
   // Dialog state for Help
   const [helpDialogOpen, setHelpDialogOpen] = useState(false);
@@ -98,23 +107,6 @@ export function AppSidebar() {
   const activeClasses = "bg-white/10 text-white font-bold sidebar-active-item shadow-sm";
 
   const subNavLinkClasses = "flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs text-white/60 hover:bg-white/10 hover:text-white transition-all";
-
-  // Primary Navigation items (TOP)
-  const topNavItems = [
-    { id: "dashboard", title: "Dashboard", url: "/", icon: LayoutDashboard },
-    { id: "pipelines", title: "Pipelines", url: "/pipelines", icon: Kanban },
-    { id: "call-panel", title: "Call Panel", url: "/painel-ligacoes", icon: PhoneCall },
-    { id: "leads", title: "Leads", url: "/leads", icon: Users },
-    { id: "chat", title: "Chat", url: "/chat", icon: MessageSquare },
-    { id: "workflows", title: "Workflows", url: "/workflows", icon: GitBranch },
-  ];
-
-  // Apps sub items
-  const appSubItems = [
-    { id: "quiz", title: "Quiz", url: "/quiz", icon: Layers },
-    { id: "prospeccao", title: "Prospecção", url: "/prospeccao", icon: Search },
-    { id: "agendamentos", title: "Agendamentos", url: "/agendamentos/calendarios", icon: CalendarDays },
-  ];
 
   return (
     <Sidebar
@@ -210,7 +202,7 @@ export function AppSidebar() {
         {/* TOP OPERATIONAL NAVIGATION */}
         <div className="space-y-1">
           <SidebarMenu className="gap-1.5">
-            {topNavItems.map((item) => {
+            {TOP_NAV_ITEMS.map((item) => {
               const isActive = item.url === "/" ? location.pathname === "/" : location.pathname.startsWith(item.url);
               return (
                 <SidebarMenuItem key={item.id}>
@@ -218,6 +210,7 @@ export function AppSidebar() {
                     <NavLink
                       to={item.url}
                       end={item.url === "/"}
+                      onClick={handleNavClick}
                       className={cn(navLinkClasses, isActive && activeClasses)}
                     >
                       <item.icon className={cn("h-5 w-5 flex-shrink-0 transition-transform duration-300 group-hover:scale-110", isActive && "text-primary")} />
@@ -242,10 +235,11 @@ export function AppSidebar() {
                   </PopoverTrigger>
                   <PopoverContent side="right" align="start" className="w-52 p-2 rounded-2xl shadow-2xl border-white/10 bg-[#0B0E14] backdrop-blur-xl z-[9999]">
                     <div className="px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-white/40">Apps</div>
-                    {appSubItems.map((sub) => (
+                    {APP_SUB_ITEMS.map((sub) => (
                       <NavLink
                         key={sub.id}
                         to={sub.url}
+                        onClick={handleNavClick}
                         className={cn(
                           "flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium text-white/70 hover:bg-white/10 hover:text-white transition-all",
                           location.pathname.startsWith(sub.url) && "bg-white/10 text-white font-bold"
@@ -271,10 +265,11 @@ export function AppSidebar() {
                   </CollapsibleTrigger>
                   <CollapsibleContent className="pl-4 pr-1 pt-1 space-y-1">
                     <div className="border-l border-white/10 pl-2 space-y-1 my-1">
-                      {appSubItems.map((sub) => (
+                      {APP_SUB_ITEMS.map((sub) => (
                         <NavLink
                           key={sub.id}
                           to={sub.url}
+                          onClick={handleNavClick}
                           className={cn(subNavLinkClasses, location.pathname.startsWith(sub.url) && "text-white font-bold bg-white/10")}
                         >
                           <sub.icon className="h-3.5 w-3.5" />
@@ -297,6 +292,7 @@ export function AppSidebar() {
               <SidebarMenuButton asChild tooltip="Notificações" className="h-auto p-0">
                 <NavLink
                   to="/alerts"
+                  onClick={handleNavClick}
                   className={cn(navLinkClasses, location.pathname.startsWith("/alerts") && activeClasses)}
                 >
                   <Bell className={cn("h-5 w-5 flex-shrink-0", location.pathname.startsWith("/alerts") && "text-primary")} />
@@ -322,6 +318,7 @@ export function AppSidebar() {
               <SidebarMenuButton asChild tooltip="Configurações" className="h-auto p-0">
                 <NavLink
                   to="/settings"
+                  onClick={handleNavClick}
                   className={cn(
                     navLinkClasses,
                     (location.pathname.startsWith("/settings") ||

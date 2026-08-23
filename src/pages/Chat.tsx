@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import { MessageSquare, RefreshCw, Loader2, Info, ChevronLeft, Smartphone, Radio, Eye, EyeOff } from "lucide-react";
+import { MessageSquare, RefreshCw, Loader2, Info, ChevronLeft, Smartphone, Radio, Eye, Zap, Pin, Archive, UserPlus } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -15,17 +15,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 import { toast } from "sonner";
 import InboxList from "@/components/chat/InboxList";
 import MessageThread from "@/components/chat/MessageThread";
 import ChatComposer from "@/components/chat/ChatComposer";
 import ChatSidebar, { ChatSidebarMode } from "@/components/chat/ChatSidebar";
+import QuickRepliesSidebarPanel from "@/components/chat/quick-replies/QuickRepliesSidebarPanel";
+import LeadContextPanel from "@/components/chat/LeadContextPanel";
 import LeadPipelineSummary from "@/components/chat/pipeline/LeadPipelineSummary";
 import ConversationActionsMenu from "@/components/chat/actions/ConversationActionsMenu";
 import { useConversationActions } from "@/hooks/useConversationActions";
 import { QuickReply } from "@/types/quickReplyTypes";
-import { Pin, Archive, UserPlus, Loader2 } from "lucide-react";
 
 import { AdvancedChatFilters, DEFAULT_ADVANCED_CHAT_FILTERS } from "@/types/chatFilterTypes";
 
@@ -34,9 +36,34 @@ export default function Chat() {
   const [searchParams] = useSearchParams();
   const phoneParam = searchParams.get("phone");
   const leadIdParam = searchParams.get("leadId");
-  const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
+  const conversationIdParam = searchParams.get("conversationId");
+
+  const [selectedConvId, setSelectedConvId] = useState<string | null>(conversationIdParam || null);
   const [sidebarMode, setSidebarMode] = useState<ChatSidebarMode>("quick_replies");
   const [selectedQuickReply, setSelectedQuickReply] = useState<QuickReply | null>(null);
+
+  // Mobile Sheet states
+  const [mobileQuickRepliesOpen, setMobileQuickRepliesOpen] = useState(false);
+  const [mobileLeadDetailsOpen, setMobileLeadDetailsOpen] = useState(false);
+
+  // Handle mobile selection with browser history state integration
+  const handleSelectConv = (id: string | null) => {
+    if (id && window.innerWidth < 768) {
+      window.history.pushState({ chatConversationId: id }, "");
+    }
+    setSelectedConvId(id);
+  };
+
+  // Listen to popstate event (mobile back gesture / browser back)
+  useEffect(() => {
+    const handlePopState = () => {
+      if (selectedConvId && window.innerWidth < 768) {
+        setSelectedConvId(null);
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [selectedConvId]);
 
   // Reset sidebar to quick_replies when switching conversation
   useEffect(() => {
@@ -114,7 +141,7 @@ export default function Chat() {
       return (profiles || []).map((p: any) => ({ id: p.id, name: p.full_name || p.email }));
     },
     enabled: !!activeCompanyId,
-    staleTime: 300000, // 5 minutes stale time
+    staleTime: 300000,
   });
 
   const selectedConv = conversations.find((c) => c.id === selectedConvId);
@@ -130,29 +157,26 @@ export default function Chat() {
     if (!selectedConv) return;
     const targetInstanceId = val === "none" ? null : val;
 
-    // 1. Check if conversation already exists in memory for this lead on targetInstanceId
     const existingConv = conversations.find(
       (c) => c.lead_id === selectedConv.lead_id && (targetInstanceId === null ? c.instance_id === null : c.instance_id === targetInstanceId)
     );
 
     if (existingConv) {
-      setSelectedConvId(existingConv.id);
+      handleSelectConv(existingConv.id);
       toast.success(`Alternado para a conversa na conexão ${existingConv.instance?.name || "selecionada"}`);
       return;
     }
 
-    // 2. Try updating current conversation's instance
     try {
       const updated = await updateConversationInstance({
         conversationId: selectedConv.id,
         instanceId: targetInstanceId,
       });
       if (updated?.id) {
-        setSelectedConvId(updated.id);
+        handleSelectConv(updated.id);
         toast.success("Conexão atualizada com sucesso");
       }
     } catch (err: any) {
-      // 3. Fallback if duplicate key error occurred
       if (err?.message?.includes("duplicate key value") || err?.code === "23505") {
         const { data: dbConv } = await supabase
           .from("chat_conversations")
@@ -163,7 +187,7 @@ export default function Chat() {
           .maybeSingle();
 
         if (dbConv?.id) {
-          setSelectedConvId(dbConv.id);
+          handleSelectConv(dbConv.id);
           toast.success("Alternado para a conversa existente nesta conexão.");
           refetchConversations();
         } else {
@@ -177,25 +201,26 @@ export default function Chat() {
 
   const [isCreatingConv, setIsCreatingConv] = useState(false);
 
-  // Auto-select conversation if leadIdParam or phoneParam is present
+  // Auto-select conversation if conversationIdParam, leadIdParam or phoneParam is present
   useEffect(() => {
     if (!selectedConvId && !isConversationsLoading && !isCreatingConv) {
-      if (leadIdParam) {
+      if (conversationIdParam) {
+        handleSelectConv(conversationIdParam);
+      } else if (leadIdParam) {
         const match = conversations.find(c => c.lead?.id === leadIdParam);
         if (match) {
-          setSelectedConvId(match.id);
+          handleSelectConv(match.id);
         } else {
           setIsCreatingConv(true);
           createConversation({ leadId: leadIdParam })
             .then((newConv) => {
-              setSelectedConvId(newConv.id);
+              handleSelectConv(newConv.id);
             })
             .catch((err) => {
               console.error("Erro ao criar conversa:", err);
-              // Fallback se falhar
               if (phoneParam) {
                 const phoneMatch = conversations.find(c => c.lead?.phone?.includes(phoneParam));
-                if (phoneMatch) setSelectedConvId(phoneMatch.id);
+                if (phoneMatch) handleSelectConv(phoneMatch.id);
               }
             })
             .finally(() => setIsCreatingConv(false));
@@ -206,17 +231,16 @@ export default function Chat() {
           return p.includes(phoneParam) || phoneParam.includes(p);
         });
         if (match) {
-          setSelectedConvId(match.id);
+          handleSelectConv(match.id);
         }
       }
     }
-  }, [leadIdParam, phoneParam, selectedConvId, isConversationsLoading, conversations, createConversation, isCreatingConv]);
+  }, [conversationIdParam, leadIdParam, phoneParam, selectedConvId, isConversationsLoading, conversations, createConversation, isCreatingConv]);
 
   // Send message coordinator
   const handleSendMessage = async (text: string, isInternal: boolean, mediaUrl?: string, mediaType?: string) => {
     if (!selectedConvId) return;
     
-    // Automatically assign conversation to operator when they send a message, if it is currently unassigned
     if (selectedConv && !selectedConv.operator_id) {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -224,7 +248,6 @@ export default function Chat() {
       }
     }
 
-    // If conversation doesn't have an instance assigned and sending outbound message, assign default connected instance
     if (selectedConv && !selectedConv.instance_id && !isInternal) {
       const connectedInst = instances.find(i => i.status === "connected") || instances[0];
       if (connectedInst) {
@@ -244,12 +267,20 @@ export default function Chat() {
     });
   };
 
+  const handleBackToInbox = () => {
+    if (window.history.state?.chatConversationId) {
+      window.history.back();
+    } else {
+      setSelectedConvId(null);
+    }
+  };
+
   return (
-    <div className="flex h-full w-full overflow-hidden bg-background/30 backdrop-blur-md border border-border/10 rounded-2xl shadow-xl">
+    <div className="flex h-full w-full overflow-hidden bg-background/30 backdrop-blur-md border-0 md:border border-border/10 rounded-none md:rounded-2xl shadow-xl">
       {/* 1. Unified Inbox Column (Left) */}
       <div className={cn(
-        "shrink-0 border-r border-border/40 h-full",
-        "w-full md:w-[320px]",
+        "shrink-0 border-r border-border/40 h-full transition-all duration-300",
+        "w-full md:w-[320px] lg:w-[360px]",
         selectedConvId ? "hidden md:block" : "block"
       )}>
         {isConversationsLoading || isOperatorsLoading ? (
@@ -264,7 +295,7 @@ export default function Chat() {
             conversations={conversations}
             archivedCount={archivedCount}
             selectedId={selectedConvId}
-            onSelect={(id) => setSelectedConvId(id)}
+            onSelect={handleSelectConv}
             operators={operators}
             instances={instances}
             filters={filters}
@@ -278,21 +309,24 @@ export default function Chat() {
 
       {/* 2. Chat Stream Column (Middle) */}
       <div className={cn(
-        "flex-1 flex flex-col h-full bg-card/5 overflow-hidden relative",
+        "flex-1 flex flex-col h-full bg-card/5 overflow-hidden relative min-w-0",
         !selectedConvId ? "hidden md:flex" : "flex"
       )}>
         {selectedConv ? (
           <>
             {/* Header info */}
-            <div className="p-3.5 px-4 border-b border-border/40 bg-card/10 flex justify-between items-center shrink-0">
-              <div className="flex items-center gap-3 min-w-0">
+            <div className="p-3 px-3.5 md:p-3.5 md:px-4 border-b border-border/40 bg-card/10 flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
+                {/* Mobile back button ← */}
                 <button 
-                  onClick={() => setSelectedConvId(null)}
-                  className="md:hidden p-1.5 -ml-2 rounded-lg text-muted-foreground hover:bg-muted transition-colors"
+                  onClick={handleBackToInbox}
+                  className="md:hidden p-1.5 -ml-1 rounded-xl text-muted-foreground hover:bg-muted transition-colors flex items-center gap-1 font-bold text-xs shrink-0"
+                  aria-label="Voltar para a caixa de entrada"
                 >
-                  <ChevronLeft className="h-5 w-5" />
+                  <ChevronLeft className="h-5 w-5 text-primary" />
                 </button>
-                <div className="space-y-1 min-w-0">
+
+                <div className="space-y-0.5 min-w-0 flex-1">
                   <div className="flex items-center gap-1.5 min-w-0">
                     {selectedConv.is_pinned && (
                       <Pin className="h-3.5 w-3.5 text-amber-500 shrink-0 fill-amber-500/20" title="Conversa Fixada" />
@@ -305,27 +339,51 @@ export default function Chat() {
                         Arquivada
                       </span>
                     )}
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            type="button"
-                            onClick={() => setSidebarMode(prev => prev === "quick_replies" ? "lead_details" : "quick_replies")}
-                            className={cn(
-                              "p-1 rounded-lg transition-all duration-200 cursor-pointer shrink-0",
-                              sidebarMode === "lead_details"
-                                ? "bg-primary/20 text-primary border border-primary/30 shadow-sm"
-                                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                            )}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom" className="text-xs font-semibold z-[10000]">
-                          {sidebarMode === "quick_replies" ? "Ver detalhes do lead" : "Voltar para respostas rápidas"}
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
+
+                    {/* Desktop Eye button */}
+                    <div className="hidden lg:block">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={() => setSidebarMode(prev => prev === "quick_replies" ? "lead_details" : "quick_replies")}
+                              className={cn(
+                                "p-1 rounded-lg transition-all duration-200 cursor-pointer shrink-0",
+                                sidebarMode === "lead_details"
+                                  ? "bg-primary/20 text-primary border border-primary/30 shadow-sm"
+                                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                              )}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" className="text-xs font-semibold z-[10000]">
+                            {sidebarMode === "quick_replies" ? "Ver detalhes do lead" : "Voltar para respostas rápidas"}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+
+                    {/* Mobile Eye / Details button */}
+                    <button
+                      type="button"
+                      onClick={() => setMobileLeadDetailsOpen(true)}
+                      className="lg:hidden p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
+                      title="Detalhes do Lead"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </button>
+
+                    {/* Mobile Quick Replies trigger */}
+                    <button
+                      type="button"
+                      onClick={() => setMobileQuickRepliesOpen(true)}
+                      className="lg:hidden p-1 rounded-lg text-amber-500 hover:bg-amber-500/10 transition-colors shrink-0"
+                      title="Respostas Rápidas"
+                    >
+                      <Zap className="h-4 w-4 fill-amber-500/20" />
+                    </button>
                   </div>
 
                   {/* Below Name: Phone + Connection/Instance Selector */}
@@ -337,7 +395,7 @@ export default function Chat() {
                     )}
 
                     {selectedConv.lead?.phone && (
-                      <span className="text-muted-foreground/30 text-[10px]">•</span>
+                      <span className="text-muted-foreground/30 text-[10px] hidden sm:inline">•</span>
                     )}
 
                     {/* Instance Connection Selector */}
@@ -356,7 +414,7 @@ export default function Chat() {
                                     ? "bg-emerald-500 animate-pulse"
                                     : "bg-amber-500"
                                 )} />
-                                <span className="font-semibold text-card-foreground truncate max-w-[170px]">
+                                <span className="font-semibold text-card-foreground truncate max-w-[120px] sm:max-w-[170px]">
                                   {selectedConv.instance?.name || instances.find(i => i.id === selectedConv.instance_id)?.name || "Instância Conectada"}
                                 </span>
                               </>
@@ -403,72 +461,26 @@ export default function Chat() {
                           })}
                         </SelectContent>
                       </Select>
-
-                      {/* (i) info icon badge when lead talks on multiple connections */}
-                      {leadConversations.length > 1 && (
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-md border border-amber-500/20 flex items-center gap-1 shrink-0 cursor-help">
-                                <Info className="h-3 w-3" />
-                                {leadConversations.length} conexões
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent className="text-xs max-w-[260px] z-[9999]">
-                              Este contato possui histórico em {leadConversations.length} conexões do WhatsApp. Selecione uma conexão no dropdown para alternar.
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      )}
                     </div>
                   </div>
-
-                  {/* Lead Pipeline Summary / Non-CRM Lead button */}
-                  {(!selectedConv.lead_id || !selectedConv.lead) ? (
-                    <button
-                      type="button"
-                      disabled={isCreatingLead}
-                      onClick={async () => {
-                        await createLeadFromConversation({
-                          conversationId: selectedConv.id,
-                          phone: selectedConv.lead?.phone || selectedConv.contact_phone || "",
-                          name: selectedConv.lead?.name || selectedConv.contact_name || "",
-                        });
-                      }}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-xs font-bold transition-all cursor-pointer shadow-sm shrink-0"
-                      title="Este contato não está cadastrado no CRM. Clique para cadastrar."
-                    >
-                      {isCreatingLead ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <UserPlus className="h-3.5 w-3.5" />
-                      )}
-                      <span>+ Criar Lead no CRM</span>
-                    </button>
-                  ) : (
-                    <LeadPipelineSummary
-                      leadId={selectedConv.lead?.id}
-                      leadName={selectedConv.lead?.name || selectedConv.lead?.phone}
-                    />
-                  )}
                 </div>
               </div>
 
               {/* Status toggles & Conversation Actions Menu */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
                 {selectedConv.status !== "resolved" ? (
                   <button
                     onClick={() => updateConversationStatus({ conversationId: selectedConv.id, status: "resolved" })}
-                    className="px-3 py-1 rounded-full text-xs font-bold bg-green-500/10 hover:bg-green-500/20 text-green-500 border border-green-500/20 transition-all duration-300 cursor-pointer shadow-sm shadow-green-500/5"
+                    className="px-2.5 py-1 rounded-full text-[11px] md:text-xs font-bold bg-green-500/10 hover:bg-green-500/20 text-green-500 border border-green-500/20 transition-all duration-300 cursor-pointer shadow-sm shadow-green-500/5 whitespace-nowrap"
                   >
-                    Marcar Resolvido
+                    Resolver
                   </button>
                 ) : (
                   <button
                     onClick={() => updateConversationStatus({ conversationId: selectedConv.id, status: "open" })}
-                    className="px-3 py-1 rounded-full text-xs font-bold bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 border border-blue-500/20 transition-all duration-300 cursor-pointer shadow-sm shadow-blue-500/5"
+                    className="px-2.5 py-1 rounded-full text-[11px] md:text-xs font-bold bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 border border-blue-500/20 transition-all duration-300 cursor-pointer shadow-sm shadow-blue-500/5 whitespace-nowrap"
                   >
-                    Reabrir Conversa
+                    Reabrir
                   </button>
                 )}
 
@@ -513,7 +525,7 @@ export default function Chat() {
         )}
       </div>
 
-      {/* 3. Chat Sidebar Column (Right) */}
+      {/* 3. Desktop Chat Sidebar Column (Right) */}
       {selectedConv && (
         <div className="hidden lg:block h-full shrink-0">
           <ChatSidebar
@@ -528,6 +540,40 @@ export default function Chat() {
           />
         </div>
       )}
+
+      {/* Mobile Quick Replies Sheet */}
+      <Sheet open={mobileQuickRepliesOpen} onOpenChange={setMobileQuickRepliesOpen}>
+        <SheetContent side="bottom" className="h-[85dvh] p-0 rounded-t-3xl bg-background border-t border-border/40 z-[9999]">
+          <SheetHeader className="p-4 border-b border-border/40">
+            <SheetTitle className="text-sm font-bold flex items-center gap-2">
+              <Zap className="h-4 w-4 text-amber-500 fill-amber-500/20" />
+              <span>Respostas Rápidas</span>
+            </SheetTitle>
+          </SheetHeader>
+          <div className="h-[calc(85dvh-60px)] overflow-y-auto">
+            <QuickRepliesSidebarPanel
+              onSelectReply={(reply) => {
+                setSelectedQuickReply(reply);
+                setMobileQuickRepliesOpen(false);
+                setTimeout(() => setSelectedQuickReply(null), 100);
+              }}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Mobile Lead Details Sheet */}
+      <Sheet open={mobileLeadDetailsOpen} onOpenChange={setMobileLeadDetailsOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-md p-0 bg-background border-l border-border/40 z-[9999] overflow-y-auto">
+          {selectedConv && (
+            <LeadContextPanel
+              conversation={selectedConv}
+              stages={pipelineStages}
+              onClose={() => setMobileLeadDetailsOpen(false)}
+            />
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

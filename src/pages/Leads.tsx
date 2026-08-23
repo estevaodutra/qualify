@@ -318,7 +318,7 @@ export default function Leads() {
   };
 
   return (
-    <div className="flex flex-col gap-6 p-8 overflow-y-auto flex-1 min-h-0 bg-background">
+    <div className="flex flex-col gap-4 md:gap-6 p-3.5 md:p-8 overflow-y-auto flex-1 min-h-0 bg-background">
       <div className="flex justify-between items-start">
         <div>
           <h1 className="text-[22px] font-semibold text-foreground tracking-tight m-0 font-['Sora']">Leads</h1>

@@ -117,6 +117,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async (): Promise<{ error: Error | null }> => {
     try {
+      // Unsubscribe push notification for this user/device on logout
+      if (typeof window !== "undefined" && "serviceWorker" in navigator && user?.id) {
+        try {
+          const reg = await navigator.serviceWorker.getRegistration();
+          const sub = await reg?.pushManager.getSubscription();
+          if (sub) {
+            const endpoint = sub.endpoint;
+            await sub.unsubscribe().catch(console.error);
+            await supabase
+              .from("push_subscriptions")
+              .update({ revoked_at: new Date().toISOString() })
+              .eq("user_id", user.id)
+              .eq("endpoint", endpoint)
+              .catch(console.error);
+          }
+        } catch (pushErr) {
+          console.warn("Could not revoke push subscription on sign out:", pushErr);
+        }
+      }
+
       const { error: globalError } = await supabase.auth.signOut();
 
       if (globalError) {
