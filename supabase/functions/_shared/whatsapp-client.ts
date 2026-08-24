@@ -471,33 +471,37 @@ export async function getInstanceStatus(instance: any, triggerN8n: boolean = tru
     };
   }
 
-  // Check for WAHA format / generic n8n formats
+  // Check for WAHA format / generic n8n formats (including session_id, connected, phone, @lid)
   const statusStr = String(item?.status || item?.state || item?.session?.status || "").toUpperCase();
   const isConnected =
+    item?.connected === true ||
+    String(item?.connected).toLowerCase() === "true" ||
     statusStr === "WORKING" ||
     statusStr === "CONNECTED" ||
-    statusStr === "CONNECTED_TO_WHATSAPP" ||
-    item?.connected === true ||
-    String(item?.connected).toLowerCase() === "true";
+    statusStr === "CONNECTED_TO_WHATSAPP";
   
   let phone = null;
-  if (item?.me?.id) {
-    phone = item.me.id.split("@")[0];
-  } else if (item?.me?.phone) {
-    phone = item.me.phone;
-  } else if (item?.phone) {
-    phone = item.phone;
+  if (item?.phone) {
+    phone = String(item.phone).replace(/\D/g, "");
   } else if (item?.connectedPhone) {
-    phone = item.connectedPhone;
+    phone = String(item.connectedPhone).replace(/\D/g, "");
+  } else if (item?.me?.id) {
+    phone = item.me.id.split("@")[0].replace(/\D/g, "");
+  } else if (item?.me?.phone) {
+    phone = String(item.me.phone).replace(/\D/g, "");
   }
+
+  const returnedId = item?.session_id || item?.sessionId || item?.name || item?.session || id;
+  const lid = item?.["@lid"] || item?.lid || item?.from_lid || null;
 
   return {
     connected: isConnected,
     paymentStatus: "ACTIVE",
     due: null,
-    returnedId: item?.name || item?.session || id,
+    returnedId: returnedId,
     returnedToken: token,
-    phone: phone
+    phone: phone,
+    lid: lid
   };
 }
 

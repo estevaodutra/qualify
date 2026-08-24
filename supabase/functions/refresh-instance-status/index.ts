@@ -114,7 +114,7 @@ Deno.serve(async (req) => {
       if (result.due) {
         updates.expiration_date = new Date(result.due).toISOString();
       }
-      if (result.phone && (!instance.phone || instance.phone === "")) {
+      if (result.phone && result.phone !== instance.phone) {
         updates.phone = result.phone;
       }
 
