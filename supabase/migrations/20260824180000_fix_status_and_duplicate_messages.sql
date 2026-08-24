@@ -17,12 +17,42 @@ DECLARE
   v_phone TEXT;
   v_name TEXT;
   v_status_val TEXT;
+  v_target_msg_id TEXT;
+  v_reaction_val TEXT;
 BEGIN
   IF NEW.classification != 'identified' THEN
     RETURN NEW;
   END IF;
 
-  -- 1. Se for evento de status de mensagem (delivered, read, sent, ack, failed, revoked, etc.), apenas atualizar a mensagem existente e NÃO criar nova mensagem!
+  -- 1. Se for evento de REAÇÃO a mensagem: atualiza campo reaction na mensagem existente e NÃO cria nova mensagem!
+  IF NEW.event_type IN ('message.reaction', 'message_reaction', 'reaction', 'reaction_inbound') OR NEW.event_subtype = 'reaction' THEN
+    v_target_msg_id := COALESCE(
+      NEW.raw_event->>'target_message_id',
+      NEW.raw_event->>'targetMessageId',
+      NEW.raw_event->'reaction'->>'messageId',
+      NEW.raw_event->'reaction'->>'target_message_id',
+      NEW.raw_event->>'message_id'
+    );
+    v_reaction_val := COALESCE(
+      NEW.raw_event->>'reaction',
+      NEW.raw_event->'reaction'->>'text',
+      NEW.raw_event->'reaction'->>'emoji',
+      NEW.raw_event->>'emoji',
+      NEW.raw_event->>'text'
+    );
+
+    IF v_target_msg_id IS NOT NULL THEN
+      UPDATE public.chat_messages
+      SET reaction = NULLIF(TRIM(v_reaction_val), '')
+      WHERE message_id = v_target_msg_id
+         OR zaap_id = v_target_msg_id
+         OR message_id LIKE '%' || v_target_msg_id;
+    END IF;
+
+    RETURN NEW;
+  END IF;
+
+  -- 2. Se for evento de status de mensagem (delivered, read, sent, ack, failed, revoked, etc.), apenas atualizar a mensagem existente e NÃO criar nova mensagem!
   IF NEW.event_type IN (
     'message.delivered', 'message.read', 'message.sent', 'message.ack', 'message.status', 'message.poll_update',
     'message_delivered', 'message_read', 'message_sent', 'message_ack', 'message_status', 'message_revoked',

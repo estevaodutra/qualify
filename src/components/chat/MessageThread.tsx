@@ -411,6 +411,18 @@ export default function MessageThread({
                       </span>
                     )}
                   </div>
+
+                  {/* Reaction badge */}
+                  {msg.reaction && (
+                    <div
+                      className={cn(
+                        "absolute -bottom-2 z-10 px-1.5 py-0.5 rounded-full text-xs shadow-md border flex items-center justify-center animate-in zoom-in-50 duration-200 bg-background/95 border-border/80",
+                        isOperator ? "left-2" : "right-2"
+                      )}
+                    >
+                      <span className="leading-none">{msg.reaction}</span>
+                    </div>
+                  )}
                 </div>
                 )}
 

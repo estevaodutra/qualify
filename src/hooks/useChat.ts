@@ -63,6 +63,7 @@ export interface ChatMessage {
   is_internal: boolean;
   zaap_id: string | null;
   message_id: string | null;
+  reaction?: string | null;
   created_at: string;
 }
 
