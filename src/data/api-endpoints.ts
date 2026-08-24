@@ -1541,102 +1541,75 @@ response = requests.post(
   },
   {
     id: "webhooks-inbound",
-    name: "Webhooks (Recebimento)",
-    description: "Endpoint para receber eventos do WhatsApp via n8n",
+    name: "Webhooks de Mensagem",
+    description: "Endpoints semânticos para recebimento de mensagens e eventos do WhatsApp",
     endpoints: [
       {
-        id: "webhook-inbound",
+        id: "webhook-message-text",
         method: "POST",
-        path: "/webhook-inbound",
-        description: "Recebe eventos de WhatsApp repassados e normalizados pelo n8n. O endpoint atua como um roteador central, processando o evento de acordo com a `action` especificada.",
+        path: "/webhooks/messages/text",
+        description: "Recebe mensagens de texto (privadas ou em grupo). O contexto de grupo é inferido pela presença de group_id.",
         attributes: [
-          {
-            name: "action",
-            type: "string",
-            required: true,
-            description: "Tipo de evento normalizado pelo n8n. Valores suportados:\n\n**1. Mensagens:** `message.received`, `message.sent`\n**2. Status:** `message.delivered`, `message.read`, `message.failed`, `message.poll_update`\n**3. Presença:** `status.online`, `status.typing`\n**4. Conexão:** `connection.connected`, `connection.disconnected`\n**5. Grupos:** `group.joined`, `group.left`, `group.settings`"
-          },
-          {
-            name: "source",
-            type: "string",
-            required: true,
-            description: "Origem do evento: 'z-api', 'evolution', 'waha' ou 'meta'"
-          },
           {
             name: "instance_id",
             type: "string",
             required: true,
-            description: "ID externo da instância WhatsApp (identificador no provedor)"
-          },
-          {
-            name: "received_at",
-            type: "string",
-            required: false,
-            description: "Data/hora do recebimento no formato ISO 8601 (ex: 2025-01-26T14:30:00.000Z)"
+            description: "ID da sessão ou da instância WhatsApp"
           },
           {
             name: "raw_event",
             type: "object",
             required: true,
-            description: "Payload original do provedor sem modificações (usado para processamento detalhado pelo controller específico)"
+            description: "Objeto com id, timestamp, from_phone, from_name, body e opcional group_id/group_name."
           }
         ],
         examples: {
-          curl: `curl -X POST "${API_BASE_URL}/webhook-inbound" \\
+          curl: `curl -X POST "${API_BASE_URL}/webhooks/messages/text" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "action": "message.received",
-    "source": "waha",
-    "instance_id": "instance_001",
+    "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
     "raw_event": {
-      "id": "false_5511999999999@c.us_3EB0191BA58CF690D254A1",
-      "timestamp": 1706284200,
-      "from": "5511999999999@c.us",
-      "body": "Olá, tudo bem?",
-      "type": "chat"
+      "id": "false_171296717553783@lid_3EB034E72F18BE445197B5",
+      "timestamp": 1786814411,
+      "from_phone": "5512982402981",
+      "from_lid": "171296717553783@lid",
+      "from_name": "Estevão",
+      "body": "Conteúdo da mensagem recebida!"
     }
   }'`,
           nodejs: `const axios = require('axios');
 
 const response = await axios.post(
-  '${API_BASE_URL}/webhook-inbound',
+  '${API_BASE_URL}/webhooks/messages/text',
   {
-    action: 'message.received',
-    source: 'waha',
-    instance_id: 'instance_001',
+    instance_id: "session_01m00wwc7vw2w21nx0n7dfmtf7",
     raw_event: {
-      id: "false_5511999999999@c.us_3EB0191BA58CF690D254A1",
-      timestamp: 1706284200,
-      from: "5511999999999@c.us",
-      body: "Olá, tudo bem?",
-      type: "chat"
+      id: "false_171296717553783@lid_3EB034E72F18BE445197B5",
+      timestamp: 1786814411,
+      from_phone: "5512982402981",
+      from_lid: "171296717553783@lid",
+      from_name: "Estevão",
+      body: "Conteúdo da mensagem recebida!"
     }
   },
-  {
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  }
+  { headers: { 'Content-Type': 'application/json' } }
 );`,
           python: `import requests
 
 response = requests.post(
-    '${API_BASE_URL}/webhook-inbound',
+    '${API_BASE_URL}/webhooks/messages/text',
     json={
-        'action': 'message.received',
-        'source': 'waha',
-        'instance_id': 'instance_001',
+        'instance_id': 'session_01m00wwc7vw2w21nx0n7dfmtf7',
         'raw_event': {
-            'id': 'false_5511999999999@c.us_3EB0191BA58CF690D254A1',
-            'timestamp': 1706284200,
-            'from': '5511999999999@c.us',
-            'body': 'Olá, tudo bem?',
-            'type': 'chat'
+            'id': 'false_171296717553783@lid_3EB034E72F18BE445197B5',
+            'timestamp': 1786814411,
+            'from_phone': '5512982402981',
+            'from_lid': '171296717553783@lid',
+            'from_name': 'Estevão',
+            'body': 'Conteúdo da mensagem recebida!'
         }
     },
-    headers={
-        'Content-Type': 'application/json'
-    }
+    headers={'Content-Type': 'application/json'}
 )`
         },
         responses: {
@@ -1644,15 +1617,190 @@ response = requests.post(
             code: 201,
             body: {
               success: true,
-              message: "Event routed successfully to MessageController",
-              action: "message.received"
+              event_id: "evt_123456",
+              type: "text",
+              message: "Message 'text' processed successfully"
             }
           },
           error: {
             code: 400,
             body: {
               success: false,
-              error: "Missing required fields: action, source, instance_id, raw_event"
+              error: "invalid_payload",
+              message: "'raw_event.body' is required"
+            }
+          }
+        }
+      },
+      {
+        id: "webhook-message-image",
+        method: "POST",
+        path: "/webhooks/messages/image",
+        description: "Recebe mensagens com imagem (com media_url e legenda opcional).",
+        attributes: [
+          {
+            name: "instance_id",
+            type: "string",
+            required: true,
+            description: "ID da sessão ou da instância WhatsApp"
+          },
+          {
+            name: "raw_event",
+            type: "object",
+            required: true,
+            description: "Objeto com id, timestamp, media_url, caption (opcional), from_phone, etc."
+          }
+        ],
+        examples: {
+          curl: `curl -X POST "${API_BASE_URL}/webhooks/messages/image" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
+    "raw_event": {
+      "id": "false_171296717553783@lid_8F9D7C2A3B4E1F",
+      "timestamp": 1786814450,
+      "from_phone": "5512982402981",
+      "from_lid": "171296717553783@lid",
+      "from_name": "Estevão",
+      "media_url": "https://storage/imagem.jpg",
+      "caption": "Olha essa foto legal!"
+    }
+  }'`,
+          nodejs: `const axios = require('axios');
+
+const response = await axios.post(
+  '${API_BASE_URL}/webhooks/messages/image',
+  {
+    instance_id: "session_01m00wwc7vw2w21nx0n7dfmtf7",
+    raw_event: {
+      id: "false_171296717553783@lid_8F9D7C2A3B4E1F",
+      timestamp: 1786814450,
+      from_phone: "5512982402981",
+      from_lid: "171296717553783@lid",
+      from_name: "Estevão",
+      media_url: "https://storage/imagem.jpg",
+      caption: "Olha essa foto legal!"
+    }
+  },
+  { headers: { 'Content-Type': 'application/json' } }
+);`,
+          python: `import requests
+
+response = requests.post(
+    '${API_BASE_URL}/webhooks/messages/image',
+    json={
+        'instance_id': 'session_01m00wwc7vw2w21nx0n7dfmtf7',
+        'raw_event': {
+            'id': 'false_171296717553783@lid_8F9D7C2A3B4E1F',
+            'timestamp': 1786814450,
+            'from_phone': '5512982402981',
+            'from_lid': '171296717553783@lid',
+            'from_name': 'Estevão',
+            'media_url': 'https://storage/imagem.jpg',
+            'caption': 'Olha essa foto legal!'
+        }
+    },
+    headers={'Content-Type': 'application/json'}
+)`
+        },
+        responses: {
+          success: {
+            code: 201,
+            body: {
+              success: true,
+              event_id: "evt_123456",
+              type: "image",
+              message: "Message 'image' processed successfully"
+            }
+          },
+          error: {
+            code: 400,
+            body: {
+              success: false,
+              error: "invalid_payload",
+              message: "'raw_event.media_url' is required"
+            }
+          }
+        }
+      },
+      {
+        id: "webhook-message-reaction",
+        method: "POST",
+        path: "/webhooks/messages/reaction",
+        description: "Associa uma reação (emoji) à mensagem alvo sem criar mensagem comum duplicada.",
+        attributes: [
+          {
+            name: "instance_id",
+            type: "string",
+            required: true,
+            description: "ID da sessão ou da instância WhatsApp"
+          },
+          {
+            name: "raw_event",
+            type: "object",
+            required: true,
+            description: "Objeto com target_message_id, reaction e timestamp."
+          }
+        ],
+        examples: {
+          curl: `curl -X POST "${API_BASE_URL}/webhooks/messages/reaction" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
+    "raw_event": {
+      "timestamp": 1786814600,
+      "message_id": "reaction_event_id_999",
+      "target_message_id": "false_171296717553783@lid_3EB034E72F18BE445197B5",
+      "reaction": "❤️",
+      "from_phone": "5512982402981"
+    }
+  }'`,
+          nodejs: `const axios = require('axios');
+
+const response = await axios.post(
+  '${API_BASE_URL}/webhooks/messages/reaction',
+  {
+    instance_id: "session_01m00wwc7vw2w21nx0n7dfmtf7",
+    raw_event: {
+      timestamp: 1786814600,
+      message_id: "reaction_event_id_999",
+      target_message_id: "false_171296717553783@lid_3EB034E72F18BE445197B5",
+      reaction: "❤️",
+      from_phone: "5512982402981"
+    }
+  },
+  { headers: { 'Content-Type': 'application/json' } }
+);`,
+          python: `import requests
+
+response = requests.post(
+    '${API_BASE_URL}/webhooks/messages/reaction',
+    json={
+        'timestamp': 1786814600,
+        'message_id': 'reaction_event_id_999',
+        'target_message_id': 'false_171296717553783@lid_3EB034E72F18BE445197B5',
+        'reaction': '❤️',
+        'from_phone': '5512982402981'
+    },
+    headers={'Content-Type': 'application/json'}
+)`
+        },
+        responses: {
+          success: {
+            code: 201,
+            body: {
+              success: true,
+              event_id: "evt_123456",
+              type: "reaction",
+              message: "Message 'reaction' processed successfully"
+            }
+          },
+          error: {
+            code: 400,
+            body: {
+              success: false,
+              error: "invalid_payload",
+              message: "'raw_event.target_message_id' is required"
             }
           }
         }
@@ -2471,45 +2619,29 @@ response = requests.post(
         id: "webhook-inbound",
         method: "POST",
         path: "/webhook-inbound",
-        description: "Super Endpoint universal para recebimento de webhooks normalizados (via n8n). Ele identifica a ação, aplica regras de IA, salva no banco e executa gatilhos automaticamente.",
+        description: "Endpoint compatível de recebimento de webhooks normalizados. Suporta o novo contrato semântico (instance_id + raw_event) e o contrato legado para transição suave.",
         attributes: [
-          {
-            name: "action",
-            type: "string",
-            required: true,
-            description: "Ação realizada (ex: 'message.received', 'message.sent', 'message.delivered', 'group.joined')"
-          },
-          {
-            name: "provider",
-            type: "string",
-            required: true,
-            description: "Provedor que originou o evento (ex: 'waha', 'evolution', 'z-api')"
-          },
           {
             name: "instance_id",
             type: "string",
             required: true,
-            description: "O session_id ou ID da instância conectada."
+            description: "ID da sessão ou da instância conectada."
           },
           {
             name: "raw_event",
             type: "object",
             required: true,
-            description: "Objeto padronizado com os dados da mensagem (is_group, from_phone, body, media_url, etc)."
+            description: "Objeto padronizado com os dados do evento (id, timestamp, from_phone, body, media_url, group_id, etc)."
           }
         ],
         examples: {
           curl: `curl -X POST "${API_BASE_URL}/webhook-inbound" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "action": "message.received",
-    "provider": "waha",
     "instance_id": "session_01m...",
     "raw_event": {
       "id": "evt_123",
       "timestamp": 1786814412074,
-      "type": "text",
-      "is_group": false,
       "from_phone": "5512982402981",
       "from_lid": "171296717553783@lid",
       "from_name": "Estevão",
@@ -2521,14 +2653,10 @@ response = requests.post(
 const response = await axios.post(
   '${API_BASE_URL}/webhook-inbound',
   {
-    action: "message.received",
-    provider: "waha",
     instance_id: "session_01m...",
     raw_event: {
       id: "evt_123",
       timestamp: 1786814412074,
-      type: "text",
-      is_group: false,
       from_phone: "5512982402981",
       from_lid: "171296717553783@lid",
       from_name: "Estevão",
@@ -2546,14 +2674,10 @@ const response = await axios.post(
 response = requests.post(
     '${API_BASE_URL}/webhook-inbound',
     json={
-        'action': 'message.received',
-        'provider': 'waha',
         'instance_id': 'session_01m...',
         'raw_event': {
             'id': 'evt_123',
             'timestamp': 1786814412074,
-            'type': 'text',
-            'is_group': False,
             'from_phone': '5512982402981',
             'from_lid': '171296717553783@lid',
             'from_name': 'Estevão',
@@ -2570,17 +2694,15 @@ response = requests.post(
             code: 201,
             body: {
               success: true,
-              provider: "waha",
               event_id: "b45a2781-...",
-              action: "message.received",
-              message: "Routed to corresponding controller for message.received"
+              message: "Processed successfully"
             }
           },
           error: {
             code: 400,
             body: {
               success: false,
-              error: "Missing required fields: action, provider (or source), instance_id, raw_event"
+              error: "Missing required fields: instance_id, raw_event"
             }
           }
         }

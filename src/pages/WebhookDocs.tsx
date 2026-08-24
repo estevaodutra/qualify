@@ -1,31 +1,42 @@
-import React from "react";
-import { Check, Copy } from "lucide-react";
+import React, { useState } from "react";
+import { Check, Copy, MessageSquare, Image, Mic, Video, FileText, Smile, MapPin, User, BarChart2, Heart, Edit3, Trash2, ArrowRight } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { Badge } from "@/components/ui/badge";
 
 const WebhookDocs = () => {
   const { toast } = useToast();
-  const [copiedId, setCopiedId] = React.useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     toast({
       title: "Copiado!",
-      description: "O JSON foi copiado para a área de transferência.",
+      description: "O código foi copiado para a área de transferência.",
     });
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const CodeBlock = ({ code, id }: { code: string; id: string }) => (
+  const CodeBlock = ({ code, id, language = "JSON" }: { code: string; id: string; language?: string }) => (
     <div className="relative group rounded-lg overflow-hidden bg-slate-900 border border-slate-800 my-4 shadow-md">
       <div className="flex items-center justify-between px-4 py-2 bg-slate-950 border-b border-slate-800">
-        <span className="text-xs font-mono text-slate-400">JSON</span>
+        <span className="text-xs font-mono text-slate-400 font-semibold">{language}</span>
         <button
           onClick={() => copyToClipboard(code, id)}
-          className="text-slate-400 hover:text-white transition-colors p-1"
+          className="text-slate-400 hover:text-white transition-colors p-1 flex items-center gap-1.5 text-xs"
           title="Copiar código"
         >
-          {copiedId === id ? <Check size={16} /> : <Copy size={16} />}
+          {copiedId === id ? (
+            <>
+              <Check size={14} className="text-emerald-400" />
+              <span className="text-emerald-400 font-medium">Copiado</span>
+            </>
+          ) : (
+            <>
+              <Copy size={14} />
+              <span>Copiar</span>
+            </>
+          )}
         </button>
       </div>
       <pre className="p-4 overflow-x-auto text-sm font-mono text-slate-50 leading-relaxed">
@@ -40,126 +51,114 @@ const WebhookDocs = () => {
         
         {/* Cabeçalho */}
         <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <Badge className="bg-indigo-600 hover:bg-indigo-700 text-xs px-3 py-1 font-semibold">
+              API REST v2 Semântica
+            </Badge>
+          </div>
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900">
-            Documentação: Webhook Inbound
+            Webhooks de Mensagem
           </h1>
-          <p className="text-lg text-slate-600">
-            O Super Endpoint Universal para recebimento de dados normalizados. 
-            Esta página documenta os payloads exatos que devem ser enviados para a nossa API 
-            <code className="mx-2 bg-slate-200 px-2 py-0.5 rounded text-sm text-slate-800">/webhook-inbound</code>.
+          <p className="text-lg text-slate-600 leading-relaxed">
+            Endpoints semânticos dedicados para cada tipo de mensagem e evento de mensageria da Qualify.
+            A própria rota da URL define a categoria, o tipo e a responsabilidade da ingestão.
           </p>
         </div>
 
-        {/* Estrutura Base */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-8">
-          <h2 className="text-2xl font-bold text-slate-900 mb-4">Estrutura Base (Obrigatória)</h2>
-          <p className="text-slate-600 mb-4">
-            Todo disparo deve conter os quatro campos raízes abaixo. A formatação detalhada acontece dentro da chave <code className="text-indigo-600 font-semibold bg-indigo-50 px-1 py-0.5 rounded">raw_event</code>.
+        {/* Princípios e Contrato Base */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-6">
+          <h2 className="text-2xl font-bold text-slate-900">Contrato Base Raiz</h2>
+          <p className="text-slate-600 leading-relaxed">
+            Todos os endpoints de mensagem recebem um payload limpo com apenas <strong>dois campos raiz obrigatórios</strong>. 
+            Campos redundantes como <code className="text-rose-600 font-mono text-xs bg-rose-50 px-1 py-0.5 rounded line-through">action</code>, <code className="text-rose-600 font-mono text-xs bg-rose-50 px-1 py-0.5 rounded line-through">provider</code>, <code className="text-rose-600 font-mono text-xs bg-rose-50 px-1 py-0.5 rounded line-through">type</code> e <code className="text-rose-600 font-mono text-xs bg-rose-50 px-1 py-0.5 rounded line-through">is_group</code> foram eliminados.
           </p>
-          <ul className="space-y-3 mb-6">
-            <li className="flex flex-col sm:flex-row gap-2 sm:items-center">
-              <span className="font-mono text-sm bg-slate-100 px-2 py-1 rounded text-slate-800 font-medium min-w-[120px] inline-block">action</span>
-              <span className="text-slate-600">Ação realizada (ex: <code className="text-indigo-600 font-mono text-sm">message.received</code>, <code className="text-indigo-600 font-mono text-sm">message.sent</code>).</span>
-            </li>
-            <li className="flex flex-col sm:flex-row gap-2 sm:items-center">
-              <span className="font-mono text-sm bg-slate-100 px-2 py-1 rounded text-slate-800 font-medium min-w-[120px] inline-block">provider</span>
-              <span className="text-slate-600">O provedor de origem (ex: <code className="text-indigo-600 font-mono text-sm">waha</code>).</span>
-            </li>
-            <li className="flex flex-col sm:flex-row gap-2 sm:items-center">
-              <span className="font-mono text-sm bg-slate-100 px-2 py-1 rounded text-slate-800 font-medium min-w-[120px] inline-block">instance_id</span>
-              <span className="text-slate-600">ID da sessão ou da instância.</span>
-            </li>
-            <li className="flex flex-col sm:flex-row gap-2 sm:items-center">
-              <span className="font-mono text-sm bg-slate-100 px-2 py-1 rounded text-slate-800 font-medium min-w-[120px] inline-block">raw_event</span>
-              <span className="text-slate-600">O payload normalizado da mensagem em si.</span>
-            </li>
-          </ul>
-        </div>
 
-        <div className="space-y-8">
-          <h2 className="text-3xl font-bold text-slate-900 border-b border-slate-200 pb-4">
-            Exemplos de Payload (<code className="text-indigo-600 text-2xl font-normal">raw_event</code>)
-          </h2>
-          
-          {/* Mensagem Privada - Texto */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-8 hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold shadow-inner">1</div>
-              <h3 className="text-xl font-bold text-slate-900">Mensagem de Texto (Privada)</h3>
+          <CodeBlock
+            id="base-contract"
+            code={`{
+  "instance_id": "session_uuid",
+  "raw_event": {}
+}`}
+          />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+              <h4 className="text-sm font-bold text-slate-800 mb-1 flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-blue-500" />
+                Conversa Privada (1x1)
+              </h4>
+              <p className="text-xs text-slate-600">
+                Identificada automaticamente pela <strong>ausência</strong> de <code className="font-mono text-slate-700">group_id</code> no <code className="font-mono text-slate-700">raw_event</code>.
+              </p>
             </div>
-            <p className="text-slate-600 mb-4">
-              Usado para mensagens diretas (1x1) que contêm apenas texto. Repare que o campo <code className="text-sm bg-slate-100 px-1 py-0.5 rounded font-mono">is_group</code> é <code className="text-blue-600 font-bold">false</code>.
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+              <h4 className="text-sm font-bold text-slate-800 mb-1 flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-purple-500" />
+                Mensagem em Grupo
+              </h4>
+              <p className="text-xs text-slate-600">
+                Identificada pela <strong>presença</strong> de <code className="font-mono text-slate-700">group_id</code> (ex: <code className="font-mono text-slate-700">120363...@g.us</code>) no <code className="font-mono text-slate-700">raw_event</code>.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* ======================================================== */}
+        {/* SEÇÃO 1: MENSAGENS POR TIPO */}
+        {/* ======================================================== */}
+        <div className="space-y-8">
+          <div className="border-b border-slate-200 pb-3">
+            <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2.5">
+              <MessageSquare className="h-6 w-6 text-indigo-600" />
+              Mensagens por Tipo
+            </h2>
+            <p className="text-sm text-slate-500 mt-1">
+              Envio de mensagens recebidas ou enviadas classificadas pelo tipo de conteúdo.
             </p>
-            <CodeBlock 
-              id="private-text"
-              code={`{
-  "action": "message.received",
-  "provider": "waha",
+          </div>
+
+          {/* 1. Texto */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-blue-100 text-blue-600">
+                  <MessageSquare className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Mensagem de Texto</h3>
+                  <p className="text-xs text-slate-500">Conversas diretas ou mensagens em grupo de texto puro</p>
+                </div>
+              </div>
+              <Badge variant="outline" className="font-mono text-xs bg-slate-100 text-slate-800 px-3 py-1">
+                POST /webhooks/messages/text
+              </Badge>
+            </div>
+
+            <div className="space-y-4 pt-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Exemplo: Texto Privado</h4>
+              <CodeBlock
+                id="msg-text-private"
+                code={`{
   "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
   "raw_event": {
     "id": "false_171296717553783@lid_3EB034E72F18BE445197B5",
     "timestamp": 1786814411,
-    "type": "text",
-    "is_group": false,
     "from_phone": "5512982402981",
     "from_lid": "171296717553783@lid",
     "from_name": "Estevão",
     "body": "Conteúdo da mensagem recebida!"
   }
-}`} 
-            />
-          </div>
+}`}
+              />
 
-          {/* Mensagem Privada - Imagem */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-8 hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 font-bold shadow-inner">2</div>
-              <h3 className="text-xl font-bold text-slate-900">Mensagem com Mídia (Imagem/Áudio)</h3>
-            </div>
-            <p className="text-slate-600 mb-4">
-              Para mídias, mude o <code className="text-sm bg-slate-100 px-1 py-0.5 rounded font-mono">type</code> (ex: <code className="text-sm bg-slate-100 px-1 rounded text-emerald-600">image</code>, <code className="text-sm bg-slate-100 px-1 rounded text-emerald-600">audio</code>, <code className="text-sm bg-slate-100 px-1 rounded text-emerald-600">video</code>) e adicione propriedades específicas da mídia como <code className="text-sm bg-slate-100 px-1 rounded font-mono">media_url</code> e <code className="text-sm bg-slate-100 px-1 rounded font-mono">caption</code> (opcional).
-            </p>
-            <CodeBlock 
-              id="private-image"
-              code={`{
-  "action": "message.received",
-  "provider": "waha",
-  "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
-  "raw_event": {
-    "id": "false_171296717553783@lid_8F9D7C2A3B4E1F",
-    "timestamp": 1786814450,
-    "type": "image",
-    "is_group": false,
-    "from_phone": "5512982402981",
-    "from_lid": "171296717553783@lid",
-    "from_name": "Estevão",
-    "media_url": "https://url-publica-do-seu-storage.com/imagem.jpg",
-    "caption": "Olha essa foto legal!"
-  }
-}`} 
-            />
-          </div>
-
-          {/* Mensagem de Grupo */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-8 hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold shadow-inner">3</div>
-              <h3 className="text-xl font-bold text-slate-900">Mensagem em Grupo</h3>
-            </div>
-            <p className="text-slate-600 mb-4">
-              Quando <code className="text-sm bg-slate-100 px-1 py-0.5 rounded font-mono">is_group: true</code>, devem ser fornecidos o <code className="text-sm bg-slate-100 px-1 rounded font-mono">group_id</code> (geralmente com sufixo @g.us) e o <code className="text-sm bg-slate-100 px-1 rounded font-mono">group_name</code>, além das informações da pessoa que enviou a mensagem (<code className="text-sm bg-slate-100 px-1 rounded font-mono">from_phone</code> e <code className="text-sm bg-slate-100 px-1 rounded font-mono">from_name</code>).
-            </p>
-            <CodeBlock 
-              id="group-text"
-              code={`{
-  "action": "message.received",
-  "provider": "waha",
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mt-4">Exemplo: Texto em Grupo</h4>
+              <CodeBlock
+                id="msg-text-group"
+                code={`{
   "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
   "raw_event": {
     "id": "false_120363425932296878@g.us_9A8B7C6D5E4F3G",
     "timestamp": 1786814500,
-    "type": "text",
-    "is_group": true,
     "group_id": "120363425932296878@g.us",
     "group_name": "Equipe de Vendas VIP",
     "from_phone": "5512982402981",
@@ -167,56 +166,427 @@ const WebhookDocs = () => {
     "from_name": "Estevão",
     "body": "Bom dia equipe! Vamos bater a meta!"
   }
-}`} 
-            />
-          </div>
-          
-          {/* Mensagem de Grupo (Sistema) */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-8 hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold shadow-inner">4</div>
-              <h3 className="text-xl font-bold text-slate-900">Eventos de Grupo (Join, Leave, etc)</h3>
+}`}
+              />
             </div>
-            <p className="text-slate-600 mb-4">
-              Para notificar o CRM de que alguém entrou, saiu, ou houve mudança no grupo, o middleware (n8n) deve formatar o JSON exatamente como abaixo. A ação (<code className="text-sm bg-slate-100 px-1 rounded font-mono">action</code>) deve ser estritamente uma de: <code className="text-indigo-600 font-bold">group_join</code>, <code className="text-indigo-600 font-bold">group_leave</code>, <code className="text-indigo-600 font-bold">group_participants</code>, ou <code className="text-indigo-600 font-bold">group_update</code>.
-            </p>
-            <p className="text-slate-600 mb-4 text-sm bg-slate-50 p-3 rounded border border-slate-100">
-              <strong>Responsabilidade do n8n:</strong> O n8n é quem deve ler o evento bagunçado do provedor (ex: <code>group.v2.join</code> do WAHA) e traduzi-lo para o nosso padrão oficial (<code>group_join</code>) <strong>antes</strong> de enviar para esta API. O ID do grupo, o telefone e o LID do participante devem vir nos campos de <code>raw_event</code> conforme os modelos abaixo.
-            </p>
-            <h4 className="text-lg font-semibold text-slate-800 mb-2 mt-6">Exemplo: Saída de Grupo (group_leave)</h4>
-            <CodeBlock 
-              id="group-leave-event"
-              code={`{
-  "action": "group_leave",
-  "provider": "waha",
-  "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
-  "raw_event": {
-    "timestamp": 1786998671007,
-    "group_id": "120363407169795131@g.us",
-    "participant_phone": "5512982402981",
-    "participant_lid": "171296717553783@lid"
-  }
-}`} 
-            />
+          </div>
 
-            <h4 className="text-lg font-semibold text-slate-800 mb-2 mt-6">Exemplo: Entrada de Grupo (group_join)</h4>
-            <CodeBlock 
-              id="group-join-event"
+          {/* 2. Imagem */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-emerald-100 text-emerald-600">
+                  <Image className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Mensagem com Imagem</h3>
+                  <p className="text-xs text-slate-500">Fotos e imagens com URL de mídia e legenda opcional</p>
+                </div>
+              </div>
+              <Badge variant="outline" className="font-mono text-xs bg-slate-100 text-slate-800 px-3 py-1">
+                POST /webhooks/messages/image
+              </Badge>
+            </div>
+
+            <CodeBlock
+              id="msg-image"
               code={`{
-  "action": "group_join",
-  "provider": "waha",
   "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
   "raw_event": {
-    "timestamp": 1786998671007,
-    "group_id": "120363407169795131@g.us",
-    "participant_phone": "5512982402981",
-    "participant_lid": "171296717553783@lid"
+    "id": "false_171296717553783@lid_8F9D7C2A3B4E1F",
+    "timestamp": 1786814450,
+    "from_phone": "5512982402981",
+    "from_lid": "171296717553783@lid",
+    "from_name": "Estevão",
+    "media_url": "https://storage/imagem.jpg",
+    "caption": "Olha essa foto legal!"
   }
-}`} 
+}`}
             />
           </div>
-          
+
+          {/* 3. Áudio / Voz */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-amber-100 text-amber-600">
+                  <Mic className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Mensagem de Áudio / Voz</h3>
+                  <p className="text-xs text-slate-500">Áudios gravados ou arquivos de áudio enviados</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Badge variant="outline" className="font-mono text-xs bg-slate-100 text-slate-800 px-2 py-1">
+                  POST /webhooks/messages/audio
+                </Badge>
+                <Badge variant="outline" className="font-mono text-xs bg-slate-100 text-slate-800 px-2 py-1">
+                  POST /webhooks/messages/voice
+                </Badge>
+              </div>
+            </div>
+
+            <CodeBlock
+              id="msg-audio"
+              code={`{
+  "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
+  "raw_event": {
+    "id": "false_171296717553783@lid_90A1B2C3D4E5",
+    "timestamp": 1786814450,
+    "from_phone": "5512982402981",
+    "from_lid": "171296717553783@lid",
+    "from_name": "Estevão",
+    "media_url": "https://storage/audio.ogg",
+    "mimetype": "audio/ogg"
+  }
+}`}
+            />
+          </div>
+
+          {/* 4. Vídeo */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-purple-100 text-purple-600">
+                  <Video className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Mensagem de Vídeo / Video Note</h3>
+                  <p className="text-xs text-slate-500">Vídeos com legenda e arquivos de vídeo</p>
+                </div>
+              </div>
+              <Badge variant="outline" className="font-mono text-xs bg-slate-100 text-slate-800 px-3 py-1">
+                POST /webhooks/messages/video
+              </Badge>
+            </div>
+
+            <CodeBlock
+              id="msg-video"
+              code={`{
+  "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
+  "raw_event": {
+    "id": "false_171296717553783@lid_F1E2D3C4B5A6",
+    "timestamp": 1786814450,
+    "from_phone": "5512982402981",
+    "from_lid": "171296717553783@lid",
+    "from_name": "Estevão",
+    "media_url": "https://storage/video.mp4",
+    "mimetype": "video/mp4",
+    "caption": "Veja esse vídeo demonstrativo"
+  }
+}`}
+            />
+          </div>
+
+          {/* 5. Documento */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-cyan-100 text-cyan-600">
+                  <FileText className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Documento / Anexo</h3>
+                  <p className="text-xs text-slate-500">PDFs, planilhas e documentos gerais</p>
+                </div>
+              </div>
+              <Badge variant="outline" className="font-mono text-xs bg-slate-100 text-slate-800 px-3 py-1">
+                POST /webhooks/messages/document
+              </Badge>
+            </div>
+
+            <CodeBlock
+              id="msg-document"
+              code={`{
+  "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
+  "raw_event": {
+    "id": "false_171296717553783@lid_A1B2C3D4E5F6",
+    "timestamp": 1786814450,
+    "from_phone": "5512982402981",
+    "from_lid": "171296717553783@lid",
+    "from_name": "Estevão",
+    "media_url": "https://storage/documento.pdf",
+    "filename": "proposta_comercial.pdf",
+    "mimetype": "application/pdf",
+    "caption": "Segue a proposta comercial solicitada"
+  }
+}`}
+            />
+          </div>
+
+          {/* 6. Sticker */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-pink-100 text-pink-600">
+                  <Smile className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Figurinha / Sticker</h3>
+                  <p className="text-xs text-slate-500">Stickers em formato WebP</p>
+                </div>
+              </div>
+              <Badge variant="outline" className="font-mono text-xs bg-slate-100 text-slate-800 px-3 py-1">
+                POST /webhooks/messages/sticker
+              </Badge>
+            </div>
+
+            <CodeBlock
+              id="msg-sticker"
+              code={`{
+  "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
+  "raw_event": {
+    "id": "false_171296717553783@lid_778899AABBCC",
+    "timestamp": 1786814450,
+    "from_phone": "5512982402981",
+    "from_lid": "171296717553783@lid",
+    "from_name": "Estevão",
+    "media_url": "https://storage/sticker.webp",
+    "mimetype": "image/webp"
+  }
+}`}
+            />
+          </div>
+
+          {/* 7. Localização */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-red-100 text-red-600">
+                  <MapPin className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Localização</h3>
+                  <p className="text-xs text-slate-500">Coordenadas geográficas de localização compartilhada</p>
+                </div>
+              </div>
+              <Badge variant="outline" className="font-mono text-xs bg-slate-100 text-slate-800 px-3 py-1">
+                POST /webhooks/messages/location
+              </Badge>
+            </div>
+
+            <CodeBlock
+              id="msg-location"
+              code={`{
+  "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
+  "raw_event": {
+    "id": "false_171296717553783@lid_445566778899",
+    "timestamp": 1786814450,
+    "from_phone": "5512982402981",
+    "from_lid": "171296717553783@lid",
+    "from_name": "Estevão",
+    "latitude": -23.55052,
+    "longitude": -46.633308,
+    "name": "Sede Qualify",
+    "address": "Av. Paulista, 1000 - Bela Vista, São Paulo - SP"
+  }
+}`}
+            />
+          </div>
+
+          {/* 8. Contato */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-teal-100 text-teal-600">
+                  <User className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Contato / Cartão de Visita</h3>
+                  <p className="text-xs text-slate-500">VCard ou dados de contato compartilhado</p>
+                </div>
+              </div>
+              <Badge variant="outline" className="font-mono text-xs bg-slate-100 text-slate-800 px-3 py-1">
+                POST /webhooks/messages/contact
+              </Badge>
+            </div>
+
+            <CodeBlock
+              id="msg-contact"
+              code={`{
+  "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
+  "raw_event": {
+    "id": "false_171296717553783@lid_112233445566",
+    "timestamp": 1786814450,
+    "from_phone": "5512982402981",
+    "from_lid": "171296717553783@lid",
+    "from_name": "Estevão",
+    "contact_name": "Dr. João Silva",
+    "contact_phone": "5511988887777",
+    "vcard": "BEGIN:VCARD\\nVERSION:3.0\\nFN:Dr. João Silva\\nTEL:5511988887777\\nEND:VCARD"
+  }
+}`}
+            />
+          </div>
+
+          {/* 9. Enquete */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-indigo-100 text-indigo-600">
+                  <BarChart2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Enquete / Poll Recebida</h3>
+                  <p className="text-xs text-slate-500">Criação de enquete no WhatsApp</p>
+                </div>
+              </div>
+              <Badge variant="outline" className="font-mono text-xs bg-slate-100 text-slate-800 px-3 py-1">
+                POST /webhooks/messages/poll
+              </Badge>
+            </div>
+
+            <CodeBlock
+              id="msg-poll"
+              code={`{
+  "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
+  "raw_event": {
+    "id": "false_120363425932296878@g.us_POLL123456",
+    "timestamp": 1786814450,
+    "group_id": "120363425932296878@g.us",
+    "group_name": "Equipe de Vendas VIP",
+    "from_phone": "5512982402981",
+    "from_lid": "171296717553783@lid",
+    "from_name": "Estevão",
+    "name": "Qual o melhor horário para a reunião?",
+    "options": [
+      { "name": "09:00", "id": "opt_1" },
+      { "name": "14:00", "id": "opt_2" },
+      { "name": "17:00", "id": "opt_3" }
+    ],
+    "selectable_options_count": 1
+  }
+}`}
+            />
+          </div>
         </div>
+
+        {/* ======================================================== */}
+        {/* SEÇÃO 2: EVENTOS ESPECIAIS (NÃO DUPLICAM MENSAGENS) */}
+        {/* ======================================================== */}
+        <div className="space-y-8 pt-4">
+          <div className="border-b border-slate-200 pb-3">
+            <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2.5">
+              <Heart className="h-6 w-6 text-rose-500" />
+              Eventos Especiais de Mensagens
+            </h2>
+            <p className="text-sm text-slate-500 mt-1">
+              Eventos que alteram ou associam estado a uma mensagem existente sem gerar novas mensagens comuns no histórico.
+            </p>
+          </div>
+
+          {/* 1. Reação */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-rose-100 text-rose-600">
+                  <Heart className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Reação de Mensagem</h3>
+                  <p className="text-xs text-slate-500">Associa uma reação (emoji) à mensagem alvo especificada</p>
+                </div>
+              </div>
+              <Badge variant="outline" className="font-mono text-xs bg-slate-100 text-slate-800 px-3 py-1">
+                POST /webhooks/messages/reaction
+              </Badge>
+            </div>
+
+            <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100">
+              <strong>Comportamento:</strong> A reação é gravada diretamente no registro da mensagem alvo (<code className="font-mono text-slate-700">target_message_id</code>), sem criar uma nova linha de mensagem no chat.
+            </p>
+
+            <CodeBlock
+              id="event-reaction"
+              code={`{
+  "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
+  "raw_event": {
+    "timestamp": 1786814600,
+    "message_id": "reaction_event_id_999",
+    "target_message_id": "false_171296717553783@lid_3EB034E72F18BE445197B5",
+    "reaction": "❤️",
+    "from_phone": "5512982402981",
+    "from_lid": "171296717553783@lid"
+  }
+}`}
+            />
+          </div>
+
+          {/* 2. Edição */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-amber-100 text-amber-600">
+                  <Edit3 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Edição de Mensagem</h3>
+                  <p className="text-xs text-slate-500">Atualiza o conteúdo de uma mensagem previamente enviada</p>
+                </div>
+              </div>
+              <Badge variant="outline" className="font-mono text-xs bg-slate-100 text-slate-800 px-3 py-1">
+                POST /webhooks/messages/edited
+              </Badge>
+            </div>
+
+            <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100">
+              <strong>Comportamento:</strong> O corpo da mensagem (<code className="font-mono text-slate-700">original_message_id</code>) é atualizado e marcado como editado, preservando a conversa sem duplicatas.
+            </p>
+
+            <CodeBlock
+              id="event-edited"
+              code={`{
+  "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
+  "raw_event": {
+    "timestamp": 1786814700,
+    "message_id": "edit_event_id_888",
+    "original_message_id": "false_171296717553783@lid_3EB034E72F18BE445197B5",
+    "from_phone": "5512982402981",
+    "from_lid": "171296717553783@lid",
+    "body": "Texto corrigido e atualizado pelo remetente."
+  }
+}`}
+            />
+          </div>
+
+          {/* 3. Revogação */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-slate-200 text-slate-700">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Mensagem Revogada / Apagada</h3>
+                  <p className="text-xs text-slate-500">Marca a mensagem como apagada para todos</p>
+                </div>
+              </div>
+              <Badge variant="outline" className="font-mono text-xs bg-slate-100 text-slate-800 px-3 py-1">
+                POST /webhooks/messages/revoked
+              </Badge>
+            </div>
+
+            <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100">
+              <strong>Comportamento:</strong> A mensagem correspondente (<code className="font-mono text-slate-700">revoked_message_id</code>) é marcada como revogada (<code className="font-mono text-slate-700">status: 'revoked'</code>).
+            </p>
+
+            <CodeBlock
+              id="event-revoked"
+              code={`{
+  "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
+  "raw_event": {
+    "timestamp": 1786814800,
+    "message_id": "revoke_event_id_777",
+    "revoked_message_id": "false_171296717553783@lid_3EB034E72F18BE445197B5",
+    "from_phone": "5512982402981",
+    "from_lid": "171296717553783@lid"
+  }
+}`}
+            />
+          </div>
+        </div>
+
       </div>
     </div>
   );

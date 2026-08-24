@@ -50,18 +50,18 @@ Deno.serve(async (req) => {
     try { requestBodyObj = JSON.parse(bodyText); } catch { requestBodyObj = { rawText: bodyText }; }
     const payload = requestBodyObj as Partial<InboundPayload>;
 
-    // Validação estrita
-    if (!payload.action || (!payload.source && !payload.provider) || !payload.instance_id || !payload.raw_event) {
-      responseBodyObj = { success: false, error: "Missing required fields: action, provider (or source), instance_id, raw_event" };
+    // Validação compatível: suporta contrato novo (instance_id + raw_event) e legado (action + provider + instance_id + raw_event)
+    if (!payload.instance_id || !payload.raw_event) {
+      responseBodyObj = { success: false, error: "Missing required fields: instance_id, raw_event" };
       statusCode = 400;
       throw new Error("Missing required fields");
     }
 
-    const action = payload.action;
-    const source = payload.provider || payload.source || "unknown";
+    const rawEvent = payload.raw_event;
+    const action = payload.action || (rawEvent.reaction ? "message_reaction" : rawEvent.revoked_message_id ? "message_revoked" : rawEvent.original_message_id ? "message_edited" : "message.received");
+    const source = payload.provider || payload.source || "api";
     const externalInstanceId = payload.instance_id;
     const receivedAt = payload.received_at || new Date().toISOString();
-    const rawEvent = payload.raw_event;
     const wahaApiKey = payload.waha_api_key;
 
     // ==========================================
