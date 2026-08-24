@@ -114,6 +114,7 @@ Deno.serve(async (req) => {
     const externalInstanceId = payload.instance_id;
     const receivedAt = payload.received_at || new Date().toISOString();
     const wahaApiKey = payload.waha_api_key;
+    if (rawEvent?.mediaUrl && wahaApiKey) {
       try {
         console.log(`[webhook-inbound] Intercepting media URL: ${rawEvent.mediaUrl}`);
         const mediaRes = await fetch(rawEvent.mediaUrl, {
