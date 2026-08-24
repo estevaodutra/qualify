@@ -12,13 +12,16 @@ import { processPresenceEvent } from "./controllers/PresenceController.ts";
 import { processConnectionEvent } from "./controllers/ConnectionController.ts";
 import { processGroupEvent } from "./controllers/GroupController.ts";
 
+import { MessageIngestionService } from "../_shared/message-ingestion.ts";
+import { SupportedMessageType } from "../_shared/message-schemas.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 export interface InboundPayload {
-  action: string;
+  action?: string;
   source?: string;
   provider?: string;
   instance_id: string;
@@ -26,6 +29,14 @@ export interface InboundPayload {
   waha_api_key?: string;
   raw_event: Record<string, any>;
 }
+
+const ingestionService = new MessageIngestionService();
+
+const SUPPORTED_MESSAGE_TYPES: SupportedMessageType[] = [
+  "text", "image", "audio", "voice", "video", "video-note",
+  "document", "sticker", "location", "contact", "contacts",
+  "poll", "reaction", "edited", "revoked"
+];
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -50,24 +61,59 @@ Deno.serve(async (req) => {
     try { requestBodyObj = JSON.parse(bodyText); } catch { requestBodyObj = { rawText: bodyText }; }
     const payload = requestBodyObj as Partial<InboundPayload>;
 
-    // Validação compatível: suporta contrato novo (instance_id + raw_event) e legado (action + provider + instance_id + raw_event)
+    // Validação compatível
     if (!payload.instance_id || !payload.raw_event) {
       responseBodyObj = { success: false, error: "Missing required fields: instance_id, raw_event" };
       statusCode = 400;
       throw new Error("Missing required fields");
     }
 
+    const url = new URL(req.url);
+    const pathParts = url.pathname.split("/").filter(Boolean);
+    let semanticType: SupportedMessageType | null = null;
+    for (let i = pathParts.length - 1; i >= 0; i--) {
+      const part = pathParts[i].toLowerCase();
+      if (SUPPORTED_MESSAGE_TYPES.includes(part as SupportedMessageType)) {
+        semanticType = part as SupportedMessageType;
+        break;
+      }
+    }
+
+    // Se for rota semântica (ex: /messages/text ou /webhooks/messages/image)
+    if (semanticType) {
+      const meta = { endpoint: url.pathname, method: req.method, ipAddress, startTime };
+      const result = await ingestionService.ingest(semanticType, payload as any, meta);
+      return new Response(JSON.stringify(result.body), {
+        status: result.statusCode,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Se não for rota semântica, mas for o novo contrato sem action
+    if (!payload.action) {
+      const rawEvent = payload.raw_event;
+      let detectedType: SupportedMessageType = "text";
+      if (rawEvent.reaction || rawEvent.target_message_id) detectedType = "reaction";
+      else if (rawEvent.original_message_id) detectedType = "edited";
+      else if (rawEvent.revoked_message_id) detectedType = "revoked";
+      else if (rawEvent.media_url || rawEvent.mediaUrl) detectedType = "image";
+      else if (rawEvent.latitude !== undefined) detectedType = "location";
+      else if (rawEvent.contact_name || rawEvent.contacts) detectedType = "contact";
+
+      const meta = { endpoint: url.pathname, method: req.method, ipAddress, startTime };
+      const result = await ingestionService.ingest(detectedType, payload as any, meta);
+      return new Response(JSON.stringify(result.body), {
+        status: result.statusCode,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const rawEvent = payload.raw_event;
-    const action = payload.action || (rawEvent.reaction ? "message_reaction" : rawEvent.revoked_message_id ? "message_revoked" : rawEvent.original_message_id ? "message_edited" : "message.received");
+    const action = payload.action;
     const source = payload.provider || payload.source || "api";
     const externalInstanceId = payload.instance_id;
     const receivedAt = payload.received_at || new Date().toISOString();
     const wahaApiKey = payload.waha_api_key;
-
-    // ==========================================
-    // AUTO-DOWNLOAD WAHA MEDIA
-    // ==========================================
-    if (rawEvent.mediaUrl && wahaApiKey && typeof rawEvent.mediaUrl === "string" && rawEvent.mediaUrl.startsWith("http")) {
       try {
         console.log(`[webhook-inbound] Intercepting media URL: ${rawEvent.mediaUrl}`);
         const mediaRes = await fetch(rawEvent.mediaUrl, {
