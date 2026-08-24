@@ -102,10 +102,7 @@ Deno.serve(async (req) => {
       const { error: dbError } = await adminClient
         .from("instances")
         .update({
-          status: "disconnected",
-          external_instance_id: null,
-          external_instance_token: null,
-          phone: ""
+          status: "disconnected"
         })
         .eq("id", instanceId);
 

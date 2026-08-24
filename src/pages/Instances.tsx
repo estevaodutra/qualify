@@ -215,10 +215,7 @@ export default function Instances() {
         await updateInstance({
           id: instanceToDisconnect.id,
           updates: {
-            status: "disconnected",
-            external_instance_id: "",
-            external_instance_token: "",
-            phone: ""
+            status: "disconnected"
           }
         });
 
@@ -471,57 +468,6 @@ export default function Instances() {
       supabase.removeChannel(channel);
     };
   }, [user, selectedInstance, refetch]);
-
-  // Auto-disconnect instances expiring in < 1 hour
-  const autoDisconnectedRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    if (!instances.length || !user) return;
-    
-    const checkExpirations = async () => {
-      for (const inst of instances) {
-        if (inst.status !== "connected" || !inst.expirationDate) continue;
-        if (autoDisconnectedRef.current.has(inst.id)) continue;
-        
-        const diffMs = new Date(inst.expirationDate).getTime() - Date.now();
-        if (diffMs < 60 * 60 * 1000) { // < 1 hour
-          autoDisconnectedRef.current.add(inst.id);
-          
-          try {
-            await updateInstance({
-              id: inst.id,
-              updates: {
-                status: "disconnected",
-                external_instance_id: "",
-                external_instance_token: "",
-                phone: ""
-              }
-            });
-
-            // Create alert for the user
-            await supabase.from("alerts").insert({
-              user_id: user.id,
-              severity: "warning",
-              title: `Instância ${inst.name} desconectada`,
-              description: `A instância foi desconectada automaticamente porque o vencimento é em menos de 1 hora.`,
-              entity: inst.name,
-            });
-
-            toast({
-              title: "Instância desconectada",
-              description: `${inst.name} foi desconectada automaticamente por vencimento próximo.`,
-              variant: "destructive",
-            });
-          } catch (e) {
-            console.error("Auto-disconnect error:", e);
-          }
-        }
-      }
-    };
-    
-    checkExpirations();
-    const interval = setInterval(checkExpirations, 60000);
-    return () => clearInterval(interval);
-  }, [instances, user]);
 
   // No longer need localStorage - data persists in database
   const getFunctionIcon = (fn: InstanceFunction) => {
