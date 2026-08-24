@@ -114,6 +114,7 @@ Deno.serve(async (req) => {
       if (result.due) {
         updates.expiration_date = new Date(result.due).toISOString();
       }
+      const effectivePhone = result.phone || instance.phone;
       if (result.phone && result.phone !== instance.phone) {
         updates.phone = result.phone;
       }
@@ -142,7 +143,7 @@ Deno.serve(async (req) => {
         await triggerSystemWebhook(supabase, eventId, {
           id: instance.id,
           name: instance.name,
-          phone: newStatus === "connected" ? (result.phone || instance.phone) : instance.phone,
+          phone: newStatus === "connected" ? effectivePhone : instance.phone,
           provider: instance.provider || "z-api",
           user_id: instance.user_id
         });
@@ -151,31 +152,34 @@ Deno.serve(async (req) => {
       updatedCount++;
 
       // Auto-register phone number when instance becomes connected
-      if (newStatus === "connected" && previousStatus !== "connected") {
+      if (newStatus === "connected") {
         try {
-          const { data: existingNumber } = await supabase
-            .from("phone_numbers")
-            .select("id")
-            .eq("number", instance.phone)
-            .eq("user_id", instance.user_id)
-            .maybeSingle();
-
-          if (existingNumber) {
-            await supabase
+          const phoneToRegister = effectivePhone;
+          if (phoneToRegister) {
+            const { data: existingNumber } = await supabase
               .from("phone_numbers")
-              .update({ connected: true, status: "active", instance_id: instance.id, health: 100 })
-              .eq("id", existingNumber.id);
-          } else if (instance.phone) {
-            await supabase.from("phone_numbers").insert({
-              user_id: instance.user_id,
-              instance_id: instance.id,
-              number: instance.phone,
-              type: "whatsapp_normal",
-              provider: instance.provider,
-              status: "active",
-              connected: true,
-              health: 100,
-            });
+              .select("id")
+              .eq("number", phoneToRegister)
+              .eq("user_id", instance.user_id)
+              .maybeSingle();
+
+            if (existingNumber) {
+              await supabase
+                .from("phone_numbers")
+                .update({ connected: true, status: "active", instance_id: instance.id, health: 100 })
+                .eq("id", existingNumber.id);
+            } else {
+              await supabase.from("phone_numbers").insert({
+                user_id: instance.user_id,
+                instance_id: instance.id,
+                number: phoneToRegister,
+                type: "whatsapp_normal",
+                provider: instance.provider,
+                status: "active",
+                connected: true,
+                health: 100,
+              });
+            }
           }
         } catch (phoneErr) {
           console.error("Error in phone auto-registration:", phoneErr);
