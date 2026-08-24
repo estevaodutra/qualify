@@ -1060,16 +1060,28 @@ response2 = requests.get(
         description: "Atualiza o status de uma instância (conectar/desconectar).",
         attributes: [
           {
-            name: "instanceId",
+            name: "session_id",
             type: "string",
             required: true,
-            description: "ID da instância"
+            description: "ID da sessão / instância externa (ex: 'session_01m0e0qnqsjb4xepkmax583azc')"
           },
           {
-            name: "status",
-            type: "string",
+            name: "connected",
+            type: "boolean",
             required: true,
-            description: "Novo status: 'connected', 'disconnected' ou 'waiting connection'"
+            description: "Status de conexão da sessão: true para conectado, false para desconectado"
+          },
+          {
+            name: "phone",
+            type: "string",
+            required: false,
+            description: "Número de telefone conectado ao WhatsApp (ex: '5512982402981')"
+          },
+          {
+            name: "@lid",
+            type: "string",
+            required: false,
+            description: "LID do WhatsApp associado (ex: '171296717553783@lid')"
           }
         ],
         examples: {
@@ -1077,16 +1089,20 @@ response2 = requests.get(
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_API_TOKEN" \\
   -d '{
-    "instanceId": "inst_abc123",
-    "status": "disconnected"
+    "session_id": "session_01m0e0qnqsjb4xepkmax583azc",
+    "connected": true,
+    "phone": "5512982402981",
+    "@lid": "171296717553783@lid"
   }'`,
           nodejs: `const axios = require('axios');
 
 const response = await axios.put(
   '${API_BASE_URL}/instance-status',
   {
-    instanceId: 'inst_abc123',
-    status: 'disconnected'
+    session_id: "session_01m0e0qnqsjb4xepkmax583azc",
+    connected: true,
+    phone: "5512982402981",
+    "@lid": "171296717553783@lid"
   },
   {
     headers: {
@@ -1100,8 +1116,10 @@ const response = await axios.put(
 response = requests.put(
     '${API_BASE_URL}/instance-status',
     json={
-        'instanceId': 'inst_abc123',
-        'status': 'disconnected'
+        "session_id": "session_01m0e0qnqsjb4xepkmax583azc",
+        "connected": True,
+        "phone": "5512982402981",
+        "@lid": "171296717553783@lid"
     },
     headers={
         'Content-Type': 'application/json',
@@ -1114,10 +1132,14 @@ response = requests.put(
             code: 200,
             body: {
               success: true,
-              instanceId: "inst_abc123",
-              previousStatus: "connected",
-              newStatus: "disconnected",
-              updatedAt: "2024-01-15T12:00:00Z"
+              session_id: "session_01m0e0qnqsjb4xepkmax583azc",
+              connected: true,
+              status: "connected",
+              phone: "5512982402981",
+              "@lid": "171296717553783@lid",
+              previousStatus: "disconnected",
+              newStatus: "connected",
+              updatedAt: "2026-08-24T12:00:00Z"
             }
           },
           error: {

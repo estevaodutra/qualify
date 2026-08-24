@@ -137,16 +137,33 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { instanceId, status } = body;
+    const resolvedSessionId = body.session_id || body.sessionId || body.instance_id || body.instanceId || body.id;
+    
+    let resolvedStatus: string | null = null;
+    if (body.connected !== undefined) {
+      resolvedStatus = (body.connected === true || String(body.connected).toLowerCase() === "true") ? "connected" : "disconnected";
+    } else if (body.status) {
+      const s = String(body.status).toLowerCase();
+      if (s === "working" || s === "connected" || s === "connected_to_whatsapp") {
+        resolvedStatus = "connected";
+      } else if (s === "waiting connection" || s === "waitingconnection" || s === "scan_qr_code") {
+        resolvedStatus = "waiting connection";
+      } else {
+        resolvedStatus = "disconnected";
+      }
+    }
+
+    const resolvedPhone = body.phone ? String(body.phone).replace(/\D/g, "") : null;
+    const resolvedLid = body["@lid"] || body.lid || body.from_lid || null;
 
     // Validate required parameters
-    if (!instanceId) {
+    if (!resolvedSessionId) {
       return new Response(
         JSON.stringify({
           success: false,
           error: {
             code: "MISSING_PARAMETER",
-            message: "instanceId is required"
+            message: "session_id ou instanceId é obrigatório."
           }
         }),
         {
@@ -156,13 +173,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!status) {
+    if (!resolvedStatus) {
       return new Response(
         JSON.stringify({
           success: false,
           error: {
             code: "MISSING_PARAMETER",
-            message: "status is required"
+            message: "connected (boolean) ou status (string) é obrigatório."
           }
         }),
         {
@@ -172,29 +189,19 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Validate status value
-    if (!VALID_STATUSES.includes(status)) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: {
-            code: "INVALID_STATUS",
-            message: `Status inválido. Use: ${VALID_STATUSES.map(s => `'${s}'`).join(", ")}.`
-          }
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        }
-      );
-    }
-
-    // Fetch instance from database
-    const { data: instance, error: fetchError } = await supabase
+    // Fetch instance from database (suporta session_id ou id interno UUID)
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(resolvedSessionId);
+    let query = supabase
       .from("instances")
-      .select("id, status")
-      .eq("id", instanceId)
-      .single();
+      .select("id, status, phone, name, provider, user_id, external_instance_id");
+
+    if (isUuid) {
+      query = query.or(`external_instance_id.eq.${resolvedSessionId},id.eq.${resolvedSessionId}`);
+    } else {
+      query = query.eq("external_instance_id", resolvedSessionId);
+    }
+
+    const { data: instance, error: fetchError } = await query.maybeSingle();
 
     if (fetchError || !instance) {
       return new Response(
@@ -202,7 +209,7 @@ Deno.serve(async (req) => {
           success: false,
           error: {
             code: "INSTANCE_NOT_FOUND",
-            message: "Instância não encontrada."
+            message: `Instância '${resolvedSessionId}' não encontrada.`
           }
         }),
         {
@@ -213,11 +220,17 @@ Deno.serve(async (req) => {
     }
 
     const previousStatus = instance.status;
+    const instanceId = instance.id;
     
+    const updates: Record<string, any> = { status: resolvedStatus };
+    if (resolvedPhone) {
+      updates.phone = resolvedPhone;
+    }
+
     // Update status in database
     const { error: updateError } = await supabase
       .from("instances")
-      .update({ status })
+      .update(updates)
       .eq("id", instanceId);
 
     if (updateError) {
@@ -237,25 +250,19 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`Instance ${instanceId} status updated: ${previousStatus} -> ${status}`);
+    console.log(`Instance ${instanceId} (${instance.name}) status updated: ${previousStatus} -> ${resolvedStatus}`);
 
     // Auto-register phone number when instance becomes connected
-    if (status === "connected" && previousStatus !== "connected") {
+    if (resolvedStatus === "connected") {
       try {
-        // Fetch full instance data including phone and user_id
-        const { data: fullInstance, error: fetchFullError } = await supabase
-          .from("instances")
-          .select("phone, provider, user_id")
-          .eq("id", instanceId)
-          .single();
-
-        if (!fetchFullError && fullInstance?.phone && fullInstance?.user_id) {
+        const phoneToRegister = resolvedPhone || instance.phone;
+        if (phoneToRegister && instance.user_id) {
           // Check if phone number already exists for this user
           const { data: existingNumber } = await supabase
             .from("phone_numbers")
             .select("id")
-            .eq("number", fullInstance.phone)
-            .eq("user_id", fullInstance.user_id)
+            .eq("number", phoneToRegister)
+            .eq("user_id", instance.user_id)
             .maybeSingle();
 
           if (existingNumber) {
@@ -269,17 +276,17 @@ Deno.serve(async (req) => {
                 health: 100,
               })
               .eq("id", existingNumber.id);
-            console.log(`Phone number ${fullInstance.phone} updated to connected`);
+            console.log(`Phone number ${phoneToRegister} updated to connected`);
           } else {
             // Create new phone number record
             const { error: insertError } = await supabase
               .from("phone_numbers")
               .insert({
-                user_id: fullInstance.user_id,
+                user_id: instance.user_id,
                 instance_id: instanceId,
-                number: fullInstance.phone,
+                number: phoneToRegister,
                 type: "whatsapp_normal",
-                provider: fullInstance.provider,
+                provider: instance.provider || "waha",
                 status: "active",
                 connected: true,
                 health: 100,
@@ -288,7 +295,7 @@ Deno.serve(async (req) => {
             if (insertError) {
               console.error("Error auto-registering phone number:", insertError);
             } else {
-              console.log(`Phone number ${fullInstance.phone} auto-registered`);
+              console.log(`Phone number ${phoneToRegister} auto-registered`);
             }
           }
         }
@@ -299,7 +306,7 @@ Deno.serve(async (req) => {
     }
 
     // Update phone number to disconnected when instance disconnects
-    if (status === "disconnected" && previousStatus === "connected") {
+    if (resolvedStatus === "disconnected" && previousStatus === "connected") {
       try {
         await supabase
           .from("phone_numbers")
@@ -314,9 +321,14 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        instanceId,
+        session_id: instance.external_instance_id || resolvedSessionId,
+        instanceId: instance.id,
+        connected: resolvedStatus === "connected",
+        status: resolvedStatus,
+        phone: resolvedPhone || instance.phone || null,
+        "@lid": resolvedLid,
         previousStatus,
-        newStatus: status,
+        newStatus: resolvedStatus,
         updatedAt: new Date().toISOString()
       }),
       {
