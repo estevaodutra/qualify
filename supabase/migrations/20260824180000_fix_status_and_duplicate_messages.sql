@@ -112,9 +112,8 @@ BEGIN
   WHERE company_id = v_company_id
     AND (
       phone = v_phone 
-      OR whatsapp = v_phone
       OR phone LIKE '%' || RIGHT(v_phone, 8)
-      OR whatsapp LIKE '%' || RIGHT(v_phone, 8)
+      OR (NEW.sender_lid IS NOT NULL AND lid = NEW.sender_lid)
     )
   ORDER BY created_at DESC
   LIMIT 1;
@@ -176,11 +175,12 @@ BEGIN
   v_msg_type := SPLIT_PART(NEW.event_type, '_', 1);
   
   v_body := COALESCE(
+    NEW.raw_event->>'caption',
+    NEW.raw_event->'body'->>'caption',
     NEW.raw_event->'body'->'payload'->>'body',
     NEW.raw_event->'payload'->>'body',
     NEW.raw_event->'body'->'text'->>'message',
     NEW.raw_event->'body'->>'message',
-    NEW.raw_event->'body'->>'caption',
     NEW.raw_event->'body'->>'text',
     NEW.raw_event->>'text',
     NEW.raw_event->>'body'

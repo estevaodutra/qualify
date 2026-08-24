@@ -314,7 +314,7 @@ export default function MessageThread({
                           <img src={msg.media_url || ""} alt="Anexo Ampliado" className="max-w-full max-h-[85vh] object-contain rounded-md" />
                         </DialogContent>
                       </Dialog>
-                      {msg.body && <p className="mt-1.5 whitespace-pre-wrap break-words leading-relaxed">{msg.body}</p>}
+                      {msg.body && !msg.body.startsWith("[") && <p className="mt-1.5 whitespace-pre-wrap break-words leading-relaxed">{msg.body}</p>}
                     </div>
                   )}
 
@@ -345,7 +345,7 @@ export default function MessageThread({
                           <span className="text-[10px] mt-1 opacity-60">URL não encontrada no payload</span>
                         </div>
                       )}
-                      {msg.body && <p className="mt-1.5 whitespace-pre-wrap break-words leading-relaxed">{msg.body}</p>}
+                      {msg.body && !msg.body.startsWith("[") && <p className="mt-1.5 whitespace-pre-wrap break-words leading-relaxed">{msg.body}</p>}
                     </div>
                   )}
 
