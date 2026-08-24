@@ -143,9 +143,81 @@ export class MessageIngestionService {
           : new Date(rawEvent.timestamp).toISOString()
         : new Date().toISOString();
 
-      // Normaliza URLs de mídia se presentes
-      if (rawEvent.media_url && !rawEvent.mediaUrl) {
-        rawEvent.mediaUrl = rawEvent.media_url;
+      // Normaliza URLs de mídia se presentes e faz upload seguro para Supabase Storage
+      const rawMediaUrl = rawEvent.media_url || rawEvent.mediaUrl || rawEvent.url;
+      if (rawMediaUrl || rawEvent.base64 || rawEvent.media_base64) {
+        if (rawMediaUrl) {
+          rawEvent.mediaUrl = rawMediaUrl;
+          rawEvent.media_url = rawMediaUrl;
+        }
+
+        // Se a URL for remota (ex: WAHA) ou vier em base64, baixa/decodifica e salva no bucket público do Supabase
+        if ((rawMediaUrl && (rawMediaUrl.startsWith("http://") || rawMediaUrl.startsWith("https://"))) || rawEvent.base64 || rawEvent.media_base64) {
+          try {
+            const wahaApiKey = (payload as any).waha_api_key || rawEvent.waha_api_key || instance.external_instance_token || Deno.env.get("WAHA_API_KEY") || "";
+            const headers: Record<string, string> = {};
+            if (wahaApiKey) {
+              headers["X-Api-Key"] = wahaApiKey;
+              headers["Authorization"] = `Bearer ${wahaApiKey}`;
+            }
+
+            let arrayBuffer: ArrayBuffer | null = null;
+            let mime = (rawEvent.mimetype || rawEvent.mime_type as string) || "application/octet-stream";
+
+            if (rawEvent.base64 || rawEvent.media_base64) {
+              const b64Data = (rawEvent.base64 || rawEvent.media_base64).replace(/^data:.*?;base64,/, "");
+              const binaryString = atob(b64Data);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              arrayBuffer = bytes.buffer;
+            } else if (rawMediaUrl) {
+              const mediaRes = await fetch(rawMediaUrl, { headers });
+              if (mediaRes.ok) {
+                arrayBuffer = await mediaRes.arrayBuffer();
+                const fetchedMime = mediaRes.headers.get("content-type");
+                if (fetchedMime && fetchedMime !== "application/octet-stream" && fetchedMime !== "application/json") {
+                  mime = fetchedMime;
+                }
+              } else {
+                console.warn(`[MessageIngestionService] Could not fetch media from ${rawMediaUrl} (status ${mediaRes.status})`);
+              }
+            }
+
+            if (arrayBuffer && arrayBuffer.byteLength > 0) {
+              const extMatch = mime.match(/\/([^;]+)/);
+              let ext = extMatch ? extMatch[1].toLowerCase() : "bin";
+              if (ext === "ogg" || ext === "oga" || mime.includes("ogg") || mime.includes("opus")) ext = "ogg";
+              else if (ext === "mp4" || ext === "mpeg") ext = "mp4";
+              else if (ext === "jpeg" || ext === "jpg") ext = "jpg";
+              else if (ext === "png") ext = "png";
+              else if (ext === "webp") ext = "webp";
+              else if (ext === "mp3" || ext === "mpeg3") ext = "mp3";
+
+              const fileName = `chat_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+              
+              const { data: uploadData, error: uploadError } = await this.supabase.storage
+                .from("media")
+                .upload(fileName, arrayBuffer, {
+                  contentType: mime,
+                  upsert: true
+                });
+
+              if (!uploadError && uploadData) {
+                const { data: publicUrlData } = this.supabase.storage.from("media").getPublicUrl(fileName);
+                const publicUrl = publicUrlData.publicUrl.replace("http://kong:8000", "https://qualify-supabase.d2x.site");
+                rawEvent.mediaUrl = publicUrl;
+                rawEvent.media_url = publicUrl;
+                console.log(`[MessageIngestionService] Media successfully uploaded to Supabase Storage: ${publicUrl}`);
+              } else if (uploadError) {
+                console.error("[MessageIngestionService] Error uploading to media storage:", uploadError);
+              }
+            }
+          } catch (mediaErr) {
+            console.error("[MessageIngestionService] Exception downloading/uploading media:", mediaErr);
+          }
+        }
       }
 
       // 5. Inserir em webhook_events
