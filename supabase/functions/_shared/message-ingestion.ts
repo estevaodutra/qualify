@@ -259,8 +259,11 @@ export class MessageIngestionService {
 
       const eventId = insertedEvent.id;
 
-      // 6. Tratar Eventos Especiais (Reação, Edição, Revogação)
-      if (type === "reaction") {
+      // 6. Tratar Eventos Especiais (Status, Reação, Edição, Revogação)
+      const isStatusType = type === "status" || type === "delivered" || type === "read" || type === "sent" || type === "failed" || type === "ack";
+      if (isStatusType) {
+        await this.handleStatusUpdate(rawEvent, instance, eventId, type);
+      } else if (type === "reaction") {
         await this.handleReaction(rawEvent, instance, eventId);
       } else if (type === "edited") {
         await this.handleEdited(rawEvent, instance, eventId);
@@ -341,6 +344,13 @@ export class MessageIngestionService {
         return "message_edited";
       case "revoked":
         return "message_revoked";
+      case "status":
+      case "delivered":
+      case "read":
+      case "sent":
+      case "failed":
+      case "ack":
+        return "message_status";
       default:
         return `${type}_message`;
     }
@@ -437,6 +447,49 @@ export class MessageIngestionService {
         .eq("id", eventId);
     } catch (err) {
       console.error("[MessageIngestionService] Error handling revoked message:", err);
+    }
+  }
+
+  private async handleStatusUpdate(rawEvent: any, instance: any, eventId: string, type: string) {
+    const targetMessageId = rawEvent.id || rawEvent.message_id || rawEvent.target_message_id;
+    if (!targetMessageId) return;
+
+    let statusVal = "delivered";
+    const rawStatus = String(rawEvent.status || rawEvent.ack || type || "").toLowerCase();
+    
+    if (rawStatus === "read" || rawStatus === "message.read" || rawStatus === "played" || rawStatus === "3") {
+      statusVal = "read";
+    } else if (rawStatus === "delivered" || rawStatus === "message.delivered" || rawStatus === "2") {
+      statusVal = "delivered";
+    } else if (rawStatus === "sent" || rawStatus === "message.sent" || rawStatus === "1") {
+      statusVal = "sent";
+    } else if (rawStatus === "failed" || rawStatus === "error" || rawStatus === "0") {
+      statusVal = "failed";
+    }
+
+    try {
+      console.log(`[MessageIngestionService] Updating message status for '${targetMessageId}' to '${statusVal}'`);
+      const shortId = targetMessageId.split("_").pop() || targetMessageId;
+      
+      const { error: updateError } = await this.supabase
+        .from("chat_messages")
+        .update({ status: statusVal })
+        .or(`message_id.eq.${targetMessageId},zaap_id.eq.${targetMessageId},message_id.ilike.%${shortId}%,zaap_id.ilike.%${shortId}%`);
+
+      if (updateError) {
+        console.error(`[MessageIngestionService] Error updating chat_messages status:`, updateError);
+      }
+
+      await this.supabase
+        .from("webhook_events")
+        .update({
+          processing_status: "processed",
+          processed_at: new Date().toISOString(),
+          processing_result: { message_status_updated: true, target_message_id: targetMessageId, status: statusVal }
+        })
+        .eq("id", eventId);
+    } catch (err) {
+      console.error("[MessageIngestionService] Exception updating message status:", err);
     }
   }
 

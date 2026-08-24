@@ -131,6 +131,18 @@ export interface RevokedRawEvent {
   group_name?: string;
 }
 
+export interface StatusRawEvent {
+  id?: string;
+  message_id?: string;
+  target_message_id?: string;
+  status: "sent" | "delivered" | "read" | "failed" | "error" | "pending" | string;
+  timestamp?: number | string;
+  from_phone?: string;
+  from_lid?: string;
+  phone?: string;
+  error_message?: string;
+}
+
 export type SupportedMessageType =
   | "text"
   | "image"
@@ -146,7 +158,13 @@ export type SupportedMessageType =
   | "poll"
   | "reaction"
   | "edited"
-  | "revoked";
+  | "revoked"
+  | "status"
+  | "delivered"
+  | "read"
+  | "sent"
+  | "failed"
+  | "ack";
 
 export interface ValidationResult {
   valid: boolean;
@@ -173,6 +191,18 @@ export function validateMessagePayload(type: SupportedMessageType, body: any): V
   const raw = body.raw_event;
 
   switch (type) {
+    case "status":
+    case "delivered":
+    case "read":
+    case "sent":
+    case "failed":
+    case "ack":
+      const statusTargetId = raw.id || raw.message_id || raw.target_message_id;
+      if (!statusTargetId) {
+        return { valid: false, error: "invalid_payload", message: "'raw_event.id' or 'raw_event.message_id' is required" };
+      }
+      break;
+
     case "text":
       if (!raw.id) return { valid: false, error: "invalid_payload", message: "'raw_event.id' is required" };
       if (raw.body === undefined || raw.body === null) return { valid: false, error: "invalid_payload", message: "'raw_event.body' is required" };

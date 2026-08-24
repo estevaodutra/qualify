@@ -585,6 +585,41 @@ const WebhookDocs = () => {
 }`}
             />
           </div>
+
+          {/* 4. Status de Mensagem (Entregue, Lida, Enviada, Falha) */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-emerald-100 text-emerald-600">
+                  <Check className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Status de Entrega e Leitura (ACK)</h3>
+                  <p className="text-xs text-slate-500">Atualiza se a mensagem foi enviada, entregue, lida ou falhou</p>
+                </div>
+              </div>
+              <Badge variant="outline" className="font-mono text-xs bg-emerald-50 text-emerald-700 border-emerald-200 px-3 py-1 font-semibold">
+                POST /webhooks/messages/status
+              </Badge>
+            </div>
+
+            <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100">
+              <strong>Comportamento:</strong> Atualiza o status da mensagem original no chat (ex: 1 check para <em>sent</em>, 2 checks cinzas para <em>delivered</em>, 2 checks azuis para <em>read</em>) <strong>sem duplicar mensagens</strong> na conversa.
+            </p>
+
+            <CodeBlock
+              id="event-status"
+              code={`{
+  "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
+  "raw_event": {
+    "id": "3EB0C0D5C4CC000102A087",
+    "status": "read",
+    "timestamp": 1787604503,
+    "from_phone": "5512982402981"
+  }
+}`}
+            />
+          </div>
         </div>
 
       </div>

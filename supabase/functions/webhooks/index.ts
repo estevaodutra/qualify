@@ -26,6 +26,12 @@ const SUPPORTED_MESSAGE_TYPES: SupportedMessageType[] = [
   "reaction",
   "edited",
   "revoked",
+  "status",
+  "delivered",
+  "read",
+  "sent",
+  "failed",
+  "ack",
 ];
 
 const ingestionService = new MessageIngestionService();

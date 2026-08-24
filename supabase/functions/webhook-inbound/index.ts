@@ -35,7 +35,7 @@ const ingestionService = new MessageIngestionService();
 const SUPPORTED_MESSAGE_TYPES: SupportedMessageType[] = [
   "text", "image", "audio", "voice", "video", "video-note",
   "document", "sticker", "location", "contact", "contacts",
-  "poll", "reaction", "edited", "revoked"
+  "poll", "reaction", "edited", "revoked", "status", "delivered", "read", "sent", "failed", "ack"
 ];
 
 Deno.serve(async (req) => {
@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Se for rota semântica (ex: /messages/text ou /webhooks/messages/image)
+    // Se for rota semântica (ex: /messages/text ou /webhooks/messages/image ou /messages/status)
     if (semanticType) {
       const meta = { endpoint: url.pathname, method: req.method, ipAddress, startTime };
       const result = await ingestionService.ingest(semanticType, payload as any, meta);
@@ -89,23 +89,40 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Se não for rota semântica, mas for o novo contrato sem action
-    if (!payload.action) {
-      const rawEvent = payload.raw_event;
-      let detectedType: SupportedMessageType = "text";
-      if (rawEvent.reaction || rawEvent.target_message_id) detectedType = "reaction";
-      else if (rawEvent.original_message_id) detectedType = "edited";
-      else if (rawEvent.revoked_message_id) detectedType = "revoked";
-      else if (rawEvent.media_url || rawEvent.mediaUrl) detectedType = "image";
-      else if (rawEvent.latitude !== undefined) detectedType = "location";
-      else if (rawEvent.contact_name || rawEvent.contacts) detectedType = "contact";
-
+    // Se vier uma ação explícita de status (ex: message.delivered, message.read, message.status)
+    const actionStr = String(payload.action || "").toLowerCase();
+    if (
+      actionStr === "message.status" ||
+      actionStr === "message.delivered" ||
+      actionStr === "message.read" ||
+      actionStr === "message.sent" ||
+      actionStr === "message.ack" ||
+      actionStr === "message_status" ||
+      actionStr === "message_delivered" ||
+      actionStr === "message_read"
+    ) {
       const meta = { endpoint: url.pathname, method: req.method, ipAddress, startTime };
-      const result = await ingestionService.ingest(detectedType, payload as any, meta);
+      const result = await ingestionService.ingest("status", payload as any, meta);
       return new Response(JSON.stringify(result.body), {
         status: result.statusCode,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Se for requisição para a raiz /webhook-inbound sem sub-rota semântica de mensagem:
+    // Bloqueia para evitar inferências ambíguas e duplicação de mensagens no chat.
+    if (!payload.action || payload.action.startsWith("message")) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "endpoint_deprecated",
+          message: "O endpoint raiz /webhook-inbound foi descontinuado para mensagens. Utilize as rotas semânticas dedicadas: /webhooks/messages/text, /webhooks/messages/audio, /webhooks/messages/status, etc."
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        }
+      );
     }
 
     const rawEvent = payload.raw_event;
