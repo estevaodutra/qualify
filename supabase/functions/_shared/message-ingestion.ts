@@ -144,15 +144,49 @@ export class MessageIngestionService {
         : new Date().toISOString();
 
       // Normaliza URLs de mídia se presentes e faz upload seguro para Supabase Storage
-      const rawMediaUrl = rawEvent.media_url || rawEvent.mediaUrl || rawEvent.url;
-      if (rawMediaUrl || rawEvent.base64 || rawEvent.media_base64) {
+      const rawMediaUrl =
+        rawEvent.media_url ||
+        rawEvent.mediaUrl ||
+        rawEvent.url ||
+        rawEvent.imageUrl ||
+        rawEvent.image_url ||
+        rawEvent.audioUrl ||
+        rawEvent.audio_url ||
+        rawEvent.videoUrl ||
+        rawEvent.video_url ||
+        rawEvent.documentUrl ||
+        rawEvent.document_url ||
+        rawEvent.file_url ||
+        rawEvent.fileUrl ||
+        rawEvent.stickerUrl ||
+        rawEvent.sticker_url ||
+        rawEvent.link ||
+        rawEvent.body?.mediaUrl ||
+        rawEvent.body?.media_url ||
+        rawEvent.body?.url ||
+        rawEvent.body?.imageUrl ||
+        rawEvent.body?.audioUrl ||
+        rawEvent.body?.videoUrl ||
+        rawEvent.body?.documentUrl ||
+        rawEvent.media?.url ||
+        rawEvent.file?.url;
+
+      const rawBase64 =
+        rawEvent.base64 ||
+        rawEvent.media_base64 ||
+        rawEvent.file_base64 ||
+        rawEvent.body?.base64 ||
+        rawEvent.media?.base64 ||
+        rawEvent.file?.base64;
+
+      if (rawMediaUrl || rawBase64) {
         if (rawMediaUrl) {
           rawEvent.mediaUrl = rawMediaUrl;
           rawEvent.media_url = rawMediaUrl;
         }
 
-        // Se a URL for remota (ex: WAHA) ou vier em base64, baixa/decodifica e salva no bucket público do Supabase
-        if ((rawMediaUrl && (rawMediaUrl.startsWith("http://") || rawMediaUrl.startsWith("https://"))) || rawEvent.base64 || rawEvent.media_base64) {
+        // Se a URL for remota (ex: WAHA, Z-API, Evolution, CDN) ou vier em base64, baixa/decodifica e salva no bucket público do Supabase
+        if ((rawMediaUrl && (rawMediaUrl.startsWith("http://") || rawMediaUrl.startsWith("https://"))) || rawBase64) {
           try {
             const wahaApiKey = (payload as any).waha_api_key || rawEvent.waha_api_key || instance.external_instance_token || Deno.env.get("WAHA_API_KEY") || "";
             const headers: Record<string, string> = {};
@@ -162,10 +196,10 @@ export class MessageIngestionService {
             }
 
             let arrayBuffer: ArrayBuffer | null = null;
-            let mime = (rawEvent.mimetype || rawEvent.mime_type as string) || "application/octet-stream";
+            let mime = (rawEvent.mimetype || rawEvent.mime_type || rawEvent.contentType as string) || "";
 
-            if (rawEvent.base64 || rawEvent.media_base64) {
-              const b64Data = (rawEvent.base64 || rawEvent.media_base64).replace(/^data:.*?;base64,/, "");
+            if (rawBase64) {
+              const b64Data = String(rawBase64).replace(/^data:.*?;base64,/, "");
               const binaryString = atob(b64Data);
               const bytes = new Uint8Array(binaryString.length);
               for (let i = 0; i < binaryString.length; i++) {
@@ -178,7 +212,7 @@ export class MessageIngestionService {
                 arrayBuffer = await mediaRes.arrayBuffer();
                 const fetchedMime = mediaRes.headers.get("content-type");
                 if (fetchedMime && fetchedMime !== "application/octet-stream" && fetchedMime !== "application/json") {
-                  mime = fetchedMime;
+                  if (!mime) mime = fetchedMime;
                 }
               } else {
                 console.warn(`[MessageIngestionService] Could not fetch media from ${rawMediaUrl} (status ${mediaRes.status})`);
@@ -186,14 +220,74 @@ export class MessageIngestionService {
             }
 
             if (arrayBuffer && arrayBuffer.byteLength > 0) {
-              const extMatch = mime.match(/\/([^;]+)/);
-              let ext = extMatch ? extMatch[1].toLowerCase() : "bin";
-              if (ext === "ogg" || ext === "oga" || mime.includes("ogg") || mime.includes("opus")) ext = "ogg";
-              else if (ext === "mp4" || ext === "mpeg") ext = "mp4";
-              else if (ext === "jpeg" || ext === "jpg") ext = "jpg";
-              else if (ext === "png") ext = "png";
-              else if (ext === "webp") ext = "webp";
-              else if (ext === "mp3" || ext === "mpeg3") ext = "mp3";
+              // 1. Tentar extrair extensão do nome do arquivo fornecido
+              const originalFileName = rawEvent.filename || rawEvent.fileName || rawEvent.name || "";
+              let ext = "";
+              if (originalFileName && originalFileName.includes(".")) {
+                const parts = originalFileName.split(".");
+                const candidateExt = parts[parts.length - 1].toLowerCase().replace(/[^a-z0-9]/g, "");
+                if (candidateExt.length >= 2 && candidateExt.length <= 5) {
+                  ext = candidateExt;
+                }
+              }
+
+              // 2. Mapeamento por MIME Type se não encontrou no nome
+              if (!ext && mime) {
+                const lowerMime = mime.toLowerCase();
+                if (lowerMime.includes("ogg") || lowerMime.includes("opus") || lowerMime.includes("oga")) ext = "ogg";
+                else if (lowerMime.includes("mp4") || lowerMime.includes("m4v")) ext = "mp4";
+                else if (lowerMime.includes("mpeg") || lowerMime.includes("mp3")) ext = "mp3";
+                else if (lowerMime.includes("wav") || lowerMime.includes("wave")) ext = "wav";
+                else if (lowerMime.includes("m4a") || lowerMime.includes("aac")) ext = "m4a";
+                else if (lowerMime.includes("webm")) ext = type.includes("video") ? "webm" : "webm";
+                else if (lowerMime.includes("jpeg") || lowerMime.includes("jpg")) ext = "jpg";
+                else if (lowerMime.includes("png")) ext = "png";
+                else if (lowerMime.includes("webp")) ext = "webp";
+                else if (lowerMime.includes("gif")) ext = "gif";
+                else if (lowerMime.includes("pdf")) ext = "pdf";
+                else if (lowerMime.includes("sheet") || lowerMime.includes("excel") || lowerMime.includes("xls")) ext = "xlsx";
+                else if (lowerMime.includes("word") || lowerMime.includes("document") || lowerMime.includes("doc")) ext = "docx";
+                else if (lowerMime.includes("zip")) ext = "zip";
+                else if (lowerMime.includes("rar")) ext = "rar";
+                else if (lowerMime.includes("csv")) ext = "csv";
+                else if (lowerMime.includes("text/plain")) ext = "txt";
+              }
+
+              // 3. Fallback pela tipagem semântica da rota
+              if (!ext) {
+                switch (type) {
+                  case "image": ext = "jpg"; break;
+                  case "audio":
+                  case "voice": ext = "ogg"; break;
+                  case "video":
+                  case "video-note": ext = "mp4"; break;
+                  case "document": ext = "pdf"; break;
+                  case "sticker": ext = "webp"; break;
+                  default: ext = "bin";
+                }
+              }
+
+              if (!mime) {
+                switch (ext) {
+                  case "jpg":
+                  case "jpeg": mime = "image/jpeg"; break;
+                  case "png": mime = "image/png"; break;
+                  case "webp": mime = "image/webp"; break;
+                  case "gif": mime = "image/gif"; break;
+                  case "ogg":
+                  case "oga": mime = "audio/ogg; codecs=opus"; break;
+                  case "mp3": mime = "audio/mpeg"; break;
+                  case "wav": mime = "audio/wav"; break;
+                  case "m4a": mime = "audio/mp4"; break;
+                  case "mp4": mime = "video/mp4"; break;
+                  case "webm": mime = type.includes("video") ? "video/webm" : "audio/webm"; break;
+                  case "pdf": mime = "application/pdf"; break;
+                  case "xlsx": mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"; break;
+                  case "docx": mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"; break;
+                  case "zip": mime = "application/zip"; break;
+                  default: mime = "application/octet-stream";
+                }
+              }
 
               const fileName = `chat_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
               
@@ -207,9 +301,17 @@ export class MessageIngestionService {
               if (!uploadError && uploadData) {
                 const { data: publicUrlData } = this.supabase.storage.from("media").getPublicUrl(fileName);
                 const publicUrl = publicUrlData.publicUrl.replace("http://kong:8000", "https://qualify-supabase.d2x.site");
+                
                 rawEvent.mediaUrl = publicUrl;
                 rawEvent.media_url = publicUrl;
-                console.log(`[MessageIngestionService] Media successfully uploaded to Supabase Storage: ${publicUrl}`);
+                rawEvent.url = publicUrl;
+                if (type === "image") { rawEvent.imageUrl = publicUrl; rawEvent.image_url = publicUrl; }
+                else if (type === "audio" || type === "voice") { rawEvent.audioUrl = publicUrl; rawEvent.audio_url = publicUrl; }
+                else if (type === "video" || type === "video-note") { rawEvent.videoUrl = publicUrl; rawEvent.video_url = publicUrl; }
+                else if (type === "document") { rawEvent.documentUrl = publicUrl; rawEvent.document_url = publicUrl; rawEvent.file_url = publicUrl; }
+                else if (type === "sticker") { rawEvent.stickerUrl = publicUrl; rawEvent.sticker_url = publicUrl; }
+
+                console.log(`[MessageIngestionService] Media (${type} / .${ext}) successfully uploaded to Supabase Storage: ${publicUrl}`);
               } else if (uploadError) {
                 console.error("[MessageIngestionService] Error uploading to media storage:", uploadError);
               }

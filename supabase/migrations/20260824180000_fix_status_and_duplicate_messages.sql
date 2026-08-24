@@ -186,17 +186,36 @@ BEGIN
     NEW.raw_event->>'body'
   );
 
-  IF v_msg_type IN ('image', 'video', 'audio', 'document', 'sticker') THEN
+  IF v_msg_type IN ('image', 'video', 'audio', 'document', 'sticker', 'voice', 'video-note', 'video_note', 'ptv') THEN
     v_media_url := COALESCE(
+      NEW.raw_event->>'media_url',
+      NEW.raw_event->>'mediaUrl',
+      NEW.raw_event->>'url',
+      NEW.raw_event->>'imageUrl',
+      NEW.raw_event->>'image_url',
+      NEW.raw_event->>'audioUrl',
+      NEW.raw_event->>'audio_url',
+      NEW.raw_event->>'videoUrl',
+      NEW.raw_event->>'video_url',
+      NEW.raw_event->>'documentUrl',
+      NEW.raw_event->>'document_url',
+      NEW.raw_event->>'file_url',
+      NEW.raw_event->>'fileUrl',
+      NEW.raw_event->>'stickerUrl',
+      NEW.raw_event->>'sticker_url',
+      NEW.raw_event->'body'->>'mediaUrl',
+      NEW.raw_event->'body'->>'media_url',
+      NEW.raw_event->'body'->>'url',
       NEW.raw_event->'body'->>'imageUrl',
       NEW.raw_event->'body'->>'videoUrl',
       NEW.raw_event->'body'->>'audioUrl',
-      NEW.raw_event->'body'->>'documentUrl',
-      NEW.raw_event->'body'->>'mediaUrl',
-      NEW.raw_event->>'mediaUrl',
-      NEW.raw_event->>'media_url'
+      NEW.raw_event->'body'->>'documentUrl'
     );
-    v_media_type := v_msg_type;
+    v_media_type := CASE 
+      WHEN v_msg_type IN ('audio', 'voice') THEN 'audio'
+      WHEN v_msg_type IN ('video', 'video-note', 'video_note', 'ptv') THEN 'video'
+      ELSE v_msg_type 
+    END;
   END IF;
 
   IF v_body IS NULL AND v_media_type IS NOT NULL THEN

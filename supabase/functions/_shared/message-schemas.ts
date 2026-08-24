@@ -210,38 +210,38 @@ export function validateMessagePayload(type: SupportedMessageType, body: any): V
 
     case "image":
       if (!raw.id) return { valid: false, error: "invalid_payload", message: "'raw_event.id' is required" };
-      if (!raw.media_url && !raw.mediaUrl && !raw.imageUrl) {
-        return { valid: false, error: "invalid_payload", message: "'raw_event.media_url' is required" };
+      if (!raw.media_url && !raw.mediaUrl && !raw.imageUrl && !raw.image_url && !raw.url && !raw.base64 && !raw.media_base64 && !raw.body?.mediaUrl && !raw.media?.url) {
+        return { valid: false, error: "invalid_payload", message: "'raw_event.media_url' or 'raw_event.base64' is required" };
       }
       break;
 
     case "audio":
     case "voice":
       if (!raw.id) return { valid: false, error: "invalid_payload", message: "'raw_event.id' is required" };
-      if (!raw.media_url && !raw.mediaUrl && !raw.audioUrl) {
-        return { valid: false, error: "invalid_payload", message: "'raw_event.media_url' is required" };
+      if (!raw.media_url && !raw.mediaUrl && !raw.audioUrl && !raw.audio_url && !raw.url && !raw.base64 && !raw.media_base64 && !raw.body?.mediaUrl && !raw.media?.url) {
+        return { valid: false, error: "invalid_payload", message: "'raw_event.media_url' or 'raw_event.base64' is required" };
       }
       break;
 
     case "video":
     case "video-note":
       if (!raw.id) return { valid: false, error: "invalid_payload", message: "'raw_event.id' is required" };
-      if (!raw.media_url && !raw.mediaUrl && !raw.videoUrl) {
-        return { valid: false, error: "invalid_payload", message: "'raw_event.media_url' is required" };
+      if (!raw.media_url && !raw.mediaUrl && !raw.videoUrl && !raw.video_url && !raw.url && !raw.base64 && !raw.media_base64 && !raw.body?.mediaUrl && !raw.media?.url) {
+        return { valid: false, error: "invalid_payload", message: "'raw_event.media_url' or 'raw_event.base64' is required" };
       }
       break;
 
     case "document":
       if (!raw.id) return { valid: false, error: "invalid_payload", message: "'raw_event.id' is required" };
-      if (!raw.media_url && !raw.mediaUrl && !raw.documentUrl) {
-        return { valid: false, error: "invalid_payload", message: "'raw_event.media_url' is required" };
+      if (!raw.media_url && !raw.mediaUrl && !raw.documentUrl && !raw.document_url && !raw.file_url && !raw.fileUrl && !raw.url && !raw.base64 && !raw.media_base64 && !raw.body?.mediaUrl && !raw.media?.url) {
+        return { valid: false, error: "invalid_payload", message: "'raw_event.media_url' or 'raw_event.base64' is required" };
       }
       break;
 
     case "sticker":
       if (!raw.id) return { valid: false, error: "invalid_payload", message: "'raw_event.id' is required" };
-      if (!raw.media_url && !raw.mediaUrl && !raw.stickerUrl) {
-        return { valid: false, error: "invalid_payload", message: "'raw_event.media_url' is required" };
+      if (!raw.media_url && !raw.mediaUrl && !raw.stickerUrl && !raw.sticker_url && !raw.url && !raw.base64 && !raw.media_base64 && !raw.body?.mediaUrl && !raw.media?.url) {
+        return { valid: false, error: "invalid_payload", message: "'raw_event.media_url' or 'raw_event.base64' is required" };
       }
       break;
 

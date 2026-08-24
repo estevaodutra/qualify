@@ -269,7 +269,7 @@ export default function MessageThread({
                   isOperator ? "ml-auto items-end" : "mr-auto items-start"
                 )}
               >
-                {msg.message_type === "audio" ? (
+                  {(msg.message_type === "audio" || msg.message_type === "voice") ? (
                   <CustomAudioPlayer 
                     src={msg.media_url || ""} 
                     isOperator={isOperator} 
@@ -318,15 +318,31 @@ export default function MessageThread({
                     </div>
                   )}
 
-                  {(msg.message_type === "video" || msg.message_type === "ptv") && (
+                  {msg.message_type === "sticker" && (
+                    <div className="space-y-1">
+                      <div className="block overflow-hidden rounded-lg max-w-[160px]">
+                        <img src={msg.media_url || ""} alt="Figurinha" className="w-full h-auto object-contain max-h-40" />
+                      </div>
+                    </div>
+                  )}
+
+                  {(msg.message_type === "video" || msg.message_type === "ptv" || msg.message_type === "video-note" || msg.message_type === "video_note") && (
                     <div className="space-y-1">
                       {msg.media_url ? (
-                        <video src={msg.media_url} controls preload="metadata" className="max-w-[240px] rounded-lg border border-border/20 max-h-60 bg-black/5" />
+                        <video 
+                          src={msg.media_url} 
+                          controls 
+                          preload="metadata" 
+                          className={cn(
+                            "max-w-[240px] rounded-lg border border-border/20 max-h-60 bg-black/5",
+                            (msg.message_type === "video-note" || msg.message_type === "video_note" || msg.message_type === "ptv") && "rounded-full w-44 h-44 object-cover border-2 border-primary/30"
+                          )} 
+                        />
                       ) : (
                         <div className="max-w-[240px] h-32 bg-muted/50 rounded-lg border border-border/20 flex flex-col items-center justify-center text-muted-foreground p-4 text-center">
                           <AlertCircle className="h-6 w-6 mb-2 opacity-50" />
                           <span className="text-xs font-semibold">Mídia não carregada</span>
-                          <span className="text-[10px] mt-1 opacity-60">URL não encontrada no payload (Verifique o n8n)</span>
+                          <span className="text-[10px] mt-1 opacity-60">URL não encontrada no payload</span>
                         </div>
                       )}
                       {msg.body && <p className="mt-1.5 whitespace-pre-wrap break-words leading-relaxed">{msg.body}</p>}
