@@ -55,11 +55,19 @@ export class MessageIngestionService {
 
     try {
       // 1. Identificar Instância / Tenant
-      const { data: instance, error: instanceError } = await this.supabase
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(externalInstanceId);
+      
+      let query = this.supabase
         .from("instances")
-        .select("id, user_id, company_id, name, phone, provider, status, external_instance_token")
-        .or(`external_instance_id.eq.${externalInstanceId},id.eq.${externalInstanceId}`)
-        .maybeSingle();
+        .select("id, user_id, company_id, name, phone, provider, status, external_instance_token");
+        
+      if (isUuid) {
+        query = query.or(`external_instance_id.eq.${externalInstanceId},id.eq.${externalInstanceId}`);
+      } else {
+        query = query.eq("external_instance_id", externalInstanceId);
+      }
+
+      const { data: instance, error: instanceError } = await query.maybeSingle();
 
       if (instanceError) {
         console.error("[MessageIngestionService] Database error checking instance:", instanceError);
