@@ -78,13 +78,14 @@ Deno.serve(async (req) => {
           phone: zapiStatus.phone || null,
         });
       } catch (err: any) {
-        console.error(`[status-refresh] Failed for ${inst.name}:`, err.message);
-        // Retain status as disconnected if API call fails
+        console.warn(`[status-refresh] Network/timeout check for ${inst.name}:`, err.message);
+        // Do NOT disconnect instance on temporary network or timeout errors
         results.push({
           id: inst.external_instance_id,
-          connected: false,
-          paymentStatus: "ERROR",
-          due: null,
+          connected: inst.status === "connected",
+          paymentStatus: inst.payment_status || "ACTIVE",
+          due: inst.expiration_date || null,
+          phone: inst.phone || null
         });
       }
     }
