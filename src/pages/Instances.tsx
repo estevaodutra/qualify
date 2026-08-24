@@ -194,6 +194,7 @@ export default function Instances() {
   const [instanceToDelete, setInstanceToDelete] = useState<Instance | null>(null);
   const [instanceToDisconnect, setInstanceToDisconnect] = useState<Instance | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshingInstanceId, setRefreshingInstanceId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [showDisconnectedAlert, setShowDisconnectedAlert] = useState(true);
   const [profileConfig, setProfileConfig] = useState<ProfileConfigData>(defaultProfileConfig);
@@ -585,6 +586,51 @@ export default function Instances() {
       setIsRefreshing(false);
     }
   };
+
+  const handleSingleInstanceStatus = async (instance: Instance) => {
+    if (!instance.idInstance) {
+      toast({
+        title: "Instância sem ID",
+        description: "Esta instância não possui ID de sessão configurado.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setRefreshingInstanceId(instance.id);
+    try {
+      const { error: refreshError } = await supabase.functions.invoke("refresh-instance-status", {
+        body: {
+          instances: [
+            {
+              id: instance.id,
+              name: instance.name,
+              external_instance_id: instance.idInstance,
+              external_instance_token: instance.tokenInstance,
+              current_status: mapFrontendStatusToDb(instance.status),
+            },
+          ],
+        },
+      });
+
+      if (refreshError) throw refreshError;
+
+      await refetch();
+      toast({
+        title: "Status verificado",
+        description: `Status da instância "${instance.name}" verificado com sucesso.`,
+      });
+    } catch (err: any) {
+      console.error("Failed to check instance status:", err);
+      toast({
+        title: "Erro ao verificar status",
+        description: err.message || "Falha ao verificar status da instância.",
+        variant: "destructive",
+      });
+    } finally {
+      setRefreshingInstanceId(null);
+    }
+  };
   const handleConfigure = (instance: Instance) => {
     setSelectedInstance(instance);
     setConfigForm({
@@ -918,6 +964,20 @@ export default function Instances() {
                     )}
                     
                     <div className="flex items-center gap-1.5">
+                      <Button 
+                        variant="outline" 
+                        size="icon" 
+                        className="h-11 w-11 rounded-xl border-border/40 bg-background/40 hover:bg-background/80 hover:border-primary/40 hover:text-primary transition-all active:scale-95" 
+                        onClick={() => handleSingleInstanceStatus(instance)} 
+                        disabled={refreshingInstanceId === instance.id}
+                        title="Verificar status da conexão (instance.status)"
+                      >
+                        {refreshingInstanceId === instance.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                        ) : (
+                          <RefreshCw className="h-4 w-4 text-muted-foreground transition-colors hover:text-primary" />
+                        )}
+                      </Button>
                       <Button variant="outline" size="icon" className="h-11 w-11 rounded-xl border-border/40 bg-background/40 hover:bg-background/80" onClick={() => handleEditClick(instance)} title={t("instances.edit")}>
                         <Pencil className="h-4 w-4 text-muted-foreground" />
                       </Button>
