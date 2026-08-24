@@ -188,7 +188,7 @@ export class MessageIngestionService {
         // Se a URL for remota (ex: WAHA, Z-API, Evolution, CDN) ou vier em base64, baixa/decodifica e salva no bucket público do Supabase
         if ((rawMediaUrl && (rawMediaUrl.startsWith("http://") || rawMediaUrl.startsWith("https://"))) || rawBase64) {
           try {
-            const wahaApiKey = (payload as any).waha_api_key || rawEvent.waha_api_key || instance.external_instance_token || Deno.env.get("WAHA_API_KEY") || "";
+            const wahaApiKey = (payload as any).waha_api_key || rawEvent.waha_api_key || instance.external_instance_token || Deno.env.get("WAHA_API_KEY") || "21e886a6f345262e85572ac594b82b36064bcc2f4b28ad76";
             const headers: Record<string, string> = {};
             if (wahaApiKey) {
               headers["X-Api-Key"] = wahaApiKey;
