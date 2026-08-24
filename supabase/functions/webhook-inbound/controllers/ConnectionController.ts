@@ -45,10 +45,8 @@ export async function processConnectionEvent(
       console.log(`[ConnectionController] Updating instance ${instance.id} status to ${newStatus} (changed: ${statusChanged})`);
       
       const updates: Record<string, any> = { status: newStatus };
-      if (newStatus === "disconnected") {
-        updates.external_instance_id = null;
-        updates.external_instance_token = null;
-        updates.phone = "";
+      if (newStatus === "connected" && (eventBody?.phone || rawEvent.phone)) {
+        updates.phone = eventBody?.phone || rawEvent.phone;
       }
 
       const { error: updateError } = await supabase

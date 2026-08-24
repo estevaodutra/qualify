@@ -202,8 +202,24 @@ function getCategoryKeyForEndpoint(endpoint: string): string {
   ) {
     return "groups";
   }
-  if (cleanEndpoint.includes("-status") || cleanEndpoint.includes("/status")) {
+  // WhatsApp Stories / Status endpoints (e.g. /send-text-status, /delete-status, etc.)
+  if (
+    cleanEndpoint.includes("-status") ||
+    cleanEndpoint.includes("/status-") ||
+    cleanEndpoint.includes("/send-status") ||
+    cleanEndpoint.includes("/list-status") ||
+    cleanEndpoint.includes("/delete-status")
+  ) {
     return "status";
+  }
+  // Instance Connection Status (e.g. /status, /instance-status, /restart, /disconnect)
+  if (
+    cleanEndpoint === "/status" ||
+    cleanEndpoint.includes("/instance") ||
+    cleanEndpoint.includes("/qr-code") ||
+    cleanEndpoint.includes("/connect")
+  ) {
+    return "instance";
   }
   if (
     cleanEndpoint.includes("/send-") ||

@@ -471,22 +471,31 @@ export async function getInstanceStatus(instance: any, triggerN8n: boolean = tru
     };
   }
 
-  // Check for WAHA format
-  const statusStr = String(item?.status || "").toUpperCase();
-  const isConnected = statusStr === "WORKING" || statusStr === "CONNECTED" || statusStr === "CONNECTED_TO_WHATSAPP" || item?.connected === true;
+  // Check for WAHA format / generic n8n formats
+  const statusStr = String(item?.status || item?.state || item?.session?.status || "").toUpperCase();
+  const isConnected =
+    statusStr === "WORKING" ||
+    statusStr === "CONNECTED" ||
+    statusStr === "CONNECTED_TO_WHATSAPP" ||
+    item?.connected === true ||
+    String(item?.connected).toLowerCase() === "true";
   
   let phone = null;
   if (item?.me?.id) {
     phone = item.me.id.split("@")[0];
   } else if (item?.me?.phone) {
     phone = item.me.phone;
+  } else if (item?.phone) {
+    phone = item.phone;
+  } else if (item?.connectedPhone) {
+    phone = item.connectedPhone;
   }
 
   return {
     connected: isConnected,
     paymentStatus: "ACTIVE",
     due: null,
-    returnedId: item?.name || id,
+    returnedId: item?.name || item?.session || id,
     returnedToken: token,
     phone: phone
   };
