@@ -1542,7 +1542,7 @@ Deno.serve(async (req) => {
             group_name: phone,
             isPrivate: true,
           }))
-        : (sendToPrivate || triggerContext?.uraResult || (triggerContext?.respondentPhone && !triggerContext?.groupJid)) && triggerContext
+        : (sendToPrivate || triggerContext?.sendPrivate || triggerContext?.uraResult || triggerContext?.respondentPhone) && triggerContext?.respondentPhone
           ? [{ 
               group_jid: triggerContext.respondentJid || `${triggerContext.respondentPhone}@s.whatsapp.net`, 
               group_name: triggerContext.respondentName || triggerContext.respondentPhone,
@@ -1840,7 +1840,8 @@ Deno.serve(async (req) => {
           const affectedDealIds: string[] = [];
 
           for (const dest of activeDestinations) {
-            const phoneClean = dest.group_jid.split("@")[0].replace(/\D/g, "");
+            const rawPhone = triggerContext?.respondentPhone || (dest.isPrivate ? dest.group_jid.split("@")[0] : "");
+            const phoneClean = rawPhone ? rawPhone.replace(/\D/g, "") : dest.group_jid.split("@")[0].replace(/\D/g, "");
             const { data: leadData } = await supabase
               .from("leads")
               .select("*")
@@ -1856,7 +1857,7 @@ Deno.serve(async (req) => {
               const resolvedPhone = cleanPhone(resolveVariables(rawPhone, triggerContext, leadData) || phoneClean);
               const resolvedEmail = resolveVariables(params.email as string, triggerContext, leadData) || null;
               const resolvedCpf = cleanCpf(resolveVariables(params.cpf as string, triggerContext, leadData) || "");
-              const resolvedSource = resolveVariables(params.source as string, triggerContext, leadData) || "Workflow Action";
+              const resolvedSource = resolveVariables(params.source as string, triggerContext, leadData) || (triggerContext?.groupJid ? `Grupo: ${triggerContext.groupJid}` : "Workflow Action");
               const resolvedCompanyName = resolveVariables(params.companyName as string, triggerContext, leadData) || null;
               const tags = Array.isArray(params.tags) ? params.tags : [];
 

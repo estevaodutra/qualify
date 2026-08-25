@@ -325,9 +325,12 @@ export async function processGroupEvent(
             // Direct check on message_sequences table
             if (seq.trigger_type === targetTriggerType) {
               const config = (seq.trigger_config as any) || {};
-              const groups = ((config && config.selectedGroupJids) || []).map(normalizeJid);
-              if (groups.length === 0 || groups.includes(normChatJid)) {
-                isMatch = true;
+              const triggerInstId = config.instanceId || (config.instanceIds && config.instanceIds[0]);
+              if (!triggerInstId || !instance?.id || triggerInstId === instance.id) {
+                const groups = ((config && config.selectedGroupJids) || []).map(normalizeJid);
+                if (groups.length === 0 || groups.includes(normChatJid)) {
+                  isMatch = true;
+                }
               }
             }
 
@@ -336,6 +339,13 @@ export async function processGroupEvent(
               const triggers = ((node.config as any) && (node.config as any).triggers) || [];
               for (const t of triggers) {
                 if (t.type === targetTriggerType) {
+                  // Validate Instance: if trigger specified a specific instance, only that instance must execute it!
+                  const triggerInstId = t.config?.instanceId || (t.config?.instanceIds && t.config.instanceIds[0]);
+                  if (triggerInstId && instance?.id && triggerInstId !== instance.id) {
+                    console.log(`[GroupController] Trigger ${t.id} ignored: configured instance ${triggerInstId} != incoming instance ${instance.id}`);
+                    continue;
+                  }
+
                   const groups = ((t.config && t.config.selectedGroupJids) || []).map(normalizeJid);
                   if (groups.length === 0 || groups.includes(normChatJid)) {
                     isMatch = true;
@@ -349,7 +359,7 @@ export async function processGroupEvent(
 
             if (isMatch) {
               try {
-                console.log(`[GroupController] Triggering workflow sequence ${seq.id} (triggerId=${matchedTriggerId}) for ${phoneToUse}`);
+                console.log(`[GroupController] Triggering workflow sequence ${seq.id} (triggerId=${matchedTriggerId}) for member ${phoneToUse} via instance ${instance?.id}`);
                 const triggerResp = await fetch(`${supabaseUrl}/functions/v1/trigger-sequence`, {
                   method: "POST",
                   headers: {
@@ -359,8 +369,11 @@ export async function processGroupEvent(
                   body: JSON.stringify({ 
                     sequenceId: seq.id, 
                     phone: phoneToUse, 
+                    name: context.senderName || phoneToUse,
                     group_jid: context.chatJid,
-                    triggerId: matchedTriggerId || undefined
+                    triggerId: matchedTriggerId || undefined,
+                    instanceId: instance?.id,
+                    sendPrivate: true
                   }),
                 });
                 const triggerJson = await triggerResp.json();

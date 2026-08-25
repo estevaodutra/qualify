@@ -279,17 +279,21 @@ Deno.serve(async (req) => {
     console.log(`[TriggerSequence] Applied ${fieldMappings.length} field mappings + fallback keys:`, customFields);
 
     // Check if payload contains destination phone for private sending
-    let destinationPhone = customFields.phone || customFields["destination.phone"] || customFields["lead.phone"] || customFields.to ||
+    let destinationPhone = (payload.phone as string) || (payload.senderPhone as string) || (payload.from_phone as string) ||
+                           customFields.phone || customFields["destination.phone"] || customFields["lead.phone"] || customFields.to ||
                            extractField(payload, "destination.phone") ||
                            extractField(payload, "lead.phone") ||
                            extractField(payload, "phone") ||
                            extractField(payload, "to");
 
-    const isGroupMode = triggerConfig.destinationMode === "groups" || 
-                        hasLinkedGroups || 
+    if (destinationPhone) {
+      destinationPhone = String(destinationPhone).replace(/\D/g, "");
+    }
+
+    const isGroupMode = (triggerConfig.destinationMode === "groups" && !destinationPhone) || 
                         (triggerConfig.isGroup === true && !destinationPhone);
 
-    const instanceId = (triggerConfig as Record<string, unknown>).instanceId as string | undefined;
+    const instanceId = (payload.instanceId as string) || (triggerConfig as Record<string, unknown>).instanceId as string | undefined;
     const instanceIds = (triggerConfig as Record<string, unknown>).instanceIds as string[] | undefined;
     let primaryInstanceId = instanceId || (instanceIds && instanceIds.length > 0 ? instanceIds[0] : undefined);
 
@@ -363,7 +367,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    const respondentName = extractField(payload, "name") || extractField(payload, "user.name") || "";
+    const respondentName = extractField(payload, "name") || extractField(payload, "user.name") || (payload.name as string) || (payload.senderName as string) || "";
     
     // Auto-create lead if in private mode
     let resolvedLeadId = null;
@@ -403,7 +407,12 @@ Deno.serve(async (req) => {
     // Build the list of (respondentJid, respondentName, groupJid) destinations
     const destinations = shouldSendToGroup
       ? targetGroups.map((g) => ({ respondentJid: g.group_jid, respondentName: g.group_name || "", groupJid: g.group_jid, instanceId: g.instance_id || primaryInstanceId || null }))
-      : [{ respondentJid: destinationPhone.includes('@') ? destinationPhone : `${destinationPhone}@s.whatsapp.net`, respondentName, groupJid: "", instanceId: primaryInstanceId || null }];
+      : [{ 
+          respondentJid: destinationPhone.includes('@') ? destinationPhone : `${destinationPhone}@s.whatsapp.net`, 
+          respondentName: respondentName || destinationPhone, 
+          groupJid: (payload.group_jid as string) || "", 
+          instanceId: primaryInstanceId || null 
+        }];
 
     console.log(`[TriggerSequence] Resolved ${destinations.length} destination(s) for this trigger`);
 
