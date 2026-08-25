@@ -52,7 +52,7 @@ export async function processGroupEvent(
               user_id: instance.user_id,
               company_id: companyId,
               phone: cleanGroupPhone,
-              name: context.chatName || context.chatJid, // Default to group name or JID
+              name: context.chatName || "Grupo WhatsApp",
               status: 'active'
             }).select("id").maybeSingle();
             
@@ -80,6 +80,7 @@ export async function processGroupEvent(
                 company_id: companyId,
                 lead_id: groupLead.id,
                 instance_id: instance.id,
+                contact_name: groupLead.name || "Grupo WhatsApp",
                 status: 'open'
               }).select("id").maybeSingle();
               
@@ -90,7 +91,32 @@ export async function processGroupEvent(
             }
 
             if (conv?.id) {
-              const cleanSenderPhone = context.senderName || context.senderPhone || "Um participante";
+              let cleanSenderPhone = context.senderName || context.senderPhone || context.senderLid || rawEvent?.["@lid"] || rawEvent?.from_phone || rawEvent?.phone || "Um participante";
+
+              // Tenta localizar se o participante já é um lead cadastrado pelo telefone ou @lid para exibir o nome dele
+              if (companyId) {
+                const phoneDigits = (context.senderPhone || rawEvent?.from_phone || rawEvent?.phone || "").replace(/\D/g, "");
+                const lidVal = context.senderLid || rawEvent?.["@lid"] || rawEvent?.from_lid || rawEvent?.participant_lid;
+                
+                const orClauses = [];
+                if (phoneDigits) orClauses.push(`phone.eq.${phoneDigits}`);
+                if (lidVal) orClauses.push(`lid.eq.${lidVal}`);
+                
+                if (orClauses.length > 0) {
+                  const { data: senderLead } = await supabase
+                    .from("leads")
+                    .select("name")
+                    .eq("company_id", companyId)
+                    .or(orClauses.join(","))
+                    .limit(1)
+                    .maybeSingle();
+                    
+                  if (senderLead?.name) {
+                    cleanSenderPhone = senderLead.name;
+                  }
+                }
+              }
+
               const systemBody = classification.eventType === "group_join"
                 ? `${cleanSenderPhone} entrou no grupo.`
                 : `${cleanSenderPhone} saiu do grupo.`;

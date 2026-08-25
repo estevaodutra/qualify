@@ -659,21 +659,19 @@ const WebhookDocs = () => {
             </div>
 
             <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100">
-              <strong>Comportamento:</strong> Cria a conversa do grupo no CRM (caso não exista), insere uma mensagem de sistema formatada (<em>"Nome/Telefone entrou no grupo."</em>) e aciona automaticamente os fluxos de <strong>Campanhas de Grupo / Campanhas Piratas</strong> configuradas para o grupo.
+              <strong>Comportamento:</strong> Registra a entrada do participante no grupo, insere a notificação de sistema no chat (<em>"5512982402981 entrou no grupo."</em>) e aciona automaticamente as automações configuradas (como <strong>Campanhas Piratas / Sequências de Boas-Vindas</strong>).
             </p>
 
             <div className="space-y-2 pt-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Exemplo de Payload</h4>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Payload Minimalista (Real)</h4>
               <CodeBlock
                 id="group-join"
                 code={`{
-  "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
+  "instance_id": "session_01m0e0qnqsjb4xepkmax583azc",
   "raw_event": {
     "group_id": "120363024849182394@g.us",
-    "group_name": "Comunidade VIP Qualify",
     "from_phone": "5512982402981",
-    "from_lid": "171296717553783@lid",
-    "from_name": "Estevão Dutra",
+    "@lid": "171296717553783@lid",
     "timestamp": 1787617800
   }
 }`}
@@ -681,7 +679,7 @@ const WebhookDocs = () => {
             </div>
 
             <div className="text-xs text-slate-500 flex flex-wrap gap-4 pt-1">
-              <span><strong>Campos aceitos:</strong> <code className="font-mono text-slate-700">group_id</code> (obrigatório), <code className="font-mono text-slate-700">from_phone</code> / <code className="font-mono text-slate-700">phone</code>, <code className="font-mono text-slate-700">from_lid</code>, <code className="font-mono text-slate-700">from_name</code>, <code className="font-mono text-slate-700">group_name</code>, <code className="font-mono text-slate-700">timestamp</code>.</span>
+              <span><strong>Campos aceitos:</strong> <code className="font-mono text-slate-700">group_id</code> (obrigatório), <code className="font-mono text-slate-700">from_phone</code> / <code className="font-mono text-slate-700">phone</code>, <code className="font-mono text-slate-700">@lid</code> / <code className="font-mono text-slate-700">from_lid</code>, <code className="font-mono text-slate-700">timestamp</code>.</span>
             </div>
           </div>
 
@@ -708,21 +706,19 @@ const WebhookDocs = () => {
             </div>
 
             <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100">
-              <strong>Comportamento:</strong> Registra a saída na timeline do chat do grupo com a mensagem de sistema (<em>"Nome/Telefone saiu do grupo."</em>) e atualiza a relação de participantes da instância no CRM.
+              <strong>Comportamento:</strong> Registra a saída na timeline do chat do grupo com a mensagem de sistema (<em>"5512982402981 saiu do grupo."</em>) e atualiza os registros do CRM.
             </p>
 
             <div className="space-y-2 pt-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Exemplo de Payload</h4>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Payload Minimalista (Real)</h4>
               <CodeBlock
                 id="group-leave"
                 code={`{
-  "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
+  "instance_id": "session_01m0e0qnqsjb4xepkmax583azc",
   "raw_event": {
     "group_id": "120363024849182394@g.us",
-    "group_name": "Comunidade VIP Qualify",
     "from_phone": "5512982402981",
-    "from_lid": "171296717553783@lid",
-    "from_name": "Estevão Dutra",
+    "@lid": "171296717553783@lid",
     "timestamp": 1787617900
   }
 }`}
@@ -730,7 +726,7 @@ const WebhookDocs = () => {
             </div>
 
             <div className="text-xs text-slate-500 flex flex-wrap gap-4 pt-1">
-              <span><strong>Campos aceitos:</strong> <code className="font-mono text-slate-700">group_id</code> (obrigatório), <code className="font-mono text-slate-700">from_phone</code> / <code className="font-mono text-slate-700">phone</code>, <code className="font-mono text-slate-700">from_lid</code>, <code className="font-mono text-slate-700">from_name</code>, <code className="font-mono text-slate-700">group_name</code>, <code className="font-mono text-slate-700">timestamp</code>.</span>
+              <span><strong>Campos aceitos:</strong> <code className="font-mono text-slate-700">group_id</code> (obrigatório), <code className="font-mono text-slate-700">from_phone</code> / <code className="font-mono text-slate-700">phone</code>, <code className="font-mono text-slate-700">@lid</code> / <code className="font-mono text-slate-700">from_lid</code>, <code className="font-mono text-slate-700">timestamp</code>.</span>
             </div>
           </div>
         </div>
