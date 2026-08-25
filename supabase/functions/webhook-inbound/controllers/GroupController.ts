@@ -9,17 +9,32 @@ export async function processGroupEvent(
   rawEvent: any,
   eventId: string
 ) {
-  const isGroupJoinOrLeave = classification.eventType === "group_join" || classification.eventType === "group_leave";
-  const validGroupEvents = ["group_join", "group_leave", "group_participants", "group_update", "group_settings"];
+  const evtType = (classification.eventType || "").toLowerCase();
+  const isJoin =
+    evtType === "group_join" ||
+    evtType === "group.participant.add" ||
+    evtType === "group_participant_add" ||
+    evtType.includes("join") ||
+    evtType.includes("add");
+    
+  const isLeave =
+    evtType === "group_leave" ||
+    evtType === "group.participant.remove" ||
+    evtType === "group_participant_remove" ||
+    evtType.includes("leave") ||
+    evtType.includes("remove");
+
+  const isGroupJoinOrLeave = isJoin || isLeave;
+  const validGroupEvents = ["group_join", "group_leave", "group_participants", "group_update", "group_settings", "group.participant.add", "group.participant.remove"];
   
-  if (!validGroupEvents.includes(classification.eventType)) return;
+  if (!isGroupJoinOrLeave && !validGroupEvents.includes(classification.eventType)) return;
 
   // 0. ==========================================
   // INSERT SYSTEM MESSAGE INTO CHAT CONVERSATION
   // ==========================================
   if (context.chatJid && instance?.id && instance?.user_id) {
     try {
-      if (classification.eventType === "group_join" || classification.eventType === "group_leave") {
+      if (isGroupJoinOrLeave) {
         // Resolve Company ID
         let companyId = null;
         const { data: company } = await supabase.from("companies").select("id").eq("owner_id", instance.user_id).limit(1).maybeSingle();
@@ -157,7 +172,7 @@ export async function processGroupEvent(
   // 1. ==========================================
   // AUTO-PROCESS GROUP JOIN for Pirate Campaigns
   // ==========================================
-  if (classification.eventType === "group_join" && context.chatJid && (context.senderPhone || context.senderLid)) {
+  if (isJoin && context.chatJid && (context.senderPhone || context.senderLid || rawEvent?.["@lid"])) {
     try {
       const phoneToSend = context.senderPhone || null;
       const lidToSend = context.senderLid || null;

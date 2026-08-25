@@ -116,13 +116,13 @@ Deno.serve(async (req) => {
       url.pathname.includes("/groups/participant-add") ||
       url.pathname.includes("/group/join")
     ) {
-      payload.action = "group.participant.add";
+      payload.action = "group_join";
     } else if (
       url.pathname.includes("/groups/leave") ||
       url.pathname.includes("/groups/participant-remove") ||
       url.pathname.includes("/group/leave")
     ) {
-      payload.action = "group.participant.remove";
+      payload.action = "group_leave";
     }
 
     // Se for requisição para a raiz /webhook-inbound sem sub-rota semântica de mensagem:
