@@ -559,6 +559,7 @@ export default function Chat() {
             stages={pipelineStages}
             sidebarMode={sidebarMode}
             onSetSidebarMode={setSidebarMode}
+            onSelectConversation={handleSelectConv}
             onSelectQuickReply={(reply) => {
               setSelectedQuickReply(reply);
               setTimeout(() => setSelectedQuickReply(null), 100);
@@ -600,6 +601,7 @@ export default function Chat() {
               <GroupContextPanel
                 conversation={selectedConv}
                 onClose={() => setMobileLeadDetailsOpen(false)}
+                onSelectConversation={handleSelectConv}
               />
             ) : (
               <LeadContextPanel

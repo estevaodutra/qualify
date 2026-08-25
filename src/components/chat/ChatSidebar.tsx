@@ -13,6 +13,7 @@ interface ChatSidebarProps {
   sidebarMode: ChatSidebarMode;
   onSetSidebarMode: (mode: ChatSidebarMode) => void;
   onSelectQuickReply: (reply: QuickReply) => void;
+  onSelectConversation?: (id: string) => void;
   className?: string;
 }
 
@@ -22,6 +23,7 @@ export default function ChatSidebar({
   sidebarMode,
   onSetSidebarMode,
   onSelectQuickReply,
+  onSelectConversation,
   className,
 }: ChatSidebarProps) {
   const phone = conversation?.lead?.phone || conversation?.contact_phone || "";
@@ -48,6 +50,7 @@ export default function ChatSidebar({
             <GroupContextPanel
               conversation={conversation}
               onClose={() => onSetSidebarMode("quick_replies")}
+              onSelectConversation={onSelectConversation}
             />
           ) : (
             <LeadContextPanel

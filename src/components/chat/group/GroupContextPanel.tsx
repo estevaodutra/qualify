@@ -49,16 +49,22 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useCompany } from "@/contexts/CompanyContext";
+import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { GroupAddParticipantModal } from "@/components/whatsapp/group-management/GroupAddParticipantModal";
 import { GroupInviteLinkModal } from "@/components/whatsapp/group-management/GroupInviteLinkModal";
 
 interface GroupContextPanelProps {
   conversation: ChatConversation;
   onClose?: () => void;
+  onSelectConversation?: (id: string) => void;
 }
 
-export default function GroupContextPanel({ conversation, onClose }: GroupContextPanelProps) {
+export default function GroupContextPanel({ conversation, onClose, onSelectConversation }: GroupContextPanelProps) {
   const navigate = useNavigate();
+  const { activeCompanyId } = useCompany();
+  const queryClient = useQueryClient();
   const {
     group,
     isLoading,
@@ -83,6 +89,142 @@ export default function GroupContextPanel({ conversation, onClose }: GroupContex
   // Modais auxiliares
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [inviteLinkOpen, setInviteLinkOpen] = useState(false);
+
+  // Modal de Criar Lead / Iniciar Conversa
+  const [newLeadModalOpen, setNewLeadModalOpen] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<GroupParticipant | null>(null);
+  const [newLeadName, setNewLeadName] = useState("");
+  const [isCreatingLeadChat, setIsCreatingLeadChat] = useState(false);
+
+  const handleStartChatWithMember = async (participant: GroupParticipant) => {
+    if (!participant.phone) return;
+    const cleanPhone = participant.phone.replace(/\D/g, "");
+    if (!cleanPhone) return;
+
+    if (!activeCompanyId) {
+      toast.error("Nenhuma empresa selecionada");
+      return;
+    }
+
+    try {
+      // 1. Verificar se o Lead já existe
+      const { data: existingLead } = await supabase
+        .from("leads")
+        .select("id, name")
+        .eq("company_id", activeCompanyId)
+        .eq("phone", cleanPhone)
+        .maybeSingle();
+
+      if (existingLead) {
+        // 2. Lead já existe -> verificar se já tem conversa aberta
+        const { data: existingConv } = await supabase
+          .from("chat_conversations")
+          .select("id")
+          .eq("company_id", activeCompanyId)
+          .eq("lead_id", existingLead.id)
+          .maybeSingle();
+
+        if (existingConv) {
+          onSelectConversation?.(existingConv.id);
+          navigate(`/chat?conversationId=${existingConv.id}`);
+          onClose?.();
+          toast.success(`Conversa aberta com ${existingLead.name || formatPhone(cleanPhone)}`);
+          return;
+        }
+
+        // Criar conversa para o lead existente
+        const { data: newConv, error: convErr } = await supabase
+          .from("chat_conversations")
+          .insert({
+            company_id: activeCompanyId,
+            lead_id: existingLead.id,
+            instance_id: conversation.instance_id || null,
+            status: "open",
+            unread_count: 0
+          })
+          .select("id")
+          .single();
+
+        if (convErr) throw convErr;
+
+        queryClient.invalidateQueries({ queryKey: ["chat-conversations", activeCompanyId] });
+        if (newConv) {
+          onSelectConversation?.(newConv.id);
+          navigate(`/chat?conversationId=${newConv.id}`);
+          onClose?.();
+          toast.success(`Conversa iniciada com ${existingLead.name || formatPhone(cleanPhone)}`);
+        }
+        return;
+      }
+
+      // 3. Lead não existe -> Abrir cardzinho perguntando se deseja criar o lead
+      setSelectedMember(participant);
+      setNewLeadName(participant.name || "");
+      setNewLeadModalOpen(true);
+    } catch (err: any) {
+      console.error("Erro ao verificar lead:", err);
+      toast.error("Erro ao iniciar conversa: " + err.message);
+    }
+  };
+
+  const handleConfirmCreateLeadAndChat = async () => {
+    if (!selectedMember || !selectedMember.phone || !activeCompanyId) return;
+    const cleanPhone = selectedMember.phone.replace(/\D/g, "");
+    setIsCreatingLeadChat(true);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Inserir lead
+      const leadName = newLeadName.trim() || formatPhone(cleanPhone);
+      const { data: newLead, error: leadErr } = await supabase
+        .from("leads")
+        .insert({
+          user_id: user?.id,
+          company_id: activeCompanyId,
+          phone: cleanPhone,
+          name: leadName,
+          source_type: "whatsapp_group",
+          source_group_name: group.name,
+          status: "active"
+        })
+        .select("id, name")
+        .single();
+
+      if (leadErr) throw leadErr;
+
+      // Inserir conversa
+      const { data: newConv, error: convErr } = await supabase
+        .from("chat_conversations")
+        .insert({
+          company_id: activeCompanyId,
+          lead_id: newLead.id,
+          instance_id: conversation.instance_id || null,
+          status: "open",
+          unread_count: 0,
+          contact_name: leadName,
+          contact_phone: cleanPhone
+        })
+        .select("id")
+        .single();
+
+      if (convErr) throw convErr;
+
+      queryClient.invalidateQueries({ queryKey: ["chat-conversations", activeCompanyId] });
+      queryClient.invalidateQueries({ queryKey: ["leads", activeCompanyId] });
+
+      setNewLeadModalOpen(false);
+      onSelectConversation?.(newConv.id);
+      navigate(`/chat?conversationId=${newConv.id}`);
+      onClose?.();
+      toast.success(`Lead criado e conversa iniciada com ${leadName}!`);
+    } catch (err: any) {
+      console.error("Erro ao criar lead e conversa:", err);
+      toast.error("Falha ao criar lead: " + err.message);
+    } finally {
+      setIsCreatingLeadChat(false);
+    }
+  };
 
   // Formatação de telefone
   const formatPhone = (phoneStr: string) => {
@@ -401,12 +543,7 @@ export default function GroupContextPanel({ conversation, onClose }: GroupContex
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-52 text-xs font-medium">
                         <DropdownMenuItem
-                          onClick={() => {
-                            if (participant.phone) {
-                              navigate(`/chat?phone=${participant.phone}`);
-                              onClose?.();
-                            }
-                          }}
+                          onClick={() => handleStartChatWithMember(participant)}
                         >
                           <MessageCircle className="h-3.5 w-3.5 mr-2 text-primary" /> Conversar com {displayName}
                         </DropdownMenuItem>
@@ -501,6 +638,79 @@ export default function GroupContextPanel({ conversation, onClose }: GroupContex
           </div>
         </div>
       </div>
+
+      {/* Cardzinho: Criar Lead do Grupo & Iniciar Conversa */}
+      <Dialog open={newLeadModalOpen} onOpenChange={setNewLeadModalOpen}>
+        <DialogContent className="sm:max-w-md bg-card border-border/60">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <User className="h-5 w-5 text-primary" />
+              <span>Novo Lead Identificado</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Este membro ainda não está cadastrado como lead. Deseja cadastrá-lo para iniciar a conversa?
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedMember && (
+            <div className="space-y-3.5 py-2">
+              <div className="p-3 rounded-xl bg-muted/40 border border-border/40 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-muted-foreground">Telefone:</span>
+                  <span className="text-xs font-bold font-mono text-foreground">
+                    {formatPhone(selectedMember.phone)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-muted-foreground">Origem:</span>
+                  <span className="text-xs font-medium text-emerald-500 truncate max-w-[200px]">
+                    Grupo {group.name}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-foreground">Nome do Lead</label>
+                <Input
+                  value={newLeadName}
+                  onChange={(e) => setNewLeadName(e.target.value)}
+                  placeholder="Ex: João da Silva"
+                  className="text-xs h-9"
+                  autoFocus
+                  onKeyDown={(e) => e.key === "Enter" && handleConfirmCreateLeadAndChat()}
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="flex gap-2 sm:justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setNewLeadModalOpen(false)}
+              disabled={isCreatingLeadChat}
+            >
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleConfirmCreateLeadAndChat}
+              disabled={isCreatingLeadChat}
+              className="bg-primary text-primary-foreground font-bold shadow-sm"
+            >
+              {isCreatingLeadChat ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> Criando Lead...
+                </>
+              ) : (
+                <>
+                  <MessageCircle className="h-3.5 w-3.5 mr-2" /> Iniciar Conversa
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Modais auxiliares */}
       {addMemberOpen && conversation.instance_id && (
