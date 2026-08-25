@@ -195,6 +195,8 @@ Deno.serve(async (req) => {
       };
     });
 
+    const participantsCount = metaObj.size || participants.length || metaObj.participantsCount || 0;
+
     // Enriquecer participantes com nomes de leads cadastrados se existirem
     if (companyId && participants.length > 0) {
       const phones = participants.map((p) => p.phone).filter(Boolean);
