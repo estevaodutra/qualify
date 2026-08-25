@@ -36,6 +36,7 @@ const SUPPORTED_MESSAGE_TYPES: SupportedMessageType[] = [
 
 const ingestionService = new MessageIngestionService();
 
+// Version: 2026-08-24.18
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });

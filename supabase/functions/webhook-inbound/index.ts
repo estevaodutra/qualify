@@ -38,6 +38,7 @@ const SUPPORTED_MESSAGE_TYPES: SupportedMessageType[] = [
   "poll", "reaction", "edited", "revoked", "status", "delivered", "read", "sent", "failed", "ack"
 ];
 
+// Version: 2026-08-24.18
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
