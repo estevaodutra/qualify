@@ -35,7 +35,14 @@ export function routeZApiRequest(endpoint: string, method: string, requestBody: 
     cleanEndpoint.includes("/create-group")
   ) {
     let action = "group.list"; // default fallback for groups
-    if (cleanEndpoint.includes("/group-members")) action = "group.get_members";
+    if (
+      cleanEndpoint.includes("/groupinfo") ||
+      cleanEndpoint.includes("/group-info") ||
+      cleanEndpoint.includes("/group-metadata")
+    ) {
+      action = "groupInfo";
+    }
+    else if (cleanEndpoint.includes("/group-members")) action = "group.get_members";
     else if (cleanEndpoint.includes("/group-invitation-link")) action = "group.get_invite_link";
     else if (cleanEndpoint.includes("/revoke-group-invitation-link")) action = "group.revoke_invite_link";
     else if (cleanEndpoint.includes("/promote-group-admin")) action = "group.promote_admin";

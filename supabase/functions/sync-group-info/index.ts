@@ -93,9 +93,15 @@ Deno.serve(async (req) => {
       const resp = await fetchZApi(
         instance.external_instance_id,
         instance.external_instance_token,
-        `/group-metadata?groupId=${encodeURIComponent(normalizedJid)}`,
-        "GET",
-        null,
+        `/group-info?groupId=${encodeURIComponent(normalizedJid)}`,
+        "POST",
+        {
+          action: "groupInfo",
+          groupId: normalizedJid,
+          group_jid: normalizedJid,
+          groupJid: normalizedJid,
+          phone: cleanGroupPhone
+        },
         { "Content-Type": "application/json" },
         instance.id,
         true
@@ -111,13 +117,18 @@ Deno.serve(async (req) => {
       console.warn(`[sync-group-info] Error fetching group metadata:`, e.message);
     }
 
-    // Normalizar retorno de diferentes provedores (WAHA / Z-API / Evolution / Baileys)
-    const metaObj = Array.isArray(rawMetadata) ? rawMetadata[0] : (rawMetadata || {});
+    // Normalizar retorno de diferentes provedores (WAHA / Z-API / Evolution / Baileys / n8n)
+    let metaObj = Array.isArray(rawMetadata) ? rawMetadata[0] : (rawMetadata || {});
+    if (metaObj.group) metaObj = metaObj.group;
+    else if (metaObj.data) metaObj = metaObj.data;
+    else if (metaObj.details) metaObj = metaObj.details;
+    else if (metaObj.body) metaObj = metaObj.body;
     
     const subject =
       metaObj.subject ||
       metaObj.name ||
       metaObj.groupName ||
+      metaObj.group_name ||
       metaObj.title ||
       null;
 
@@ -126,6 +137,7 @@ Deno.serve(async (req) => {
       metaObj.desc ||
       metaObj.topic ||
       metaObj.groupDescription ||
+      metaObj.group_description ||
       null;
 
     const pictureUrl =
@@ -134,6 +146,8 @@ Deno.serve(async (req) => {
       metaObj.photo ||
       metaObj.profilePicUrl ||
       metaObj.icon ||
+      metaObj.image ||
+      metaObj.group_photo ||
       null;
 
     const ownerJid =
@@ -146,6 +160,7 @@ Deno.serve(async (req) => {
     const rawParticipants: RawParticipant[] =
       metaObj.participants ||
       metaObj.members ||
+      metaObj.group_members ||
       [];
 
     const participants = rawParticipants.map((p) => {

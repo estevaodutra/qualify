@@ -75,6 +75,8 @@ export const webhookCategories: WebhookCategory[] = [
     defaultUrl: "https://n8n.d2x.site/webhook/manager_groups",
     actions: [
       // Request actions (Dispatch -> n8n)
+      { id: "groupInfo", name: "groupInfo", description: "Buscar informações completas do grupo", type: "request" },
+      { id: "group.info", name: "group.info", description: "Buscar dados do grupo", type: "request" },
       { id: "group.list", name: "group.list", description: "Listar grupos", type: "request" },
       { id: "group.create", name: "group.create", description: "Criar grupo", type: "request" },
       { id: "group.update_name", name: "group.update_name", description: "Atualizar nome", type: "request" },
