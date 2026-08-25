@@ -98,8 +98,19 @@ export class MessageIngestionService {
         `gen_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
       // 3. Deduplicação / Idempotência
-      // Se for uma mensagem comum e já existir no webhook_events para esta instância, não duplica
-      if (type !== "reaction" && type !== "edited" && type !== "revoked") {
+      // Status, reações, edições e revogações nunca devem ser bloqueados pela deduplicação de mensagem comum
+      const isStatusOrMutation =
+        type === "reaction" ||
+        type === "edited" ||
+        type === "revoked" ||
+        type === "status" ||
+        type === "delivered" ||
+        type === "read" ||
+        type === "sent" ||
+        type === "failed" ||
+        type === "ack";
+
+      if (!isStatusOrMutation) {
         const { data: existingEvent } = await this.supabase
           .from("webhook_events")
           .select("id")
@@ -557,15 +568,15 @@ export class MessageIngestionService {
     if (!targetMessageId) return;
 
     let statusVal = "delivered";
-    const rawStatus = String(rawEvent.status || rawEvent.ack || type || "").toLowerCase();
+    const rawStatus = String(rawEvent.status || rawEvent.action || rawEvent.ack || type || "").toLowerCase();
     
-    if (rawStatus === "read" || rawStatus === "message.read" || rawStatus === "played" || rawStatus === "3") {
+    if (rawStatus === "read" || rawStatus.includes("read") || rawStatus === "played" || rawStatus === "3") {
       statusVal = "read";
-    } else if (rawStatus === "delivered" || rawStatus === "message.delivered" || rawStatus === "2") {
+    } else if (rawStatus === "delivered" || rawStatus.includes("delivered") || rawStatus === "2") {
       statusVal = "delivered";
-    } else if (rawStatus === "sent" || rawStatus === "message.sent" || rawStatus === "1") {
+    } else if (rawStatus === "sent" || rawStatus.includes("sent") || rawStatus === "1") {
       statusVal = "sent";
-    } else if (rawStatus === "failed" || rawStatus === "error" || rawStatus === "0") {
+    } else if (rawStatus === "failed" || rawStatus.includes("failed") || rawStatus.includes("error") || rawStatus === "0") {
       statusVal = "failed";
     }
 
