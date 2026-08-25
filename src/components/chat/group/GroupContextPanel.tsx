@@ -24,6 +24,7 @@ import {
   Loader2,
   User,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { ChatConversation } from "@/hooks/useChat";
 import { useGroupInfo, GroupParticipant } from "@/hooks/useGroupInfo";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -57,6 +58,7 @@ interface GroupContextPanelProps {
 }
 
 export default function GroupContextPanel({ conversation, onClose }: GroupContextPanelProps) {
+  const navigate = useNavigate();
   const {
     group,
     isLoading,
@@ -84,7 +86,7 @@ export default function GroupContextPanel({ conversation, onClose }: GroupContex
 
   // Formatação de telefone
   const formatPhone = (phoneStr: string) => {
-    const clean = phoneStr.replace(/\D/g, "");
+    const clean = (phoneStr || "").replace(/\D/g, "");
     if (!clean) return phoneStr;
     if (clean.length === 13 && clean.startsWith("55")) {
       return `+55 ${clean.slice(2, 4)} ${clean.slice(4, 9)}-${clean.slice(9)}`;
@@ -92,11 +94,22 @@ export default function GroupContextPanel({ conversation, onClose }: GroupContex
     if (clean.length === 12 && clean.startsWith("55")) {
       return `+55 ${clean.slice(2, 4)} ${clean.slice(4, 8)}-${clean.slice(8)}`;
     }
+    if (clean.length === 11) {
+      return `+55 ${clean.slice(0, 2)} ${clean.slice(2, 7)}-${clean.slice(7)}`;
+    }
     return `+${clean}`;
   };
 
-  // Filtragem de membros
-  const filteredParticipants = (group.participants || []).filter((p) => {
+  // Ordenar admins primeiro e depois filtrar por busca
+  const sortedParticipants = [...(group.participants || [])].sort((a, b) => {
+    if (a.isAdmin && !b.isAdmin) return -1;
+    if (!a.isAdmin && b.isAdmin) return 1;
+    if (a.isSuperAdmin && !b.isSuperAdmin) return -1;
+    if (!a.isSuperAdmin && b.isSuperAdmin) return 1;
+    return (a.name || a.phone).localeCompare(b.name || b.phone);
+  });
+
+  const filteredParticipants = sortedParticipants.filter((p) => {
     if (!memberSearch) return true;
     const term = memberSearch.toLowerCase();
     return (
@@ -361,22 +374,15 @@ export default function GroupContextPanel({ conversation, onClose }: GroupContex
                       </AvatarFallback>
                     </Avatar>
 
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-bold text-foreground truncate">
-                          {displayName}
+                    <div className="min-w-0 flex-1 flex items-center gap-2">
+                      <span className="text-xs font-bold text-foreground truncate">
+                        {displayName}
+                      </span>
+                      {participant.isAdmin && (
+                        <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.2 rounded shrink-0">
+                          Admin do grupo
                         </span>
-                        {participant.isAdmin && (
-                          <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.2 rounded shrink-0">
-                            Admin do grupo
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-muted-foreground truncate">
-                        {participant.status && participant.status !== "active"
-                          ? participant.status
-                          : "Olá! Eu estou usando o WhatsApp."}
-                      </p>
+                      )}
                     </div>
                   </div>
 
@@ -393,7 +399,17 @@ export default function GroupContextPanel({ conversation, onClose }: GroupContex
                           <MoreVertical className="h-4 w-4" />
                         </button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48 text-xs font-medium">
+                      <DropdownMenuContent align="end" className="w-52 text-xs font-medium">
+                        <DropdownMenuItem
+                          onClick={() => {
+                            if (participant.phone) {
+                              navigate(`/chat?phone=${participant.phone}`);
+                              onClose?.();
+                            }
+                          }}
+                        >
+                          <MessageCircle className="h-3.5 w-3.5 mr-2 text-primary" /> Conversar com {displayName}
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => {
                             navigator.clipboard.writeText(participant.phone);
