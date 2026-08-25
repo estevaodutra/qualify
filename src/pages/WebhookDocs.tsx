@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Check, Copy, MessageSquare, Image, Mic, Video, FileText, Smile, MapPin, User, BarChart2, Heart, Edit3, Trash2, ArrowRight } from "lucide-react";
+import { Check, Copy, MessageSquare, Image, Mic, Video, FileText, Smile, MapPin, User, BarChart2, Heart, Edit3, Trash2, ArrowRight, Users, UserPlus, UserMinus } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { Badge } from "@/components/ui/badge";
 
@@ -619,6 +619,119 @@ const WebhookDocs = () => {
   }
 }`}
             />
+          </div>
+        </div>
+
+        {/* ======================================================== */}
+        {/* SEÇÃO 3: EVENTOS DE GRUPO (ENTRADA E SAÍDA) */}
+        {/* ======================================================== */}
+        <div className="space-y-8 pt-4">
+          <div className="border-b border-slate-200 pb-3">
+            <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2.5">
+              <Users className="h-6 w-6 text-purple-600" />
+              Eventos de Grupo (Entrada e Saída)
+            </h2>
+            <p className="text-sm text-slate-500 mt-1">
+              Endpoints dedicados para registrar a movimentação de participantes em grupos do WhatsApp e disparar automações de boas-vindas / campanhas.
+            </p>
+          </div>
+
+          {/* 1. Entrada de Participante no Grupo (Group Join) */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-emerald-100 text-emerald-600">
+                  <UserPlus className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Entrada de Participante no Grupo (Join)</h3>
+                  <p className="text-xs text-slate-500">Notifica quando um novo participante entra ou é adicionado ao grupo</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="font-mono text-xs bg-purple-50 text-purple-700 border-purple-200 px-3 py-1 font-semibold">
+                  POST /webhook-inbound/groups/join
+                </Badge>
+                <Badge variant="outline" className="font-mono text-xs bg-slate-100 text-slate-700 px-2 py-1">
+                  POST /webhooks/groups/join
+                </Badge>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100">
+              <strong>Comportamento:</strong> Cria a conversa do grupo no CRM (caso não exista), insere uma mensagem de sistema formatada (<em>"Nome/Telefone entrou no grupo."</em>) e aciona automaticamente os fluxos de <strong>Campanhas de Grupo / Campanhas Piratas</strong> configuradas para o grupo.
+            </p>
+
+            <div className="space-y-2 pt-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Exemplo de Payload</h4>
+              <CodeBlock
+                id="group-join"
+                code={`{
+  "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
+  "raw_event": {
+    "group_id": "120363024849182394@g.us",
+    "group_name": "Comunidade VIP Qualify",
+    "from_phone": "5512982402981",
+    "from_lid": "171296717553783@lid",
+    "from_name": "Estevão Dutra",
+    "timestamp": 1787617800
+  }
+}`}
+              />
+            </div>
+
+            <div className="text-xs text-slate-500 flex flex-wrap gap-4 pt-1">
+              <span><strong>Campos aceitos:</strong> <code className="font-mono text-slate-700">group_id</code> (obrigatório), <code className="font-mono text-slate-700">from_phone</code> / <code className="font-mono text-slate-700">phone</code>, <code className="font-mono text-slate-700">from_lid</code>, <code className="font-mono text-slate-700">from_name</code>, <code className="font-mono text-slate-700">group_name</code>, <code className="font-mono text-slate-700">timestamp</code>.</span>
+            </div>
+          </div>
+
+          {/* 2. Saída de Participante do Grupo (Group Leave) */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-rose-100 text-rose-600">
+                  <UserMinus className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Saída / Remoção de Participante (Leave)</h3>
+                  <p className="text-xs text-slate-500">Notifica quando um participante sai voluntariamente ou é removido do grupo</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="font-mono text-xs bg-rose-50 text-rose-700 border-rose-200 px-3 py-1 font-semibold">
+                  POST /webhook-inbound/groups/leave
+                </Badge>
+                <Badge variant="outline" className="font-mono text-xs bg-slate-100 text-slate-700 px-2 py-1">
+                  POST /webhooks/groups/leave
+                </Badge>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100">
+              <strong>Comportamento:</strong> Registra a saída na timeline do chat do grupo com a mensagem de sistema (<em>"Nome/Telefone saiu do grupo."</em>) e atualiza a relação de participantes da instância no CRM.
+            </p>
+
+            <div className="space-y-2 pt-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Exemplo de Payload</h4>
+              <CodeBlock
+                id="group-leave"
+                code={`{
+  "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
+  "raw_event": {
+    "group_id": "120363024849182394@g.us",
+    "group_name": "Comunidade VIP Qualify",
+    "from_phone": "5512982402981",
+    "from_lid": "171296717553783@lid",
+    "from_name": "Estevão Dutra",
+    "timestamp": 1787617900
+  }
+}`}
+              />
+            </div>
+
+            <div className="text-xs text-slate-500 flex flex-wrap gap-4 pt-1">
+              <span><strong>Campos aceitos:</strong> <code className="font-mono text-slate-700">group_id</code> (obrigatório), <code className="font-mono text-slate-700">from_phone</code> / <code className="font-mono text-slate-700">phone</code>, <code className="font-mono text-slate-700">from_lid</code>, <code className="font-mono text-slate-700">from_name</code>, <code className="font-mono text-slate-700">group_name</code>, <code className="font-mono text-slate-700">timestamp</code>.</span>
+            </div>
           </div>
         </div>
 

@@ -639,6 +639,8 @@ function extractZApiContext(rawEvent: Record<string, unknown>): EventContext {
   let senderPhone = (
     wahaPayload?._data?.key?.remoteJidAlt ||
     rawEvent._data?.key?.remoteJidAlt ||
+    rawEvent.from_phone ||
+    rawEvent.phone ||
     sender?.phone ||
     rawEvent.participant_phone ||
     rawEvent.senderPhone ||
@@ -653,12 +655,12 @@ function extractZApiContext(rawEvent: Record<string, unknown>): EventContext {
     senderPhone = senderPhone.split("@")[0];
   }
 
-  if (!senderPhone && chatJid) {
+  if (!senderPhone && chatJid && !isGroup) {
     senderPhone = chatJid.split("@")[0];
   }
 
   // For group participant notifications, extract participant identifier
-  let senderLid = (rawEvent.participant_lid as string) || null;
+  let senderLid = (rawEvent.from_lid || rawEvent.participant_lid || rawEvent.lid as string) || null;
   
   const notification = body?.notification as string | undefined;
   if (notification?.startsWith("GROUP_PARTICIPANT")) {

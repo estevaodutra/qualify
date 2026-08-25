@@ -110,6 +110,21 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Roteamento semântico para eventos de Grupo (Join / Leave)
+    if (
+      url.pathname.includes("/groups/join") ||
+      url.pathname.includes("/groups/participant-add") ||
+      url.pathname.includes("/group/join")
+    ) {
+      payload.action = "group.participant.add";
+    } else if (
+      url.pathname.includes("/groups/leave") ||
+      url.pathname.includes("/groups/participant-remove") ||
+      url.pathname.includes("/group/leave")
+    ) {
+      payload.action = "group.participant.remove";
+    }
+
     // Se for requisição para a raiz /webhook-inbound sem sub-rota semântica de mensagem:
     // Bloqueia para evitar inferências ambíguas e duplicação de mensagens no chat.
     if (!payload.action || payload.action.startsWith("message")) {
