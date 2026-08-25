@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import { MessageSquare, RefreshCw, Loader2, Info, ChevronLeft, Smartphone, Radio, Eye, Zap, Pin, Archive, UserPlus } from "lucide-react";
+import { MessageSquare, RefreshCw, Loader2, Info, ChevronLeft, Smartphone, Radio, Eye, Zap, Pin, Archive, UserPlus, Users } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -24,6 +24,7 @@ import ChatComposer from "@/components/chat/ChatComposer";
 import ChatSidebar, { ChatSidebarMode } from "@/components/chat/ChatSidebar";
 import QuickRepliesSidebarPanel from "@/components/chat/quick-replies/QuickRepliesSidebarPanel";
 import LeadContextPanel from "@/components/chat/LeadContextPanel";
+import GroupContextPanel from "@/components/chat/group/GroupContextPanel";
 import LeadPipelineSummary from "@/components/chat/pipeline/LeadPipelineSummary";
 import ConversationActionsMenu from "@/components/chat/actions/ConversationActionsMenu";
 import { useConversationActions } from "@/hooks/useConversationActions";
@@ -331,9 +332,27 @@ export default function Chat() {
                     {selectedConv.is_pinned && (
                       <Pin className="h-3.5 w-3.5 text-amber-500 shrink-0 fill-amber-500/20" title="Conversa Fixada" />
                     )}
-                    <h3 className="font-bold text-sm text-card-foreground leading-snug truncate">
-                      {selectedConv.lead?.name || selectedConv.lead?.phone || "Lead Sem Nome"}
-                    </h3>
+                    {(() => {
+                      const p = selectedConv.lead?.phone || selectedConv.contact_phone || "";
+                      const c = (selectedConv.lead?.custom_fields as Record<string, any>) || {};
+                      const isGrp = p.length > 15 || p.includes("@g.us") || p.includes("-group") || c.is_group === true;
+                      return (
+                        <div
+                          onClick={() => setSidebarMode(prev => prev === "quick_replies" ? "lead_details" : "quick_replies")}
+                          className="flex items-center gap-1.5 min-w-0 cursor-pointer group"
+                          title={isGrp ? "Clique para ver dados do grupo" : "Clique para ver dados do lead"}
+                        >
+                          {isGrp && (
+                            <div className="p-0.5 rounded bg-purple-500/10 text-purple-600 shrink-0">
+                              <Users className="h-3.5 w-3.5" />
+                            </div>
+                          )}
+                          <h3 className="font-bold text-sm text-card-foreground leading-snug truncate group-hover:text-primary transition-colors">
+                            {selectedConv.lead?.name || selectedConv.contact_name || (isGrp ? "Grupo WhatsApp" : "Lead Sem Nome")}
+                          </h3>
+                        </div>
+                      );
+                    })()}
                     {selectedConv.is_archived && (
                       <span className="text-[10px] font-bold text-purple-600 bg-purple-500/10 px-1.5 py-0.2 rounded border border-purple-500/20 shrink-0">
                         Arquivada
@@ -359,7 +378,14 @@ export default function Chat() {
                             </button>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" className="text-xs font-semibold z-[10000]">
-                            {sidebarMode === "quick_replies" ? "Ver detalhes do lead" : "Voltar para respostas rápidas"}
+                            {(() => {
+                              const p = selectedConv.lead?.phone || selectedConv.contact_phone || "";
+                              const c = (selectedConv.lead?.custom_fields as Record<string, any>) || {};
+                              const isGrp = p.length > 15 || p.includes("@g.us") || p.includes("-group") || c.is_group === true;
+                              return sidebarMode === "quick_replies" 
+                                ? (isGrp ? "Ver dados do grupo" : "Ver detalhes do lead")
+                                : "Voltar para respostas rápidas";
+                            })()}
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
@@ -370,7 +396,7 @@ export default function Chat() {
                       type="button"
                       onClick={() => setMobileLeadDetailsOpen(true)}
                       className="lg:hidden p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
-                      title="Detalhes do Lead"
+                      title="Detalhes"
                     >
                       <Eye className="h-4 w-4" />
                     </button>
@@ -562,16 +588,27 @@ export default function Chat() {
         </SheetContent>
       </Sheet>
 
-      {/* Mobile Lead Details Sheet */}
+      {/* Mobile Details Sheet */}
       <Sheet open={mobileLeadDetailsOpen} onOpenChange={setMobileLeadDetailsOpen}>
         <SheetContent side="right" className="w-full sm:max-w-md p-0 bg-background border-l border-border/40 z-[9999] overflow-y-auto">
-          {selectedConv && (
-            <LeadContextPanel
-              conversation={selectedConv}
-              stages={pipelineStages}
-              onClose={() => setMobileLeadDetailsOpen(false)}
-            />
-          )}
+          {selectedConv && (() => {
+            const p = selectedConv.lead?.phone || selectedConv.contact_phone || "";
+            const c = (selectedConv.lead?.custom_fields as Record<string, any>) || {};
+            const isGrp = p.length > 15 || p.includes("@g.us") || p.includes("-group") || c.is_group === true;
+
+            return isGrp ? (
+              <GroupContextPanel
+                conversation={selectedConv}
+                onClose={() => setMobileLeadDetailsOpen(false)}
+              />
+            ) : (
+              <LeadContextPanel
+                conversation={selectedConv}
+                stages={pipelineStages}
+                onClose={() => setMobileLeadDetailsOpen(false)}
+              />
+            );
+          })()}
         </SheetContent>
       </Sheet>
     </div>

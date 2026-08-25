@@ -124,6 +124,26 @@ function CustomAudioPlayer({ src, isOperator, isInternal, timeString }: { src: s
 
 
 
+const SENDER_COLORS = [
+  "text-emerald-500 dark:text-emerald-400",
+  "text-sky-500 dark:text-sky-400",
+  "text-violet-500 dark:text-violet-400",
+  "text-pink-500 dark:text-pink-400",
+  "text-amber-500 dark:text-amber-400",
+  "text-teal-500 dark:text-teal-400",
+  "text-indigo-400 dark:text-indigo-300",
+  "text-orange-500 dark:text-orange-400",
+  "text-cyan-500 dark:text-cyan-400",
+];
+
+function getSenderColor(identifier: string) {
+  let hash = 0;
+  for (let i = 0; i < identifier.length; i++) {
+    hash = identifier.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return SENDER_COLORS[Math.abs(hash) % SENDER_COLORS.length];
+}
+
 export default function MessageThread({ 
   conversation, 
   messages, 
@@ -261,6 +281,17 @@ export default function MessageThread({
               );
             }
 
+            const phoneStr = conversation?.lead?.phone || conversation?.contact_phone || "";
+            const customFlds = (conversation?.lead?.custom_fields as Record<string, any>) || {};
+            const isGroupConv =
+              phoneStr.length > 15 ||
+              phoneStr.includes("@g.us") ||
+              phoneStr.includes("-group") ||
+              customFlds.is_group === true;
+
+            const msgMeta = (msg.metadata as Record<string, any>) || {};
+            const rawSender = msgMeta.sender_name || msgMeta.from_name || msgMeta.sender_phone || msgMeta.from_phone || msgMeta.participant || "";
+
             return (
               <div
                 key={msg.id}
@@ -294,6 +325,15 @@ export default function MessageThread({
                     <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider mb-1 opacity-85">
                       <Lock className="h-3 w-3 shrink-0" />
                       Nota Interna
+                    </div>
+                  )}
+
+                  {/* Group Sender Header */}
+                  {isGroupConv && !isOperator && !isInternal && rawSender && (
+                    <div className="flex items-center gap-1.5 mb-1 select-none">
+                      <span className={cn("text-[11px] font-bold truncate", getSenderColor(rawSender))}>
+                        {rawSender}
+                      </span>
                     </div>
                   )}
 
