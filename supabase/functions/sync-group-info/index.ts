@@ -162,7 +162,7 @@ Deno.serve(async (req) => {
       metaObj.ownerJid ||
       null;
 
-    // Normalizar participantes conforme modelo [ { id: "@lid", phoneNumber: "@s.whatsapp.net", admin: "admin"|"superadmin"|null } ]
+    // Normalizar participantes conforme modelo [ { id: "@lid", phoneNumber: "5512988390881@s.whatsapp.net", admin: "admin"|"superadmin"|null } ]
     const rawParticipants: any[] =
       metaObj.participants ||
       metaObj.members ||
@@ -170,11 +170,12 @@ Deno.serve(async (req) => {
       [];
 
     const participants = rawParticipants.map((p) => {
-      let rawPhone = p.phoneNumber || p.phone || "";
+      // Prioridade total para phoneNumber (remove letras, @s.whatsapp.net, +, mantendo apenas dígitos)
+      let rawPhone = p.phoneNumber || p.phone_number || p.pn || p.phone || "";
       if (!rawPhone && p.id && !p.id.includes("@lid")) {
         rawPhone = p.id;
       }
-      const phoneDigits = rawPhone.includes("@") ? rawPhone.split("@")[0].replace(/\D/g, "") : rawPhone.replace(/\D/g, "");
+      const phoneDigits = rawPhone ? String(rawPhone).replace(/\D/g, "") : "";
       
       const rawLid = p.id && p.id.includes("@lid") ? p.id : (p.lid || null);
       
@@ -184,12 +185,13 @@ Deno.serve(async (req) => {
 
       return {
         phone: phoneDigits,
+        phoneNumber: phoneDigits,
         lid: rawLid,
         name: p.name || null,
         isAdmin,
         isSuperAdmin,
         profilePhoto: p.profilePhoto || null,
-        status: p.status || "active"
+        status: (p.status && p.status !== "active") ? p.status : "Olá! Eu estou usando o WhatsApp."
       };
     });
 

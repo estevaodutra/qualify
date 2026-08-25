@@ -22,6 +22,7 @@ import {
   Check,
   Camera,
   Loader2,
+  User,
 } from "lucide-react";
 import { ChatConversation } from "@/hooks/useChat";
 import { useGroupInfo, GroupParticipant } from "@/hooks/useGroupInfo";
@@ -355,8 +356,8 @@ export default function GroupContextPanel({ conversation, onClose }: GroupContex
                   <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
                     <Avatar className="h-10 w-10 border border-border/40 shrink-0">
                       <AvatarImage src={participant.profilePhoto || undefined} alt={displayName} />
-                      <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
-                        {displayName.slice(0, 2).toUpperCase()}
+                      <AvatarFallback className="bg-muted text-muted-foreground font-bold text-xs">
+                        {participant.name ? participant.name.slice(0, 2).toUpperCase() : <User className="h-4 w-4 text-muted-foreground" />}
                       </AvatarFallback>
                     </Avatar>
 
@@ -372,15 +373,19 @@ export default function GroupContextPanel({ conversation, onClose }: GroupContex
                         )}
                       </div>
                       <p className="text-[11px] text-muted-foreground truncate">
-                        {participant.status || "Olá! Eu estou usando o WhatsApp."}
+                        {participant.status && participant.status !== "active"
+                          ? participant.status
+                          : "Olá! Eu estou usando o WhatsApp."}
                       </p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-[10px] font-mono text-muted-foreground hidden sm:inline">
-                      {formatPhone(participant.phone)}
-                    </span>
+                    {participant.name && (
+                      <span className="text-[10px] font-mono text-muted-foreground hidden sm:inline">
+                        {formatPhone(participant.phone)}
+                      </span>
+                    )}
 
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
