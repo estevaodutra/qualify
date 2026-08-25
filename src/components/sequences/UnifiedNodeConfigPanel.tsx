@@ -572,7 +572,7 @@ export function UnifiedNodeConfigPanel({
     ? node.config.messages.find((m: any) => m.id === editingMessageId)
     : null;
 
-  const isActionNode = node.nodeType === "action" || isActionSubType(node.nodeType) || isActionSubType(type) || isActionSubType(node.config.actionType as string) || !!getActionDefinition((node.config.actionType as string) || node.nodeType);
+  const isActionNode = node.nodeType === "action" || isActionSubType(node.nodeType) || isActionSubType(node.config?.actionType as string) || !!getActionDefinition((node.config?.actionType as string) || node.nodeType);
 
   // "content"/"action" nodes carry their real sub-type inside config
   // (contentType/actionType) — resolvedNodeType lets every existing per-type
