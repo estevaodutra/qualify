@@ -123,6 +123,10 @@ Deno.serve(async (req) => {
     else if (metaObj.data) metaObj = metaObj.data;
     else if (metaObj.details) metaObj = metaObj.details;
     else if (metaObj.body) metaObj = metaObj.body;
+
+    const actualGroupId = metaObj.id || normalizedJid;
+    const finalGroupPhone = actualGroupId.includes("@") ? actualGroupId.split("@")[0].replace(/\D/g, "") : cleanGroupPhone;
+    const finalGroupJid = actualGroupId.includes("@") ? actualGroupId : `${finalGroupPhone}@g.us`;
     
     const subject =
       metaObj.subject ||
@@ -133,8 +137,8 @@ Deno.serve(async (req) => {
       null;
 
     const description =
-      metaObj.description ||
       metaObj.desc ||
+      metaObj.description ||
       metaObj.topic ||
       metaObj.groupDescription ||
       metaObj.group_description ||
@@ -151,27 +155,36 @@ Deno.serve(async (req) => {
       null;
 
     const ownerJid =
+      metaObj.ownerPn ||
       metaObj.owner ||
       metaObj.creator ||
+      metaObj.subjectOwnerPn ||
       metaObj.ownerJid ||
       null;
 
-    // Normalizar participantes
-    const rawParticipants: RawParticipant[] =
+    // Normalizar participantes conforme modelo [ { id: "@lid", phoneNumber: "@s.whatsapp.net", admin: "admin"|"superadmin"|null } ]
+    const rawParticipants: any[] =
       metaObj.participants ||
       metaObj.members ||
       metaObj.group_members ||
       [];
 
     const participants = rawParticipants.map((p) => {
-      const rawId = p.id || p.phone || "";
-      const phoneDigits = rawId.includes("@") ? rawId.split("@")[0] : rawId;
-      const isAdmin = p.isAdmin === true || p.isSuperAdmin === true || p.admin === "admin" || p.admin === "superadmin" || p.admin === true;
-      const isSuperAdmin = p.isSuperAdmin === true || p.admin === "superadmin";
+      let rawPhone = p.phoneNumber || p.phone || "";
+      if (!rawPhone && p.id && !p.id.includes("@lid")) {
+        rawPhone = p.id;
+      }
+      const phoneDigits = rawPhone.includes("@") ? rawPhone.split("@")[0].replace(/\D/g, "") : rawPhone.replace(/\D/g, "");
+      
+      const rawLid = p.id && p.id.includes("@lid") ? p.id : (p.lid || null);
+      
+      const adminVal = typeof p.admin === "string" ? p.admin.toLowerCase() : "";
+      const isAdmin = p.isAdmin === true || adminVal === "admin" || adminVal === "superadmin";
+      const isSuperAdmin = p.isSuperAdmin === true || adminVal === "superadmin";
 
       return {
         phone: phoneDigits,
-        lid: p.lid || (rawId.includes("@lid") ? rawId : null),
+        lid: rawLid,
         name: p.name || null,
         isAdmin,
         isSuperAdmin,
@@ -180,7 +193,26 @@ Deno.serve(async (req) => {
       };
     });
 
-    const participantsCount = participants.length || metaObj.size || metaObj.participantsCount || null;
+    // Enriquecer participantes com nomes de leads cadastrados se existirem
+    if (companyId && participants.length > 0) {
+      const phones = participants.map((p) => p.phone).filter(Boolean);
+      if (phones.length > 0) {
+        const { data: matchedLeads } = await supabase
+          .from("leads")
+          .select("phone, name")
+          .eq("company_id", companyId)
+          .in("phone", phones);
+
+        if (matchedLeads && matchedLeads.length > 0) {
+          const leadMap = new Map(matchedLeads.map((l) => [l.phone, l.name]));
+          participants.forEach((p) => {
+            if (!p.name && leadMap.has(p.phone)) {
+              p.name = leadMap.get(p.phone) || null;
+            }
+          });
+        }
+      }
+    }
 
     // 3. Atualizar ou Criar Lead do Grupo
     let groupLeadId: string | null = null;
@@ -189,14 +221,14 @@ Deno.serve(async (req) => {
         .from("leads")
         .select("id, name, custom_fields")
         .eq("company_id", companyId)
-        .eq("phone", cleanGroupPhone)
+        .eq("phone", finalGroupPhone)
         .maybeSingle();
 
       const existingCustom = (existingLead?.custom_fields as Record<string, any>) || {};
       const updatedCustom = {
         ...existingCustom,
         is_group: true,
-        group_jid: normalizedJid,
+        group_jid: finalGroupJid,
         description: description || existingCustom.description || null,
         profile_picture_url: pictureUrl || existingCustom.profile_picture_url || null,
         pictureUrl: pictureUrl || existingCustom.pictureUrl || null,
@@ -224,7 +256,7 @@ Deno.serve(async (req) => {
           .insert({
             user_id: instance.user_id,
             company_id: companyId,
-            phone: cleanGroupPhone,
+            phone: finalGroupPhone,
             name: groupName,
             status: "active",
             custom_fields: updatedCustom
@@ -251,8 +283,8 @@ Deno.serve(async (req) => {
     const responsePayload = {
       success: true,
       group: {
-        jid: normalizedJid,
-        phone: cleanGroupPhone,
+        jid: finalGroupJid,
+        phone: finalGroupPhone,
         name: subject || "Grupo WhatsApp",
         description: description || "",
         pictureUrl: pictureUrl || null,
