@@ -296,6 +296,52 @@ export function useConversationActions() {
     },
   });
 
+  // 8. Delete Conversation (Permanently removes conversation and message history)
+  const deleteMutation = useMutation({
+    mutationFn: async (conversationId: string) => {
+      if (!activeCompanyId) throw new Error("Sem empresa selecionada");
+
+      if (user) removeLocalPin(activeCompanyId, user.id, conversationId);
+      removeLocalArchived(activeCompanyId, conversationId);
+
+      try {
+        await supabase
+          .from("chat_conversation_pins" as any)
+          .delete()
+          .eq("conversation_id", conversationId);
+      } catch (e) {
+        // ignore pin delete error if table doesn't have it
+      }
+
+      try {
+        await supabase
+          .from("chat_messages")
+          .delete()
+          .eq("conversation_id", conversationId);
+      } catch (e) {
+        // ignore if handled by cascade
+      }
+
+      const { error } = await supabase
+        .from("chat_conversations")
+        .delete()
+        .eq("id", conversationId)
+        .eq("company_id", activeCompanyId);
+
+      if (error) throw error;
+      return conversationId;
+    },
+    onSuccess: (deletedId) => {
+      toast.success("Conversa apagada com sucesso!");
+      invalidateChatQueries();
+      queryClient.removeQueries({ queryKey: ["chat-messages", deletedId] });
+    },
+    onError: (err: any) => {
+      console.error("Error deleting conversation:", err);
+      toast.error(`Erro ao apagar conversa: ${err.message}`);
+    },
+  });
+
   return {
     pinConversation: pinMutation.mutateAsync,
     unpinConversation: unpinMutation.mutateAsync,
@@ -304,6 +350,8 @@ export function useConversationActions() {
     archiveConversation: archiveMutation.mutateAsync,
     unarchiveConversation: unarchiveMutation.mutateAsync,
     createLeadFromConversation: createLeadMutation.mutateAsync,
+    deleteConversation: deleteMutation.mutateAsync,
+    isDeleting: deleteMutation.isPending,
     isCreatingLead: createLeadMutation.isPending,
     isPending:
       pinMutation.isPending ||
@@ -312,6 +360,7 @@ export function useConversationActions() {
       markReadMutation.isPending ||
       archiveMutation.isPending ||
       unarchiveMutation.isPending ||
-      createLeadMutation.isPending,
+      createLeadMutation.isPending ||
+      deleteMutation.isPending,
   };
 }
