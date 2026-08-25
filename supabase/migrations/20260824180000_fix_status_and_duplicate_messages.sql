@@ -248,12 +248,18 @@ BEGIN
     END;
   END IF;
 
-  IF v_body IS NULL AND v_media_type IS NOT NULL THEN
-    v_body := '[' || v_media_type || ']';
+  -- Se for mídia e o corpo for nulo ou igual ao placeholder da mídia, limpa o corpo
+  IF v_media_type IS NOT NULL AND (
+    v_body IS NULL OR 
+    v_body = '[' || v_media_type || ']' OR 
+    v_body = '[' || v_msg_type || ']' OR
+    v_body = '[Mensagem do WhatsApp]'
+  ) THEN
+    v_body := '';
   END IF;
-  
+
   IF v_body IS NULL THEN
-    v_body := '[Mensagem do WhatsApp]';
+    v_body := '';
   END IF;
 
   IF v_direction = 'outbound' THEN
@@ -289,11 +295,14 @@ BEGIN
     COALESCE(NEW.event_timestamp, NEW.received_at)
   );
 
-  -- Atualizar a conversa (last_message_at, preview, unread_count, is_archived, etc.)
   UPDATE public.chat_conversations
   SET 
     last_message_at = COALESCE(NEW.event_timestamp, NEW.received_at),
-    last_message_preview = COALESCE(v_body, CASE WHEN v_media_type IS NOT NULL THEN '[' || v_media_type || ']' ELSE '' END),
+    last_message_preview = CASE 
+      WHEN NULLIF(TRIM(v_body), '') IS NOT NULL THEN v_body
+      WHEN v_media_type IS NOT NULL THEN '[' || v_media_type || ']'
+      ELSE '[Mensagem]'
+    END,
     unread_count = CASE WHEN v_direction = 'inbound' THEN unread_count + 1 ELSE unread_count END,
     is_archived = CASE WHEN v_direction = 'inbound' THEN false ELSE is_archived END,
     updated_at = NOW()
