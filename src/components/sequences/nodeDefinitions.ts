@@ -6,6 +6,8 @@ import {
 } from "lucide-react";
 import type { NodeCategory, NodeTypeInfo } from "./shared-types";
 
+import { ACTION_REGISTRY, getActionDefinition } from "./actions/actionRegistry";
+
 export type NodeStatus = "available" | "coming_soon";
 
 export interface NodeSubTypeDefinition {
@@ -24,12 +26,9 @@ export interface NodeBlockDefinition {
   subTypes?: NodeSubTypeDefinition[];
 }
 
-// The 8 main blocks the palette now shows for group-campaign sequences,
-// replacing the previous 22 flat node-type entries. "content" and "action"
-// carry sub-types selected inside the node's own config panel (see
-// UnifiedNodeConfigPanel's "content"/"action" blocks) rather than being
-// separate palette entries — this is what keeps the palette short enough to
-// fit without scrolling.
+// The main blocks the palette now shows for group-campaign sequences,
+// replacing the previous flat node-type entries. "content" and "action"
+// carry sub-types selected inside the node's own config panel.
 export const NODE_DEFINITIONS: NodeBlockDefinition[] = [
   {
     blockType: "content", label: "Mensagem", icon: MessageSquare, color: "bg-blue-500",
@@ -57,15 +56,17 @@ export const NODE_DEFINITIONS: NodeBlockDefinition[] = [
   {
     blockType: "action", label: "Ações", icon: Tag, color: "bg-orange-600",
     subTypes: [
+      { subType: "create_lead", label: "Criar Lead", icon: UserPlus, color: "bg-orange-600" },
+      { subType: "delete_lead", label: "Deletar Lead", icon: UserMinus, color: "bg-rose-600" },
       { subType: "tag_add", label: "Adicionar Tag", icon: Tag, color: "bg-orange-600" },
       { subType: "add_lead_tags", label: "Adicionar Tag", icon: Tag, color: "bg-orange-600" },
       { subType: "tag_remove", label: "Remover Tag", icon: Tag, color: "bg-rose-600" },
       { subType: "remove_lead_tags", label: "Remover Tag", icon: Tag, color: "bg-rose-600" },
+      { subType: "create_deal", label: "Criar Negócio", icon: Award, color: "bg-orange-600" },
+      { subType: "deal_create", label: "Criar Negócio", icon: Award, color: "bg-orange-600" },
       { subType: "deal_move", label: "Mover Negócio", icon: Award, color: "bg-emerald-600" },
       { subType: "move_deal_stage", label: "Mover Negócio", icon: Award, color: "bg-emerald-600" },
       { subType: "move_deal", label: "Mover Negócio", icon: Award, color: "bg-emerald-600" },
-      { subType: "create_deal", label: "Criar Negócio", icon: Award, color: "bg-orange-600" },
-      { subType: "deal_create", label: "Criar Negócio", icon: Award, color: "bg-orange-600" },
       { subType: "channel_select", label: "Selecionar Canal", icon: Send, color: "bg-indigo-600" },
     ],
   },
@@ -98,6 +99,7 @@ export function isContentSubType(nodeType: string): boolean {
 }
 
 export function isActionSubType(nodeType: string): boolean {
+  if (ACTION_REGISTRY[nodeType]) return true;
   const block = getNodeBlockDefinition("action");
   if (!block || !block.subTypes) return false;
   return block.subTypes.some((s) => s.subType === nodeType);
@@ -125,9 +127,14 @@ export function getNodeVisual(nodeType: string, contentType?: string, actionType
     const block = getNodeBlockDefinition("content")!;
     return { label: block.label, icon: block.icon, color: block.color };
   }
-  if (nodeType === "action") {
-    const sub = getNodeSubTypeInfo("action", actionType);
+  if (nodeType === "action" || isActionSubType(nodeType) || isActionSubType(actionType || "")) {
+    const effectiveActionType = actionType || (isActionSubType(nodeType) && nodeType !== "action" ? nodeType : undefined);
+    const sub = getNodeSubTypeInfo("action", effectiveActionType);
     if (sub) return sub;
+    const actionDef = getActionDefinition(effectiveActionType);
+    if (actionDef) {
+      return { label: actionDef.label, icon: Tag, color: "bg-orange-600" };
+    }
     const block = getNodeBlockDefinition("action")!;
     return { label: block.label, icon: block.icon, color: block.color };
   }

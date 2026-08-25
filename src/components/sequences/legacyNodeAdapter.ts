@@ -22,7 +22,8 @@ export function liftLegacyNode(node: LocalNode): LocalNode {
     return node;
   }
   if (node.nodeType === "action") {
-    return node;
+    const actionType = (node.config.actionType as string) || "create_lead";
+    return { ...node, config: { ...node.config, actionType } };
   }
   if (isContentSubType(node.nodeType)) {
     // Lift legacy literal node to a container node with 1 message
@@ -41,11 +42,16 @@ export function liftLegacyNode(node: LocalNode): LocalNode {
   }
   if (
     isActionSubType(node.nodeType) ||
+    node.nodeType === "create_lead" ||
+    node.nodeType === "lead_create" ||
+    node.nodeType === "delete_lead" ||
     node.nodeType === "create_deal" ||
     node.nodeType === "deal_create" ||
     node.nodeType === "move_deal_stage" ||
     node.nodeType === "move_deal" ||
-    node.nodeType === "deal_move"
+    node.nodeType === "deal_move" ||
+    node.config?.category === "lead" ||
+    node.config?.category === "deal"
   ) {
     const actionType = (node.config.actionType as string) || node.nodeType;
     return { ...node, nodeType: "action", config: { ...node.config, actionType } };
@@ -60,7 +66,7 @@ export function lowerToLegacyNode(node: LocalNode): LocalNode {
   }
   if (node.nodeType === "action") {
     const { actionType, ...rest } = node.config;
-    const legacyType = (actionType as string) || "tag_add";
+    const legacyType = (actionType as string) || "create_lead";
     return { ...node, nodeType: legacyType, config: { ...rest, actionType: legacyType } };
   }
   return node;

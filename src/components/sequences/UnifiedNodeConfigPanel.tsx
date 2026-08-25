@@ -44,7 +44,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { getNodeBlockDefinition, getDefaultConfigForSubType } from "./nodeDefinitions";
+import { getNodeBlockDefinition, getDefaultConfigForSubType, isActionSubType } from "./nodeDefinitions";
 import { VariablePicker } from "./VariablePicker";
 import { normalizeDelayConfig, toDelayMs, formatDelayLabel } from "@/lib/workflows/delay";
 import { useCallOperators } from "@/hooks/useCallOperators";
@@ -176,6 +176,10 @@ const NODE_TITLES: Record<string, { title: string; icon: React.ElementType }> = 
   status_video: { title: "Status Vídeo", icon: CircleDot },
   content: { title: "Conteúdo", icon: MessageSquare },
   action: { title: "Ação", icon: Tag },
+  create_lead: { title: "Criar Lead", icon: UserPlus },
+  delete_lead: { title: "Deletar Lead", icon: UserMinus },
+  create_deal: { title: "Criar Negócio", icon: Award },
+  move_deal_stage: { title: "Mover Negócio", icon: Award },
   tag_add: { title: "Adicionar Tag", icon: Tag },
   tag_remove: { title: "Remover Tag", icon: Tag },
   deal_move: { title: "Mover Negócio", icon: Award },
@@ -568,6 +572,8 @@ export function UnifiedNodeConfigPanel({
     ? node.config.messages.find((m: any) => m.id === editingMessageId)
     : null;
 
+  const isActionNode = node.nodeType === "action" || isActionSubType(node.nodeType) || isActionSubType(type) || isActionSubType(node.config.actionType as string) || !!getActionDefinition((node.config.actionType as string) || node.nodeType);
+
   // "content"/"action" nodes carry their real sub-type inside config
   // (contentType/actionType) — resolvedNodeType lets every existing per-type
   // block below key off the sub-type transparently, whether the node arrived
@@ -576,8 +582,8 @@ export function UnifiedNodeConfigPanel({
   // predating the consolidation).
   const resolvedNodeType = node.nodeType === "content"
     ? "content"
-    : node.nodeType === "action"
-    ? ((node.config.actionType as string) || "tag_add")
+    : isActionNode
+    ? "action"
     : node.nodeType;
 
   const nodeInfo = NODE_TITLES[resolvedNodeType] || NODE_TITLES[node.nodeType] || NODE_TITLES.message;
@@ -2797,8 +2803,8 @@ export function UnifiedNodeConfigPanel({
           })()}
 
           {/* ACTION - Novo Motor Extensível de Ações CRM */}
-          {(node.nodeType === "action" || type === "action" || type === "tag_add" || type === "tag_remove" || type === "deal_move") && (() => {
-            const actionType = (currentConfig.actionType as string) || (type === "tag_add" ? "add_lead_tags" : type === "tag_remove" ? "remove_lead_tags" : type === "deal_move" ? "move_deal_stage" : undefined);
+          {(isActionNode || node.nodeType === "action" || type === "action" || isActionSubType(type) || isActionSubType(node.nodeType)) && (() => {
+            const actionType = (currentConfig.actionType as string) || (isActionSubType(node.nodeType) && node.nodeType !== "action" ? node.nodeType : undefined) || (isActionSubType(type) && type !== "action" ? type : undefined) || "create_lead";
             const activeDef = getActionDefinition(actionType);
 
             return (

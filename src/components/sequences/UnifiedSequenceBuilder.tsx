@@ -26,7 +26,7 @@ import { NodePalettePopover, NODE_PALETTE_DND_MIME } from "./NodePalettePopover"
 import { FloatingNodePicker } from "./FloatingNodePicker";
 import { buildTriggerSummary } from "./triggers/TriggerSummary";
 import { validateWorkflowActivation } from "@/lib/workflows/validateActivation";
-import { getNodeVisual, toNodeCategories } from "./nodeDefinitions";
+import { getNodeVisual, toNodeCategories, isActionSubType } from "./nodeDefinitions";
 import { formatDelayLabel, normalizeDelayConfig } from "@/lib/workflows/delay";
 import { TriggerTypeSelector } from "./triggers/TriggerTypeSelector";
 import { getTriggerDefinition } from "./triggers/triggerDefinitions";
@@ -2149,43 +2149,50 @@ export function UnifiedSequenceBuilder({
                       ) : (
                         <>
                           {/* Header/Title */}
-                          <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
-                            <div className={cn("p-1.5 rounded-lg text-white shrink-0 shadow-sm", nodeInfo.color)}>
-                              <NodeIcon className="h-3.5 w-3.5" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-bold text-xs text-slate-800 truncate">
-                                {isCondition
-                                  ? (getConditionDefinition(node.config.conditionType as string)?.label || (node.config.label as string) || "Condição")
-                                  : (node.nodeType === "action" || node.nodeType === "tag_add" || node.nodeType === "tag_remove" || node.nodeType === "deal_move" || node.nodeType === "create_deal" || node.nodeType === "deal_create" || node.nodeType === "move_deal_stage" || node.nodeType === "move_deal")
-                                  ? (getActionDefinition(node.config.actionType as string)?.label || (node.config.label as string) || "Ações")
-                                  : ((node.config.label as string) || nodeInfo.label)}
-                              </p>
-                              <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                                {isCondition
-                                  ? (getConditionDefinition(node.config.conditionType as string) ? "Leads" : "Condição")
-                                  : (node.nodeType === "action" || node.nodeType === "tag_add" || node.nodeType === "tag_remove" || node.nodeType === "deal_move" || node.nodeType === "create_deal" || node.nodeType === "deal_create" || node.nodeType === "move_deal_stage" || node.nodeType === "move_deal")
-                                  ? (getActionDefinition(node.config.actionType as string)?.category.toUpperCase() || "Ação CRM")
-                                  : nodeInfo.label}
-                              </p>
-                            </div>
-                          </div>
+                          {(() => {
+                            const isAction = node.nodeType === "action" || isActionSubType(node.nodeType) || isActionSubType(node.config.actionType as string) || !!getActionDefinition((node.config.actionType as string) || node.nodeType);
+                            const actionDef = isAction ? getActionDefinition((node.config.actionType as string) || (isActionSubType(node.nodeType) && node.nodeType !== "action" ? node.nodeType : undefined) || "create_lead") : null;
+                            const condDef = isCondition ? getConditionDefinition(node.config.conditionType as string) : null;
 
-                          {/* Card Content / Description */}
-                          <div
-                            className="pt-2 text-[10px] text-slate-500 font-medium line-clamp-2 min-h-[30px]"
-                            title={isRandomizer ? randomizerBranches.map(b => b.label).join(node.config.mode === "round_robin" ? " → " : " · ") : undefined}
-                          >
-                            {isCondition ? (
-                              getConditionDefinition(node.config.conditionType as string)?.description || "Clique para selecionar e configurar esta regra..."
-                            ) : (node.nodeType === "action" || node.nodeType === "tag_add" || node.nodeType === "tag_remove" || node.nodeType === "deal_move" || node.nodeType === "create_deal" || node.nodeType === "deal_create" || node.nodeType === "move_deal_stage" || node.nodeType === "move_deal") ? (
-                              getActionDefinition(node.config.actionType as string)?.description || "Clique para selecionar e configurar esta ação..."
-                            ) : isRandomizer ? (
-                              randomizerBranches.length === 0 ? "Clique para configurar as ramificações..." :
-                              node.config.mode === "round_robin"
-                                ? randomizerBranches.map(b => b.label).join(" → ")
-                                : randomizerBranches.map(b => `${b.label} — ${b.weight}%`).join(" · ")
-                            ) : node.nodeType === "status" ? (
+                            return (
+                              <>
+                                <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+                                  <div className={cn("p-1.5 rounded-lg text-white shrink-0 shadow-sm", nodeInfo.color)}>
+                                    <NodeIcon className="h-3.5 w-3.5" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-bold text-xs text-slate-800 truncate">
+                                      {isCondition
+                                        ? (condDef?.label || (node.config.label as string) || "Condição")
+                                        : isAction
+                                        ? (actionDef?.label || (node.config.label as string) || "Ações")
+                                        : ((node.config.label as string) || nodeInfo.label)}
+                                    </p>
+                                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                      {isCondition
+                                        ? (condDef ? "Leads" : "Condição")
+                                        : isAction
+                                        ? (actionDef?.category.toUpperCase() || "AÇÃO CRM")
+                                        : nodeInfo.label}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {/* Card Content / Description */}
+                                <div
+                                  className="pt-2 text-[10px] text-slate-500 font-medium line-clamp-2 min-h-[30px]"
+                                  title={isRandomizer ? randomizerBranches.map(b => b.label).join(node.config.mode === "round_robin" ? " → " : " · ") : undefined}
+                                >
+                                  {isCondition ? (
+                                    condDef?.description || "Clique para selecionar e configurar esta regra..."
+                                  ) : isAction ? (
+                                    actionDef?.description || "Clique para selecionar e configurar esta ação..."
+                                  ) : isRandomizer ? (
+                                    randomizerBranches.length === 0 ? "Clique para configurar as ramificações..." :
+                                    node.config.mode === "round_robin"
+                                      ? randomizerBranches.map(b => b.label).join(" → ")
+                                      : randomizerBranches.map(b => `${b.label} — ${b.weight}%`).join(" · ")
+                                  ) : node.nodeType === "status" ? (
                               (() => {
                                 const statusType = (node.config.statusType as string) || "text";
                                 const isScheduled = node.config.scheduleType === "schedule";
@@ -2211,13 +2218,16 @@ export function UnifiedSequenceBuilder({
                                 node.config.question ? (node.config.question as string) :
                                 node.config.url ? (node.config.url as string) :
                                 node.config.seconds || node.config.minutes || node.config.hours || node.config.days ?
-                                `Aguardar ${node.config.days || 0}d ${node.config.hours || 0}h ${node.config.minutes || 0}m` :
-                                "Clique para configurar o bloco...";
-                              })()
-                            )}
-                          </div>
-                        </>
-                      )}
+                                    `Aguardar ${node.config.days || 0}d ${node.config.hours || 0}h ${node.config.minutes || 0}m` :
+                                    "Clique para configurar o bloco...";
+                                  })()
+                                )}
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </>
+                    )}
 
 
                       
