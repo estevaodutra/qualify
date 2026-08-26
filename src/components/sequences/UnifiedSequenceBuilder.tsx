@@ -1817,7 +1817,11 @@ export function UnifiedSequenceBuilder({
                           <div className="flex flex-col gap-2.5 w-full text-right relative mb-4">
                             {(() => {
                               const pollMsg = (((node.config.messages as any[]) || [])).find(m => m.type === "poll");
-                              const rawPollOpts = (node.config.options as unknown[]) || (pollMsg?.options as unknown[]) || [];
+                              const rawPollOpts = (Array.isArray(pollMsg?.options) && pollMsg.options.length > 0)
+                                ? pollMsg.options
+                                : (Array.isArray(node.config.options) && node.config.options.length > 0)
+                                  ? node.config.options
+                                  : [];
                               const pollOptions = normalizePollOptions(rawPollOpts);
                               const hasPollOutputs = pollOptions.length > 0;
 

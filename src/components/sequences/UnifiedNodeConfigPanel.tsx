@@ -1895,128 +1895,146 @@ export function UnifiedNodeConfigPanel({
           )}
 
           {/* POLL */}
-          {type === "poll" && (
-            <>
-              <div className="space-y-2">
-                <Label>Pergunta da Enquete</Label>
-                <Textarea
-                  placeholder="Ex: Qual o seu nível de interesse?"
-                  value={(currentConfig.question as string) || (currentConfig.title as string) || ""}
-                  onChange={e => updateConfig("question", e.target.value)}
-                  className="resize-none"
-                />
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label>Opções (até 12)</Label>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6"
-                    onClick={() => {
-                      if (options.length < 12) {
-                        const newOpt: PollOption = {
-                          id: `poll_opt_${options.length + 1}_${crypto.randomUUID().slice(0, 8)}`,
-                          label: ""
-                        };
-                        updateConfig("options", [...options, newOpt]);
-                      }
-                    }}
-                    disabled={options.length >= 12}
-                  >
-                    <Plus className="h-3 w-3 mr-1" /> Adicionar
-                  </Button>
+          {type === "poll" && (() => {
+            const rawOptions = (currentConfig.options as unknown[]) || [];
+            const options = normalizePollOptions(rawOptions);
+
+            const handleDeleteOption = (index: number) => {
+              const opt = options[index];
+              if (connections && onDeleteConnection && opt.id) {
+                const hasConnection = connections.some(c => c.sourceNodeId === node.id && c.conditionPath === opt.id);
+                if (hasConnection) {
+                  setOptionToDelete({ index, id: opt.id, label: opt.label || `Opção ${index + 1}` });
+                  return;
+                }
+              }
+              const updated = options.filter((_, idx) => idx !== index);
+              updateConfig("options", updated);
+            };
+
+            return (
+              <>
+                <div className="space-y-2">
+                  <Label>Pergunta da Enquete</Label>
+                  <Textarea
+                    placeholder="Ex: Qual o seu nível de interesse?"
+                    value={(currentConfig.question as string) || (currentConfig.title as string) || ""}
+                    onChange={e => updateConfig("question", e.target.value)}
+                    className="resize-none"
+                  />
                 </div>
-                {options.map((opt, i) => (
-                  <div key={opt.id || i} className="flex gap-1.5 items-center">
-                    <Input
-                      placeholder={`Opção ${i + 1}`}
-                      value={opt.label}
-                      onChange={e => {
-                        const updated = [...options];
-                        updated[i] = { ...updated[i], label: e.target.value };
-                        updateConfig("options", updated);
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Opções (até 12)</Label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6"
+                      onClick={() => {
+                        if (options.length < 12) {
+                          const newOpt: PollOption = {
+                            id: `poll_opt_${options.length + 1}_${crypto.randomUUID().slice(0, 8)}`,
+                            label: ""
+                          };
+                          updateConfig("options", [...options, newOpt]);
+                        }
                       }}
-                      className="flex-1"
-                    />
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="h-9 px-2 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 shrink-0 select-none cursor-default">
-                            <GitBranch className="h-3 w-3" />
-                            Saída {i + 1}
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent side="top">
-                          Cada opção cria uma saída no Workflow Builder.
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-
-                    {options.length > 2 && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-9 w-9 shrink-0 text-destructive hover:bg-destructive/10"
-                        onClick={() => handleDeleteOption(i)}
-                        title="Remover opção"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
+                      disabled={options.length >= 12}
+                    >
+                      <Plus className="h-3 w-3 mr-1" /> Adicionar
+                    </Button>
                   </div>
-                ))}
-              </div>
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 leading-relaxed font-normal space-y-1">
-                <p className="font-semibold text-slate-800 flex items-center gap-1.5">
-                  <GitBranch className="h-3.5 w-3.5 text-[#8A3CFF]" />
-                  Saídas dinâmicas no Workflow
-                </p>
-                <p>
-                  Cada opção cria uma saída independente no canvas. Conecte cada saída ao nó que deseja executar quando o usuário selecionar a opção.
-                </p>
-              </div>
-              <div className="flex items-center justify-between">
-                <Label>Múltipla escolha</Label>
-                <Switch
-                  checked={(currentConfig.multiSelect as boolean) || false}
-                  onCheckedChange={checked => updateConfig("multiSelect", checked)}
-                />
-              </div>
-              <p className="text-xs text-amber-600 dark:text-amber-400">
-                ⚠️ Enquetes funcionam apenas em grupos
-              </p>
-
-              {optionToDelete && (
-                <AlertDialog open={!!optionToDelete} onOpenChange={(o) => !o && setOptionToDelete(null)}>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Remover opção com conexão</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Esta opção possui uma conexão no Workflow. Ao remover "{optionToDelete.label}", a conexão correspondente também será removida. Deseja continuar?
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel onClick={() => setOptionToDelete(null)}>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        onClick={() => {
-                          const updated = options.filter((_, idx) => idx !== optionToDelete.index);
+                  {options.map((opt, i) => (
+                    <div key={opt.id || i} className="flex gap-1.5 items-center">
+                      <Input
+                        placeholder={`Opção ${i + 1}`}
+                        value={opt.label}
+                        onChange={e => {
+                          const updated = [...options];
+                          updated[i] = { ...updated[i], label: e.target.value };
                           updateConfig("options", updated);
-                          if (onDeleteConnection) {
-                            onDeleteConnection(node.id, optionToDelete.id);
-                          }
-                          setOptionToDelete(null);
                         }}
-                      >
-                        Remover Conexão e Opção
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              )}
-            </>
-          )}
+                        className="flex-1"
+                      />
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="h-9 px-2 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 shrink-0 select-none cursor-default">
+                              <GitBranch className="h-3 w-3" />
+                              Saída {i + 1}
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">
+                            Cada opção cria uma saída no Workflow Builder.
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+
+                      {options.length > 2 && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 shrink-0 text-destructive hover:bg-destructive/10"
+                          onClick={() => handleDeleteOption(i)}
+                          title="Remover opção"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 leading-relaxed font-normal space-y-1">
+                  <p className="font-semibold text-slate-800 flex items-center gap-1.5">
+                    <GitBranch className="h-3.5 w-3.5 text-[#8A3CFF]" />
+                    Saídas dinâmicas no Workflow
+                  </p>
+                  <p>
+                    Cada opção cria uma saída independente no canvas. Conecte cada saída ao nó que deseja executar quando o usuário selecionar a opção.
+                  </p>
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label>Múltipla escolha</Label>
+                  <Switch
+                    checked={(currentConfig.multiSelect as boolean) || false}
+                    onCheckedChange={checked => updateConfig("multiSelect", checked)}
+                  />
+                </div>
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  ⚠️ Enquetes funcionam apenas em grupos
+                </p>
+
+                {optionToDelete && (
+                  <AlertDialog open={!!optionToDelete} onOpenChange={(o) => !o && setOptionToDelete(null)}>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Remover opção com conexão</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Esta opção possui uma conexão no Workflow. Ao remover "{optionToDelete.label}", a conexão correspondente também será removida. Deseja continuar?
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setOptionToDelete(null)}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          onClick={() => {
+                            const updated = options.filter((_, idx) => idx !== optionToDelete.index);
+                            updateConfig("options", updated);
+                            if (onDeleteConnection) {
+                              onDeleteConnection(node.id, optionToDelete.id);
+                            }
+                            setOptionToDelete(null);
+                          }}
+                        >
+                          Remover Conexão e Opção
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+              </>
+            );
+          })()}
 
           {/* BUTTONS */}
           {type === "buttons" && (() => {
