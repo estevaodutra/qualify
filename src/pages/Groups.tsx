@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useGroups, WhatsAppGroupItem, GroupFilters } from "@/hooks/useGroups";
 import { GroupCard } from "@/components/groups/GroupCard";
 import { GroupDetailsDrawer } from "@/components/groups/GroupDetailsDrawer";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { UsersRound, Search, Filter, ArrowUpDown, RefreshCw, ChevronLeft, ChevronRight, Check } from "lucide-react";
+import { UsersRound, Search, Filter, ArrowUpDown, RefreshCw, ChevronLeft, ChevronRight, Wand2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -24,7 +24,7 @@ export default function Groups() {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Fetch groups with filters
-  const { groups, totalCount, totalPages, isLoading, isFetching, refetch } = useGroups({
+  const { groups, totalCount, totalPages, isLoading, isFetching, refetch, migrateGroups, isMigrating } = useGroups({
     search,
     instanceId,
     status,
@@ -34,6 +34,11 @@ export default function Groups() {
     page,
     pageSize: 12,
   });
+
+  // Auto-run migration once on mount to organize group entries out of leads table into whatsapp_groups
+  useEffect(() => {
+    migrateGroups();
+  }, []);
 
   // Fetch instances for filter dropdown
   const { data: instances } = useQuery({
@@ -73,6 +78,18 @@ export default function Groups() {
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => migrateGroups()}
+            disabled={isMigrating}
+            className="gap-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/30 border-indigo-200/60"
+            title="Extrai grupos cadastrados na tabela de Leads e move para a tabela de Grupos"
+          >
+            <Wand2 className={`h-3.5 w-3.5 ${isMigrating ? "animate-spin" : ""}`} />
+            {isMigrating ? "Organizando..." : "Organizar Grupos da Base"}
+          </Button>
+
           <Button
             variant="outline"
             size="sm"
@@ -203,22 +220,34 @@ export default function Groups() {
               Os grupos das suas conexões do WhatsApp aparecerão aqui automaticamente após a sincronização.
             </p>
           </div>
-          {(search || instanceId !== "all" || hasDescriptionOnly || hasPhotoOnly) && (
+          <div className="flex items-center justify-center gap-3 pt-2">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => {
-                setSearch("");
-                setInstanceId("all");
-                setStatus("all");
-                setHasDescriptionOnly(false);
-                setHasPhotoOnly(false);
-              }}
-              className="text-xs font-semibold"
+              onClick={() => migrateGroups()}
+              disabled={isMigrating}
+              className="text-xs font-bold gap-2 text-indigo-600 dark:text-indigo-400"
             >
-              Limpar Filtros
+              <Wand2 className="h-3.5 w-3.5" />
+              Organizar Grupos da Base
             </Button>
-          )}
+            {(search || instanceId !== "all" || hasDescriptionOnly || hasPhotoOnly) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSearch("");
+                  setInstanceId("all");
+                  setStatus("all");
+                  setHasDescriptionOnly(false);
+                  setHasPhotoOnly(false);
+                }}
+                className="text-xs font-semibold"
+              >
+                Limpar Filtros
+              </Button>
+            )}
+          </div>
         </div>
       )}
 

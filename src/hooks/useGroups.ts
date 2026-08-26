@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useEffect } from "react";
+import { toast } from "sonner";
 
 export interface WhatsAppGroupItem {
   id: string;
@@ -51,66 +52,110 @@ export function useGroups(filters: GroupFilters = {}) {
     queryFn: async () => {
       if (!activeCompanyId) return { groups: [], totalCount: 0, totalPages: 1 };
 
-      // 1. Query dedicated whatsapp_groups or fallback to group_campaigns / chat_conversations
-      const { data: wgData, error: wgErr } = await supabase
+      // 1. Query dedicated whatsapp_groups
+      const { data: wgData } = await supabase
         .from("whatsapp_groups" as any)
         .select("*", { count: "exact" })
         .eq("company_id", activeCompanyId);
 
       let rawGroups: any[] = wgData || [];
 
-      // Fallback: If whatsapp_groups table is empty, merge from group_campaigns and chat_conversations
-      if (!wgErr && rawGroups.length === 0) {
-        const { data: gcData } = await supabase
-          .from("group_campaigns")
-          .select("id, name, instance_id, group_jid, group_name, group_description, group_photo_url, status, created_at, updated_at")
-          .eq("company_id", activeCompanyId);
+      // 2. Additional source: Query group_campaigns
+      const { data: gcData } = await supabase
+        .from("group_campaigns")
+        .select("id, name, instance_id, group_jid, group_name, group_description, group_photo_url, status, created_at, updated_at")
+        .eq("company_id", activeCompanyId);
 
-        if (gcData && gcData.length > 0) {
-          rawGroups = gcData.map((gc) => ({
-            id: gc.id,
-            company_id: activeCompanyId,
-            instance_id: gc.instance_id,
-            group_jid: gc.group_jid || `gc_${gc.id}@g.us`,
-            name: gc.group_name || gc.name || "Grupo WhatsApp",
-            description: gc.group_description,
-            picture_url: gc.group_photo_url,
-            participants_count: 0,
-            admins_count: 0,
-            status: gc.status || "active",
-            created_at: gc.created_at,
-            updated_at: gc.updated_at,
-          }));
-        }
+      if (gcData && gcData.length > 0) {
+        gcData.forEach((gc) => {
+          const jid = gc.group_jid || `gc_${gc.id}@g.us`;
+          if (!rawGroups.some((g) => g.group_jid === jid)) {
+            rawGroups.push({
+              id: gc.id,
+              company_id: activeCompanyId,
+              instance_id: gc.instance_id,
+              group_jid: jid,
+              name: gc.group_name || gc.name || "Grupo WhatsApp",
+              description: gc.group_description,
+              picture_url: gc.group_photo_url,
+              participants_count: 0,
+              admins_count: 0,
+              status: gc.status || "active",
+              created_at: gc.created_at,
+              updated_at: gc.updated_at,
+            });
+          }
+        });
+      }
 
-        const { data: convData } = await supabase
-          .from("chat_conversations")
-          .select("id, instance_id, contact_name, last_message_at, updated_at, lead_id")
-          .eq("company_id", activeCompanyId);
+      // 3. Additional source: Query chat_conversations
+      const { data: convData } = await supabase
+        .from("chat_conversations")
+        .select("id, instance_id, contact_name, last_message_at, updated_at, lead_id")
+        .eq("company_id", activeCompanyId);
 
-        if (convData) {
-          const groupConvs = convData.filter((c: any) => c.contact_name?.includes("@g.us") || c.contact_name?.toLowerCase().includes("grupo"));
-          groupConvs.forEach((c: any) => {
-            const jid = c.contact_name?.includes("@g.us") ? c.contact_name : `${c.id}@g.us`;
-            if (!rawGroups.some((g) => g.group_jid === jid)) {
-              rawGroups.push({
-                id: c.id,
-                company_id: activeCompanyId,
-                instance_id: c.instance_id,
-                group_jid: jid,
-                name: c.contact_name?.split("@")[0] || "Grupo WhatsApp",
-                description: null,
-                picture_url: null,
-                participants_count: 0,
-                admins_count: 0,
-                status: "active",
-                last_activity_at: c.last_message_at || c.updated_at,
-                created_at: c.updated_at || new Date().toISOString(),
-                updated_at: c.updated_at || new Date().toISOString(),
-              });
-            }
-          });
-        }
+      if (convData) {
+        const groupConvs = convData.filter((c: any) => c.contact_name?.includes("@g.us") || c.contact_name?.toLowerCase().includes("grupo"));
+        groupConvs.forEach((c: any) => {
+          const jid = c.contact_name?.includes("@g.us") ? c.contact_name : `${c.id}@g.us`;
+          if (!rawGroups.some((g) => g.group_jid === jid)) {
+            rawGroups.push({
+              id: c.id,
+              company_id: activeCompanyId,
+              instance_id: c.instance_id,
+              group_jid: jid,
+              name: c.contact_name?.split("@")[0] || "Grupo WhatsApp",
+              description: null,
+              picture_url: null,
+              participants_count: 0,
+              admins_count: 0,
+              status: "active",
+              last_activity_at: c.last_message_at || c.updated_at,
+              created_at: c.updated_at || new Date().toISOString(),
+              updated_at: c.updated_at || new Date().toISOString(),
+            });
+          }
+        });
+      }
+
+      // 4. Additional source: Check leads table for group entries (e.g. 120363... or @g.us)
+      const { data: groupLeads } = await supabase
+        .from("leads")
+        .select("id, company_id, name, phone, created_at, updated_at")
+        .eq("company_id", activeCompanyId);
+
+      if (groupLeads) {
+        const fakeGroupLeads = groupLeads.filter(
+          (l: any) =>
+            (l.name && l.name.includes("@g.us")) ||
+            (l.phone && (l.phone.startsWith("120363") || l.phone.includes("@g.us")))
+        );
+
+        fakeGroupLeads.forEach((gl: any) => {
+          const jid = gl.phone?.includes("@g.us")
+            ? gl.phone
+            : gl.name?.includes("@g.us")
+            ? gl.name
+            : `${gl.phone}@g.us`;
+
+          if (!rawGroups.some((g) => g.group_jid === jid)) {
+            rawGroups.push({
+              id: gl.id,
+              company_id: activeCompanyId,
+              instance_id: null,
+              group_jid: jid,
+              name: gl.name && !gl.name.includes("@g.us") ? gl.name : jid,
+              description: null,
+              picture_url: null,
+              participants_count: 0,
+              admins_count: 0,
+              status: "active",
+              last_activity_at: gl.updated_at || gl.created_at,
+              created_at: gl.created_at || new Date().toISOString(),
+              updated_at: gl.updated_at || new Date().toISOString(),
+            });
+          }
+        });
       }
 
       // Fetch instance names
@@ -123,7 +168,7 @@ export function useGroups(filters: GroupFilters = {}) {
       const { data: members } = await supabase
         .from("group_members")
         .select("group_campaign_id, is_admin");
-      
+
       const countsMap = new Map<string, { total: number; admins: number }>();
       (members || []).forEach((m) => {
         const curr = countsMap.get(m.group_campaign_id) || { total: 0, admins: 0 };
@@ -153,7 +198,7 @@ export function useGroups(filters: GroupFilters = {}) {
         };
       });
 
-      // 2. Client-side Filters
+      // 5. Client-side Filters
       if (search.trim()) {
         const term = search.toLowerCase().trim();
         items = items.filter(
@@ -180,7 +225,7 @@ export function useGroups(filters: GroupFilters = {}) {
         items = items.filter((g) => Boolean(g.pictureUrl));
       }
 
-      // 3. Sort
+      // 6. Sort
       items.sort((a, b) => {
         if (sort === "most_recent") return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
         if (sort === "oldest") return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
@@ -202,7 +247,76 @@ export function useGroups(filters: GroupFilters = {}) {
       };
     },
     enabled: Boolean(activeCompanyId),
-    staleTime: 1000 * 30, // 30 seconds
+    staleTime: 1000 * 15,
+  });
+
+  // Mutation to migrate group entries out of leads table into whatsapp_groups table
+  const migrateGroupsMutation = useMutation({
+    mutationFn: async () => {
+      if (!activeCompanyId) return 0;
+
+      // 1. Fetch leads that are fake groups
+      const { data: groupLeads } = await supabase
+        .from("leads")
+        .select("id, user_id, company_id, name, phone, created_at, updated_at")
+        .eq("company_id", activeCompanyId);
+
+      if (!groupLeads || groupLeads.length === 0) return 0;
+
+      const fakeGroupLeads = groupLeads.filter(
+        (l: any) =>
+          (l.name && l.name.includes("@g.us")) ||
+          (l.phone && (l.phone.startsWith("120363") || l.phone.includes("@g.us")))
+      );
+
+      if (fakeGroupLeads.length === 0) return 0;
+
+      let migratedCount = 0;
+
+      for (const gl of fakeGroupLeads) {
+        const jid = gl.phone?.includes("@g.us")
+          ? gl.phone
+          : gl.name?.includes("@g.us")
+          ? gl.name
+          : `${gl.phone}@g.us`;
+
+        const groupName = gl.name && !gl.name.includes("@g.us") ? gl.name : jid;
+
+        // Upsert into whatsapp_groups table
+        const { error: upsertErr } = await supabase
+          .from("whatsapp_groups" as any)
+          .upsert(
+            {
+              company_id: gl.company_id,
+              user_id: gl.user_id,
+              group_jid: jid,
+              name: groupName,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "company_id,group_jid" }
+          );
+
+        if (!upsertErr) {
+          // Delete from leads table
+          await supabase.from("leads").delete().eq("id", gl.id);
+          migratedCount++;
+        }
+      }
+
+      return migratedCount;
+    },
+    onSuccess: (count) => {
+      queryClient.invalidateQueries({ queryKey: ["whatsapp_groups"] });
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      if (count > 0) {
+        toast.success(`${count} grupos foram migrados da tabela de Leads para a tabela de Grupos!`);
+      } else {
+        toast.info("Todos os grupos já estão organizados na tabela de Grupos.");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(`Erro ao organizar grupos: ${err.message || String(err)}`);
+    },
   });
 
   // Realtime updates subscription
@@ -211,6 +325,9 @@ export function useGroups(filters: GroupFilters = {}) {
 
     const channel = supabase
       .channel("realtime_groups_channel")
+      .on("postgres_changes", { event: "*", schema: "public", table: "whatsapp_groups" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["whatsapp_groups"] });
+      })
       .on("postgres_changes", { event: "*", schema: "public", table: "group_campaigns" }, () => {
         queryClient.invalidateQueries({ queryKey: ["whatsapp_groups"] });
       })
@@ -232,5 +349,7 @@ export function useGroups(filters: GroupFilters = {}) {
     isFetching,
     error,
     refetch,
+    migrateGroups: migrateGroupsMutation.mutate,
+    isMigrating: migrateGroupsMutation.isPending,
   };
 }
