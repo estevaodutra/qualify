@@ -3336,10 +3336,12 @@ Deno.serve(async (req) => {
           
           if (subFailed) {
             nodesFailed++;
+            console.log(`[ExecuteMessage] ❌ Content node ${node.id} sub-message failed, aborting sequence continuation.`);
+            break;
           }
 
           // If a poll message was sent in this content node and execution wasn't resumed from a vote, pause to wait for response
-          if (hasSentPollInSubMessages && !subFailed && !triggerContext?.resumedFromPoll) {
+          if (hasSentPollInSubMessages && !triggerContext?.resumedFromPoll) {
             console.log(`[ExecuteMessage] ⏸️ Poll message sent in content node ${node.id}. Pausing workflow ${workflowExecutionId} to wait for poll vote...`);
 
             await supabase

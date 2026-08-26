@@ -182,7 +182,9 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
     case "message.send_poll":
       endpoint = "/send-poll";
       body.pollName = config.question || config.title || "";
-      body.options = config.options || [];
+      body.options = (Array.isArray(config.options) ? config.options : []).map((opt: any) =>
+        typeof opt === "string" ? opt : (opt?.label || String(opt || ""))
+      );
       break;
 
     case "message.send_reaction":
