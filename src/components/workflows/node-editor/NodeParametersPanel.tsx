@@ -11,6 +11,8 @@ interface NodeParametersPanelProps {
   nodes?: LocalNode[];
   onManualSend?: () => void;
   isSendingManual?: boolean;
+  connections?: any[];
+  onDeleteConnection?: (sourceNodeId: string, conditionPath: string) => void;
 }
 
 export function NodeParametersPanel({
@@ -20,7 +22,9 @@ export function NodeParametersPanel({
   isGroup,
   nodes,
   onManualSend,
-  isSendingManual
+  isSendingManual,
+  connections,
+  onDeleteConnection,
 }: NodeParametersPanelProps) {
   return (
     <div className="flex flex-col border rounded-2xl bg-white shadow-sm overflow-hidden">
@@ -38,6 +42,8 @@ export function NodeParametersPanel({
           mode={mode}
           isGroup={isGroup}
           nodes={nodes}
+          connections={connections}
+          onDeleteConnection={onDeleteConnection}
           onManualSend={onManualSend}
           isSendingManual={isSendingManual}
           renderMediaUploader={(props) => (

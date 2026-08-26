@@ -115,12 +115,33 @@ Deno.serve(async (req) => {
     }
 
     const typedPoll = pollMessage as PollMessage;
-    const optionActions = typedPoll.option_actions || {};
-    const actionConfig = optionActions[String(response.option_index)] as PollActionConfig | undefined;
 
-    console.log(`[HandlePollResponse] Found poll, action config: ${JSON.stringify(actionConfig)}`);
+    // Resolve stable option ID and label from poll_messages.options
+    const rawOptions = typedPoll.options || [];
+    let selectedOptionId = "";
+    let selectedOptionLabel = response.option_text || "";
 
-    // Check deduplication - has this user already voted for this option?
+    if (Array.isArray(rawOptions)) {
+      const optItem = rawOptions[response.option_index] || rawOptions.find((o: any) => {
+        const lbl = typeof o === "string" ? o : o?.label;
+        return lbl && response.option_text && lbl.toLowerCase() === response.option_text.toLowerCase();
+      });
+
+      if (typeof optItem === "string") {
+        selectedOptionId = `poll_opt_${response.option_index + 1}`;
+        selectedOptionLabel = optItem;
+      } else if (optItem && typeof optItem === "object") {
+        selectedOptionId = (optItem as any).id || `poll_opt_${response.option_index + 1}`;
+        selectedOptionLabel = (optItem as any).label || response.option_text || "";
+      }
+    }
+    if (!selectedOptionId) {
+      selectedOptionId = `poll_opt_${response.option_index + 1}`;
+    }
+
+    console.log(`[HandlePollResponse] Resolved voted option ID: "${selectedOptionId}", label: "${selectedOptionLabel}" for message ${message_id}`);
+
+    // Check deduplication - has this user already voted for this option and resumed the workflow?
     const { data: existingResponse } = await supabase
       .from("poll_responses")
       .select("id, action_executed")
@@ -129,27 +150,22 @@ Deno.serve(async (req) => {
       .eq("option_index", response.option_index)
       .maybeSingle();
 
-    if (existingResponse) {
-      // Check if action should execute only once
-      const executeOnce = actionConfig?.config?.executeOnce !== false;
-      
-      if (executeOnce && existingResponse.action_executed) {
-        console.log(`[HandlePollResponse] Duplicate vote, action already executed`);
-        return new Response(
-          JSON.stringify({ 
-            success: true, 
-            message: "Action already executed for this respondent",
-            data: {
-              action_type: actionConfig?.actionType || "none",
-              already_executed: true,
-            }
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+    if (existingResponse?.action_executed) {
+      console.log(`[HandlePollResponse] Duplicate vote: workflow already resumed for respondent ${respondent.phone}`);
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: "Workflow execution already resumed for this vote",
+          data: { already_executed: true, selectedOptionId }
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // Create or get response record
+    const optionActions = typedPoll.option_actions || {};
+    const actionConfig = optionActions[String(response.option_index)] as PollActionConfig | undefined;
+
+    // Create or update poll response record
     const { data: responseRecord, error: responseError } = await supabase
       .from("poll_responses")
       .upsert({
@@ -159,8 +175,8 @@ Deno.serve(async (req) => {
         respondent_name: respondent.name || null,
         respondent_jid: respondent.jid || null,
         option_index: response.option_index,
-        option_text: response.option_text || typedPoll.options[response.option_index] || "",
-        action_type: actionConfig?.actionType || "none",
+        option_text: selectedOptionLabel || response.option_text || "",
+        action_type: actionConfig?.actionType || "workflow_branch",
         responded_at: timestamp || new Date().toISOString(),
       }, {
         onConflict: "poll_message_id,respondent_phone,option_index",
@@ -176,15 +192,75 @@ Deno.serve(async (req) => {
       );
     }
 
-    // If no action configured or action is "none", just record and return
-    if (!actionConfig || actionConfig.actionType === "none") {
+    // Always attempt to resume workflow execution if sequence_id is present
+    let workflowResumeResult: Record<string, unknown> | null = null;
+    let workflowResumed = false;
+
+    if (typedPoll.sequence_id) {
+      console.log(`[HandlePollResponse] Triggering workflow continuation for sequence ${typedPoll.sequence_id}, node ${typedPoll.node_id}, output ${selectedOptionId}`);
+      
+      const triggerContext = {
+        resumedFromPoll: true,
+        resumeNodeId: typedPoll.node_id,
+        pollMessageId: typedPoll.message_id,
+        selectedOptionId,
+        selectedOptionLabel,
+        respondentPhone: respondent.phone,
+        contactPhone: respondent.phone,
+        respondentName: respondent.name || "",
+        respondentJid: respondent.jid || `${respondent.phone}@s.whatsapp.net`,
+        groupJid: group_jid,
+        pollResponse: {
+          poll_message_id: typedPoll.message_id,
+          option_id: selectedOptionId,
+          option_label: selectedOptionLabel,
+          responded_at: timestamp || new Date().toISOString(),
+        },
+      };
+
+      try {
+        const executeResponse = await fetch(`${supabaseUrl}/functions/v1/execute-message`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            campaignId: typedPoll.campaign_id,
+            sequenceId: typedPoll.sequence_id,
+            triggerContext,
+          }),
+        });
+
+        workflowResumeResult = await executeResponse.json();
+        workflowResumed = executeResponse.ok;
+        console.log(`[HandlePollResponse] Workflow resume response:`, workflowResumeResult);
+      } catch (resumeErr) {
+        console.error(`[HandlePollResponse] Failed to resume workflow via execute-message:`, resumeErr);
+      }
+    }
+
+    // Update response record with execution result
+    await supabase
+      .from("poll_responses")
+      .update({
+        action_executed: workflowResumed || (actionConfig && actionConfig.actionType !== "none"),
+        action_result: { workflowResumeResult, actionConfig },
+        executed_at: new Date().toISOString(),
+      })
+      .eq("id", responseRecord.id);
+
+    // If workflow was resumed or legacy action is none, return success
+    if (workflowResumed || !actionConfig || actionConfig.actionType === "none") {
       return new Response(
-        JSON.stringify({ 
-          success: true, 
-          message: "Response recorded, no action configured",
+        JSON.stringify({
+          success: true,
+          message: workflowResumed ? "Workflow resumed for selected poll option" : "Response recorded",
           data: {
-            action_type: "none",
-            recorded: true,
+            selectedOptionId,
+            selectedOptionLabel,
+            workflowResumed,
+            workflowResult: workflowResumeResult,
           }
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }

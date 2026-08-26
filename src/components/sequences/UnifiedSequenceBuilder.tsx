@@ -625,11 +625,33 @@ export function UnifiedSequenceBuilder({
       guard++;
     }
 
+    const clonedConfig = JSON.parse(JSON.stringify(source.config));
+    if (Array.isArray(clonedConfig.options)) {
+      clonedConfig.options = clonedConfig.options.map((opt: any, idx: number) => ({
+        id: `poll_opt_${idx + 1}_${crypto.randomUUID().slice(0, 8)}`,
+        label: typeof opt === "string" ? opt : (opt?.label || ""),
+      }));
+    }
+    if (Array.isArray(clonedConfig.messages)) {
+      clonedConfig.messages = clonedConfig.messages.map((msg: any) => {
+        if (msg.type === "poll" && Array.isArray(msg.options)) {
+          return {
+            ...msg,
+            options: msg.options.map((opt: any, idx: number) => ({
+              id: `poll_opt_${idx + 1}_${crypto.randomUUID().slice(0, 8)}`,
+              label: typeof opt === "string" ? opt : (opt?.label || ""),
+            })),
+          };
+        }
+        return msg;
+      });
+    }
+
     const newNode: LocalNode = {
       id: generateNodeId(),
       nodeType: source.nodeType,
       nodeOrder: localNodes.length,
-      config: JSON.parse(JSON.stringify(source.config)),
+      config: clonedConfig,
       positionX: offsetX,
       positionY: offsetY,
     };
@@ -1792,42 +1814,72 @@ export function UnifiedSequenceBuilder({
                             <Plus className="h-3.5 w-3.5" /> Adicionar ação
                           </button>
                           
-                          <div className="flex flex-col gap-2 w-full text-right relative mb-4">
-                            {(((node.config.messages as any[]) || [])).some(m => m.type === "user_input") && (
-                              <div className="relative flex items-center justify-end w-full">
-                                <span className="text-[8px] font-bold text-slate-500 select-none mr-2">Caso o contato não responda</span>
-                                <div
-                                  data-node-port="true" data-node-id={node.id} data-port-id="timeout"
-                                  onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", "timeout")}
-                                  className="absolute -right-[27.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-amber-500 bg-background hover:bg-amber-500 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
-                                  title="Caso o contato não responda"
-                                >
-                                  <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                                </div>
-                              </div>
-                            )}
-                            <div className="relative flex items-center justify-end w-full">
-                              <span className="text-[8px] font-bold text-slate-500 select-none mr-2">Caso ocorrer erro no envio da mensagem</span>
-                              <div
-                                data-node-port="true" data-node-id={node.id} data-port-id="error"
-                                onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", "error")}
-                                className="absolute -right-[27.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-destructive bg-background hover:bg-destructive cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
-                                title="Caso ocorrer erro"
-                              >
-                                <div className="h-1.5 w-1.5 rounded-full bg-destructive" />
-                              </div>
-                            </div>
-                            <div className="relative flex items-center justify-end w-full">
-                              <span className="text-[8px] font-bold text-slate-500 select-none mr-2">Próximo passo</span>
-                              <div
-                                data-node-port="true" data-node-id={node.id} data-port-id="default"
-                            onMouseDown={(e) => handlePortMouseDown(e, node.id, "out")}
-                                className="absolute -right-[27.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-blue-500 bg-background hover:bg-blue-500 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
-                                title="Próximo passo"
-                              >
-                                <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-                              </div>
-                            </div>
+                          <div className="flex flex-col gap-2.5 w-full text-right relative mb-4">
+                            {(() => {
+                              const pollMsg = (((node.config.messages as any[]) || [])).find(m => m.type === "poll");
+                              const rawPollOpts = (node.config.options as unknown[]) || (pollMsg?.options as unknown[]) || [];
+                              const pollOptions = normalizePollOptions(rawPollOpts);
+                              const hasPollOutputs = pollOptions.length > 0;
+
+                              return (
+                                <>
+                                  {hasPollOutputs && pollOptions.map((opt, i) => (
+                                    <div key={opt.id || i} className="relative flex items-center justify-end w-full min-h-[20px]">
+                                      <span className="text-[9px] font-bold text-indigo-600 select-none mr-2 truncate max-w-[180px]" title={opt.label || `Opção ${i + 1}`}>
+                                        {opt.label || `Opção ${i + 1}`}
+                                      </span>
+                                      <div
+                                        data-node-port="true" data-node-id={node.id} data-port-id={opt.id}
+                                        onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", opt.id)}
+                                        className="absolute -right-[27.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-indigo-500 bg-background hover:bg-indigo-500 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
+                                        title={`Saída: ${opt.label || `Opção ${i + 1}`}`}
+                                      >
+                                        <div className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
+                                      </div>
+                                    </div>
+                                  ))}
+
+                                  {(((node.config.messages as any[]) || [])).some(m => m.type === "user_input") && (
+                                    <div className="relative flex items-center justify-end w-full">
+                                      <span className="text-[8px] font-bold text-slate-500 select-none mr-2">Caso o contato não responda</span>
+                                      <div
+                                        data-node-port="true" data-node-id={node.id} data-port-id="timeout"
+                                        onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", "timeout")}
+                                        className="absolute -right-[27.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-amber-500 bg-background hover:bg-amber-500 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
+                                        title="Caso o contato não responda"
+                                      >
+                                        <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                      </div>
+                                    </div>
+                                  )}
+                                  <div className="relative flex items-center justify-end w-full">
+                                    <span className="text-[8px] font-bold text-slate-500 select-none mr-2">Caso ocorrer erro no envio da mensagem</span>
+                                    <div
+                                      data-node-port="true" data-node-id={node.id} data-port-id="error"
+                                      onMouseDown={(e) => handlePortMouseDown(e, node.id, "out", "error")}
+                                      className="absolute -right-[27.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-destructive bg-background hover:bg-destructive cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
+                                      title="Caso ocorrer erro"
+                                    >
+                                      <div className="h-1.5 w-1.5 rounded-full bg-destructive" />
+                                    </div>
+                                  </div>
+
+                                  {!hasPollOutputs && (
+                                    <div className="relative flex items-center justify-end w-full">
+                                      <span className="text-[8px] font-bold text-slate-500 select-none mr-2">Próximo passo</span>
+                                      <div
+                                        data-node-port="true" data-node-id={node.id} data-port-id="default"
+                                        onMouseDown={(e) => handlePortMouseDown(e, node.id, "out")}
+                                        className="absolute -right-[27.5px] top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-blue-500 bg-background hover:bg-blue-500 cursor-crosshair z-20 flex items-center justify-center transition-colors shadow-sm"
+                                        title="Próximo passo"
+                                      >
+                                        <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                                      </div>
+                                    </div>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </div>
 
 

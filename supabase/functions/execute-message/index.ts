@@ -3000,6 +3000,48 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // Check if we are resuming from a poll vote
+        const isResumedFromPollNode = triggerContext?.resumedFromPoll && (triggerContext?.resumeNodeId === node.id || !triggerContext?.resumeNodeId);
+        if (isResumedFromPollNode && (node.node_type === "content" || node.node_type === "poll")) {
+          const selectedOptionId = triggerContext?.selectedOptionId;
+          const selectedOptionLabel = triggerContext?.selectedOptionLabel;
+          console.log(`[ExecuteMessage] 🗳️ Resuming execution from poll response at node ${node.id}: option ID = "${selectedOptionId}", label = "${selectedOptionLabel}"`);
+
+          await logNodeExecution(supabase, {
+            executionId: workflowExecutionId,
+            userId,
+            nodeId: node.id,
+            nodeType: node.node_type,
+            status: "success",
+            startedAt: nodeStartedAt,
+            input: node.config,
+            output: {
+              status: "completed",
+              selectedOptionId,
+              selectedOptionLabel,
+              pollResponse: triggerContext?.pollResponse || null
+            },
+          });
+
+          // Find connection matching the selected option ID (or matching selectedOptionLabel)
+          let nextConn = connections.find(c => c.source_node_id === node.id && c.condition_path === selectedOptionId);
+          if (!nextConn && selectedOptionLabel) {
+            nextConn = connections.find(c => c.source_node_id === node.id && c.condition_path === selectedOptionLabel);
+          }
+
+          if (nextConn) {
+            console.log(`[ExecuteMessage] ✅ Found outgoing edge for poll option "${selectedOptionId}" -> target node ${nextConn.target_node_id}`);
+            currentNodeId = nextConn.target_node_id;
+            nodesProcessed++;
+            triggerContext.resumedFromPoll = false;
+            continue;
+          } else {
+            console.log(`[ExecuteMessage] ℹ️ Poll option selected ("${selectedOptionLabel || selectedOptionId}") but no outgoing edge configured for node ${node.id}. Completing branch.`);
+            triggerContext.resumedFromPoll = false;
+            break;
+          }
+        }
+
         // ============= CONTENT CONTAINER NODES =============
         if (node.node_type === "content") {
           const subMessages = (node.config?.messages as any[]) || [];
@@ -3105,6 +3147,7 @@ Deno.serve(async (req) => {
           console.log(`[ExecuteMessage] Processing content node ${node.id} with ${subMessages.length} sub-messages`);
           
           let subFailed = false;
+          let hasSentPollInSubMessages = false;
           
           for (const subMsg of subMessages) {
             const subNodeType = subMsg.type || "message";
@@ -3235,6 +3278,33 @@ Deno.serve(async (req) => {
                       externalMessageId: externalMessageId,
                     });
                   }
+                  if (subNodeType === "poll" && (externalMessageId || zaapId)) {
+                    const messageIdForInsert = externalMessageId || zaapId;
+                    const pollQuestion = (formattedConfig.question as string) || (formattedConfig.title as string) || "";
+                    const rawOpts = (formattedConfig.options as any[]) || (subMsg.options as any[]) || [];
+                    const pollOptions = rawOpts.map((opt, idx) => {
+                      if (typeof opt === "string") return { id: `poll_opt_${idx + 1}`, label: replaceVariables(opt) };
+                      if (opt && typeof opt === "object") return { id: opt.id || `poll_opt_${idx + 1}`, label: replaceVariables(opt.label || "") };
+                      return { id: `poll_opt_${idx + 1}`, label: String(opt || "") };
+                    });
+
+                    if (messageIdForInsert) {
+                      await supabase.from("poll_messages").insert({
+                        user_id: userId,
+                        message_id: messageIdForInsert,
+                        zaap_id: zaapId,
+                        node_id: node.id,
+                        sequence_id: effectiveSequenceId,
+                        campaign_id: typedCampaign.id || effectiveSequenceId,
+                        group_jid: dest.group_jid,
+                        instance_id: activeInstanceId,
+                        question_text: pollQuestion,
+                        options: pollOptions,
+                        sent_at: new Date().toISOString(),
+                      });
+                      hasSentPollInSubMessages = true;
+                    }
+                  }
                 }
               } catch (err: any) {
                 subFailed = true;
@@ -3266,6 +3336,45 @@ Deno.serve(async (req) => {
           
           if (subFailed) {
             nodesFailed++;
+          }
+
+          // If a poll message was sent in this content node and execution wasn't resumed from a vote, pause to wait for response
+          if (hasSentPollInSubMessages && !subFailed && !triggerContext?.resumedFromPoll) {
+            console.log(`[ExecuteMessage] ⏸️ Poll message sent in content node ${node.id}. Pausing workflow ${workflowExecutionId} to wait for poll vote...`);
+
+            await supabase
+              .from("workflow_executions")
+              .update({ status: "waiting", updated_at: new Date().toISOString() })
+              .eq("id", workflowExecutionId);
+
+            await supabase
+              .from("sequence_executions")
+              .upsert({
+                user_id: userId,
+                campaign_id: effectiveCampaignId,
+                sequence_id: effectiveSequenceId,
+                message_id: typedMessage?.id || null,
+                trigger_context: {
+                  ...(triggerContext || {}),
+                  resumeNodeId: node.id,
+                },
+                nodes_data: sortedNodes,
+                destinations: effectiveDests,
+                status: "paused",
+                resume_at: null,
+                nodes_processed: nodesProcessed + 1,
+                nodes_failed: nodesFailed,
+              }, { onConflict: "user_id,sequence_id" });
+
+            return new Response(
+              JSON.stringify({
+                success: true,
+                status: "paused",
+                executionId: workflowExecutionId,
+                message: "Execution paused waiting for poll response."
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
           }
           
           const nextConn = connections.find(c => c.source_node_id === node.id);
@@ -3911,9 +4020,13 @@ Deno.serve(async (req) => {
                 // Use formattedConfig which has variables already replaced
                 const pollQuestion = (formattedConfig.question as string) || (formattedConfig.title as string) || "";
                 
-                // Also replace variables in options array
-                const rawOptions = (formattedConfig.options as string[]) || [];
-                const pollOptions = rawOptions.map(opt => typeof opt === 'string' ? replaceVariables(opt) : opt);
+                // Also replace variables in options array and ensure { id, label } structure
+                const rawOptions = (formattedConfig.options as any[]) || [];
+                const pollOptions = rawOptions.map((opt, idx) => {
+                  if (typeof opt === 'string') return { id: `poll_opt_${idx + 1}`, label: replaceVariables(opt) };
+                  if (opt && typeof opt === 'object') return { id: opt.id || `poll_opt_${idx + 1}`, label: replaceVariables(opt.label || '') };
+                  return { id: `poll_opt_${idx + 1}`, label: String(opt || '') };
+                });
                 
                 // option_actions still comes from original config
                 const optionActions = ((node.config as Record<string, unknown>).optionActions as Record<string, unknown>) || {};
@@ -3954,6 +4067,44 @@ Deno.serve(async (req) => {
                   } else {
                     console.log(`[ExecuteMessage] ✅ Poll registered: zaap_id=${zaapId}, message_id=${messageIdForInsert}`);
                   }
+                }
+
+                if (!triggerContext?.resumedFromPoll) {
+                  console.log(`[ExecuteMessage] ⏸️ Standalone poll message sent in node ${node.id}. Pausing workflow ${workflowExecutionId}...`);
+
+                  await supabase
+                    .from("workflow_executions")
+                    .update({ status: "waiting", updated_at: new Date().toISOString() })
+                    .eq("id", workflowExecutionId);
+
+                  await supabase
+                    .from("sequence_executions")
+                    .upsert({
+                      user_id: userId,
+                      campaign_id: effectiveCampaignId,
+                      sequence_id: effectiveSequenceId,
+                      message_id: typedMessage?.id || null,
+                      trigger_context: {
+                        ...(triggerContext || {}),
+                        resumeNodeId: node.id,
+                      },
+                      nodes_data: sortedNodes,
+                      destinations: effectiveDests,
+                      status: "paused",
+                      resume_at: null,
+                      nodes_processed: nodesProcessed + 1,
+                      nodes_failed: nodesFailed,
+                    }, { onConflict: "user_id,sequence_id" });
+
+                  return new Response(
+                    JSON.stringify({
+                      success: true,
+                      status: "paused",
+                      executionId: workflowExecutionId,
+                      message: "Execution paused waiting for poll response."
+                    }),
+                    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                  );
                 }
               }
 

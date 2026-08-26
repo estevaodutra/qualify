@@ -67,8 +67,33 @@ export interface RandomizerConfig {
   branches: RandomizerBranch[];
 }
 
-export interface MessageAction {
+export interface PollOption {
   id: string;
-  type: string;
-  [key: string]: any;
+  label: string;
 }
+
+export function normalizePollOptions(rawOptions: unknown[] | undefined): PollOption[] {
+  if (!Array.isArray(rawOptions) || rawOptions.length === 0) {
+    return [];
+  }
+  return rawOptions.map((opt, idx) => {
+    if (typeof opt === "string") {
+      return {
+        id: `poll_opt_${idx + 1}_${Math.random().toString(36).substr(2, 6)}`,
+        label: opt,
+      };
+    }
+    if (opt && typeof opt === "object" && "label" in opt) {
+      const obj = opt as Record<string, unknown>;
+      return {
+        id: (obj.id as string) || `poll_opt_${idx + 1}_${Math.random().toString(36).substr(2, 6)}`,
+        label: (obj.label as string) || "",
+      };
+    }
+    return {
+      id: `poll_opt_${idx + 1}_${Math.random().toString(36).substr(2, 6)}`,
+      label: String(opt || ""),
+    };
+  });
+}
+

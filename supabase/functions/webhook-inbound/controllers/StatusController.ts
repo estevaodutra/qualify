@@ -167,17 +167,26 @@ export async function processStatusEvent(
 
           if (resolvedPoll) {
             const votedOptionText = options[0]?.name || "";
-            const pollOptions = resolvedPoll.options as string[];
-            let optionIndex = pollOptions.findIndex(
-              (opt) => opt.toLowerCase() === votedOptionText.toLowerCase()
-            );
+            const rawPollOpts = (resolvedPoll.options as any[]) || [];
+
+            let optionIndex = rawPollOpts.findIndex((opt: any) => {
+              const label = typeof opt === "string" ? opt : opt?.label;
+              return label && label.toLowerCase() === votedOptionText.toLowerCase();
+            });
 
             if (optionIndex === -1) {
-              optionIndex = pollOptions.findIndex(
-                (opt) =>
-                  opt.toLowerCase().includes(votedOptionText.toLowerCase()) ||
-                  votedOptionText.toLowerCase().includes(opt.toLowerCase())
-              );
+              optionIndex = rawPollOpts.findIndex((opt: any) => {
+                const label = typeof opt === "string" ? opt : opt?.label;
+                return (
+                  label &&
+                  (label.toLowerCase().includes(votedOptionText.toLowerCase()) ||
+                    votedOptionText.toLowerCase().includes(label.toLowerCase()))
+                );
+              });
+            }
+
+            if (optionIndex === -1) {
+              optionIndex = 0;
             }
 
             if (optionIndex >= 0) {

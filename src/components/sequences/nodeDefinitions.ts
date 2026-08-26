@@ -154,7 +154,14 @@ export function getDefaultConfigForSubType(blockType: string, subType: string): 
     case "user_input": return { targetField: "", timeoutMs: 3600000, question: "", invalidMessage: "", saveMedia: false };
     case "delay": return { delayMs: 300000, value: 5, unit: "minutes" };
     case "dynamic_url": return { url: "", caption: "", sendPrivate: false, viewOnce: false };
-    case "poll": return { question: "", options: ["", "", ""], multiSelect: false };
+    case "poll": return {
+      question: "",
+      options: [
+        { id: `poll_opt_1_${crypto.randomUUID().slice(0, 8)}`, label: "" },
+        { id: `poll_opt_2_${crypto.randomUUID().slice(0, 8)}`, label: "" }
+      ],
+      multiSelect: false
+    };
     case "buttons": return { text: "", buttons: [{ id: "1", label: "", type: "REPLY" }] };
     case "list": return { title: "", buttonText: "Selecionar", sections: [{ title: "Opções", rows: [{ id: "1", title: "", description: "" }] }] };
     case "location": return { latitude: "", longitude: "", name: "", address: "" };

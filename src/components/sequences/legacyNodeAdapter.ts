@@ -13,50 +13,81 @@ import { isActionSubType, isContentSubType } from "./nodeDefinitions";
 // ai_agent/group management types) passes through unchanged in both
 // directions.
 
+import { normalizePollOptions } from "./shared-types";
+
 export function liftLegacyNode(node: LocalNode): LocalNode {
-  if (node.nodeType === "content") {
+  let processed = { ...node };
+
+  if (processed.nodeType === "content") {
     // Already migrated to container, ensure messages array exists
-    if (!node.config.messages) {
-      return { ...node, config: { ...node.config, messages: [] } };
+    if (!processed.config.messages) {
+      processed = { ...processed, config: { ...processed.config, messages: [] } };
     }
-    return node;
-  }
-  if (node.nodeType === "action") {
-    const actionType = (node.config.actionType as string) || "create_lead";
-    return { ...node, config: { ...node.config, actionType } };
-  }
-  if (isContentSubType(node.nodeType)) {
+  } else if (processed.nodeType === "action") {
+    const actionType = (processed.config.actionType as string) || "create_lead";
+    processed = { ...processed, config: { ...processed.config, actionType } };
+  } else if (isContentSubType(processed.nodeType)) {
     // Lift legacy literal node to a container node with 1 message
     const messageId = Math.random().toString(36).substring(2, 9);
-    return { 
-      ...node, 
+    processed = { 
+      ...processed, 
       nodeType: "content", 
       config: { 
         messages: [{
           id: messageId,
-          type: node.nodeType,
-          ...node.config
+          type: processed.nodeType,
+          ...processed.config
         }]
       } 
     };
-  }
-  if (
-    isActionSubType(node.nodeType) ||
-    node.nodeType === "create_lead" ||
-    node.nodeType === "lead_create" ||
-    node.nodeType === "delete_lead" ||
-    node.nodeType === "create_deal" ||
-    node.nodeType === "deal_create" ||
-    node.nodeType === "move_deal_stage" ||
-    node.nodeType === "move_deal" ||
-    node.nodeType === "deal_move" ||
-    node.config?.category === "lead" ||
-    node.config?.category === "deal"
+  } else if (
+    isActionSubType(processed.nodeType) ||
+    processed.nodeType === "create_lead" ||
+    processed.nodeType === "lead_create" ||
+    processed.nodeType === "delete_lead" ||
+    processed.nodeType === "create_deal" ||
+    processed.nodeType === "deal_create" ||
+    processed.nodeType === "move_deal_stage" ||
+    processed.nodeType === "move_deal" ||
+    processed.nodeType === "deal_move" ||
+    processed.config?.category === "lead" ||
+    processed.config?.category === "deal"
   ) {
-    const actionType = (node.config.actionType as string) || node.nodeType;
-    return { ...node, nodeType: "action", config: { ...node.config, actionType } };
+    const actionType = (processed.config.actionType as string) || processed.nodeType;
+    processed = { ...processed, nodeType: "action", config: { ...processed.config, actionType } };
   }
-  return node;
+
+  // Normalize poll options if present
+  if (processed.config.options) {
+    processed = {
+      ...processed,
+      config: {
+        ...processed.config,
+        options: normalizePollOptions(processed.config.options as unknown[]),
+      },
+    };
+  }
+
+  if (Array.isArray(processed.config.messages)) {
+    const updatedMessages = (processed.config.messages as any[]).map((msg) => {
+      if (msg.type === "poll" && msg.options) {
+        return {
+          ...msg,
+          options: normalizePollOptions(msg.options),
+        };
+      }
+      return msg;
+    });
+    processed = {
+      ...processed,
+      config: {
+        ...processed.config,
+        messages: updatedMessages,
+      },
+    };
+  }
+
+  return processed;
 }
 
 export function lowerToLegacyNode(node: LocalNode): LocalNode {

@@ -1,6 +1,16 @@
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { LocalNode, RandomizerBranch } from "./shared-types";
+import { LocalNode, RandomizerBranch, PollOption, normalizePollOptions, LocalConnection } from "./shared-types";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -141,7 +151,8 @@ interface UnifiedNodeConfigPanelProps {
   }) => React.ReactNode;
   getOptionAction?: (node: LocalNode, index: number) => unknown;
   getActionIconColor?: (actionType?: string) => string;
-  getActionLabel?: (actionType?: string) => string;
+  onDeleteConnection?: (sourceNodeId: string, conditionPath: string) => void;
+  connections?: LocalConnection[];
 }
 
 const NODE_TITLES: Record<string, { title: string; icon: React.ElementType }> = {
@@ -488,8 +499,11 @@ export function UnifiedNodeConfigPanel({
   getActionIconColor,
   getActionLabel,
   nodes,
+  onDeleteConnection,
+  connections,
 }: UnifiedNodeConfigPanelProps) {
   const { toast } = useToast();
+  const [optionToDelete, setOptionToDelete] = useState<{ index: number; id: string; label: string } | null>(null);
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
   const [editingOptionIndex, setEditingOptionIndex] = useState<number | null>(null);
 
@@ -1877,15 +1891,6 @@ export function UnifiedNodeConfigPanel({
                   onCheckedChange={checked => updateConfig("viewOnce", checked)}
                 />
               </div>
-              {isGroup && (
-                <div className="flex items-center justify-between">
-                  <Label>Enviar no privado</Label>
-                  <Switch
-                    checked={(currentConfig.sendPrivate as boolean) || false}
-                    onCheckedChange={checked => updateConfig("sendPrivate", checked)}
-                  />
-                </div>
-              )}
             </>
           )}
 
@@ -1893,19 +1898,13 @@ export function UnifiedNodeConfigPanel({
           {type === "poll" && (
             <>
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label>Pergunta</Label>
-                  <VariablePicker isGroup={isGroup} onSelect={(val) => { const current = (currentConfig.question as string) || ""; updateConfig("question", current + val); }} />
-                </div>
+                <Label>Pergunta da Enquete</Label>
                 <Textarea
-                  placeholder="Qual sua preferência?"
-                  value={(currentConfig.question as string) || ""}
+                  placeholder="Ex: Qual o seu nível de interesse?"
+                  value={(currentConfig.question as string) || (currentConfig.title as string) || ""}
                   onChange={e => updateConfig("question", e.target.value)}
-                  maxLength={255}
-                  rows={3}
                   className="resize-none"
                 />
-                <p className="text-xs text-muted-foreground">Máximo 255 caracteres</p>
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -1915,70 +1914,67 @@ export function UnifiedNodeConfigPanel({
                     size="sm"
                     className="h-6"
                     onClick={() => {
-                      const options = [...((currentConfig.options as string[]) || [])];
                       if (options.length < 12) {
-                        options.push("");
-                        updateConfig("options", options);
+                        const newOpt: PollOption = {
+                          id: `poll_opt_${options.length + 1}_${crypto.randomUUID().slice(0, 8)}`,
+                          label: ""
+                        };
+                        updateConfig("options", [...options, newOpt]);
                       }
                     }}
-                    disabled={((currentConfig.options as string[]) || []).length >= 12}
+                    disabled={options.length >= 12}
                   >
                     <Plus className="h-3 w-3 mr-1" /> Adicionar
                   </Button>
                 </div>
-                {((currentConfig.options as string[]) || ["", "", ""]).map((opt, i) => {
-                  const action = getOptionAction?.(node, i);
-                  const hasAction = action && (action as any)?.actionType !== "none";
+                {options.map((opt, i) => (
+                  <div key={opt.id || i} className="flex gap-1.5 items-center">
+                    <Input
+                      placeholder={`Opção ${i + 1}`}
+                      value={opt.label}
+                      onChange={e => {
+                        const updated = [...options];
+                        updated[i] = { ...updated[i], label: e.target.value };
+                        updateConfig("options", updated);
+                      }}
+                      className="flex-1"
+                    />
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="h-9 px-2 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center gap-1 shrink-0 select-none cursor-default">
+                            <GitBranch className="h-3 w-3" />
+                            Saída {i + 1}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          Cada opção cria uma saída no Workflow Builder.
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
 
-                  return (
-                    <div key={i} className="flex gap-1">
-                      <Input
-                        placeholder={`Opção ${i + 1}`}
-                        value={opt}
-                        onChange={e => {
-                          const options = [...((currentConfig.options as string[]) || [])];
-                          options[i] = e.target.value;
-                          updateConfig("options", options);
-                        }}
-                        className="flex-1"
-                      />
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-9 w-9 shrink-0"
-                              onClick={() => openActionDialog(i)}
-                            >
-                              <Zap className={`h-4 w-4 ${hasAction ? (getActionIconColor?.((action as any)?.actionType) || "text-primary") : "text-muted-foreground"}`} />
-                              {hasAction && (
-                                <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary" />
-                              )}
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top">
-                            {hasAction ? (getActionLabel?.((action as any)?.actionType) || "Ação configurada") : "Configurar ação"}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                      {((currentConfig.options as string[]) || []).length > 2 && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-9 w-9 shrink-0"
-                          onClick={() => {
-                            const options = [...((currentConfig.options as string[]) || [])];
-                            options.splice(i, 1);
-                            updateConfig("options", options);
-                          }}
-                        >
-                          <Trash2 className="h-3 w-3 text-destructive" />
-                        </Button>
-                      )}
-                    </div>
-                  );
-                })}
+                    {options.length > 2 && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 shrink-0 text-destructive hover:bg-destructive/10"
+                        onClick={() => handleDeleteOption(i)}
+                        title="Remover opção"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 leading-relaxed font-normal space-y-1">
+                <p className="font-semibold text-slate-800 flex items-center gap-1.5">
+                  <GitBranch className="h-3.5 w-3.5 text-[#8A3CFF]" />
+                  Saídas dinâmicas no Workflow
+                </p>
+                <p>
+                  Cada opção cria uma saída independente no canvas. Conecte cada saída ao nó que deseja executar quando o usuário selecionar a opção.
+                </p>
               </div>
               <div className="flex items-center justify-between">
                 <Label>Múltipla escolha</Label>
@@ -1990,21 +1986,35 @@ export function UnifiedNodeConfigPanel({
               <p className="text-xs text-amber-600 dark:text-amber-400">
                 ⚠️ Enquetes funcionam apenas em grupos
               </p>
-              {renderPollActionDialog?.({
-                open: actionDialogOpen,
-                onClose: () => { setActionDialogOpen(false); setEditingOptionIndex(null); },
-                optionIndex: editingOptionIndex ?? 0,
-                optionText: ((currentConfig.options as string[]) || [])[editingOptionIndex ?? 0] || "",
-                currentAction: editingOptionIndex !== null ? getOptionAction?.(node, editingOptionIndex) : null,
-                onSave: (action) => {
-                  if (editingOptionIndex !== null) {
-                    const optionActions = (currentConfig.optionActions as Record<string, unknown>) || {};
-                    updateMultipleConfigs({
-                      optionActions: { ...optionActions, [String(editingOptionIndex)]: action },
-                    });
-                  }
-                },
-              })}
+
+              {optionToDelete && (
+                <AlertDialog open={!!optionToDelete} onOpenChange={(o) => !o && setOptionToDelete(null)}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Remover opção com conexão</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Esta opção possui uma conexão no Workflow. Ao remover "{optionToDelete.label}", a conexão correspondente também será removida. Deseja continuar?
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel onClick={() => setOptionToDelete(null)}>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        onClick={() => {
+                          const updated = options.filter((_, idx) => idx !== optionToDelete.index);
+                          updateConfig("options", updated);
+                          if (onDeleteConnection) {
+                            onDeleteConnection(node.id, optionToDelete.id);
+                          }
+                          setOptionToDelete(null);
+                        }}
+                      >
+                        Remover Conexão e Opção
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
             </>
           )}
 

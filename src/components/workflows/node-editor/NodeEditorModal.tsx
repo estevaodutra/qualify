@@ -47,6 +47,7 @@ interface NodeEditorModalProps {
   campaignId?: string;
   onManualSendNode?: (node: LocalNode) => Promise<void>;
   activeTriggerId?: string;
+  onDeleteConnection?: (sourceNodeId: string, conditionPath: string) => void;
 }
 
 export function NodeEditorModal({
@@ -65,6 +66,7 @@ export function NodeEditorModal({
   campaignId,
   onManualSendNode,
   activeTriggerId,
+  onDeleteConnection,
 }: NodeEditorModalProps) {
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(nodeId);
   const node = nodes.find((n) => n.id === currentNodeId);
@@ -741,6 +743,8 @@ export function NodeEditorModal({
                     mode={mode}
                     isGroup={isGroup}
                     nodes={nodes}
+                    connections={connections}
+                    onDeleteConnection={onDeleteConnection}
                     onManualSend={handleManualSend}
                     isSendingManual={isSendingManual}
                   />
