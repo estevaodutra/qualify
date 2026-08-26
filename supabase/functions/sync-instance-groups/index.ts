@@ -6,6 +6,51 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+/**
+ * Universal group objects extractor to handle all WAHA / Z-API / Evolution / Baileys response formats.
+ * Especially handles WAHA format where groups are wrapped inside dictionary keys:
+ * [ { "120363412175102479@g.us": { id: "...", subject: "GRUPO TESTE", size: 3, participants: [...] } } ]
+ */
+function extractGroupObjects(rawJson: any): any[] {
+  if (!rawJson) return [];
+  let items: any[] = [];
+
+  if (Array.isArray(rawJson)) {
+    for (const el of rawJson) {
+      if (!el || typeof el !== "object") continue;
+      if (el.id || el.jid || el.groupJid || el.subject || el.name || el.title) {
+        items.push(el);
+      } else {
+        // Dict inside array element: { "120363412175102479@g.us": { ... } }
+        const values = Object.values(el);
+        for (const v of values) {
+          if (v && typeof v === "object") {
+            items.push(v);
+          }
+        }
+      }
+    }
+  } else if (typeof rawJson === "object" && rawJson !== null) {
+    const possibleArray = rawJson.groups || rawJson.data || rawJson.chats || rawJson.result || rawJson.items || rawJson.response;
+    if (possibleArray) {
+      return extractGroupObjects(possibleArray);
+    }
+
+    // Dict of JIDs at root: { "120363412175102479@g.us": { ... } }
+    for (const [key, val] of Object.entries(rawJson)) {
+      if (val && typeof val === "object") {
+        const itemObj = { ...(val as any) };
+        if (!itemObj.id && (key.includes("@g.us") || key.startsWith("1203"))) {
+          itemObj.id = key;
+        }
+        items.push(itemObj);
+      }
+    }
+  }
+
+  return items;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -108,21 +153,13 @@ Deno.serve(async (req) => {
       if (resp.ok) {
         const json = await resp.json();
         rawResponseSnippet = JSON.stringify(json).slice(0, 300);
-
-        if (Array.isArray(json)) {
-          if (json.length > 0 && Array.isArray(json[0].groups)) rawChats = json[0].groups;
-          else if (json.length > 0 && Array.isArray(json[0].data)) rawChats = json[0].data;
-          else if (json.length > 0 && Array.isArray(json[0].chats)) rawChats = json[0].chats;
-          else rawChats = json;
-        } else if (typeof json === "object" && json !== null) {
-          rawChats = json.groups || json.data || json.chats || json.result || json.items || json.response || [];
-        }
+        rawChats = extractGroupObjects(json);
       }
     } catch (e: any) {
       console.warn(`[sync-instance-groups] Provider API error:`, e.message);
     }
 
-    // Fallback: try GET /chats or GET /groups if group.list returned empty
+    // Fallback GET /chats if group.list returned no items
     if (rawChats.length === 0) {
       try {
         const respFallback = await fetchZApi(
@@ -138,31 +175,40 @@ Deno.serve(async (req) => {
 
         if (respFallback.ok) {
           const jsonF = await respFallback.json();
-          if (Array.isArray(jsonF)) rawChats = jsonF;
-          else if (typeof jsonF === "object" && jsonF !== null) {
-            rawChats = jsonF.chats || jsonF.data || jsonF.groups || jsonF.result || [];
-          }
+          rawChats = extractGroupObjects(jsonF);
         }
       } catch (e: any) {
         console.warn(`[sync-instance-groups] Fallback GET /chats error:`, e.message);
       }
     }
 
+    console.log(`[sync-instance-groups] Extracted ${rawChats.length} group objects from response`);
+
     let syncedCount = 0;
     const upsertedJids = new Set<string>();
 
-    // 3. Process provider chats and populate whatsapp_groups, chat_conversations, and group_campaigns
+    // 3. Process each group object
     for (const chat of rawChats) {
       const jid = chat.id || chat.phone || chat.jid || chat.groupJid || chat.group_jid || chat.chatId;
-      if (!jid) continue;
+      const subject = chat.subject || chat.name || chat.groupName || chat.group_name || chat.title;
 
-      const strJid = String(jid);
-      const isGroup = strJid.includes("@g.us") || chat.isGroup || chat.is_group;
+      // Ensure valid group JID
+      let groupJid = jid ? String(jid) : "";
+      if (!groupJid && subject) {
+        // If JID missing but item exists
+        continue;
+      }
+      if (!groupJid.includes("@")) {
+        groupJid = `${groupJid.replace(/\D/g, "")}@g.us`;
+      }
 
-      if (!isGroup) continue;
+      if (!groupJid.includes("@g.us") && !groupJid.startsWith("1203")) {
+        continue;
+      }
 
-      const groupJid = strJid.includes("@") ? strJid : `${strJid.replace(/\D/g, "")}@g.us`;
-      const name = chat.name || chat.subject || chat.groupName || chat.group_name || chat.title || groupJid.split("@")[0];
+      const finalName = subject || groupJid.split("@")[0] || "Grupo WhatsApp";
+      const participants = Array.isArray(chat.participants) ? chat.participants : [];
+      const participantsCount = chat.size || chat.participantsCount || (participants.length > 0 ? participants.length : 0);
 
       // Upsert into whatsapp_groups
       const { error: upsertGroupErr } = await supabase
@@ -173,16 +219,16 @@ Deno.serve(async (req) => {
             user_id: instance.user_id,
             instance_id: instance.id,
             group_jid: groupJid,
-            name: name || "Grupo WhatsApp",
+            name: finalName,
             description: chat.description || chat.desc || null,
             picture_url: chat.pictureUrl || chat.profilePictureUrl || chat.picture_url || chat.photo || null,
-            participants_count: Array.isArray(chat.participants) ? chat.participants.length : (chat.participants_count || 0),
+            participants_count: participantsCount,
             updated_at: new Date().toISOString(),
           },
           { onConflict: "company_id,group_jid" }
         );
 
-      // ALSO Upsert into chat_conversations
+      // Upsert into chat_conversations
       const { error: upsertConvErr } = await supabase
         .from("chat_conversations")
         .upsert(
@@ -199,7 +245,7 @@ Deno.serve(async (req) => {
           { onConflict: "company_id,instance_id,contact_name" }
         );
 
-      // ALSO Upsert into group_campaigns
+      // Upsert into group_campaigns
       await supabase
         .from("group_campaigns")
         .upsert(
@@ -208,13 +254,35 @@ Deno.serve(async (req) => {
             user_id: instance.user_id,
             instance_id: instance.id,
             group_jid: groupJid,
-            group_name: name || "Grupo WhatsApp",
-            name: name || "Grupo WhatsApp",
+            group_name: finalName,
+            name: finalName,
             status: "active",
             updated_at: new Date().toISOString(),
           },
           { onConflict: "company_id,group_jid" }
         ).catch(() => {});
+
+      // Sync members into group_members if present
+      if (participants.length > 0) {
+        for (const p of participants) {
+          const rawPhone = p.phoneNumber || p.phone || p.id || "";
+          const cleanPhone = String(rawPhone).replace(/\D/g, "");
+          if (cleanPhone) {
+            const isAdmin = p.admin === "admin" || p.admin === "superadmin" || p.isAdmin === true;
+            await supabase.from("group_members").upsert(
+              {
+                user_id: instance.user_id,
+                group_jid: groupJid,
+                phone: cleanPhone,
+                role: isAdmin ? "admin" : "member",
+                is_admin: isAdmin,
+                name: p.name || p.pushName || null,
+              },
+              { onConflict: "user_id,group_jid,phone" }
+            ).catch(() => {});
+          }
+        }
+      }
 
       if (!upsertGroupErr || !upsertConvErr) {
         syncedCount++;
@@ -259,7 +327,7 @@ Deno.serve(async (req) => {
         instanceId: instance.id,
         instanceName: instance.name,
         syncedCount,
-        totalRawChatsFound: rawChats.length,
+        totalExtracted: rawChats.length,
         providerStatus,
         snippet: rawResponseSnippet,
       }),
