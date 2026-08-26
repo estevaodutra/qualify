@@ -42,6 +42,7 @@ import { SettingsLayout } from "@/components/settings/SettingsLayout";
 import MembersPage from "@/pages/settings/MembersPage";
 import Instances from "@/pages/Instances";
 import { TagsTab } from "@/components/settings/TagsTab";
+import { DataCleanupTab } from "@/components/settings/DataCleanupTab";
 
 
 interface ApiKey {
@@ -360,6 +361,8 @@ export default function Settings() {
         <CustomFieldsTab />
       ) : location.pathname === "/settings/tags" ? (
         <TagsTab />
+      ) : location.pathname === "/settings/cleanup" ? (
+        <DataCleanupTab />
       ) : (
         <div className="space-y-8">
           <PageHeader

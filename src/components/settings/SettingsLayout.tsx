@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { UserCircle, Settings, Users, Radio, Wallet, CreditCard, FileText, Sliders, Tag, ChevronDown } from "lucide-react";
+import { UserCircle, Settings, Users, Radio, Wallet, CreditCard, FileText, Sliders, Tag, Trash2, ChevronDown } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -28,6 +28,7 @@ export function SettingsLayout({ children }: SettingsLayoutProps) {
       items: [
         { title: "Campos Adicionais", url: "/settings/custom-fields", icon: Sliders },
         { title: "Tags", url: "/settings/tags", icon: Tag },
+        { title: "Limpeza de Audiência", url: "/settings/cleanup", icon: Trash2 },
       ],
     },
     {
