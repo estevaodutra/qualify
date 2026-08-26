@@ -3,6 +3,7 @@ import {
   Kanban,
   PhoneCall,
   Users,
+  UsersRound,
   MessageSquare,
   GitBranch,
   Grid,
@@ -28,6 +29,7 @@ export const TOP_NAV_ITEMS: NavItem[] = [
   { id: "pipelines", title: "Pipelines", url: "/pipelines", icon: Kanban },
   { id: "call-panel", title: "Call Panel", url: "/painel-ligacoes", icon: PhoneCall },
   { id: "leads", title: "Leads", url: "/leads", icon: Users },
+  { id: "groups", title: "Groups", url: "/groups", icon: UsersRound },
   { id: "chat", title: "Chat", url: "/chat", icon: MessageSquare },
   { id: "workflows", title: "Workflows", url: "/workflows", icon: GitBranch },
 ];

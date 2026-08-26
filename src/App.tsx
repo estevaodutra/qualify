@@ -14,6 +14,7 @@ import { AppLayout } from "./components/layout/AppLayout";
 // Pages
 import Dashboard from "./pages/Dashboard";
 import Leads from "./pages/Leads";
+import Groups from "./pages/Groups";
 import Pipelines from "./pages/Pipelines";
 import {
   CampaignsHub,
@@ -110,6 +111,7 @@ const App = () => {
                       <Route path="/chat" element={<Chat />} />
                       <Route path="/painel-ligacoes" element={<CallPanel />} />
                       <Route path="/leads" element={<Leads />} />
+                      <Route path="/groups" element={<Groups />} />
                       <Route path="/pipelines" element={<Pipelines />} />
                       <Route path="/instances" element={<Instances />} />
                       <Route path="/alerts" element={<Alerts />} />
