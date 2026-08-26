@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useGroups, WhatsAppGroupItem, GroupFilters } from "@/hooks/useGroups";
 import { GroupCard } from "@/components/groups/GroupCard";
+import { GroupTableRow } from "@/components/groups/GroupTableRow";
 import { GroupDetailsDrawer } from "@/components/groups/GroupDetailsDrawer";
 import { PageHeader } from "@/components/dispatch/PageHeader";
 import { Input } from "@/components/ui/input";
@@ -8,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { UsersRound, Search, Filter, ArrowUpDown, RefreshCw, ChevronLeft, ChevronRight, Wand2 } from "lucide-react";
+import { UsersRound, Search, Filter, ArrowUpDown, RefreshCw, ChevronLeft, ChevronRight, Wand2, LayoutGrid, List } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -20,6 +21,7 @@ export default function Groups() {
   const [hasDescriptionOnly, setHasDescriptionOnly] = useState(false);
   const [hasPhotoOnly, setHasPhotoOnly] = useState(false);
   const [page, setPage] = useState(1);
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [selectedGroup, setSelectedGroup] = useState<WhatsAppGroupItem | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -32,7 +34,7 @@ export default function Groups() {
     hasPhotoOnly,
     sort,
     page,
-    pageSize: 12,
+    pageSize: 15,
   });
 
   // Auto-run migration once on mount to organize group entries out of leads table into whatsapp_groups
@@ -121,9 +123,33 @@ export default function Groups() {
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* View Mode Switcher */}
+          <div className="flex items-center bg-background border border-border rounded-xl p-0.5">
+            <Button
+              variant={viewMode === "table" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-8 px-2.5 text-xs gap-1.5 rounded-lg"
+              onClick={() => setViewMode("table")}
+              title="Visualizar em Colunas (Tabela)"
+            >
+              <List className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Tabela</span>
+            </Button>
+            <Button
+              variant={viewMode === "grid" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-8 px-2.5 text-xs gap-1.5 rounded-lg"
+              onClick={() => setViewMode("grid")}
+              title="Visualizar em Cards"
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Cards</span>
+            </Button>
+          </div>
+
           {/* Instance Filter */}
           <Select value={instanceId} onValueChange={(v) => { setInstanceId(v); setPage(1); }}>
-            <SelectTrigger className="w-[180px] h-10 text-xs bg-background/60">
+            <SelectTrigger className="w-[170px] h-10 text-xs bg-background/60">
               <SelectValue placeholder="Instância" />
             </SelectTrigger>
             <SelectContent>
@@ -138,7 +164,7 @@ export default function Groups() {
 
           {/* Sort Filter */}
           <Select value={sort} onValueChange={(v: any) => { setSort(v); setPage(1); }}>
-            <SelectTrigger className="w-[170px] h-10 text-xs bg-background/60">
+            <SelectTrigger className="w-[160px] h-10 text-xs bg-background/60">
               <ArrowUpDown className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
               <SelectValue placeholder="Ordenar" />
             </SelectTrigger>
@@ -185,29 +211,48 @@ export default function Groups() {
         </div>
       </div>
 
-      {/* Main Grid View */}
+      {/* Main Table / Grid View */}
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-            <div key={i} className="h-48 rounded-2xl bg-card/60 border border-border animate-pulse p-5 space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="h-12 w-12 rounded-full bg-muted/60" />
-                <div className="space-y-1.5 flex-1">
-                  <div className="h-4 w-3/4 bg-muted/60 rounded" />
-                  <div className="h-3 w-1/2 bg-muted/40 rounded" />
-                </div>
-              </div>
-              <div className="h-10 bg-muted/30 rounded-xl" />
-              <div className="h-4 w-1/3 bg-muted/40 rounded" />
-            </div>
-          ))}
+        <div className="bg-card rounded-2xl border border-border p-8 text-center text-xs text-muted-foreground font-medium">
+          Carregando grupos...
         </div>
       ) : groups.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {groups.map((group) => (
-            <GroupCard key={group.id} group={group} onOpenDetails={handleOpenDetails} />
-          ))}
-        </div>
+        viewMode === "table" ? (
+          /* Table View */
+          <div className="overflow-x-auto w-full bg-card rounded-2xl border border-border shadow-sm">
+            <table className="w-full border-collapse">
+              <thead className="bg-muted/40">
+                <tr>
+                  <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Grupo</th>
+                  <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">ID do Grupo (JID)</th>
+                  <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Participantes</th>
+                  <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Admins</th>
+                  <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Instância</th>
+                  <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Última Atividade</th>
+                  <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Data</th>
+                  <th className="px-4 py-3 border-b border-border w-24 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {groups.map((group, i) => (
+                  <GroupTableRow
+                    key={group.id}
+                    group={group}
+                    isEven={i % 2 === 0}
+                    onOpenDetails={handleOpenDetails}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          /* Grid View */
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {groups.map((group) => (
+              <GroupCard key={group.id} group={group} onOpenDetails={handleOpenDetails} />
+            ))}
+          </div>
+        )
       ) : (
         /* Empty State */
         <div className="text-center py-20 bg-card rounded-3xl border border-border p-8 space-y-4 shadow-sm">

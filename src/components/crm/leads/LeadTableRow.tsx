@@ -96,15 +96,6 @@ export function LeadTableRow({
       <td className="px-4 py-3 align-middle text-right">
         <DealValue value={lead.total_open_value || 0} />
       </td>
-      <td className="px-4 py-3 align-middle text-[12px] text-muted-foreground">
-        {lead.last_interaction_at ? format(new Date(lead.last_interaction_at), "dd/MM/yy HH:mm") : "—"}
-      </td>
-      <td className="px-4 py-3 align-middle text-[12px] text-muted-foreground">
-        {lead.next_activity_at ? format(new Date(lead.next_activity_at), "dd/MM/yy HH:mm") : "—"}
-      </td>
-      <td className="px-4 py-3 align-middle text-[12px] text-muted-foreground">
-        {lead.source_name || SOURCE_LABELS[lead.source_type || ""] || "—"}
-      </td>
       <td className="px-4 py-3 align-middle text-[12px] font-mono text-muted-foreground">
         {format(new Date(lead.created_at), "dd/MM/yyyy")}
       </td>
