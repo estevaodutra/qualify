@@ -6,6 +6,18 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function sanitizeText(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const clean = text.replace(/\u0000/g, "").trim();
+  return clean || null;
+}
+
+function sanitizeTextNoSurrogates(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const clean = text.replace(/\u0000/g, "").replace(/[\uD800-\uDFFF]/g, "").trim();
+  return clean || null;
+}
+
 /**
  * Universal group objects extractor to handle all WAHA / Z-API / Evolution / Baileys response formats.
  * Traverses nested structures and handles dictionary formats where group objects are keyed by group JID:
@@ -78,15 +90,28 @@ function extractGroupObjects(rawJson: any): any[] {
 }
 
 async function upsertGroup(supabase: any, groupData: any): Promise<boolean> {
+  const cleanData = {
+    ...groupData,
+    name: sanitizeText(groupData.name) || "Grupo WhatsApp",
+    description: sanitizeText(groupData.description),
+  };
+
   const { error: err1 } = await supabase
     .from("whatsapp_groups" as any)
-    .upsert(groupData, { onConflict: "company_id,group_jid" });
+    .upsert(cleanData, { onConflict: "company_id,group_jid" });
 
   if (!err1) return true;
 
+  // Fallback: strip surrogates if UTF-8 encoding failed
+  const safeData = {
+    ...groupData,
+    name: sanitizeTextNoSurrogates(groupData.name) || "Grupo WhatsApp",
+    description: sanitizeTextNoSurrogates(groupData.description),
+  };
+
   const { error: err2 } = await supabase
     .from("whatsapp_groups" as any)
-    .upsert(groupData, { onConflict: "group_jid" });
+    .upsert(safeData, { onConflict: "company_id,group_jid" });
 
   if (!err2) return true;
 
@@ -100,44 +125,66 @@ async function upsertGroup(supabase: any, groupData: any): Promise<boolean> {
   if (existing) {
     const { error } = await supabase
       .from("whatsapp_groups" as any)
-      .update(groupData)
+      .update(safeData)
       .eq("id", existing.id);
     return !error;
   } else {
     const { error } = await supabase
       .from("whatsapp_groups" as any)
-      .insert(groupData);
+      .insert(safeData);
+    if (error) {
+      console.error(`[upsertGroup] Insert failed for ${groupData.group_jid}:`, error.message);
+    }
     return !error;
   }
 }
 
 async function upsertConversation(supabase: any, convData: any): Promise<boolean> {
+  const cleanData = {
+    ...convData,
+    contact_name: sanitizeText(convData.contact_name) || convData.contact_phone,
+  };
+
   const { data: existing } = await supabase
     .from("chat_conversations")
     .select("id")
     .eq("company_id", convData.company_id)
-    .eq("contact_name", convData.contact_name)
+    .eq("contact_name", cleanData.contact_name)
     .maybeSingle();
 
   if (existing) {
     const { error } = await supabase
       .from("chat_conversations")
       .update({
-        instance_id: convData.instance_id,
-        last_message_at: convData.last_message_at,
-        updated_at: convData.updated_at,
+        instance_id: cleanData.instance_id,
+        last_message_at: cleanData.last_message_at,
+        updated_at: cleanData.updated_at,
       })
       .eq("id", existing.id);
     return !error;
   } else {
     const { error } = await supabase
       .from("chat_conversations")
-      .insert(convData);
-    return !error;
+      .insert(cleanData);
+
+    if (error) {
+      // Retry without surrogates
+      cleanData.contact_name = sanitizeTextNoSurrogates(convData.contact_name) || convData.contact_phone;
+      const { error: errRetry } = await supabase.from("chat_conversations").insert(cleanData);
+      return !errRetry;
+    }
+    return true;
   }
 }
 
 async function upsertGroupCampaign(supabase: any, gcData: any): Promise<boolean> {
+  const cleanData = {
+    ...gcData,
+    group_name: sanitizeText(gcData.group_name) || "Grupo WhatsApp",
+    name: sanitizeText(gcData.name) || "Grupo WhatsApp",
+    group_description: sanitizeText(gcData.group_description),
+  };
+
   const { data: existing } = await supabase
     .from("group_campaigns")
     .select("id")
@@ -149,19 +196,27 @@ async function upsertGroupCampaign(supabase: any, gcData: any): Promise<boolean>
     const { error } = await supabase
       .from("group_campaigns")
       .update({
-        instance_id: gcData.instance_id,
-        group_name: gcData.group_name,
-        name: gcData.name,
-        group_description: gcData.group_description,
-        updated_at: gcData.updated_at,
+        instance_id: cleanData.instance_id,
+        group_name: cleanData.group_name,
+        name: cleanData.name,
+        group_description: cleanData.group_description,
+        updated_at: cleanData.updated_at,
       })
       .eq("id", existing.id);
     return !error;
   } else {
     const { error } = await supabase
       .from("group_campaigns")
-      .insert(gcData);
-    return !error;
+      .insert(cleanData);
+
+    if (error) {
+      cleanData.group_name = sanitizeTextNoSurrogates(gcData.group_name) || "Grupo WhatsApp";
+      cleanData.name = sanitizeTextNoSurrogates(gcData.name) || "Grupo WhatsApp";
+      cleanData.group_description = sanitizeTextNoSurrogates(gcData.group_description);
+      const { error: errRetry } = await supabase.from("group_campaigns").insert(cleanData);
+      return !errRetry;
+    }
+    return true;
   }
 }
 
@@ -370,7 +425,7 @@ Deno.serve(async (req) => {
                 phone: cleanPhone,
                 role: isAdmin ? "admin" : "member",
                 is_admin: isAdmin,
-                name: p.name || p.pushName || null,
+                name: sanitizeText(p.name || p.pushName) || null,
               },
               { onConflict: "user_id,group_jid,phone" }
             ).catch(() => {});
