@@ -77,7 +77,16 @@ export function useLeads(filters: LeadFilters = {}) {
 
       const { data, error, count } = await query;
       if (error) throw error;
-      return { data: (data || []) as Lead[], count: count || 0 };
+
+      // Filter out any fake WhatsApp group records from the Leads view
+      const realLeads = (data || []).filter((l: any) => {
+        const isGroup =
+          (l.name && (l.name.includes("@g.us") || l.name.toLowerCase().includes("grupo whatsapp"))) ||
+          (l.phone && (l.phone.startsWith("1203") || l.phone.startsWith("120") || l.phone.includes("@g.us")));
+        return !isGroup;
+      });
+
+      return { data: realLeads as Lead[], count: count || 0 };
     },
   });
 

@@ -127,8 +127,8 @@ export function useGroups(filters: GroupFilters = {}) {
       if (groupLeads) {
         const fakeGroupLeads = groupLeads.filter(
           (l: any) =>
-            (l.name && l.name.includes("@g.us")) ||
-            (l.phone && (l.phone.startsWith("120363") || l.phone.includes("@g.us")))
+            (l.name && (l.name.includes("@g.us") || l.name.toLowerCase().includes("grupo whatsapp"))) ||
+            (l.phone && (l.phone.startsWith("1203") || l.phone.startsWith("120") || l.phone.includes("@g.us")))
         );
 
         fakeGroupLeads.forEach((gl: any) => {
@@ -265,8 +265,8 @@ export function useGroups(filters: GroupFilters = {}) {
 
       const fakeGroupLeads = groupLeads.filter(
         (l: any) =>
-          (l.name && l.name.includes("@g.us")) ||
-          (l.phone && (l.phone.startsWith("120363") || l.phone.includes("@g.us")))
+          (l.name && (l.name.includes("@g.us") || l.name.toLowerCase().includes("grupo whatsapp"))) ||
+          (l.phone && (l.phone.startsWith("1203") || l.phone.startsWith("120") || l.phone.includes("@g.us")))
       );
 
       if (fakeGroupLeads.length === 0) return 0;

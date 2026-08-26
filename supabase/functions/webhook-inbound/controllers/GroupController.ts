@@ -47,63 +47,57 @@ export async function processGroupEvent(
 
         if (companyId) {
           // The database automatically strips non-numeric characters from 'phone' using a trigger.
-          // Therefore, we must clean the JID before querying or it will never be found, leading to a unique constraint error on insertion.
           const cleanGroupPhone = context.chatJid.replace(/\D/g, "");
 
-          // Find or create the GROUP as a Lead
-          let { data: groupLead, error: leadFindErr } = await supabase.from("leads")
+          // Upsert into dedicated whatsapp_groups table instead of leads table
+          let { data: whatsappGroup } = await supabase
+            .from("whatsapp_groups")
+            .select("id, name")
+            .eq("company_id", companyId)
+            .eq("group_jid", context.chatJid)
+            .maybeSingle();
+
+          if (!whatsappGroup) {
+            const { data: newGroup } = await supabase
+              .from("whatsapp_groups")
+              .insert({
+                company_id: companyId,
+                user_id: instance.user_id,
+                instance_id: instance.id,
+                group_jid: context.chatJid,
+                name: context.chatName || "Grupo WhatsApp",
+              })
+              .select("id, name")
+              .maybeSingle();
+            whatsappGroup = newGroup;
+          }
+
+          // Find or create Conversation for the Group
+          let { data: conv, error: convFindErr } = await supabase.from("chat_conversations")
             .select("id")
             .eq("company_id", companyId)
-            .eq("phone", cleanGroupPhone)
-            .limit(1)
+            .eq("contact_name", context.chatJid)
+            .eq("instance_id", instance.id)
             .maybeSingle();
             
-          if (leadFindErr) {
-            await supabase.from("alerts").insert({ user_id: instance.user_id, severity: "error", title: "GroupLead Find Error", message: JSON.stringify(leadFindErr) });
+          if (convFindErr) {
+            await supabase.from("alerts").insert({ user_id: instance.user_id, severity: "error", title: "Conv Find Error", message: JSON.stringify(convFindErr) });
           }
 
-          if (!groupLead) {
-            const { data: newGroupLead, error: leadInsertErr } = await supabase.from("leads").insert({
-              user_id: instance.user_id,
+          if (!conv) {
+            const { data: newConv, error: convInsertErr } = await supabase.from("chat_conversations").insert({
               company_id: companyId,
-              phone: cleanGroupPhone,
-              name: context.chatName || "Grupo WhatsApp",
-              status: 'active'
+              instance_id: instance.id,
+              user_id: instance.user_id,
+              contact_name: context.chatJid,
+              status: 'open'
             }).select("id").maybeSingle();
             
-            if (leadInsertErr) {
-              await supabase.from("alerts").insert({ user_id: instance.user_id, severity: "error", title: "GroupLead Insert Error", message: JSON.stringify(leadInsertErr) });
+            if (convInsertErr) {
+              await supabase.from("alerts").insert({ user_id: instance.user_id, severity: "error", title: "Conv Insert Error", message: JSON.stringify(convInsertErr) });
             }
-            groupLead = newGroupLead;
+            conv = newConv;
           }
-
-          if (groupLead?.id) {
-            // Find or create Conversation for the Group
-            let { data: conv, error: convFindErr } = await supabase.from("chat_conversations")
-              .select("id")
-              .eq("company_id", companyId)
-              .eq("lead_id", groupLead.id)
-              .eq("instance_id", instance.id)
-              .maybeSingle();
-              
-            if (convFindErr) {
-              await supabase.from("alerts").insert({ user_id: instance.user_id, severity: "error", title: "Conv Find Error", message: JSON.stringify(convFindErr) });
-            }
-
-            if (!conv) {
-              const { data: newConv, error: convInsertErr } = await supabase.from("chat_conversations").insert({
-                company_id: companyId,
-                lead_id: groupLead.id,
-                instance_id: instance.id,
-                contact_name: groupLead.name || "Grupo WhatsApp",
-                status: 'open'
-              }).select("id").maybeSingle();
-              
-              if (convInsertErr) {
-                await supabase.from("alerts").insert({ user_id: instance.user_id, severity: "error", title: "Conv Insert Error", message: JSON.stringify(convInsertErr) });
-              }
-              conv = newConv;
-            }
 
             if (conv?.id) {
               let cleanSenderPhone = context.senderName || context.senderPhone || context.senderLid || rawEvent?.["@lid"] || rawEvent?.from_phone || rawEvent?.phone || "Um participante";
