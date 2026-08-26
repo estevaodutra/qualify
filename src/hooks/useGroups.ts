@@ -325,7 +325,7 @@ export function useGroups(filters: GroupFilters = {}) {
       if (!targetInstanceId) return { syncedCount: 0 };
 
       const { data: resData, error: resErr } = await supabase.functions.invoke("sync-instance-groups", {
-        body: { instanceId: targetInstanceId },
+        body: { instanceId: targetInstanceId, companyId: activeCompanyId },
       });
 
       if (resErr) {

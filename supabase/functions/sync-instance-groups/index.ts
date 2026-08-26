@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
       if (user) userId = user.id;
     }
 
-    const { instanceId } = await req.json();
+    const { instanceId, companyId: reqCompanyId } = await req.json();
 
     if (!instanceId) {
       return new Response(
@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
     // 1. Fetch instance details
     const { data: instance, error: instErr } = await supabase
       .from("instances")
-      .select("id, user_id, name, phone, external_instance_id, external_instance_token, provider")
+      .select("id, user_id, company_id, name, phone, external_instance_id, external_instance_token, provider")
       .eq("id", instanceId)
       .maybeSingle();
 
@@ -48,26 +48,29 @@ Deno.serve(async (req) => {
     }
 
     // Resolve company_id
-    const targetUserId = userId || instance.user_id;
-    let companyId: string | null = null;
-    const { data: company } = await supabase
-      .from("companies")
-      .select("id")
-      .eq("owner_id", targetUserId)
-      .limit(1)
-      .maybeSingle();
+    let companyId: string | null = reqCompanyId || (instance as any).company_id || null;
 
-    if (company?.id) {
-      companyId = company.id;
-    } else {
-      const { data: member } = await supabase
-        .from("company_members")
-        .select("company_id")
-        .eq("user_id", targetUserId)
-        .eq("is_active", true)
+    if (!companyId) {
+      const targetUserId = userId || instance.user_id;
+      const { data: company } = await supabase
+        .from("companies")
+        .select("id")
+        .eq("owner_id", targetUserId)
         .limit(1)
         .maybeSingle();
-      if (member?.company_id) companyId = member.company_id;
+
+      if (company?.id) {
+        companyId = company.id;
+      } else {
+        const { data: member } = await supabase
+          .from("company_members")
+          .select("company_id")
+          .eq("user_id", targetUserId)
+          .eq("is_active", true)
+          .limit(1)
+          .maybeSingle();
+        if (member?.company_id) companyId = member.company_id;
+      }
     }
 
     if (!companyId) {
@@ -77,9 +80,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`[sync-instance-groups] Executing action group.list for instance ${instance.name} (${instance.id})`);
+    console.log(`[sync-instance-groups] Executing action group.list for instance ${instance.name} (${instance.id}) company ${companyId}`);
 
     let rawChats: any[] = [];
+    let providerStatus = 0;
+    let rawResponseSnippet = "";
 
     // 2. Execute action "group.list" via fetchZApi / n8n-router
     try {
@@ -98,11 +103,28 @@ Deno.serve(async (req) => {
         true
       );
 
+      providerStatus = resp.status;
+
       if (resp.ok) {
         const json = await resp.json();
-        rawChats = Array.isArray(json) ? json : json.data || json.groups || json.chats || json.result || [];
-      } else {
-        // Fallback: try GET /chats or GET /groups
+        rawResponseSnippet = JSON.stringify(json).slice(0, 300);
+
+        if (Array.isArray(json)) {
+          if (json.length > 0 && Array.isArray(json[0].groups)) rawChats = json[0].groups;
+          else if (json.length > 0 && Array.isArray(json[0].data)) rawChats = json[0].data;
+          else if (json.length > 0 && Array.isArray(json[0].chats)) rawChats = json[0].chats;
+          else rawChats = json;
+        } else if (typeof json === "object" && json !== null) {
+          rawChats = json.groups || json.data || json.chats || json.result || json.items || json.response || [];
+        }
+      }
+    } catch (e: any) {
+      console.warn(`[sync-instance-groups] Provider API error:`, e.message);
+    }
+
+    // Fallback: try GET /chats or GET /groups if group.list returned empty
+    if (rawChats.length === 0) {
+      try {
         const respFallback = await fetchZApi(
           instance.external_instance_id,
           instance.external_instance_token,
@@ -113,25 +135,34 @@ Deno.serve(async (req) => {
           instance.id,
           true
         );
+
         if (respFallback.ok) {
           const jsonF = await respFallback.json();
-          rawChats = Array.isArray(jsonF) ? jsonF : jsonF.data || jsonF.groups || jsonF.chats || jsonF.result || [];
+          if (Array.isArray(jsonF)) rawChats = jsonF;
+          else if (typeof jsonF === "object" && jsonF !== null) {
+            rawChats = jsonF.chats || jsonF.data || jsonF.groups || jsonF.result || [];
+          }
         }
+      } catch (e: any) {
+        console.warn(`[sync-instance-groups] Fallback GET /chats error:`, e.message);
       }
-    } catch (e: any) {
-      console.warn(`[sync-instance-groups] Provider API error:`, e.message);
     }
 
     let syncedCount = 0;
     const upsertedJids = new Set<string>();
 
-    // 3. Process provider chats and populate BOTH whatsapp_groups and chat_conversations
+    // 3. Process provider chats and populate whatsapp_groups, chat_conversations, and group_campaigns
     for (const chat of rawChats) {
-      const jid = chat.id || chat.phone || chat.jid || chat.groupJid;
-      if (!jid || (!jid.includes("@g.us") && !chat.isGroup)) continue;
+      const jid = chat.id || chat.phone || chat.jid || chat.groupJid || chat.group_jid || chat.chatId;
+      if (!jid) continue;
 
-      const groupJid = jid.includes("@") ? jid : `${jid.replace(/\D/g, "")}@g.us`;
-      const name = chat.name || chat.subject || chat.groupName || groupJid.split("@")[0];
+      const strJid = String(jid);
+      const isGroup = strJid.includes("@g.us") || chat.isGroup || chat.is_group;
+
+      if (!isGroup) continue;
+
+      const groupJid = strJid.includes("@") ? strJid : `${strJid.replace(/\D/g, "")}@g.us`;
+      const name = chat.name || chat.subject || chat.groupName || chat.group_name || chat.title || groupJid.split("@")[0];
 
       // Upsert into whatsapp_groups
       const { error: upsertGroupErr } = await supabase
@@ -144,14 +175,14 @@ Deno.serve(async (req) => {
             group_jid: groupJid,
             name: name || "Grupo WhatsApp",
             description: chat.description || chat.desc || null,
-            picture_url: chat.pictureUrl || chat.profilePictureUrl || chat.photo || null,
-            participants_count: Array.isArray(chat.participants) ? chat.participants.length : 0,
+            picture_url: chat.pictureUrl || chat.profilePictureUrl || chat.picture_url || chat.photo || null,
+            participants_count: Array.isArray(chat.participants) ? chat.participants.length : (chat.participants_count || 0),
             updated_at: new Date().toISOString(),
           },
           { onConflict: "company_id,group_jid" }
         );
 
-      // ALSO Upsert into chat_conversations so the Chat page lists the groups!
+      // ALSO Upsert into chat_conversations
       const { error: upsertConvErr } = await supabase
         .from("chat_conversations")
         .upsert(
@@ -167,6 +198,23 @@ Deno.serve(async (req) => {
           },
           { onConflict: "company_id,instance_id,contact_name" }
         );
+
+      // ALSO Upsert into group_campaigns
+      await supabase
+        .from("group_campaigns")
+        .upsert(
+          {
+            company_id: companyId,
+            user_id: instance.user_id,
+            instance_id: instance.id,
+            group_jid: groupJid,
+            group_name: name || "Grupo WhatsApp",
+            name: name || "Grupo WhatsApp",
+            status: "active",
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "company_id,group_jid" }
+        ).catch(() => {});
 
       if (!upsertGroupErr || !upsertConvErr) {
         syncedCount++;
@@ -211,6 +259,9 @@ Deno.serve(async (req) => {
         instanceId: instance.id,
         instanceName: instance.name,
         syncedCount,
+        totalRawChatsFound: rawChats.length,
+        providerStatus,
+        snippet: rawResponseSnippet,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
