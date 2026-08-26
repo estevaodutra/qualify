@@ -8,47 +8,161 @@ const corsHeaders = {
 
 /**
  * Universal group objects extractor to handle all WAHA / Z-API / Evolution / Baileys response formats.
- * Especially handles WAHA format where groups are wrapped inside dictionary keys:
- * [ { "120363412175102479@g.us": { id: "...", subject: "GRUPO TESTE", size: 3, participants: [...] } } ]
+ * Traverses nested structures and handles dictionary formats where group objects are keyed by group JID:
+ * [ { "120363412175102479@g.us": { id: "120363412175102479@g.us", subject: "GRUPO TESTE", ... }, ... } ]
  */
 function extractGroupObjects(rawJson: any): any[] {
   if (!rawJson) return [];
-  let items: any[] = [];
 
-  if (Array.isArray(rawJson)) {
-    for (const el of rawJson) {
-      if (!el || typeof el !== "object") continue;
-      if (el.id || el.jid || el.groupJid || el.subject || el.name || el.title) {
-        items.push(el);
-      } else {
-        // Dict inside array element: { "120363412175102479@g.us": { ... } }
-        const values = Object.values(el);
-        for (const v of values) {
-          if (v && typeof v === "object") {
-            items.push(v);
+  const foundObjects: any[] = [];
+
+  function walk(node: any) {
+    if (!node) return;
+
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        walk(item);
+      }
+      return;
+    }
+
+    if (typeof node === "object" && node !== null) {
+      // Check n8n wrappers like { body: ... } or { json: ... } or { data: ... }
+      if (node.body) walk(node.body);
+      if (node.json) walk(node.json);
+      if (node.data && Array.isArray(node.data)) walk(node.data);
+      if (node.groups && Array.isArray(node.groups)) walk(node.groups);
+      if (node.chats && Array.isArray(node.chats)) walk(node.chats);
+      if (node.result && Array.isArray(node.result)) walk(node.result);
+
+      // Check if node itself is a single group object
+      const directId = node.id || node.jid || node.groupJid || node.group_jid;
+      if (directId && (String(directId).includes("@g.us") || String(directId).startsWith("1203") || node.subject || node.name)) {
+        foundObjects.push(node);
+        return;
+      }
+
+      // Check key-value pairs (WAHA dict format where keys are JIDs "120363412175102479@g.us")
+      for (const [key, val] of Object.entries(node)) {
+        if (val && typeof val === "object" && !Array.isArray(val)) {
+          const subObj = { ...(val as any) };
+          const isJidKey = key.includes("@g.us") || key.startsWith("1203");
+          if (isJidKey || subObj.id || subObj.subject || subObj.name || subObj.participants) {
+            if (!subObj.id && isJidKey) {
+              subObj.id = key;
+            }
+            if (subObj.id || subObj.subject || subObj.name || isJidKey) {
+              foundObjects.push(subObj);
+            }
           }
         }
       }
     }
-  } else if (typeof rawJson === "object" && rawJson !== null) {
-    const possibleArray = rawJson.groups || rawJson.data || rawJson.chats || rawJson.result || rawJson.items || rawJson.response;
-    if (possibleArray) {
-      return extractGroupObjects(possibleArray);
-    }
+  }
 
-    // Dict of JIDs at root: { "120363412175102479@g.us": { ... } }
-    for (const [key, val] of Object.entries(rawJson)) {
-      if (val && typeof val === "object") {
-        const itemObj = { ...(val as any) };
-        if (!itemObj.id && (key.includes("@g.us") || key.startsWith("1203"))) {
-          itemObj.id = key;
-        }
-        items.push(itemObj);
+  walk(rawJson);
+
+  // Deduplicate by JID / ID
+  const map = new Map<string, any>();
+  for (const item of foundObjects) {
+    const jid = item.id || item.jid || item.groupJid || item.phone;
+    if (jid) {
+      const key = String(jid).includes("@") ? String(jid) : `${String(jid).replace(/\D/g, "")}@g.us`;
+      if (!map.has(key)) {
+        map.set(key, item);
       }
     }
   }
 
-  return items;
+  return Array.from(map.values());
+}
+
+async function upsertGroup(supabase: any, groupData: any): Promise<boolean> {
+  const { error: err1 } = await supabase
+    .from("whatsapp_groups" as any)
+    .upsert(groupData, { onConflict: "company_id,group_jid" });
+
+  if (!err1) return true;
+
+  const { error: err2 } = await supabase
+    .from("whatsapp_groups" as any)
+    .upsert(groupData, { onConflict: "group_jid" });
+
+  if (!err2) return true;
+
+  const { data: existing } = await supabase
+    .from("whatsapp_groups" as any)
+    .select("id")
+    .eq("company_id", groupData.company_id)
+    .eq("group_jid", groupData.group_jid)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase
+      .from("whatsapp_groups" as any)
+      .update(groupData)
+      .eq("id", existing.id);
+    return !error;
+  } else {
+    const { error } = await supabase
+      .from("whatsapp_groups" as any)
+      .insert(groupData);
+    return !error;
+  }
+}
+
+async function upsertConversation(supabase: any, convData: any): Promise<boolean> {
+  const { data: existing } = await supabase
+    .from("chat_conversations")
+    .select("id")
+    .eq("company_id", convData.company_id)
+    .eq("contact_name", convData.contact_name)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase
+      .from("chat_conversations")
+      .update({
+        instance_id: convData.instance_id,
+        last_message_at: convData.last_message_at,
+        updated_at: convData.updated_at,
+      })
+      .eq("id", existing.id);
+    return !error;
+  } else {
+    const { error } = await supabase
+      .from("chat_conversations")
+      .insert(convData);
+    return !error;
+  }
+}
+
+async function upsertGroupCampaign(supabase: any, gcData: any): Promise<boolean> {
+  const { data: existing } = await supabase
+    .from("group_campaigns")
+    .select("id")
+    .eq("company_id", gcData.company_id)
+    .eq("group_jid", gcData.group_jid)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase
+      .from("group_campaigns")
+      .update({
+        instance_id: gcData.instance_id,
+        group_name: gcData.group_name,
+        name: gcData.name,
+        group_description: gcData.group_description,
+        updated_at: gcData.updated_at,
+      })
+      .eq("id", existing.id);
+    return !error;
+  } else {
+    const { error } = await supabase
+      .from("group_campaigns")
+      .insert(gcData);
+    return !error;
+  }
 }
 
 Deno.serve(async (req) => {
@@ -152,14 +266,14 @@ Deno.serve(async (req) => {
 
       if (resp.ok) {
         const json = await resp.json();
-        rawResponseSnippet = JSON.stringify(json).slice(0, 300);
+        rawResponseSnippet = JSON.stringify(json).slice(0, 500);
         rawChats = extractGroupObjects(json);
       }
     } catch (e: any) {
       console.warn(`[sync-instance-groups] Provider API error:`, e.message);
     }
 
-    // Fallback GET /chats if group.list returned no items
+    // Fallback GET /chats if group.list returned 0 items
     if (rawChats.length === 0) {
       try {
         const respFallback = await fetchZApi(
@@ -192,75 +306,55 @@ Deno.serve(async (req) => {
       const jid = chat.id || chat.phone || chat.jid || chat.groupJid || chat.group_jid || chat.chatId;
       const subject = chat.subject || chat.name || chat.groupName || chat.group_name || chat.title;
 
-      // Ensure valid group JID
       let groupJid = jid ? String(jid) : "";
-      if (!groupJid && subject) {
-        // If JID missing but item exists
-        continue;
-      }
+      if (!groupJid && subject) continue;
       if (!groupJid.includes("@")) {
         groupJid = `${groupJid.replace(/\D/g, "")}@g.us`;
       }
 
-      if (!groupJid.includes("@g.us") && !groupJid.startsWith("1203")) {
-        continue;
-      }
+      if (!groupJid.includes("@g.us") && !groupJid.startsWith("1203")) continue;
 
       const finalName = subject || groupJid.split("@")[0] || "Grupo WhatsApp";
       const participants = Array.isArray(chat.participants) ? chat.participants : [];
       const participantsCount = chat.size || chat.participantsCount || (participants.length > 0 ? participants.length : 0);
 
       // Upsert into whatsapp_groups
-      const { error: upsertGroupErr } = await supabase
-        .from("whatsapp_groups" as any)
-        .upsert(
-          {
-            company_id: companyId,
-            user_id: instance.user_id,
-            instance_id: instance.id,
-            group_jid: groupJid,
-            name: finalName,
-            description: chat.description || chat.desc || null,
-            picture_url: chat.pictureUrl || chat.profilePictureUrl || chat.picture_url || chat.photo || null,
-            participants_count: participantsCount,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "company_id,group_jid" }
-        );
+      const gOk = await upsertGroup(supabase, {
+        company_id: companyId,
+        user_id: instance.user_id,
+        instance_id: instance.id,
+        group_jid: groupJid,
+        name: finalName,
+        description: chat.desc || chat.description || null,
+        picture_url: chat.pictureUrl || chat.profilePictureUrl || chat.picture_url || chat.photo || null,
+        participants_count: participantsCount,
+        updated_at: new Date().toISOString(),
+      });
 
       // Upsert into chat_conversations
-      const { error: upsertConvErr } = await supabase
-        .from("chat_conversations")
-        .upsert(
-          {
-            company_id: companyId,
-            user_id: instance.user_id,
-            instance_id: instance.id,
-            contact_name: groupJid,
-            contact_phone: groupJid,
-            status: "open",
-            last_message_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "company_id,instance_id,contact_name" }
-        );
+      const cOk = await upsertConversation(supabase, {
+        company_id: companyId,
+        user_id: instance.user_id,
+        instance_id: instance.id,
+        contact_name: groupJid,
+        contact_phone: groupJid,
+        status: "open",
+        last_message_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
 
       // Upsert into group_campaigns
-      await supabase
-        .from("group_campaigns")
-        .upsert(
-          {
-            company_id: companyId,
-            user_id: instance.user_id,
-            instance_id: instance.id,
-            group_jid: groupJid,
-            group_name: finalName,
-            name: finalName,
-            status: "active",
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "company_id,group_jid" }
-        ).catch(() => {});
+      await upsertGroupCampaign(supabase, {
+        company_id: companyId,
+        user_id: instance.user_id,
+        instance_id: instance.id,
+        group_jid: groupJid,
+        group_name: finalName,
+        name: finalName,
+        group_description: chat.desc || chat.description || null,
+        status: "active",
+        updated_at: new Date().toISOString(),
+      });
 
       // Sync members into group_members if present
       if (participants.length > 0) {
@@ -284,40 +378,9 @@ Deno.serve(async (req) => {
         }
       }
 
-      if (!upsertGroupErr || !upsertConvErr) {
+      if (gOk || cOk) {
         syncedCount++;
         upsertedJids.add(groupJid);
-      }
-    }
-
-    // 4. Fallback: Check local chat_conversations for existing groups and sync to whatsapp_groups
-    const { data: dbConvs } = await supabase
-      .from("chat_conversations")
-      .select("id, contact_name, instance_id, user_id, updated_at")
-      .eq("company_id", companyId)
-      .eq("instance_id", instance.id);
-
-    if (dbConvs) {
-      for (const conv of dbConvs) {
-        const contactName = conv.contact_name || "";
-        if (contactName.includes("@g.us") || contactName.toLowerCase().includes("grupo")) {
-          const groupJid = contactName.includes("@g.us") ? contactName : `${conv.id}@g.us`;
-          if (!upsertedJids.has(groupJid)) {
-            await supabase.from("whatsapp_groups" as any).upsert(
-              {
-                company_id: companyId,
-                user_id: instance.user_id,
-                instance_id: instance.id,
-                group_jid: groupJid,
-                name: contactName.split("@")[0] || "Grupo WhatsApp",
-                updated_at: new Date().toISOString(),
-              },
-              { onConflict: "company_id,group_jid" }
-            );
-            syncedCount++;
-            upsertedJids.add(groupJid);
-          }
-        }
       }
     }
 
