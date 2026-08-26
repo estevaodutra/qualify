@@ -77,58 +77,55 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`[sync-instance-groups] Fetching groups from provider for instance ${instance.name} (${instance.id})`);
+    console.log(`[sync-instance-groups] Executing action group.list for instance ${instance.name} (${instance.id})`);
 
     let rawChats: any[] = [];
 
-    // Attempt to fetch chats/groups via provider API
+    // 2. Execute action "group.list" via fetchZApi / n8n-router
     try {
       const resp = await fetchZApi(
         instance.external_instance_id,
         instance.external_instance_token,
-        "/chats",
-        "GET",
-        null,
-        {},
+        "/group/list",
+        "POST",
+        {
+          action: "group.list",
+          instanceId: instance.id,
+          external_instance_id: instance.external_instance_id,
+        },
+        { "Content-Type": "application/json" },
         instance.id,
         true
       );
 
       if (resp.ok) {
         const json = await resp.json();
-        rawChats = Array.isArray(json) ? json : json.data || json.chats || json.result || [];
+        rawChats = Array.isArray(json) ? json : json.data || json.groups || json.chats || json.result || [];
       } else {
-        // Fallback to /groups endpoint
-        const respGroups = await fetchZApi(
+        // Fallback: try GET /chats or GET /groups
+        const respFallback = await fetchZApi(
           instance.external_instance_id,
           instance.external_instance_token,
-          "/groups",
+          "/chats",
           "GET",
           null,
           {},
           instance.id,
           true
         );
-        if (respGroups.ok) {
-          const jsonG = await respGroups.json();
-          rawChats = Array.isArray(jsonG) ? jsonG : jsonG.data || jsonG.groups || jsonG.result || [];
+        if (respFallback.ok) {
+          const jsonF = await respFallback.json();
+          rawChats = Array.isArray(jsonF) ? jsonF : jsonF.data || jsonF.groups || jsonF.chats || jsonF.result || [];
         }
       }
     } catch (e: any) {
       console.warn(`[sync-instance-groups] Provider API error:`, e.message);
     }
 
-    // Also pull from existing chat_conversations for this instance
-    const { data: dbConvs } = await supabase
-      .from("chat_conversations")
-      .select("id, contact_name, last_message_at, updated_at")
-      .eq("company_id", companyId)
-      .eq("instance_id", instance.id);
-
     let syncedCount = 0;
     const upsertedJids = new Set<string>();
 
-    // Process provider chats
+    // 3. Process provider chats and populate BOTH whatsapp_groups and chat_conversations
     for (const chat of rawChats) {
       const jid = chat.id || chat.phone || chat.jid || chat.groupJid;
       if (!jid || (!jid.includes("@g.us") && !chat.isGroup)) continue;
@@ -136,7 +133,8 @@ Deno.serve(async (req) => {
       const groupJid = jid.includes("@") ? jid : `${jid.replace(/\D/g, "")}@g.us`;
       const name = chat.name || chat.subject || chat.groupName || groupJid.split("@")[0];
 
-      const { error: upsertErr } = await supabase
+      // Upsert into whatsapp_groups
+      const { error: upsertGroupErr } = await supabase
         .from("whatsapp_groups" as any)
         .upsert(
           {
@@ -153,37 +151,55 @@ Deno.serve(async (req) => {
           { onConflict: "company_id,group_jid" }
         );
 
-      if (!upsertErr) {
+      // ALSO Upsert into chat_conversations so the Chat page lists the groups!
+      const { error: upsertConvErr } = await supabase
+        .from("chat_conversations")
+        .upsert(
+          {
+            company_id: companyId,
+            user_id: instance.user_id,
+            instance_id: instance.id,
+            contact_name: groupJid,
+            contact_phone: groupJid,
+            status: "open",
+            last_message_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "company_id,instance_id,contact_name" }
+        );
+
+      if (!upsertGroupErr || !upsertConvErr) {
         syncedCount++;
         upsertedJids.add(groupJid);
       }
     }
 
-    // Process database conversations for groups not yet upserted
+    // 4. Fallback: Check local chat_conversations for existing groups and sync to whatsapp_groups
+    const { data: dbConvs } = await supabase
+      .from("chat_conversations")
+      .select("id, contact_name, instance_id, user_id, updated_at")
+      .eq("company_id", companyId)
+      .eq("instance_id", instance.id);
+
     if (dbConvs) {
       for (const conv of dbConvs) {
         const contactName = conv.contact_name || "";
         if (contactName.includes("@g.us") || contactName.toLowerCase().includes("grupo")) {
           const groupJid = contactName.includes("@g.us") ? contactName : `${conv.id}@g.us`;
           if (!upsertedJids.has(groupJid)) {
-            const { error: upsertErr } = await supabase
-              .from("whatsapp_groups" as any)
-              .upsert(
-                {
-                  company_id: companyId,
-                  user_id: instance.user_id,
-                  instance_id: instance.id,
-                  group_jid: groupJid,
-                  name: contactName.split("@")[0] || "Grupo WhatsApp",
-                  updated_at: new Date().toISOString(),
-                },
-                { onConflict: "company_id,group_jid" }
-              );
-
-            if (!upsertErr) {
-              syncedCount++;
-              upsertedJids.add(groupJid);
-            }
+            await supabase.from("whatsapp_groups" as any).upsert(
+              {
+                company_id: companyId,
+                user_id: instance.user_id,
+                instance_id: instance.id,
+                group_jid: groupJid,
+                name: contactName.split("@")[0] || "Grupo WhatsApp",
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "company_id,group_jid" }
+            );
+            syncedCount++;
+            upsertedJids.add(groupJid);
           }
         }
       }

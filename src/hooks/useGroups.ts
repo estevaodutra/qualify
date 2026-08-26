@@ -365,6 +365,8 @@ export function useGroups(filters: GroupFilters = {}) {
     },
     onSuccess: (res: any) => {
       queryClient.invalidateQueries({ queryKey: ["whatsapp_groups"] });
+      queryClient.invalidateQueries({ queryKey: ["chat_conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
       const count = res?.syncedCount || 0;
       toast.success(count > 0 ? `${count} grupos sincronizados da conexão!` : "Sincronização concluída da conexão!");
     },
