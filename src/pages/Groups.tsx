@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/dispatch/PageHeader";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
@@ -18,11 +19,22 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { UsersRound, Search, Filter, ArrowUpDown, RefreshCw, ChevronLeft, ChevronRight, Wand2, LayoutGrid, List, Radio } from "lucide-react";
+import { UsersRound, Search, Filter, ArrowUpDown, RefreshCw, ChevronLeft, ChevronRight, Wand2, LayoutGrid, List, Radio, CheckCircle2, PlusCircle, Users } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useCompany } from "@/contexts/CompanyContext";
+import { toast } from "sonner";
+
+interface RemoteGroupItem {
+  groupJid: string;
+  name: string;
+  description: string | null;
+  pictureUrl: string | null;
+  participantsCount: number;
+}
 
 export default function Groups() {
+  const { activeCompanyId } = useCompany();
   const [search, setSearch] = useState("");
   const [instanceId, setInstanceId] = useState("all");
   const [status, setStatus] = useState("all");
@@ -33,8 +45,14 @@ export default function Groups() {
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [selectedGroup, setSelectedGroup] = useState<WhatsAppGroupItem | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // Sync / Import Modal state
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [selectedSyncInstance, setSelectedSyncInstance] = useState<string>("");
+  const [isFetchingRemote, setIsFetchingRemote] = useState(false);
+  const [remoteGroups, setRemoteGroups] = useState<RemoteGroupItem[]>([]);
+  const [selectedJids, setSelectedJids] = useState<Set<string>>(new Set());
+  const [remoteSearch, setRemoteSearch] = useState("");
 
   // Fetch groups with filters
   const {
@@ -78,6 +96,88 @@ export default function Groups() {
     setDrawerOpen(true);
   };
 
+  // Fetch remote groups from WhatsApp instance for selection
+  const handleFetchRemoteGroups = async () => {
+    if (!selectedSyncInstance) {
+      toast.error("Selecione uma conexão de WhatsApp.");
+      return;
+    }
+
+    setIsFetchingRemote(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("sync-instance-groups", {
+        body: {
+          instanceId: selectedSyncInstance,
+          companyId: activeCompanyId,
+          fetchOnly: true,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.success && Array.isArray(data.groups)) {
+        setRemoteGroups(data.groups);
+        // Select all groups by default
+        const allJids = new Set<string>(data.groups.map((g: RemoteGroupItem) => g.groupJid));
+        setSelectedJids(allJids);
+        toast.success(`${data.groups.length} grupos encontrados na conexão!`);
+      } else {
+        toast.info("Nenhum grupo encontrado nesta conexão do WhatsApp.");
+        setRemoteGroups([]);
+        setSelectedJids(new Set());
+      }
+    } catch (err: any) {
+      toast.error(`Erro ao buscar grupos da conexão: ${err.message || String(err)}`);
+    } finally {
+      setIsFetchingRemote(false);
+    }
+  };
+
+  // Toggle single group selection
+  const handleToggleSelectJid = (jid: string) => {
+    setSelectedJids((prev) => {
+      const next = new Set(prev);
+      if (next.has(jid)) {
+        next.delete(jid);
+      } else {
+        next.add(jid);
+      }
+      return next;
+    });
+  };
+
+  // Toggle select all groups
+  const handleToggleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const allJids = new Set<string>(remoteGroups.map((g) => g.groupJid));
+      setSelectedJids(allJids);
+    } else {
+      setSelectedJids(new Set());
+    }
+  };
+
+  // Submit selected groups import to CRM
+  const handleImportSelectedGroups = () => {
+    if (!selectedSyncInstance || selectedJids.size === 0) {
+      toast.error("Selecione pelo menos 1 grupo para adicionar.");
+      return;
+    }
+
+    syncInstanceGroups({
+      instanceId: selectedSyncInstance,
+      selectedJids: Array.from(selectedJids),
+    });
+
+    setSyncDialogOpen(false);
+  };
+
+  // Filtered remote groups by search query
+  const filteredRemoteGroups = remoteGroups.filter(
+    (g) =>
+      g.name.toLowerCase().includes(remoteSearch.toLowerCase()) ||
+      g.groupJid.toLowerCase().includes(remoteSearch.toLowerCase())
+  );
+
   return (
     <div className="min-h-screen bg-background p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
       {/* Top Page Header */}
@@ -102,7 +202,7 @@ export default function Groups() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
-          {/* Button to sync groups from WhatsApp Instance */}
+          {/* Button to sync & select groups from WhatsApp Instance */}
           <Dialog open={syncDialogOpen} onOpenChange={setSyncDialogOpen}>
             <DialogTrigger asChild>
               <Button
@@ -114,49 +214,132 @@ export default function Groups() {
                 Buscar Grupos da Instância
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md rounded-2xl bg-card border border-border shadow-2xl p-6">
+            <DialogContent className="sm:max-w-xl rounded-2xl bg-card border border-border shadow-2xl p-6">
               <DialogHeader>
                 <DialogTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-                  <Radio className="h-5 w-5 text-emerald-500" /> Buscar Grupos da Conexão
+                  <Radio className="h-5 w-5 text-emerald-500" /> Buscar e Selecionar Grupos da Conexão
                 </DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground">
-                  Selecione uma instância do WhatsApp conectada para buscar e sincronizar automaticamente todos os grupos.
+                  Selecione uma conexão WhatsApp para listar todos os grupos disponíveis e selecione quais deseja adicionar ao CRM.
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Selecione a Conexão</label>
-                  <Select value={selectedSyncInstance} onValueChange={setSelectedSyncInstance}>
-                    <SelectTrigger className="h-10 text-xs">
-                      <SelectValue placeholder="Selecione uma conexão..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {instances?.map((i) => (
-                        <SelectItem key={i.id} value={i.id}>
-                          {i.name} {i.phone ? `(${i.phone})` : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className="space-y-4 py-3">
+                {/* Step 1: Select Instance & Search Button */}
+                <div className="flex items-end gap-3 bg-muted/30 p-3.5 rounded-xl border border-border/50">
+                  <div className="flex-1 space-y-1.5">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Conexão do WhatsApp
+                    </label>
+                    <Select
+                      value={selectedSyncInstance}
+                      onValueChange={(val) => {
+                        setSelectedSyncInstance(val);
+                        setRemoteGroups([]);
+                        setSelectedJids(new Set());
+                      }}
+                    >
+                      <SelectTrigger className="h-10 text-xs bg-background">
+                        <SelectValue placeholder="Selecione uma conexão..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {instances?.map((i) => (
+                          <SelectItem key={i.id} value={i.id}>
+                            {i.name} {i.phone ? `(${i.phone})` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    size="sm"
+                    disabled={!selectedSyncInstance || isFetchingRemote}
+                    onClick={handleFetchRemoteGroups}
+                    className="h-10 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shrink-0"
+                  >
+                    {isFetchingRemote ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+                    {isFetchingRemote ? "Buscando..." : "Buscar Grupos"}
+                  </Button>
                 </div>
+
+                {/* Step 2: List & Selectable Groups */}
+                {remoteGroups.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      {/* Search inside modal */}
+                      <div className="relative flex-1">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                        <Input
+                          placeholder="Filtrar por nome do grupo..."
+                          value={remoteSearch}
+                          onChange={(e) => setRemoteSearch(e.target.value)}
+                          className="pl-8 h-8 text-xs bg-background"
+                        />
+                      </div>
+
+                      {/* Select All Checkbox */}
+                      <div className="flex items-center gap-2 bg-background px-3 py-1.5 rounded-lg border border-border text-xs font-semibold shrink-0">
+                        <Checkbox
+                          id="select-all-groups"
+                          checked={selectedJids.size === remoteGroups.length && remoteGroups.length > 0}
+                          onCheckedChange={(checked) => handleToggleSelectAll(!!checked)}
+                        />
+                        <label htmlFor="select-all-groups" className="cursor-pointer text-xs">
+                          Selecionar Todos ({selectedJids.size}/{remoteGroups.length})
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Scrollable list of selectable groups */}
+                    <div className="max-h-[300px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+                      {filteredRemoteGroups.map((g) => {
+                        const isChecked = selectedJids.has(g.groupJid);
+                        return (
+                          <div
+                            key={g.groupJid}
+                            onClick={() => handleToggleSelectJid(g.groupJid)}
+                            className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
+                              isChecked
+                                ? "bg-emerald-500/10 border-emerald-500/40"
+                                : "bg-card hover:bg-muted/40 border-border/60"
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <Checkbox
+                                checked={isChecked}
+                                onCheckedChange={() => handleToggleSelectJid(g.groupJid)}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-foreground truncate">{g.name}</p>
+                                <p className="text-[10px] font-mono text-muted-foreground truncate">{g.groupJid}</p>
+                              </div>
+                            </div>
+
+                            <Badge variant="outline" className="text-[10px] font-semibold gap-1 shrink-0 bg-background">
+                              <Users className="h-3 w-3 text-muted-foreground" />
+                              {g.participantsCount} {g.participantsCount === 1 ? "membro" : "membros"}
+                            </Badge>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <DialogFooter className="gap-2">
-                <Button variant="outline" size="sm" onClick={() => setSyncDialogOpen(false)}>Cancelar</Button>
+              <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t border-border">
+                <Button variant="outline" size="sm" onClick={() => setSyncDialogOpen(false)}>
+                  Cancelar
+                </Button>
                 <Button
                   size="sm"
-                  disabled={!selectedSyncInstance || isSyncingInstance}
-                  onClick={() => {
-                    if (selectedSyncInstance) {
-                      syncInstanceGroups(selectedSyncInstance);
-                      setSyncDialogOpen(false);
-                    }
-                  }}
+                  disabled={selectedJids.size === 0 || isSyncingInstance}
+                  onClick={handleImportSelectedGroups}
                   className="font-bold bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
                 >
-                  {isSyncingInstance ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Radio className="h-3.5 w-3.5" />}
-                  {isSyncingInstance ? "Buscando Grupos..." : "Iniciar Sincronização"}
+                  {isSyncingInstance ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <PlusCircle className="h-3.5 w-3.5" />}
+                  {isSyncingInstance ? "Adicionando..." : `Adicionar ${selectedJids.size} ${selectedJids.size === 1 ? "Grupo" : "Grupos"} ao CRM`}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -344,7 +527,7 @@ export default function Groups() {
           <div className="space-y-1.5 max-w-md mx-auto">
             <h3 className="text-lg font-bold text-foreground">Nenhum grupo encontrado</h3>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Sincronize os grupos de uma instância do WhatsApp conectada usando o botão acima.
+              Busque e selecione os grupos de uma instância do WhatsApp para adicionar à sua plataforma.
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
