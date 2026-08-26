@@ -39,6 +39,7 @@ export const webhookCategories: WebhookCategory[] = [
       { id: "message.read", name: "message.read", description: "Marcar como lida", type: "request" },
       // Event actions (n8n -> Dispatch)
       { id: "message.received", name: "message.received", description: "Mensagem recebida", type: "event" },
+      { id: "poll.vote", name: "poll.vote", description: "Voto / Resposta de enquete recebido", type: "event" },
       { id: "message.sent", name: "message.sent", description: "Mensagem enviada com sucesso", type: "event" },
       { id: "message.delivered", name: "message.delivered", description: "Mensagem entregue", type: "event" },
       { id: "message.read_ack", name: "message.read_ack", description: "Confirmação de leitura", type: "event" },

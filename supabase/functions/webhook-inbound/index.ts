@@ -35,7 +35,7 @@ const ingestionService = new MessageIngestionService();
 const SUPPORTED_MESSAGE_TYPES: SupportedMessageType[] = [
   "text", "image", "audio", "voice", "video", "video-note",
   "document", "sticker", "location", "contact", "contacts",
-  "poll", "reaction", "edited", "revoked", "status", "delivered", "read", "sent", "failed", "ack"
+  "poll", "poll-vote", "poll_vote", "reaction", "edited", "revoked", "status", "delivered", "read", "sent", "failed", "ack"
 ];
 
 // Version: 2026-08-24.18
@@ -106,6 +106,68 @@ Deno.serve(async (req) => {
       const result = await ingestionService.ingest("status", payload as any, meta);
       return new Response(JSON.stringify(result.body), {
         status: result.statusCode,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Roteamento semântico para Resposta / Voto de Enquete (Poll Vote)
+    if (
+      url.pathname.includes("/polls/vote") ||
+      url.pathname.includes("/messages/poll-vote") ||
+      url.pathname.includes("/messages/poll_vote") ||
+      url.pathname.includes("/polls/response")
+    ) {
+      const raw = payload.raw_event || {};
+      const pollPayload = {
+        message_id: raw.message_id || raw.poll_message_id || raw.id,
+        instance_id: payload.instance_id,
+        group_jid: raw.group_id || raw.group_jid || raw.chat_jid || "",
+        respondent: {
+          phone: raw.from_phone || raw.respondent_phone || raw.phone || "",
+          name: raw.from_name || raw.respondent_name || "",
+          jid: raw.from_jid || `${raw.from_phone || raw.phone}@s.whatsapp.net`,
+        },
+        response: {
+          option_index: raw.selected_option_index !== undefined ? raw.selected_option_index : (raw.option_index !== undefined ? raw.option_index : 0),
+          option_text: raw.selected_option_text || raw.option_text || raw.option || "",
+        },
+        timestamp: raw.timestamp ? (typeof raw.timestamp === "number" ? new Date(raw.timestamp * 1000).toISOString() : raw.timestamp) : new Date().toISOString(),
+        _raw_event: raw,
+      };
+
+      console.log(`[webhook-inbound] 🗳️ Direct poll vote endpoint triggered for message ${pollPayload.message_id}`);
+
+      const handleRes = await fetch(`${Deno.env.get("SUPABASE_URL")!}/functions/v1/handle-poll-response`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!}`,
+        },
+        body: JSON.stringify(pollPayload),
+      });
+
+      const handleResult = await handleRes.json();
+
+      await supabase.from("webhook_events").insert({
+        user_id: null,
+        source: payload.provider || payload.source || "api",
+        external_instance_id: payload.instance_id,
+        event_type: "poll_vote",
+        event_subtype: "poll_response",
+        classification: "identified",
+        direction: "inbound",
+        confidence: "high",
+        matched_rule: "poll_vote_endpoint",
+        chat_jid: pollPayload.group_jid,
+        sender_phone: pollPayload.respondent.phone,
+        sender_name: pollPayload.respondent.name,
+        message_id: pollPayload.message_id,
+        raw_event: raw,
+        processing_status: "processed",
+      }).catch((err) => console.error("[webhook-inbound] Failed to log poll vote event:", err));
+
+      return new Response(JSON.stringify(handleResult), {
+        status: handleRes.status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

@@ -460,6 +460,53 @@ const WebhookDocs = () => {
 }`}
             />
           </div>
+
+          {/* 10. Resposta / Voto de Enquete */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-purple-100 text-purple-600">
+                  <BarChart2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Resposta / Voto de Enquete</h3>
+                  <p className="text-xs text-slate-500">Notificação de voto selecionado por um participante em uma enquete do WhatsApp</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="font-mono text-xs bg-purple-50 text-purple-700 border-purple-200 px-3 py-1 font-semibold">
+                  POST /webhooks/messages/poll-vote
+                </Badge>
+                <Badge variant="outline" className="font-mono text-xs bg-slate-100 text-slate-700 px-2 py-1">
+                  POST /webhook-inbound/polls/vote
+                </Badge>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100">
+              <strong>Comportamento:</strong> Registra o voto do participante no banco de dados (<code className="font-mono text-slate-700">poll_responses</code>) e <strong>retoma automaticamente a execução do Workflow</strong> no ramo/saída correspondente à alternativa selecionada.
+            </p>
+
+            <CodeBlock
+              id="msg-poll-vote"
+              code={`{
+  "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
+  "raw_event": {
+    "message_id": "false_120363425932296878@g.us_POLL123456",
+    "group_id": "120363425932296878@g.us",
+    "from_phone": "5512982402981",
+    "from_name": "Estevão",
+    "selected_option_index": 0,
+    "selected_option_text": "Sim, tenho interesse",
+    "timestamp": 1786814900
+  }
+}`}
+            />
+
+            <div className="text-xs text-slate-500 flex flex-wrap gap-4 pt-1">
+              <span><strong>Campos aceitos:</strong> <code className="font-mono text-slate-700">message_id</code> / <code className="font-mono text-slate-700">poll_message_id</code>, <code className="font-mono text-slate-700">group_id</code>, <code className="font-mono text-slate-700">from_phone</code>, <code className="font-mono text-slate-700">selected_option_index</code>, <code className="font-mono text-slate-700">selected_option_text</code>.</span>
+            </div>
+          </div>
         </div>
 
         {/* ======================================================== */}
