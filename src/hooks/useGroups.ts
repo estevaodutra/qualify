@@ -319,6 +319,60 @@ export function useGroups(filters: GroupFilters = {}) {
     },
   });
 
+  // Mutation to sync groups directly from a specific WhatsApp instance/connection
+  const syncInstanceGroupsMutation = useMutation({
+    mutationFn: async (targetInstanceId: string) => {
+      if (!targetInstanceId) return { syncedCount: 0 };
+
+      const { data: resData, error: resErr } = await supabase.functions.invoke("sync-instance-groups", {
+        body: { instanceId: targetInstanceId },
+      });
+
+      if (resErr) {
+        console.warn("[syncInstanceGroups] Edge function warning:", resErr);
+      }
+
+      // Also sync local chat_conversations for this instance into whatsapp_groups
+      if (activeCompanyId) {
+        const { data: convs } = await supabase
+          .from("chat_conversations")
+          .select("id, contact_name, instance_id, user_id")
+          .eq("company_id", activeCompanyId)
+          .eq("instance_id", targetInstanceId);
+
+        if (convs) {
+          for (const c of convs) {
+            const name = c.contact_name || "";
+            if (name.includes("@g.us") || name.toLowerCase().includes("grupo")) {
+              const groupJid = name.includes("@g.us") ? name : `${c.id}@g.us`;
+              await supabase.from("whatsapp_groups" as any).upsert(
+                {
+                  company_id: activeCompanyId,
+                  instance_id: targetInstanceId,
+                  user_id: c.user_id,
+                  group_jid: groupJid,
+                  name: name.split("@")[0] || "Grupo WhatsApp",
+                  updated_at: new Date().toISOString(),
+                },
+                { onConflict: "company_id,group_jid" }
+              );
+            }
+          }
+        }
+      }
+
+      return resData || { syncedCount: 0 };
+    },
+    onSuccess: (res: any) => {
+      queryClient.invalidateQueries({ queryKey: ["whatsapp_groups"] });
+      const count = res?.syncedCount || 0;
+      toast.success(count > 0 ? `${count} grupos sincronizados da conexão!` : "Sincronização concluída da conexão!");
+    },
+    onError: (err: any) => {
+      toast.error(`Erro ao sincronizar grupos da conexão: ${err.message || String(err)}`);
+    },
+  });
+
   // Realtime updates subscription
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -351,5 +405,7 @@ export function useGroups(filters: GroupFilters = {}) {
     refetch,
     migrateGroups: migrateGroupsMutation.mutate,
     isMigrating: migrateGroupsMutation.isPending,
+    syncInstanceGroups: syncInstanceGroupsMutation.mutate,
+    isSyncingInstance: syncInstanceGroupsMutation.isPending,
   };
 }

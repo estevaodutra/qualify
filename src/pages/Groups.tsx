@@ -9,7 +9,16 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { UsersRound, Search, Filter, ArrowUpDown, RefreshCw, ChevronLeft, ChevronRight, Wand2, LayoutGrid, List } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { UsersRound, Search, Filter, ArrowUpDown, RefreshCw, ChevronLeft, ChevronRight, Wand2, LayoutGrid, List, Radio } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -24,9 +33,22 @@ export default function Groups() {
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [selectedGroup, setSelectedGroup] = useState<WhatsAppGroupItem | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
+  const [selectedSyncInstance, setSelectedSyncInstance] = useState<string>("");
 
   // Fetch groups with filters
-  const { groups, totalCount, totalPages, isLoading, isFetching, refetch, migrateGroups, isMigrating } = useGroups({
+  const {
+    groups,
+    totalCount,
+    totalPages,
+    isLoading,
+    isFetching,
+    refetch,
+    migrateGroups,
+    isMigrating,
+    syncInstanceGroups,
+    isSyncingInstance,
+  } = useGroups({
     search,
     instanceId,
     status,
@@ -42,7 +64,7 @@ export default function Groups() {
     migrateGroups();
   }, []);
 
-  // Fetch instances for filter dropdown
+  // Fetch instances for filter dropdown and sync dialog
   const { data: instances } = useQuery({
     queryKey: ["instances_list_for_groups_filter"],
     queryFn: async () => {
@@ -79,7 +101,67 @@ export default function Groups() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          {/* Button to sync groups from WhatsApp Instance */}
+          <Dialog open={syncDialogOpen} onOpenChange={setSyncDialogOpen}>
+            <DialogTrigger asChild>
+              <Button
+                variant="default"
+                size="sm"
+                className="gap-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+              >
+                <Radio className="h-3.5 w-3.5" />
+                Buscar Grupos da Instância
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md rounded-2xl bg-card border border-border shadow-2xl p-6">
+              <DialogHeader>
+                <DialogTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+                  <Radio className="h-5 w-5 text-emerald-500" /> Buscar Grupos da Conexão
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">
+                  Selecione uma instância do WhatsApp conectada para buscar e sincronizar automaticamente todos os grupos.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Selecione a Conexão</label>
+                  <Select value={selectedSyncInstance} onValueChange={setSelectedSyncInstance}>
+                    <SelectTrigger className="h-10 text-xs">
+                      <SelectValue placeholder="Selecione uma conexão..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {instances?.map((i) => (
+                        <SelectItem key={i.id} value={i.id}>
+                          {i.name} {i.phone ? `(${i.phone})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <DialogFooter className="gap-2">
+                <Button variant="outline" size="sm" onClick={() => setSyncDialogOpen(false)}>Cancelar</Button>
+                <Button
+                  size="sm"
+                  disabled={!selectedSyncInstance || isSyncingInstance}
+                  onClick={() => {
+                    if (selectedSyncInstance) {
+                      syncInstanceGroups(selectedSyncInstance);
+                      setSyncDialogOpen(false);
+                    }
+                  }}
+                  className="font-bold bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+                >
+                  {isSyncingInstance ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Radio className="h-3.5 w-3.5" />}
+                  {isSyncingInstance ? "Buscando Grupos..." : "Iniciar Sincronização"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
           <Button
             variant="outline"
             size="sm"
@@ -262,10 +344,18 @@ export default function Groups() {
           <div className="space-y-1.5 max-w-md mx-auto">
             <h3 className="text-lg font-bold text-foreground">Nenhum grupo encontrado</h3>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Os grupos das suas conexões do WhatsApp aparecerão aqui automaticamente após a sincronização.
+              Sincronize os grupos de uma instância do WhatsApp conectada usando o botão acima.
             </p>
           </div>
-          <div className="flex items-center justify-center gap-3 pt-2">
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <Button
+              size="sm"
+              onClick={() => setSyncDialogOpen(true)}
+              className="text-xs font-bold gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              <Radio className="h-3.5 w-3.5" />
+              Buscar Grupos da Instância
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -276,22 +366,6 @@ export default function Groups() {
               <Wand2 className="h-3.5 w-3.5" />
               Organizar Grupos da Base
             </Button>
-            {(search || instanceId !== "all" || hasDescriptionOnly || hasPhotoOnly) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setSearch("");
-                  setInstanceId("all");
-                  setStatus("all");
-                  setHasDescriptionOnly(false);
-                  setHasPhotoOnly(false);
-                }}
-                className="text-xs font-semibold"
-              >
-                Limpar Filtros
-              </Button>
-            )}
           </div>
         </div>
       )}
