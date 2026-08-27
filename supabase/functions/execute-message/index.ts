@@ -3023,14 +3023,43 @@ Deno.serve(async (req) => {
             },
           });
 
-          // Find connection matching the selected option ID (or matching selectedOptionLabel)
-          let nextConn = connections.find(c => c.source_node_id === node.id && c.condition_path === selectedOptionId);
+          // Multi-candidate connection matching for poll option paths
+          const nodeConns = connections.filter((c) => c.source_node_id === node.id);
+          const candidates = new Set<string>();
+
+          if (selectedOptionId) candidates.add(selectedOptionId);
+          if (selectedOptionLabel) candidates.add(selectedOptionLabel);
+
+          const rawOptIndex = (triggerContext as any)?.pollResponse?.option_index ?? (triggerContext as any)?.response?.option_index;
+          if (rawOptIndex !== undefined && rawOptIndex !== null) {
+            const idxNum = Number(rawOptIndex);
+            candidates.add(String(idxNum));
+            candidates.add(String(idxNum + 1));
+            candidates.add(`poll_opt_${idxNum + 1}`);
+            candidates.add(`opt_${idxNum}`);
+            candidates.add(`opt_${idxNum + 1}`);
+            candidates.add(`option_${idxNum}`);
+            candidates.add(`option_${idxNum + 1}`);
+          }
+
+          let nextConn = nodeConns.find((c) => c.condition_path && candidates.has(c.condition_path));
+
           if (!nextConn && selectedOptionLabel) {
-            nextConn = connections.find(c => c.source_node_id === node.id && c.condition_path === selectedOptionLabel);
+            const lowerLabel = selectedOptionLabel.toLowerCase().trim();
+            nextConn = nodeConns.find((c) => c.condition_path && c.condition_path.toLowerCase().trim() === lowerLabel);
+          }
+
+          if (!nextConn && nodeConns.length > 0) {
+            const idxNum = rawOptIndex !== undefined && rawOptIndex !== null ? Number(rawOptIndex) : -1;
+            if (idxNum >= 0 && idxNum < nodeConns.length) {
+              nextConn = nodeConns[idxNum];
+            } else if (nodeConns.length === 1) {
+              nextConn = nodeConns[0];
+            }
           }
 
           if (nextConn) {
-            console.log(`[ExecuteMessage] ✅ Found outgoing edge for poll option "${selectedOptionId}" -> target node ${nextConn.target_node_id}`);
+            console.log(`[ExecuteMessage] ✅ Found outgoing edge for poll option "${selectedOptionLabel || selectedOptionId}" -> target node ${nextConn.target_node_id}`);
             currentNodeId = nextConn.target_node_id;
             nodesProcessed++;
             triggerContext.resumedFromPoll = false;
