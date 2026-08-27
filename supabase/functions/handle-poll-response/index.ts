@@ -85,11 +85,77 @@ Deno.serve(async (req) => {
     console.log(`[HandlePollResponse] Received vote for message ${message_id}, option ${response.option_index}`);
 
     // Validate required fields
-    if (!message_id || !respondent?.phone || response?.option_index === undefined) {
+    if (!message_id || (!respondent?.phone && !(respondent as any)?.lid) || response?.option_index === undefined) {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: "Missing required fields: message_id, respondent.phone, response.option_index" 
+          error: "Missing required fields: message_id, respondent.phone or respondent.lid, response.option_index" 
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ----------------------------------------------------
+    // Robust LID -> Phone Resolution for WAHA & WhatsApp
+    // ----------------------------------------------------
+    let respondentPhone = String(respondent?.phone || "").trim();
+    let respondentLid: string | null = (respondent as any)?.lid || null;
+
+    if (respondentPhone.includes("@lid")) {
+      respondentLid = respondentPhone;
+      respondentPhone = "";
+    }
+
+    if (respondentLid) {
+      console.log(`[HandlePollResponse] Respondent passed with @lid "${respondentLid}". Querying database for phone number...`);
+
+      // 1. Query leads table by lid
+      const { data: leadMatch } = await supabase
+        .from("leads")
+        .select("phone, name")
+        .eq("lid", respondentLid)
+        .not("phone", "is", null)
+        .limit(1)
+        .maybeSingle();
+
+      if (leadMatch?.phone) {
+        respondentPhone = leadMatch.phone.replace(/\D/g, "");
+        if (!respondent.name && leadMatch.name) respondent.name = leadMatch.name;
+        console.log(`[HandlePollResponse] ✅ Resolved phone "${respondentPhone}" from leads table for lid "${respondentLid}"`);
+      } else {
+        // 2. Query group_members table by lid
+        const { data: memberMatch } = await supabase
+          .from("group_members")
+          .select("phone, name")
+          .eq("lid", respondentLid)
+          .not("phone", "is", null)
+          .limit(1)
+          .maybeSingle();
+
+        if (memberMatch?.phone) {
+          respondentPhone = memberMatch.phone.replace(/\D/g, "");
+          if (!respondent.name && memberMatch.name) respondent.name = memberMatch.name;
+          console.log(`[HandlePollResponse] ✅ Resolved phone "${respondentPhone}" from group_members table for lid "${respondentLid}"`);
+        } else {
+          console.warn(`[HandlePollResponse] ⚠️ Could not find phone number for lid "${respondentLid}" in database.`);
+        }
+      }
+    }
+
+    const cleanDigits = respondentPhone.split("@")[0].replace(/\D/g, "");
+    if (cleanDigits.length >= 8) {
+      respondentPhone = cleanDigits;
+    }
+
+    // Assign resolved phone number back to respondent
+    respondent.phone = respondentPhone;
+
+    if (!respondent.phone) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "PHONE_NOT_FOUND_FOR_LID",
+          message: `Telefone não encontrado no banco de dados para o LID '${respondentLid}'. Sincronize os participantes do grupo primeiro.`,
         }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );

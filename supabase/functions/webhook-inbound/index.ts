@@ -117,15 +117,59 @@ Deno.serve(async (req) => {
       url.pathname.includes("/messages/poll_vote") ||
       url.pathname.includes("/polls/response")
     ) {
-      const raw = payload.raw_event || {};
+      const raw = payload.raw_event || payload;
+      const rawFromPhone = String(raw.from_phone || raw.respondent_phone || raw.phone || raw.lid || raw.from_lid || raw.voter_lid || raw.from_id || "");
+      let candidateLid: string | null = null;
+      let candidatePhone: string | null = null;
+
+      if (rawFromPhone.includes("@lid")) {
+        candidateLid = rawFromPhone.trim();
+      } else if (rawFromPhone.replace(/\D/g, "").length >= 8) {
+        candidatePhone = rawFromPhone.split("@")[0].replace(/\D/g, "");
+      }
+
+      if (!candidateLid) {
+        const lidVal = String(raw.lid || raw.from_lid || raw.voter_lid || raw.id || "");
+        if (lidVal.includes("@lid")) candidateLid = lidVal.trim();
+      }
+
+      // Query database by LID if phone is missing or candidate is LID
+      if (candidateLid && !candidatePhone) {
+        const { data: leadMatch } = await supabase
+          .from("leads")
+          .select("phone, name")
+          .eq("lid", candidateLid)
+          .not("phone", "is", null)
+          .limit(1)
+          .maybeSingle();
+
+        if (leadMatch?.phone) {
+          candidatePhone = leadMatch.phone.replace(/\D/g, "");
+        } else {
+          const { data: memberMatch } = await supabase
+            .from("group_members")
+            .select("phone, name")
+            .eq("lid", candidateLid)
+            .not("phone", "is", null)
+            .limit(1)
+            .maybeSingle();
+          if (memberMatch?.phone) {
+            candidatePhone = memberMatch.phone.replace(/\D/g, "");
+          }
+        }
+      }
+
+      const finalPhone = candidatePhone || rawFromPhone.split("@")[0].replace(/\D/g, "");
+
       const pollPayload = {
         message_id: raw.message_id || raw.poll_message_id || raw.id,
         instance_id: payload.instance_id,
         group_jid: raw.group_id || raw.group_jid || raw.chat_jid || "",
         respondent: {
-          phone: raw.from_phone || raw.respondent_phone || raw.phone || "",
+          phone: finalPhone,
+          lid: candidateLid,
           name: raw.from_name || raw.respondent_name || "",
-          jid: raw.from_jid || `${raw.from_phone || raw.phone}@s.whatsapp.net`,
+          jid: raw.from_jid || `${finalPhone}@s.whatsapp.net`,
         },
         response: {
           option_index: raw.selected_option_index !== undefined ? raw.selected_option_index : (raw.option_index !== undefined ? raw.option_index : 0),
@@ -135,7 +179,7 @@ Deno.serve(async (req) => {
         _raw_event: raw,
       };
 
-      console.log(`[webhook-inbound] 🗳️ Direct poll vote endpoint triggered for message ${pollPayload.message_id}`);
+      console.log(`[webhook-inbound] 🗳️ Direct poll vote endpoint triggered for message ${pollPayload.message_id}, resolved phone: ${finalPhone}, lid: ${candidateLid}`);
 
       const handleRes = await fetch(`${Deno.env.get("SUPABASE_URL")!}/functions/v1/handle-poll-response`, {
         method: "POST",
