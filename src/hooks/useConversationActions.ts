@@ -246,40 +246,82 @@ export function useConversationActions() {
       if (!phone) throw new Error("Telefone do contato é obrigatório");
 
       const cleanPhone = phone.trim();
-      const cleanName = (name && name !== cleanPhone) ? name.trim() : cleanPhone;
+      const digitsOnly = cleanPhone.replace(/\D/g, "");
+      const cleanName = (name && name !== cleanPhone && name !== digitsOnly) ? name.trim() : (cleanPhone || "Novo Lead");
 
-      // 1. Check if lead already exists in CRM
-      let { data: existingLead } = await supabase
+      // 1. Check if lead already exists in CRM (by exact phone, digits, or ending digits)
+      const last8 = digitsOnly.length >= 8 ? digitsOnly.slice(-8) : digitsOnly;
+      let existingLeadQuery = supabase
         .from("leads")
-        .select("id")
-        .eq("company_id", activeCompanyId)
-        .eq("phone", cleanPhone)
-        .maybeSingle();
+        .select("id, company_id, name, user_id")
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (digitsOnly) {
+        existingLeadQuery = existingLeadQuery.or(`phone.eq.${digitsOnly},phone.eq.${cleanPhone},phone.ilike.%${last8}`);
+      } else {
+        existingLeadQuery = existingLeadQuery.eq("phone", cleanPhone);
+      }
+
+      const { data: existingLeads } = await existingLeadQuery;
+      const existingLead = existingLeads?.[0];
 
       let leadId = existingLead?.id;
 
-      if (!leadId) {
-        // Insert new lead into CRM
+      if (existingLead) {
+        // If lead already exists, update its company_id and name if needed
+        const updates: Record<string, any> = {};
+        if (!existingLead.company_id && activeCompanyId) updates.company_id = activeCompanyId;
+        if ((!existingLead.name || existingLead.name === existingLead.phone) && cleanName) updates.name = cleanName;
+        
+        if (Object.keys(updates).length > 0) {
+          await supabase.from("leads").update(updates).eq("id", existingLead.id);
+        }
+      } else {
+        // Insert new lead into CRM with upsert fallback
         const { data: newLead, error: insertError } = await supabase
           .from("leads")
-          .insert({
-            company_id: activeCompanyId,
-            user_id: user.id,
-            phone: cleanPhone,
-            name: cleanName,
-            status: "active",
-          })
+          .upsert(
+            {
+              company_id: activeCompanyId,
+              user_id: user.id,
+              phone: digitsOnly || cleanPhone,
+              name: cleanName,
+              status: "active",
+            },
+            { onConflict: "user_id, phone" }
+          )
           .select("id")
           .single();
 
-        if (insertError) throw insertError;
-        leadId = newLead.id;
+        if (insertError) {
+          // If conflict occurred despite check, try to fetch the conflicting lead
+          const { data: fallbackLead } = await supabase
+            .from("leads")
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("phone", digitsOnly || cleanPhone)
+            .maybeSingle();
+
+          if (fallbackLead?.id) {
+            leadId = fallbackLead.id;
+          } else {
+            throw insertError;
+          }
+        } else if (newLead) {
+          leadId = newLead.id;
+        }
       }
+
+      if (!leadId) throw new Error("Não foi possível obter o ID do Lead");
 
       // 2. Link conversation with the created lead_id
       const { error: updateConvError } = await supabase
         .from("chat_conversations")
-        .update({ lead_id: leadId })
+        .update({ 
+          lead_id: leadId,
+          contact_name: cleanName || undefined
+        })
         .eq("id", conversationId);
 
       if (updateConvError) throw updateConvError;
@@ -289,6 +331,8 @@ export function useConversationActions() {
     onSuccess: () => {
       toast.success("Lead cadastrado com sucesso no CRM!");
       invalidateChatQueries();
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-stats"] });
     },
     onError: (err: any) => {
       console.error("Error creating lead from conversation:", err);
