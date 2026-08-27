@@ -209,7 +209,7 @@ Deno.serve(async (req) => {
           if (data?.user) userId = data.user.id;
         }
       } catch (_e) {
-        // Safe catch for anon key or invalid JWT format
+        // Safe catch for anon key
       }
     }
 
@@ -446,24 +446,48 @@ Deno.serve(async (req) => {
         contact_phone: groupJid,
       });
 
-      // 3. Save members into group_members
+      // 3. Save members into group_members using safe select -> update/insert
       if (participants.length > 0) {
         for (const p of participants) {
           const rawPhone = p.phoneNumber || p.phone || p.id || "";
-          const cleanPhone = String(rawPhone).replace(/\D/g, "");
+          const cleanPhone = String(rawPhone).split("@")[0].replace(/\D/g, "");
           if (cleanPhone) {
             const isAdmin = p.admin === "admin" || p.admin === "superadmin" || p.isAdmin === true;
-            await supabase.from("group_members").upsert(
-              {
-                user_id: targetUserId,
-                group_jid: groupJid,
-                phone: cleanPhone,
-                role: isAdmin ? "admin" : "member",
-                is_admin: isAdmin,
-                name: sanitizeText(p.name || p.pushName) || null,
-              },
-              { onConflict: "user_id,group_jid,phone" }
-            ).catch(() => {});
+            const cleanName = sanitizeText(p.name || p.pushName) || null;
+
+            try {
+              const { data: existingM } = await supabase
+                .from("group_members")
+                .select("id")
+                .eq("user_id", targetUserId)
+                .eq("group_jid", groupJid)
+                .eq("phone", cleanPhone)
+                .maybeSingle();
+
+              if (existingM?.id) {
+                await supabase
+                  .from("group_members")
+                  .update({
+                    role: isAdmin ? "admin" : "member",
+                    is_admin: isAdmin,
+                    name: cleanName,
+                  })
+                  .eq("id", existingM.id);
+              } else {
+                await supabase
+                  .from("group_members")
+                  .insert({
+                    user_id: targetUserId,
+                    group_jid: groupJid,
+                    phone: cleanPhone,
+                    role: isAdmin ? "admin" : "member",
+                    is_admin: isAdmin,
+                    name: cleanName,
+                  });
+              }
+            } catch (e: any) {
+              console.warn("[sync-instance-groups] group_members save error:", e.message);
+            }
           }
         }
       }
@@ -479,6 +503,7 @@ Deno.serve(async (req) => {
         instanceId: instance.id,
         syncedCount,
         totalTargetGroups: targetGroups.length,
+        groups: targetGroups,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

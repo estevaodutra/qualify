@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { UsersRound, Shield, Copy, MessageSquare, Search, ChevronLeft, ChevronRight, Phone, RefreshCw, UserPlus, Sparkles, CheckCircle2 } from "lucide-react";
+import { UsersRound, Shield, Copy, MessageSquare, Search, ChevronLeft, ChevronRight, Phone, RefreshCw, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -73,11 +73,61 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
 
       if (error) throw error;
 
+      // Process and save any participants returned directly in payload
+      const returnedGroups = data?.groups || [];
+      const singleGroup = returnedGroups[0];
+      const participants = singleGroup?.participants || [];
+
+      if (participants.length > 0) {
+        const targetUserId = currentUserId || activeCompanyId;
+        for (const p of participants) {
+          const rawPhone = p.phoneNumber || p.phone || p.id || "";
+          const cleanPhone = String(rawPhone).split("@")[0].replace(/\D/g, "");
+          if (cleanPhone) {
+            const isAdmin = p.admin === "admin" || p.admin === "superadmin" || p.isAdmin === true;
+            try {
+              const { data: existingM } = await supabase
+                .from("group_members")
+                .select("id")
+                .eq("user_id", targetUserId)
+                .eq("group_jid", group.groupJid)
+                .eq("phone", cleanPhone)
+                .maybeSingle();
+
+              if (existingM?.id) {
+                await supabase
+                  .from("group_members")
+                  .update({
+                    role: isAdmin ? "admin" : "member",
+                    is_admin: isAdmin,
+                    name: p.name || null,
+                  })
+                  .eq("id", existingM.id);
+              } else {
+                await supabase
+                  .from("group_members")
+                  .insert({
+                    user_id: targetUserId,
+                    group_jid: group.groupJid,
+                    phone: cleanPhone,
+                    role: isAdmin ? "admin" : "member",
+                    is_admin: isAdmin,
+                    name: p.name || null,
+                  });
+              }
+            } catch (e) {
+              console.warn("Client side member save warning:", e);
+            }
+          }
+        }
+      }
+
       queryClient.invalidateQueries({ queryKey: ["group_details"] });
       queryClient.invalidateQueries({ queryKey: ["groups_list"] });
       await refetchDetails();
 
-      toast.success("Requisição groupInfo enviada com sucesso ao n8n!");
+      const count = participants.length;
+      toast.success(count > 0 ? `${count} participantes atualizados do WhatsApp com sucesso!` : "Requisição enviada com sucesso ao N8N!");
     } catch (err: any) {
       toast.error(`Erro ao buscar dados do grupo no WhatsApp: ${err.message || String(err)}`);
     } finally {

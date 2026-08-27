@@ -23,34 +23,41 @@ export function useGroupDetails(groupIdOrJid: string | null, searchParticipant =
   return useQuery({
     queryKey: ["group_details", groupIdOrJid, searchParticipant, page, pageSize],
     queryFn: async () => {
-      if (!groupIdOrJid) return { participants: [], totalCount: 0, totalPages: 1 };
+      if (!groupIdOrJid) return { participants: [], allParticipants: [], totalCount: 0, totalPages: 1 };
 
       const jidKey = normalizeJidKey(groupIdOrJid);
 
-      // Query members matching group_jid or group_campaign_id
-      let { data } = await supabase
+      // 1. Primary query by normalized group_jid
+      let { data: rawMembers } = await supabase
         .from("group_members")
         .select("*")
-        .or(`group_jid.eq.${groupIdOrJid},group_campaign_id.eq.${groupIdOrJid},group_jid.eq.${jidKey}`);
+        .eq("group_jid", jidKey);
 
-      let rawMembers = data || [];
-
-      if (rawMembers.length === 0) {
-        // Fallback: search all group_members limit 200
-        const { data: altMembers } = await supabase
+      // 2. Fallback query by exact groupIdOrJid
+      if (!rawMembers || rawMembers.length === 0) {
+        const { data: rawByOriginal } = await supabase
           .from("group_members")
           .select("*")
-          .limit(200);
-        if (altMembers) {
-          rawMembers = altMembers.filter((m: any) =>
-            m.group_jid === groupIdOrJid ||
-            m.group_campaign_id === groupIdOrJid ||
-            normalizeJidKey(m.group_jid) === jidKey
-          );
+          .eq("group_jid", groupIdOrJid);
+        if (rawByOriginal && rawByOriginal.length > 0) {
+          rawMembers = rawByOriginal;
         }
       }
 
-      let participants: GroupParticipant[] = rawMembers.map((m: any) => ({
+      // 3. Fallback query by group_campaign_id
+      if (!rawMembers || rawMembers.length === 0) {
+        const { data: rawByCampaign } = await supabase
+          .from("group_members")
+          .select("*")
+          .eq("group_campaign_id", groupIdOrJid);
+        if (rawByCampaign && rawByCampaign.length > 0) {
+          rawMembers = rawByCampaign;
+        }
+      }
+
+      const list = rawMembers || [];
+
+      let participants: GroupParticipant[] = list.map((m: any) => ({
         id: m.id || m.phone,
         phone: m.phone,
         lid: m.lid || null,
