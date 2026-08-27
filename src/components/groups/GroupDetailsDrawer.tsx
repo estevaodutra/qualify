@@ -92,16 +92,18 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
         const targetUserId = currentUserId || activeCompanyId;
 
         for (const p of participants) {
-          const rawPhone = p.phoneNumber || p.phone || p.id || "";
+          const rawPhone = p.phoneNumber || p.phone || "";
           const cleanPhone = String(rawPhone).split("@")[0].replace(/\D/g, "");
-          if (cleanPhone) {
+          const lidVal = p.id?.includes("@lid") ? p.id : (p.lid || null);
+
+          if (cleanPhone || lidVal) {
             const isAdmin = p.admin === "admin" || p.admin === "superadmin" || p.isAdmin === true;
             try {
               const { data: existingM } = await supabase
                 .from("group_members")
                 .select("id")
                 .eq("group_campaign_id", campaignId)
-                .eq("phone", cleanPhone)
+                .eq("phone", cleanPhone || lidVal)
                 .maybeSingle();
 
               if (existingM?.id) {
@@ -109,6 +111,7 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
                   .from("group_members")
                   .update({
                     user_id: targetUserId,
+                    lid: lidVal,
                     is_admin: isAdmin,
                     name: p.name || null,
                   })
@@ -119,7 +122,8 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
                   .insert({
                     group_campaign_id: campaignId,
                     user_id: targetUserId,
-                    phone: cleanPhone,
+                    phone: cleanPhone || lidVal,
+                    lid: lidVal,
                     is_admin: isAdmin,
                     name: p.name || null,
                   });
@@ -144,7 +148,7 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
     }
   };
 
-  // Action 2: Save all group participants into CRM leads table
+  // Action 2: Save all group participants into CRM leads table with @lid and phone number
   const handleSaveLeadsToCRM = async () => {
     const participantsList = detailsData?.allParticipants || detailsData?.participants || [];
 
@@ -160,46 +164,61 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
       const targetUserId = currentUserId || activeCompanyId;
 
       for (const p of participantsList) {
-        const cleanPhone = String(p.phone).replace(/\D/g, "");
-        if (!cleanPhone) continue;
+        const cleanPhone = String(p.phone || "").replace(/\D/g, "");
+        const lidVal = p.lid || (p.id && p.id.includes("@lid") ? p.id : null);
 
-        const leadName = p.name && !p.name.includes("@g.us") ? p.name : `Participante ${cleanPhone}`;
+        if (!cleanPhone && !lidVal) continue;
 
-        // Safe select -> update or insert into leads
-        const { data: existingLead } = await supabase
-          .from("leads")
-          .select("id")
-          .eq("company_id", activeCompanyId)
-          .eq("phone", cleanPhone)
-          .maybeSingle();
+        const leadName = p.name && !p.name.includes("@g.us") ? p.name : (cleanPhone ? `Participante ${cleanPhone}` : `LID ${lidVal}`);
 
-        if (existingLead?.id) {
+        // Check if existing lead by phone or lid
+        let existingLeadId: string | null = null;
+        if (cleanPhone) {
+          const { data: exByPhone } = await supabase
+            .from("leads")
+            .select("id")
+            .eq("user_id", targetUserId)
+            .eq("phone", cleanPhone)
+            .maybeSingle();
+          if (exByPhone?.id) existingLeadId = exByPhone.id;
+        }
+
+        if (!existingLeadId && lidVal) {
+          const { data: exByLid } = await supabase
+            .from("leads")
+            .select("id")
+            .eq("user_id", targetUserId)
+            .eq("lid", lidVal)
+            .maybeSingle();
+          if (exByLid?.id) existingLeadId = exByLid.id;
+        }
+
+        const leadPayload = {
+          user_id: targetUserId,
+          name: leadName,
+          phone: cleanPhone || null,
+          lid: lidVal || null,
+          source_group_id: group.groupJid,
+          source_group_name: group.name,
+          source_name: "group_import",
+          source_type: "group",
+          status: "novo",
+          updated_at: new Date().toISOString(),
+        };
+
+        if (existingLeadId) {
           await supabase
             .from("leads")
-            .update({
-              name: leadName,
-              user_id: targetUserId,
-              notes: `Importado do grupo: ${group.name} (${group.groupJid})`,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", existingLead.id);
+            .update(leadPayload)
+            .eq("id", existingLeadId);
         } else {
-          await supabase.from("leads").insert({
-            company_id: activeCompanyId,
-            user_id: targetUserId,
-            name: leadName,
-            phone: cleanPhone,
-            notes: `Importado do grupo: ${group.name} (${group.groupJid})`,
-            status: "novo",
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          });
+          await supabase.from("leads").insert(leadPayload);
         }
         savedCount++;
       }
 
       queryClient.invalidateQueries({ queryKey: ["leads"] });
-      toast.success(`${savedCount} participantes salvos com sucesso como Leads no CRM!`);
+      toast.success(`${savedCount} participantes e LIDs salvos com sucesso como Leads no CRM!`);
     } catch (err: any) {
       toast.error(`Erro ao salvar leads no CRM: ${err.message || String(err)}`);
     } finally {
@@ -343,11 +362,17 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
                         <p className="text-xs font-bold text-foreground truncate">
                           {p.name || p.phone}
                         </p>
-                        <p className="text-[11px] text-muted-foreground font-mono truncate flex items-center gap-1">
-                          <Phone className="h-3 w-3 shrink-0" />
-                          <span>{p.phone}</span>
-                          {p.lid && <span className="text-[10px] text-muted-foreground/60">({p.lid})</span>}
-                        </p>
+                        <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-mono truncate">
+                          <span className="flex items-center gap-1">
+                            <Phone className="h-3 w-3 shrink-0" />
+                            {p.phone || "Sem Telefone"}
+                          </span>
+                          {p.lid && (
+                            <Badge variant="secondary" className="text-[9px] font-mono px-1.5 py-0 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-200/50 truncate">
+                              {p.lid}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                     </div>
 
