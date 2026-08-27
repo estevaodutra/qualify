@@ -19,6 +19,33 @@ function sanitizeTextNoSurrogates(text: string | null | undefined): string | nul
 }
 
 /**
+ * Robust extraction of phone number and @lid from any WAHA / Z-API / Evolution / Baileys participant object
+ */
+function extractPhoneAndLid(p: any): { phone: string | null; lid: string | null } {
+  if (!p) return { phone: null, lid: null };
+
+  let phone: string | null = null;
+  let lid: string | null = null;
+
+  const rawPhone = p.phoneNumber || p.phone || p.phoneNumberPn || p.pn || p.jid || p.id || "";
+  const phoneStr = String(rawPhone);
+
+  if (phoneStr.includes("@s.whatsapp.net") || phoneStr.includes("@c.us") || (!phoneStr.includes("@lid") && phoneStr.replace(/\D/g, "").length >= 10)) {
+    const digits = phoneStr.split("@")[0].replace(/\D/g, "");
+    if (digits.length >= 10) phone = digits;
+  }
+
+  const rawLid = p.lid || p.subjectOwner || p.owner || p.id || "";
+  const lidStr = String(rawLid);
+
+  if (lidStr.includes("@lid")) {
+    lid = lidStr.trim();
+  }
+
+  return { phone, lid };
+}
+
+/**
  * Universal group objects extractor to handle all WAHA / Z-API / Evolution / Baileys response formats.
  */
 function extractGroupObjects(rawJson: any): any[] {
@@ -418,7 +445,7 @@ Deno.serve(async (req) => {
 
     let syncedCount = 0;
 
-    // Process and save each selected group to group_campaigns, chat_conversations, and group_members
+    // Process and save each selected group to group_campaigns, chat_conversations, group_members, and LEADS!
     for (const group of targetGroups) {
       const groupJid = group.groupJid || group.id || group.jid;
       if (!groupJid) continue;
@@ -449,17 +476,16 @@ Deno.serve(async (req) => {
         contact_phone: groupJid,
       });
 
-      // 3. Save members into group_members capturing lid and phone
+      // 3. Save members into group_members AND leads capturing phone and @lid
       if (campaignId && participants.length > 0) {
         for (const p of participants) {
-          const rawPhone = p.phoneNumber || p.phone || "";
-          const cleanPhone = String(rawPhone).split("@")[0].replace(/\D/g, "");
-          const lidVal = p.id?.includes("@lid") ? p.id : (p.lid || null);
+          const { phone: cleanPhone, lid: lidVal } = extractPhoneAndLid(p);
 
           if (cleanPhone || lidVal) {
             const isAdmin = p.admin === "admin" || p.admin === "superadmin" || p.isAdmin === true;
             const cleanName = sanitizeText(p.name || p.pushName) || null;
 
+            // A. Save to group_members
             try {
               const { data: existingM } = await supabase
                 .from("group_members")
@@ -492,6 +518,52 @@ Deno.serve(async (req) => {
               }
             } catch (e: any) {
               console.warn("[sync-instance-groups] group_members save error:", e.message);
+            }
+
+            // B. ALWAYS save/update into leads table with phone and @lid!
+            try {
+              let existingLeadId: string | null = null;
+              if (cleanPhone) {
+                const { data: exByPhone } = await supabase
+                  .from("leads")
+                  .select("id")
+                  .eq("user_id", targetUserId)
+                  .eq("phone", cleanPhone)
+                  .maybeSingle();
+                if (exByPhone?.id) existingLeadId = exByPhone.id;
+              }
+
+              if (!existingLeadId && lidVal) {
+                const { data: exByLid } = await supabase
+                  .from("leads")
+                  .select("id")
+                  .eq("user_id", targetUserId)
+                  .eq("lid", lidVal)
+                  .maybeSingle();
+                if (exByLid?.id) existingLeadId = exByLid.id;
+              }
+
+              const leadName = cleanName && !cleanName.includes("@g.us") ? cleanName : (cleanPhone ? `Participante ${cleanPhone}` : `LID ${lidVal}`);
+
+              const leadPayload = {
+                company_id: companyId,
+                user_id: targetUserId,
+                name: leadName,
+                phone: cleanPhone || null,
+                lid: lidVal || null,
+                source_group_name: finalName,
+                source_type: "grupo",
+                status: "novo",
+                updated_at: new Date().toISOString(),
+              };
+
+              if (existingLeadId) {
+                await supabase.from("leads").update(leadPayload).eq("id", existingLeadId);
+              } else {
+                await supabase.from("leads").insert(leadPayload);
+              }
+            } catch (e: any) {
+              console.warn("[sync-instance-groups] leads save error:", e.message);
             }
           }
         }

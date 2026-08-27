@@ -21,6 +21,30 @@ interface GroupDetailsDrawerProps {
   onOpenChange: (open: boolean) => void;
 }
 
+function extractPhoneAndLid(p: any): { phone: string | null; lid: string | null } {
+  if (!p) return { phone: null, lid: null };
+
+  let phone: string | null = null;
+  let lid: string | null = null;
+
+  const rawPhone = p.phoneNumber || p.phone || p.phoneNumberPn || p.pn || p.jid || p.id || "";
+  const phoneStr = String(rawPhone);
+
+  if (phoneStr.includes("@s.whatsapp.net") || phoneStr.includes("@c.us") || (!phoneStr.includes("@lid") && phoneStr.replace(/\D/g, "").length >= 10)) {
+    const digits = phoneStr.split("@")[0].replace(/\D/g, "");
+    if (digits.length >= 10) phone = digits;
+  }
+
+  const rawLid = p.lid || p.subjectOwner || p.owner || p.id || "";
+  const lidStr = String(rawLid);
+
+  if (lidStr.includes("@lid")) {
+    lid = lidStr.trim();
+  }
+
+  return { phone, lid };
+}
+
 export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, open, onOpenChange }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -52,7 +76,7 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
     navigate(`/chat?search=${encodeURIComponent(group.name)}`);
   };
 
-  // Action 1: Execute group.info on WhatsApp provider to retrieve all group members & metadata
+  // Action 1: Execute group.info on WhatsApp provider to retrieve all group members & metadata with @lid
   const handleFetchGroupInfo = async () => {
     if (!group.instanceId) {
       toast.error("Instância do WhatsApp não identificada neste grupo.");
@@ -73,74 +97,16 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
 
       if (error) throw error;
 
-      // Extract participants from response
-      const returnedGroups = data?.groups || [];
-      const singleGroup = returnedGroups[0];
-      const participants = singleGroup?.participants || [];
-
-      // Resolve group_campaign_id
-      const { data: gcRow } = await supabase
-        .from("group_campaigns")
-        .select("id")
-        .eq("company_id", activeCompanyId)
-        .eq("group_jid", group.groupJid)
-        .maybeSingle();
-
-      const campaignId = gcRow?.id || group.id;
-
-      if (campaignId && participants.length > 0) {
-        const targetUserId = currentUserId || activeCompanyId;
-
-        for (const p of participants) {
-          const rawPhone = p.phoneNumber || p.phone || "";
-          const cleanPhone = String(rawPhone).split("@")[0].replace(/\D/g, "");
-          const lidVal = p.id?.includes("@lid") ? p.id : (p.lid || null);
-
-          if (cleanPhone || lidVal) {
-            const isAdmin = p.admin === "admin" || p.admin === "superadmin" || p.isAdmin === true;
-            try {
-              const { data: existingM } = await supabase
-                .from("group_members")
-                .select("id")
-                .eq("group_campaign_id", campaignId)
-                .eq("phone", cleanPhone || lidVal)
-                .maybeSingle();
-
-              if (existingM?.id) {
-                await supabase
-                  .from("group_members")
-                  .update({
-                    user_id: targetUserId,
-                    lid: lidVal,
-                    is_admin: isAdmin,
-                    name: p.name || null,
-                  })
-                  .eq("id", existingM.id);
-              } else {
-                await supabase
-                  .from("group_members")
-                  .insert({
-                    group_campaign_id: campaignId,
-                    user_id: targetUserId,
-                    phone: cleanPhone || lidVal,
-                    lid: lidVal,
-                    is_admin: isAdmin,
-                    name: p.name || null,
-                  });
-              }
-            } catch (e) {
-              console.warn("Client member save warning:", e);
-            }
-          }
-        }
-      }
-
       queryClient.invalidateQueries({ queryKey: ["group_details"] });
       queryClient.invalidateQueries({ queryKey: ["groups_list"] });
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
       await refetchDetails();
 
-      const count = participants.length;
-      toast.success(count > 0 ? `${count} participantes atualizados do WhatsApp com sucesso!` : "Requisição enviada com sucesso ao N8N!");
+      const returnedGroups = data?.groups || [];
+      const singleGroup = returnedGroups[0];
+      const count = singleGroup?.participants?.length || 0;
+
+      toast.success(count > 0 ? `${count} participantes atualizados com @lid e telefone!` : "Requisição enviada com sucesso ao N8N!");
     } catch (err: any) {
       toast.error(`Erro ao buscar dados do grupo no WhatsApp: ${err.message || String(err)}`);
     } finally {
@@ -148,13 +114,13 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
     }
   };
 
-  // Action 2: Save all group participants into CRM leads table with @lid and phone number
+  // Action 2: Save and Migrate all group participants with phone and @lid into CRM leads table
   const handleSaveLeadsToCRM = async () => {
     setIsSavingLeads(true);
     let savedCount = 0;
 
     try {
-      // 1. Re-fetch fresh group info from Edge Function to guarantee fresh @lid values from WhatsApp
+      // 1. Re-fetch fresh group info from Edge Function to guarantee fresh @lid values from WhatsApp API
       let freshParticipants: any[] = [];
       if (group.instanceId) {
         try {
@@ -187,9 +153,7 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
       const targetUserId = authData?.user?.id || currentUserId || activeCompanyId;
 
       for (const p of participantsList) {
-        const rawPhone = p.phoneNumber || p.phone || "";
-        const cleanPhone = String(rawPhone).split("@")[0].replace(/\D/g, "");
-        const lidVal = p.id?.includes("@lid") ? p.id : (p.lid?.includes("@lid") ? p.lid : null);
+        const { phone: cleanPhone, lid: lidVal } = extractPhoneAndLid(p);
 
         if (!cleanPhone && !lidVal) continue;
 
@@ -244,7 +208,9 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
       queryClient.invalidateQueries({ queryKey: ["leads"] });
       queryClient.invalidateQueries({ queryKey: ["leads-stats"] });
       queryClient.invalidateQueries({ queryKey: ["leads-group-names"] });
-      toast.success(`${savedCount} participantes e LIDs salvos com sucesso como Leads no CRM!`);
+      await refetchDetails();
+
+      toast.success(`${savedCount} participantes salvos e vinculados com Telefone e @LID no CRM!`);
     } catch (err: any) {
       toast.error(`Erro ao salvar leads no CRM: ${err.message || String(err)}`);
     } finally {
@@ -315,7 +281,7 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
               className="text-xs font-bold gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
             >
               {isSavingLeads ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
-              {isSavingLeads ? "Salvando..." : "Salvar Participantes no CRM"}
+              {isSavingLeads ? "Salvando..." : "Salvar Participantes e @LID no CRM"}
             </Button>
           </div>
 
