@@ -339,45 +339,57 @@ export function useGroups(filters: GroupFilters = {}) {
           const jid = g.groupJid || g.id || g.jid;
           if (!jid) continue;
 
-          await supabase.from("whatsapp_groups" as any).upsert(
-            {
-              company_id: activeCompanyId,
-              instance_id: targetInstanceId,
-              group_jid: jid,
-              name: g.name || "Grupo WhatsApp",
-              description: g.description || null,
-              picture_url: g.pictureUrl || null,
-              participants_count: g.participantsCount || 0,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "company_id,group_jid" }
-          ).catch(() => {});
+          try {
+            await supabase.from("whatsapp_groups" as any).upsert(
+              {
+                company_id: activeCompanyId,
+                instance_id: targetInstanceId,
+                group_jid: jid,
+                name: g.name || "Grupo WhatsApp",
+                description: g.description || null,
+                picture_url: g.pictureUrl || null,
+                participants_count: g.participantsCount || 0,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "company_id,group_jid" }
+            );
+          } catch (e) {
+            console.warn("Client fallback upsert whatsapp_groups error:", e);
+          }
 
-          await supabase.from("chat_conversations").upsert(
-            {
-              company_id: activeCompanyId,
-              instance_id: targetInstanceId,
-              contact_name: jid,
-              contact_phone: jid,
-              status: "open",
-              last_message_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "company_id,instance_id,contact_name" }
-          ).catch(() => {});
+          try {
+            await supabase.from("chat_conversations").upsert(
+              {
+                company_id: activeCompanyId,
+                instance_id: targetInstanceId,
+                contact_name: jid,
+                contact_phone: jid,
+                status: "open",
+                last_message_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "company_id,instance_id,contact_name" }
+            );
+          } catch (e) {
+            console.warn("Client fallback upsert chat_conversations error:", e);
+          }
 
-          await supabase.from("group_campaigns").upsert(
-            {
-              company_id: activeCompanyId,
-              instance_id: targetInstanceId,
-              group_jid: jid,
-              group_name: g.name || "Grupo WhatsApp",
-              name: g.name || "Grupo WhatsApp",
-              status: "active",
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "company_id,group_jid" }
-          ).catch(() => {});
+          try {
+            await supabase.from("group_campaigns").upsert(
+              {
+                company_id: activeCompanyId,
+                instance_id: targetInstanceId,
+                group_jid: jid,
+                group_name: g.name || "Grupo WhatsApp",
+                name: g.name || "Grupo WhatsApp",
+                status: "active",
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "company_id,group_jid" }
+            );
+          } catch (e) {
+            console.warn("Client fallback upsert group_campaigns error:", e);
+          }
         }
       }
 
