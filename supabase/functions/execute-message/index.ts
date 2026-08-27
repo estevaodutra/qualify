@@ -560,7 +560,22 @@ const evaluateExtensibleCondition = async (
             .eq("phone", phoneToSearch)
             .maybeSingle();
 
-          if (dbLead) targetLeadId = dbLead.id;
+          if (dbLead) {
+            targetLeadId = dbLead.id;
+          } else {
+            const suffix = phoneToSearch.slice(-8);
+            if (suffix.length >= 8) {
+              const { data: flexLeads } = await supabase
+                .from("leads")
+                .select("id")
+                .eq("company_id", companyId)
+                .ilike("phone", `%${suffix}`)
+                .limit(1);
+              if (flexLeads && flexLeads.length > 0) {
+                targetLeadId = flexLeads[0].id;
+              }
+            }
+          }
         }
       }
 
@@ -599,7 +614,22 @@ const evaluateExtensibleCondition = async (
             .eq("phone", phoneToSearch)
             .maybeSingle();
 
-          if (dbLead) targetLeadId = dbLead.id;
+          if (dbLead) {
+            targetLeadId = dbLead.id;
+          } else {
+            const suffix = phoneToSearch.slice(-8);
+            if (suffix.length >= 8) {
+              const { data: flexLeads } = await supabase
+                .from("leads")
+                .select("id")
+                .eq("company_id", companyId)
+                .ilike("phone", `%${suffix}`)
+                .limit(1);
+              if (flexLeads && flexLeads.length > 0) {
+                targetLeadId = flexLeads[0].id;
+              }
+            }
+          }
         }
       }
 
@@ -1813,6 +1843,11 @@ Deno.serve(async (req) => {
           node.node_type !== "channel_select" &&
           (
             node.node_type === "action" ||
+            node.node_type === "create_lead" ||
+            node.node_type === "lead_create" ||
+            node.node_type === "delete_lead" ||
+            node.node_type === "add_lead_tags" ||
+            node.node_type === "remove_lead_tags" ||
             node.node_type === "tag_add" ||
             node.node_type === "tag_remove" ||
             node.node_type === "deal_move" ||
@@ -1827,9 +1862,13 @@ Deno.serve(async (req) => {
           const actionType =
             (node.config.actionType as string) ||
             ((node.config.parameters as Record<string, any>)?.actionType as string) ||
-            (node.node_type === "tag_add"
+            (node.node_type === "create_lead" || node.node_type === "lead_create"
+              ? "create_lead"
+              : node.node_type === "delete_lead"
+              ? "delete_lead"
+              : (node.node_type === "tag_add" || node.node_type === "add_lead_tags")
               ? "add_lead_tags"
-              : node.node_type === "tag_remove"
+              : (node.node_type === "tag_remove" || node.node_type === "remove_lead_tags")
               ? "remove_lead_tags"
               : (node.node_type === "deal_move" || node.node_type === "move_deal" || node.node_type === "move_deal_stage")
               ? "move_deal_stage"
@@ -1837,7 +1876,7 @@ Deno.serve(async (req) => {
               ? "create_deal"
               : node.config?.category === "deal"
               ? ((node.config.parameters as any)?.stageId && !(node.config.parameters as any)?.title ? "move_deal_stage" : "create_deal")
-              : "add_lead_tags");
+              : "create_lead");
           const params = (node.config.parameters as Record<string, any>) || node.config;
           const companyId = typedCampaign.company_id || triggerContext?.companyId || "dcb34e9a-1510-4137-aecd-cec0c6d548c4";
           const affectedLeadIds: string[] = [];
@@ -1964,6 +2003,21 @@ Deno.serve(async (req) => {
                   if (existingLead) {
                     targetLeadId = existingLead.id;
                   } else {
+                    const suffix = phoneClean.slice(-8);
+                    if (suffix.length >= 8) {
+                      const { data: flexLeads } = await supabase
+                        .from("leads")
+                        .select("id")
+                        .eq("company_id", effectiveCompanyId)
+                        .ilike("phone", `%${suffix}`)
+                        .limit(1);
+                      if (flexLeads && flexLeads.length > 0) {
+                        targetLeadId = flexLeads[0].id;
+                      }
+                    }
+                  }
+
+                  if (!targetLeadId) {
                     const leadName = triggerContext?.respondentName || phoneClean;
                     const { data: newLead } = await supabase
                       .from("leads")
@@ -1983,30 +2037,44 @@ Deno.serve(async (req) => {
                 }
 
                 if (pipelineId && stageId && targetLeadId) {
-                  const dealTitle = (params.title && params.title.trim() !== "") ? params.title : `Negócio - ${leadData?.name || triggerContext?.respondentName || phoneClean}`;
-                  const dealValue = Number(params.value) || 0;
-                  const assigneeId = params.assigneeId || leadData?.owner_id || null;
-
-                  const { data: createdDeal, error: dealErr } = await supabase
+                  // Check if an open deal already exists for this lead in this pipeline
+                  const { data: existingDeals } = await supabase
                     .from("deals")
-                    .insert({
-                      company_id: effectiveCompanyId,
-                      lead_id: targetLeadId,
-                      pipeline_id: pipelineId,
-                      stage_id: stageId,
-                      title: dealTitle,
-                      value: dealValue,
-                      owner_id: assigneeId || null,
-                      status: "open",
-                    })
-                    .select()
-                    .single();
+                    .select("id")
+                    .eq("company_id", effectiveCompanyId)
+                    .eq("lead_id", targetLeadId)
+                    .eq("pipeline_id", pipelineId)
+                    .limit(1);
 
-                  if (createdDeal) {
-                    affectedDealIds.push(createdDeal.id);
-                    console.log(`[ExecuteMessage] 💼 Deal ${createdDeal.id} created for lead ${targetLeadId} in pipeline ${pipelineId}`);
-                  } else if (dealErr) {
-                    console.error(`[ExecuteMessage] ❌ Error creating deal:`, dealErr);
+                  if (existingDeals && existingDeals.length > 0) {
+                    affectedDealIds.push(existingDeals[0].id);
+                    console.log(`[ExecuteMessage] ℹ️ Deal ${existingDeals[0].id} already exists for lead ${targetLeadId} in pipeline ${pipelineId}`);
+                  } else {
+                    const dealTitle = (params.title && params.title.trim() !== "") ? params.title : `Negócio - ${leadData?.name || triggerContext?.respondentName || phoneClean}`;
+                    const dealValue = Number(params.value) || 0;
+                    const assigneeId = params.assigneeId || leadData?.owner_id || null;
+
+                    const { data: createdDeal, error: dealErr } = await supabase
+                      .from("deals")
+                      .insert({
+                        company_id: effectiveCompanyId,
+                        lead_id: targetLeadId,
+                        pipeline_id: pipelineId,
+                        stage_id: stageId,
+                        title: dealTitle,
+                        value: dealValue,
+                        owner_id: assigneeId || null,
+                        status: "open",
+                      })
+                      .select()
+                      .single();
+
+                    if (createdDeal) {
+                      affectedDealIds.push(createdDeal.id);
+                      console.log(`[ExecuteMessage] 💼 Deal ${createdDeal.id} created for lead ${targetLeadId} in pipeline ${pipelineId}`);
+                    } else if (dealErr) {
+                      console.error(`[ExecuteMessage] ❌ Error creating deal:`, dealErr);
+                    }
                   }
                 }
               } else if (actionType === "move_deal_stage") {
@@ -2412,7 +2480,7 @@ Deno.serve(async (req) => {
               );
               if (ruleResult.matched) {
                 matched = true;
-                branch = rule.id || "yes";
+                branch = ruleResult.branch || rule.id || "yes";
                 break;
               }
             }
