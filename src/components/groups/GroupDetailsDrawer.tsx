@@ -161,7 +161,8 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
     let savedCount = 0;
 
     try {
-      const targetUserId = currentUserId || activeCompanyId;
+      const { data: authData } = await supabase.auth.getUser();
+      const targetUserId = authData?.user?.id || currentUserId || activeCompanyId;
 
       for (const p of participantsList) {
         const cleanPhone = String(p.phone || "").replace(/\D/g, "");
@@ -193,17 +194,17 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
           if (exByLid?.id) existingLeadId = exByLid.id;
         }
 
-        const leadPayload = {
+        const leadPayload: any = {
           user_id: targetUserId,
           name: leadName,
           phone: cleanPhone || null,
           lid: lidVal || null,
-          source_group_id: group.groupJid,
-          source_group_name: group.name,
-          source_name: "group_import",
-          source_type: "group",
+          source_type: "grupo",
           status: "novo",
-          updated_at: new Date().toISOString(),
+          custom_fields: {
+            source_group_name: group.name,
+            source_group_jid: group.groupJid,
+          },
         };
 
         if (existingLeadId) {
@@ -218,6 +219,7 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
       }
 
       queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-stats"] });
       toast.success(`${savedCount} participantes e LIDs salvos com sucesso como Leads no CRM!`);
     } catch (err: any) {
       toast.error(`Erro ao salvar leads no CRM: ${err.message || String(err)}`);
