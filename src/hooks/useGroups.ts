@@ -59,35 +59,14 @@ export function useGroups(filters: GroupFilters = {}) {
   } = filters;
 
   const { data, isLoading, isFetching, error, refetch } = useQuery({
-    queryKey: ["whatsapp_groups", activeCompanyId, search, instanceId, status, hasDescriptionOnly, hasPhotoOnly, sort, page, pageSize],
+    queryKey: ["groups_list", activeCompanyId, search, instanceId, status, hasDescriptionOnly, hasPhotoOnly, sort, page, pageSize],
     queryFn: async () => {
       if (!activeCompanyId) return { groups: [], totalCount: 0, totalPages: 1 };
 
       const rawGroups: any[] = [];
       const seenJids = new Set<string>();
 
-      // 1. Query dedicated whatsapp_groups
-      try {
-        const { data: wgData } = await supabase
-          .from("whatsapp_groups" as any)
-          .select("*", { count: "exact" })
-          .eq("company_id", activeCompanyId);
-
-        if (wgData) {
-          wgData.forEach((g: any) => {
-            const jid = g.group_jid || `${g.id}@g.us`;
-            const key = normalizeJidKey(jid);
-            if (key && !seenJids.has(key)) {
-              seenJids.add(key);
-              rawGroups.push(g);
-            }
-          });
-        }
-      } catch (e) {
-        console.warn("[useGroups] whatsapp_groups query error:", e);
-      }
-
-      // 2. Additional source: Query group_campaigns
+      // 1. Primary source: Query group_campaigns
       try {
         const { data: gcData } = await supabase
           .from("group_campaigns")
@@ -121,7 +100,7 @@ export function useGroups(filters: GroupFilters = {}) {
         console.warn("[useGroups] group_campaigns query error:", e);
       }
 
-      // 3. Additional source: Query chat_conversations
+      // 2. Secondary source: Query chat_conversations
       try {
         const { data: convData } = await supabase
           .from("chat_conversations")
@@ -163,26 +142,8 @@ export function useGroups(filters: GroupFilters = {}) {
         .select("id, name, phone");
       const instanceMap = new Map((instances || []).map((i) => [i.id, `${i.name}${i.phone ? ` (${i.phone})` : ""}`]));
 
-      // Fetch participant and admin counts from group_members
-      const { data: members } = await supabase
-        .from("group_members")
-        .select("group_jid, is_admin");
-
-      const countsMap = new Map<string, { total: number; admins: number }>();
-      (members || []).forEach((m: any) => {
-        const key = normalizeJidKey(m.group_jid);
-        if (key) {
-          const curr = countsMap.get(key) || { total: 0, admins: 0 };
-          curr.total += 1;
-          if (m.is_admin) curr.admins += 1;
-          countsMap.set(key, curr);
-        }
-      });
-
       // Map raw groups to frontend model
       let items: WhatsAppGroupItem[] = rawGroups.map((g) => {
-        const key = normalizeJidKey(g.group_jid || g.id);
-        const counts = countsMap.get(key) || { total: g.participants_count || 0, admins: g.admins_count || 0 };
         return {
           id: g.id || g.group_jid,
           companyId: g.company_id || activeCompanyId,
@@ -192,8 +153,8 @@ export function useGroups(filters: GroupFilters = {}) {
           name: g.name || "Grupo WhatsApp",
           description: g.description || null,
           pictureUrl: g.picture_url || g.profile_picture_url || null,
-          participantsCount: Math.max(counts.total, g.participants_count || 0),
-          adminsCount: counts.admins || g.admins_count || 0,
+          participantsCount: g.participants_count || 0,
+          adminsCount: g.admins_count || 0,
           status: g.status === "inactive" || g.status === "archived" ? g.status : "active",
           lastActivityAt: g.last_activity_at || g.updated_at || g.created_at,
           createdAt: g.created_at || new Date().toISOString(),
@@ -252,64 +213,9 @@ export function useGroups(filters: GroupFilters = {}) {
     staleTime: 5000,
   });
 
-  // Mutation to migrate group entries out of leads table into whatsapp_groups table
+  // Dummy migrate function for backward compatibility
   const migrateGroupsMutation = useMutation({
-    mutationFn: async () => {
-      if (!activeCompanyId) return { migratedCount: 0 };
-
-      const { data: leads } = await supabase
-        .from("leads")
-        .select("id, name, phone, created_at, updated_at")
-        .eq("company_id", activeCompanyId);
-
-      if (!leads || leads.length === 0) return { migratedCount: 0 };
-
-      const fakeGroupLeads = leads.filter(
-        (l: any) =>
-          (l.name && (l.name.includes("@g.us") || l.name.toLowerCase().includes("grupo whatsapp"))) ||
-          (l.phone && (l.phone.startsWith("1203") || l.phone.startsWith("120") || l.phone.includes("@g.us")))
-      );
-
-      if (fakeGroupLeads.length === 0) return { migratedCount: 0 };
-
-      let migratedCount = 0;
-
-      for (const lead of fakeGroupLeads) {
-        const jid = lead.phone?.includes("@g.us")
-          ? lead.phone
-          : lead.name?.includes("@g.us")
-          ? lead.name
-          : `${lead.phone || lead.id}@g.us`;
-
-        const groupName = lead.name && !lead.name.includes("@g.us") ? lead.name : "Grupo WhatsApp";
-
-        await supabase
-          .from("whatsapp_groups" as any)
-          .upsert(
-            {
-              company_id: activeCompanyId,
-              user_id: currentUserId || activeCompanyId,
-              group_jid: jid,
-              name: groupName,
-              updated_at: lead.updated_at || new Date().toISOString(),
-            },
-            { onConflict: "company_id,group_jid" }
-          )
-          .catch(() => {});
-
-        await supabase.from("leads").delete().eq("id", lead.id).catch(() => {});
-        migratedCount++;
-      }
-
-      return { migratedCount };
-    },
-    onSuccess: (res) => {
-      queryClient.invalidateQueries({ queryKey: ["whatsapp_groups"] });
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
-      if (res.migratedCount > 0) {
-        toast.success(`${res.migratedCount} grupos reorganizados da tabela de leads para Grupos!`);
-      }
-    },
+    mutationFn: async () => ({ migratedCount: 0 }),
   });
 
   // Mutation to sync groups directly from a specific WhatsApp instance/connection
@@ -329,68 +235,91 @@ export function useGroups(filters: GroupFilters = {}) {
       });
 
       if (resErr) {
-        console.warn("[syncInstanceGroups] Edge function error:", resErr);
+        console.warn("[syncInstanceGroups] Edge function warning:", resErr);
       }
 
-      // 2. Direct client-side dual persistence fallback into whatsapp_groups, chat_conversations, and group_campaigns
+      // 2. Direct client-side dual persistence fallback into group_campaigns and chat_conversations using safe select->update/insert
       if (activeCompanyId && Array.isArray(groups) && groups.length > 0) {
+        const targetUserId = currentUserId || activeCompanyId;
+
         for (const g of groups) {
           const jid = g.groupJid || g.id || g.jid;
           if (!jid) continue;
 
+          const groupName = g.name || "Grupo WhatsApp";
+          const groupDesc = g.description || null;
+
+          // Fallback A: group_campaigns
           try {
-            await supabase.from("whatsapp_groups" as any).upsert(
-              {
+            const { data: existingGc } = await supabase
+              .from("group_campaigns")
+              .select("id")
+              .eq("company_id", activeCompanyId)
+              .eq("group_jid", jid)
+              .maybeSingle();
+
+            if (existingGc?.id) {
+              await supabase
+                .from("group_campaigns")
+                .update({
+                  instance_id: targetInstanceId,
+                  user_id: targetUserId,
+                  group_name: groupName,
+                  name: groupName,
+                  group_description: groupDesc,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", existingGc.id);
+            } else {
+              await supabase.from("group_campaigns").insert({
                 company_id: activeCompanyId,
-                user_id: currentUserId || activeCompanyId,
+                user_id: targetUserId,
                 instance_id: targetInstanceId,
                 group_jid: jid,
-                name: g.name || "Grupo WhatsApp",
-                description: g.description || null,
-                picture_url: g.pictureUrl || null,
-                participants_count: g.participantsCount || 0,
+                group_name: groupName,
+                name: groupName,
+                group_description: groupDesc,
+                status: "active",
                 updated_at: new Date().toISOString(),
-              },
-              { onConflict: "company_id,group_jid" }
-            );
+              });
+            }
           } catch (e) {
-            console.warn("Client fallback upsert whatsapp_groups error:", e);
+            console.warn("Client fallback group_campaigns error:", e);
           }
 
+          // Fallback B: chat_conversations
           try {
-            await supabase.from("chat_conversations").upsert(
-              {
+            const { data: existingConv } = await supabase
+              .from("chat_conversations")
+              .select("id")
+              .eq("company_id", activeCompanyId)
+              .eq("contact_name", jid)
+              .maybeSingle();
+
+            if (existingConv?.id) {
+              await supabase
+                .from("chat_conversations")
+                .update({
+                  instance_id: targetInstanceId,
+                  user_id: targetUserId,
+                  last_message_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", existingConv.id);
+            } else {
+              await supabase.from("chat_conversations").insert({
                 company_id: activeCompanyId,
-                user_id: currentUserId || activeCompanyId,
+                user_id: targetUserId,
                 instance_id: targetInstanceId,
                 contact_name: jid,
                 contact_phone: jid,
                 status: "open",
                 last_message_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
-              },
-              { onConflict: "company_id,instance_id,contact_name" }
-            );
+              });
+            }
           } catch (e) {
-            console.warn("Client fallback upsert chat_conversations error:", e);
-          }
-
-          try {
-            await supabase.from("group_campaigns").upsert(
-              {
-                company_id: activeCompanyId,
-                user_id: currentUserId || activeCompanyId,
-                instance_id: targetInstanceId,
-                group_jid: jid,
-                group_name: g.name || "Grupo WhatsApp",
-                name: g.name || "Grupo WhatsApp",
-                status: "active",
-                updated_at: new Date().toISOString(),
-              },
-              { onConflict: "company_id,group_jid" }
-            );
-          } catch (e) {
-            console.warn("Client fallback upsert group_campaigns error:", e);
+            console.warn("Client fallback chat_conversations error:", e);
           }
         }
       }
@@ -398,7 +327,7 @@ export function useGroups(filters: GroupFilters = {}) {
       return resData || { syncedCount: groups?.length || 0 };
     },
     onSuccess: (res: any) => {
-      queryClient.invalidateQueries({ queryKey: ["whatsapp_groups"] });
+      queryClient.invalidateQueries({ queryKey: ["groups_list"] });
       queryClient.invalidateQueries({ queryKey: ["chat_conversations"] });
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
       queryClient.invalidateQueries({ queryKey: ["group_campaigns"] });
@@ -416,14 +345,11 @@ export function useGroups(filters: GroupFilters = {}) {
 
     const channel = supabase
       .channel("realtime_groups_channel")
-      .on("postgres_changes", { event: "*", schema: "public", table: "whatsapp_groups" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["whatsapp_groups"] });
-      })
       .on("postgres_changes", { event: "*", schema: "public", table: "group_campaigns" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["whatsapp_groups"] });
+        queryClient.invalidateQueries({ queryKey: ["groups_list"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_conversations" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["whatsapp_groups"] });
+        queryClient.invalidateQueries({ queryKey: ["groups_list"] });
       })
       .subscribe();
 

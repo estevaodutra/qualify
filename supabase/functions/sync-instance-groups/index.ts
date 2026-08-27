@@ -84,131 +84,108 @@ function extractGroupObjects(rawJson: any): any[] {
   return Array.from(map.values());
 }
 
-async function upsertGroup(supabase: any, groupData: any): Promise<{ success: boolean; error?: string }> {
-  const cleanData = {
-    ...groupData,
-    name: sanitizeText(groupData.name) || "Grupo WhatsApp",
-    description: sanitizeText(groupData.description),
-  };
+async function saveChatConversation(supabase: any, convData: any): Promise<boolean> {
+  try {
+    const cleanData = {
+      company_id: convData.company_id,
+      user_id: convData.user_id,
+      instance_id: convData.instance_id,
+      contact_name: sanitizeText(convData.contact_name) || convData.contact_phone,
+      contact_phone: convData.contact_phone,
+      status: "open",
+      last_message_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
 
-  const { error: err1 } = await supabase
-    .from("whatsapp_groups" as any)
-    .upsert(cleanData, { onConflict: "company_id,group_jid" });
+    const { data: existing } = await supabase
+      .from("chat_conversations")
+      .select("id")
+      .eq("company_id", convData.company_id)
+      .eq("contact_name", cleanData.contact_name)
+      .maybeSingle();
 
-  if (!err1) return { success: true };
-
-  const safeData = {
-    ...groupData,
-    name: sanitizeTextNoSurrogates(groupData.name) || "Grupo WhatsApp",
-    description: sanitizeTextNoSurrogates(groupData.description),
-  };
-
-  const { error: err2 } = await supabase
-    .from("whatsapp_groups" as any)
-    .upsert(safeData, { onConflict: "company_id,group_jid" });
-
-  if (!err2) return { success: true };
-
-  const { data: existing } = await supabase
-    .from("whatsapp_groups" as any)
-    .select("id")
-    .eq("company_id", groupData.company_id)
-    .eq("group_jid", groupData.group_jid)
-    .maybeSingle();
-
-  if (existing) {
-    const { error: err3 } = await supabase
-      .from("whatsapp_groups" as any)
-      .update(safeData)
-      .eq("id", existing.id);
-    return err3 ? { success: false, error: err3.message } : { success: true };
-  } else {
-    const { error: err4 } = await supabase
-      .from("whatsapp_groups" as any)
-      .insert(safeData);
-    return err4 ? { success: false, error: err4.message } : { success: true };
+    if (existing?.id) {
+      const { error } = await supabase
+        .from("chat_conversations")
+        .update({
+          instance_id: cleanData.instance_id,
+          user_id: cleanData.user_id,
+          last_message_at: cleanData.last_message_at,
+          updated_at: cleanData.updated_at,
+        })
+        .eq("id", existing.id);
+      if (error) console.warn("[saveChatConversation] update error:", error.message);
+      return !error;
+    } else {
+      const { error } = await supabase
+        .from("chat_conversations")
+        .insert(cleanData);
+      if (error) {
+        cleanData.contact_name = sanitizeTextNoSurrogates(convData.contact_name) || convData.contact_phone;
+        const { error: errRetry } = await supabase.from("chat_conversations").insert(cleanData);
+        if (errRetry) console.warn("[saveChatConversation] insert retry error:", errRetry.message);
+        return !errRetry;
+      }
+      return true;
+    }
+  } catch (e: any) {
+    console.error("[saveChatConversation] exception:", e.message);
+    return false;
   }
 }
 
-async function upsertConversation(supabase: any, convData: any): Promise<{ success: boolean; error?: string }> {
-  const cleanData = {
-    ...convData,
-    contact_name: sanitizeText(convData.contact_name) || convData.contact_phone,
-  };
+async function saveGroupCampaign(supabase: any, gcData: any): Promise<boolean> {
+  try {
+    const cleanData = {
+      company_id: gcData.company_id,
+      user_id: gcData.user_id,
+      instance_id: gcData.instance_id,
+      group_jid: gcData.group_jid,
+      group_name: sanitizeText(gcData.group_name) || "Grupo WhatsApp",
+      name: sanitizeText(gcData.name) || "Grupo WhatsApp",
+      group_description: sanitizeText(gcData.group_description),
+      status: "active",
+      updated_at: new Date().toISOString(),
+    };
 
-  const { data: existing } = await supabase
-    .from("chat_conversations")
-    .select("id")
-    .eq("company_id", convData.company_id)
-    .eq("contact_name", cleanData.contact_name)
-    .maybeSingle();
-
-  if (existing) {
-    const { error } = await supabase
-      .from("chat_conversations")
-      .update({
-        instance_id: cleanData.instance_id,
-        user_id: cleanData.user_id,
-        last_message_at: cleanData.last_message_at,
-        updated_at: cleanData.updated_at,
-      })
-      .eq("id", existing.id);
-    return error ? { success: false, error: error.message } : { success: true };
-  } else {
-    const { error } = await supabase
-      .from("chat_conversations")
-      .insert(cleanData);
-
-    if (error) {
-      cleanData.contact_name = sanitizeTextNoSurrogates(convData.contact_name) || convData.contact_phone;
-      const { error: errRetry } = await supabase.from("chat_conversations").insert(cleanData);
-      return errRetry ? { success: false, error: errRetry.message } : { success: true };
-    }
-    return { success: true };
-  }
-}
-
-async function upsertGroupCampaign(supabase: any, gcData: any): Promise<{ success: boolean; error?: string }> {
-  const cleanData = {
-    ...gcData,
-    group_name: sanitizeText(gcData.group_name) || "Grupo WhatsApp",
-    name: sanitizeText(gcData.name) || "Grupo WhatsApp",
-    group_description: sanitizeText(gcData.group_description),
-  };
-
-  const { data: existing } = await supabase
-    .from("group_campaigns")
-    .select("id")
-    .eq("company_id", gcData.company_id)
-    .eq("group_jid", gcData.group_jid)
-    .maybeSingle();
-
-  if (existing) {
-    const { error } = await supabase
+    const { data: existing } = await supabase
       .from("group_campaigns")
-      .update({
-        instance_id: cleanData.instance_id,
-        user_id: cleanData.user_id,
-        group_name: cleanData.group_name,
-        name: cleanData.name,
-        group_description: cleanData.group_description,
-        updated_at: cleanData.updated_at,
-      })
-      .eq("id", existing.id);
-    return error ? { success: false, error: error.message } : { success: true };
-  } else {
-    const { error } = await supabase
-      .from("group_campaigns")
-      .insert(cleanData);
+      .select("id")
+      .eq("company_id", gcData.company_id)
+      .eq("group_jid", gcData.group_jid)
+      .maybeSingle();
 
-    if (error) {
-      cleanData.group_name = sanitizeTextNoSurrogates(gcData.group_name) || "Grupo WhatsApp";
-      cleanData.name = sanitizeTextNoSurrogates(gcData.name) || "Grupo WhatsApp";
-      cleanData.group_description = sanitizeTextNoSurrogates(gcData.group_description);
-      const { error: errRetry } = await supabase.from("group_campaigns").insert(cleanData);
-      return errRetry ? { success: false, error: errRetry.message } : { success: true };
+    if (existing?.id) {
+      const { error } = await supabase
+        .from("group_campaigns")
+        .update({
+          instance_id: cleanData.instance_id,
+          user_id: cleanData.user_id,
+          group_name: cleanData.group_name,
+          name: cleanData.name,
+          group_description: cleanData.group_description,
+          updated_at: cleanData.updated_at,
+        })
+        .eq("id", existing.id);
+      if (error) console.warn("[saveGroupCampaign] update error:", error.message);
+      return !error;
+    } else {
+      const { error } = await supabase
+        .from("group_campaigns")
+        .insert(cleanData);
+      if (error) {
+        cleanData.group_name = sanitizeTextNoSurrogates(gcData.group_name) || "Grupo WhatsApp";
+        cleanData.name = sanitizeTextNoSurrogates(gcData.name) || "Grupo WhatsApp";
+        cleanData.group_description = sanitizeTextNoSurrogates(gcData.group_description);
+        const { error: errRetry } = await supabase.from("group_campaigns").insert(cleanData);
+        if (errRetry) console.warn("[saveGroupCampaign] insert retry error:", errRetry.message);
+        return !errRetry;
+      }
+      return true;
     }
-    return { success: true };
+  } catch (e: any) {
+    console.error("[saveGroupCampaign] exception:", e.message);
+    return false;
   }
 }
 
@@ -397,48 +374,18 @@ Deno.serve(async (req) => {
     }
 
     let syncedCount = 0;
-    const errorsList: string[] = [];
 
-    // Process and upsert each selected group
+    // Process and save each selected group to group_campaigns and chat_conversations
     for (const group of targetGroups) {
       const groupJid = group.groupJid || group.id || group.jid;
       if (!groupJid) continue;
 
       const finalName = group.name || group.subject || groupJid.split("@")[0] || "Grupo WhatsApp";
       const description = group.description || group.desc || null;
-      const pictureUrl = group.pictureUrl || group.picture_url || group.profilePictureUrl || null;
       const participants = Array.isArray(group.participants) ? group.participants : [];
-      const participantsCount = group.participantsCount || group.size || (participants.length > 0 ? participants.length : 0);
 
-      // 1. Upsert into whatsapp_groups
-      const gRes = await upsertGroup(supabase, {
-        company_id: companyId,
-        user_id: targetUserId,
-        instance_id: instance.id,
-        group_jid: groupJid,
-        name: finalName,
-        description,
-        picture_url: pictureUrl,
-        participants_count: participantsCount,
-        updated_at: new Date().toISOString(),
-      });
-      if (!gRes.success && gRes.error) errorsList.push(`whatsapp_groups: ${gRes.error}`);
-
-      // 2. Upsert into chat_conversations
-      const cRes = await upsertConversation(supabase, {
-        company_id: companyId,
-        user_id: targetUserId,
-        instance_id: instance.id,
-        contact_name: groupJid,
-        contact_phone: groupJid,
-        status: "open",
-        last_message_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
-      if (!cRes.success && cRes.error) errorsList.push(`chat_conversations: ${cRes.error}`);
-
-      // 3. Upsert into group_campaigns
-      const gcRes = await upsertGroupCampaign(supabase, {
+      // 1. Save into group_campaigns
+      const gcOk = await saveGroupCampaign(supabase, {
         company_id: companyId,
         user_id: targetUserId,
         instance_id: instance.id,
@@ -446,34 +393,18 @@ Deno.serve(async (req) => {
         group_name: finalName,
         name: finalName,
         group_description: description,
-        status: "active",
-        updated_at: new Date().toISOString(),
       });
-      if (!gcRes.success && gcRes.error) errorsList.push(`group_campaigns: ${gcRes.error}`);
 
-      // 4. Sync members into group_members
-      if (participants.length > 0) {
-        for (const p of participants) {
-          const rawPhone = p.phoneNumber || p.phone || p.id || "";
-          const cleanPhone = String(rawPhone).replace(/\D/g, "");
-          if (cleanPhone) {
-            const isAdmin = p.admin === "admin" || p.admin === "superadmin" || p.isAdmin === true;
-            await supabase.from("group_members").upsert(
-              {
-                user_id: targetUserId,
-                group_jid: groupJid,
-                phone: cleanPhone,
-                role: isAdmin ? "admin" : "member",
-                is_admin: isAdmin,
-                name: sanitizeText(p.name || p.pushName) || null,
-              },
-              { onConflict: "user_id,group_jid,phone" }
-            ).catch(() => {});
-          }
-        }
-      }
+      // 2. Save into chat_conversations
+      const cOk = await saveChatConversation(supabase, {
+        company_id: companyId,
+        user_id: targetUserId,
+        instance_id: instance.id,
+        contact_name: groupJid,
+        contact_phone: groupJid,
+      });
 
-      if (gRes.success || cRes.success || gcRes.success) {
+      if (gcOk || cOk) {
         syncedCount++;
       }
     }
@@ -484,7 +415,6 @@ Deno.serve(async (req) => {
         instanceId: instance.id,
         syncedCount,
         totalTargetGroups: targetGroups.length,
-        errors: errorsList,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
