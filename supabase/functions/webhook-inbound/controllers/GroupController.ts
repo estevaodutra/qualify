@@ -156,12 +156,11 @@ export async function processGroupEvent(
             }
           }
         }
+      } catch (sysMsgErr) {
+        await supabase.from("alerts").insert({ user_id: instance.user_id, severity: "error", title: "GroupController Exception", message: JSON.stringify(sysMsgErr, Object.getOwnPropertyNames(sysMsgErr)) });
+        console.error("[GroupController] Error inserting system message:", sysMsgErr);
       }
-    } catch (sysMsgErr) {
-      await supabase.from("alerts").insert({ user_id: instance.user_id, severity: "error", title: "GroupController Exception", message: JSON.stringify(sysMsgErr, Object.getOwnPropertyNames(sysMsgErr)) });
-      console.error("[GroupController] Error inserting system message:", sysMsgErr);
     }
-  }
 
   // 1. ==========================================
   // AUTO-PROCESS GROUP JOIN for Pirate Campaigns
