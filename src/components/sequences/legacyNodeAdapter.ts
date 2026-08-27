@@ -18,7 +18,22 @@ import { normalizePollOptions } from "./shared-types";
 export function liftLegacyNode(node: LocalNode): LocalNode {
   let processed = { ...node };
 
-  if (processed.nodeType === "content") {
+  const isConditionNode = 
+    processed.nodeType === "condition" ||
+    !!processed.config?.conditionType ||
+    (Array.isArray(processed.config?.rules) && processed.config.rules.length > 0) ||
+    processed.config?.actionType === "condition";
+
+  if (isConditionNode) {
+    processed = {
+      ...processed,
+      nodeType: "condition",
+    };
+    if (processed.config?.actionType === "condition") {
+      const { actionType, ...rest } = processed.config;
+      processed.config = rest;
+    }
+  } else if (processed.nodeType === "content") {
     // Already migrated to container, ensure messages array exists
     if (!processed.config.messages) {
       processed = { ...processed, config: { ...processed.config, messages: [] } };
@@ -49,9 +64,7 @@ export function liftLegacyNode(node: LocalNode): LocalNode {
     processed.nodeType === "deal_create" ||
     processed.nodeType === "move_deal_stage" ||
     processed.nodeType === "move_deal" ||
-    processed.nodeType === "deal_move" ||
-    processed.config?.category === "lead" ||
-    processed.config?.category === "deal"
+    processed.nodeType === "deal_move"
   ) {
     const actionType = (processed.config.actionType as string) || processed.nodeType;
     processed = { ...processed, nodeType: "action", config: { ...processed.config, actionType } };
