@@ -161,12 +161,16 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Find the poll message
+    // Extract short ID suffix if serialized (e.g., true_120363412175102479@g.us_3EB0D3E0502029992AB91C -> 3EB0D3E0502029992AB91C)
+    const shortId = message_id.includes("_") ? message_id.split("_").pop()! : message_id;
+
+    // Find the poll message by full message_id, zaap_id, or shortId
     const { data: pollMessage, error: pollError } = await supabase
       .from("poll_messages")
       .select("*")
-      .or(`message_id.eq.${message_id},zaap_id.eq.${message_id}`)
-      .single();
+      .or(`message_id.eq.${message_id},zaap_id.eq.${message_id},zaap_id.eq.${shortId},message_id.ilike.%${shortId}%`)
+      .limit(1)
+      .maybeSingle();
 
     if (pollError || !pollMessage) {
       console.log(`[HandlePollResponse] Poll message not found for message_id: ${message_id}`);
