@@ -284,6 +284,7 @@ Deno.serve(async (req) => {
           poll_message_id: typedPoll.message_id,
           option_id: selectedOptionId,
           option_label: selectedOptionLabel,
+          option_index: response.option_index,
           responded_at: timestamp || new Date().toISOString(),
         },
       };

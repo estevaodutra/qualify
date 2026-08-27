@@ -1652,9 +1652,13 @@ Deno.serve(async (req) => {
       const visitCounts = new Map<string, number>();
       let activeInstanceId = instance.id; // local state tracker for active channel selector
 
-      // Resume by node id when available (graph resume), otherwise start at the first node in order
+      // Resume by node id when available (graph resume or poll resume), otherwise start at the first node in order
       let currentNodeId: string | null =
-        isResumedExecution && startFromNodeId ? startFromNodeId : (sortedNodes[0]?.id ?? null);
+        (triggerContext?.resumedFromPoll && triggerContext?.resumeNodeId)
+          ? triggerContext.resumeNodeId
+          : (isResumedExecution && startFromNodeId)
+          ? startFromNodeId
+          : (sortedNodes[0]?.id ?? null);
 
       // Workflow execution history: one row per real run, reused across pause/resume
       // (via the same executionId) so a single logical run — even one spanning a
