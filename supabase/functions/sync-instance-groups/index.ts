@@ -228,7 +228,7 @@ Deno.serve(async (req) => {
       if (user) userId = user.id;
     }
 
-    const { instanceId, companyId: reqCompanyId, fetchOnly, selectedJids } = await req.json();
+    const { instanceId, companyId: reqCompanyId, fetchOnly, groups: inputGroups, selectedJids } = await req.json();
 
     if (!instanceId) {
       return new Response(
@@ -284,111 +284,113 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`[sync-instance-groups] Executing action group.list for instance ${instance.name} (${instance.id}) company ${companyId}`);
+    let targetGroups: any[] = [];
 
-    let rawChats: any[] = [];
-    let providerStatus = 0;
+    // If frontend passed selected groups directly in request payload, use them!
+    if (Array.isArray(inputGroups) && inputGroups.length > 0) {
+      console.log(`[sync-instance-groups] Received ${inputGroups.length} selected group objects directly from frontend`);
+      targetGroups = inputGroups;
+    } else {
+      // Otherwise fetch from provider via action group.list
+      console.log(`[sync-instance-groups] Fetching groups from provider for instance ${instance.name}`);
+      let rawChats: any[] = [];
 
-    // 2. Execute action "group.list" via fetchZApi / n8n-router
-    try {
-      const resp = await fetchZApi(
-        instance.external_instance_id,
-        instance.external_instance_token,
-        "/group/list",
-        "POST",
-        {
-          action: "group.list",
-          instanceId: instance.id,
-          external_instance_id: instance.external_instance_id,
-        },
-        { "Content-Type": "application/json" },
-        instance.id,
-        true
-      );
-
-      providerStatus = resp.status;
-
-      if (resp.ok) {
-        const json = await resp.json();
-        rawChats = extractGroupObjects(json);
-      }
-    } catch (e: any) {
-      console.warn(`[sync-instance-groups] Provider API error:`, e.message);
-    }
-
-    // Fallback GET /chats if group.list returned 0 items
-    if (rawChats.length === 0) {
       try {
-        const respFallback = await fetchZApi(
+        const resp = await fetchZApi(
           instance.external_instance_id,
           instance.external_instance_token,
-          "/chats",
-          "GET",
-          null,
-          {},
+          "/group/list",
+          "POST",
+          {
+            action: "group.list",
+            instanceId: instance.id,
+            external_instance_id: instance.external_instance_id,
+          },
+          { "Content-Type": "application/json" },
           instance.id,
           true
         );
 
-        if (respFallback.ok) {
-          const jsonF = await respFallback.json();
-          rawChats = extractGroupObjects(jsonF);
+        if (resp.ok) {
+          const json = await resp.json();
+          rawChats = extractGroupObjects(json);
         }
       } catch (e: any) {
-        console.warn(`[sync-instance-groups] Fallback GET /chats error:`, e.message);
+        console.warn(`[sync-instance-groups] Provider API error:`, e.message);
       }
+
+      if (rawChats.length === 0) {
+        try {
+          const respFallback = await fetchZApi(
+            instance.external_instance_id,
+            instance.external_instance_token,
+            "/chats",
+            "GET",
+            null,
+            {},
+            instance.id,
+            true
+          );
+          if (respFallback.ok) {
+            const jsonF = await respFallback.json();
+            rawChats = extractGroupObjects(jsonF);
+          }
+        } catch (e: any) {
+          console.warn(`[sync-instance-groups] Fallback GET /chats error:`, e.message);
+        }
+      }
+
+      const formattedGroups = rawChats.map((chat) => {
+        const jid = chat.id || chat.phone || chat.jid || chat.groupJid || chat.group_jid || chat.chatId;
+        const subject = chat.subject || chat.name || chat.groupName || chat.group_name || chat.title;
+
+        let groupJid = jid ? String(jid) : "";
+        if (!groupJid && subject) groupJid = `${subject}@g.us`;
+        if (!groupJid.includes("@")) groupJid = `${groupJid.replace(/\D/g, "")}@g.us`;
+
+        const participants = Array.isArray(chat.participants) ? chat.participants : [];
+        const participantsCount = chat.size || chat.participantsCount || (participants.length > 0 ? participants.length : 0);
+
+        return {
+          groupJid,
+          name: subject || groupJid.split("@")[0] || "Grupo WhatsApp",
+          description: chat.desc || chat.description || null,
+          pictureUrl: chat.pictureUrl || chat.profilePictureUrl || chat.picture_url || chat.photo || null,
+          participantsCount,
+          participants,
+        };
+      }).filter((g) => g.groupJid.includes("@g.us") || g.groupJid.startsWith("1203"));
+
+      if (fetchOnly) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            instanceId: instance.id,
+            instanceName: instance.name,
+            groups: formattedGroups,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const selectedSet = Array.isArray(selectedJids) && selectedJids.length > 0 ? new Set(selectedJids) : null;
+      targetGroups = selectedSet
+        ? formattedGroups.filter((g) => selectedSet.has(g.groupJid))
+        : formattedGroups;
     }
-
-    // Format groups list
-    const formattedGroups = rawChats.map((chat) => {
-      const jid = chat.id || chat.phone || chat.jid || chat.groupJid || chat.group_jid || chat.chatId;
-      const subject = chat.subject || chat.name || chat.groupName || chat.group_name || chat.title;
-
-      let groupJid = jid ? String(jid) : "";
-      if (!groupJid && subject) groupJid = `${subject}@g.us`;
-      if (!groupJid.includes("@")) groupJid = `${groupJid.replace(/\D/g, "")}@g.us`;
-
-      const participants = Array.isArray(chat.participants) ? chat.participants : [];
-      const participantsCount = chat.size || chat.participantsCount || (participants.length > 0 ? participants.length : 0);
-
-      return {
-        groupJid,
-        name: subject || groupJid.split("@")[0] || "Grupo WhatsApp",
-        description: chat.desc || chat.description || null,
-        pictureUrl: chat.pictureUrl || chat.profilePictureUrl || chat.picture_url || chat.photo || null,
-        participantsCount,
-        participants,
-      };
-    }).filter((g) => g.groupJid.includes("@g.us") || g.groupJid.startsWith("1203"));
-
-    // If request is fetchOnly (previewing groups in modal), return without saving to DB
-    if (fetchOnly) {
-      return new Response(
-        JSON.stringify({
-          success: true,
-          instanceId: instance.id,
-          instanceName: instance.name,
-          groups: formattedGroups,
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Filter by selectedJids if specified by user
-    const selectedSet = Array.isArray(selectedJids) && selectedJids.length > 0 ? new Set(selectedJids) : null;
-    const targetGroups = selectedSet
-      ? formattedGroups.filter((g) => selectedSet.has(g.groupJid))
-      : formattedGroups;
 
     let syncedCount = 0;
-    const upsertedJids = new Set<string>();
 
-    // 3. Process and upsert each selected group
+    // Process and upsert each selected group
     for (const group of targetGroups) {
-      const groupJid = group.groupJid;
-      const finalName = group.name;
-      const participants = group.participants;
-      const participantsCount = group.participantsCount;
+      const groupJid = group.groupJid || group.id || group.jid;
+      if (!groupJid) continue;
+
+      const finalName = group.name || group.subject || groupJid.split("@")[0] || "Grupo WhatsApp";
+      const description = group.description || group.desc || null;
+      const pictureUrl = group.pictureUrl || group.picture_url || group.profilePictureUrl || null;
+      const participants = Array.isArray(group.participants) ? group.participants : [];
+      const participantsCount = group.participantsCount || group.size || (participants.length > 0 ? participants.length : 0);
 
       // Upsert into whatsapp_groups
       const gOk = await upsertGroup(supabase, {
@@ -397,8 +399,8 @@ Deno.serve(async (req) => {
         instance_id: instance.id,
         group_jid: groupJid,
         name: finalName,
-        description: group.description,
-        picture_url: group.pictureUrl,
+        description,
+        picture_url: pictureUrl,
         participants_count: participantsCount,
         updated_at: new Date().toISOString(),
       });
@@ -423,7 +425,7 @@ Deno.serve(async (req) => {
         group_jid: groupJid,
         group_name: finalName,
         name: finalName,
-        group_description: group.description,
+        group_description: description,
         status: "active",
         updated_at: new Date().toISOString(),
       });
@@ -452,7 +454,6 @@ Deno.serve(async (req) => {
 
       if (gOk || cOk) {
         syncedCount++;
-        upsertedJids.add(groupJid);
       }
     }
 
@@ -460,10 +461,8 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: true,
         instanceId: instance.id,
-        instanceName: instance.name,
         syncedCount,
-        totalSelected: targetGroups.length,
-        totalExtracted: formattedGroups.length,
+        totalTargetGroups: targetGroups.length,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

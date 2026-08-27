@@ -321,18 +321,67 @@ export function useGroups(filters: GroupFilters = {}) {
 
   // Mutation to sync groups directly from a specific WhatsApp instance/connection
   const syncInstanceGroupsMutation = useMutation({
-    mutationFn: async ({ instanceId: targetInstanceId, selectedJids }: { instanceId: string; selectedJids?: string[] }) => {
+    mutationFn: async ({ instanceId: targetInstanceId, selectedJids, groups }: { instanceId: string; selectedJids?: string[]; groups?: any[] }) => {
       if (!targetInstanceId) return { syncedCount: 0 };
 
+      // 1. Invoke Edge Function with direct groups array if provided
       const { data: resData, error: resErr } = await supabase.functions.invoke("sync-instance-groups", {
-        body: { instanceId: targetInstanceId, companyId: activeCompanyId, selectedJids },
+        body: { instanceId: targetInstanceId, companyId: activeCompanyId, selectedJids, groups },
       });
 
       if (resErr) {
         console.warn("[syncInstanceGroups] Edge function warning:", resErr);
       }
 
-      return resData || { syncedCount: 0 };
+      // 2. Direct client-side dual persistence fallback into whatsapp_groups, chat_conversations, and group_campaigns
+      if (activeCompanyId && Array.isArray(groups) && groups.length > 0) {
+        for (const g of groups) {
+          const jid = g.groupJid || g.id || g.jid;
+          if (!jid) continue;
+
+          await supabase.from("whatsapp_groups" as any).upsert(
+            {
+              company_id: activeCompanyId,
+              instance_id: targetInstanceId,
+              group_jid: jid,
+              name: g.name || "Grupo WhatsApp",
+              description: g.description || null,
+              picture_url: g.pictureUrl || null,
+              participants_count: g.participantsCount || 0,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "company_id,group_jid" }
+          ).catch(() => {});
+
+          await supabase.from("chat_conversations").upsert(
+            {
+              company_id: activeCompanyId,
+              instance_id: targetInstanceId,
+              contact_name: jid,
+              contact_phone: jid,
+              status: "open",
+              last_message_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "company_id,instance_id,contact_name" }
+          ).catch(() => {});
+
+          await supabase.from("group_campaigns").upsert(
+            {
+              company_id: activeCompanyId,
+              instance_id: targetInstanceId,
+              group_jid: jid,
+              group_name: g.name || "Grupo WhatsApp",
+              name: g.name || "Grupo WhatsApp",
+              status: "active",
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "company_id,group_jid" }
+          ).catch(() => {});
+        }
+      }
+
+      return resData || { syncedCount: groups?.length || 0 };
     },
     onSuccess: (res: any) => {
       queryClient.invalidateQueries({ queryKey: ["whatsapp_groups"] });

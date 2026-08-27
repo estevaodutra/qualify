@@ -163,9 +163,12 @@ export default function Groups() {
       return;
     }
 
+    const selectedGroupsObjects = remoteGroups.filter((g) => selectedJids.has(g.groupJid));
+
     syncInstanceGroups({
       instanceId: selectedSyncInstance,
       selectedJids: Array.from(selectedJids),
+      groups: selectedGroupsObjects,
     });
 
     setSyncDialogOpen(false);
