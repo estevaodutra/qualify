@@ -148,7 +148,7 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
     }
   };
 
-  // Action 2: Save all group participants into CRM leads table with @lid and phone number
+  // Action 2: Save all group participants into CRM leads table with company_id, @lid and phone number
   const handleSaveLeadsToCRM = async () => {
     const participantsList = detailsData?.allParticipants || detailsData?.participants || [];
 
@@ -174,11 +174,12 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
 
         // Check if existing lead by phone or lid
         let existingLeadId: string | null = null;
+
         if (cleanPhone) {
           const { data: exByPhone } = await supabase
             .from("leads")
             .select("id")
-            .eq("user_id", targetUserId)
+            .or(`company_id.eq.${activeCompanyId},user_id.eq.${targetUserId}`)
             .eq("phone", cleanPhone)
             .maybeSingle();
           if (exByPhone?.id) existingLeadId = exByPhone.id;
@@ -188,23 +189,22 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
           const { data: exByLid } = await supabase
             .from("leads")
             .select("id")
-            .eq("user_id", targetUserId)
+            .or(`company_id.eq.${activeCompanyId},user_id.eq.${targetUserId}`)
             .eq("lid", lidVal)
             .maybeSingle();
           if (exByLid?.id) existingLeadId = exByLid.id;
         }
 
         const leadPayload: any = {
+          company_id: activeCompanyId,
           user_id: targetUserId,
           name: leadName,
           phone: cleanPhone || null,
           lid: lidVal || null,
+          source_group_name: group.name,
           source_type: "grupo",
           status: "novo",
-          custom_fields: {
-            source_group_name: group.name,
-            source_group_jid: group.groupJid,
-          },
+          updated_at: new Date().toISOString(),
         };
 
         if (existingLeadId) {
@@ -220,7 +220,8 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
 
       queryClient.invalidateQueries({ queryKey: ["leads"] });
       queryClient.invalidateQueries({ queryKey: ["leads-stats"] });
-      toast.success(`${savedCount} participantes e LIDs salvos com sucesso como Leads no CRM!`);
+      queryClient.invalidateQueries({ queryKey: ["leads-group-names"] });
+      toast.success(`${savedCount} participantes salvos como Leads no CRM!`);
     } catch (err: any) {
       toast.error(`Erro ao salvar leads no CRM: ${err.message || String(err)}`);
     } finally {
