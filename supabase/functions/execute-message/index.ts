@@ -1892,6 +1892,28 @@ Deno.serve(async (req) => {
               .eq("phone", phoneClean)
               .maybeSingle();
 
+            const resolveVariables = (str?: string, ctx?: any, lead?: any): string => {
+              if (!str) return "";
+              let res = String(str);
+              const name = lead?.name || ctx?.respondentName || ctx?.contactName || "";
+              const phone = lead?.phone || ctx?.respondentPhone || ctx?.contactPhone || ctx?.phone || "";
+              const email = lead?.email || ctx?.email || "";
+              const cpf = lead?.cpf || lead?.document || ctx?.cpf || "";
+
+              res = res.replace(/\{\{name\}\}/g, name);
+              res = res.replace(/\{\{phone\}\}/g, phone);
+              res = res.replace(/\{\{email\}\}/g, email);
+              res = res.replace(/\{\{cpf\}\}/g, cpf);
+
+              if (ctx?.customFields && typeof ctx.customFields === "object") {
+                for (const [key, value] of Object.entries(ctx.customFields)) {
+                  const regex = new RegExp(`\\{\\{${key}\\}\\}`, "g");
+                  res = res.replace(regex, String(value || ""));
+                }
+              }
+              return res;
+            };
+
             if (actionType === "create_lead") {
               const rawName = (params.name as string) || (triggerContext?.respondentName as string) || dest.group_name || "Novo Lead";
               const rawPhone = (params.phone as string) || (triggerContext?.respondentPhone as string) || phoneClean;
