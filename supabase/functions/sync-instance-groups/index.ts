@@ -380,6 +380,7 @@ Deno.serve(async (req) => {
     }
 
     let syncedCount = 0;
+    const targetUserId = userId || instance.user_id;
 
     // Process and upsert each selected group
     for (const group of targetGroups) {
@@ -395,7 +396,7 @@ Deno.serve(async (req) => {
       // Upsert into whatsapp_groups
       const gOk = await upsertGroup(supabase, {
         company_id: companyId,
-        user_id: instance.user_id,
+        user_id: targetUserId,
         instance_id: instance.id,
         group_jid: groupJid,
         name: finalName,
@@ -408,7 +409,7 @@ Deno.serve(async (req) => {
       // Upsert into chat_conversations
       const cOk = await upsertConversation(supabase, {
         company_id: companyId,
-        user_id: instance.user_id,
+        user_id: targetUserId,
         instance_id: instance.id,
         contact_name: groupJid,
         contact_phone: groupJid,
@@ -420,7 +421,7 @@ Deno.serve(async (req) => {
       // Upsert into group_campaigns
       await upsertGroupCampaign(supabase, {
         company_id: companyId,
-        user_id: instance.user_id,
+        user_id: targetUserId,
         instance_id: instance.id,
         group_jid: groupJid,
         group_name: finalName,
@@ -439,7 +440,7 @@ Deno.serve(async (req) => {
             const isAdmin = p.admin === "admin" || p.admin === "superadmin" || p.isAdmin === true;
             await supabase.from("group_members").upsert(
               {
-                user_id: instance.user_id,
+                user_id: targetUserId,
                 group_jid: groupJid,
                 phone: cleanPhone,
                 role: isAdmin ? "admin" : "member",

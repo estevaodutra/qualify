@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useEffect } from "react";
 import { toast } from "sonner";
 
@@ -34,6 +35,8 @@ export interface GroupFilters {
 
 export function useGroups(filters: GroupFilters = {}) {
   const { activeCompanyId } = useCompany();
+  const { user } = useAuth();
+  const currentUserId = user?.id;
   const queryClient = useQueryClient();
 
   const {
@@ -343,6 +346,7 @@ export function useGroups(filters: GroupFilters = {}) {
             await supabase.from("whatsapp_groups" as any).upsert(
               {
                 company_id: activeCompanyId,
+                user_id: currentUserId || activeCompanyId,
                 instance_id: targetInstanceId,
                 group_jid: jid,
                 name: g.name || "Grupo WhatsApp",
@@ -361,6 +365,7 @@ export function useGroups(filters: GroupFilters = {}) {
             await supabase.from("chat_conversations").upsert(
               {
                 company_id: activeCompanyId,
+                user_id: currentUserId || activeCompanyId,
                 instance_id: targetInstanceId,
                 contact_name: jid,
                 contact_phone: jid,
@@ -378,6 +383,7 @@ export function useGroups(filters: GroupFilters = {}) {
             await supabase.from("group_campaigns").upsert(
               {
                 company_id: activeCompanyId,
+                user_id: currentUserId || activeCompanyId,
                 instance_id: targetInstanceId,
                 group_jid: jid,
                 group_name: g.name || "Grupo WhatsApp",
