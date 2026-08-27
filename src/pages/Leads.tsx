@@ -565,6 +565,7 @@ export default function Leads() {
           mode={tagDialogMode}
           leads={leads}
           selectedIds={selectedIds}
+          availableTags={availableTags}
           onSubmit={async (tags) => {
             const ids = await getSelectedIds();
             if (tagDialogMode === "add") {

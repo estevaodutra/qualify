@@ -119,6 +119,36 @@ export function useLeads(filters: LeadFilters = {}) {
   const tagNamesQuery = useQuery({
     queryKey: ["leads-tags", activeCompanyId],
     queryFn: async () => {
+      const tagSet = new Set<string>();
+
+      // 1. Fetch system tags from 'tags' table
+      try {
+        const { data: dbTags } = await supabase
+          .from("tags")
+          .select("name");
+        if (dbTags) {
+          dbTags.forEach((t: any) => {
+            if (t.name) tagSet.add(t.name);
+          });
+        }
+      } catch (_e) {}
+
+      // 2. Fetch local storage tags fallback
+      if (activeCompanyId) {
+        try {
+          const rawLocal = localStorage.getItem(`qualify_tags_${activeCompanyId}`);
+          if (rawLocal) {
+            const parsed = JSON.parse(rawLocal);
+            if (Array.isArray(parsed)) {
+              parsed.forEach((t: any) => {
+                if (t.name) tagSet.add(t.name);
+              });
+            }
+          }
+        } catch (_e) {}
+      }
+
+      // 3. Fetch tags used on existing leads
       const { data: authData } = await supabase.auth.getUser();
       const currentUserId = authData?.user?.id;
 
@@ -131,14 +161,15 @@ export function useLeads(filters: LeadFilters = {}) {
         query = query.eq("user_id", currentUserId);
       }
 
-      const { data } = await query;
-      if (!data) return [];
-      const tagSet = new Set<string>();
-      data.forEach((row: any) => {
-        if (Array.isArray(row.tags)) {
-          row.tags.forEach((t: string) => tagSet.add(t));
-        }
-      });
+      const { data: leadRows } = await query;
+      if (leadRows) {
+        leadRows.forEach((row: any) => {
+          if (Array.isArray(row.tags)) {
+            row.tags.forEach((t: string) => tagSet.add(t));
+          }
+        });
+      }
+
       return Array.from(tagSet);
     },
   });
@@ -253,6 +284,7 @@ export function useLeads(filters: LeadFilters = {}) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-tags"] });
       toast({ title: "Tags adicionadas aos leads selecionados" });
     },
     onError: () => toast({ title: "Erro ao adicionar tags", variant: "destructive" }),
@@ -274,6 +306,7 @@ export function useLeads(filters: LeadFilters = {}) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-tags"] });
       toast({ title: "Tags removidas dos leads selecionados" });
     },
     onError: () => toast({ title: "Erro ao remover tags", variant: "destructive" }),
