@@ -207,7 +207,7 @@ Deno.serve(async (req) => {
       if (user) userId = user.id;
     }
 
-    const { instanceId, companyId: reqCompanyId, userId: reqUserId, fetchOnly, groups: inputGroups, selectedJids } = await req.json();
+    const { instanceId, companyId: reqCompanyId, userId: reqUserId, singleGroupJid, fetchOnly, groups: inputGroups, selectedJids } = await req.json();
 
     if (!instanceId) {
       return new Response(
@@ -280,13 +280,46 @@ Deno.serve(async (req) => {
 
     let targetGroups: any[] = [];
 
+    // If singleGroupJid specified (e.g. clicking "Buscar Membros"), invoke n8n manager_groups with action groupInfo
+    if (singleGroupJid) {
+      console.log(`[sync-instance-groups] Invoking n8n /group-info for single group JID: ${singleGroupJid}`);
+      try {
+        const respInfo = await fetchZApi(
+          instance.external_instance_id,
+          instance.external_instance_token,
+          "/group-info",
+          "POST",
+          {
+            action: "groupInfo",
+            phone: singleGroupJid,
+            groupJid: singleGroupJid,
+            instanceId: instance.id,
+            external_instance_id: instance.external_instance_id,
+          },
+          { "Content-Type": "application/json" },
+          instance.id,
+          true
+        );
+
+        if (respInfo.ok) {
+          const jsonInfo = await respInfo.json();
+          const singleGroups = extractGroupObjects(jsonInfo);
+          if (singleGroups.length > 0) {
+            targetGroups = singleGroups;
+          }
+        }
+      } catch (e: any) {
+        console.warn(`[sync-instance-groups] Single group-info error:`, e.message);
+      }
+    }
+
     // If frontend passed selected groups directly in request payload, use them!
-    if (Array.isArray(inputGroups) && inputGroups.length > 0) {
+    if (targetGroups.length === 0 && Array.isArray(inputGroups) && inputGroups.length > 0) {
       console.log(`[sync-instance-groups] Received ${inputGroups.length} selected group objects directly from frontend`);
       targetGroups = inputGroups;
-    } else {
+    } else if (targetGroups.length === 0) {
       // Otherwise fetch from provider via action group.list
-      console.log(`[sync-instance-groups] Fetching groups from provider for instance ${instance.name}`);
+      console.log(`[sync-instance-groups] Fetching group list from provider for instance ${instance.name}`);
       let rawChats: any[] = [];
 
       try {
@@ -375,7 +408,7 @@ Deno.serve(async (req) => {
 
     let syncedCount = 0;
 
-    // Process and save each selected group to group_campaigns and chat_conversations
+    // Process and save each selected group to group_campaigns, chat_conversations, and group_members
     for (const group of targetGroups) {
       const groupJid = group.groupJid || group.id || group.jid;
       if (!groupJid) continue;
@@ -403,6 +436,28 @@ Deno.serve(async (req) => {
         contact_name: groupJid,
         contact_phone: groupJid,
       });
+
+      // 3. Save members into group_members
+      if (participants.length > 0) {
+        for (const p of participants) {
+          const rawPhone = p.phoneNumber || p.phone || p.id || "";
+          const cleanPhone = String(rawPhone).replace(/\D/g, "");
+          if (cleanPhone) {
+            const isAdmin = p.admin === "admin" || p.admin === "superadmin" || p.isAdmin === true;
+            await supabase.from("group_members").upsert(
+              {
+                user_id: targetUserId,
+                group_jid: groupJid,
+                phone: cleanPhone,
+                role: isAdmin ? "admin" : "member",
+                is_admin: isAdmin,
+                name: sanitizeText(p.name || p.pushName) || null,
+              },
+              { onConflict: "user_id,group_jid,phone" }
+            ).catch(() => {});
+          }
+        }
+      }
 
       if (gcOk || cOk) {
         syncedCount++;

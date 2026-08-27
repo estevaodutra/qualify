@@ -66,6 +66,7 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
           instanceId: group.instanceId,
           companyId: activeCompanyId,
           userId: currentUserId,
+          singleGroupJid: group.groupJid,
           selectedJids: [group.groupJid],
         },
       });
@@ -76,7 +77,7 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
       queryClient.invalidateQueries({ queryKey: ["groups_list"] });
       await refetchDetails();
 
-      toast.success("Informações e membros do grupo atualizados do WhatsApp com sucesso!");
+      toast.success("Requisição groupInfo enviada com sucesso ao n8n!");
     } catch (err: any) {
       toast.error(`Erro ao buscar dados do grupo no WhatsApp: ${err.message || String(err)}`);
     } finally {
