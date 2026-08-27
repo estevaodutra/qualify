@@ -449,12 +449,14 @@ Deno.serve(async (req) => {
         contact_phone: groupJid,
       });
 
-      // 3. Save members into group_members using group_campaign_id and user_id schema
+      // 3. Save members into group_members capturing lid and phone
       if (campaignId && participants.length > 0) {
         for (const p of participants) {
-          const rawPhone = p.phoneNumber || p.phone || p.id || "";
+          const rawPhone = p.phoneNumber || p.phone || "";
           const cleanPhone = String(rawPhone).split("@")[0].replace(/\D/g, "");
-          if (cleanPhone) {
+          const lidVal = p.id?.includes("@lid") ? p.id : (p.lid || null);
+
+          if (cleanPhone || lidVal) {
             const isAdmin = p.admin === "admin" || p.admin === "superadmin" || p.isAdmin === true;
             const cleanName = sanitizeText(p.name || p.pushName) || null;
 
@@ -463,7 +465,7 @@ Deno.serve(async (req) => {
                 .from("group_members")
                 .select("id")
                 .eq("group_campaign_id", campaignId)
-                .eq("phone", cleanPhone)
+                .eq("phone", cleanPhone || lidVal)
                 .maybeSingle();
 
               if (existingM?.id) {
@@ -471,6 +473,7 @@ Deno.serve(async (req) => {
                   .from("group_members")
                   .update({
                     user_id: targetUserId,
+                    lid: lidVal,
                     is_admin: isAdmin,
                     name: cleanName,
                   })
@@ -481,7 +484,8 @@ Deno.serve(async (req) => {
                   .insert({
                     group_campaign_id: campaignId,
                     user_id: targetUserId,
-                    phone: cleanPhone,
+                    phone: cleanPhone || lidVal,
+                    lid: lidVal,
                     is_admin: isAdmin,
                     name: cleanName,
                   });

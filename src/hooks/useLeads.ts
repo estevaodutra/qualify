@@ -2,7 +2,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/contexts/CompanyContext";
-import { safeBatchUpsert } from "@/lib/supabase-batch";
 
 import { Lead } from "@/types/crm.types";
 
@@ -26,9 +25,6 @@ export interface LeadStats {
 }
 
 const PAGE_SIZE = 20;
-const SYNC_BATCH_SIZE = 50;
-
-// safeBatchUpsert moved to @/lib/supabase-batch
 
 export function useLeads(filters: LeadFilters = {}) {
   const { toast } = useToast();
@@ -40,13 +36,16 @@ export function useLeads(filters: LeadFilters = {}) {
   const leadsQuery = useQuery({
     queryKey: ["leads", activeCompanyId, filters],
     queryFn: async () => {
+      const { data: authData } = await supabase.auth.getUser();
+      const currentUserId = authData?.user?.id;
+
       let query = supabase
         .from("leads")
         .select("*", { count: "exact" })
         .order("created_at", { ascending: false });
 
-      if (activeCompanyId) {
-        query = query.eq("company_id", activeCompanyId);
+      if (currentUserId) {
+        query = query.eq("user_id", currentUserId);
       }
 
       if (filters.search) {
@@ -93,58 +92,45 @@ export function useLeads(filters: LeadFilters = {}) {
   const groupNamesQuery = useQuery({
     queryKey: ["leads-group-names", activeCompanyId],
     queryFn: async () => {
+      const { data: authData } = await supabase.auth.getUser();
+      const currentUserId = authData?.user?.id;
+
       let query = supabase
         .from("leads")
         .select("source_group_name")
         .not("source_group_name", "is", null);
-      
-      if (activeCompanyId) {
-        query = query.eq("company_id", activeCompanyId);
-      }
-      
-      const { data } = await query.order("source_group_name");
-      const names = [...new Set((data || []).map(d => d.source_group_name).filter(Boolean))];
-      return names as string[];
-    },
-  });
 
-  const tagNamesQuery = useQuery({
-    queryKey: ["leads-tag-names", activeCompanyId],
-    queryFn: async () => {
-      let query = supabase
-        .from("leads")
-        .select("tags")
-        .not("tags", "eq", "{}");
-      
-      if (activeCompanyId) {
-        query = query.eq("company_id", activeCompanyId);
+      if (currentUserId) {
+        query = query.eq("user_id", currentUserId);
       }
-      
+
       const { data } = await query;
-      const allTags = (data || []).flatMap(d => d.tags || []);
-      return [...new Set(allTags)].sort() as string[];
+      if (!data) return [];
+      const names = new Set<string>();
+      data.forEach((row: any) => {
+        if (row.source_group_name) names.add(row.source_group_name);
+      });
+      return Array.from(names);
     },
   });
 
   const statsQuery = useQuery({
     queryKey: ["leads-stats", activeCompanyId],
     queryFn: async () => {
-      const baseQuery = supabase.from("leads").select("*", { count: "exact", head: true });
-      if (activeCompanyId) {
-        baseQuery.eq("company_id", activeCompanyId);
-      } else {
-        baseQuery.is("company_id", null);
+      const { data: authData } = await supabase.auth.getUser();
+      const currentUserId = authData?.user?.id;
+
+      let baseQuery = supabase.from("leads").select("*", { count: "exact", head: true });
+      if (currentUserId) {
+        baseQuery = baseQuery.eq("user_id", currentUserId);
       }
 
       const { count: total } = await baseQuery;
-      const { count: active } = await baseQuery.eq("status", "active");
-      const { count: inCampaign } = await baseQuery.not("active_campaign_id", "is", null);
-      const { count: inactive } = await baseQuery.eq("status", "inactive");
       return {
         total: total || 0,
-        active: active || 0,
-        inCampaign: inCampaign || 0,
-        inactive: inactive || 0,
+        active: total || 0,
+        inCampaign: 0,
+        inactive: 0,
       } as LeadStats;
     },
   });
@@ -160,7 +146,6 @@ export function useLeads(filters: LeadFilters = {}) {
         lid: lead.lid || null,
         email: lead.email || null,
         tags: lead.tags || [],
-        company_id: activeCompanyId,
         source_type: "manual",
       }).select().single();
       if (error) throw error;
@@ -178,17 +163,18 @@ export function useLeads(filters: LeadFilters = {}) {
   });
 
   const updateLead = useMutation({
-    mutationFn: async ({ id, ...updates }: Partial<Lead> & { id: string }) => {
-      const { data, error } = await supabase.from("leads").update(updates).eq("id", id).select().single();
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Lead> }) => {
+      const { data, error } = await supabase.from("leads").update(updates as any).eq("id", id).select().single();
       if (error) throw error;
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-stats"] });
-      toast({ title: "Lead atualizado" });
+      toast({ title: "Lead atualizado com sucesso" });
     },
-    onError: () => toast({ title: "Erro ao atualizar lead", variant: "destructive" }),
+    onError: (err: Error) => {
+      toast({ title: "Erro ao atualizar lead", description: err.message, variant: "destructive" });
+    },
   });
 
   const deleteLead = useMutation({
@@ -199,319 +185,26 @@ export function useLeads(filters: LeadFilters = {}) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
       queryClient.invalidateQueries({ queryKey: ["leads-stats"] });
-      toast({ title: "Lead excluído" });
+      toast({ title: "Lead removido com sucesso" });
     },
-    onError: () => toast({ title: "Erro ao excluir lead", variant: "destructive" }),
-  });
-
-  const bulkDelete = useMutation({
-    mutationFn: async (ids: string[]) => {
-      for (let i = 0; i < ids.length; i += 200) {
-        const batch = ids.slice(i, i + 200);
-        const { error } = await supabase.from("leads").delete().in("id", batch);
-        if (error) throw error;
-      }
+    onError: (err: Error) => {
+      toast({ title: "Erro ao remover lead", description: err.message, variant: "destructive" });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-stats"] });
-      toast({ title: "Leads excluídos" });
-    },
-    onError: () => toast({ title: "Erro ao excluir leads", variant: "destructive" }),
-  });
-
-  const bulkAddTags = useMutation({
-    mutationFn: async ({ ids, tags }: { ids: string[]; tags: string[] }) => {
-      const allLeads: { id: string; tags: string[] }[] = [];
-      for (let i = 0; i < ids.length; i += 200) {
-        const batch = ids.slice(i, i + 200);
-        const { data, error: fetchErr } = await supabase.from("leads").select("id, tags").in("id", batch);
-        if (fetchErr) throw fetchErr;
-        allLeads.push(...(data || []));
-      }
-      for (const lead of allLeads) {
-        const merged = Array.from(new Set([...(lead.tags || []), ...tags]));
-        await supabase.from("leads").update({ tags: merged }).eq("id", lead.id);
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
-      toast({ title: "Tags adicionadas" });
-    },
-    onError: () => toast({ title: "Erro ao adicionar tags", variant: "destructive" }),
-  });
-
-  const bulkRemoveTags = useMutation({
-    mutationFn: async ({ ids, tags }: { ids: string[]; tags: string[] }) => {
-      const allLeads: { id: string; tags: string[] }[] = [];
-      for (let i = 0; i < ids.length; i += 200) {
-        const batch = ids.slice(i, i + 200);
-        const { data, error: fetchErr } = await supabase.from("leads").select("id, tags").in("id", batch);
-        if (fetchErr) throw fetchErr;
-        allLeads.push(...(data || []));
-      }
-      for (const lead of allLeads) {
-        const filtered = (lead.tags || []).filter((t: string) => !tags.includes(t));
-        await supabase.from("leads").update({ tags: filtered }).eq("id", lead.id);
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
-      toast({ title: "Tags removidas" });
-    },
-    onError: () => toast({ title: "Erro ao remover tags", variant: "destructive" }),
-  });
-
-  const bulkAddToCampaign = useMutation({
-    mutationFn: async ({ ids, campaignId, campaignType, skipExisting }: {
-      ids: string[];
-      campaignId: string;
-      campaignType: string;
-      skipExisting: boolean;
-    }) => {
-      let toUpdate = ids;
-      if (skipExisting) {
-        const existingIds = new Set<string>();
-        for (let i = 0; i < ids.length; i += 200) {
-          const batch = ids.slice(i, i + 200);
-          const { data } = await supabase
-            .from("leads").select("id").in("id", batch)
-            .eq("active_campaign_id", campaignId);
-          (data || []).forEach(e => existingIds.add(e.id));
-        }
-        toUpdate = ids.filter(id => !existingIds.has(id));
-      }
-      if (toUpdate.length === 0) return { added: 0, skipped: ids.length };
-      for (let i = 0; i < toUpdate.length; i += 200) {
-        const batch = toUpdate.slice(i, i + 200);
-        const { error } = await supabase
-          .from("leads")
-          .update({ active_campaign_id: campaignId, active_campaign_type: campaignType })
-          .in("id", batch);
-        if (error) throw error;
-      }
-      // Sync to call_leads if campaign type is ligacao
-      if (campaignType === "ligacao") {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const leadsData: { id: string; phone: string; name: string | null; email: string | null }[] = [];
-          for (let i = 0; i < toUpdate.length; i += 200) {
-            const batch = toUpdate.slice(i, i + 200);
-            const { data } = await supabase
-              .from("leads")
-              .select("id, phone, name, email")
-              .in("id", batch);
-            leadsData.push(...(data || []));
-          }
-          const callRows = leadsData.map(l => ({
-            campaign_id: campaignId,
-            user_id: user.id,
-            phone: l.phone,
-            name: l.name,
-            email: l.email,
-            status: "pending",
-          }));
-          await safeBatchUpsert("call_leads", callRows, "phone,campaign_id");
-        }
-      }
-
-      // Sync to dispatch_campaign_contacts if campaign type is despacho
-      if (campaignType === "despacho") {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const dispatchRows = toUpdate.map(leadId => ({
-            campaign_id: campaignId,
-            user_id: user.id,
-            lead_id: leadId,
-            status: "active",
-          }));
-          await safeBatchUpsert("dispatch_campaign_contacts", dispatchRows, "campaign_id,lead_id");
-        }
-      }
-
-      return { added: toUpdate.length, skipped: ids.length - toUpdate.length };
-    },
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["call-leads"] });
-      queryClient.invalidateQueries({ queryKey: ["call_leads"] });
-      queryClient.invalidateQueries({ queryKey: ["dispatch_contacts"] });
-      const msg = result
-        ? `${result.added} leads adicionados${result.skipped > 0 ? `, ${result.skipped} ignorados` : ""}`
-        : "Leads adicionados à campanha";
-      toast({ title: msg });
-    },
-    onError: () => toast({ title: "Erro ao adicionar à campanha", variant: "destructive" }),
-  });
-
-  const importLeads = useMutation({
-    mutationFn: async ({ leads, updateExisting, defaultTags, defaultCampaignId, defaultCampaignType }: {
-      leads: { name?: string; phone: string; email?: string; lid?: string; tags?: string[]; campaignId?: string; campaignType?: string }[];
-      updateExisting: boolean;
-      defaultTags: string[];
-      defaultCampaignId?: string;
-      defaultCampaignType?: string;
-    }) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      let imported = 0;
-      let updated = 0;
-      let skipped = 0;
-
-      for (const lead of leads) {
-        const tags = Array.from(new Set([...(lead.tags || []), ...defaultTags]));
-        const campaignId = lead.campaignId || defaultCampaignId || null;
-        const campaignType = lead.campaignType || defaultCampaignType || null;
-
-        const insertData: Record<string, unknown> = {
-          user_id: user.id,
-          name: lead.name || null,
-          phone: lead.phone,
-          lid: lead.lid || null,
-          email: lead.email || null,
-          tags,
-          source_type: "import_csv",
-        };
-        if (campaignId) {
-          insertData.active_campaign_id = campaignId;
-          insertData.active_campaign_type = campaignType;
-        }
-
-        const { error } = await supabase.from("leads").insert(insertData as any);
-
-        if (error) {
-          if (error.message.includes("duplicate") && updateExisting) {
-            const updateData: Record<string, unknown> = {
-              name: lead.name || undefined,
-              email: lead.email || undefined,
-              tags,
-            };
-            if (campaignId) {
-              updateData.active_campaign_id = campaignId;
-              updateData.active_campaign_type = campaignType;
-            }
-            await supabase.from("leads").update(updateData as any).eq("phone", lead.phone).eq("user_id", user.id);
-            updated++;
-          } else {
-            skipped++;
-          }
-        } else {
-          imported++;
-        }
-      }
-      // Sync imported leads to call_leads for ligacao campaigns
-      const ligacaoLeads = leads.filter(l => {
-        const cType = l.campaignType || defaultCampaignType;
-        const cId = l.campaignId || defaultCampaignId;
-        return cType === "ligacao" && cId;
-      });
-
-      let callLeadsSynced = 0;
-      let callLeadsFailed = 0;
-
-      if (ligacaoLeads.length > 0) {
-        const byCampaign = new Map<string, typeof ligacaoLeads>();
-        for (const l of ligacaoLeads) {
-          const cId = (l.campaignId || defaultCampaignId)!;
-          if (!byCampaign.has(cId)) byCampaign.set(cId, []);
-          byCampaign.get(cId)!.push(l);
-        }
-
-        for (const [campaignId, campaignLeads] of byCampaign) {
-          const rows = campaignLeads.map(l => ({
-            campaign_id: campaignId,
-            user_id: user.id,
-            phone: l.phone,
-            name: l.name || null,
-            email: l.email || null,
-            status: "pending",
-          }));
-          const result = await safeBatchUpsert("call_leads", rows, "phone,campaign_id");
-          callLeadsSynced += result.synced;
-          callLeadsFailed += result.failed;
-        }
-      }
-
-      // Sync imported leads to dispatch_campaign_contacts for despacho campaigns
-      const despachoLeads = leads.filter(l => {
-        const cType = l.campaignType || defaultCampaignType;
-        const cId = l.campaignId || defaultCampaignId;
-        return cType === "despacho" && cId;
-      });
-
-      let dispatchSynced = 0;
-      let dispatchFailed = 0;
-
-      if (despachoLeads.length > 0) {
-        const byCampaignD = new Map<string, typeof despachoLeads>();
-        for (const l of despachoLeads) {
-          const cId = (l.campaignId || defaultCampaignId)!;
-          if (!byCampaignD.has(cId)) byCampaignD.set(cId, []);
-          byCampaignD.get(cId)!.push(l);
-        }
-
-        for (const [dCampaignId, dCampaignLeads] of byCampaignD) {
-          const phones = dCampaignLeads.map(l => l.phone);
-          const leadIds: string[] = [];
-          for (let i = 0; i < phones.length; i += 200) {
-            const batch = phones.slice(i, i + 200);
-            const { data } = await supabase
-              .from("leads").select("id").in("phone", batch).eq("user_id", user.id);
-            leadIds.push(...(data || []).map(d => d.id));
-          }
-
-          const rows = leadIds.map(leadId => ({
-            campaign_id: dCampaignId,
-            user_id: user.id,
-            lead_id: leadId,
-            status: "active",
-          }));
-          const result = await safeBatchUpsert("dispatch_campaign_contacts", rows, "campaign_id,lead_id");
-          dispatchSynced += result.synced;
-          dispatchFailed += result.failed;
-        }
-      }
-
-      return { imported, updated, skipped, callLeadsSynced, callLeadsFailed, dispatchSynced, dispatchFailed };
-    },
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["call-leads"] });
-      queryClient.invalidateQueries({ queryKey: ["call_leads"] });
-      queryClient.invalidateQueries({ queryKey: ["dispatch_contacts"] });
-
-      const syncFailed = (result.callLeadsFailed || 0) + (result.dispatchFailed || 0);
-      const syncOk = (result.callLeadsSynced || 0) + (result.dispatchSynced || 0);
-      let desc = `${result.imported} importados, ${result.updated} atualizados, ${result.skipped} ignorados`;
-      if (syncOk > 0) desc += ` • ${syncOk} sincronizados na campanha`;
-      if (syncFailed > 0) {
-        desc += ` • ${syncFailed} falharam ao sincronizar`;
-        toast({ title: "Importação concluída com avisos", description: desc, variant: "destructive" });
-      } else {
-        toast({ title: "Importação concluída", description: desc });
-      }
-    },
-    onError: () => toast({ title: "Erro na importação", variant: "destructive" }),
   });
 
   return {
     leads: leadsQuery.data?.data || [],
     totalCount: leadsQuery.data?.count || 0,
-    stats: statsQuery.data || { total: 0, active: 0, inCampaign: 0, inactive: 0 },
-    groupNames: groupNamesQuery.data || [],
-    availableTags: tagNamesQuery.data || [],
+    pageCount: Math.ceil((leadsQuery.data?.count || 0) / limit),
     isLoading: leadsQuery.isLoading,
+    isError: leadsQuery.isError,
+    error: leadsQuery.error,
+    stats: statsQuery.data,
+    isLoadingStats: statsQuery.isLoading,
+    groupNames: groupNamesQuery.data || [],
     createLead,
     updateLead,
     deleteLead,
-    bulkDelete,
-    bulkAddTags,
-    bulkRemoveTags,
-    bulkAddToCampaign,
-    importLeads,
-    pageSize: limit,
+    refetch: leadsQuery.refetch,
   };
 }
