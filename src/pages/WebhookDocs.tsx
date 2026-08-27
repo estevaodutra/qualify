@@ -484,7 +484,7 @@ const WebhookDocs = () => {
             </div>
 
             <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100">
-              <strong>Comportamento:</strong> Registra o voto do participante no banco de dados (<code className="font-mono text-slate-700">poll_responses</code>) e <strong>retoma automaticamente a execução do Workflow</strong> no ramo/saída correspondente à alternativa selecionada.
+              <strong>Comportamento:</strong> Registra o voto do participante no banco de dados (<code className="font-mono text-slate-700">poll_responses</code>) e <strong>retoma automaticamente a execução do Workflow</strong> no ramo/saída correspondente à alternativa selecionada. <span className="text-indigo-600 font-semibold">Suporta envio por número de telefone ou por <code className="font-mono font-bold">@lid</code> do WAHA (o sistema busca o telefone automaticamente no banco pelo LID).</span>
             </p>
 
             <CodeBlock
@@ -494,7 +494,7 @@ const WebhookDocs = () => {
   "raw_event": {
     "message_id": "false_120363425932296878@g.us_POLL123456",
     "group_id": "120363425932296878@g.us",
-    "from_phone": "5512982402981",
+    "from_phone": "128475927204076@lid",
     "from_name": "Estevão",
     "selected_option_index": 0,
     "selected_option_text": "Sim, tenho interesse",
@@ -504,7 +504,7 @@ const WebhookDocs = () => {
             />
 
             <div className="text-xs text-slate-500 flex flex-wrap gap-4 pt-1">
-              <span><strong>Campos aceitos:</strong> <code className="font-mono text-slate-700">message_id</code> / <code className="font-mono text-slate-700">poll_message_id</code>, <code className="font-mono text-slate-700">group_id</code>, <code className="font-mono text-slate-700">from_phone</code>, <code className="font-mono text-slate-700">selected_option_index</code>, <code className="font-mono text-slate-700">selected_option_text</code>.</span>
+              <span><strong>Campos aceitos:</strong> <code className="font-mono text-slate-700">message_id</code> / <code className="font-mono text-slate-700">poll_message_id</code>, <code className="font-mono text-slate-700">group_id</code>, <code className="font-mono text-slate-700">from_phone</code> / <code className="font-mono text-slate-700">lid</code> / <code className="font-mono text-slate-700">voter_lid</code> (aceita telefone ou @lid), <code className="font-mono text-slate-700">selected_option_index</code>, <code className="font-mono text-slate-700">selected_option_text</code>.</span>
             </div>
           </div>
         </div>
