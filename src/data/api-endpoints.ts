@@ -1582,7 +1582,7 @@ response = requests.post(
             name: "raw_event",
             type: "object",
             required: true,
-            description: "Objeto com id, timestamp, from_phone, from_name, body e opcional group_id/group_name."
+            description: "Objeto com id, timestamp, from_me (boolean, default false), from_phone, from_name, body e opcional group_id/group_name."
           }
         ],
         examples: {
@@ -1593,6 +1593,7 @@ response = requests.post(
     "raw_event": {
       "id": "false_171296717553783@lid_3EB034E72F18BE445197B5",
       "timestamp": 1786814411,
+      "from_me": false,
       "from_phone": "5512982402981",
       "from_lid": "171296717553783@lid",
       "from_name": "Estevão",
@@ -1608,6 +1609,7 @@ const response = await axios.post(
     raw_event: {
       id: "false_171296717553783@lid_3EB034E72F18BE445197B5",
       timestamp: 1786814411,
+      from_me: false,
       from_phone: "5512982402981",
       from_lid: "171296717553783@lid",
       from_name: "Estevão",

@@ -20,13 +20,14 @@ export interface BaseWebhookPayload<T = Record<string, any>> {
 export interface BaseRawMessageEvent {
   id: string;
   timestamp: number | string;
+  from_me?: boolean;
+  fromMe?: boolean;
   from_phone?: string;
   from_lid?: string;
   from_name?: string;
   group_id?: string;
   group_name?: string;
   reply_to_id?: string;
-  from_me?: boolean;
   to_phone?: string;
 }
 

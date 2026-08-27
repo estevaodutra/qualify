@@ -81,7 +81,7 @@ const WebhookDocs = () => {
 }`}
           />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
             <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
               <h4 className="text-sm font-bold text-slate-800 mb-1 flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-blue-500" />
@@ -98,6 +98,15 @@ const WebhookDocs = () => {
               </h4>
               <p className="text-xs text-slate-600">
                 Identificada pela <strong>presença</strong> de <code className="font-mono text-slate-700">group_id</code> (ex: <code className="font-mono text-slate-700">120363...@g.us</code>) no <code className="font-mono text-slate-700">raw_event</code>.
+              </p>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+              <h4 className="text-sm font-bold text-slate-800 mb-1 flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                Autoria (<code className="font-mono text-xs">from_me</code>)
+              </h4>
+              <p className="text-xs text-slate-600">
+                <code className="font-mono text-slate-700">from_me: false</code> para recebidas do lead (balão à esquerda) e <code className="font-mono text-slate-700">from_me: true</code> para enviadas pelo operador (balão à direita).
               </p>
             </div>
           </div>
@@ -135,7 +144,7 @@ const WebhookDocs = () => {
             </div>
 
             <div className="space-y-4 pt-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Exemplo: Texto Privado</h4>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Exemplo: Texto Recebido do Lead (Inbound)</h4>
               <CodeBlock
                 id="msg-text-private"
                 code={`{
@@ -143,10 +152,28 @@ const WebhookDocs = () => {
   "raw_event": {
     "id": "false_171296717553783@lid_3EB034E72F18BE445197B5",
     "timestamp": 1786814411,
+    "from_me": false,
     "from_phone": "5512982402981",
     "from_lid": "171296717553783@lid",
     "from_name": "Estevão",
     "body": "Conteúdo da mensagem recebida!"
+  }
+}`}
+              />
+
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mt-4">Exemplo: Texto Enviado pelo Operador (Outbound / from_me: true)</h4>
+              <CodeBlock
+                id="msg-text-outbound"
+                code={`{
+  "instance_id": "session_01m00wwc7vw2w21nx0n7dfmtf7",
+  "raw_event": {
+    "id": "true_171296717553783@lid_3EB0AD8BFB17017D5D9080",
+    "timestamp": 1786814420,
+    "from_me": true,
+    "from_phone": "5512982402981",
+    "from_lid": "171296717553783@lid",
+    "from_name": "Estevão",
+    "body": "Olá! Mensagem enviada pelo atendente (aparece à direita no CRM)"
   }
 }`}
               />
@@ -159,6 +186,7 @@ const WebhookDocs = () => {
   "raw_event": {
     "id": "false_120363425932296878@g.us_9A8B7C6D5E4F3G",
     "timestamp": 1786814500,
+    "from_me": false,
     "group_id": "120363425932296878@g.us",
     "group_name": "Equipe de Vendas VIP",
     "from_phone": "5512982402981",
@@ -195,6 +223,7 @@ const WebhookDocs = () => {
   "raw_event": {
     "id": "false_171296717553783@lid_8F9D7C2A3B4E1F",
     "timestamp": 1786814450,
+    "from_me": false,
     "from_phone": "5512982402981",
     "from_lid": "171296717553783@lid",
     "from_name": "Estevão",

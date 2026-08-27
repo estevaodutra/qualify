@@ -146,7 +146,15 @@ export class MessageIngestionService {
       const senderPhone = rawEvent.from_phone || null;
       const senderLid = rawEvent.from_lid || null;
       const senderName = rawEvent.from_name || null;
-      const direction = rawEvent.from_me ? "outbound" : "inbound";
+      const isFromMe = 
+        rawEvent.from_me === true || 
+        rawEvent.fromMe === true || 
+        String(rawEvent.from_me).toLowerCase() === "true" || 
+        String(rawEvent.fromMe).toLowerCase() === "true" ||
+        (payload as any).from_me === true ||
+        (payload as any).fromMe === true ||
+        (payload as any).direction === "outbound";
+      const direction = isFromMe ? "outbound" : "inbound";
 
       const eventTimestamp = rawEvent.timestamp
         ? typeof rawEvent.timestamp === "number"
