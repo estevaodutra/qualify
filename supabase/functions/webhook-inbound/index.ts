@@ -80,8 +80,16 @@ Deno.serve(async (req) => {
       }
     }
 
+    const isPollVoteRoute =
+      url.pathname.includes("/polls/vote") ||
+      url.pathname.includes("/messages/poll-vote") ||
+      url.pathname.includes("/messages/poll_vote") ||
+      url.pathname.includes("/polls/response") ||
+      semanticType === "poll-vote" ||
+      semanticType === "poll_vote";
+
     // Se for rota semântica (ex: /messages/text ou /webhooks/messages/image ou /messages/status)
-    if (semanticType) {
+    if (semanticType && !isPollVoteRoute) {
       const meta = { endpoint: url.pathname, method: req.method, ipAddress, startTime };
       const result = await ingestionService.ingest(semanticType, payload as any, meta);
       return new Response(JSON.stringify(result.body), {
@@ -111,12 +119,7 @@ Deno.serve(async (req) => {
     }
 
     // Roteamento semântico para Resposta / Voto de Enquete (Poll Vote)
-    if (
-      url.pathname.includes("/polls/vote") ||
-      url.pathname.includes("/messages/poll-vote") ||
-      url.pathname.includes("/messages/poll_vote") ||
-      url.pathname.includes("/polls/response")
-    ) {
+    if (isPollVoteRoute) {
       const raw = payload.raw_event || payload;
       const rawFromPhone = String(raw.from_phone || raw.respondent_phone || raw.phone || raw.lid || raw.from_lid || raw.voter_lid || raw.from_id || "");
       let candidateLid: string | null = null;

@@ -108,12 +108,14 @@ Deno.serve(async (req) => {
 
     if (respondentLid) {
       console.log(`[HandlePollResponse] Respondent passed with @lid "${respondentLid}". Querying database for phone number...`);
+      const lidDigits = respondentLid.replace(/\D/g, "");
+      const orClause = `lid.eq.${respondentLid},lid.eq.${lidDigits},lid.eq.${lidDigits}@lid,lid.ilike.%${lidDigits}%`;
 
       // 1. Query leads table by lid
       const { data: leadMatch } = await supabase
         .from("leads")
         .select("phone, name")
-        .eq("lid", respondentLid)
+        .or(orClause)
         .not("phone", "is", null)
         .limit(1)
         .maybeSingle();
@@ -127,7 +129,7 @@ Deno.serve(async (req) => {
         const { data: memberMatch } = await supabase
           .from("group_members")
           .select("phone, name")
-          .eq("lid", respondentLid)
+          .or(orClause)
           .not("phone", "is", null)
           .limit(1)
           .maybeSingle();
