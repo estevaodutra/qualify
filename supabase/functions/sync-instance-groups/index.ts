@@ -84,7 +84,7 @@ function extractGroupObjects(rawJson: any): any[] {
   return Array.from(map.values());
 }
 
-async function upsertGroup(supabase: any, groupData: any): Promise<boolean> {
+async function upsertGroup(supabase: any, groupData: any): Promise<{ success: boolean; error?: string }> {
   const cleanData = {
     ...groupData,
     name: sanitizeText(groupData.name) || "Grupo WhatsApp",
@@ -95,7 +95,7 @@ async function upsertGroup(supabase: any, groupData: any): Promise<boolean> {
     .from("whatsapp_groups" as any)
     .upsert(cleanData, { onConflict: "company_id,group_jid" });
 
-  if (!err1) return true;
+  if (!err1) return { success: true };
 
   const safeData = {
     ...groupData,
@@ -107,7 +107,7 @@ async function upsertGroup(supabase: any, groupData: any): Promise<boolean> {
     .from("whatsapp_groups" as any)
     .upsert(safeData, { onConflict: "company_id,group_jid" });
 
-  if (!err2) return true;
+  if (!err2) return { success: true };
 
   const { data: existing } = await supabase
     .from("whatsapp_groups" as any)
@@ -117,20 +117,20 @@ async function upsertGroup(supabase: any, groupData: any): Promise<boolean> {
     .maybeSingle();
 
   if (existing) {
-    const { error } = await supabase
+    const { error: err3 } = await supabase
       .from("whatsapp_groups" as any)
       .update(safeData)
       .eq("id", existing.id);
-    return !error;
+    return err3 ? { success: false, error: err3.message } : { success: true };
   } else {
-    const { error } = await supabase
+    const { error: err4 } = await supabase
       .from("whatsapp_groups" as any)
       .insert(safeData);
-    return !error;
+    return err4 ? { success: false, error: err4.message } : { success: true };
   }
 }
 
-async function upsertConversation(supabase: any, convData: any): Promise<boolean> {
+async function upsertConversation(supabase: any, convData: any): Promise<{ success: boolean; error?: string }> {
   const cleanData = {
     ...convData,
     contact_name: sanitizeText(convData.contact_name) || convData.contact_phone,
@@ -148,11 +148,12 @@ async function upsertConversation(supabase: any, convData: any): Promise<boolean
       .from("chat_conversations")
       .update({
         instance_id: cleanData.instance_id,
+        user_id: cleanData.user_id,
         last_message_at: cleanData.last_message_at,
         updated_at: cleanData.updated_at,
       })
       .eq("id", existing.id);
-    return !error;
+    return error ? { success: false, error: error.message } : { success: true };
   } else {
     const { error } = await supabase
       .from("chat_conversations")
@@ -161,13 +162,13 @@ async function upsertConversation(supabase: any, convData: any): Promise<boolean
     if (error) {
       cleanData.contact_name = sanitizeTextNoSurrogates(convData.contact_name) || convData.contact_phone;
       const { error: errRetry } = await supabase.from("chat_conversations").insert(cleanData);
-      return !errRetry;
+      return errRetry ? { success: false, error: errRetry.message } : { success: true };
     }
-    return true;
+    return { success: true };
   }
 }
 
-async function upsertGroupCampaign(supabase: any, gcData: any): Promise<boolean> {
+async function upsertGroupCampaign(supabase: any, gcData: any): Promise<{ success: boolean; error?: string }> {
   const cleanData = {
     ...gcData,
     group_name: sanitizeText(gcData.group_name) || "Grupo WhatsApp",
@@ -187,13 +188,14 @@ async function upsertGroupCampaign(supabase: any, gcData: any): Promise<boolean>
       .from("group_campaigns")
       .update({
         instance_id: cleanData.instance_id,
+        user_id: cleanData.user_id,
         group_name: cleanData.group_name,
         name: cleanData.name,
         group_description: cleanData.group_description,
         updated_at: cleanData.updated_at,
       })
       .eq("id", existing.id);
-    return !error;
+    return error ? { success: false, error: error.message } : { success: true };
   } else {
     const { error } = await supabase
       .from("group_campaigns")
@@ -204,9 +206,9 @@ async function upsertGroupCampaign(supabase: any, gcData: any): Promise<boolean>
       cleanData.name = sanitizeTextNoSurrogates(gcData.name) || "Grupo WhatsApp";
       cleanData.group_description = sanitizeTextNoSurrogates(gcData.group_description);
       const { error: errRetry } = await supabase.from("group_campaigns").insert(cleanData);
-      return !errRetry;
+      return errRetry ? { success: false, error: errRetry.message } : { success: true };
     }
-    return true;
+    return { success: true };
   }
 }
 
@@ -228,7 +230,7 @@ Deno.serve(async (req) => {
       if (user) userId = user.id;
     }
 
-    const { instanceId, companyId: reqCompanyId, fetchOnly, groups: inputGroups, selectedJids } = await req.json();
+    const { instanceId, companyId: reqCompanyId, userId: reqUserId, fetchOnly, groups: inputGroups, selectedJids } = await req.json();
 
     if (!instanceId) {
       return new Response(
@@ -255,7 +257,7 @@ Deno.serve(async (req) => {
     let companyId: string | null = reqCompanyId || (instance as any).company_id || null;
 
     if (!companyId) {
-      const targetUserId = userId || instance.user_id;
+      const targetUserId = reqUserId || userId || instance.user_id;
       const { data: company } = await supabase
         .from("companies")
         .select("id")
@@ -283,6 +285,21 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Resolve targetUserId guaranteed non-null
+    let targetUserId: string | null = reqUserId || userId || instance.user_id || null;
+
+    if (!targetUserId && companyId) {
+      const { data: comp } = await supabase.from("companies").select("owner_id").eq("id", companyId).maybeSingle();
+      if (comp?.owner_id) targetUserId = comp.owner_id;
+    }
+
+    if (!targetUserId) {
+      const { data: cm } = await supabase.from("company_members").select("user_id").eq("company_id", companyId).limit(1).maybeSingle();
+      if (cm?.user_id) targetUserId = cm.user_id;
+    }
+
+    console.log(`[sync-instance-groups] Target User ID: ${targetUserId}, Company ID: ${companyId}`);
 
     let targetGroups: any[] = [];
 
@@ -380,7 +397,7 @@ Deno.serve(async (req) => {
     }
 
     let syncedCount = 0;
-    const targetUserId = userId || instance.user_id;
+    const errorsList: string[] = [];
 
     // Process and upsert each selected group
     for (const group of targetGroups) {
@@ -393,8 +410,8 @@ Deno.serve(async (req) => {
       const participants = Array.isArray(group.participants) ? group.participants : [];
       const participantsCount = group.participantsCount || group.size || (participants.length > 0 ? participants.length : 0);
 
-      // Upsert into whatsapp_groups
-      const gOk = await upsertGroup(supabase, {
+      // 1. Upsert into whatsapp_groups
+      const gRes = await upsertGroup(supabase, {
         company_id: companyId,
         user_id: targetUserId,
         instance_id: instance.id,
@@ -405,9 +422,10 @@ Deno.serve(async (req) => {
         participants_count: participantsCount,
         updated_at: new Date().toISOString(),
       });
+      if (!gRes.success && gRes.error) errorsList.push(`whatsapp_groups: ${gRes.error}`);
 
-      // Upsert into chat_conversations
-      const cOk = await upsertConversation(supabase, {
+      // 2. Upsert into chat_conversations
+      const cRes = await upsertConversation(supabase, {
         company_id: companyId,
         user_id: targetUserId,
         instance_id: instance.id,
@@ -417,9 +435,10 @@ Deno.serve(async (req) => {
         last_message_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       });
+      if (!cRes.success && cRes.error) errorsList.push(`chat_conversations: ${cRes.error}`);
 
-      // Upsert into group_campaigns
-      await upsertGroupCampaign(supabase, {
+      // 3. Upsert into group_campaigns
+      const gcRes = await upsertGroupCampaign(supabase, {
         company_id: companyId,
         user_id: targetUserId,
         instance_id: instance.id,
@@ -430,8 +449,9 @@ Deno.serve(async (req) => {
         status: "active",
         updated_at: new Date().toISOString(),
       });
+      if (!gcRes.success && gcRes.error) errorsList.push(`group_campaigns: ${gcRes.error}`);
 
-      // Sync members into group_members
+      // 4. Sync members into group_members
       if (participants.length > 0) {
         for (const p of participants) {
           const rawPhone = p.phoneNumber || p.phone || p.id || "";
@@ -453,7 +473,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      if (gOk || cOk) {
+      if (gRes.success || cRes.success || gcRes.success) {
         syncedCount++;
       }
     }
@@ -464,6 +484,7 @@ Deno.serve(async (req) => {
         instanceId: instance.id,
         syncedCount,
         totalTargetGroups: targetGroups.length,
+        errors: errorsList,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
