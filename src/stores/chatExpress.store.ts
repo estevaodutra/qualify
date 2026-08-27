@@ -42,6 +42,7 @@ export const useChatExpressStore = create<ChatExpressState>()(
       sessions: [],
 
       openLeadSession: (lead) => {
+        const safeName = (lead.leadName || lead.phone || "Lead").trim() || "Lead";
         set((state) => {
           const existing = state.sessions.find((s) => s.leadId === lead.leadId);
           if (existing) {
@@ -58,9 +59,7 @@ export const useChatExpressStore = create<ChatExpressState>()(
             sessions: [
               ...state.sessions,
               {
-                leadId: lead.leadId,
                 conversationId: null,
-                leadName: lead.leadName,
                 phone: lead.phone || null,
                 avatarUrl: lead.avatarUrl || null,
                 instanceId: null,
@@ -70,6 +69,8 @@ export const useChatExpressStore = create<ChatExpressState>()(
                 unreadCount: 0,
                 draft: "",
                 ...lead, // Allow overriding properties
+                leadId: lead.leadId,
+                leadName: safeName,
               },
             ],
           };

@@ -60,13 +60,13 @@ export function ChatExpressSessionView({ session }: ChatExpressSessionViewProps)
       <div className="h-16 border-b border-border/40 bg-card/50 flex items-center justify-between px-4 shrink-0">
         <div className="flex items-center gap-3 overflow-hidden">
           <Avatar className="w-9 h-9 rounded-xl border border-border/50">
-            <AvatarImage src={session.avatarUrl || ""} alt={session.leadName} />
+            <AvatarImage src={session.avatarUrl || ""} alt={session.leadName || session.phone || "Lead"} />
             <AvatarFallback className="rounded-xl bg-primary/10 text-primary font-bold text-xs">
-              {session.leadName.substring(0, 2).toUpperCase()}
+              {(session.leadName || session.phone || "L").substring(0, 2).toUpperCase()}
             </AvatarFallback>
           </Avatar>
           <div className="flex flex-col min-w-0">
-            <span className="font-semibold text-sm text-foreground truncate">{session.leadName}</span>
+            <span className="font-semibold text-sm text-foreground truncate">{session.leadName || session.phone || "Sem Nome"}</span>
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-muted-foreground truncate">{session.phone || "Sem telefone"}</span>
               <div className="w-1 h-1 bg-border rounded-full" />

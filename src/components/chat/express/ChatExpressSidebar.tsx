@@ -18,7 +18,8 @@ export function ChatExpressSidebar() {
 
       {sessions.map((session) => {
         const isActive = session.leadId === activeLeadId;
-        const fallback = session.leadName.substring(0, 2).toUpperCase();
+        const displayName = session.leadName || session.phone || "Lead";
+        const fallback = displayName.substring(0, 2).toUpperCase();
 
         return (
           <Tooltip key={session.leadId} delayDuration={300}>
@@ -37,7 +38,7 @@ export function ChatExpressSidebar() {
                   isActive ? "ring-2 ring-primary shadow-md scale-105" : "hover:scale-105 hover:bg-muted/50 p-0.5 opacity-80 hover:opacity-100"
                 )}>
                   <Avatar className="w-full h-full rounded-2xl">
-                    <AvatarImage src={session.avatarUrl || ""} alt={session.leadName} className="object-cover" />
+                    <AvatarImage src={session.avatarUrl || ""} alt={displayName} className="object-cover" />
                     <AvatarFallback className="rounded-2xl bg-secondary text-secondary-foreground font-semibold text-sm">
                       {fallback}
                     </AvatarFallback>
