@@ -97,43 +97,7 @@ export class MessageIngestionService {
         rawEvent.revoked_message_id ||
         `gen_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
-      // 3. Deduplicação / Idempotência
-      // Status, reações, edições e revogações nunca devem ser bloqueados pela deduplicação de mensagem comum
-      const isStatusOrMutation =
-        type === "reaction" ||
-        type === "edited" ||
-        type === "revoked" ||
-        type === "status" ||
-        type === "delivered" ||
-        type === "read" ||
-        type === "sent" ||
-        type === "failed" ||
-        type === "ack";
-
-      if (!isStatusOrMutation) {
-        const { data: existingEvent } = await this.supabase
-          .from("webhook_events")
-          .select("id")
-          .eq("external_instance_id", externalInstanceId)
-          .eq("message_id", messageId)
-          .maybeSingle();
-
-        if (existingEvent) {
-          console.log(`[MessageIngestionService] Duplicate message detected (${messageId}). Skipping duplicate ingestion.`);
-          statusCode = 200;
-          resultBody = {
-            success: true,
-            duplicated: true,
-            event_id: existingEvent.id,
-            type,
-            message: "Event already processed (deduplicated)",
-          };
-          await this.logApiRequest(meta, payload, resultBody, statusCode, instanceUserId);
-          return { statusCode, body: resultBody };
-        }
-      }
-
-      // 4. Inferência de Contexto de Grupo e Remetente
+      // 4. Inferência de Contexto de Grupo, Remetente e Autoria
       const isGroup = !!rawEvent.group_id;
       const chatJid = rawEvent.group_id
         ? rawEvent.group_id
@@ -155,6 +119,56 @@ export class MessageIngestionService {
         (payload as any).fromMe === true ||
         (payload as any).direction === "outbound";
       const direction = isFromMe ? "outbound" : "inbound";
+
+      // 3. Deduplicação / Idempotência
+      // Status, reações, edições e revogações nunca devem ser bloqueados pela deduplicação de mensagem comum
+      const isStatusOrMutation =
+        type === "reaction" ||
+        type === "edited" ||
+        type === "revoked" ||
+        type === "status" ||
+        type === "delivered" ||
+        type === "read" ||
+        type === "sent" ||
+        type === "failed" ||
+        type === "ack";
+
+      if (!isStatusOrMutation) {
+        const { data: existingEvent } = await this.supabase
+          .from("webhook_events")
+          .select("id, direction")
+          .eq("external_instance_id", externalInstanceId)
+          .eq("message_id", messageId)
+          .maybeSingle();
+
+        if (existingEvent) {
+          if (isFromMe && existingEvent.direction !== "outbound") {
+            await this.supabase
+              .from("webhook_events")
+              .update({ direction: "outbound" })
+              .eq("id", existingEvent.id);
+
+            await this.supabase
+              .from("chat_messages")
+              .update({ sender_type: "operator", status: "sent" })
+              .eq("message_id", messageId);
+
+            console.log(`[MessageIngestionService] Updated existing message (${messageId}) to outbound/operator.`);
+          }
+
+          console.log(`[MessageIngestionService] Duplicate message detected (${messageId}). Skipping duplicate ingestion.`);
+          statusCode = 200;
+          resultBody = {
+            success: true,
+            duplicated: true,
+            event_id: existingEvent.id,
+            type,
+            message: "Event already processed (deduplicated)",
+          };
+          await this.logApiRequest(meta, payload, resultBody, statusCode, instanceUserId);
+          return { statusCode, body: resultBody };
+        }
+      }
 
       const eventTimestamp = rawEvent.timestamp
         ? typeof rawEvent.timestamp === "number"
