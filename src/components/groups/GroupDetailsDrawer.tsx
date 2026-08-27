@@ -148,25 +148,48 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
     }
   };
 
-  // Action 2: Save all group participants into CRM leads table with company_id, @lid and phone number
+  // Action 2: Save all group participants into CRM leads table with @lid and phone number
   const handleSaveLeadsToCRM = async () => {
-    const participantsList = detailsData?.allParticipants || detailsData?.participants || [];
-
-    if (participantsList.length === 0) {
-      toast.error("Nenhum participante encontrado neste grupo para salvar no CRM. Clique em 'Buscar Membros' primeiro.");
-      return;
-    }
-
     setIsSavingLeads(true);
     let savedCount = 0;
 
     try {
+      // 1. Re-fetch fresh group info from Edge Function to guarantee fresh @lid values from WhatsApp
+      let freshParticipants: any[] = [];
+      if (group.instanceId) {
+        try {
+          const { data: syncRes } = await supabase.functions.invoke("sync-instance-groups", {
+            body: {
+              instanceId: group.instanceId,
+              companyId: activeCompanyId,
+              userId: currentUserId,
+              singleGroupJid: group.groupJid,
+              selectedJids: [group.groupJid],
+            },
+          });
+          const returnedGroups = syncRes?.groups || [];
+          freshParticipants = returnedGroups[0]?.participants || [];
+        } catch (_e) {
+          // Fallback
+        }
+      }
+
+      const participantsList = freshParticipants.length > 0
+        ? freshParticipants
+        : (detailsData?.allParticipants || detailsData?.participants || []);
+
+      if (participantsList.length === 0) {
+        toast.error("Nenhum participante encontrado neste grupo para salvar no CRM. Clique em 'Buscar Membros' primeiro.");
+        return;
+      }
+
       const { data: authData } = await supabase.auth.getUser();
       const targetUserId = authData?.user?.id || currentUserId || activeCompanyId;
 
       for (const p of participantsList) {
-        const cleanPhone = String(p.phone || "").replace(/\D/g, "");
-        const lidVal = p.lid || (p.id && p.id.includes("@lid") ? p.id : null);
+        const rawPhone = p.phoneNumber || p.phone || "";
+        const cleanPhone = String(rawPhone).split("@")[0].replace(/\D/g, "");
+        const lidVal = p.id?.includes("@lid") ? p.id : (p.lid?.includes("@lid") ? p.lid : null);
 
         if (!cleanPhone && !lidVal) continue;
 
@@ -179,7 +202,7 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
           const { data: exByPhone } = await supabase
             .from("leads")
             .select("id")
-            .or(`company_id.eq.${activeCompanyId},user_id.eq.${targetUserId}`)
+            .eq("user_id", targetUserId)
             .eq("phone", cleanPhone)
             .maybeSingle();
           if (exByPhone?.id) existingLeadId = exByPhone.id;
@@ -189,7 +212,7 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
           const { data: exByLid } = await supabase
             .from("leads")
             .select("id")
-            .or(`company_id.eq.${activeCompanyId},user_id.eq.${targetUserId}`)
+            .eq("user_id", targetUserId)
             .eq("lid", lidVal)
             .maybeSingle();
           if (exByLid?.id) existingLeadId = exByLid.id;
@@ -221,7 +244,7 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
       queryClient.invalidateQueries({ queryKey: ["leads"] });
       queryClient.invalidateQueries({ queryKey: ["leads-stats"] });
       queryClient.invalidateQueries({ queryKey: ["leads-group-names"] });
-      toast.success(`${savedCount} participantes salvos como Leads no CRM!`);
+      toast.success(`${savedCount} participantes e LIDs salvos com sucesso como Leads no CRM!`);
     } catch (err: any) {
       toast.error(`Erro ao salvar leads no CRM: ${err.message || String(err)}`);
     } finally {
