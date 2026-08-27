@@ -520,15 +520,16 @@ Deno.serve(async (req) => {
               console.warn("[sync-instance-groups] group_members save error:", e.message);
             }
 
-            // B. ALWAYS save/update into leads table with phone and @lid!
+            // B. ALWAYS save/update into leads table with phone and @lid matching existing leads by phone or lid!
             try {
               let existingLeadId: string | null = null;
+
               if (cleanPhone) {
                 const { data: exByPhone } = await supabase
                   .from("leads")
                   .select("id")
-                  .eq("user_id", targetUserId)
                   .eq("phone", cleanPhone)
+                  .limit(1)
                   .maybeSingle();
                 if (exByPhone?.id) existingLeadId = exByPhone.id;
               }
@@ -537,8 +538,8 @@ Deno.serve(async (req) => {
                 const { data: exByLid } = await supabase
                   .from("leads")
                   .select("id")
-                  .eq("user_id", targetUserId)
                   .eq("lid", lidVal)
+                  .limit(1)
                   .maybeSingle();
                 if (exByLid?.id) existingLeadId = exByLid.id;
               }

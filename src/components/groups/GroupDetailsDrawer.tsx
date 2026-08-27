@@ -159,15 +159,15 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
 
         const leadName = p.name && !p.name.includes("@g.us") ? p.name : (cleanPhone ? `Participante ${cleanPhone}` : `LID ${lidVal}`);
 
-        // Check if existing lead by phone or lid
+        // Check if existing lead by phone or lid across entire leads table
         let existingLeadId: string | null = null;
 
         if (cleanPhone) {
           const { data: exByPhone } = await supabase
             .from("leads")
             .select("id")
-            .eq("user_id", targetUserId)
             .eq("phone", cleanPhone)
+            .limit(1)
             .maybeSingle();
           if (exByPhone?.id) existingLeadId = exByPhone.id;
         }
@@ -176,8 +176,8 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
           const { data: exByLid } = await supabase
             .from("leads")
             .select("id")
-            .eq("user_id", targetUserId)
             .eq("lid", lidVal)
+            .limit(1)
             .maybeSingle();
           if (exByLid?.id) existingLeadId = exByLid.id;
         }
