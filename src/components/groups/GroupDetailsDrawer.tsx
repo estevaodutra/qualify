@@ -1,17 +1,19 @@
 import React, { useState } from "react";
 import { WhatsAppGroupItem } from "@/hooks/useGroups";
 import { useGroupDetails } from "@/hooks/useGroupDetails";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { UsersRound, Shield, Radio, Copy, MessageSquare, Search, ChevronLeft, ChevronRight, Calendar, Phone, CheckCircle2 } from "lucide-react";
+import { UsersRound, Shield, Copy, MessageSquare, Search, ChevronLeft, ChevronRight, Phone, RefreshCw, UserPlus, Sparkles, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { formatDistanceToNow } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { supabase } from "@/integrations/supabase/client";
+import { useCompany } from "@/contexts/CompanyContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface GroupDetailsDrawerProps {
   group: WhatsAppGroupItem | null;
@@ -21,11 +23,18 @@ interface GroupDetailsDrawerProps {
 
 export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, open, onOpenChange }) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { activeCompanyId } = useCompany();
+  const { user } = useAuth();
+  const currentUserId = user?.id;
+
   const [searchParticipant, setSearchParticipant] = useState("");
   const [participantPage, setParticipantPage] = useState(1);
+  const [isFetchingInfo, setIsFetchingInfo] = useState(false);
+  const [isSavingLeads, setIsSavingLeads] = useState(false);
 
-  const { data: detailsData, isLoading: isLoadingParticipants } = useGroupDetails(
-    group?.id || null,
+  const { data: detailsData, isLoading: isLoadingParticipants, refetch: refetchDetails } = useGroupDetails(
+    group?.groupJid || group?.id || null,
     searchParticipant,
     participantPage,
     20
@@ -41,6 +50,101 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
   const handleOpenChat = () => {
     onOpenChange(false);
     navigate(`/chat?search=${encodeURIComponent(group.name)}`);
+  };
+
+  // Action 1: Execute group.info on WhatsApp provider to retrieve all group members & metadata
+  const handleFetchGroupInfo = async () => {
+    if (!group.instanceId) {
+      toast.error("Instância do WhatsApp não identificada neste grupo.");
+      return;
+    }
+
+    setIsFetchingInfo(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("sync-instance-groups", {
+        body: {
+          instanceId: group.instanceId,
+          companyId: activeCompanyId,
+          userId: currentUserId,
+          selectedJids: [group.groupJid],
+        },
+      });
+
+      if (error) throw error;
+
+      queryClient.invalidateQueries({ queryKey: ["group_details"] });
+      queryClient.invalidateQueries({ queryKey: ["groups_list"] });
+      await refetchDetails();
+
+      toast.success("Informações e membros do grupo atualizados do WhatsApp com sucesso!");
+    } catch (err: any) {
+      toast.error(`Erro ao buscar dados do grupo no WhatsApp: ${err.message || String(err)}`);
+    } finally {
+      setIsFetchingInfo(false);
+    }
+  };
+
+  // Action 2: Save all group participants into CRM leads table
+  const handleSaveLeadsToCRM = async () => {
+    const participantsList = detailsData?.allParticipants || detailsData?.participants || [];
+
+    if (participantsList.length === 0) {
+      toast.error("Nenhum participante encontrado neste grupo para salvar no CRM. Clique em 'Buscar Membros' primeiro.");
+      return;
+    }
+
+    setIsSavingLeads(true);
+    let savedCount = 0;
+
+    try {
+      const targetUserId = currentUserId || activeCompanyId;
+
+      for (const p of participantsList) {
+        const cleanPhone = String(p.phone).replace(/\D/g, "");
+        if (!cleanPhone) continue;
+
+        const leadName = p.name && !p.name.includes("@g.us") ? p.name : `Participante ${cleanPhone}`;
+
+        // Safe select -> update or insert into leads
+        const { data: existingLead } = await supabase
+          .from("leads")
+          .select("id")
+          .eq("company_id", activeCompanyId)
+          .eq("phone", cleanPhone)
+          .maybeSingle();
+
+        if (existingLead?.id) {
+          await supabase
+            .from("leads")
+            .update({
+              name: leadName,
+              user_id: targetUserId,
+              notes: `Importado do grupo: ${group.name} (${group.groupJid})`,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", existingLead.id);
+        } else {
+          await supabase.from("leads").insert({
+            company_id: activeCompanyId,
+            user_id: targetUserId,
+            name: leadName,
+            phone: cleanPhone,
+            notes: `Importado do grupo: ${group.name} (${group.groupJid})`,
+            status: "novo",
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+        }
+        savedCount++;
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      toast.success(`${savedCount} participantes salvos com sucesso como Leads no CRM!`);
+    } catch (err: any) {
+      toast.error(`Erro ao salvar leads no CRM: ${err.message || String(err)}`);
+    } finally {
+      setIsSavingLeads(false);
+    }
   };
 
   return (
@@ -86,11 +190,37 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
             </div>
           )}
 
+          {/* Action Toolbar: Fetch Group Info & Save Leads to CRM */}
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isFetchingInfo}
+              onClick={handleFetchGroupInfo}
+              className="text-xs font-bold gap-2 bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 border-indigo-200/60"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isFetchingInfo ? "animate-spin" : ""}`} />
+              {isFetchingInfo ? "Buscando..." : "Buscar Membros no WhatsApp (group.info)"}
+            </Button>
+
+            <Button
+              size="sm"
+              disabled={isSavingLeads}
+              onClick={handleSaveLeadsToCRM}
+              className="text-xs font-bold gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+            >
+              {isSavingLeads ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
+              {isSavingLeads ? "Salvando..." : "Salvar Participantes no CRM"}
+            </Button>
+          </div>
+
           {/* Stats Bar */}
           <div className="grid grid-cols-3 gap-2 pt-1 text-center">
             <div className="p-2.5 rounded-xl bg-background border border-border/60">
               <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Participantes</span>
-              <span className="text-base font-extrabold text-foreground">{group.participantsCount}</span>
+              <span className="text-base font-extrabold text-foreground">
+                {detailsData?.totalCount || group.participantsCount}
+              </span>
             </div>
             <div className="p-2.5 rounded-xl bg-background border border-border/60">
               <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Administradores</span>
@@ -177,9 +307,21 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
                 ))}
               </div>
             ) : (
-              <div className="text-center py-12 space-y-2">
+              <div className="text-center py-12 space-y-3">
                 <UsersRound className="h-8 w-8 text-muted-foreground/40 mx-auto" />
-                <p className="text-xs text-muted-foreground">Nenhum participante encontrado com esse termo.</p>
+                <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+                  Nenhum participante listado localmente. Clique no botão acima para buscar os membros do WhatsApp.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={isFetchingInfo}
+                  onClick={handleFetchGroupInfo}
+                  className="text-xs font-bold gap-2 text-indigo-600 border-indigo-200"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${isFetchingInfo ? "animate-spin" : ""}`} />
+                  Buscar Membros do WhatsApp
+                </Button>
               </div>
             )}
           </ScrollArea>

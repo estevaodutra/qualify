@@ -11,37 +11,52 @@ export interface GroupParticipant {
   joinedAt: string;
 }
 
-export function useGroupDetails(groupId: string | null, searchParticipant = "", page = 1, pageSize = 20) {
+function normalizeJidKey(jid: string | null | undefined): string {
+  if (!jid) return "";
+  const str = String(jid).trim().toLowerCase();
+  if (str.includes("@g.us")) return str;
+  const digits = str.replace(/\D/g, "");
+  return digits ? `${digits}@g.us` : str;
+}
+
+export function useGroupDetails(groupIdOrJid: string | null, searchParticipant = "", page = 1, pageSize = 20) {
   return useQuery({
-    queryKey: ["group_details", groupId, searchParticipant, page, pageSize],
+    queryKey: ["group_details", groupIdOrJid, searchParticipant, page, pageSize],
     queryFn: async () => {
-      if (!groupId) return { participants: [], totalCount: 0, totalPages: 1 };
+      if (!groupIdOrJid) return { participants: [], totalCount: 0, totalPages: 1 };
 
-      // Query members by group_campaign_id or group_jid
-      let query = supabase
+      const jidKey = normalizeJidKey(groupIdOrJid);
+
+      // Query members matching group_jid or group_campaign_id
+      let { data } = await supabase
         .from("group_members")
-        .select("*", { count: "exact" })
-        .eq("group_campaign_id", groupId);
+        .select("*")
+        .or(`group_jid.eq.${groupIdOrJid},group_campaign_id.eq.${groupIdOrJid},group_jid.eq.${jidKey}`);
 
-      const { data, count, error } = await query;
       let rawMembers = data || [];
 
       if (rawMembers.length === 0) {
-        // Fallback: search by matching groupId as group_jid or id
-        const { data: altMembers, count: altCount } = await supabase
+        // Fallback: search all group_members limit 200
+        const { data: altMembers } = await supabase
           .from("group_members")
-          .select("*", { count: "exact" })
-          .limit(100);
-        if (altMembers) rawMembers = altMembers;
+          .select("*")
+          .limit(200);
+        if (altMembers) {
+          rawMembers = altMembers.filter((m: any) =>
+            m.group_jid === groupIdOrJid ||
+            m.group_campaign_id === groupIdOrJid ||
+            normalizeJidKey(m.group_jid) === jidKey
+          );
+        }
       }
 
       let participants: GroupParticipant[] = rawMembers.map((m: any) => ({
-        id: m.id,
+        id: m.id || m.phone,
         phone: m.phone,
         lid: m.lid || null,
         name: m.name || null,
         profilePhoto: m.profile_photo || null,
-        role: m.is_admin ? "admin" : "member",
+        role: m.is_admin || m.role === "admin" ? "admin" : "member",
         joinedAt: m.joined_at || m.created_at || new Date().toISOString(),
       }));
 
@@ -62,11 +77,12 @@ export function useGroupDetails(groupId: string | null, searchParticipant = "", 
 
       return {
         participants: paginated,
+        allParticipants: participants,
         totalCount,
         totalPages,
       };
     },
-    enabled: Boolean(groupId),
-    staleTime: 1000 * 30,
+    enabled: Boolean(groupIdOrJid),
+    staleTime: 1000 * 5,
   });
 }
