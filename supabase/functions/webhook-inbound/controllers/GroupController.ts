@@ -501,4 +501,3 @@ export async function processGroupEvent(
       console.error("[GroupController] Error processing execution list:", execListError);
     }
   }
-}
