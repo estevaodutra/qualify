@@ -199,20 +199,27 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const authHeader = req.headers.get("Authorization");
     let userId: string | null = null;
-    if (authHeader) {
-      const token = authHeader.replace("Bearer ", "");
-      const { data: { user } } = await supabase.auth.getUser(token);
-      if (user) userId = user.id;
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      try {
+        const token = authHeader.replace("Bearer ", "");
+        if (token && token.length > 30) {
+          const { data } = await supabase.auth.getUser(token);
+          if (data?.user) userId = data.user.id;
+        }
+      } catch (_e) {
+        // Safe catch for anon key or invalid JWT format
+      }
     }
 
-    const { instanceId, companyId: reqCompanyId, userId: reqUserId, singleGroupJid, fetchOnly, groups: inputGroups, selectedJids } = await req.json();
+    const requestJson = await req.json().catch(() => ({}));
+    const { instanceId, companyId: reqCompanyId, userId: reqUserId, singleGroupJid, fetchOnly, groups: inputGroups, selectedJids } = requestJson;
 
     if (!instanceId) {
       return new Response(
         JSON.stringify({ success: false, error: "instanceId is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -226,7 +233,7 @@ Deno.serve(async (req) => {
     if (instErr || !instance) {
       return new Response(
         JSON.stringify({ success: false, error: "Instance not found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -235,31 +242,33 @@ Deno.serve(async (req) => {
 
     if (!companyId) {
       const targetUserId = reqUserId || userId || instance.user_id;
-      const { data: company } = await supabase
-        .from("companies")
-        .select("id")
-        .eq("owner_id", targetUserId)
-        .limit(1)
-        .maybeSingle();
-
-      if (company?.id) {
-        companyId = company.id;
-      } else {
-        const { data: member } = await supabase
-          .from("company_members")
-          .select("company_id")
-          .eq("user_id", targetUserId)
-          .eq("is_active", true)
+      if (targetUserId) {
+        const { data: company } = await supabase
+          .from("companies")
+          .select("id")
+          .eq("owner_id", targetUserId)
           .limit(1)
           .maybeSingle();
-        if (member?.company_id) companyId = member.company_id;
+
+        if (company?.id) {
+          companyId = company.id;
+        } else {
+          const { data: member } = await supabase
+            .from("company_members")
+            .select("company_id")
+            .eq("user_id", targetUserId)
+            .eq("is_active", true)
+            .limit(1)
+            .maybeSingle();
+          if (member?.company_id) companyId = member.company_id;
+        }
       }
     }
 
     if (!companyId) {
       return new Response(
         JSON.stringify({ success: false, error: "Company not found for user" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -309,7 +318,7 @@ Deno.serve(async (req) => {
           }
         }
       } catch (e: any) {
-        console.warn(`[sync-instance-groups] Single group-info error:`, e.message);
+        console.warn(`[sync-instance-groups] Single group-info warning:`, e.message);
       }
     }
 
@@ -343,7 +352,7 @@ Deno.serve(async (req) => {
           rawChats = extractGroupObjects(json);
         }
       } catch (e: any) {
-        console.warn(`[sync-instance-groups] Provider API error:`, e.message);
+        console.warn(`[sync-instance-groups] Provider API warning:`, e.message);
       }
 
       if (rawChats.length === 0) {
@@ -363,7 +372,7 @@ Deno.serve(async (req) => {
             rawChats = extractGroupObjects(jsonF);
           }
         } catch (e: any) {
-          console.warn(`[sync-instance-groups] Fallback GET /chats error:`, e.message);
+          console.warn(`[sync-instance-groups] Fallback GET /chats warning:`, e.message);
         }
       }
 
@@ -474,10 +483,10 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err: any) {
-    console.error("[sync-instance-groups] Internal Error:", err);
+    console.error("[sync-instance-groups] Caught Error:", err);
     return new Response(
-      JSON.stringify({ success: false, error: err.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ success: false, error: err?.message || String(err) }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
