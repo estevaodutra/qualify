@@ -134,7 +134,7 @@ async function saveChatConversation(supabase: any, convData: any): Promise<boole
   }
 }
 
-async function saveGroupCampaign(supabase: any, gcData: any): Promise<boolean> {
+async function saveGroupCampaign(supabase: any, gcData: any): Promise<{ success: boolean; id?: string }> {
   try {
     const cleanData = {
       company_id: gcData.company_id,
@@ -167,25 +167,26 @@ async function saveGroupCampaign(supabase: any, gcData: any): Promise<boolean> {
           updated_at: cleanData.updated_at,
         })
         .eq("id", existing.id);
-      if (error) console.warn("[saveGroupCampaign] update error:", error.message);
-      return !error;
+      return { success: !error, id: existing.id };
     } else {
-      const { error } = await supabase
+      const { data: inserted, error } = await supabase
         .from("group_campaigns")
-        .insert(cleanData);
+        .insert(cleanData)
+        .select("id")
+        .maybeSingle();
+
       if (error) {
         cleanData.group_name = sanitizeTextNoSurrogates(gcData.group_name) || "Grupo WhatsApp";
         cleanData.name = sanitizeTextNoSurrogates(gcData.name) || "Grupo WhatsApp";
         cleanData.group_description = sanitizeTextNoSurrogates(gcData.group_description);
-        const { error: errRetry } = await supabase.from("group_campaigns").insert(cleanData);
-        if (errRetry) console.warn("[saveGroupCampaign] insert retry error:", errRetry.message);
-        return !errRetry;
+        const { data: insertedRetry, error: errRetry } = await supabase.from("group_campaigns").insert(cleanData).select("id").maybeSingle();
+        return { success: !errRetry, id: insertedRetry?.id };
       }
-      return true;
+      return { success: true, id: inserted?.id };
     }
   } catch (e: any) {
     console.error("[saveGroupCampaign] exception:", e.message);
-    return false;
+    return { success: false };
   }
 }
 
@@ -209,7 +210,7 @@ Deno.serve(async (req) => {
           if (data?.user) userId = data.user.id;
         }
       } catch (_e) {
-        // Safe catch for anon key
+        // Safe catch
       }
     }
 
@@ -426,8 +427,8 @@ Deno.serve(async (req) => {
       const description = group.description || group.desc || null;
       const participants = Array.isArray(group.participants) ? group.participants : [];
 
-      // 1. Save into group_campaigns
-      const gcOk = await saveGroupCampaign(supabase, {
+      // 1. Save into group_campaigns and obtain group_campaign_id
+      const gcRes = await saveGroupCampaign(supabase, {
         company_id: companyId,
         user_id: targetUserId,
         instance_id: instance.id,
@@ -436,6 +437,8 @@ Deno.serve(async (req) => {
         name: finalName,
         group_description: description,
       });
+
+      const campaignId = gcRes.id;
 
       // 2. Save into chat_conversations
       const cOk = await saveChatConversation(supabase, {
@@ -446,8 +449,8 @@ Deno.serve(async (req) => {
         contact_phone: groupJid,
       });
 
-      // 3. Save members into group_members using safe select -> update/insert
-      if (participants.length > 0) {
+      // 3. Save members into group_members using group_campaign_id and user_id schema
+      if (campaignId && participants.length > 0) {
         for (const p of participants) {
           const rawPhone = p.phoneNumber || p.phone || p.id || "";
           const cleanPhone = String(rawPhone).split("@")[0].replace(/\D/g, "");
@@ -459,8 +462,7 @@ Deno.serve(async (req) => {
               const { data: existingM } = await supabase
                 .from("group_members")
                 .select("id")
-                .eq("user_id", targetUserId)
-                .eq("group_jid", groupJid)
+                .eq("group_campaign_id", campaignId)
                 .eq("phone", cleanPhone)
                 .maybeSingle();
 
@@ -468,7 +470,7 @@ Deno.serve(async (req) => {
                 await supabase
                   .from("group_members")
                   .update({
-                    role: isAdmin ? "admin" : "member",
+                    user_id: targetUserId,
                     is_admin: isAdmin,
                     name: cleanName,
                   })
@@ -477,10 +479,9 @@ Deno.serve(async (req) => {
                 await supabase
                   .from("group_members")
                   .insert({
+                    group_campaign_id: campaignId,
                     user_id: targetUserId,
-                    group_jid: groupJid,
                     phone: cleanPhone,
-                    role: isAdmin ? "admin" : "member",
                     is_admin: isAdmin,
                     name: cleanName,
                   });
@@ -492,7 +493,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      if (gcOk || cOk) {
+      if (gcRes.success || cOk) {
         syncedCount++;
       }
     }

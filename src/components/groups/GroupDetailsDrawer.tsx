@@ -73,13 +73,24 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
 
       if (error) throw error;
 
-      // Process and save any participants returned directly in payload
+      // Extract participants from response
       const returnedGroups = data?.groups || [];
       const singleGroup = returnedGroups[0];
       const participants = singleGroup?.participants || [];
 
-      if (participants.length > 0) {
+      // Resolve group_campaign_id
+      const { data: gcRow } = await supabase
+        .from("group_campaigns")
+        .select("id")
+        .eq("company_id", activeCompanyId)
+        .eq("group_jid", group.groupJid)
+        .maybeSingle();
+
+      const campaignId = gcRow?.id || group.id;
+
+      if (campaignId && participants.length > 0) {
         const targetUserId = currentUserId || activeCompanyId;
+
         for (const p of participants) {
           const rawPhone = p.phoneNumber || p.phone || p.id || "";
           const cleanPhone = String(rawPhone).split("@")[0].replace(/\D/g, "");
@@ -89,8 +100,7 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
               const { data: existingM } = await supabase
                 .from("group_members")
                 .select("id")
-                .eq("user_id", targetUserId)
-                .eq("group_jid", group.groupJid)
+                .eq("group_campaign_id", campaignId)
                 .eq("phone", cleanPhone)
                 .maybeSingle();
 
@@ -98,7 +108,7 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
                 await supabase
                   .from("group_members")
                   .update({
-                    role: isAdmin ? "admin" : "member",
+                    user_id: targetUserId,
                     is_admin: isAdmin,
                     name: p.name || null,
                   })
@@ -107,16 +117,15 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
                 await supabase
                   .from("group_members")
                   .insert({
+                    group_campaign_id: campaignId,
                     user_id: targetUserId,
-                    group_jid: group.groupJid,
                     phone: cleanPhone,
-                    role: isAdmin ? "admin" : "member",
                     is_admin: isAdmin,
                     name: p.name || null,
                   });
               }
             } catch (e) {
-              console.warn("Client side member save warning:", e);
+              console.warn("Client member save warning:", e);
             }
           }
         }
