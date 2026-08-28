@@ -497,51 +497,36 @@ const evaluateExtensibleCondition = async (
       if (leadData?.id) {
         isFound = true;
       } else if (phoneToSearch && (identifierField === "phone" || !identifierField)) {
-        const { data: dbLead } = await supabase
-          .from("leads")
-          .select("id, name, phone")
-          .eq("company_id", companyId)
-          .eq("phone", phoneToSearch)
-          .maybeSingle();
-
-        console.log(`[ExecuteMessage DEBUG lead_exists] exact query dbLead=${JSON.stringify(dbLead)}`);
-
-        if (dbLead) {
-          isFound = true;
+        let query = supabase.from("leads").select("*").limit(1);
+        const suffix = phoneToSearch.slice(-8);
+        if (suffix.length >= 8) {
+          query = query.or(`phone.eq.${phoneToSearch},phone.ilike.%${suffix}`);
         } else {
-          // Suffix check for 8+ trailing digits
-          const suffix = phoneToSearch.slice(-8);
-          if (suffix.length >= 8) {
-            const { data: flexLeads } = await supabase
-              .from("leads")
-              .select("id")
-              .eq("company_id", companyId)
-              .ilike("phone", `%${suffix}`);
-            console.log(`[ExecuteMessage DEBUG lead_exists] suffix query count=${flexLeads?.length}`);
-            isFound = flexLeads && flexLeads.length > 0;
-          }
+          query = query.eq("phone", phoneToSearch);
+        }
+        if (companyId) {
+          query = query.or(`company_id.eq.${companyId},company_id.is.null`);
+        }
+        const { data: dbLeads } = await query;
+        if (dbLeads && dbLeads.length > 0) {
+          isFound = true;
+          if (!leadData) leadData = dbLeads[0];
         }
       } else if (identifierField === "email") {
         const targetEmail = (params.email as string) || leadData?.email;
         if (targetEmail) {
-          const { data: dbLead } = await supabase
-            .from("leads")
-            .select("id")
-            .eq("company_id", companyId)
-            .eq("email", targetEmail)
-            .maybeSingle();
-          isFound = !!dbLead;
+          let query = supabase.from("leads").select("*").eq("email", targetEmail).limit(1);
+          if (companyId) query = query.or(`company_id.eq.${companyId},company_id.is.null`);
+          const { data: dbLeads } = await query;
+          isFound = !!(dbLeads && dbLeads.length > 0);
         }
       } else if (identifierField === "cpf") {
         const targetCpf = cleanCpf((params.cpf as string) || leadData?.cpf || leadData?.document);
         if (targetCpf) {
-          const { data: dbLead } = await supabase
-            .from("leads")
-            .select("id")
-            .eq("company_id", companyId)
-            .eq("document", targetCpf)
-            .maybeSingle();
-          isFound = !!dbLead;
+          let query = supabase.from("leads").select("*").eq("document", targetCpf).limit(1);
+          if (companyId) query = query.or(`company_id.eq.${companyId},company_id.is.null`);
+          const { data: dbLeads } = await query;
+          isFound = !!(dbLeads && dbLeads.length > 0);
         }
       }
 
@@ -799,6 +784,11 @@ const getActionForNodeType = (nodeType: string): string => {
   const actionMap: Record<string, string> = {
     message: "message.send_text",
     text: "message.send_text",
+    user_input: "message.send_text",
+    question: "message.send_text",
+    pergunta: "message.send_text",
+    interactive: "message.send_text",
+    quiz: "message.send_text",
     image: "message.send_image",
     video: "message.send_video",
     ptv: "message.send_ptv",
@@ -2474,7 +2464,7 @@ Deno.serve(async (req) => {
           if (ctxLeadId) {
             const { data } = await supabase
               .from("leads")
-              .select("id, name, phone, email, tags, custom_fields, pipeline_stage_id, crm_owner_id, assigned_user_id, attendant_id, cpf")
+              .select("*")
               .eq("id", ctxLeadId)
               .maybeSingle();
 
@@ -2484,29 +2474,41 @@ Deno.serve(async (req) => {
           if (!leadData && ctxPhone) {
             const cleanCtxPhone = (ctxPhone as string).replace(/\D/g, "");
             if (cleanCtxPhone) {
-              const { data } = await supabase
-                .from("leads")
-                .select("id, name, phone, email, tags, custom_fields, pipeline_stage_id, crm_owner_id, assigned_user_id, attendant_id, cpf")
-                .eq("company_id", companyId)
-                .eq("phone", cleanCtxPhone)
-                .maybeSingle();
-
-              if (data) leadData = data;
+              let query = supabase.from("leads").select("*").limit(1);
+              const suffix = cleanCtxPhone.slice(-8);
+              if (suffix.length >= 8) {
+                query = query.or(`phone.eq.${cleanCtxPhone},phone.ilike.%${suffix}`);
+              } else {
+                query = query.eq("phone", cleanCtxPhone);
+              }
+              if (companyId) {
+                query = query.or(`company_id.eq.${companyId},company_id.is.null`);
+              }
+              const { data: dbLeads } = await query;
+              if (dbLeads && dbLeads.length > 0) {
+                leadData = dbLeads[0];
+              }
             }
           }
 
           if (!leadData && activeDestinations.length > 0) {
             const dest = activeDestinations[0];
             const phoneClean = dest.group_jid.split("@")[0].replace(/\D/g, "");
-            const { data } = await supabase
-              .from("leads")
-              .select("id, name, phone, email, tags, custom_fields, pipeline_stage_id, crm_owner_id, assigned_user_id, attendant_id, cpf")
-              .eq("company_id", companyId)
-              .eq("phone", phoneClean)
-              .maybeSingle();
-
-            if (data) {
-              leadData = data;
+            if (phoneClean) {
+              let query = supabase.from("leads").select("*").limit(1);
+              const suffix = phoneClean.slice(-8);
+              if (suffix.length >= 8) {
+                query = query.or(`phone.eq.${phoneClean},phone.ilike.%${suffix}`);
+              } else {
+                query = query.eq("phone", phoneClean);
+              }
+              if (companyId) {
+                query = query.or(`company_id.eq.${companyId},company_id.is.null`);
+              }
+              const { data: dbLeads } = await query;
+              if (dbLeads && dbLeads.length > 0) {
+                leadData = dbLeads[0];
+              }
             }
           }
 
@@ -2518,6 +2520,7 @@ Deno.serve(async (req) => {
 
           let matched = false;
           let branch = "fallback";
+          let matchedRuleId: string | null = null;
 
           if (rules.length > 0) {
             for (const rule of rules) {
@@ -2530,7 +2533,8 @@ Deno.serve(async (req) => {
               );
               if (ruleResult.matched) {
                 matched = true;
-                branch = ruleResult.branch || rule.id || "yes";
+                matchedRuleId = rule.id || null;
+                branch = rule.id || ruleResult.branch || "yes";
                 break;
               }
             }
@@ -2546,7 +2550,7 @@ Deno.serve(async (req) => {
             branch = singleResult.branch;
           }
 
-          console.log(`[ExecuteMessage] Extensible condition node ${node.id} evaluated as: ${matched} (${branch} branch)`);
+          console.log(`[ExecuteMessage] Extensible condition node ${node.id} evaluated as: ${matched} (${branch} branch, matchedRuleId=${matchedRuleId})`);
 
           await logNodeExecution(supabase, {
             executionId: workflowExecutionId,
@@ -2564,10 +2568,21 @@ Deno.serve(async (req) => {
             },
           });
 
-          const matchConn = connections.find(c =>
-            c.source_node_id === node.id &&
-            (c.condition_path === branch || (branch === "fallback" && (c.condition_path === "no" || c.condition_path === "not_found" || c.condition_path === "not_matched" || c.condition_path === "fallback")))
+          let matchConn = connections.find(c =>
+            c.source_node_id === node.id && (
+              c.condition_path === branch ||
+              (matchedRuleId && c.condition_path === matchedRuleId) ||
+              (matched && (c.condition_path === "yes" || c.condition_path === "true" || c.condition_path === "found" || c.condition_path === "matched")) ||
+              (!matched && (c.condition_path === "no" || c.condition_path === "false" || c.condition_path === "not_found" || c.condition_path === "not_matched" || c.condition_path === "fallback"))
+            )
           );
+
+          if (!matchConn && !matched) {
+            matchConn = connections.find(c =>
+              c.source_node_id === node.id && (c.condition_path === "fallback" || c.condition_path === "no" || c.condition_path === "not_found" || c.condition_path === null)
+            );
+          }
+
           currentNodeId = matchConn ? matchConn.target_node_id : null;
           nodesProcessed++;
           continue;
@@ -3415,7 +3430,7 @@ Deno.serve(async (req) => {
                   console.error(`[ExecuteMessage] ❌ Failed to send sub-message ${subNodeType} to ${dest.group_name}`);
                 } else {
                   console.log(`[ExecuteMessage] ✅ Sub-message ${subNodeType} sent to ${dest.group_name}`);
-                  const msgText = (subMsg.content || subMsg.text || subMsg.message || formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.caption || "") as string;
+                  const msgText = (subMsg.content || subMsg.text || subMsg.message || subMsg.question || formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.question || formattedConfig.caption || "") as string;
                   const destPhone = (dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || triggerContext?.contactPhone || "") as string;
                   const effectiveCompanyId = triggerContext?.companyId || typedCampaign?.company_id || "dcb34e9a-1510-4137-aecd-cec0c6d548c4";
                   if (msgText && destPhone) {

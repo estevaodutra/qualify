@@ -84,8 +84,12 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
 
   switch (action) {
     case "message.send_text":
+    case "message.send_user_input":
+    case "message.send_question":
+    case "message.send_interactive":
+    case "message.send_pergunta":
       endpoint = "/send-text";
-      body.message = config.text || config.content || config.message || "";
+      body.message = config.text || config.content || config.message || config.question || config.questionText || "";
       break;
 
     case "message.send_image":
@@ -331,7 +335,10 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
     default:
       console.warn(`[whatsapp-client] Unknown action mapping: ${action}. Trying to fallback to send-text.`);
       endpoint = "/send-text";
-      body.message = config.text || config.content || JSON.stringify(config);
+      body.message = config.text || config.content || config.message || config.question || config.questionText || config.title || config.caption || "";
+      if (!body.message && typeof config === "string") {
+        body.message = config;
+      }
   }
 
   const url = `https://api.z-api.io/instances/${externalId}/token/${externalToken}${endpoint}`;
