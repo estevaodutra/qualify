@@ -98,18 +98,6 @@ export class MessageIngestionService {
         `gen_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
       // 4. Inferência de Contexto de Grupo, Remetente e Autoria
-      const isGroup = !!rawEvent.group_id;
-      const chatJid = rawEvent.group_id
-        ? rawEvent.group_id
-        : rawEvent.from_phone
-        ? `${rawEvent.from_phone}@s.whatsapp.net`
-        : rawEvent.from_lid || "unknown";
-
-      const chatType = isGroup ? "group" : "private";
-      const chatName = rawEvent.group_name || rawEvent.from_name || rawEvent.from_phone || chatJid;
-      const senderPhone = rawEvent.from_phone || null;
-      const senderLid = rawEvent.from_lid || null;
-      const senderName = rawEvent.from_name || null;
       const isFromMe = 
         rawEvent.from_me === true || 
         rawEvent.fromMe === true || 
@@ -119,6 +107,24 @@ export class MessageIngestionService {
         (payload as any).fromMe === true ||
         (payload as any).direction === "outbound";
       const direction = isFromMe ? "outbound" : "inbound";
+
+      const isGroup = !!rawEvent.group_id;
+      const chatJid = rawEvent.group_id
+        ? rawEvent.group_id
+        : rawEvent.from_phone
+        ? `${rawEvent.from_phone}@s.whatsapp.net`
+        : rawEvent.from_lid || "unknown";
+
+      const chatType = isGroup ? "group" : "private";
+      const senderPhone = rawEvent.from_phone || null;
+      const senderLid = rawEvent.from_lid || null;
+
+      // Quando a mensagem é enviada pelo operador (from_me: true), o from_name do webhook
+      // representa o nome do operador e NÃO o do contato/lead. Portanto, o nome do contato deve ser o telefone.
+      const chatName = isGroup 
+        ? (rawEvent.group_name || chatJid) 
+        : (isFromMe ? (senderPhone || chatJid) : (rawEvent.from_name || senderPhone || chatJid));
+      const senderName = isFromMe ? senderPhone : (rawEvent.from_name || null);
 
       // 3. Deduplicação / Idempotência
       // Status, reações, edições e revogações nunca devem ser bloqueados pela deduplicação de mensagem comum
