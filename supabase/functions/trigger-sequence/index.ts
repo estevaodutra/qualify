@@ -440,7 +440,13 @@ Deno.serve(async (req) => {
       const executePayload = {
         campaignId: typedCampaign.id || typedSequence.id,
         sequenceId: typedSequence.id,
-        triggerContext,
+        startFromNodeId: payload.startFromNodeId || (payload.triggerContext as any)?.resumeNodeId || undefined,
+        resumedExecution: payload.resumedExecution || !!payload.startFromNodeId || !!(payload.triggerContext as any)?.resumedFromUserInput || undefined,
+        executionId: payload.executionId || undefined,
+        triggerContext: {
+          ...triggerContext,
+          ...(payload.triggerContext || {}),
+        },
       };
 
       console.log(`[TriggerSequence] Calling execute-message with:`, JSON.stringify(executePayload).substring(0, 500));

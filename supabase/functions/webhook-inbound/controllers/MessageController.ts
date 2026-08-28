@@ -56,6 +56,120 @@ export async function processMessageEvent(
     }
   }
 
+  // 1.5. ==========================================
+  // RESUME WORKFLOWS WAITING FOR USER INPUT (ENTRADA DO USUÁRIO)
+  // ==========================================
+  if (isInbound && !context.isFromMe) {
+    try {
+      const senderPhone = (context.senderPhone || (context.chatType !== "group" ? context.chatJid : "") || "").replace(/\D/g, "");
+      if (senderPhone) {
+        const suffix = senderPhone.slice(-8);
+        let query = supabase
+          .from("workflow_user_inputs")
+          .select("*")
+          .eq("status", "waiting")
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        if (suffix.length >= 8) {
+          query = query.or(`phone.eq.${senderPhone},phone.ilike.%${suffix}`);
+        } else {
+          query = query.eq("phone", senderPhone);
+        }
+
+        const { data: pendingInputs } = await query;
+        const pendingInput = pendingInputs?.[0];
+
+        if (pendingInput) {
+          console.log(`[MessageController] 🎯 Found waiting user_input session ${pendingInput.id} for phone ${senderPhone}`);
+          const rawMsgObj = rawEvent.body || rawEvent.payload || rawEvent;
+          const responseText = (typeof rawMsgObj === "string" ? rawMsgObj : rawMsgObj?.text?.message || rawMsgObj?.text || rawMsgObj?.message?.conversation || rawMsgObj?.message?.extendedTextMessage?.text || rawMsgObj?.caption || rawMsgObj?.body || "") as string;
+
+          // Mark session as answered
+          await supabase
+            .from("workflow_user_inputs")
+            .update({
+              status: "answered",
+              response_text: responseText,
+              answered_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", pendingInput.id);
+
+          // Update lead custom_field if target_field is configured
+          if (pendingInput.target_field) {
+            let leadIdToUpdate = pendingInput.lead_id;
+            if (!leadIdToUpdate) {
+              const { data: leadFound } = await supabase
+                .from("leads")
+                .select("id")
+                .or(`phone.eq.${senderPhone},phone.ilike.%${suffix}`)
+                .limit(1)
+                .maybeSingle();
+              if (leadFound) leadIdToUpdate = leadFound.id;
+            }
+
+            if (leadIdToUpdate) {
+              const { data: l } = await supabase.from("leads").select("custom_fields").eq("id", leadIdToUpdate).maybeSingle();
+              const existingCustom = (l?.custom_fields as Record<string, any>) || {};
+              await supabase.from("leads").update({
+                custom_fields: { ...existingCustom, [pendingInput.target_field]: responseText },
+                updated_at: new Date().toISOString()
+              }).eq("id", leadIdToUpdate);
+              console.log(`[MessageController] Updated custom_fields.${pendingInput.target_field} = "${responseText}" on lead ${leadIdToUpdate}`);
+            }
+          }
+
+          // Find the connection from the waiting node to the next step
+          const { data: connections } = await supabase
+            .from("sequence_connections")
+            .select("target_node_id")
+            .eq("sequence_id", pendingInput.sequence_id)
+            .eq("source_node_id", pendingInput.node_id);
+
+          const nextNodeId = connections?.[0]?.target_node_id || null;
+
+          if (nextNodeId) {
+            console.log(`[MessageController] Resuming sequence ${pendingInput.sequence_id} from node ${nextNodeId} for phone ${senderPhone}`);
+            const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+            const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+
+            fetch(`${supabaseUrl}/functions/v1/trigger-sequence`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${supabaseServiceKey}`,
+              },
+              body: JSON.stringify({
+                sequenceId: pendingInput.sequence_id,
+                companyId: pendingInput.company_id,
+                userId: pendingInput.user_id,
+                leadId: pendingInput.lead_id,
+                phone: senderPhone,
+                startFromNodeId: nextNodeId,
+                resumedExecution: true,
+                executionId: pendingInput.execution_id,
+                triggerContext: {
+                  resumedFromUserInput: true,
+                  resumeNodeId: nextNodeId,
+                  userResponse: responseText,
+                  userInputField: pendingInput.target_field,
+                  respondentPhone: senderPhone,
+                  respondentName: context.senderName || senderPhone,
+                  leadId: pendingInput.lead_id,
+                  companyId: pendingInput.company_id,
+                  instanceId: pendingInput.instance_id || instance?.id,
+                }
+              })
+            }).catch(resumeErr => console.error("[MessageController] Error triggering resume sequence:", resumeErr));
+          }
+        }
+      }
+    } catch (userInputErr) {
+      console.error("[MessageController] Error checking waiting user_input:", userInputErr);
+    }
+  }
+
   // 2. ==========================================
   // AUTO-TRIGGER CONTEXT CAMPAIGNS (KEYWORDS & FIRST MESSAGE)
   // ==========================================

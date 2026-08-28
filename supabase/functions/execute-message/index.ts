@@ -3314,6 +3314,8 @@ Deno.serve(async (req) => {
           
           let subFailed = false;
           let hasSentPollInSubMessages = false;
+          let hasSentUserInputInSubMessages = false;
+          let userInputSubMsgConfig: any = null;
           
           for (const subMsg of subMessages) {
             const subNodeType = subMsg.type || "message";
@@ -3471,6 +3473,11 @@ Deno.serve(async (req) => {
                       hasSentPollInSubMessages = true;
                     }
                   }
+
+                  if (subNodeType === "user_input" || subNodeType === "question" || subNodeType === "pergunta") {
+                    hasSentUserInputInSubMessages = true;
+                    userInputSubMsgConfig = subMsg;
+                  }
                 }
               } catch (err: any) {
                 subFailed = true;
@@ -3504,6 +3511,85 @@ Deno.serve(async (req) => {
             nodesFailed++;
             console.log(`[ExecuteMessage] ❌ Content node ${node.id} sub-message failed, aborting sequence continuation.`);
             break;
+          }
+
+          // If a user_input message was sent in this content node and execution wasn't resumed from user input, pause to wait for reply
+          if (hasSentUserInputInSubMessages && !triggerContext?.resumedFromUserInput) {
+            console.log(`[ExecuteMessage] ⏸️ User Input message sent in content node ${node.id}. Pausing workflow ${workflowExecutionId} to wait for reply...`);
+
+            const nextConn = connections.find(c => c.source_node_id === node.id);
+            const nextNodeId = nextConn ? nextConn.target_node_id : null;
+
+            for (const dest of activeDestinations) {
+              const rawDestPhone = triggerContext?.respondentPhone || (dest.group_jid ? dest.group_jid.split("@")[0] : "");
+              const destPhoneClean = rawDestPhone ? rawDestPhone.replace(/\D/g, "") : "";
+              const targetField = (userInputSubMsgConfig?.targetField || (node.config as any)?.targetField || "") as string;
+              const timeoutMs = (userInputSubMsgConfig?.timeoutMs || (node.config as any)?.timeoutMs || 3600000) as number;
+
+              if (destPhoneClean) {
+                await supabase.from("workflow_user_inputs").insert({
+                  company_id: typedCampaign.company_id || triggerContext?.companyId || null,
+                  user_id: userId,
+                  execution_id: workflowExecutionId,
+                  sequence_id: effectiveSequenceId,
+                  node_id: node.id,
+                  lead_id: triggerContext?.leadId || null,
+                  instance_id: activeInstanceId,
+                  phone: destPhoneClean,
+                  group_jid: dest.group_jid,
+                  target_field: targetField || null,
+                  timeout_ms: timeoutMs,
+                  status: "waiting",
+                  expires_at: new Date(Date.now() + timeoutMs).toISOString(),
+                });
+              }
+            }
+
+            await supabase
+              .from("workflow_executions")
+              .update({
+                status: "waiting",
+                updated_at: new Date().toISOString(),
+                trigger_payload: {
+                  ...(triggerContext || {}),
+                  waitingNodeId: node.id,
+                  resumeNodeId: nextNodeId,
+                  waitingType: "user_input"
+                }
+              })
+              .eq("id", workflowExecutionId);
+
+            await supabase
+              .from("sequence_executions")
+              .upsert({
+                user_id: userId,
+                campaign_id: effectiveCampaignId,
+                sequence_id: effectiveSequenceId,
+                message_id: typedMessage?.id || null,
+                current_node_id: nextNodeId,
+                trigger_context: {
+                  ...(triggerContext || {}),
+                  waitingNodeId: node.id,
+                  resumeNodeId: nextNodeId,
+                  waitingType: "user_input"
+                },
+                nodes_data: sortedNodes,
+                destinations: effectiveDests,
+                status: "paused",
+                resume_at: null,
+                nodes_processed: nodesProcessed + 1,
+                nodes_failed: nodesFailed,
+              }, { onConflict: "user_id,sequence_id" });
+
+            return new Response(
+              JSON.stringify({
+                success: true,
+                status: "waiting_for_user_input",
+                executionId: workflowExecutionId,
+                message: "Execution paused waiting for user response."
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
           }
 
           // If a poll message was sent in this content node and execution wasn't resumed from a vote, pause to wait for response
@@ -4274,6 +4360,82 @@ Deno.serve(async (req) => {
                     { headers: { ...corsHeaders, "Content-Type": "application/json" } }
                   );
                 }
+              }
+
+              if ((node.node_type === "user_input" || node.node_type === "question" || node.node_type === "pergunta") && !triggerContext?.resumedFromUserInput) {
+                console.log(`[ExecuteMessage] ⏸️ Standalone user_input message sent in node ${node.id}. Pausing workflow ${workflowExecutionId}...`);
+
+                const nextConn = connections.find(c => c.source_node_id === node.id);
+                const nextNodeId = nextConn ? nextConn.target_node_id : null;
+
+                const rawDestPhone = triggerContext?.respondentPhone || (dest.group_jid ? dest.group_jid.split("@")[0] : "");
+                const destPhoneClean = rawDestPhone ? rawDestPhone.replace(/\D/g, "") : "";
+                const targetField = ((node.config as any)?.targetField || "") as string;
+                const timeoutMs = ((node.config as any)?.timeoutMs || 3600000) as number;
+
+                if (destPhoneClean) {
+                  await supabase.from("workflow_user_inputs").insert({
+                    company_id: typedCampaign.company_id || triggerContext?.companyId || null,
+                    user_id: userId,
+                    execution_id: workflowExecutionId,
+                    sequence_id: effectiveSequenceId,
+                    node_id: node.id,
+                    lead_id: triggerContext?.leadId || null,
+                    instance_id: activeInstanceId,
+                    phone: destPhoneClean,
+                    group_jid: dest.group_jid,
+                    target_field: targetField || null,
+                    timeout_ms: timeoutMs,
+                    status: "waiting",
+                    expires_at: new Date(Date.now() + timeoutMs).toISOString(),
+                  });
+                }
+
+                await supabase
+                  .from("workflow_executions")
+                  .update({
+                    status: "waiting",
+                    updated_at: new Date().toISOString(),
+                    trigger_payload: {
+                      ...(triggerContext || {}),
+                      waitingNodeId: node.id,
+                      resumeNodeId: nextNodeId,
+                      waitingType: "user_input"
+                    }
+                  })
+                  .eq("id", workflowExecutionId);
+
+                await supabase
+                  .from("sequence_executions")
+                  .upsert({
+                    user_id: userId,
+                    campaign_id: effectiveCampaignId,
+                    sequence_id: effectiveSequenceId,
+                    message_id: typedMessage?.id || null,
+                    current_node_id: nextNodeId,
+                    trigger_context: {
+                      ...(triggerContext || {}),
+                      waitingNodeId: node.id,
+                      resumeNodeId: nextNodeId,
+                      waitingType: "user_input"
+                    },
+                    nodes_data: sortedNodes,
+                    destinations: effectiveDests,
+                    status: "paused",
+                    resume_at: null,
+                    nodes_processed: nodesProcessed + 1,
+                    nodes_failed: nodesFailed,
+                  }, { onConflict: "user_id,sequence_id" });
+
+                return new Response(
+                  JSON.stringify({
+                    success: true,
+                    status: "waiting_for_user_input",
+                    executionId: workflowExecutionId,
+                    message: "Execution paused waiting for user response."
+                  }),
+                  { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                );
               }
 
               // Wait for delivery to preserve ordering before next steps
