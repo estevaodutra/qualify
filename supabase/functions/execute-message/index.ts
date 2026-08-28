@@ -7,6 +7,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const cleanPhone = (phone?: string) => (phone ? String(phone).replace(/\D/g, "") : "");
+const cleanCpf = (cpf?: string) => (cpf ? String(cpf).replace(/\D/g, "") : "");
+
 const syncSentMessageToChat = async (
   supabase: any,
   params: {
@@ -1925,20 +1928,31 @@ Deno.serve(async (req) => {
               const resolvedSource = resolveVariables(params.source as string, triggerContext, leadData) || (triggerContext?.groupJid ? `Grupo: ${triggerContext.groupJid}` : "Workflow Action");
               const resolvedCompanyName = resolveVariables(params.companyName as string, triggerContext, leadData) || null;
               const tags = Array.isArray(params.tags) ? params.tags : [];
+              const targetUserId = typedCampaign?.user_id || triggerContext?.userId || null;
 
               if (resolvedPhone) {
-                const { data: existing } = await supabase
+                let existingLeadQuery = supabase
                   .from("leads")
-                  .select("id")
-                  .eq("company_id", companyId)
-                  .eq("phone", resolvedPhone)
-                  .maybeSingle();
+                  .select("id, name, company_id, tags")
+                  .order("created_at", { ascending: false })
+                  .limit(1);
+
+                const suffix = resolvedPhone.slice(-8);
+                if (suffix.length >= 8) {
+                  existingLeadQuery = existingLeadQuery.or(`phone.eq.${resolvedPhone},phone.ilike.%${suffix}`);
+                } else {
+                  existingLeadQuery = existingLeadQuery.eq("phone", resolvedPhone);
+                }
+
+                const { data: existingLeads } = await existingLeadQuery;
+                const existing = existingLeads?.[0];
 
                 if (!existing) {
-                  const { data: created } = await supabase
+                  const { data: created, error: createError } = await supabase
                     .from("leads")
                     .insert({
                       company_id: companyId,
+                      user_id: targetUserId,
                       name: resolvedName,
                       phone: resolvedPhone,
                       email: resolvedEmail,
@@ -1948,14 +1962,28 @@ Deno.serve(async (req) => {
                       tags,
                     })
                     .select("*")
-                    .single();
+                    .maybeSingle();
 
                   if (created) {
                     affectedLeadIds.push(created.id);
                     console.log(`[ExecuteMessage] 🆕 Lead ${created.id} created via Action Node for phone ${resolvedPhone}`);
+                  } else if (createError) {
+                    console.error(`[ExecuteMessage] Error creating lead for phone ${resolvedPhone}:`, createError);
                   }
                 } else {
                   affectedLeadIds.push(existing.id);
+                  const updates: Record<string, any> = {};
+                  if (!existing.company_id && companyId) updates.company_id = companyId;
+                  if ((!existing.name || existing.name === resolvedPhone) && resolvedName && resolvedName !== resolvedPhone) {
+                    updates.name = resolvedName;
+                  }
+                  if (tags.length > 0) {
+                    const currentTags = existing.tags || [];
+                    updates.tags = Array.from(new Set([...currentTags, ...tags]));
+                  }
+                  if (Object.keys(updates).length > 0) {
+                    await supabase.from("leads").update(updates).eq("id", existing.id);
+                  }
                   console.log(`[ExecuteMessage] Lead ${existing.id} already exists for phone ${resolvedPhone}`);
                 }
               }
