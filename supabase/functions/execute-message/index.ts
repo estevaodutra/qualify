@@ -28,29 +28,55 @@ const syncSentMessageToChat = async (
 
   try {
     let convId: string | null = null;
+    let targetLeadId: string | null = params.leadId || null;
+    const suffix = cleanPhone.slice(-8);
 
-    if (params.leadId) {
-      const { data } = await supabase
-        .from("chat_conversations")
-        .select("id")
-        .eq("company_id", params.companyId)
-        .eq("lead_id", params.leadId)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (data) convId = data.id;
+    // Se leadId não foi fornecido, busca lead existente no banco pelo telefone ou sufixo
+    if (!targetLeadId) {
+      let leadQ = supabase.from("leads").select("id").limit(1);
+      if (suffix.length >= 8) {
+        leadQ = leadQ.or(`phone.eq.${cleanPhone},phone.ilike.%${suffix}`);
+      } else {
+        leadQ = leadQ.eq("phone", cleanPhone);
+      }
+      if (params.companyId) {
+        leadQ = leadQ.or(`company_id.eq.${params.companyId},company_id.is.null`);
+      }
+      const { data: foundLeads } = await leadQ;
+      if (foundLeads?.[0]?.id) {
+        targetLeadId = foundLeads[0].id;
+      }
     }
 
-    if (!convId) {
-      const { data } = await supabase
-        .from("chat_conversations")
-        .select("id")
-        .eq("company_id", params.companyId)
-        .eq("contact_phone", cleanPhone)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (data) convId = data.id;
+    // Busca conversa existente por lead_id OU por telefone (ou sufixo de 8 dígitos)
+    let convQ = supabase
+      .from("chat_conversations")
+      .select("id, lead_id, instance_id, contact_name")
+      .eq("company_id", params.companyId)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (targetLeadId && suffix.length >= 8) {
+      convQ = convQ.or(`lead_id.eq.${targetLeadId},contact_phone.eq.${cleanPhone},contact_phone.ilike.%${suffix}`);
+    } else if (targetLeadId) {
+      convQ = convQ.or(`lead_id.eq.${targetLeadId},contact_phone.eq.${cleanPhone}`);
+    } else if (suffix.length >= 8) {
+      convQ = convQ.or(`contact_phone.eq.${cleanPhone},contact_phone.ilike.%${suffix}`);
+    } else {
+      convQ = convQ.eq("contact_phone", cleanPhone);
+    }
+
+    const { data: existingConvs } = await convQ;
+    const existingConv = existingConvs?.[0];
+
+    if (existingConv) {
+      convId = existingConv.id;
+      const updates: Record<string, any> = {};
+      if (!existingConv.lead_id && targetLeadId) updates.lead_id = targetLeadId;
+      if (!existingConv.instance_id && params.instanceId) updates.instance_id = params.instanceId;
+      if (Object.keys(updates).length > 0) {
+        await supabase.from("chat_conversations").update(updates).eq("id", convId);
+      }
     }
 
     if (!convId) {
@@ -59,7 +85,7 @@ const syncSentMessageToChat = async (
         .insert({
           company_id: params.companyId,
           instance_id: params.instanceId || null,
-          lead_id: params.leadId || null,
+          lead_id: targetLeadId || null,
           contact_phone: cleanPhone,
           contact_name: params.name || cleanPhone,
           status: "open",
