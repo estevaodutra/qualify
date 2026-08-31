@@ -18,6 +18,7 @@ export interface WorkflowDefinition {
   sourceType: WorkflowSourceType;
   sourceId: string;
   triggerType?: string;
+  triggerConfig?: any;
   createdAt: string;
   updatedAt: string;
 }
@@ -36,7 +37,7 @@ interface DbWorkflowDefinition {
   updated_at: string;
 }
 
-const transformDbToFrontend = (db: DbWorkflowDefinition): WorkflowDefinition => ({
+const transformDbToFrontend = (db: DbWorkflowDefinition, seqConfig?: { trigger_type?: string; trigger_config?: any }): WorkflowDefinition => ({
   id: db.id,
   companyId: db.company_id,
   folderId: db.folder_id || undefined,
@@ -45,7 +46,8 @@ const transformDbToFrontend = (db: DbWorkflowDefinition): WorkflowDefinition => 
   status: (db.status as WorkflowStatus) || "draft",
   sourceType: db.source_type as WorkflowSourceType,
   sourceId: db.source_id,
-  triggerType: db.trigger_type || undefined,
+  triggerType: seqConfig?.trigger_type || db.trigger_type || undefined,
+  triggerConfig: seqConfig?.trigger_config || undefined,
   createdAt: db.created_at,
   updatedAt: db.updated_at,
 });
@@ -74,12 +76,29 @@ export function useWorkflowDefinitions(filters?: { folderId?: string | null; sta
         query = query.eq("status", filters.status);
       }
 
-      const { data, error } = await query;
-      if (error) {
-        if ((error as any).code === "42P01") return [];
-        throw error;
+      const [defsRes, seqsRes] = await Promise.all([
+        query,
+        supabase
+          .from("message_sequences")
+          .select("id, trigger_type, trigger_config")
+          .or(`company_id.eq.${activeCompanyId},company_id.is.null`),
+      ]);
+
+      if (defsRes.error) {
+        if ((defsRes.error as any).code === "42P01") return [];
+        throw defsRes.error;
       }
-      return (data as unknown as DbWorkflowDefinition[]).map(transformDbToFrontend);
+
+      const seqsMap = new Map<string, { trigger_type?: string; trigger_config?: any }>();
+      if (seqsRes.data) {
+        for (const seq of seqsRes.data as any[]) {
+          seqsMap.set(seq.id, seq);
+        }
+      }
+
+      return (defsRes.data as unknown as DbWorkflowDefinition[]).map((d) => 
+        transformDbToFrontend(d, seqsMap.get(d.source_id))
+      );
     },
     enabled: !!user && !!activeCompanyId,
   });

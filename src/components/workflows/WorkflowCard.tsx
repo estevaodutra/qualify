@@ -6,7 +6,9 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub,
   DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreVertical, FolderInput, ExternalLink, Send, Users, Skull, Activity, PhoneCall, Trash2, Copy } from "lucide-react";
+import {
+  MoreVertical, FolderInput, ExternalLink, Send, Users, Skull, Activity, PhoneCall, Trash2, Copy, Webhook, CalendarClock
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WorkflowDefinition, WorkflowSourceType } from "@/hooks/useWorkflowDefinitions";
 import type { WorkflowFolder } from "@/hooks/useWorkflowFolders";
@@ -25,13 +27,40 @@ const STATUS_COLORS: Record<string, string> = {
   error: "bg-destructive/10 text-destructive border-destructive/30",
 };
 
-const SOURCE_TYPE_META: Record<WorkflowSourceType, { label: string; icon: any }> = {
-  dispatch_sequence: { label: "WhatsApp", icon: Send },
-  group_sequence: { label: "Grupo", icon: Users },
-  context_campaign: { label: "Contexto", icon: Activity },
-  pirate_campaign: { label: "Pirata", icon: Skull },
-  call_campaign: { label: "Ligação", icon: PhoneCall },
-};
+export function getWorkflowTypeMeta(workflow: WorkflowDefinition): { label: string; icon: any; className?: string } {
+  if (workflow.sourceType === "context_campaign") {
+    return { label: "Contexto", icon: Activity, className: "border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10" };
+  }
+  if (workflow.sourceType === "call_campaign") {
+    return { label: "Ligação", icon: PhoneCall, className: "border-rose-500/30 text-rose-600 dark:text-rose-400 bg-rose-500/10" };
+  }
+  if (workflow.sourceType === "pirate_campaign") {
+    return { label: "Pirata", icon: Skull, className: "border-red-500/30 text-red-600 dark:text-red-400 bg-red-500/10" };
+  }
+
+  const config = workflow.triggerConfig || {};
+  const isGroup = 
+    config.destinationMode === "groups" || 
+    config.isGroup === true || 
+    config.groupScope === "selected" || 
+    (Array.isArray(config.selectedGroupJids) && config.selectedGroupJids.length > 0) || 
+    workflow.triggerType === "group_event";
+
+  if (isGroup) {
+    return { label: "Grupo", icon: Users, className: "border-indigo-500/30 text-indigo-600 dark:text-indigo-400 bg-indigo-500/10" };
+  }
+
+  const isWebhook = workflow.triggerType === "webhook" || workflow.triggerType === "api" || !!config.referencePayload;
+  if (isWebhook) {
+    return { label: "Webhook", icon: Webhook, className: "border-blue-500/30 text-blue-600 dark:text-blue-400 bg-blue-500/10" };
+  }
+
+  if (workflow.triggerType === "scheduled") {
+    return { label: "Agendado", icon: CalendarClock, className: "border-orange-500/30 text-orange-600 dark:text-orange-400 bg-orange-500/10" };
+  }
+
+  return { label: "WhatsApp", icon: Send, className: "border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10" };
+}
 
 const SOURCE_TYPE_BUILDER_ROUTE: Record<WorkflowSourceType, (def: WorkflowDefinition) => string | null> = {
   dispatch_sequence: () => null, // resolved via /workflows/:id/builder
@@ -51,7 +80,7 @@ interface WorkflowCardProps {
 
 export function WorkflowCard({ workflow, folders, onMoveToFolder, onDelete, onDuplicate }: WorkflowCardProps) {
   const navigate = useNavigate();
-  const meta = SOURCE_TYPE_META[workflow.sourceType];
+  const meta = getWorkflowTypeMeta(workflow);
   const Icon = meta.icon;
 
   const openBuilder = () => {
@@ -71,7 +100,7 @@ export function WorkflowCard({ workflow, folders, onMoveToFolder, onDelete, onDu
             <Badge className={cn("text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 border", STATUS_COLORS[workflow.status])}>
               {STATUS_LABELS[workflow.status]}
             </Badge>
-            <Badge variant="outline" className="text-[9px] font-semibold gap-1">
+            <Badge variant="outline" className={cn("text-[9px] font-semibold gap-1 border", meta.className)}>
               <Icon className="h-3 w-3" /> {meta.label}
             </Badge>
           </div>
