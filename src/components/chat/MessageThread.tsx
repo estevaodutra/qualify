@@ -13,6 +13,122 @@ interface MessageThreadProps {
   isFetchingNextMessages?: boolean;
 }
 
+function parseInlineFormatting(text: string): React.ReactNode[] {
+  if (!text) return [];
+
+  const pattern = /(https?:\/\/[^\s]+)|(\*[^\*\n]+\*)|(_[^_\n]+_)|(~[^~\n]+~)|(`[^`\n]+`)/g;
+
+  const elements: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      elements.push(text.substring(lastIndex, match.index));
+    }
+
+    const matchedStr = match[0];
+
+    if (match[1]) {
+      elements.push(
+        <a
+          key={match.index}
+          href={matchedStr}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline hover:opacity-80 text-blue-500 dark:text-blue-400 break-all"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {matchedStr}
+        </a>
+      );
+    } else if (match[2]) {
+      const inner = matchedStr.slice(1, -1);
+      elements.push(
+        <strong key={match.index} className="font-bold">
+          {parseInlineFormatting(inner)}
+        </strong>
+      );
+    } else if (match[3]) {
+      const inner = matchedStr.slice(1, -1);
+      elements.push(
+        <em key={match.index} className="italic">
+          {parseInlineFormatting(inner)}
+        </em>
+      );
+    } else if (match[4]) {
+      const inner = matchedStr.slice(1, -1);
+      elements.push(
+        <del key={match.index} className="line-through opacity-80">
+          {parseInlineFormatting(inner)}
+        </del>
+      );
+    } else if (match[5]) {
+      elements.push(
+        <code key={match.index} className="bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded text-xs font-mono">
+          {matchedStr.slice(1, -1)}
+        </code>
+      );
+    }
+
+    lastIndex = pattern.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    elements.push(text.substring(lastIndex));
+  }
+
+  return elements;
+}
+
+function FormattedChatMessageText({ content, className }: { content: string; className?: string }) {
+  if (!content) return null;
+
+  const lines = content.split("\n");
+
+  return (
+    <div className={cn("whitespace-pre-wrap break-words leading-relaxed text-sm", className)}>
+      {lines.map((line, lineIndex) => {
+        const isLastLine = lineIndex === lines.length - 1;
+
+        const isQuote = line.startsWith("> ") || (line.startsWith(">") && line.length > 1 && line[1] !== " ");
+        const cleanQuoteLine = isQuote ? line.replace(/^>\s?/, "") : line;
+
+        const isBullet = !isQuote && /^[\-\*]\s+/.test(cleanQuoteLine);
+        const cleanLine = isBullet ? cleanQuoteLine.replace(/^[\-\*]\s+/, "") : cleanQuoteLine;
+
+        const inlineContent = parseInlineFormatting(cleanLine);
+
+        let lineNode: React.ReactNode = inlineContent;
+
+        if (isBullet) {
+          lineNode = (
+            <span className="flex items-start gap-1.5 my-0.5">
+              <span className="select-none font-bold opacity-75">•</span>
+              <span className="flex-1">{inlineContent}</span>
+            </span>
+          );
+        }
+
+        if (isQuote) {
+          lineNode = (
+            <blockquote className="border-l-4 border-primary/70 pl-2.5 py-1 my-1 bg-black/5 dark:bg-white/10 rounded-r text-sm italic">
+              {lineNode}
+            </blockquote>
+          );
+        }
+
+        return (
+          <span key={lineIndex} className="block min-h-[1.2em]">
+            {lineNode}
+            {!isLastLine && !isQuote && line === "" && <br />}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 
 function CustomAudioPlayer({ src, isOperator, isInternal, timeString }: { src: string; isOperator: boolean; isInternal: boolean; timeString: string }) {
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -339,7 +455,7 @@ export default function MessageThread({
 
                   {/* Render content by type */}
                   {msg.message_type === "text" && (
-                    <p className="whitespace-pre-wrap break-words leading-relaxed">{msg.body}</p>
+                    <FormattedChatMessageText content={msg.body} />
                   )}
 
                   {msg.message_type === "image" && (
@@ -354,7 +470,7 @@ export default function MessageThread({
                           <img src={msg.media_url || ""} alt="Anexo Ampliado" className="max-w-full max-h-[85vh] object-contain rounded-md" />
                         </DialogContent>
                       </Dialog>
-                      {msg.body && !msg.body.startsWith("[") && <p className="mt-1.5 whitespace-pre-wrap break-words leading-relaxed">{msg.body}</p>}
+                      {msg.body && !msg.body.startsWith("[") && <FormattedChatMessageText content={msg.body} className="mt-1.5" />}
                     </div>
                   )}
 
@@ -385,7 +501,7 @@ export default function MessageThread({
                           <span className="text-[10px] mt-1 opacity-60">URL não encontrada no payload</span>
                         </div>
                       )}
-                      {msg.body && !msg.body.startsWith("[") && <p className="mt-1.5 whitespace-pre-wrap break-words leading-relaxed">{msg.body}</p>}
+                      {msg.body && !msg.body.startsWith("[") && <FormattedChatMessageText content={msg.body} className="mt-1.5" />}
                     </div>
                   )}
 

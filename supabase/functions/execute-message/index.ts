@@ -1547,36 +1547,44 @@ Deno.serve(async (req) => {
         if (!text) return text;
         let result = text;
         if (triggerContext) {
-          // Built-in variables
-          result = result.replace(/\{\{name\}\}/g, triggerContext.respondentName || "");
-          result = result.replace(/\{\{phone\}\}/g, triggerContext.respondentPhone || "");
-          result = result.replace(/\{\{option\}\}/g, triggerContext.pollOptionText || "");
+          // Built-in variables (English & Portuguese aliases)
+          result = result.replace(/\{\{name\}\}/gi, triggerContext.respondentName || "");
+          result = result.replace(/\{\{nome\}\}/gi, triggerContext.respondentName || "");
+          result = result.replace(/\{\{phone\}\}/gi, triggerContext.respondentPhone || "");
+          result = result.replace(/\{\{telefone\}\}/gi, triggerContext.respondentPhone || "");
+          result = result.replace(/\{\{celular\}\}/gi, triggerContext.respondentPhone || "");
+          result = result.replace(/\{\{option\}\}/gi, triggerContext.pollOptionText || "");
+          result = result.replace(/\{\{opcao\}\}/gi, triggerContext.pollOptionText || "");
           
-          // Custom fields from webhook payload
+          // Custom fields from triggerContext
           if (triggerContext.customFields) {
             for (const [key, value] of Object.entries(triggerContext.customFields)) {
-              const regex = new RegExp(`\\{\\{${key}\\}\\}`, "g");
-              result = result.replace(regex, value || "");
-              const regexSingle = new RegExp(`\\{${key}\\}`, "g");
-              result = result.replace(regexSingle, value || "");
+              const strVal = value !== undefined && value !== null ? (typeof value === 'object' ? JSON.stringify(value) : String(value)) : "";
+              const regex = new RegExp(`\\{\\{${key}\\}\\}`, "gi");
+              result = result.replace(regex, strVal);
+              const regexSingle = new RegExp(`\\{${key}\\}`, "gi");
+              result = result.replace(regexSingle, strVal);
             }
           }
 
-          // Direct payload / webhook resolution (e.g. {{body.nome}}, {{webhook.body.id}}, {{body.phone}})
+          // Direct payload / webhook resolution (e.g. {{body.nome}}, {{data.user}}, {{webhook.body.id}}, {{user}}, {{mac_key}})
           const payloadObj = triggerContext.webhookPayload || (triggerContext as any).payload || triggerContext;
           if (payloadObj && typeof payloadObj === "object") {
-            result = result.replace(/\{\{([^{}]+)\}\}/g, (match, rawKey) => {
+            const resolveVal = (rawKey: string): any => {
               const key = rawKey.trim();
-              const val = getNestedProp(payloadObj, key) 
+              return getNestedProp(payloadObj, key) 
                 ?? getNestedProp(payloadObj, key.replace(/^webhook\./, ''))
-                ?? getNestedProp(payloadObj.body || payloadObj, key.replace(/^body\./, ''));
+                ?? getNestedProp(payloadObj.body || payloadObj, key.replace(/^body\./, ''))
+                ?? getNestedProp(payloadObj.data || payloadObj, key.replace(/^data\./, ''))
+                ?? getNestedProp(triggerContext.customFields, key);
+            };
+
+            result = result.replace(/\{\{([^{}]+)\}\}/g, (match, rawKey) => {
+              const val = resolveVal(rawKey);
               return val !== undefined && val !== null ? (typeof val === 'object' ? JSON.stringify(val) : String(val)) : match;
             });
             result = result.replace(/\{([^{}]+)\}/g, (match, rawKey) => {
-              const key = rawKey.trim();
-              const val = getNestedProp(payloadObj, key)
-                ?? getNestedProp(payloadObj, key.replace(/^webhook\./, ''))
-                ?? getNestedProp(payloadObj.body || payloadObj, key.replace(/^body\./, ''));
+              const val = resolveVal(rawKey);
               return val !== undefined && val !== null ? (typeof val === 'object' ? JSON.stringify(val) : String(val)) : match;
             });
           }
@@ -3464,7 +3472,7 @@ Deno.serve(async (req) => {
                   console.error(`[ExecuteMessage] ❌ Failed to send sub-message ${subNodeType} to ${dest.group_name}`);
                 } else {
                   console.log(`[ExecuteMessage] ✅ Sub-message ${subNodeType} sent to ${dest.group_name}`);
-                  const msgText = (subMsg.content || subMsg.text || subMsg.message || subMsg.question || formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.question || formattedConfig.caption || "") as string;
+                  const msgText = (formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.question || formattedConfig.caption || subMsg.content || subMsg.text || subMsg.message || subMsg.question || "") as string;
                   const destPhone = (dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || triggerContext?.contactPhone || "") as string;
                   const effectiveCompanyId = triggerContext?.companyId || typedCampaign?.company_id || "dcb34e9a-1510-4137-aecd-cec0c6d548c4";
                   if (msgText && destPhone) {
