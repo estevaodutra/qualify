@@ -19,7 +19,7 @@ interface StepRendererProps {
   submitting?: boolean;
   onFormChange?: (componentId: string, val: string) => void;
   onOptionSelect?: (componentId: string, optionId: string, destination: string | null) => void;
-  onNextStep?: () => void;
+  onNextStep?: (clickedId?: string) => void;
   onPrevStep?: () => void;
   onSelectComponent?: (id: string) => void;
 }
@@ -146,7 +146,7 @@ export const QuizStepRenderer: React.FC<StepRendererProps> = ({
                 submitting={submitting}
                 onFormChange={(val) => onFormChange?.(comp.id, val)}
                 onOptionSelect={(optId, destination) => onOptionSelect?.(comp.id, optId, destination)}
-                onNext={onNextStep}
+                onNext={(clickedId) => onNextStep?.(clickedId)}
                 onSelectComponent={onSelectComponent}
                 onDuplicateComponent={(id) => duplicateComponent(id)}
                 onDeleteComponent={(id) => deleteComponent(id)}

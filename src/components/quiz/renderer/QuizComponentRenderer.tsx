@@ -64,7 +64,7 @@ interface ComponentRendererProps {
   submitting?: boolean;
   onFormChange?: (val: string) => void;
   onOptionSelect?: (optId: string, destination: string | null) => void;
-  onNext?: () => void;
+  onNext?: (clickedId?: string) => void;
   onSelectComponent?: (id: string) => void;
   onDuplicateComponent?: (id: string) => void;
   onDeleteComponent?: (id: string) => void;
@@ -202,10 +202,12 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
           return;
         }
 
+        const buttonIdName = (config.idName as string) || component.id;
+
         if (targetStepId) {
-          onOptionSelect?.("", targetStepId);
+          onOptionSelect?.(component.id, buttonIdName, targetStepId);
         } else {
-          onNext?.();
+          onNext?.(buttonIdName);
         }
       };
 

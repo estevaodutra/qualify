@@ -469,7 +469,7 @@ export default function QuizPublicPage() {
     });
   };
 
-  const handleNextStep = async (forcedDestination?: string | null) => {
+  const handleNextStep = async (forcedDestination?: string | null, clickedElementId?: string) => {
     if (!funnel || !steps[currentStepIndex]) return;
 
     setSubmitting(true);
@@ -553,6 +553,16 @@ export default function QuizPublicPage() {
             leadData: { name: leadName, email: leadEmail, phone: leadPhone }
           });
         }
+      }
+
+      // 2b. Dispatch element_click webhook if an element/button was clicked (AFTER saving answers to DB)
+      if (submissionId && funnel && clickedElementId) {
+        await quizTrackingService.dispatchWebhook({
+          funnel,
+          submissionId,
+          triggerType: "element_click",
+          clickedElementId
+        });
       }
 
       // 3. Mark the submission as started if it was in anonymous state and we are moving past the first step
@@ -752,17 +762,9 @@ export default function QuizPublicPage() {
           setSelectedOptions((prev) => ({ ...prev, [compId]: [optId] }));
           const comp = components.find((c) => c.id === compId);
           const clickedId = (comp?.config?.idName as string) || optId || compId;
-          if (submissionId && funnel) {
-            quizTrackingService.dispatchWebhook({
-              funnel,
-              submissionId,
-              triggerType: "element_click",
-              clickedElementId: String(clickedId)
-            });
-          }
-          setTimeout(() => handleNextStep(dest), 350);
+          setTimeout(() => handleNextStep(dest, String(clickedId)), 350);
         }}
-        onNextStep={() => handleNextStep()}
+        onNextStep={(clickedId) => handleNextStep(null, clickedId)}
         onPrevStep={handlePrevStep}
       />
     </div>

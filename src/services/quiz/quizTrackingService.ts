@@ -543,8 +543,14 @@ export const quizTrackingService = {
 
     if (params.triggerType === "element_click") {
       if (configuredTrigger === "element_click" || !!targetElementId) {
-        if (!targetElementId || targetElementId === params.clickedElementId) {
+        if (!targetElementId || targetElementId === "*") {
           shouldFire = true;
+        } else if (params.clickedElementId) {
+          const target = targetElementId.toLowerCase();
+          const clicked = params.clickedElementId.toLowerCase();
+          if (target === clicked || clicked.includes(target) || target.includes(clicked)) {
+            shouldFire = true;
+          }
         }
       }
     } else if (params.triggerType === "completion") {
@@ -593,11 +599,16 @@ export const quizTrackingService = {
         headers["Authorization"] = `Bearer ${webhookConfig.token.trim()}`;
       }
 
-      await fetch(url.trim(), {
+      console.log(`[Webhook Dispatch] Disparando webhook (${params.triggerType}) para ${url.trim()}:`, payload);
+
+      const res = await fetch(url.trim(), {
         method: "POST",
         headers,
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        keepalive: true
       });
+
+      console.log(`[Webhook Dispatch] Resposta do webhook (${res.status}):`, res.statusText);
     } catch (err) {
       console.warn("dispatchWebhook error:", err);
     }
