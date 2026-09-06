@@ -631,12 +631,24 @@ export default function QuizPublicPage() {
         // Complete the quiz
         if (submissionId) {
           await quizTrackingService.completeSubmission(submissionId, funnel.id, funnel.companyId);
+          await quizTrackingService.dispatchWebhook({
+            funnel,
+            submissionId,
+            triggerType: "completion"
+          });
         }
         setCompleted(true);
       } else {
         const nextIdx = currentStepIndex + 1;
         const nextStep = steps[nextIdx];
         setCurrentStepIndex(nextIdx);
+
+        if (submissionId) {
+          await quizTrackingService.dispatchWebhook({
+            funnel,
+            submissionId,
+            triggerType: "each_step"
+          });
 
         if (submissionId) {
           // Track next step entry
@@ -739,6 +751,16 @@ export default function QuizPublicPage() {
         }}
         onOptionSelect={(compId, optId, dest) => {
           setSelectedOptions((prev) => ({ ...prev, [compId]: [optId] }));
+          const comp = components.find((c) => c.id === compId);
+          const clickedId = (comp?.config?.idName as string) || optId || compId;
+          if (submissionId && funnel) {
+            quizTrackingService.dispatchWebhook({
+              funnel,
+              submissionId,
+              triggerType: "element_click",
+              clickedElementId: String(clickedId)
+            });
+          }
           setTimeout(() => handleNextStep(dest), 350);
         }}
         onNextStep={() => handleNextStep()}

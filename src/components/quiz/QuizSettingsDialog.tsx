@@ -24,6 +24,7 @@ export function QuizSettingsDialog({ open, onClose, funnel, onSave }: Props) {
   const [webhookUrl, setWebhookUrl] = useState(webhook.url || "");
   const [webhookToken, setWebhookToken] = useState(webhook.token || "");
   const [webhookTrigger, setWebhookTrigger] = useState(webhook.trigger || "completion");
+  const [webhookElementId, setWebhookElementId] = useState(webhook.elementId || "");
 
   const [seoTitle, setSeoTitle] = useState(seo.title || "");
   const [seoDescription, setSeoDescription] = useState(seo.description || "");
@@ -98,14 +99,30 @@ export function QuizSettingsDialog({ open, onClose, funnel, onSave }: Props) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="completion">Ao concluir o funil</SelectItem>
+                  <SelectItem value="element_click">Ao clicar em um elemento/botão específico</SelectItem>
                   <SelectItem value="each_step">A cada etapa respondida</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
+            {(webhookTrigger === "element_click" || !!webhookElementId) && (
+              <div className="space-y-1.5">
+                <Label>ID/Name do Elemento Gatilho</Label>
+                <Input
+                  placeholder="Ex: ho4kyR ou btn_confirmar"
+                  value={webhookElementId}
+                  onChange={(e) => setWebhookElementId(e.target.value)}
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  ID/Name do componente configurado nas propriedades avançadas do botão.
+                </p>
+              </div>
+            )}
+
             <Button
               className="w-full"
               disabled={saving}
-              onClick={() => handleSave("webhook_config", { url: webhookUrl, token: webhookToken, trigger: webhookTrigger })}
+              onClick={() => handleSave("webhook_config", { url: webhookUrl, token: webhookToken, trigger: webhookTrigger, elementId: webhookElementId })}
             >
               Salvar Webhook
             </Button>

@@ -272,7 +272,8 @@ export interface PixelConfig {
 export interface WebhookConfig {
   url?: string;
   token?: string;
-  trigger?: "each_step" | "completion" | "both";
+  trigger?: "each_step" | "completion" | "both" | "element_click";
+  elementId?: string;
   secret?: string;
 }
 

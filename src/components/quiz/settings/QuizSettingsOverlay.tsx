@@ -591,6 +591,35 @@ export const QuizSettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, on
                     className="text-xs"
                   />
                 </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold">Gatilho de Envio do Webhook</Label>
+                  <select
+                    value={webhook.trigger || "completion"}
+                    onChange={(e) => setWebhook({ ...webhook, trigger: e.target.value })}
+                    className="w-full h-8 px-2 border rounded-md text-xs bg-background"
+                  >
+                    <option value="completion">Ao concluir o quiz (Padrão)</option>
+                    <option value="element_click">Ao clicar em um elemento/botão específico</option>
+                    <option value="each_step">A cada etapa respondida</option>
+                    <option value="both">Ao concluir e em cada etapa</option>
+                  </select>
+                </div>
+
+                {(webhook.trigger === "element_click" || !!webhook.elementId) && (
+                  <div className="space-y-2 pt-1 border-t border-border/60 animate-in fade-in duration-200">
+                    <Label className="text-xs font-semibold">ID/Name do Elemento Gatilho</Label>
+                    <Input
+                      value={webhook.elementId || ""}
+                      onChange={(e) => setWebhook({ ...webhook, elementId: e.target.value })}
+                      placeholder="Ex: ho4kyR ou btn_confirmar"
+                      className="text-xs font-mono"
+                    />
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Informe o ID/Name do elemento (ex: botão de CTA ou opção) que, ao ser clicado pelo usuário, irá disparar o envio do webhook com todas as respostas e dados coletados até o momento.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}

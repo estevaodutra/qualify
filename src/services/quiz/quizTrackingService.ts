@@ -523,5 +523,83 @@ export const quizTrackingService = {
     } catch (err) {
       console.warn("completeSubmission error:", err);
     }
+  },
+
+  async dispatchWebhook(params: {
+    funnel: any;
+    submissionId: string;
+    triggerType: "completion" | "each_step" | "element_click";
+    clickedElementId?: string;
+  }): Promise<void> {
+    if (!params.funnel || !params.submissionId) return;
+    const webhookConfig = (params.funnel.webhookConfig || params.funnel.webhook_config || {}) as Record<string, any>;
+    const url = webhookConfig.url;
+    if (!url || typeof url !== "string" || !url.trim()) return;
+
+    const configuredTrigger = webhookConfig.trigger || "completion";
+    const targetElementId = (webhookConfig.elementId || webhookConfig.triggerElementId || "").trim();
+
+    let shouldFire = false;
+
+    if (params.triggerType === "element_click") {
+      if (configuredTrigger === "element_click" || !!targetElementId) {
+        if (!targetElementId || targetElementId === params.clickedElementId) {
+          shouldFire = true;
+        }
+      }
+    } else if (params.triggerType === "completion") {
+      if (configuredTrigger === "completion" || configuredTrigger === "both" || !configuredTrigger) {
+        shouldFire = true;
+      }
+    } else if (params.triggerType === "each_step") {
+      if (configuredTrigger === "each_step" || configuredTrigger === "both") {
+        shouldFire = true;
+      }
+    }
+
+    if (!shouldFire) return;
+
+    try {
+      const { data: sub } = await (supabase as any)
+        .from("quiz_submissions")
+        .select("*")
+        .eq("id", params.submissionId)
+        .single();
+
+      const { data: answers } = await (supabase as any)
+        .from("quiz_answers")
+        .select("*")
+        .eq("submission_id", params.submissionId);
+
+      const payload = {
+        event: `quiz_${params.triggerType}`,
+        trigger_type: params.triggerType,
+        clicked_element_id: params.clickedElementId || null,
+        funnel: {
+          id: params.funnel.id,
+          name: params.funnel.name,
+          slug: params.funnel.slug
+        },
+        submission: sub || { id: params.submissionId },
+        answers: answers || [],
+        timestamp: new Date().toISOString()
+      };
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json"
+      };
+
+      if (webhookConfig.token && typeof webhookConfig.token === "string" && webhookConfig.token.trim()) {
+        headers["Authorization"] = `Bearer ${webhookConfig.token.trim()}`;
+      }
+
+      await fetch(url.trim(), {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload)
+      });
+    } catch (err) {
+      console.warn("dispatchWebhook error:", err);
+    }
   }
 };
