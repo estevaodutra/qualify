@@ -290,8 +290,11 @@ Deno.serve(async (req) => {
       destinationPhone = String(destinationPhone).replace(/\D/g, "");
     }
 
-    const isGroupMode = (triggerConfig.destinationMode === "groups" && !destinationPhone) || 
-                        (triggerConfig.isGroup === true && !destinationPhone);
+    const isGroupMode = triggerConfig.destinationMode === "groups" || 
+                        (triggerConfig.destinationMode !== "individual" && triggerConfig.destinationMode !== "private" && (
+                          triggerConfig.isGroup === true ||
+                          (!destinationPhone && (hasLinkedGroups || (selectedGroupJids && selectedGroupJids.length > 0)))
+                        ));
 
     const instanceId = (payload.instanceId as string) || (triggerConfig as Record<string, unknown>).instanceId as string | undefined;
     const instanceIds = (triggerConfig as Record<string, unknown>).instanceIds as string[] | undefined;

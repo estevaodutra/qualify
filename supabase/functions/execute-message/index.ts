@@ -1591,9 +1591,9 @@ Deno.serve(async (req) => {
             group_name: phone,
             isPrivate: true,
           }))
-        : (sendToPrivate || triggerContext?.sendPrivate || triggerContext?.uraResult || triggerContext?.respondentPhone) && triggerContext?.respondentPhone
+        : (sendToPrivate || triggerContext?.sendPrivate || triggerContext?.uraResult) && triggerContext?.respondentPhone
           ? [{ 
-              group_jid: triggerContext.respondentJid || `${triggerContext.respondentPhone}@s.whatsapp.net`, 
+              group_jid: (triggerContext.respondentJid && triggerContext.respondentJid.includes('@s.whatsapp.net')) ? triggerContext.respondentJid : `${triggerContext.respondentPhone}@s.whatsapp.net`, 
               group_name: triggerContext.respondentName || triggerContext.respondentPhone,
               isPrivate: true
             }]
@@ -1603,7 +1603,13 @@ Deno.serve(async (req) => {
                 group_name: (triggerContext.respondentName as string) || "Grupo",
                 isPrivate: false,
               }]
-            : groups.map(g => ({ group_jid: g.group_jid, group_name: g.group_name, isPrivate: false }));
+            : (triggerContext?.sendPrivate === false
+                ? groups.map(g => ({ group_jid: g.group_jid, group_name: g.group_name, isPrivate: false }))
+                : (triggerContext?.respondentPhone
+                    ? [{ group_jid: `${triggerContext.respondentPhone}@s.whatsapp.net`, group_name: triggerContext.respondentPhone, isPrivate: true }]
+                    : groups.map(g => ({ group_jid: g.group_jid, group_name: g.group_name, isPrivate: false }))
+                  )
+              );
 
       // If this is a manual test execution from the builder and we have no destinations,
       // fallback to sending to the instance's own number to allow preview/testing.
