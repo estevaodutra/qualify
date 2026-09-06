@@ -650,7 +650,6 @@ export default function QuizPublicPage() {
             triggerType: "each_step"
           });
 
-        if (submissionId) {
           // Track next step entry
           await quizTrackingService.trackQuizEvent({
             submissionId,
