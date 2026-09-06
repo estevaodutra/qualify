@@ -577,6 +577,80 @@ export const quizTrackingService = {
         .select("*")
         .eq("submission_id", params.submissionId);
 
+      const { data: dbComponents } = await (supabase as any)
+        .from("quiz_components")
+        .select("*")
+        .eq("funnel_id", params.funnel.id);
+
+      const compMap: Record<string, any> = {};
+      if (dbComponents && Array.isArray(dbComponents)) {
+        for (const c of dbComponents) {
+          compMap[c.id] = c;
+        }
+      }
+
+      const dataObject: Record<string, any> = {};
+      const formattedAnswers: Array<Record<string, any>> = [];
+
+      if (answers && Array.isArray(answers)) {
+        for (const ans of answers) {
+          const comp = compMap[ans.component_id];
+          const config = (comp?.config || {}) as Record<string, any>;
+
+          const questionKey = config.idName || config.title || config.label || comp?.component_type || ans.component_id;
+
+          const resolveOptionText = (val: string): string => {
+            if (!val || typeof val !== "string") return String(val);
+            if (config.options && Array.isArray(config.options)) {
+              const opt = config.options.find(
+                (o: any) => o.id === val || o.value === val || (o.idName && o.idName === val)
+              );
+              if (opt) {
+                return opt.text || opt.label || opt.title || opt.value || val;
+              }
+            }
+            return val;
+          };
+
+          let readableValue: any = ans.answer_value;
+
+          if (Array.isArray(ans.answer_value)) {
+            readableValue = ans.answer_value.map((item: any) => resolveOptionText(String(item))).join(", ");
+          } else if (typeof ans.answer_value === "string") {
+            readableValue = resolveOptionText(ans.answer_value);
+          }
+
+          dataObject[questionKey] = readableValue;
+
+          formattedAnswers.push({
+            id: ans.id,
+            question: questionKey,
+            answer_value: readableValue,
+            raw_value: ans.answer_value,
+            component_id: ans.component_id,
+            id_name: config.idName || null,
+            answered_at: ans.answered_at
+          });
+        }
+      }
+
+      if (params.clickedElementId) {
+        dataObject[params.clickedElementId] = "clicked";
+
+        const alreadyIncluded = formattedAnswers.some(
+          (a) => a.question === params.clickedElementId || a.id_name === params.clickedElementId || a.component_id === params.clickedElementId
+        );
+
+        if (!alreadyIncluded) {
+          formattedAnswers.push({
+            question: params.clickedElementId,
+            answer_value: "clicked",
+            component_id: params.clickedElementId,
+            id_name: params.clickedElementId
+          });
+        }
+      }
+
       const payload = {
         event: `quiz_${params.triggerType}`,
         trigger_type: params.triggerType,
@@ -587,7 +661,9 @@ export const quizTrackingService = {
           slug: params.funnel.slug
         },
         submission: sub || { id: params.submissionId },
-        answers: answers || [],
+        data: dataObject,
+        answers: formattedAnswers,
+        raw_answers: answers || [],
         timestamp: new Date().toISOString()
       };
 
