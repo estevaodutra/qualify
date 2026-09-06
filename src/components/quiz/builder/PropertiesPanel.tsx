@@ -1,6 +1,6 @@
 // src/components/quiz/builder/PropertiesPanel.tsx
 import React from "react";
-import { Sliders, Palette, LayoutGrid, Eye, Play, GitBranch, Database, Trash2, Plus, ArrowUp, ArrowDown } from "lucide-react";
+import { Sliders, Palette, LayoutGrid, Eye, Play, GitBranch, Database, Trash2, Plus, ArrowUp, ArrowDown, Upload, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,10 +8,11 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useQuizBuilderStore, InspectorTab } from "@/stores/quiz/useQuizBuilderStore";
 import { COMPONENT_REGISTRY } from "../registry/componentRegistry";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { X } from "lucide-react";
 import { TEXT_COLOR_PRESETS } from "@/utils/quiz/quizTextSanitizer";
 import { ImageUploader } from "../media/ImageUploader";
 import { EditableRichText } from "../editor/EditableRichText";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface ColorPickerProps {
   label: string;
@@ -142,6 +143,90 @@ const WidthSliderControl: React.FC<WidthSliderProps> = ({ value, onChange }) => 
         />
       </div>
     </div>
+  );
+const OptionImageUploadButton: React.FC<{ onUploadSuccess: (url: string) => void }> = ({ onUploadSuccess }) => {
+  const { toast } = useToast();
+  const [uploading, setUploading] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const funnel = useQuizBuilderStore((s) => s.funnel);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "Formato inválido", description: "Selecione uma imagem (PNG, JPG, SVG, WebP).", variant: "destructive" });
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "Arquivo muito grande", description: "O tamanho máximo é 5MB.", variant: "destructive" });
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${crypto.randomUUID()}.${fileExt}`;
+      const filePath = `options/${funnel?.id || "global"}/${fileName}`;
+
+      const bucketsToTry = ["quiz-media", "group-photos"];
+      let uploadSuccess = false;
+      let lastErrorMessage = "";
+
+      for (const bucketName of bucketsToTry) {
+        const { error: uploadError } = await supabase.storage
+          .from(bucketName)
+          .upload(filePath, file, { upsert: true });
+
+        if (!uploadError) {
+          const { data } = supabase.storage.from(bucketName).getPublicUrl(filePath);
+          onUploadSuccess(data.publicUrl);
+          toast({ title: "Imagem enviada com sucesso!" });
+          uploadSuccess = true;
+          break;
+        } else {
+          lastErrorMessage = uploadError.message;
+          if (!uploadError.message.toLowerCase().includes("not found")) {
+            throw uploadError;
+          }
+        }
+      }
+
+      if (!uploadSuccess) {
+        throw new Error(lastErrorMessage || "Não foi possível enviar a imagem para o storage.");
+      }
+    } catch (err: any) {
+      toast({ title: "Erro no upload", description: err.message, variant: "destructive" });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  return (
+    <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        disabled={uploading}
+        onClick={() => fileInputRef.current?.click()}
+        className="h-6 w-6 shrink-0 bg-background border-border hover:bg-accent hover:text-accent-foreground"
+        title="Fazer upload de imagem"
+      >
+        {uploading ? <Loader2 className="w-3 h-3 animate-spin text-indigo-500" /> : <Upload className="w-3 h-3 text-indigo-500" />}
+      </Button>
+    </>
   );
 };
 
@@ -628,23 +713,47 @@ export const PropertiesPanel: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* Image URL input if card choice */}
-                        {activeComponent.componentType === "cards_choice" && (
-                          <div className="flex items-center gap-1.5 pt-1">
-                            <span className="text-[10px] text-muted-foreground shrink-0 w-10 text-right pr-1">Imagem:</span>
-                            <Input
-                              value={opt.image || ""}
-                              onChange={(e) => {
-                                const updated = ((activeComponent.config.options as any[]) || []).map((o, i) => 
-                                  i === idx ? { ...o, image: e.target.value } : o
-                                );
-                                handleConfigChange("options", updated);
-                              }}
-                              placeholder="URL da imagem (opcional)"
-                              className="flex-1 h-6 text-[10px] bg-background"
-                            />
-                          </div>
-                        )}
+                        {/* Image URL & Upload button for options / cards_choice */}
+                        <div className="flex items-center gap-1.5 pt-1">
+                          <span className="text-[10px] text-muted-foreground shrink-0 w-10 text-right pr-1">Imagem:</span>
+                          {opt.image ? (
+                            <div className="relative w-6 h-6 rounded border border-border/80 overflow-hidden shrink-0 group bg-muted shadow-xs">
+                              <img src={opt.image} alt="" className="w-full h-full object-cover" />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = ((activeComponent.config.options as any[]) || []).map((o, i) => 
+                                    i === idx ? { ...o, image: "" } : o
+                                  );
+                                  handleConfigChange("options", updated);
+                                }}
+                                className="absolute inset-0 bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                title="Remover imagem"
+                              >
+                                <X className="w-3 h-3 text-red-300 hover:text-red-100" />
+                              </button>
+                            </div>
+                          ) : null}
+                          <Input
+                            value={opt.image || ""}
+                            onChange={(e) => {
+                              const updated = ((activeComponent.config.options as any[]) || []).map((o, i) => 
+                                i === idx ? { ...o, image: e.target.value } : o
+                              );
+                              handleConfigChange("options", updated);
+                            }}
+                            placeholder="URL da imagem (opcional)"
+                            className="flex-1 h-6 text-[10px] bg-background"
+                          />
+                          <OptionImageUploadButton
+                            onUploadSuccess={(url) => {
+                              const updated = ((activeComponent.config.options as any[]) || []).map((o, i) => 
+                                i === idx ? { ...o, image: url } : o
+                              );
+                              handleConfigChange("options", updated);
+                            }}
+                          />
+                        </div>
                       </div>
                     ))}
                   </div>
