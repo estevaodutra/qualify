@@ -1,10 +1,11 @@
-import { Trash2, Plus } from "lucide-react";
+import { Trash2, Plus, X } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { CompactImageUploadButton } from "@/components/quiz/media/ImageUploader";
 
 interface QuizOption {
   id: string;
@@ -129,13 +130,31 @@ export function OptionsConfig({ config, onChange, steps }: Props) {
               </div>
             </div>
             <div className="space-y-1 mt-1">
-              <Label className="text-[10px]">Imagem (URL)</Label>
-              <Input
-                className="h-7 text-xs w-full"
-                value={opt.image || ""}
-                onChange={(e) => updateOption(i, { image: e.target.value || null })}
-                placeholder="https://..."
-              />
+              <Label className="text-[10px]">Imagem (URL ou Upload)</Label>
+              <div className="flex items-center gap-1.5">
+                {opt.image ? (
+                  <div className="relative w-7 h-7 rounded border border-border/80 overflow-hidden shrink-0 group bg-muted shadow-xs">
+                    <img src={opt.image} alt="" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => updateOption(i, { image: null })}
+                      className="absolute inset-0 bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Remover imagem"
+                    >
+                      <X className="w-3.5 h-3.5 text-red-300 hover:text-red-100" />
+                    </button>
+                  </div>
+                ) : null}
+                <Input
+                  className="h-7 text-xs flex-1"
+                  value={opt.image || ""}
+                  onChange={(e) => updateOption(i, { image: e.target.value || null })}
+                  placeholder="URL da imagem (opcional)"
+                />
+                <CompactImageUploadButton
+                  onUploadSuccess={(url) => updateOption(i, { image: url })}
+                />
+              </div>
             </div>
           </div>
         ))}

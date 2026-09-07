@@ -1,5 +1,6 @@
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { ImageUploader } from "@/components/quiz/media/ImageUploader";
 
 interface Props {
   config: Record<string, unknown>;
@@ -9,8 +10,13 @@ interface Props {
 export function ImageConfig({ config, onChange }: Props) {
   return (
     <div className="space-y-3">
+      <ImageUploader
+        label="Upload de Foto / Logo"
+        value={(config.url as string) || ""}
+        onChange={(url) => onChange({ ...config, url })}
+      />
       <div className="space-y-1.5">
-        <Label>URL da imagem</Label>
+        <Label>URL da imagem (ou cole o link)</Label>
         <Input
           value={(config.url as string) || ""}
           onChange={(e) => onChange({ ...config, url: e.target.value })}

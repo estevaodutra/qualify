@@ -9,7 +9,7 @@ import { useQuizBuilderStore, InspectorTab } from "@/stores/quiz/useQuizBuilderS
 import { COMPONENT_REGISTRY } from "../registry/componentRegistry";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { TEXT_COLOR_PRESETS } from "@/utils/quiz/quizTextSanitizer";
-import { ImageUploader } from "../media/ImageUploader";
+import { ImageUploader, CompactImageUploadButton } from "../media/ImageUploader";
 import { EditableRichText } from "../editor/EditableRichText";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -142,91 +142,6 @@ const WidthSliderControl: React.FC<WidthSliderProps> = ({ value, onChange }) => 
           className="w-full accent-sky-500 cursor-pointer h-2 bg-muted rounded-lg"
         />
       </div>
-    </div>
-  );
-const OptionImageUploadButton: React.FC<{ onUploadSuccess: (url: string) => void }> = ({ onUploadSuccess }) => {
-  const { toast } = useToast();
-  const [uploading, setUploading] = React.useState(false);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
-  const funnel = useQuizBuilderStore((s) => s.funnel);
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      toast({ title: "Formato inválido", description: "Selecione uma imagem (PNG, JPG, SVG, WebP).", variant: "destructive" });
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      toast({ title: "Arquivo muito grande", description: "O tamanho máximo é 5MB.", variant: "destructive" });
-      return;
-    }
-
-    setUploading(true);
-    try {
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${crypto.randomUUID()}.${fileExt}`;
-      const filePath = `options/${funnel?.id || "global"}/${fileName}`;
-
-      const bucketsToTry = ["quiz-media", "group-photos"];
-      let uploadSuccess = false;
-      let lastErrorMessage = "";
-
-      for (const bucketName of bucketsToTry) {
-        const { error: uploadError } = await supabase.storage
-          .from(bucketName)
-          .upload(filePath, file, { upsert: true });
-
-        if (!uploadError) {
-          const { data } = supabase.storage.from(bucketName).getPublicUrl(filePath);
-          onUploadSuccess(data.publicUrl);
-          toast({ title: "Imagem enviada com sucesso!" });
-          uploadSuccess = true;
-          break;
-        } else {
-          lastErrorMessage = uploadError.message;
-          if (!uploadError.message.toLowerCase().includes("not found")) {
-            throw uploadError;
-          }
-        }
-      }
-
-      if (!uploadSuccess) {
-        throw new Error(lastErrorMessage || "Não foi possível enviar a imagem para o storage.");
-      }
-    } catch (err: any) {
-      toast({ title: "Erro no upload", description: err.message, variant: "destructive" });
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    }
-  };
-
-  return (
-    <>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={handleFileChange}
-      />
-      <Button
-        type="button"
-        variant="outline"
-        size="icon"
-        disabled={uploading}
-        onClick={() => fileInputRef.current?.click()}
-        className="h-6 w-6 shrink-0 bg-background border-border hover:bg-accent hover:text-accent-foreground"
-        title="Fazer upload de imagem"
-      >
-        {uploading ? <Loader2 className="w-3 h-3 animate-spin text-indigo-500" /> : <Upload className="w-3 h-3 text-indigo-500" />}
-      </Button>
-    </>
   );
 };
 
@@ -745,7 +660,7 @@ export const PropertiesPanel: React.FC = () => {
                             placeholder="URL da imagem (opcional)"
                             className="flex-1 h-6 text-[10px] bg-background"
                           />
-                          <OptionImageUploadButton
+                          <CompactImageUploadButton
                             onUploadSuccess={(url) => {
                               const updated = ((activeComponent.config.options as any[]) || []).map((o, i) => 
                                 i === idx ? { ...o, image: url } : o

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQuizBuilderStore } from "@/stores/quiz/useQuizBuilderStore";
+import { cn } from "@/lib/utils";
 
 interface ImageUploaderProps {
   value?: string;
@@ -121,5 +122,96 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ value, onChange, l
         </div>
       </div>
     </div>
+  );
+};
+
+interface CompactImageUploadButtonProps {
+  onUploadSuccess: (url: string) => void;
+  className?: string;
+}
+
+export const CompactImageUploadButton: React.FC<CompactImageUploadButtonProps> = ({ onUploadSuccess, className }) => {
+  const { toast } = useToast();
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const funnel = useQuizBuilderStore((s) => s.funnel);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "Formato inválido", description: "Selecione uma imagem (PNG, JPG, SVG, WebP).", variant: "destructive" });
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "Arquivo muito grande", description: "O tamanho máximo é 5MB.", variant: "destructive" });
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${crypto.randomUUID()}.${fileExt}`;
+      const filePath = `options/${funnel?.id || "global"}/${fileName}`;
+
+      const bucketsToTry = ["quiz-media", "group-photos"];
+      let uploadSuccess = false;
+      let lastErrorMessage = "";
+
+      for (const bucketName of bucketsToTry) {
+        const { error: uploadError } = await supabase.storage
+          .from(bucketName)
+          .upload(filePath, file, { upsert: true });
+
+        if (!uploadError) {
+          const { data } = supabase.storage.from(bucketName).getPublicUrl(filePath);
+          onUploadSuccess(data.publicUrl);
+          toast({ title: "Imagem enviada com sucesso!" });
+          uploadSuccess = true;
+          break;
+        } else {
+          lastErrorMessage = uploadError.message;
+          if (!uploadError.message.toLowerCase().includes("not found")) {
+            throw uploadError;
+          }
+        }
+      }
+
+      if (!uploadSuccess) {
+        throw new Error(lastErrorMessage || "Não foi possível enviar a imagem para o storage.");
+      }
+    } catch (err: any) {
+      toast({ title: "Erro no upload", description: err.message, variant: "destructive" });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  return (
+    <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        disabled={uploading}
+        onClick={() => fileInputRef.current?.click()}
+        className={cn("h-7 w-7 shrink-0 bg-background border-border hover:bg-accent hover:text-accent-foreground", className)}
+        title="Fazer upload de imagem"
+      >
+        {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-500" /> : <Upload className="w-3.5 h-3.5 text-indigo-500" />}
+      </Button>
+    </>
   );
 };
