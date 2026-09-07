@@ -714,9 +714,27 @@ export default function QuizPublicPage() {
       }
 
       if (finalDestinationStepId) {
-        let targetIdx = steps.findIndex((s) => s.id === finalDestinationStepId);
+        const trimmedDest = finalDestinationStepId.trim();
+        if (trimmedDest.startsWith("http://") || trimmedDest.startsWith("https://") || trimmedDest.startsWith("www.")) {
+          let formattedUrl = trimmedDest;
+          if (formattedUrl.startsWith("www.")) {
+            formattedUrl = `https://${formattedUrl}`;
+          }
+          if (submissionId) {
+            await quizTrackingService.completeSubmission(submissionId, funnel.id, funnel.companyId);
+            await quizTrackingService.dispatchWebhook({
+              funnel,
+              submissionId,
+              triggerType: "completion"
+            });
+          }
+          window.location.href = formattedUrl;
+          return;
+        }
+
+        let targetIdx = steps.findIndex((s) => s.id === trimmedDest);
         if (targetIdx < 0) {
-          targetIdx = steps.findIndex((s) => s.name.trim().toLowerCase() === finalDestinationStepId.trim().toLowerCase());
+          targetIdx = steps.findIndex((s) => s.name.trim().toLowerCase() === trimmedDest.toLowerCase());
         }
 
         if (targetIdx >= 0) {
@@ -889,9 +907,27 @@ export default function QuizPublicPage() {
           }
         }}
         onOptionSelect={(compId, optId, dest) => {
-          const updatedOptions = { ...latestSelectedOptions.current, [compId]: [optId] };
+          const comp = components.find((c) => c.id === compId);
+          const isMultiple = comp?.config?.multiple === true;
+          const autoAdvance = comp?.config?.autoAdvance !== false;
+
+          let updatedForComp: string[];
+          const currentSel = latestSelectedOptions.current[compId] || [];
+
+          if (isMultiple) {
+            if (currentSel.includes(optId)) {
+              updatedForComp = currentSel.filter((id) => id !== optId);
+            } else {
+              updatedForComp = [...currentSel, optId];
+            }
+          } else {
+            updatedForComp = [optId];
+          }
+
+          const updatedOptions = { ...latestSelectedOptions.current, [compId]: updatedForComp };
           latestSelectedOptions.current = updatedOptions;
           setSelectedOptions(updatedOptions);
+
           if (validationErrors[compId]) {
             setValidationErrors((prev) => {
               const copy = { ...prev };
@@ -899,9 +935,11 @@ export default function QuizPublicPage() {
               return copy;
             });
           }
-          const comp = components.find((c) => c.id === compId);
-          const clickedId = (comp?.config?.idName as string) || optId || compId;
-          setTimeout(() => handleNextStep(dest, String(clickedId), updatedOptions, latestFormValues.current), 350);
+
+          if (!isMultiple && autoAdvance) {
+            const clickedId = (comp?.config?.idName as string) || optId || compId;
+            setTimeout(() => handleNextStep(dest, String(clickedId), updatedOptions, latestFormValues.current), 150);
+          }
         }}
         onNextStep={(clickedId) => handleNextStep(null, clickedId)}
         onPrevStep={handlePrevStep}

@@ -323,7 +323,7 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
                   <button
                     key={opt.id}
                     type="button"
-                    disabled={isEditor}
+                    disabled={submitting || isEditor}
                     onClick={() => onOptionSelect?.(opt.id, opt.destination)}
                     style={{
                       borderRadius: borderStyle.borderRadius,
@@ -332,7 +332,7 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
                     }}
                     className={cn(
                       "flex flex-col items-center p-2.5 border-2 text-center transition-all hover:border-primary/60 active:scale-[0.98] h-full",
-                      isEditor && "pointer-events-none"
+                      (submitting || isEditor) && "pointer-events-none opacity-80"
                     )}
                   >
                     {opt.image ? (
@@ -355,7 +355,7 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
                   <button
                     key={opt.id}
                     type="button"
-                    disabled={isEditor}
+                    disabled={submitting || isEditor}
                     onClick={() => onOptionSelect?.(opt.id, opt.destination)}
                     style={{
                       borderRadius: borderStyle.borderRadius,
@@ -364,7 +364,7 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
                     }}
                     className={cn(
                       "w-full flex items-center gap-3 px-4 py-3 border-2 text-left text-sm font-medium transition-all hover:border-primary/60 active:scale-[0.99]",
-                      isEditor && "pointer-events-none"
+                      (submitting || isEditor) && "pointer-events-none opacity-80"
                     )}
                   >
                     {isEmoji(opt.value) ? (
