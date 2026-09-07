@@ -432,6 +432,13 @@ export default function QuizPublicPage() {
     };
   }, [submissionId, funnel]);
 
+  // Reset window scroll position to top whenever changing steps
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    if (document.documentElement) document.documentElement.scrollTop = 0;
+    if (document.body) document.body.scrollTop = 0;
+  }, [currentStepIndex]);
+
   const handlePrevStep = async () => {
     if (currentStepIndex <= 0 || !submissionId || !funnel) return;
     
@@ -897,7 +904,7 @@ export default function QuizPublicPage() {
         backgroundColor: funnel.designConfig.backgroundColor,
         fontFamily: `${funnel.designConfig.fontFamily}, sans-serif`,
       }}
-      className="min-h-screen flex flex-col items-center justify-start py-8 px-4"
+      className="min-h-[100dvh] w-full flex flex-col items-center justify-center py-6 px-4"
     >
       <QuizStepRenderer
         step={currentStep}

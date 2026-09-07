@@ -84,7 +84,7 @@ export const QuizStepRenderer: React.FC<StepRendererProps> = ({
   };
 
   return (
-    <div className="w-full flex flex-col items-center justify-start transition-all">
+    <div className="w-full flex flex-col items-center justify-center my-auto transition-all">
       <div style={containerStyle} className="w-full relative overflow-visible transition-all duration-300">
         {/* Step Top Progress Bar */}
         {step.showProgress && d.progress?.style !== "none" && (
@@ -156,13 +156,6 @@ export const QuizStepRenderer: React.FC<StepRendererProps> = ({
             ))
           )}
         </div>
-
-        {/* Step Index Indicator Footer */}
-        {totalSteps > 1 && (
-          <div className="mt-6 text-center text-[11px] font-medium opacity-40">
-            Etapa {currentStepIndex + 1} de {totalSteps}
-          </div>
-        )}
       </div>
     </div>
   );
