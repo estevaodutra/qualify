@@ -142,6 +142,7 @@ const WidthSliderControl: React.FC<WidthSliderProps> = ({ value, onChange }) => 
           className="w-full accent-sky-500 cursor-pointer h-2 bg-muted rounded-lg"
         />
       </div>
+    </div>
   );
 };
 
