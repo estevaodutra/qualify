@@ -454,8 +454,12 @@ export const PropertiesPanel: React.FC = () => {
                       <div className="space-y-1.5 pt-1 animate-in fade-in duration-200">
                         <Label className="text-xs">Etapa de destino</Label>
                         <select
-                          value={(activeComponent.config.targetStepId as string) || ""}
-                          onChange={(e) => handleConfigChange("targetStepId", e.target.value)}
+                          value={(activeComponent.config.targetStepId as string) || (activeComponent.config.destination as string) || ""}
+                          onChange={(e) => {
+                            const destVal = e.target.value || null;
+                            handleConfigChange("targetStepId", destVal);
+                            handleConfigChange("destination", destVal);
+                          }}
                           className="w-full h-8 px-2 border rounded-md text-xs bg-background"
                         >
                           <option value="">Próxima Etapa (Padrão)</option>

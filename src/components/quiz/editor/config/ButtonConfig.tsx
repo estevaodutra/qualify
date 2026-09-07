@@ -48,8 +48,11 @@ export function ButtonConfig({ componentId, config, onChange, steps }: Props) {
         <div className="space-y-1.5">
           <Label>Destino</Label>
           <Select
-            value={(config.destination as string) || "__next__"}
-            onValueChange={(v) => set("destination", v === "__next__" ? null : v)}
+            value={(config.destination as string) || (config.targetStepId as string) || "__next__"}
+            onValueChange={(v) => {
+              const destVal = v === "__next__" ? null : v;
+              onChange({ ...config, destination: destVal, targetStepId: destVal });
+            }}
           >
             <SelectTrigger><SelectValue placeholder="Próxima etapa" /></SelectTrigger>
             <SelectContent>

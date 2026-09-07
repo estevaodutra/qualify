@@ -238,7 +238,7 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
       const actionType = (config.actionType as string) || "navigate";
       const redirectUrl = (config.redirectUrl as string) || "";
       const openInNewTab = !!config.openInNewTab;
-      const targetStepId = (config.targetStepId as string) || "";
+      const targetStepId = (config.targetStepId as string) || (config.destination as string) || (config.destinationStepId as string) || "";
 
       const handleButtonClick = () => {
         if (isEditor) return;
@@ -312,7 +312,7 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
       const isCards = type === "cards_choice" || config.displayStyle === "cards" || options.some((o) => o.image);
 
       return (
-        <div className="w-full space-y-3 my-2 transition-all">
+        <div id={component.id} className="w-full space-y-3 my-2 transition-all">
           {question && <p className="font-semibold text-base text-center mb-2">{question}</p>}
 
           {isCards ? (
@@ -442,6 +442,7 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
           <label className="text-xs font-semibold text-foreground/80">{label}</label>
           {isTextarea ? (
             <textarea
+              id={component.id}
               disabled={isEditor}
               placeholder={placeholder}
               value={formValue}
@@ -454,6 +455,7 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
             />
           ) : (
             <input
+              id={component.id}
               type={type === "field_email" ? "email" : type === "field_phone" ? "tel" : "text"}
               disabled={isEditor}
               placeholder={placeholder}

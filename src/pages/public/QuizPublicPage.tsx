@@ -469,9 +469,83 @@ export default function QuizPublicPage() {
     });
   };
 
+  const validateCurrentStep = (): { isValid: boolean; errors: Record<string, string> } => {
+    if (!steps[currentStepIndex]) return { isValid: true, errors: {} };
+
+    const currentStep = steps[currentStepIndex];
+    const stepComponents = components.filter((c) => c.stepId === currentStep.id);
+    const errors: Record<string, string> = {};
+
+    for (const comp of stepComponents) {
+      const type = comp.componentType;
+      const config = comp.config || {};
+
+      if (type.startsWith("field_")) {
+        const isRequired = config.required !== false;
+        const val = (formValues[comp.id] || "").trim();
+
+        if (isRequired && !val) {
+          errors[comp.id] = "Por favor, preencha este campo obrigatório.";
+          continue;
+        }
+
+        if (val) {
+          if (type === "field_email") {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(val)) {
+              errors[comp.id] = "Por favor, insira um e-mail válido.";
+            }
+          } else if (type === "field_phone") {
+            const digits = val.replace(/\D/g, "");
+            if (digits.length < 10) {
+              errors[comp.id] = "Por favor, insira um telefone válido com DDD.";
+            }
+          } else if (type === "field_cpf") {
+            const digits = val.replace(/\D/g, "");
+            if (digits.length !== 11) {
+              errors[comp.id] = "Por favor, insira um CPF válido com 11 dígitos.";
+            }
+          }
+        }
+      }
+
+      if (type === "options" || type === "cards_choice") {
+        const isRequired = config.required !== false;
+        const selected = selectedOptions[comp.id] || [];
+
+        if (isRequired && selected.length === 0) {
+          errors[comp.id] = "Por favor, selecione uma das opções acima.";
+        }
+      }
+    }
+
+    return {
+      isValid: Object.keys(errors).length === 0,
+      errors,
+    };
+  };
+
   const handleNextStep = async (forcedDestination?: string | null, clickedElementId?: string) => {
     if (!funnel || !steps[currentStepIndex]) return;
 
+    // 0. Validate current step inputs
+    const { isValid, errors } = validateCurrentStep();
+    if (!isValid) {
+      setValidationErrors(errors);
+      const firstInvalidId = Object.keys(errors)[0];
+      if (firstInvalidId) {
+        setTimeout(() => {
+          const el = document.getElementById(firstInvalidId);
+          if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+            el.focus?.();
+          }
+        }, 50);
+      }
+      return;
+    }
+
+    setValidationErrors({});
     setSubmitting(true);
     try {
       const currentStep = steps[currentStepIndex];
@@ -594,15 +668,37 @@ export default function QuizPublicPage() {
         });
       }
 
-      // 6. Navigation logic
-      if (forcedDestination) {
-        const targetIdx = steps.findIndex((s) => s.id === forcedDestination);
+      // 6. Navigation / Destination Resolution logic
+      let finalDestinationStepId: string | null = forcedDestination || null;
+
+      // If button has no explicit destination (null), check if any selected option in this step has a destination configured
+      if (!finalDestinationStepId) {
+        for (const comp of stepComponents) {
+          if (comp.componentType === "options" || comp.componentType === "cards_choice") {
+            const selectedOptIds = selectedOptions[comp.id] || [];
+            const rawOpts = (comp.config.options as any[]) || [];
+            for (const optId of selectedOptIds) {
+              const matchedOpt = rawOpts.find((o) => o.id === optId || o.value === optId || String(o.id) === String(optId));
+              if (matchedOpt && matchedOpt.destination) {
+                finalDestinationStepId = matchedOpt.destination;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      if (finalDestinationStepId) {
+        let targetIdx = steps.findIndex((s) => s.id === finalDestinationStepId);
+        if (targetIdx < 0) {
+          targetIdx = steps.findIndex((s) => s.name.trim().toLowerCase() === finalDestinationStepId.trim().toLowerCase());
+        }
+
         if (targetIdx >= 0) {
           const nextStep = steps[targetIdx];
           setCurrentStepIndex(targetIdx);
 
           if (submissionId) {
-            // Track next step entry
             await quizTrackingService.trackQuizEvent({
               submissionId,
               funnelId: funnel.id,
@@ -757,9 +853,23 @@ export default function QuizPublicPage() {
         onFormChange={(compId, val) => {
           const formattedVal = compId.includes("phone") ? maskPhone(val) : val;
           setFormValues((prev) => ({ ...prev, [compId]: formattedVal }));
+          if (validationErrors[compId]) {
+            setValidationErrors((prev) => {
+              const copy = { ...prev };
+              delete copy[compId];
+              return copy;
+            });
+          }
         }}
         onOptionSelect={(compId, optId, dest) => {
           setSelectedOptions((prev) => ({ ...prev, [compId]: [optId] }));
+          if (validationErrors[compId]) {
+            setValidationErrors((prev) => {
+              const copy = { ...prev };
+              delete copy[compId];
+              return copy;
+            });
+          }
           const comp = components.find((c) => c.id === compId);
           const clickedId = (comp?.config?.idName as string) || optId || compId;
           setTimeout(() => handleNextStep(dest, String(clickedId)), 350);
