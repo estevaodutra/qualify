@@ -272,7 +272,7 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
         const buttonIdName = (config.idName as string) || component.id;
 
         if (targetStepId) {
-          onOptionSelect?.(component.id, buttonIdName, targetStepId);
+          onOptionSelect?.(buttonIdName, targetStepId);
         } else {
           onNext?.(buttonIdName);
         }

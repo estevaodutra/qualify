@@ -736,6 +736,22 @@ export default function QuizPublicPage() {
         if (targetIdx < 0) {
           targetIdx = steps.findIndex((s) => s.name.trim().toLowerCase() === trimmedDest.toLowerCase());
         }
+        if (targetIdx < 0) {
+          targetIdx = steps.findIndex(
+            (s) =>
+              s.name.trim().toLowerCase().includes(trimmedDest.toLowerCase()) ||
+              trimmedDest.toLowerCase().includes(s.name.trim().toLowerCase())
+          );
+        }
+        if (targetIdx < 0) {
+          const digits = trimmedDest.replace(/\D/g, "");
+          if (digits) {
+            const num = parseInt(digits, 10);
+            if (!isNaN(num) && num > 0 && num <= steps.length) {
+              targetIdx = num - 1;
+            }
+          }
+        }
 
         if (targetIdx >= 0) {
           const nextStep = steps[targetIdx];
