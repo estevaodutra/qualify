@@ -79,6 +79,17 @@ export default function QuizPublicPage() {
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string[]>>({});
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
+  const latestFormValues = useRef<Record<string, string>>({});
+  const latestSelectedOptions = useRef<Record<string, string[]>>({});
+
+  useEffect(() => {
+    latestFormValues.current = formValues;
+  }, [formValues]);
+
+  useEffect(() => {
+    latestSelectedOptions.current = selectedOptions;
+  }, [selectedOptions]);
+
   const accumulatedLead = useRef<Record<string, string>>({});
 
   useEffect(() => {
@@ -469,12 +480,18 @@ export default function QuizPublicPage() {
     });
   };
 
-  const validateCurrentStep = (): { isValid: boolean; errors: Record<string, string> } => {
+  const validateCurrentStep = (
+    overrideFormValues?: Record<string, string>,
+    overrideSelectedOptions?: Record<string, string[]>
+  ): { isValid: boolean; errors: Record<string, string> } => {
     if (!steps[currentStepIndex]) return { isValid: true, errors: {} };
 
     const currentStep = steps[currentStepIndex];
     const stepComponents = components.filter((c) => c.stepId === currentStep.id);
     const errors: Record<string, string> = {};
+
+    const activeFormValues = overrideFormValues || latestFormValues.current || formValues;
+    const activeSelectedOptions = overrideSelectedOptions || latestSelectedOptions.current || selectedOptions;
 
     for (const comp of stepComponents) {
       const type = comp.componentType;
@@ -482,7 +499,7 @@ export default function QuizPublicPage() {
 
       if (type.startsWith("field_")) {
         const isRequired = config.required !== false;
-        const val = (formValues[comp.id] || "").trim();
+        const val = (activeFormValues[comp.id] || "").trim();
 
         if (isRequired && !val) {
           errors[comp.id] = "Por favor, preencha este campo obrigatório.";
@@ -511,7 +528,7 @@ export default function QuizPublicPage() {
 
       if (type === "options" || type === "cards_choice") {
         const isRequired = config.required !== false;
-        const selected = selectedOptions[comp.id] || [];
+        const selected = activeSelectedOptions[comp.id] || [];
 
         if (isRequired && selected.length === 0) {
           errors[comp.id] = "Por favor, selecione uma das opções acima.";
@@ -525,11 +542,19 @@ export default function QuizPublicPage() {
     };
   };
 
-  const handleNextStep = async (forcedDestination?: string | null, clickedElementId?: string) => {
+  const handleNextStep = async (
+    forcedDestination?: string | null,
+    clickedElementId?: string,
+    overrideSelectedOptions?: Record<string, string[]>,
+    overrideFormValues?: Record<string, string>
+  ) => {
     if (!funnel || !steps[currentStepIndex]) return;
 
-    // 0. Validate current step inputs
-    const { isValid, errors } = validateCurrentStep();
+    const activeFormValues = overrideFormValues || latestFormValues.current || formValues;
+    const activeSelectedOptions = overrideSelectedOptions || latestSelectedOptions.current || selectedOptions;
+
+    // 0. Validate current step inputs with latest up-to-date values
+    const { isValid, errors } = validateCurrentStep(activeFormValues, activeSelectedOptions);
     if (!isValid) {
       setValidationErrors(errors);
       const firstInvalidId = Object.keys(errors)[0];
@@ -558,7 +583,7 @@ export default function QuizPublicPage() {
 
       for (const comp of stepComponents) {
         if (comp.componentType.startsWith("field_")) {
-          const val = formValues[comp.id];
+          const val = activeFormValues[comp.id];
           if (val) {
             if (submissionId) {
               await quizTrackingService.saveAnswer({
@@ -590,7 +615,7 @@ export default function QuizPublicPage() {
             }
           }
         } else if (comp.componentType === "options" || comp.componentType === "cards_choice") {
-          const opts = selectedOptions[comp.id];
+          const opts = activeSelectedOptions[comp.id];
           if (opts && opts.length > 0) {
             if (submissionId) {
               await quizTrackingService.saveAnswer({
@@ -675,7 +700,7 @@ export default function QuizPublicPage() {
       if (!finalDestinationStepId) {
         for (const comp of stepComponents) {
           if (comp.componentType === "options" || comp.componentType === "cards_choice") {
-            const selectedOptIds = selectedOptions[comp.id] || [];
+            const selectedOptIds = activeSelectedOptions[comp.id] || [];
             const rawOpts = (comp.config.options as any[]) || [];
             for (const optId of selectedOptIds) {
               const matchedOpt = rawOpts.find((o) => o.id === optId || o.value === optId || String(o.id) === String(optId));
@@ -852,7 +877,9 @@ export default function QuizPublicPage() {
         submitting={submitting}
         onFormChange={(compId, val) => {
           const formattedVal = compId.includes("phone") ? maskPhone(val) : val;
-          setFormValues((prev) => ({ ...prev, [compId]: formattedVal }));
+          const updatedForm = { ...latestFormValues.current, [compId]: formattedVal };
+          latestFormValues.current = updatedForm;
+          setFormValues(updatedForm);
           if (validationErrors[compId]) {
             setValidationErrors((prev) => {
               const copy = { ...prev };
@@ -862,7 +889,9 @@ export default function QuizPublicPage() {
           }
         }}
         onOptionSelect={(compId, optId, dest) => {
-          setSelectedOptions((prev) => ({ ...prev, [compId]: [optId] }));
+          const updatedOptions = { ...latestSelectedOptions.current, [compId]: [optId] };
+          latestSelectedOptions.current = updatedOptions;
+          setSelectedOptions(updatedOptions);
           if (validationErrors[compId]) {
             setValidationErrors((prev) => {
               const copy = { ...prev };
@@ -872,7 +901,7 @@ export default function QuizPublicPage() {
           }
           const comp = components.find((c) => c.id === compId);
           const clickedId = (comp?.config?.idName as string) || optId || compId;
-          setTimeout(() => handleNextStep(dest, String(clickedId)), 350);
+          setTimeout(() => handleNextStep(dest, String(clickedId), updatedOptions, latestFormValues.current), 350);
         }}
         onNextStep={(clickedId) => handleNextStep(null, clickedId)}
         onPrevStep={handlePrevStep}
