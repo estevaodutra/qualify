@@ -258,6 +258,24 @@ function ComponentPreview({
     );
   }
 
+  if (type === "video") {
+    const url = (config.url as string) || "";
+    if (!url) {
+      return (
+        <div className="h-32 bg-current/10 rounded-lg flex items-center justify-center text-xs opacity-40">
+          Vídeo
+        </div>
+      );
+    }
+    return (
+      <video
+        src={url}
+        controls
+        className="w-full rounded-lg object-cover max-h-48"
+      />
+    );
+  }
+
   if (type === "button") {
     const style = config.style as string || "primary";
     return (

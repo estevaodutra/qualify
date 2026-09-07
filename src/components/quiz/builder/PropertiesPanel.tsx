@@ -10,6 +10,7 @@ import { COMPONENT_REGISTRY } from "../registry/componentRegistry";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { TEXT_COLOR_PRESETS } from "@/utils/quiz/quizTextSanitizer";
 import { ImageUploader, CompactImageUploadButton } from "../media/ImageUploader";
+import { VideoUploader } from "../media/VideoUploader";
 import { EditableRichText } from "../editor/EditableRichText";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -322,6 +323,52 @@ export const PropertiesPanel: React.FC = () => {
                     onChange={(e) => handleConfigChange("alt", e.target.value)}
                     className="h-8 text-xs"
                   />
+                </div>
+              </div>
+            ) : null}
+
+            {activeComponent.componentType === "video" ? (
+              <div className="space-y-4">
+                <VideoUploader
+                  label="Upload de Vídeo (Arquivo MP4/WebM)"
+                  value={(activeComponent.config.url as string) || ""}
+                  onChange={(url) => handleConfigChange("url", url)}
+                />
+                <div className="space-y-1.5">
+                  <Label className="text-xs">URL do Vídeo (Embed ou Link Direto)</Label>
+                  <Input
+                    value={(activeComponent.config.url as string) || ""}
+                    onChange={(e) => handleConfigChange("url", e.target.value)}
+                    placeholder="https://www.youtube.com/watch?v=... ou link .mp4"
+                    className="h-8 text-xs"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Cole um link do YouTube, Vimeo ou o link direto do arquivo de vídeo.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs">
+                    <input
+                      type="checkbox"
+                      checked={!!activeComponent.config.autoPlay}
+                      onChange={(e) => handleConfigChange("autoPlay", e.target.checked)}
+                      className="rounded text-indigo-600"
+                    />
+                    <span>Autoplay (Reprodução Automática)</span>
+                  </label>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs">
+                    <input
+                      type="checkbox"
+                      checked={activeComponent.config.controls !== false}
+                      onChange={(e) => handleConfigChange("controls", e.target.checked)}
+                      className="rounded text-indigo-600"
+                    />
+                    <span>Mostrar Controles</span>
+                  </label>
                 </div>
               </div>
             ) : null}

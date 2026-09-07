@@ -13,6 +13,7 @@ import { ImageConfig } from "./config/ImageConfig";
 import { ButtonConfig } from "./config/ButtonConfig";
 import { OptionsConfig } from "./config/OptionsConfig";
 import { FieldConfig } from "./config/FieldConfig";
+import { VideoUploader } from "../media/VideoUploader";
 
 const componentLabel: Record<QuizComponentType, string> = {
   text: "Texto",
@@ -90,6 +91,24 @@ export function ComponentConfigPanel({ component, activeStep, steps, onChange, o
           )}
           {component.componentType === "image" && (
             <ImageConfig config={component.config} onChange={handleChange} />
+          )}
+          {component.componentType === "video" && (
+            <div className="space-y-4">
+              <VideoUploader
+                label="Upload de Vídeo (Arquivo MP4/WebM)"
+                value={(component.config.url as string) || ""}
+                onChange={(url) => handleChange({ ...component.config, url })}
+              />
+              <div className="space-y-1.5">
+                <Label className="text-xs">URL do Vídeo (Embed ou Link Direto)</Label>
+                <Input
+                  value={(component.config.url as string) || ""}
+                  onChange={(e) => handleChange({ ...component.config, url: e.target.value })}
+                  placeholder="https://www.youtube.com/watch?v=... ou link .mp4"
+                  className="h-8 text-xs"
+                />
+              </div>
+            </div>
           )}
           {component.componentType === "button" && (
             <ButtonConfig componentId={component.id} config={component.config} onChange={handleChange} steps={steps} />

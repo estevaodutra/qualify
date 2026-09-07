@@ -11,7 +11,8 @@ import {
   ArrowDown,
   Copy,
   Trash2,
-  GripVertical
+  GripVertical,
+  Video
 } from "lucide-react";
 import { EditableRichText } from "../editor/EditableRichText";
 import { RichTextRenderer } from "./RichTextRenderer";
@@ -162,7 +163,73 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
       );
     }
 
-    // ─── Buttons (CTA & WhatsApp) ──────────────────────────────────────────────
+    // ─── Video Embed / Upload ──────────────────────────────────────────────────
+    if (type === "video") {
+      const url = (config.url as string) || "";
+      const autoPlay = !!config.autoPlay;
+      const controls = config.controls !== false;
+
+      const getEmbedUrl = (rawUrl: string): string | null => {
+        if (!rawUrl) return null;
+        const trimmed = rawUrl.trim();
+
+        if (trimmed.includes("youtube.com") || trimmed.includes("youtu.be")) {
+          let videoId = "";
+          if (trimmed.includes("youtu.be/")) {
+            videoId = trimmed.split("youtu.be/")[1]?.split("?")[0]?.split("&")[0];
+          } else if (trimmed.includes("watch?v=")) {
+            videoId = trimmed.split("watch?v=")[1]?.split("&")[0];
+          } else if (trimmed.includes("embed/")) {
+            videoId = trimmed.split("embed/")[1]?.split("?")[0];
+          }
+          if (videoId) return `https://www.youtube.com/embed/${videoId}${autoPlay ? "?autoplay=1" : ""}`;
+        }
+
+        if (trimmed.includes("vimeo.com")) {
+          const parts = trimmed.split("vimeo.com/");
+          const videoId = parts[1]?.split("?")[0]?.split("#")[0];
+          if (videoId && /^\d+$/.test(videoId)) {
+            return `https://player.vimeo.com/video/${videoId}${autoPlay ? "?autoplay=1" : ""}`;
+          }
+        }
+
+        return null;
+      };
+
+      const embedUrl = getEmbedUrl(url);
+
+      return (
+        <div className="w-full my-2 transition-all">
+          {url ? (
+            embedUrl ? (
+              <div className="w-full aspect-video rounded-lg overflow-hidden shadow-sm bg-black">
+                <iframe
+                  src={embedUrl}
+                  title="Vídeo Embed"
+                  className="w-full h-full border-0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+            ) : (
+              <video
+                src={url}
+                controls={controls}
+                autoPlay={autoPlay}
+                playsInline
+                style={{ borderRadius: borderStyle.borderRadius }}
+                className="w-full h-auto max-h-[420px] shadow-sm bg-black object-contain"
+              />
+            )
+          ) : (
+            <div className="w-full h-40 bg-muted/40 border-2 border-dashed border-muted-foreground/30 rounded-lg flex flex-col items-center justify-center text-xs opacity-60 gap-1.5">
+              <Video className="w-6 h-6 opacity-40 text-muted-foreground" />
+              <span>Configure a URL ou faça upload do vídeo</span>
+            </div>
+          )}
+        </div>
+      );
+    }
     if (type === "button" || type === "cta_whatsapp") {
       const text = (config.text as string) || (type === "cta_whatsapp" ? "Falar no WhatsApp" : "Continuar");
       const buttonColor = (config.buttonColor as string) || (config.backgroundColor as string) || primaryColor;
