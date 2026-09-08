@@ -53,6 +53,130 @@ function formatPhone(value: string, mask: string): string {
   return formatted;
 }
 
+const RedirectComponent: React.FC<{
+  config: Record<string, unknown>;
+  primaryColor: string;
+  borderStyle: React.CSSProperties;
+  isEditor: boolean;
+  onOptionSelect?: (optId: string, destination: string | null) => void;
+  onNext?: (clickedId?: string) => void;
+  componentId: string;
+}> = ({
+  config,
+  primaryColor,
+  borderStyle,
+  isEditor,
+  onOptionSelect,
+  onNext,
+  componentId,
+}) => {
+  const title = (config.title as string) ?? "Carregando...";
+  const delaySeconds = Number(config.delaySeconds ?? 0);
+  const durationSeconds = Number(config.durationSeconds ?? 5);
+  const navigationType = (config.navigationType as string) || (config.actionType as string) || "step";
+  const destination = (config.destination as string) || (config.targetStepId as string) || null;
+  const externalUrl = (config.externalUrl as string) || (config.redirectUrl as string) || "";
+  const description = (config.description as string) ?? "";
+  const showTitle = (config.showTitle as boolean) ?? true;
+  const showProgress = (config.showProgress as boolean) ?? true;
+
+  const [progress, setProgress] = React.useState(0);
+  const hasTriggeredRef = React.useRef(false);
+
+  React.useEffect(() => {
+    let animationFrameId: number;
+    let delayTimeoutId: NodeJS.Timeout;
+    hasTriggeredRef.current = false;
+    setProgress(0);
+
+    const startTime = Date.now() + delaySeconds * 1000;
+    const totalTimeMs = durationSeconds * 1000;
+
+    const tick = () => {
+      const now = Date.now();
+      if (now < startTime) {
+        setProgress(0);
+        animationFrameId = requestAnimationFrame(tick);
+        return;
+      }
+
+      const elapsed = now - startTime;
+      const pct = Math.min(100, (elapsed / totalTimeMs) * 100);
+      setProgress(pct);
+
+      if (pct < 100) {
+        animationFrameId = requestAnimationFrame(tick);
+      } else {
+        if (!hasTriggeredRef.current) {
+          hasTriggeredRef.current = true;
+          if (!isEditor) {
+            const buttonIdName = (config.idName as string) || componentId;
+            if (navigationType === "url" || navigationType === "redirect") {
+              if (externalUrl) {
+                let url = externalUrl.trim();
+                if (!url.startsWith("http://") && !url.startsWith("https://") && !url.startsWith("www.")) {
+                  url = `https://${url}`;
+                } else if (url.startsWith("www.")) {
+                  url = `https://${url}`;
+                }
+                window.location.href = url;
+              } else {
+                onNext?.(buttonIdName);
+              }
+            } else {
+              onOptionSelect?.(buttonIdName, destination);
+            }
+          }
+        }
+      }
+    };
+
+    delayTimeoutId = setTimeout(() => {
+      animationFrameId = requestAnimationFrame(tick);
+    }, 50);
+
+    return () => {
+      clearTimeout(delayTimeoutId);
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+    };
+  }, [delaySeconds, durationSeconds, navigationType, destination, externalUrl, isEditor, componentId]);
+
+  return (
+    <div
+      style={{ borderRadius: borderStyle.borderRadius }}
+      className="w-full p-4 my-2 text-center space-y-3 border border-border/60 bg-card shadow-xs transition-all select-none"
+    >
+      {showTitle && title && (
+        <h3 className="text-base font-bold text-foreground mb-1">{title}</h3>
+      )}
+
+      {showProgress && (
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-xs font-semibold px-0.5">
+            <span className="text-[11px] text-muted-foreground opacity-80">Progresso</span>
+            <span className="text-xs font-bold text-foreground">{Math.round(progress)}%</span>
+          </div>
+          <div className="w-full h-3.5 bg-muted rounded-full overflow-hidden p-0.5 border border-border/40">
+            <div
+              style={{
+                width: `${progress}%`,
+                backgroundColor: primaryColor,
+              }}
+              className="h-full rounded-full transition-all duration-75 ease-linear"
+            />
+          </div>
+        </div>
+      )}
+
+      {description && (
+        <p className="text-xs text-muted-foreground opacity-90 max-w-md mx-auto whitespace-pre-wrap pt-0.5">
+          {description}
+        </p>
+      )}
+    </div>
+  );
+};
+
 interface ComponentRendererProps {
   component: QuizComponent;
   formValue?: string;
@@ -477,6 +601,21 @@ export const QuizComponentRenderer: React.FC<ComponentRendererProps> = ({
           )}
           {hasError && <p className="text-xs text-red-500 font-medium">{validationError}</p>}
         </div>
+      );
+    }
+
+    // ─── Redirect / Loading Component ───────────────────────────────────────
+    if (type === "result_redirect" || type === "redirect") {
+      return (
+        <RedirectComponent
+          config={config}
+          primaryColor={primaryColor}
+          borderStyle={borderStyle}
+          isEditor={isEditor}
+          onOptionSelect={onOptionSelect}
+          onNext={onNext}
+          componentId={component.id}
+        />
       );
     }
 

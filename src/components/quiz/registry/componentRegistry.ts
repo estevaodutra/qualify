@@ -20,7 +20,8 @@ import {
   HelpCircle,
   LucideIcon,
   CreditCard,
-  FileText
+  FileText,
+  Timer
 } from "lucide-react";
 
 import { QuizComponentType, QuizComponentCategory } from "@/types/quiz";
@@ -651,12 +652,44 @@ export const COMPONENT_REGISTRY: Record<QuizComponentType, ComponentDefinition> 
   result_redirect: {
     type: "result_redirect",
     label: "Redirecionamento Automático",
-    description: "Redireciona o visitante para uma URL externa pós-resposta.",
+    description: "Loading animado com redirecionamento automático por tempo.",
     category: "result",
-    icon: MousePointerClick,
+    icon: Timer,
     defaultConfig: {
-      title: "Redirecionando...",
-      description: "Você será direcionado em alguns instantes.",
+      idName: "",
+      title: "Carregando...",
+      delaySeconds: 0,
+      durationSeconds: 5,
+      navigationType: "step",
+      destination: null,
+      externalUrl: "",
+      description: "Aguarde enquanto preparamos seu resultado...",
+      showTitle: true,
+      showProgress: true,
+    },
+    schema: ResultCardSchema,
+    supportsConditions: true,
+    supportsResponsive: true,
+    supportsDataBinding: false,
+    migrationVersion: 1,
+  },
+  redirect: {
+    type: "redirect",
+    label: "Redirecionamento Automático",
+    description: "Loading animado com redirecionamento automático por tempo.",
+    category: "result",
+    icon: Timer,
+    defaultConfig: {
+      idName: "",
+      title: "Carregando...",
+      delaySeconds: 0,
+      durationSeconds: 5,
+      navigationType: "step",
+      destination: null,
+      externalUrl: "",
+      description: "Aguarde enquanto preparamos seu resultado...",
+      showTitle: true,
+      showProgress: true,
     },
     schema: ResultCardSchema,
     supportsConditions: true,

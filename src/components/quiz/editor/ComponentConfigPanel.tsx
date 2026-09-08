@@ -13,6 +13,7 @@ import { ImageConfig } from "./config/ImageConfig";
 import { ButtonConfig } from "./config/ButtonConfig";
 import { OptionsConfig } from "./config/OptionsConfig";
 import { FieldConfig } from "./config/FieldConfig";
+import { RedirectConfig } from "./config/RedirectConfig";
 import { VideoUploader } from "../media/VideoUploader";
 
 const componentLabel: Record<QuizComponentType, string> = {
@@ -115,6 +116,9 @@ export function ComponentConfigPanel({ component, activeStep, steps, onChange, o
           )}
           {component.componentType === "options" && (
             <OptionsConfig config={component.config} onChange={handleChange} steps={steps} />
+          )}
+          {(component.componentType === "result_redirect" || component.componentType === "redirect") && (
+            <RedirectConfig componentId={component.id} config={component.config} onChange={handleChange} steps={steps} />
           )}
           {isField && (
             <FieldConfig

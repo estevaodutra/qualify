@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { TEXT_COLOR_PRESETS } from "@/utils/quiz/quizTextSanitizer";
 import { ImageUploader, CompactImageUploadButton } from "../media/ImageUploader";
 import { VideoUploader } from "../media/VideoUploader";
+import { RedirectConfig } from "../editor/config/RedirectConfig";
 import { EditableRichText } from "../editor/EditableRichText";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -775,6 +776,15 @@ export const PropertiesPanel: React.FC = () => {
                 </label>
               </div>
             ) : null}
+
+            {(activeComponent.componentType === "result_redirect" || activeComponent.componentType === "redirect") && (
+              <RedirectConfig
+                componentId={activeComponent.id}
+                config={activeComponent.config}
+                onChange={(cfg) => updateComponent(activeComponent.id, { config: cfg })}
+                steps={steps}
+              />
+            )}
           </TabsContent>
 
           {/* Style Tab */}
