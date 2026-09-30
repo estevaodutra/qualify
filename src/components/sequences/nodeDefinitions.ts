@@ -93,6 +93,7 @@ export function getNodeSubTypeInfo(blockType: string, subType: string | undefine
 // back to the block+subtype it now lives under, driving the lift-on-load side
 // of the legacy adapter (see legacyNodeAdapter.ts).
 export function isContentSubType(nodeType: string): boolean {
+  if (nodeType === "delay") return false;
   const block = getNodeBlockDefinition("content");
   if (!block || !block.subTypes) return false;
   return block.subTypes.some((s) => s.subType === nodeType);
