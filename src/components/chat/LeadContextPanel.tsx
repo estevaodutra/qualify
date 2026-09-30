@@ -13,6 +13,8 @@ import { useToast } from "@/hooks/use-toast";
 import { LeadAvatar, LeadTags, DealPipelineStage, DealValue } from "../crm/shared";
 import { Badge } from "@/components/ui/badge";
 import { TagSelectorPopover } from "./tags/TagSelectorPopover";
+import { TagBadge } from "./tags/TagBadge";
+import { useTagColors } from "@/hooks/useTagColors";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Deal } from "@/types/crm.types";
 import { format } from "date-fns";
@@ -38,6 +40,7 @@ interface CustomFieldMetadata {
 export default function LeadContextPanel({ conversation, stages, onClose }: LeadContextPanelProps) {
   const { lead } = conversation;
   const { createLeadFromConversation, isCreatingLead } = useConversationActions();
+  const { getTagColor } = useTagColors();
 
   const [activeTab, setActiveTab] = useState<"info" | "negocios" | "tarefas" | "arquivos">("info");
 
@@ -250,21 +253,13 @@ export default function LeadContextPanel({ conversation, stages, onClose }: Lead
         {conversation.lead_id && (
           <div className="flex items-center justify-center gap-1.5 flex-wrap pt-1 max-w-[280px]">
             {localTags.map((tag) => (
-              <Badge
+              <TagBadge
                 key={tag}
-                variant="secondary"
-                className="text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full flex items-center gap-1"
-              >
-                <span>{tag}</span>
-                <button
-                  type="button"
-                  onClick={() => handleRemoveTag(tag)}
-                  className="hover:text-destructive transition-colors cursor-pointer"
-                  title="Remover tag"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
+                tag={tag}
+                color={getTagColor(tag)}
+                onRemove={() => handleRemoveTag(tag)}
+                maxTextWidth="max-w-[150px]"
+              />
             ))}
             <TagSelectorPopover
               leadId={lead?.id}
@@ -273,10 +268,11 @@ export default function LeadContextPanel({ conversation, stages, onClose }: Lead
               trigger={
                 <button
                   type="button"
-                  className="h-6 w-6 rounded-full bg-primary/10 text-primary hover:bg-primary/20 flex items-center justify-center transition-all cursor-pointer border border-primary/20 shadow-none shrink-0"
+                  className="h-5 px-1.5 rounded-md bg-muted/60 hover:bg-primary/10 hover:text-primary text-muted-foreground flex items-center gap-1 text-[10px] font-medium transition-all cursor-pointer border border-border/40 shrink-0"
                   title="Adicionar Tag"
                 >
-                  <Plus className="h-3.5 w-3.5" />
+                  <Plus className="h-3 w-3" />
+                  {localTags.length === 0 && <span className="text-[10px]">Adicionar tag</span>}
                 </button>
               }
             />

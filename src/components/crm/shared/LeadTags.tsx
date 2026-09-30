@@ -1,10 +1,11 @@
-import { Badge } from "@/components/ui/badge";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Badge } from "@/components/ui/badge";
+import { useTagColors, getTagStyles } from "@/hooks/useTagColors";
 
 interface LeadTagsProps {
   tags: string[];
@@ -12,6 +13,8 @@ interface LeadTagsProps {
 }
 
 export function LeadTags({ tags, maxVisible = 2 }: LeadTagsProps) {
+  const { getTagColor } = useTagColors();
+
   if (!tags || tags.length === 0) return null;
 
   const visibleTags = tags.slice(0, maxVisible);
@@ -19,20 +22,24 @@ export function LeadTags({ tags, maxVisible = 2 }: LeadTagsProps) {
 
   return (
     <div className="flex flex-wrap gap-1">
-      {visibleTags.map((tag) => (
-        <Badge
-          key={tag}
-          variant="secondary"
-          className="px-1.5 py-0 text-[10px] bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-        >
-          {tag}
-        </Badge>
-      ))}
+      {visibleTags.map((tag) => {
+        const color = getTagColor(tag);
+        const styles = getTagStyles(color);
+        return (
+          <span
+            key={tag}
+            style={styles}
+            className="inline-flex items-center text-[10px] font-bold border px-1.5 py-0.5 rounded-md leading-tight shrink-0 select-none shadow-none"
+          >
+            {tag}
+          </span>
+        );
+      })}
       {hiddenCount > 0 && (
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Badge variant="outline" className="px-1.5 py-0 text-[10px] text-muted-foreground cursor-help">
+              <Badge variant="outline" className="px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground cursor-help rounded-md">
                 +{hiddenCount}
               </Badge>
             </TooltipTrigger>
