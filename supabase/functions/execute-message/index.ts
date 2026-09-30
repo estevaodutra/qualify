@@ -2713,7 +2713,7 @@ Deno.serve(async (req) => {
             // Save execution state
             const { data: savedExecution, error: saveError } = await supabase
               .from("sequence_executions")
-              .insert({
+              .upsert({
                 id: workflowExecutionId, // reuse the same id as workflow_executions so resume can correlate them
                 user_id: userId,
                 campaign_id: effectiveCampaignId,
@@ -3281,7 +3281,7 @@ Deno.serve(async (req) => {
               
               const { data: savedExecution, error: saveError } = await supabase
                 .from("sequence_executions")
-                .insert({
+                .upsert({
                   id: workflowExecutionId,
                   user_id: userId,
                   campaign_id: effectiveCampaignId,
