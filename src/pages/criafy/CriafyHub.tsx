@@ -8,7 +8,7 @@ import {
   Sparkles,
   Plus,
   BookOpen,
-  FolderVideo,
+  Film,
   Send,
   Clock,
   Loader2,
@@ -285,7 +285,7 @@ export default function CriafyHub() {
       <Tabs defaultValue="conteudos" className="space-y-4 pt-4">
         <TabsList className="bg-muted/60 p-1 h-10">
           <TabsTrigger value="conteudos" className="text-xs gap-1.5 h-8">
-            <FolderVideo className="w-3.5 h-3.5" /> Biblioteca de Conteúdos
+            <Film className="w-3.5 h-3.5" /> Biblioteca de Conteúdos
           </TabsTrigger>
           <TabsTrigger value="publicacoes" className="text-xs gap-1.5 h-8">
             <Send className="w-3.5 h-3.5" /> Publicações & Agendamento
