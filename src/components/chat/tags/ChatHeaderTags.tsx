@@ -6,7 +6,10 @@ import {
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
 import { TagSelectorPopover } from "./TagSelectorPopover";
-import { Tag, Eye, Plus } from "lucide-react";
+import { Tag, Eye, Plus, X, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 interface ChatHeaderTagsProps {
   leadId?: string;
@@ -19,7 +22,9 @@ export function ChatHeaderTags({
   tags = [],
   onTagsChange,
 }: ChatHeaderTagsProps) {
+  const queryClient = useQueryClient();
   const [currentTags, setCurrentTags] = useState<string[]>(tags || []);
+  const [removingTag, setRemovingTag] = useState<string | null>(null);
 
   useEffect(() => {
     setCurrentTags(tags || []);
@@ -28,6 +33,40 @@ export function ChatHeaderTags({
   const handleTagsChange = (newTags: string[]) => {
     setCurrentTags(newTags);
     if (onTagsChange) onTagsChange(newTags);
+  };
+
+  const handleRemoveTag = async (e: React.MouseEvent, tagToRemove: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!leadId) return;
+
+    const nextTags = currentTags.filter(
+      (t) => t.toLowerCase() !== tagToRemove.toLowerCase()
+    );
+
+    // Atualização otimista imediata
+    handleTagsChange(nextTags);
+    setRemovingTag(tagToRemove);
+
+    try {
+      const { error } = await supabase
+        .from("leads")
+        .update({ tags: nextTags })
+        .eq("id", leadId);
+
+      if (error) throw error;
+
+      queryClient.invalidateQueries({ queryKey: ["chat-conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["lead-deals"] });
+      toast.success(`Tag "${tagToRemove}" removida`);
+    } catch (err: any) {
+      console.error("Erro ao remover tag:", err);
+      toast.error(`Erro ao remover tag: ${err.message || err}`);
+      // Reverter em caso de erro
+      handleTagsChange(currentTags);
+    } finally {
+      setRemovingTag(null);
+    }
   };
 
   if (!leadId) return null;
@@ -51,9 +90,22 @@ export function ChatHeaderTags({
         <Badge
           key={tag}
           variant="secondary"
-          className="text-[10px] font-semibold bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-md shrink-0 shadow-none hover:bg-primary/15 transition-colors"
+          className="group/tag relative text-[10px] font-semibold bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-md shrink-0 shadow-none hover:bg-primary/15 transition-all flex items-center gap-1"
         >
-          {tag}
+          <span>{tag}</span>
+          <button
+            type="button"
+            onClick={(e) => handleRemoveTag(e, tag)}
+            disabled={removingTag === tag}
+            className="opacity-0 group-hover/tag:opacity-100 -mr-0.5 ml-0.5 p-0.5 rounded-full hover:bg-destructive/20 hover:text-destructive text-muted-foreground transition-all cursor-pointer"
+            title={`Remover tag "${tag}"`}
+          >
+            {removingTag === tag ? (
+              <Loader2 className="h-2.5 w-2.5 animate-spin" />
+            ) : (
+              <X className="h-2.5 w-2.5" />
+            )}
+          </button>
         </Badge>
       ))}
 
@@ -102,9 +154,22 @@ export function ChatHeaderTags({
                 <Badge
                   key={tag}
                   variant="secondary"
-                  className="text-[10px] font-semibold bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-md"
+                  className="group/popovertag text-[10px] font-semibold bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-md flex items-center gap-1"
                 >
-                  {tag}
+                  <span>{tag}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => handleRemoveTag(e, tag)}
+                    disabled={removingTag === tag}
+                    className="opacity-0 group-hover/popovertag:opacity-100 -mr-0.5 ml-0.5 p-0.5 rounded-full hover:bg-destructive/20 hover:text-destructive text-muted-foreground transition-all cursor-pointer"
+                    title={`Remover tag "${tag}"`}
+                  >
+                    {removingTag === tag ? (
+                      <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                    ) : (
+                      <X className="h-2.5 w-2.5" />
+                    )}
+                  </button>
                 </Badge>
               ))}
             </div>
