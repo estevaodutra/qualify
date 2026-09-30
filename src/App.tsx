@@ -58,6 +58,7 @@ import MembersPage from "./pages/settings/MembersPage";
 import QuizFunnelsPage from "./pages/quiz/QuizFunnelsPage";
 import QuizEditorPage from "./pages/quiz/QuizEditorPage";
 import QuizPublicPage from "./pages/public/QuizPublicPage";
+import CriafyHub from "./pages/criafy/CriafyHub";
 import { AdminRoute } from "@/components/auth/AdminRoute";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -136,6 +137,7 @@ const App = () => {
                       <Route path="/configuracoes/membros" element={<Settings />} />
 
                       {/* Quiz / Funnel routes (inside AppLayout with sidebar support) */}
+                      <Route path="/criafy" element={<CriafyHub />} />
                       <Route path="/quiz" element={<QuizFunnelsPage />} />
                       <Route path="/quiz/:id" element={<QuizEditorPage />} />
 

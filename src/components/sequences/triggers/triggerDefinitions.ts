@@ -2,12 +2,12 @@ import {
   Rocket, Plug, Webhook, UserPlus, Kanban,
   Search, Radar, MessageCircle, Hash,
   CalendarClock, ClipboardCheck, CalendarPlus, Zap,
-  Users, LogOut,
+  Users, LogOut, Tag, Award, Trash2, ArrowRightLeft
 } from "lucide-react";
 import type { TriggerDefinition } from "./types";
 import { ScheduledTriggerConfig } from "./configs/ScheduledTriggerConfig";
 import { ApiTriggerConfig } from "./configs/ApiTriggerConfig";
-import { GroupEventTriggerConfig } from "./configs/GroupEventTriggerConfig";
+
 
 const weekdayLabel = (days: any): string => {
   if (!Array.isArray(days) || days.length === 0) return "nenhum dia";
@@ -116,44 +116,7 @@ export const TRIGGER_DEFINITIONS: Record<string, TriggerDefinition> = {
     },
     configComponent: ScheduledTriggerConfig,
   },
-  member_join: {
-    type: "member_join",
-    label: "Membro entrar",
-    description: "Inicia quando um novo membro entra no grupo.",
-    category: "leads",
-    icon: Users,
-    color: "bg-green-500",
-    status: "available",
-    supportedBy: ["dispatch_sequence", "group_sequence"],
-    defaultConfig: { sendPrivate: false },
-    summaryBuilder: () => ({ title: "Membro entrar no grupo" }),
-    validate: (config) => {
-      const errors: string[] = [];
-      if (!config.instanceId) errors.push("Selecione a instância.");
-      if (!config.selectedGroupJids || (config.selectedGroupJids as string[]).length === 0) errors.push("Selecione pelo menos um grupo monitorado.");
-      return errors;
-    },
-    configComponent: GroupEventTriggerConfig,
-  },
-  member_leave: {
-    type: "member_leave",
-    label: "Membro sair",
-    description: "Inicia quando um membro sai do grupo.",
-    category: "leads",
-    icon: LogOut,
-    color: "bg-red-500",
-    status: "available",
-    supportedBy: ["dispatch_sequence", "group_sequence"],
-    defaultConfig: { sendPrivate: false },
-    summaryBuilder: () => ({ title: "Membro sair do grupo" }),
-    validate: (config) => {
-      const errors: string[] = [];
-      if (!config.instanceId) errors.push("Selecione a instância.");
-      if (!config.selectedGroupJids || (config.selectedGroupJids as string[]).length === 0) errors.push("Selecione pelo menos um grupo monitorado.");
-      return errors;
-    },
-    configComponent: GroupEventTriggerConfig,
-  },
+  // Group Events triggers (member_join, member_leave) foram removidos conforme solicitado
   on_add: {
     type: "on_add",
     label: "Lead adicionado",
@@ -248,17 +211,69 @@ export const TRIGGER_DEFINITIONS: Record<string, TriggerDefinition> = {
     }),
     validate: () => [],
   },
-  quiz_completed: {
-    type: "quiz_completed",
-    label: "Quiz concluído",
-    description: "Inicia quando o lead conclui um quiz.",
-    category: "atividades",
-    icon: ClipboardCheck,
-    color: "bg-fuchsia-600",
+  deal_created: {
+    type: "deal_created",
+    label: "Negócio criado",
+    description: "Inicia quando um novo negócio é criado no pipeline.",
+    category: "negocios",
+    icon: Award,
+    color: "bg-orange-500",
     status: "available",
-    supportedBy: [],
+    supportedBy: ["dispatch_sequence"],
     defaultConfig: {},
-    summaryBuilder: () => ({ title: "Quiz concluído" }),
+    summaryBuilder: () => ({ title: "Negócio criado" }),
+    validate: () => [],
+  },
+  deal_moved: {
+    type: "deal_moved",
+    label: "Negócio movido",
+    description: "Inicia quando um negócio é movido para outra etapa.",
+    category: "negocios",
+    icon: ArrowRightLeft,
+    color: "bg-orange-600",
+    status: "available",
+    supportedBy: ["dispatch_sequence"],
+    defaultConfig: {},
+    summaryBuilder: () => ({ title: "Negócio movido" }),
+    validate: () => [],
+  },
+  deal_deleted: {
+    type: "deal_deleted",
+    label: "Negócio removido",
+    description: "Inicia quando um negócio é removido.",
+    category: "negocios",
+    icon: Trash2,
+    color: "bg-red-600",
+    status: "available",
+    supportedBy: ["dispatch_sequence"],
+    defaultConfig: {},
+    summaryBuilder: () => ({ title: "Negócio removido" }),
+    validate: () => [],
+  },
+  tag_added: {
+    type: "tag_added",
+    label: "Tag adicionada",
+    description: "Inicia quando uma tag específica é adicionada a um lead.",
+    category: "leads",
+    icon: Tag,
+    color: "bg-indigo-500",
+    status: "available",
+    supportedBy: ["dispatch_sequence"],
+    defaultConfig: {},
+    summaryBuilder: () => ({ title: "Tag adicionada" }),
+    validate: () => [],
+  },
+  tag_removed: {
+    type: "tag_removed",
+    label: "Tag removida",
+    description: "Inicia quando uma tag específica é removida de um lead.",
+    category: "leads",
+    icon: Tag,
+    color: "bg-indigo-400",
+    status: "available",
+    supportedBy: ["dispatch_sequence"],
+    defaultConfig: {},
+    summaryBuilder: () => ({ title: "Tag removida" }),
     validate: () => [],
   },
   appointment_created: {

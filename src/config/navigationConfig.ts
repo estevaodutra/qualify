@@ -13,6 +13,7 @@ import {
   Bell,
   HelpCircle,
   Settings,
+  Sparkles,
   LucideIcon,
 } from "lucide-react";
 
@@ -35,6 +36,7 @@ export const TOP_NAV_ITEMS: NavItem[] = [
 ];
 
 export const APP_SUB_ITEMS: NavItem[] = [
+  { id: "criafy", title: "Criafy", url: "/criafy", icon: Sparkles },
   { id: "quiz", title: "Quiz", url: "/quiz", icon: Layers },
   { id: "prospeccao", title: "Prospecção", url: "/prospeccao", icon: Search },
   { id: "agendamentos", title: "Agendamentos", url: "/agendamentos/calendarios", icon: CalendarDays },
