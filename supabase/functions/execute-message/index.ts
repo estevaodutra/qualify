@@ -2365,11 +2365,13 @@ Deno.serve(async (req) => {
                       (triggerContext.customFields as Record<string, string>)["phone"] = rawVal;
                       // Update the active destination and phoneClean for fetching lead
                       phoneClean = rawVal;
-                      dest.group_jid = `${rawVal}@s.whatsapp.net`;
-                      dest.respondentJid = `${rawVal}@s.whatsapp.net`;
+                      if (dest.isPrivate) {
+                        dest.group_jid = `${rawVal}@s.whatsapp.net`;
+                        (dest as any).respondentJid = `${rawVal}@s.whatsapp.net`;
+                      }
                     }
                   } else if (fieldKey === "tags") {
-                    newTags = rawVal.split(",").map(t => t.trim()).filter(Boolean);
+                    newTags = rawVal.split(",").map((t: string) => t.trim()).filter(Boolean);
                     leadUpdated = true;
                   } else {
                     cfUpdates[fieldKey] = rawVal;
@@ -2388,7 +2390,9 @@ Deno.serve(async (req) => {
                     triggerContext.respondentPhone = rawVal;
                     // Also update dest and phoneClean so the lead lookup uses the mapped phone
                     phoneClean = rawVal;
-                    dest.group_jid = `${rawVal}@s.whatsapp.net`;
+                    if (dest.isPrivate) {
+                      dest.group_jid = `${rawVal}@s.whatsapp.net`;
+                    }
                   }
                 } else if (targetType === "variable") {
                   if (!triggerContext.customFields) triggerContext.customFields = {};
