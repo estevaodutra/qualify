@@ -27,6 +27,7 @@ import LeadContextPanel from "@/components/chat/LeadContextPanel";
 import GroupContextPanel from "@/components/chat/group/GroupContextPanel";
 import LeadPipelineSummary from "@/components/chat/pipeline/LeadPipelineSummary";
 import ConversationActionsMenu from "@/components/chat/actions/ConversationActionsMenu";
+import { ChatHeaderTags } from "@/components/chat/tags/ChatHeaderTags";
 import { useConversationActions } from "@/hooks/useConversationActions";
 import { QuickReply } from "@/types/quickReplyTypes";
 
@@ -489,6 +490,14 @@ export default function Chat() {
                       </Select>
                     </div>
                   </div>
+
+                  {/* Permanent Tags Row (Option 2) */}
+                  {(selectedConv.lead?.id || selectedConv.lead_id) && (
+                    <ChatHeaderTags
+                      leadId={selectedConv.lead?.id || selectedConv.lead_id}
+                      tags={selectedConv.lead?.tags || []}
+                    />
+                  )}
                 </div>
               </div>
 
