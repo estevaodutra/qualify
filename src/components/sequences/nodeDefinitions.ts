@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   MessageSquare, Clock, GitBranch, Shuffle, Tag, Award, Send, Link2, Sliders, Sparkles,
   Image, Video, Music, FileText, Smile, BarChart3, MousePointerClick, List, MapPin, Contact, Calendar,
-  Plus, Pencil, UserPlus, UserMinus, ShieldAlert, ShieldCheck, Settings, Radio, UsersRound, PhoneCall
+  Plus, Pencil, UserPlus, UserMinus, ShieldAlert, ShieldCheck, Settings, Radio, MessagesSquare, PhoneCall
 } from "lucide-react";
 import type { NodeCategory, NodeTypeInfo } from "./shared-types";
 
@@ -70,7 +70,7 @@ export const NODE_DEFINITIONS: NodeBlockDefinition[] = [
       { subType: "channel_select", label: "Selecionar Canal", icon: Send, color: "bg-indigo-600" },
     ],
   },
-  { blockType: "group_management", label: "Gestão de Grupo", icon: UsersRound, color: "bg-indigo-600" },
+  { blockType: "group_management", label: "Gestão de Grupo", icon: MessagesSquare, color: "bg-indigo-600" },
   { blockType: "status", label: "Status", icon: Radio, color: "bg-pink-600" },
   { blockType: "phone_call", label: "Ligação", icon: PhoneCall, color: "bg-pink-600" },
   { blockType: "ura", label: "URA", icon: PhoneCall, color: "bg-purple-600" },
@@ -311,7 +311,7 @@ export function toNodeCategories(isGroup?: boolean): NodeCategory[] {
       id: "group_management",
       label: "Gestão de Grupo",
       nodes: [
-        { type: "group_management", label: "Gestão de Grupo", icon: UsersRound, color: "bg-indigo-600" }
+        { type: "group_management", label: "Gestão de Grupo", icon: MessagesSquare, color: "bg-indigo-600" }
       ]
     });
   }

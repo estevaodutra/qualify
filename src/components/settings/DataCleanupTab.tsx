@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Trash2, AlertTriangle, ShieldAlert, Users, UsersRound, MessageSquare, RefreshCw, CheckCircle2 } from "lucide-react";
+import { Trash2, AlertTriangle, ShieldAlert, Users, MessagesSquare, MessageSquare, RefreshCw, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useQueryClient } from "@tanstack/react-query";
@@ -153,7 +153,7 @@ export function DataCleanupTab() {
           <CardHeader className="p-5 pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <UsersRound className="h-4 w-4 text-emerald-500" /> Grupos
+                <MessagesSquare className="h-4 w-4 text-emerald-500" /> Grupos
               </CardTitle>
               <Badge variant="outline" className="text-[10px] font-semibold text-muted-foreground">
                 Tabela `whatsapp_groups`

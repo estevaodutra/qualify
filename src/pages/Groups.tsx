@@ -19,10 +19,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { UsersRound, Search, Filter, ArrowUpDown, RefreshCw, ChevronLeft, ChevronRight, Wand2, LayoutGrid, List, Radio, CheckCircle2, PlusCircle, Users } from "lucide-react";
+import { MessagesSquare, Search, Filter, ArrowUpDown, RefreshCw, ChevronLeft, ChevronRight, Wand2, LayoutGrid, List, Radio, CheckCircle2, PlusCircle, Users } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useGroupFolders } from "@/hooks/useGroupFolders";
+import { GroupFolderBar } from "@/components/groups/GroupFolderBar";
 import { toast } from "sonner";
 
 interface RemoteGroupItem {
@@ -45,6 +47,17 @@ export default function Groups() {
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [selectedGroup, setSelectedGroup] = useState<WhatsAppGroupItem | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null | undefined>(undefined);
+
+  // Group Folders hook
+  const {
+    folders,
+    assignments,
+    createFolder,
+    renameFolder,
+    deleteFolder,
+    assignGroupToFolder,
+  } = useGroupFolders();
 
   // Sync / Import Modal state
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
@@ -70,12 +83,27 @@ export default function Groups() {
     search,
     instanceId,
     status,
+    folderId: selectedFolderId,
     hasDescriptionOnly,
     hasPhotoOnly,
     sort,
     page,
     pageSize: 15,
   });
+
+  // Calculate folder counts
+  const countByFolder: Record<string, number> = {};
+  folders.forEach((f) => {
+    countByFolder[f.id] = 0;
+  });
+  let assignedCount = 0;
+  Object.values(assignments).forEach((fId) => {
+    if (countByFolder[fId] !== undefined) {
+      countByFolder[fId]++;
+      assignedCount++;
+    }
+  });
+  const uncategorizedCount = Math.max(0, totalCount - assignedCount);
 
   // Auto-run migration once on mount to organize group entries out of leads table into whatsapp_groups
   useEffect(() => {
@@ -188,7 +216,7 @@ export default function Groups() {
         <div>
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
-              <UsersRound className="h-6 w-6" />
+              <MessagesSquare className="h-6 w-6" />
             </div>
             <div>
               <div className="flex items-center gap-2.5">
@@ -373,6 +401,24 @@ export default function Groups() {
         </div>
       </div>
 
+      {/* Group Folder Bar */}
+      <div className="bg-card p-3 rounded-2xl border border-border shadow-sm">
+        <GroupFolderBar
+          folders={folders}
+          selectedFolderId={selectedFolderId}
+          onSelectFolder={(fId) => {
+            setSelectedFolderId(fId);
+            setPage(1);
+          }}
+          countByFolder={countByFolder}
+          totalCount={totalCount}
+          uncategorizedCount={uncategorizedCount}
+          onCreateFolder={(name) => createFolder({ name })}
+          onRenameFolder={(id, name) => renameFolder({ id, name })}
+          onDeleteFolder={(id) => deleteFolder(id)}
+        />
+      </div>
+
       {/* Filter and Search Bar */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-card p-4 rounded-2xl border border-border shadow-sm">
         {/* Search */}
@@ -507,7 +553,9 @@ export default function Groups() {
                     key={group.id}
                     group={group}
                     isEven={i % 2 === 0}
+                    folders={folders}
                     onOpenDetails={handleOpenDetails}
+                    onMoveToFolder={(groupId, fId) => assignGroupToFolder({ groupId, folderId: fId })}
                   />
                 ))}
               </tbody>
@@ -517,7 +565,13 @@ export default function Groups() {
           /* Grid View */
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {groups.map((group) => (
-              <GroupCard key={group.id} group={group} onOpenDetails={handleOpenDetails} />
+              <GroupCard
+                key={group.id}
+                group={group}
+                folders={folders}
+                onOpenDetails={handleOpenDetails}
+                onMoveToFolder={(groupId, fId) => assignGroupToFolder({ groupId, folderId: fId })}
+              />
             ))}
           </div>
         )
@@ -525,7 +579,7 @@ export default function Groups() {
         /* Empty State */
         <div className="text-center py-20 bg-card rounded-3xl border border-border p-8 space-y-4 shadow-sm">
           <div className="h-16 w-16 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto">
-            <UsersRound className="h-8 w-8" />
+            <MessagesSquare className="h-8 w-8" />
           </div>
           <div className="space-y-1.5 max-w-md mx-auto">
             <h3 className="text-lg font-bold text-foreground">Nenhum grupo encontrado</h3>

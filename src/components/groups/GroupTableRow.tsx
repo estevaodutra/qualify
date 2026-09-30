@@ -1,11 +1,33 @@
 import React from "react";
 import { WhatsAppGroupItem } from "@/hooks/useGroups";
+import { GroupFolder } from "@/hooks/useGroupFolders";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { UsersRound, Shield, Radio, Clock, MoreVertical, MessageSquare, Copy, Eye } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  MessagesSquare,
+  Shield,
+  Radio,
+  Clock,
+  MoreVertical,
+  MessageSquare,
+  Copy,
+  Eye,
+  Folder,
+  FolderInput,
+  Check,
+  Users,
+} from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
@@ -33,10 +55,18 @@ const WhatsappIcon = ({ className }: { className?: string }) => (
 interface GroupTableRowProps {
   group: WhatsAppGroupItem;
   isEven: boolean;
+  folders?: GroupFolder[];
   onOpenDetails: (group: WhatsAppGroupItem) => void;
+  onMoveToFolder?: (groupId: string, folderId: string | null) => void;
 }
 
-export const GroupTableRow: React.FC<GroupTableRowProps> = ({ group, isEven, onOpenDetails }) => {
+export const GroupTableRow: React.FC<GroupTableRowProps> = ({
+  group,
+  isEven,
+  folders,
+  onOpenDetails,
+  onMoveToFolder,
+}) => {
   const navigate = useNavigate();
 
   const timeAgo = group.lastActivityAt
@@ -45,6 +75,7 @@ export const GroupTableRow: React.FC<GroupTableRowProps> = ({ group, isEven, onO
 
   const copyGroupJid = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!group.groupJid) return;
     navigator.clipboard.writeText(group.groupJid);
     toast.success("ID do grupo copiado!");
   };
@@ -62,13 +93,13 @@ export const GroupTableRow: React.FC<GroupTableRowProps> = ({ group, isEven, onO
         isEven ? "bg-transparent" : "bg-muted/20"
       )}
     >
-      {/* GRUPO: Photo + Name */}
+      {/* GRUPO: Photo + Name + Folder */}
       <td className="px-4 py-3 align-middle">
         <div className="flex items-center gap-3 min-w-0">
           <Avatar className="h-9 w-9 border border-border shrink-0">
             <AvatarImage src={group.pictureUrl || undefined} alt={group.name} className="object-cover" />
             <AvatarFallback className="bg-indigo-500/10 text-indigo-600 font-bold text-xs">
-              <UsersRound className="h-4 w-4" />
+              <MessagesSquare className="h-4 w-4" />
             </AvatarFallback>
           </Avatar>
 
@@ -82,40 +113,64 @@ export const GroupTableRow: React.FC<GroupTableRowProps> = ({ group, isEven, onO
                 </TooltipTrigger>
                 <TooltipContent side="top">
                   <p className="font-semibold">{group.name}</p>
-                  <p className="text-[10px] text-muted-foreground font-mono">{group.groupJid}</p>
+                  <p className="text-[10px] text-muted-foreground font-mono">
+                    {group.groupJid || "Sem ID vinculado"}
+                  </p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
 
-            {group.description && (
-              <span className="text-[11px] text-muted-foreground truncate max-w-[220px]">
-                {group.description}
-              </span>
-            )}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {group.folderName && (
+                <Badge
+                  variant="outline"
+                  className="text-[10px] font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200/50 gap-1 px-1.5 py-0 mt-0.5"
+                >
+                  <Folder className="h-2.5 w-2.5" />
+                  {group.folderName}
+                </Badge>
+              )}
+
+              {group.description && (
+                <span className="text-[11px] text-muted-foreground truncate max-w-[200px]">
+                  {group.description}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </td>
 
-      {/* ID DO GRUPO */}
+      {/* ID DO GRUPO (JID Real ou Não Vinculado) */}
       <td className="px-4 py-3 align-middle font-mono text-[12px] text-muted-foreground">
-        <div className="flex items-center gap-1.5 max-w-[180px]">
-          <span className="truncate">{group.groupJid}</span>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-5 w-5 shrink-0 text-muted-foreground hover:text-foreground"
-            onClick={copyGroupJid}
-            title="Copiar ID"
+        {group.hasValidJid && group.groupJid ? (
+          <div className="flex items-center gap-1.5 max-w-[180px]">
+            <span className="truncate">{group.groupJid}</span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5 shrink-0 text-muted-foreground hover:text-foreground"
+              onClick={copyGroupJid}
+              title="Copiar ID do WhatsApp"
+            >
+              <Copy className="h-3 w-3" />
+            </Button>
+          </div>
+        ) : (
+          <Badge
+            variant="outline"
+            className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/30 px-2 py-0.5"
+            title="Este grupo/fluxo ainda não está vinculado a um JID real de WhatsApp"
           >
-            <Copy className="h-3 w-3" />
-          </Button>
-        </div>
+            Não vinculado
+          </Badge>
+        )}
       </td>
 
       {/* PARTICIPANTES */}
       <td className="px-4 py-3 align-middle">
         <Badge variant="secondary" className="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border-indigo-200/60 font-semibold gap-1.5 px-2 py-0.5 text-xs">
-          <UsersRound className="h-3.5 w-3.5 text-indigo-600" />
+          <Users className="h-3.5 w-3.5 text-indigo-600" />
           {group.participantsCount}
         </Badge>
       </td>
@@ -172,16 +227,52 @@ export const GroupTableRow: React.FC<GroupTableRowProps> = ({ group, isEven, onO
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44 z-[99]">
+            <DropdownMenuContent align="end" className="w-48 z-[99]">
               <DropdownMenuItem onClick={() => onOpenDetails(group)} className="gap-2 text-xs">
                 <Eye className="h-4 w-4 text-primary" /> Ver Detalhes
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleOpenChat} className="gap-2 text-xs">
                 <MessageSquare className="h-4 w-4 text-emerald-500" /> Abrir no Chat
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={copyGroupJid} className="gap-2 text-xs">
-                <Copy className="h-4 w-4 text-blue-500" /> Copiar ID
-              </DropdownMenuItem>
+
+              {group.hasValidJid && (
+                <DropdownMenuItem onClick={copyGroupJid} className="gap-2 text-xs">
+                  <Copy className="h-4 w-4 text-blue-500" /> Copiar ID
+                </DropdownMenuItem>
+              )}
+
+              {/* Move to folder submenu */}
+              {onMoveToFolder && (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger className="gap-2 text-xs">
+                    <FolderInput className="h-4 w-4 text-amber-500" /> Mover para pasta
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="w-48">
+                    <DropdownMenuItem
+                      onClick={() => onMoveToFolder(group.id, null)}
+                      className="gap-2 text-xs"
+                    >
+                      <Folder className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>Sem pasta</span>
+                      {!group.folderId && <Check className="h-3.5 w-3.5 ml-auto text-primary" />}
+                    </DropdownMenuItem>
+                    {folders && folders.length > 0 && (
+                      <div className="h-px bg-border my-1" />
+                    )}
+                    {folders?.map((f) => (
+                      <DropdownMenuItem
+                        key={f.id}
+                        onClick={() => onMoveToFolder(group.id, f.id)}
+                        className="gap-2 text-xs"
+                      >
+                        <Folder className="h-3.5 w-3.5 text-indigo-500" />
+                        <span className="truncate flex-1">{f.name}</span>
+                        {group.folderId === f.id && <Check className="h-3.5 w-3.5 ml-auto text-primary" />}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

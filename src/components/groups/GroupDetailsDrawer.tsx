@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { UsersRound, Shield, Copy, MessageSquare, Search, ChevronLeft, ChevronRight, Phone, RefreshCw, UserPlus } from "lucide-react";
+import { MessagesSquare, Users, Shield, Copy, MessageSquare, Search, ChevronLeft, ChevronRight, Phone, RefreshCw, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -228,7 +228,7 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
               <Avatar className="h-16 w-16 border-2 border-primary/20 shrink-0 shadow-md">
                 <AvatarImage src={group.pictureUrl || undefined} alt={group.name} className="object-cover" />
                 <AvatarFallback className="bg-indigo-500/10 text-indigo-600 font-bold text-xl">
-                  <UsersRound className="h-8 w-8" />
+                  <MessagesSquare className="h-8 w-8" />
                 </AvatarFallback>
               </Avatar>
 
@@ -237,12 +237,20 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
                   {group.name}
                 </SheetTitle>
                 <div className="flex items-center gap-2 mt-1">
-                  <Badge variant="outline" className="font-mono text-[11px] text-muted-foreground bg-background/80 px-2 py-0.5 max-w-[220px] truncate">
-                    {group.groupJid}
-                  </Badge>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={copyGroupJid} title="Copiar ID">
-                    <Copy className="h-3.5 w-3.5" />
-                  </Button>
+                  {group.hasValidJid && group.groupJid ? (
+                    <>
+                      <Badge variant="outline" className="font-mono text-[11px] text-muted-foreground bg-background/80 px-2 py-0.5 max-w-[220px] truncate">
+                        {group.groupJid}
+                      </Badge>
+                      <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={copyGroupJid} title="Copiar ID">
+                        <Copy className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  ) : (
+                    <Badge variant="outline" className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/30 px-2 py-0.5">
+                      Não vinculado ao WhatsApp
+                    </Badge>
+                  )}
                 </div>
               </div>
             </div>
@@ -310,7 +318,7 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
         <div className="flex-1 flex flex-col min-h-0 p-6 space-y-4">
           <div className="flex items-center justify-between gap-3">
             <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <UsersRound className="h-4 w-4 text-primary" />
+              <Users className="h-4 w-4 text-primary" />
               Participantes ({detailsData?.totalCount || group.participantsCount})
             </h4>
 
@@ -385,7 +393,7 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
               </div>
             ) : (
               <div className="text-center py-12 space-y-3">
-                <UsersRound className="h-8 w-8 text-muted-foreground/40 mx-auto" />
+                <Users className="h-8 w-8 text-muted-foreground/40 mx-auto" />
                 <p className="text-xs text-muted-foreground max-w-xs mx-auto">
                   Nenhum participante listado localmente. Clique no botão acima para buscar os membros do WhatsApp.
                 </p>

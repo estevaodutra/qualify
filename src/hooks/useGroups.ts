@@ -10,7 +10,10 @@ export interface WhatsAppGroupItem {
   companyId: string;
   instanceId: string | null;
   instanceName?: string | null;
-  groupJid: string;
+  groupJid: string | null;
+  hasValidJid: boolean;
+  folderId?: string | null;
+  folderName?: string | null;
   name: string;
   description: string | null;
   pictureUrl: string | null;
@@ -26,6 +29,7 @@ export interface GroupFilters {
   search?: string;
   instanceId?: string;
   status?: string;
+  folderId?: string | null | undefined; // undefined = "Todas", null = "Sem pasta", string = folderId
   hasDescriptionOnly?: boolean;
   hasPhotoOnly?: boolean;
   sort?: "most_recent" | "oldest" | "name_asc" | "name_desc" | "most_participants" | "least_participants";
@@ -33,12 +37,40 @@ export interface GroupFilters {
   pageSize?: number;
 }
 
-function normalizeJidKey(jid: string | null | undefined): string {
-  if (!jid) return "";
-  const str = String(jid).trim().toLowerCase();
-  if (str.includes("@g.us")) return str;
+/**
+ * Validates and normalizes WhatsApp group JIDs.
+ * Returns null if the string is just a database UUID, gc_<uuid>, or invalid.
+ */
+export function cleanAndValidateJid(rawJid: string | null | undefined): string | null {
+  if (!rawJid) return null;
+  let str = String(rawJid).trim();
+
+  // Reject database UUIDs or pseudo-keys like gc_<uuid>
+  if (str.startsWith("gc_") || (!str.includes("@") && !str.startsWith("1203") && str.length > 25)) {
+    return null;
+  }
+
+  // Handle -group suffix
+  if (str.endsWith("-group")) {
+    str = str.replace(/-group$/, "@g.us");
+  }
+
+  if (str.includes("@g.us")) {
+    return str.toLowerCase();
+  }
+
   const digits = str.replace(/\D/g, "");
-  return digits ? `${digits}@g.us` : str;
+  if (digits.startsWith("1203") || digits.length >= 15) {
+    return `${digits}@g.us`;
+  }
+
+  return null;
+}
+
+function normalizeJidKey(jid: string | null | undefined): string {
+  const valid = cleanAndValidateJid(jid);
+  if (valid) return valid;
+  return jid ? String(jid).trim().toLowerCase() : "";
 }
 
 export function useGroups(filters: GroupFilters = {}) {
@@ -51,6 +83,7 @@ export function useGroups(filters: GroupFilters = {}) {
     search = "",
     instanceId = "all",
     status = "all",
+    folderId = undefined,
     hasDescriptionOnly = false,
     hasPhotoOnly = false,
     sort = "most_recent",
@@ -59,12 +92,78 @@ export function useGroups(filters: GroupFilters = {}) {
   } = filters;
 
   const { data, isLoading, isFetching, error, refetch } = useQuery({
-    queryKey: ["groups_list", activeCompanyId, search, instanceId, status, hasDescriptionOnly, hasPhotoOnly, sort, page, pageSize],
+    queryKey: [
+      "groups_list",
+      activeCompanyId,
+      search,
+      instanceId,
+      status,
+      folderId,
+      hasDescriptionOnly,
+      hasPhotoOnly,
+      sort,
+      page,
+      pageSize,
+    ],
     queryFn: async () => {
       if (!activeCompanyId) return { groups: [], totalCount: 0, totalPages: 1 };
 
       const rawGroups: any[] = [];
-      const seenJids = new Set<string>();
+      const seenKeys = new Set<string>();
+
+      // 0. Pre-fetch campaign_groups, sequences, folders and folder assignments
+      const [cgRes, seqRes, folderRes, assignRes] = await Promise.all([
+        supabase
+          .from("campaign_groups")
+          .select("campaign_id, group_jid, group_name")
+          .catch(() => ({ data: [] })),
+        supabase
+          .from("message_sequences")
+          .select("id, group_campaign_id, name")
+          .catch(() => ({ data: [] })),
+        supabase
+          .from("group_folders" as any)
+          .select("id, name")
+          .eq("company_id", activeCompanyId)
+          .catch(() => ({ data: [] })),
+        supabase
+          .from("group_folder_assignments" as any)
+          .select("group_id, folder_id")
+          .eq("company_id", activeCompanyId)
+          .catch(() => ({ data: [] })),
+      ]);
+
+      const campaignGroups = cgRes?.data || [];
+      const messageSequences = seqRes?.data || [];
+      const groupFolders = (folderRes?.data || []) as { id: string; name: string }[];
+      const folderAssignments = (assignRes?.data || []) as { group_id: string; folder_id: string }[];
+
+      // Build folder lookup maps
+      const folderNameMap = new Map<string, string>();
+      groupFolders.forEach((f) => folderNameMap.set(f.id, f.name));
+
+      const groupToFolderMap = new Map<string, string>();
+      folderAssignments.forEach((a) => {
+        if (a.group_id && a.folder_id) {
+          groupToFolderMap.set(a.group_id, a.folder_id);
+        }
+      });
+
+      // Build campaign_groups JID lookup
+      const cgMap = new Map<string, string>();
+      campaignGroups.forEach((cg: any) => {
+        const valid = cleanAndValidateJid(cg.group_jid);
+        if (valid) {
+          cgMap.set(cg.campaign_id, valid);
+        }
+      });
+
+      const seqToCampaign = new Map<string, string>();
+      messageSequences.forEach((s: any) => {
+        if (s.group_campaign_id) {
+          seqToCampaign.set(s.id, s.group_campaign_id);
+        }
+      });
 
       // 1. Primary source: Query group_campaigns
       try {
@@ -75,15 +174,39 @@ export function useGroups(filters: GroupFilters = {}) {
 
         if (gcData) {
           gcData.forEach((gc: any) => {
-            const jid = gc.group_jid || `gc_${gc.id}@g.us`;
-            const key = normalizeJidKey(jid);
-            if (key && !seenJids.has(key)) {
-              seenJids.add(key);
+            let validJid = cleanAndValidateJid(gc.group_jid);
+
+            // Attempt to resolve real JID from campaign_groups if missing or invalid
+            if (!validJid) {
+              validJid = cgMap.get(gc.id) || null;
+              if (!validJid) {
+                for (const [seqId, campId] of seqToCampaign.entries()) {
+                  if (campId === gc.id && cgMap.has(seqId)) {
+                    validJid = cgMap.get(seqId) || null;
+                    break;
+                  }
+                }
+              }
+
+              // Background backfill if we found a valid JID
+              if (validJid) {
+                supabase
+                  .from("group_campaigns")
+                  .update({ group_jid: validJid })
+                  .eq("id", gc.id)
+                  .then(() => {});
+              }
+            }
+
+            const dedupKey = validJid || `campaign_${gc.id}`;
+            if (!seenKeys.has(dedupKey)) {
+              seenKeys.add(dedupKey);
               rawGroups.push({
                 id: gc.id,
                 company_id: activeCompanyId,
                 instance_id: gc.instance_id,
-                group_jid: jid,
+                group_jid: validJid, // Real JID or null (never a fake UUID!)
+                has_valid_jid: !!validJid,
                 name: gc.group_name || gc.name || "Grupo WhatsApp",
                 description: gc.group_description,
                 picture_url: gc.group_photo_url,
@@ -104,22 +227,31 @@ export function useGroups(filters: GroupFilters = {}) {
       try {
         const { data: convData } = await supabase
           .from("chat_conversations")
-          .select("id, instance_id, contact_name, last_message_at, updated_at")
+          .select("id, instance_id, contact_name, contact_phone, last_message_at, updated_at")
           .eq("company_id", activeCompanyId);
 
         if (convData) {
-          const groupConvs = convData.filter((c: any) => c.contact_name?.includes("@g.us") || c.contact_name?.toLowerCase().includes("grupo"));
+          const groupConvs = convData.filter((c: any) => {
+            const hasGroupInName = c.contact_name?.toLowerCase().includes("grupo");
+            const isGroupPhone = c.contact_phone?.startsWith("1203") || c.contact_phone?.includes("@g.us");
+            const isGroupName = c.contact_name?.includes("@g.us") || c.contact_name?.startsWith("1203");
+            return hasGroupInName || isGroupPhone || isGroupName;
+          });
+
           groupConvs.forEach((c: any) => {
-            const jid = c.contact_name?.includes("@g.us") ? c.contact_name : `${c.id}@g.us`;
-            const key = normalizeJidKey(jid);
-            if (key && !seenJids.has(key)) {
-              seenJids.add(key);
+            // Check contact_phone first, then contact_name for real WhatsApp JID
+            const validJid = cleanAndValidateJid(c.contact_phone) || cleanAndValidateJid(c.contact_name);
+            const dedupKey = validJid || `conv_${c.id}`;
+
+            if (!seenKeys.has(dedupKey)) {
+              seenKeys.add(dedupKey);
               rawGroups.push({
                 id: c.id,
                 company_id: activeCompanyId,
                 instance_id: c.instance_id,
-                group_jid: jid,
-                name: c.contact_name?.split("@")[0] || "Grupo WhatsApp",
+                group_jid: validJid, // Real JID or null
+                has_valid_jid: !!validJid,
+                name: c.contact_name && !c.contact_name.includes("@") ? c.contact_name : (c.contact_name?.split("@")[0] || "Grupo WhatsApp"),
                 description: null,
                 picture_url: null,
                 participants_count: 0,
@@ -142,14 +274,21 @@ export function useGroups(filters: GroupFilters = {}) {
         .select("id, name, phone");
       const instanceMap = new Map((instances || []).map((i) => [i.id, `${i.name}${i.phone ? ` (${i.phone})` : ""}`]));
 
-      // Map raw groups to frontend model
+      // Map raw groups to frontend model with folder info
       let items: WhatsAppGroupItem[] = rawGroups.map((g) => {
+        // Resolve folder assignment by group id or group jid
+        const assignedFolderId = groupToFolderMap.get(g.id) || (g.group_jid ? groupToFolderMap.get(g.group_jid) : null) || null;
+        const assignedFolderName = assignedFolderId ? folderNameMap.get(assignedFolderId) || null : null;
+
         return {
-          id: g.id || g.group_jid,
+          id: g.id,
           companyId: g.company_id || activeCompanyId,
           instanceId: g.instance_id,
           instanceName: g.instance_id ? instanceMap.get(g.instance_id) || "Instância Conectada" : "Instância Geral",
-          groupJid: g.group_jid || `${g.id}@g.us`,
+          groupJid: g.group_jid || null,
+          hasValidJid: !!g.has_valid_jid,
+          folderId: assignedFolderId,
+          folderName: assignedFolderName,
           name: g.name || "Grupo WhatsApp",
           description: g.description || null,
           pictureUrl: g.picture_url || g.profile_picture_url || null,
@@ -162,23 +301,36 @@ export function useGroups(filters: GroupFilters = {}) {
         };
       });
 
-      // Filters
+      // Filter: Search term
       if (search.trim()) {
         const term = search.toLowerCase().trim();
         items = items.filter(
           (g) =>
             g.name.toLowerCase().includes(term) ||
             (g.description && g.description.toLowerCase().includes(term)) ||
-            g.groupJid.toLowerCase().includes(term)
+            (g.groupJid && g.groupJid.toLowerCase().includes(term))
         );
       }
 
+      // Filter: Instance
       if (instanceId !== "all") {
         items = items.filter((g) => g.instanceId === instanceId);
       }
 
+      // Filter: Status
       if (status !== "all") {
         items = items.filter((g) => g.status === status);
+      }
+
+      // Filter: Folder
+      if (folderId !== undefined) {
+        if (folderId === null) {
+          // "Sem pasta"
+          items = items.filter((g) => !g.folderId);
+        } else {
+          // Specific folder
+          items = items.filter((g) => g.folderId === folderId);
+        }
       }
 
       if (hasDescriptionOnly) {
@@ -238,12 +390,13 @@ export function useGroups(filters: GroupFilters = {}) {
         console.warn("[syncInstanceGroups] Edge function warning:", resErr);
       }
 
-      // 2. Direct client-side dual persistence fallback into group_campaigns and chat_conversations using safe select->update/insert
+      // 2. Direct client-side dual persistence fallback into group_campaigns and chat_conversations
       if (activeCompanyId && Array.isArray(groups) && groups.length > 0) {
         const targetUserId = currentUserId || activeCompanyId;
 
         for (const g of groups) {
-          const jid = g.groupJid || g.id || g.jid;
+          const rawJid = g.groupJid || g.id || g.jid;
+          const jid = cleanAndValidateJid(rawJid);
           if (!jid) continue;
 
           const groupName = g.name || "Grupo WhatsApp";
@@ -302,6 +455,7 @@ export function useGroups(filters: GroupFilters = {}) {
                 .update({
                   instance_id: targetInstanceId,
                   user_id: targetUserId,
+                  contact_phone: jid,
                   last_message_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
                 })
@@ -350,6 +504,10 @@ export function useGroups(filters: GroupFilters = {}) {
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_conversations" }, () => {
         queryClient.invalidateQueries({ queryKey: ["groups_list"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "group_folder_assignments" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["groups_list"] });
+        queryClient.invalidateQueries({ queryKey: ["group_folder_assignments"] });
       })
       .subscribe();
 
