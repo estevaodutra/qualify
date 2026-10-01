@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { SequenceVersionsDialog } from "./SequenceVersionsDialog";
+import { WorkflowWhatsAppPreviewModal } from "./WorkflowWhatsAppPreviewModal";
 import { useSequences } from "@/hooks/useSequences";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -14,7 +15,7 @@ import {
 import {
   ArrowLeft, Save, Play, Pause, Trash2, ZoomIn, ZoomOut, Maximize,
   Loader2, Info, GitBranch, Copy, PenLine, History, Sliders, ArrowRight, Plus, MessageSquare, Settings, Clock,
-  ChevronUp, ChevronDown, PhoneCall, Filter, Briefcase, User
+  ChevronUp, ChevronDown, PhoneCall, Filter, Briefcase, User, Smartphone
 } from "lucide-react";
 import { debounce } from "lodash";
 import { useToast } from "@/hooks/use-toast";
@@ -178,6 +179,7 @@ export function UnifiedSequenceBuilder({
   // Trigger Selector Modal State
   const [triggerSelectorOpen, setTriggerSelectorOpen] = useState(false);
   const [workflowSettingsOpen, setWorkflowSettingsOpen] = useState(false);
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
 
   const handleManualTriggerExecution = async (triggerId: string) => {
     try {
@@ -909,6 +911,15 @@ export function UnifiedSequenceBuilder({
                 onRestoreVersion={handleRestoreVersion}
                 isSaving={isSavingVersion}
               />
+              <Button
+                variant="outline"
+                onClick={() => setPreviewModalOpen(true)}
+                className="rounded-xl border-slate-200 hover:bg-slate-50 gap-2 h-9 px-4 font-semibold text-slate-700"
+                title="Visualizar simulação das mensagens no WhatsApp"
+              >
+                <Smartphone className="h-4 w-4 text-emerald-600" />
+                Visualizar mensagens
+              </Button>
               <Button onClick={handleSaveAll} disabled={isSaving} className="bg-[#8A3CFF] hover:bg-[#7830E3] text-white rounded-xl gap-2 h-9 px-5 font-semibold">
                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 {isSaving ? "Salvando..." : "Salvar"}
@@ -2365,6 +2376,14 @@ export function UnifiedSequenceBuilder({
         onChange={(newConfig) => updateWorkflowConfigAndSave(() => newConfig)}
         isGroup={!!campaignId}
         campaignId={campaignId}
+      />
+
+      <WorkflowWhatsAppPreviewModal
+        open={previewModalOpen}
+        onOpenChange={setPreviewModalOpen}
+        nodes={localNodes}
+        connections={localConnections}
+        workflowName={sequenceName}
       />
     </div>
   );
