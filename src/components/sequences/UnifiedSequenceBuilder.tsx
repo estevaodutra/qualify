@@ -913,12 +913,12 @@ export function UnifiedSequenceBuilder({
               />
               <Button
                 variant="outline"
+                size="icon"
                 onClick={() => setPreviewModalOpen(true)}
-                className="rounded-xl border-slate-200 hover:bg-slate-50 gap-2 h-9 px-4 font-semibold text-slate-700"
+                className="rounded-xl border-slate-200 hover:bg-slate-50 h-9 w-9 text-slate-700"
                 title="Visualizar simulação das mensagens no WhatsApp"
               >
                 <Smartphone className="h-4 w-4 text-emerald-600" />
-                Visualizar mensagens
               </Button>
               <Button onClick={handleSaveAll} disabled={isSaving} className="bg-[#8A3CFF] hover:bg-[#7830E3] text-white rounded-xl gap-2 h-9 px-5 font-semibold">
                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
