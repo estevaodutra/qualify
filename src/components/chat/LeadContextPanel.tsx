@@ -228,17 +228,45 @@ export default function LeadContextPanel({ conversation, stages, onClose }: Lead
   const handleSaveProfile = async () => {
     setIsSaving(true);
     try {
-      const { error } = await supabase
-        .from("leads")
-        .update({
-          name: name.trim() || null,
-          email: email.trim() || null,
-          custom_fields: customFields
-        })
-        .eq("id", lead.id);
+      const trimmedName = name.trim();
+      const trimmedEmail = email.trim();
 
-      if (error) throw error;
+      // 1. Update leads table if lead exists
+      if (lead?.id) {
+        const { error } = await supabase
+          .from("leads")
+          .update({
+            name: trimmedName || null,
+            email: trimmedEmail || null,
+            custom_fields: customFields
+          })
+          .eq("id", lead.id);
+
+        if (error) throw error;
+      }
+
+      // 2. Also update chat_conversations table with contact_name so it's always synchronized across the entire chat UI
+      if (conversation.id) {
+        const updatePayload: Record<string, any> = {
+          contact_name: trimmedName || null
+        };
+        if (lead?.id && !conversation.lead_id) {
+          updatePayload.lead_id = lead.id;
+        }
+
+        const { error: convError } = await supabase
+          .from("chat_conversations")
+          .update(updatePayload)
+          .eq("id", conversation.id);
+
+        if (convError) {
+          console.warn("Could not update conversation contact_name:", convError);
+        }
+      }
+
       queryClient.invalidateQueries({ queryKey: ["chat-conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-stats"] });
       toast({ title: "Perfil salvo com sucesso!" });
     } catch (err: any) {
       toast({ title: "Erro ao salvar", description: err.message, variant: "destructive" });

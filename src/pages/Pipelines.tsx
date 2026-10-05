@@ -14,6 +14,7 @@ import { CreateStageDialog } from "@/components/crm/pipelines/CreateStageDialog"
 import { EditStageDialog } from "@/components/crm/pipelines/EditStageDialog";
 import { EditPipelineDialog } from "@/components/crm/pipelines/EditPipelineDialog";
 import { toast } from "sonner";
+import { dispatchWorkflowForDealMove } from "@/lib/workflow-dispatcher";
 
 export default function Pipelines() {
   const { activeCompany } = useCompany();
@@ -196,10 +197,13 @@ export default function Pipelines() {
       }
       toast.error(`Erro ao mover negócio: ${err.message}`);
     },
-    onSuccess: (data) => {
+    onSuccess: async (data, variables) => {
       toast.success(`Negócio movido para "${data.targetStageName || "nova etapa"}"!`);
       queryClient.invalidateQueries({ queryKey: ['deals', activePipelineId] });
       queryClient.invalidateQueries({ queryKey: ['lead-deals'] });
+
+      // Trigger workflows
+      await dispatchWorkflowForDealMove(data.dealId, activePipelineId, data.targetStageId);
     },
   });
 

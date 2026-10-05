@@ -20,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { dispatchWorkflowForDealMove } from "@/lib/workflow-dispatcher";
 import { Deal, Pipeline } from "@/types/crm.types";
 import { GitBranch, Loader2, ArrowRight } from "lucide-react";
 
@@ -108,6 +109,8 @@ export function MoveDealPipelineDialog({
       queryClient.invalidateQueries({ queryKey: ["lead-deals"] });
       queryClient.invalidateQueries({ queryKey: ["pipeline-deals"] });
       queryClient.invalidateQueries({ queryKey: ["chat-conversations"] });
+
+      await dispatchWorkflowForDealMove(deal.id, targetPipelineId, targetStageId);
 
       onOpenChange(false);
     } catch (err: any) {

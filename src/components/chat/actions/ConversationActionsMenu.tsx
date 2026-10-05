@@ -91,7 +91,7 @@ export default function ConversationActionsMenu({
     } catch (err) {}
   };
 
-  const contactLabel = conversation.contact_name || conversation.lead?.name || conversation.lead?.phone || conversation.contact_phone || "esta conversa";
+  const contactLabel = conversation.lead?.name?.trim() || conversation.contact_name?.trim() || conversation.lead?.phone || conversation.contact_phone || "esta conversa";
 
   return (
     <>

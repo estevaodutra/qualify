@@ -1,6 +1,6 @@
 {
-  "commit": "8385e0a33cf844e15ebf9973e0327d001184495f",
-  "shortCommit": "8385e0a",
-  "message": "fix(workflows): fix stage query column and ignore deleted pipelines",
-  "builtAt": "2026-10-05T18:37:26.072Z"
+  "commit": "d364fa0f08109667ffd9797161cdf0eeeb531e98",
+  "shortCommit": "d364fa0",
+  "message": "fix(leads): stop auto-creating leads from groups and display subtle fallback when lead has no name",
+  "builtAt": "2026-10-05T19:54:19.631Z"
 }

@@ -106,10 +106,12 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
     };
 
     if (triggerNode) {
+      const isLegacyPrivate = mergedWorkflowConfig.isGroup === false;
+      const defaultDestMode = isLegacyPrivate ? "individual" : "groups";
       triggerNode.config = {
         ...triggerNode.config,
         triggerConfig: mergedWorkflowConfig,
-        destinationMode: mergedWorkflowConfig.destinationMode || "groups",
+        destinationMode: mergedWorkflowConfig.destinationMode || defaultDestMode,
         instanceIds: mergedWorkflowConfig.instanceIds,
         groupScope: mergedWorkflowConfig.groupScope,
         selectedGroupJids: mergedWorkflowConfig.selectedGroupJids,
@@ -243,6 +245,7 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
       onBack={onBack}
       initialNodes={initialNodes}
       initialConnections={initialConnections}
+      initialWorkflowConfig={sequence.triggerConfig || {}}
       isSaving={isSaving}
       isLoading={isLoading}
     />
