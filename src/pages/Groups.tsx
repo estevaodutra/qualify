@@ -19,7 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { MessagesSquare, Search, Filter, ArrowUpDown, RefreshCw, ChevronLeft, ChevronRight, Wand2, LayoutGrid, List, Radio, CheckCircle2, PlusCircle, Users } from "lucide-react";
+import { MessagesSquare, Search, Filter, ArrowUpDown, RefreshCw, ChevronLeft, ChevronRight, Wand2, LayoutGrid, List, Radio, CheckCircle2, PlusCircle, Users, Smartphone, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -212,7 +212,7 @@ export default function Groups() {
   );
 
   return (
-    <div className="min-h-screen bg-background p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 w-full max-w-7xl mx-auto pb-10">
       {/* Top Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-5">
         <div>
@@ -222,13 +222,13 @@ export default function Groups() {
             </div>
             <div>
               <div className="flex items-center gap-2.5">
-                <h1 className="text-2xl font-extrabold text-foreground tracking-tight">Groups</h1>
+                <h1 className="text-2xl font-extrabold text-foreground tracking-tight">Grupos</h1>
                 <Badge variant="secondary" className="bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 font-bold px-2.5 py-0.5 text-xs">
                   {totalCount} {totalCount === 1 ? "grupo" : "grupos"}
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Gerencie e visualize os grupos conectados às suas instâncias.
+                Gerencie e organize os grupos do WhatsApp conectados às suas instâncias.
               </p>
             </div>
           </div>
@@ -247,22 +247,29 @@ export default function Groups() {
                 Buscar Grupos da Instância
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-xl rounded-2xl bg-card border border-border shadow-2xl p-6">
-              <DialogHeader>
-                <DialogTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-                  <Radio className="h-5 w-5 text-emerald-500" /> Buscar e Selecionar Grupos da Conexão
-                </DialogTitle>
-                <DialogDescription className="text-xs text-muted-foreground">
-                  Selecione uma conexão WhatsApp para listar todos os grupos disponíveis e selecione quais deseja adicionar ao CRM.
-                </DialogDescription>
+            <DialogContent className="sm:max-w-2xl md:max-w-3xl w-full max-h-[88vh] flex flex-col p-0 overflow-hidden rounded-2xl bg-card border border-border shadow-2xl">
+              <DialogHeader className="p-6 pb-4 border-b border-border/70 bg-muted/20 shrink-0">
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5">
+                    <Radio className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <DialogTitle className="text-lg font-bold text-foreground">
+                      Buscar e Selecionar Grupos da Conexão
+                    </DialogTitle>
+                    <DialogDescription className="text-xs text-muted-foreground mt-1">
+                      Selecione uma conexão WhatsApp para listar todos os grupos disponíveis e selecione quais deseja adicionar ao CRM.
+                    </DialogDescription>
+                  </div>
+                </div>
               </DialogHeader>
 
-              <div className="space-y-4 py-3">
-                {/* Step 1: Select Instance & Search Button */}
-                <div className="flex items-end gap-3 bg-muted/30 p-3.5 rounded-xl border border-border/50">
+              {/* Step 1: Select Instance & Search Button */}
+              <div className="p-6 pb-3 shrink-0">
+                <div className="flex flex-col sm:flex-row sm:items-end gap-3 bg-muted/30 p-3.5 rounded-xl border border-border/60">
                   <div className="flex-1 space-y-1.5">
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                      Conexão do WhatsApp
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                      <Smartphone className="h-3.5 w-3.5" /> Conexão do WhatsApp
                     </label>
                     <Select
                       value={selectedSyncInstance}
@@ -270,62 +277,93 @@ export default function Groups() {
                         setSelectedSyncInstance(val);
                         setRemoteGroups([]);
                         setSelectedJids(new Set());
+                        setRemoteSearch("");
                       }}
                     >
-                      <SelectTrigger className="h-10 text-xs bg-background">
+                      <SelectTrigger className="h-10 text-xs bg-background border-border">
                         <SelectValue placeholder="Selecione uma conexão..." />
                       </SelectTrigger>
                       <SelectContent>
                         {instances?.map((i) => (
                           <SelectItem key={i.id} value={i.id}>
-                            {i.name} {i.phone ? `(${i.phone})` : ""}
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{i.name}</span>
+                              {i.phone && <span className="text-muted-foreground text-[11px]">({i.phone})</span>}
+                            </div>
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <Button
-                    size="sm"
+                    size="default"
                     disabled={!selectedSyncInstance || isFetchingRemote}
                     onClick={handleFetchRemoteGroups}
-                    className="h-10 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shrink-0"
+                    className="h-10 px-4 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shrink-0 shadow-sm"
                   >
                     {isFetchingRemote ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
                     {isFetchingRemote ? "Buscando..." : "Buscar Grupos"}
                   </Button>
                 </div>
+              </div>
 
-                {/* Step 2: List & Selectable Groups */}
-                {remoteGroups.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-3">
+              {/* Step 2: List & Selectable Groups */}
+              {remoteGroups.length > 0 ? (
+                <div className="flex flex-col flex-1 min-h-0">
+                  {/* Search and Selection Toolbar */}
+                  <div className="px-6 pb-3 shrink-0">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                       {/* Search inside modal */}
                       <div className="relative flex-1">
-                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                         <Input
-                          placeholder="Filtrar por nome do grupo..."
+                          placeholder="Filtrar por nome do grupo ou ID (@g.us)..."
                           value={remoteSearch}
                           onChange={(e) => setRemoteSearch(e.target.value)}
-                          className="pl-8 h-8 text-xs bg-background"
+                          className="pl-9 pr-8 h-9 text-xs bg-background border-border"
                         />
+                        {remoteSearch && (
+                          <button
+                            type="button"
+                            onClick={() => setRemoteSearch("")}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs p-1"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </div>
 
-                      {/* Select All Checkbox */}
-                      <div className="flex items-center gap-2 bg-background px-3 py-1.5 rounded-lg border border-border text-xs font-semibold shrink-0">
+                      {/* Select All Toggle Button */}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleToggleSelectAll(selectedJids.size !== remoteGroups.length)}
+                        className="h-9 px-3 text-xs font-semibold gap-2 shrink-0 border-border hover:bg-muted/60"
+                      >
                         <Checkbox
                           id="select-all-groups"
                           checked={selectedJids.size === remoteGroups.length && remoteGroups.length > 0}
-                          onCheckedChange={(checked) => handleToggleSelectAll(!!checked)}
+                          className="pointer-events-none"
                         />
-                        <label htmlFor="select-all-groups" className="cursor-pointer text-xs">
-                          Selecionar Todos ({selectedJids.size}/{remoteGroups.length})
-                        </label>
-                      </div>
+                        <span>
+                          {selectedJids.size === remoteGroups.length ? "Desmarcar Todos" : "Selecionar Todos"}
+                        </span>
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-mono font-bold bg-muted">
+                          {selectedJids.size}/{remoteGroups.length}
+                        </Badge>
+                      </Button>
                     </div>
+                  </div>
 
-                    {/* Scrollable list of selectable groups */}
-                    <div className="max-h-[300px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
-                      {filteredRemoteGroups.map((g) => {
+                  {/* Scrollable list of selectable groups */}
+                  <div className="flex-1 min-h-[260px] max-h-[380px] overflow-y-auto px-6 pb-4 space-y-2 scrollbar-thin">
+                    {filteredRemoteGroups.length === 0 ? (
+                      <div className="text-center py-10 text-xs text-muted-foreground">
+                        Nenhum grupo encontrado com o filtro &ldquo;{remoteSearch}&rdquo;.
+                      </div>
+                    ) : (
+                      filteredRemoteGroups.map((g) => {
                         const isChecked = selectedJids.has(g.groupJid);
                         return (
                           <div
@@ -333,47 +371,75 @@ export default function Groups() {
                             onClick={() => handleToggleSelectJid(g.groupJid)}
                             className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
                               isChecked
-                                ? "bg-emerald-500/10 border-emerald-500/40"
-                                : "bg-card hover:bg-muted/40 border-border/60"
+                                ? "bg-emerald-500/10 border-emerald-500/50 shadow-sm"
+                                : "bg-card hover:bg-muted/40 border-border/70"
                             }`}
                           >
-                            <div className="flex items-center gap-3 min-w-0">
+                            <div className="flex items-center gap-3 min-w-0 pr-3">
                               <Checkbox
                                 checked={isChecked}
                                 onCheckedChange={() => handleToggleSelectJid(g.groupJid)}
                                 onClick={(e) => e.stopPropagation()}
+                                className="shrink-0"
                               />
+                              <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                                <MessagesSquare className="h-4 w-4" />
+                              </div>
                               <div className="min-w-0">
                                 <p className="text-xs font-bold text-foreground truncate">{g.name}</p>
-                                <p className="text-[10px] font-mono text-muted-foreground truncate">{g.groupJid}</p>
+                                <p className="text-[11px] font-mono text-muted-foreground/90 truncate">{g.groupJid}</p>
                               </div>
                             </div>
 
-                            <Badge variant="outline" className="text-[10px] font-semibold gap-1 shrink-0 bg-background">
+                            <Badge variant="outline" className="text-[11px] font-medium gap-1 shrink-0 bg-background/80 py-1">
                               <Users className="h-3 w-3 text-muted-foreground" />
                               {g.participantsCount} {g.participantsCount === 1 ? "membro" : "membros"}
                             </Badge>
                           </div>
                         );
-                      })}
-                    </div>
+                      })
+                    )}
                   </div>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div className="px-6 pb-6">
+                  <div className="text-center py-10 px-4 space-y-2 border border-dashed border-border/80 rounded-xl bg-muted/10">
+                    <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mx-auto text-muted-foreground">
+                      <Radio className="h-5 w-5" />
+                    </div>
+                    <p className="text-xs font-semibold text-foreground">Nenhum grupo listado ainda</p>
+                    <p className="text-[11px] text-muted-foreground max-w-sm mx-auto">
+                      Selecione a conexão do WhatsApp acima e clique em &ldquo;Buscar Grupos&rdquo; para carregar os grupos participantes.
+                    </p>
+                  </div>
+                </div>
+              )}
 
-              <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t border-border">
-                <Button variant="outline" size="sm" onClick={() => setSyncDialogOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={selectedJids.size === 0 || isSyncingInstance}
-                  onClick={handleImportSelectedGroups}
-                  className="font-bold bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
-                >
-                  {isSyncingInstance ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <PlusCircle className="h-3.5 w-3.5" />}
-                  {isSyncingInstance ? "Adicionando..." : `Adicionar ${selectedJids.size} ${selectedJids.size === 1 ? "Grupo" : "Grupos"} ao CRM`}
-                </Button>
+              <DialogFooter className="p-4 px-6 border-t border-border/70 bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                <div className="text-xs text-muted-foreground self-start sm:self-auto">
+                  {selectedJids.size > 0 ? (
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                      <CheckCircle2 className="h-4 w-4" />
+                      {selectedJids.size} {selectedJids.size === 1 ? "grupo selecionado" : "grupos selecionados"} de {remoteGroups.length}
+                    </span>
+                  ) : (
+                    <span>{remoteGroups.length > 0 ? `0 de ${remoteGroups.length} grupos selecionados` : "Nenhum grupo selecionado"}</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 self-end sm:self-auto">
+                  <Button variant="outline" size="sm" onClick={() => setSyncDialogOpen(false)} className="text-xs">
+                    Cancelar
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={selectedJids.size === 0 || isSyncingInstance}
+                    onClick={handleImportSelectedGroups}
+                    className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shadow-sm"
+                  >
+                    {isSyncingInstance ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <PlusCircle className="h-3.5 w-3.5" />}
+                    {isSyncingInstance ? "Adicionando..." : `Adicionar ${selectedJids.size} ${selectedJids.size === 1 ? "Grupo" : "Grupos"} ao CRM`}
+                  </Button>
+                </div>
               </DialogFooter>
             </DialogContent>
           </Dialog>
