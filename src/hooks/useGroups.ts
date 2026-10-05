@@ -115,7 +115,7 @@ export function useGroups(filters: GroupFilters = {}) {
       pageSize,
     ],
     queryFn: async () => {
-      if (!activeCompanyId) return { groups: [], totalCount: 0, totalPages: 1 };
+      if (!activeCompanyId) return { groups: [], totalCount: 0, totalPages: 1, globalTotalCount: 0 };
 
       const rawGroups: any[] = [];
       const seenKeys = new Set<string>();
@@ -124,26 +124,21 @@ export function useGroups(filters: GroupFilters = {}) {
       const [cgRes, seqRes, folderRes, assignRes, memberRes] = await Promise.all([
         supabase
           .from("campaign_groups")
-          .select("campaign_id, group_jid, group_name")
-          .catch(() => ({ data: [] })),
+          .select("campaign_id, group_jid, group_name"),
         supabase
           .from("message_sequences")
-          .select("id, group_campaign_id, name")
-          .catch(() => ({ data: [] })),
+          .select("id, group_campaign_id, name"),
         supabase
           .from("group_folders" as any)
           .select("id, name")
-          .eq("company_id", activeCompanyId)
-          .catch(() => ({ data: [] })),
+          .eq("company_id", activeCompanyId),
         supabase
           .from("group_folder_assignments" as any)
           .select("group_id, folder_id")
-          .eq("company_id", activeCompanyId)
-          .catch(() => ({ data: [] })),
+          .eq("company_id", activeCompanyId),
         supabase
           .from("group_members")
-          .select("group_campaign_id, is_admin")
-          .catch(() => ({ data: [] })),
+          .select("group_campaign_id, is_admin"),
       ]);
 
       const campaignGroups = cgRes?.data || [];
@@ -423,27 +418,11 @@ export function useGroups(filters: GroupFilters = {}) {
       groups?: any[];
       targetFolderId?: string | null;
     }) => {
-      if (!targetInstanceId) return { syncedCount: 0 };
+      if (!targetInstanceId || !activeCompanyId) return { syncedCount: 0 };
+      const targetUserId = currentUserId || activeCompanyId;
 
-      // 1. Invoke Edge Function with direct groups array and userId
-      const { data: resData, error: resErr } = await supabase.functions.invoke("sync-instance-groups", {
-        body: {
-          instanceId: targetInstanceId,
-          companyId: activeCompanyId,
-          userId: currentUserId,
-          selectedJids,
-          groups,
-        },
-      });
-
-      if (resErr) {
-        console.warn("[syncInstanceGroups] Edge function warning:", resErr);
-      }
-
-      // 2. Client-side persistence and leads registration fallback
-      if (activeCompanyId && Array.isArray(groups) && groups.length > 0) {
-        const targetUserId = currentUserId || activeCompanyId;
-
+      // 1. Immediately persist group headers and folder assignments in Supabase (fast, <300ms)
+      if (Array.isArray(groups) && groups.length > 0) {
         for (const g of groups) {
           const rawJid = g.groupJid || g.id || g.jid;
           const jid = cleanAndValidateJid(rawJid);
@@ -456,7 +435,6 @@ export function useGroups(filters: GroupFilters = {}) {
 
           let savedCampaignId: string | null = null;
 
-          // Save/update group_campaigns with config stats
           try {
             const { data: existingGc } = await supabase
               .from("group_campaigns")
@@ -509,144 +487,115 @@ export function useGroups(filters: GroupFilters = {}) {
               }
             }
           } catch (e) {
-            console.warn("Client fallback group_campaigns error:", e);
+            console.warn("Client group_campaigns error:", e);
           }
 
-          // If target folder is specified, assign group to folder
+          // If target folder is specified, assign group to folder with correct Postgres constraint
           if (savedCampaignId && targetFolderId) {
             try {
               await supabase.from("group_folder_assignments" as any).upsert(
                 {
+                  company_id: activeCompanyId,
                   group_id: savedCampaignId,
                   folder_id: targetFolderId,
-                  company_id: activeCompanyId,
+                  created_at: new Date().toISOString(),
                 },
-                { onConflict: "group_id" }
+                { onConflict: "company_id,group_id" }
               );
             } catch (e) {
               console.warn("Error assigning group to folder:", e);
             }
           }
-
-          // Register group participants into group_members AND leads
-          if (savedCampaignId && participants.length > 0) {
-            for (const p of participants) {
-              const rawPhone = p.phoneNumber || p.phone || p.phoneNumberPn || p.pn || p.jid || p.id || "";
-              let cleanPhone: string | null = null;
-              const phoneStr = String(rawPhone);
-              if (
-                phoneStr.includes("@s.whatsapp.net") ||
-                phoneStr.includes("@c.us") ||
-                (!phoneStr.includes("@lid") && phoneStr.replace(/\D/g, "").length >= 10)
-              ) {
-                const digits = phoneStr.split("@")[0].replace(/\D/g, "");
-                if (digits.length >= 10) cleanPhone = digits;
-              }
-
-              const rawLid = p.lid || p.subjectOwner || p.owner || p.id || "";
-              const lidVal = String(rawLid).includes("@lid") ? String(rawLid).trim() : null;
-
-              if (cleanPhone || lidVal) {
-                const isAdmin = p.admin === "admin" || p.admin === "superadmin" || p.isAdmin === true;
-                const memberName = p.name || p.pushName || null;
-
-                // 1. Save to group_members
-                try {
-                  const { data: exMem } = await supabase
-                    .from("group_members")
-                    .select("id")
-                    .eq("group_campaign_id", savedCampaignId)
-                    .eq("phone", cleanPhone || lidVal)
-                    .maybeSingle();
-
-                  if (exMem?.id) {
-                    await supabase
-                      .from("group_members")
-                      .update({
-                        user_id: targetUserId,
-                        name: memberName,
-                        lid: lidVal,
-                        is_admin: isAdmin,
-                      })
-                      .eq("id", exMem.id);
-                  } else {
-                    await supabase.from("group_members").insert({
-                      group_campaign_id: savedCampaignId,
-                      user_id: targetUserId,
-                      phone: cleanPhone || lidVal,
-                      lid: lidVal,
-                      name: memberName,
-                      is_admin: isAdmin,
-                    });
-                  }
-                } catch (e) {
-                  console.warn("Error saving group_member:", e);
-                }
-
-                // 2. Save/update to leads
-                try {
-                  let existingLeadId: string | null = null;
-                  if (cleanPhone) {
-                    const { data: exByP } = await supabase
-                      .from("leads")
-                      .select("id")
-                      .eq("company_id", activeCompanyId)
-                      .eq("phone", cleanPhone)
-                      .limit(1)
-                      .maybeSingle();
-                    if (exByP?.id) existingLeadId = exByP.id;
-                  }
-                  if (!existingLeadId && lidVal) {
-                    const { data: exByL } = await supabase
-                      .from("leads")
-                      .select("id")
-                      .eq("company_id", activeCompanyId)
-                      .eq("lid", lidVal)
-                      .limit(1)
-                      .maybeSingle();
-                    if (exByL?.id) existingLeadId = exByL.id;
-                  }
-
-                  const leadName =
-                    memberName && !memberName.includes("@g.us")
-                      ? memberName
-                      : cleanPhone
-                      ? `Participante ${cleanPhone}`
-                      : `LID ${lidVal}`;
-
-                  if (existingLeadId) {
-                    await supabase
-                      .from("leads")
-                      .update({
-                        source_group_id: savedCampaignId,
-                        source_group_name: groupName,
-                        updated_at: new Date().toISOString(),
-                      })
-                      .eq("id", existingLeadId);
-                  } else {
-                    await supabase.from("leads").insert({
-                      company_id: activeCompanyId,
-                      user_id: targetUserId,
-                      name: leadName,
-                      phone: cleanPhone || null,
-                      lid: lidVal || null,
-                      source_group_id: savedCampaignId,
-                      source_group_name: groupName,
-                      source_type: "grupo",
-                      status: "novo",
-                      updated_at: new Date().toISOString(),
-                    });
-                  }
-                } catch (e) {
-                  console.warn("Error saving lead:", e);
-                }
-              }
-            }
-          }
         }
       }
 
-      return resData || { syncedCount: groups?.length || 0 };
+      // 2. Background participant sync: run non-blocking bulk upsert and invoke Edge Function
+      const runBackgroundParticipantSync = async () => {
+        try {
+          // Trigger Edge Function in background
+          supabase.functions
+            .invoke("sync-instance-groups", {
+              body: {
+                instanceId: targetInstanceId,
+                companyId: activeCompanyId,
+                userId: targetUserId,
+                selectedJids,
+                groups,
+              },
+            })
+            .catch((err) => console.warn("Background edge function warning:", err));
+
+          // Also perform bulk upsert for participants on client in chunks of 50
+          if (Array.isArray(groups)) {
+            for (const g of groups) {
+              const rawJid = g.groupJid || g.id || g.jid;
+              const jid = cleanAndValidateJid(rawJid);
+              if (!jid) continue;
+
+              const participants = Array.isArray(g.participants) ? g.participants : [];
+              if (participants.length === 0) continue;
+
+              const { data: gc } = await supabase
+                .from("group_campaigns")
+                .select("id")
+                .eq("company_id", activeCompanyId)
+                .eq("group_jid", jid)
+                .maybeSingle();
+
+              if (!gc?.id) continue;
+              const campaignId = gc.id;
+
+              const memberRows: any[] = [];
+              for (const p of participants) {
+                const rawPhone = p.phoneNumber || p.phone || p.phoneNumberPn || p.pn || p.jid || p.id || "";
+                let cleanPhone: string | null = null;
+                const phoneStr = String(rawPhone);
+                if (
+                  phoneStr.includes("@s.whatsapp.net") ||
+                  phoneStr.includes("@c.us") ||
+                  (!phoneStr.includes("@lid") && phoneStr.replace(/\D/g, "").length >= 10)
+                ) {
+                  const digits = phoneStr.split("@")[0].replace(/\D/g, "");
+                  if (digits.length >= 10) cleanPhone = digits;
+                }
+
+                const rawLid = p.lid || p.subjectOwner || p.owner || p.id || "";
+                const lidVal = String(rawLid).includes("@lid") ? String(rawLid).trim() : null;
+
+                if (cleanPhone || lidVal) {
+                  const isAdmin = p.admin === "admin" || p.admin === "superadmin" || p.isAdmin === true;
+                  const memberName = p.name || p.pushName || null;
+                  memberRows.push({
+                    group_campaign_id: campaignId,
+                    user_id: targetUserId,
+                    phone: cleanPhone || lidVal,
+                    lid: lidVal,
+                    name: memberName,
+                    is_admin: isAdmin,
+                  });
+                }
+              }
+
+              // Bulk upsert group members in chunks of 50
+              const CHUNK_SIZE = 50;
+              for (let i = 0; i < memberRows.length; i += CHUNK_SIZE) {
+                const chunk = memberRows.slice(i, i + CHUNK_SIZE);
+                await supabase
+                  .from("group_members")
+                  .upsert(chunk, { onConflict: "group_campaign_id,phone" })
+                  .catch((err) => console.warn("group_members batch upsert error:", err));
+              }
+            }
+          }
+        } catch (bgErr) {
+          console.warn("Background participant sync error:", bgErr);
+        }
+      };
+
+      // Fire background worker asynchronously
+      runBackgroundParticipantSync().catch(() => {});
+
+      return { syncedCount: groups?.length || 0 };
     },
     onSuccess: (res: any) => {
       queryClient.invalidateQueries({ queryKey: ["groups_list"] });

@@ -642,7 +642,7 @@ export default function Groups() {
             folders={folders}
             countByFolder={countByFolder}
             uncategorizedCount={uncategorizedCount}
-            totalCount={totalCount}
+            totalCount={globalTotalCount}
             selectedFolderId={selectedFolderId}
             onSelectFolder={(fId) => {
               setSelectedFolderId(fId);
