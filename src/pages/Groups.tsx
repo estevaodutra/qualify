@@ -760,14 +760,14 @@ export default function Groups() {
             <table className="w-full border-collapse">
               <thead className="bg-muted/40">
                 <tr>
-                  <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Grupo</th>
-                  <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">ID do Grupo (JID)</th>
-                  <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Participantes</th>
-                  <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Admins</th>
-                  <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Instância</th>
-                  <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Última Atividade</th>
-                  <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Data</th>
-                  <th className="px-4 py-3 border-b border-border w-24 text-right">Ações</th>
+                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Grupo</th>
+                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border whitespace-nowrap">ID (JID)</th>
+                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-center border-b border-border whitespace-nowrap">Membros</th>
+                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-center border-b border-border whitespace-nowrap">Admins</th>
+                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border whitespace-nowrap">Instância</th>
+                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border whitespace-nowrap">Última Atividade</th>
+                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border whitespace-nowrap">Data</th>
+                  <th className="px-3 py-2.5 border-b border-border w-16 text-right whitespace-nowrap">Ações</th>
                 </tr>
               </thead>
               <tbody>
