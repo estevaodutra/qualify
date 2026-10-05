@@ -67,6 +67,11 @@ export const GroupCard: React.FC<GroupCardProps> = ({
 
   return (
     <Card
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData("application/x-group-id", group.id);
+        e.dataTransfer.effectAllowed = "move";
+      }}
       onClick={() => onOpenDetails(group)}
       className="group relative overflow-hidden bg-card hover:bg-accent/40 border-border/60 transition-all duration-300 hover:shadow-md hover:border-primary/30 cursor-pointer flex flex-col justify-between"
     >

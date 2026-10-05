@@ -24,7 +24,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useGroupFolders } from "@/hooks/useGroupFolders";
-import { GroupFolderBar } from "@/components/groups/GroupFolderBar";
+import { GroupFolderTree } from "@/components/groups/GroupFolderTree";
 import { toast } from "sonner";
 
 interface RemoteGroupItem {
@@ -48,6 +48,7 @@ export default function Groups() {
   const [selectedGroup, setSelectedGroup] = useState<WhatsAppGroupItem | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null | undefined>(undefined);
+  const [folderPendingDelete, setFolderPendingDelete] = useState<string | null>(null);
 
   // Group Folders hook
   const {
@@ -57,6 +58,7 @@ export default function Groups() {
     renameFolder,
     deleteFolder,
     assignGroupToFolder,
+    reorderFolders,
   } = useGroupFolders();
 
   // Sync / Import Modal state
@@ -401,25 +403,31 @@ export default function Groups() {
         </div>
       </div>
 
-      {/* Group Folder Bar */}
-      <div className="bg-card p-3 rounded-2xl border border-border shadow-sm">
-        <GroupFolderBar
-          folders={folders}
-          selectedFolderId={selectedFolderId}
-          onSelectFolder={(fId) => {
-            setSelectedFolderId(fId);
-            setPage(1);
-          }}
-          countByFolder={countByFolder}
-          totalCount={totalCount}
-          uncategorizedCount={uncategorizedCount}
-          onCreateFolder={(name) => createFolder({ name })}
-          onRenameFolder={(id, name) => renameFolder({ id, name })}
-          onDeleteFolder={(id) => deleteFolder(id)}
-        />
-      </div>
+      {/* Two Column Layout: Folder Sidebar on left + Groups content on right */}
+      <div className="flex flex-col lg:flex-row gap-6 flex-1 min-h-0 items-start">
+        {/* Sidebar com Pastas (igual aos Workflows) */}
+        <aside className="w-full lg:w-64 shrink-0 bg-card border border-border/70 rounded-2xl p-3.5 shadow-sm">
+          <GroupFolderTree
+            folders={folders}
+            countByFolder={countByFolder}
+            uncategorizedCount={uncategorizedCount}
+            totalCount={totalCount}
+            selectedFolderId={selectedFolderId}
+            onSelectFolder={(fId) => {
+              setSelectedFolderId(fId);
+              setPage(1);
+            }}
+            onCreateFolder={(name) => createFolder({ name })}
+            onRenameFolder={(id, name) => renameFolder({ id, name })}
+            onDeleteFolder={(id) => setFolderPendingDelete(id)}
+            onReorder={reorderFolders}
+            onDropGroup={(groupId, fId) => assignGroupToFolder({ groupId, folderId: fId })}
+          />
+        </aside>
 
-      {/* Filter and Search Bar */}
+        {/* Coluna Principal da Direita: Busca, Filtros e Lista de Grupos */}
+        <div className="flex-1 min-w-0 w-full space-y-4">
+          {/* Filter and Search Bar */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-card p-4 rounded-2xl border border-border shadow-sm">
         {/* Search */}
         <div className="relative flex-1 min-w-[240px]">
@@ -638,6 +646,42 @@ export default function Groups() {
           </div>
         </div>
       )}
+        </div>
+      </div>
+
+      {/* Delete Folder Dialog */}
+      <Dialog open={!!folderPendingDelete} onOpenChange={(open) => !open && setFolderPendingDelete(null)}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold">
+              Excluir pasta "{folders.find((f) => f.id === folderPendingDelete)?.name}"?
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Os grupos contidos nesta pasta continuarão existindo normalmente no CRM, apenas ficarão "Sem pasta".
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0 pt-2">
+            <Button variant="outline" size="sm" onClick={() => setFolderPendingDelete(null)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={async () => {
+                if (folderPendingDelete) {
+                  await deleteFolder(folderPendingDelete);
+                  if (selectedFolderId === folderPendingDelete) {
+                    setSelectedFolderId(undefined);
+                  }
+                  setFolderPendingDelete(null);
+                }
+              }}
+            >
+              Excluir pasta
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Details Drawer */}
       <GroupDetailsDrawer

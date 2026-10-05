@@ -87,6 +87,11 @@ export const GroupTableRow: React.FC<GroupTableRowProps> = ({
 
   return (
     <tr
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData("application/x-group-id", group.id);
+        e.dataTransfer.effectAllowed = "move";
+      }}
       onClick={() => onOpenDetails(group)}
       className={cn(
         "border-b border-border/50 hover:bg-accent/40 transition-colors cursor-pointer",
