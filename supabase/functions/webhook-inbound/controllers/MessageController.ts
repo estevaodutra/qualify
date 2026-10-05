@@ -110,13 +110,24 @@ export async function processMessageEvent(
             }
 
             if (leadIdToUpdate) {
-              const { data: l } = await supabase.from("leads").select("custom_fields").eq("id", leadIdToUpdate).maybeSingle();
-              const existingCustom = (l?.custom_fields as Record<string, any>) || {};
-              await supabase.from("leads").update({
-                custom_fields: { ...existingCustom, [pendingInput.target_field]: responseText },
-                updated_at: new Date().toISOString()
-              }).eq("id", leadIdToUpdate);
-              console.log(`[MessageController] Updated custom_fields.${pendingInput.target_field} = "${responseText}" on lead ${leadIdToUpdate}`);
+              const targetField = pendingInput.target_field;
+              const coreFields = ["name", "email", "document", "company_name", "website"];
+              
+              if (coreFields.includes(targetField)) {
+                await supabase.from("leads").update({
+                  [targetField]: responseText,
+                  updated_at: new Date().toISOString()
+                }).eq("id", leadIdToUpdate);
+                console.log(`[MessageController] Updated core field ${targetField} = "${responseText}" on lead ${leadIdToUpdate}`);
+              } else {
+                const { data: l } = await supabase.from("leads").select("custom_fields").eq("id", leadIdToUpdate).maybeSingle();
+                const existingCustom = (l?.custom_fields as Record<string, any>) || {};
+                await supabase.from("leads").update({
+                  custom_fields: { ...existingCustom, [targetField]: responseText },
+                  updated_at: new Date().toISOString()
+                }).eq("id", leadIdToUpdate);
+                console.log(`[MessageController] Updated custom_fields.${targetField} = "${responseText}" on lead ${leadIdToUpdate}`);
+              }
             }
           }
 

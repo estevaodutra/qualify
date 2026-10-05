@@ -18,7 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel, SelectSeparator } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toCanonicalPayload } from "@/lib/workflows/canonicalPayload";
@@ -2387,11 +2387,27 @@ export function UnifiedNodeConfigPanel({
                     <SelectValue placeholder="Selecione o campo" />
                   </SelectTrigger>
                   <SelectContent>
-                    {customFieldsMetadata.map(field => (
-                      <SelectItem key={field.id} value={field.name}>
-                        {field.label} ({field.type})
-                      </SelectItem>
-                    ))}
+                    <SelectGroup>
+                      <SelectLabel>Campos Padrões</SelectLabel>
+                      <SelectItem value="name">Nome Completo (text)</SelectItem>
+                      <SelectItem value="email">E-mail (text)</SelectItem>
+                      <SelectItem value="document">CPF/CNPJ (text)</SelectItem>
+                      <SelectItem value="company_name">Empresa (text)</SelectItem>
+                      <SelectItem value="website">Site (text)</SelectItem>
+                    </SelectGroup>
+                    {customFieldsMetadata.length > 0 && (
+                      <>
+                        <SelectSeparator />
+                        <SelectGroup>
+                          <SelectLabel>Campos Personalizados</SelectLabel>
+                          {customFieldsMetadata.map(field => (
+                            <SelectItem key={field.id} value={field.name}>
+                              {field.label} ({field.type})
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
