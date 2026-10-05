@@ -28,6 +28,8 @@ import { cn } from "@/lib/utils";
 import { TriggerTypeSelector } from "@/components/sequences/triggers/TriggerTypeSelector";
 import { ScheduledTriggerConfig } from "@/components/sequences/triggers/configs/ScheduledTriggerConfig";
 import { GroupEventTriggerConfig } from "@/components/sequences/triggers/configs/GroupEventTriggerConfig";
+import { PipelineChangedTriggerConfig } from "@/components/sequences/triggers/configs/PipelineChangedTriggerConfig";
+import { getTriggerDefinition } from "@/components/sequences/triggers/triggerDefinitions";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 
@@ -684,6 +686,13 @@ export function NodeEditorModal({
                               onChange={handleTriggerConfigChange}
                             />
                           </div>
+                        )}
+
+                        {(selectorValue === "pipeline_changed" || selectorValue === "deal_created" || selectorValue === "deal_moved") && (
+                          <PipelineChangedTriggerConfig
+                            config={triggerConfig}
+                            onChange={handleTriggerConfigChange}
+                          />
                         )}
                       </div>
                     );
