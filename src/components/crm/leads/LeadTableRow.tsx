@@ -73,7 +73,11 @@ export function LeadTableRow({
         <div className="flex items-center gap-2.5">
           <LeadAvatar name={lead.name} className="w-8 h-8" />
           <div className="flex flex-col">
-            <span className="text-[13px] font-medium text-foreground">{lead.name || "Sem Nome"}</span>
+            {lead.name && lead.name.trim().length > 0 ? (
+              <span className="text-[13px] font-medium text-foreground">{lead.name}</span>
+            ) : (
+              <span className="text-[13px] text-muted-foreground/50 font-normal italic">Sem nome</span>
+            )}
             <span className="text-[11px] text-muted-foreground truncate max-w-[150px]">{lead.company_name || ""}</span>
           </div>
         </div>

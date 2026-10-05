@@ -156,23 +156,8 @@ Deno.serve(async (req) => {
         await supabase.from("group_member_history").insert(historyRecords.slice(i, i + 100));
       }
 
-      const leadRecords = entered.map((p) => ({
-        user_id: userId,
-        phone: p.phone,
-        name: p.name || null,
-        active_campaign_id: campaignId,
-        active_campaign_type: "grupos",
-        status: "active",
-      }));
-
-      // Deduplicate leadRecords by phone to prevent Postgres throwing unique constraint inside the same bulk insert
-      const uniqueLeadRecords = Array.from(new Map(leadRecords.map(item => [item.phone, item])).values());
-
-      for (let i = 0; i < uniqueLeadRecords.length; i += 100) {
-        await supabase
-          .from("leads")
-          .upsert(uniqueLeadRecords.slice(i, i + 100), { onConflict: "user_id,phone", ignoreDuplicates: false });
-      }
+      // Note: Group members belong to group_members table.
+      // They are only added to CRM leads if an explicit workflow action (create_lead) runs.
     }
 
     // 8. Process left

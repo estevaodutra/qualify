@@ -1948,10 +1948,10 @@ Deno.serve(async (req) => {
             };
 
             if (actionType === "create_lead") {
-              const rawName = (params.name as string) || (triggerContext?.respondentName as string) || dest.group_name || "Novo Lead";
+              const rawName = (params.name as string) || (triggerContext?.respondentName as string) || null;
               const rawPhone = (params.phone as string) || (triggerContext?.respondentPhone as string) || phoneClean;
 
-              const resolvedName = resolveVariables(rawName, triggerContext, leadData) || phoneClean;
+              const resolvedName = rawName ? (resolveVariables(rawName, triggerContext, leadData) || null) : null;
               const resolvedPhone = cleanPhone(resolveVariables(rawPhone, triggerContext, leadData) || phoneClean);
               const resolvedEmail = resolveVariables(params.email as string, triggerContext, leadData) || null;
               const resolvedCpf = cleanCpf(resolveVariables(params.cpf as string, triggerContext, leadData) || "");

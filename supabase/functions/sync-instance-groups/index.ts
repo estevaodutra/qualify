@@ -520,7 +520,8 @@ Deno.serve(async (req) => {
               console.warn("[sync-instance-groups] group_members save error:", e.message);
             }
 
-            // B. ALWAYS save/update into leads table with phone and @lid matching existing leads by phone or lid!
+            // B. If lead already exists in CRM leads table, update its LID if missing.
+            // Do NOT automatically create new leads for all group members.
             try {
               let existingLeadId: string | null = null;
 
@@ -544,27 +545,14 @@ Deno.serve(async (req) => {
                 if (exByLid?.id) existingLeadId = exByLid.id;
               }
 
-              const leadName = cleanName && !cleanName.includes("@g.us") ? cleanName : (cleanPhone ? `Participante ${cleanPhone}` : `LID ${lidVal}`);
-
-              const leadPayload = {
-                company_id: companyId,
-                user_id: targetUserId,
-                name: leadName,
-                phone: cleanPhone || null,
-                lid: lidVal || null,
-                source_group_name: finalName,
-                source_type: "grupo",
-                status: "novo",
-                updated_at: new Date().toISOString(),
-              };
-
-              if (existingLeadId) {
-                await supabase.from("leads").update(leadPayload).eq("id", existingLeadId);
-              } else {
-                await supabase.from("leads").insert(leadPayload);
+              if (existingLeadId && lidVal) {
+                await supabase.from("leads").update({
+                  lid: lidVal,
+                  updated_at: new Date().toISOString(),
+                }).eq("id", existingLeadId);
               }
             } catch (e: any) {
-              console.warn("[sync-instance-groups] leads save error:", e.message);
+              console.warn("[sync-instance-groups] leads update error:", e.message);
             }
           }
         }

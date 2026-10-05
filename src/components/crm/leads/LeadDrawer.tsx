@@ -23,7 +23,13 @@ export function LeadDrawer({ lead, open, onOpenChange }: LeadDrawerProps) {
           <SheetHeader className="flex flex-row items-start gap-4 space-y-0">
             <LeadAvatar name={lead.name} className="w-16 h-16 shadow-md" fallbackClassName="text-2xl" />
             <div className="flex flex-col gap-1.5 flex-1 pt-1">
-              <SheetTitle className="text-xl font-bold">{lead.name || "Sem Nome"}</SheetTitle>
+              <SheetTitle className="text-xl font-bold">
+                {lead.name && lead.name.trim().length > 0 ? (
+                  lead.name
+                ) : (
+                  <span className="text-muted-foreground/50 font-normal italic">Sem nome</span>
+                )}
+              </SheetTitle>
               <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
                 {lead.phone && (
                   <span className="flex items-center gap-1.5">
