@@ -28,6 +28,7 @@ export function PipelineChangedTriggerConfig({ config, onChange }: PipelineChang
         .from("pipelines")
         .select("id, name")
         .eq("company_id", activeCompanyId)
+        .is("deleted_at", null)
         .order("name", { ascending: true });
       
       if (data) {
@@ -49,9 +50,10 @@ export function PipelineChangedTriggerConfig({ config, onChange }: PipelineChang
       setIsLoadingStages(true);
       const { data } = await supabase
         .from("pipeline_stages")
-        .select("id, name, position")
+        .select("id, name, order_index")
         .eq("pipeline_id", selectedPipelineId)
-        .order("position", { ascending: true });
+        .is("deleted_at", null)
+        .order("order_index", { ascending: true });
       
       if (data) {
         setStages(data);
