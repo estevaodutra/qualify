@@ -33,6 +33,7 @@ interface RemoteGroupItem {
   description: string | null;
   pictureUrl: string | null;
   participantsCount: number;
+  participants?: any[];
 }
 
 export default function Groups() {
@@ -68,11 +69,15 @@ export default function Groups() {
   const [remoteGroups, setRemoteGroups] = useState<RemoteGroupItem[]>([]);
   const [selectedJids, setSelectedJids] = useState<Set<string>>(new Set());
   const [remoteSearch, setRemoteSearch] = useState("");
+  const [remoteGroupFilterTab, setRemoteGroupFilterTab] = useState<"all" | "new" | "registered">("all");
+  const [targetFolderIdForImport, setTargetFolderIdForImport] = useState<string | null | undefined>(undefined);
 
-  // Fetch groups with filters
+  // Fetch groups with filters from CRM database
   const {
     groups,
     totalCount,
+    globalTotalCount,
+    allRegisteredJids,
     totalPages,
     isLoading,
     isFetching,
@@ -93,6 +98,11 @@ export default function Groups() {
     pageSize: 15,
   });
 
+  // Set of all JIDs currently registered in the CRM
+  const registeredJidsSet = React.useMemo(() => {
+    return new Set((allRegisteredJids || []).map((j) => j.toLowerCase().trim()));
+  }, [allRegisteredJids]);
+
   // Calculate folder counts
   const countByFolder: Record<string, number> = {};
   folders.forEach((f) => {
@@ -105,7 +115,7 @@ export default function Groups() {
       assignedCount++;
     }
   });
-  const uncategorizedCount = Math.max(0, totalCount - assignedCount);
+  const uncategorizedCount = Math.max(0, globalTotalCount - assignedCount);
 
   // Auto-run migration once on mount to organize group entries out of leads table into whatsapp_groups
   useEffect(() => {
@@ -147,10 +157,23 @@ export default function Groups() {
 
       if (data?.success && Array.isArray(data.groups)) {
         setRemoteGroups(data.groups);
-        // Select all groups by default
-        const allJids = new Set<string>(data.groups.map((g: RemoteGroupItem) => g.groupJid));
-        setSelectedJids(allJids);
-        toast.success(`${data.groups.length} grupos encontrados na conexão!`);
+        
+        // By default, select ONLY groups that are NOT yet registered in the CRM
+        const newJids = new Set<string>();
+        data.groups.forEach((g: RemoteGroupItem) => {
+          if (!registeredJidsSet.has(g.groupJid.toLowerCase().trim())) {
+            newJids.add(g.groupJid);
+          }
+        });
+
+        // Pre-select new groups
+        setSelectedJids(newJids);
+
+        const newCount = newJids.size;
+        const alreadyCount = data.groups.length - newCount;
+        toast.success(
+          `${data.groups.length} grupos encontrados na conexão (${newCount} novos, ${alreadyCount} já no CRM)!`
+        );
       } else {
         toast.info("Nenhum grupo encontrado nesta conexão do WhatsApp.");
         setRemoteGroups([]);
@@ -176,20 +199,10 @@ export default function Groups() {
     });
   };
 
-  // Toggle select all groups
-  const handleToggleSelectAll = (checked: boolean) => {
-    if (checked) {
-      const allJids = new Set<string>(remoteGroups.map((g) => g.groupJid));
-      setSelectedJids(allJids);
-    } else {
-      setSelectedJids(new Set());
-    }
-  };
-
-  // Submit selected groups import to CRM
+  // Submit selected groups registration to CRM
   const handleImportSelectedGroups = () => {
     if (!selectedSyncInstance || selectedJids.size === 0) {
-      toast.error("Selecione pelo menos 1 grupo para adicionar.");
+      toast.error("Selecione pelo menos 1 grupo para registrar no CRM.");
       return;
     }
 
@@ -199,17 +212,40 @@ export default function Groups() {
       instanceId: selectedSyncInstance,
       selectedJids: Array.from(selectedJids),
       groups: selectedGroupsObjects,
+      targetFolderId: targetFolderIdForImport !== undefined ? targetFolderIdForImport : (selectedFolderId ?? null),
     });
 
     setSyncDialogOpen(false);
   };
 
-  // Filtered remote groups by search query
-  const filteredRemoteGroups = remoteGroups.filter(
-    (g) =>
+  // Filter remote groups by search query and tab (all, new, registered)
+  const filteredRemoteGroups = remoteGroups.filter((g) => {
+    const matchesSearch =
       g.name.toLowerCase().includes(remoteSearch.toLowerCase()) ||
-      g.groupJid.toLowerCase().includes(remoteSearch.toLowerCase())
-  );
+      g.groupJid.toLowerCase().includes(remoteSearch.toLowerCase());
+    if (!matchesSearch) return false;
+
+    const isAlreadyReg = registeredJidsSet.has(g.groupJid.toLowerCase().trim());
+    if (remoteGroupFilterTab === "new") return !isAlreadyReg;
+    if (remoteGroupFilterTab === "registered") return isAlreadyReg;
+    return true;
+  });
+
+  const remoteNewCount = remoteGroups.filter(
+    (g) => !registeredJidsSet.has(g.groupJid.toLowerCase().trim())
+  ).length;
+  const remoteAlreadyCount = remoteGroups.length - remoteNewCount;
+
+  const selectedNewCount = Array.from(selectedJids).filter(
+    (jid) => !registeredJidsSet.has(jid.toLowerCase().trim())
+  ).length;
+  const selectedExistingCount = selectedJids.size - selectedNewCount;
+
+  const currentFolderName = selectedFolderId
+    ? folders.find((f) => f.id === selectedFolderId)?.name || "Pasta selecionada"
+    : selectedFolderId === null
+    ? "Sem pasta"
+    : null;
 
   return (
     <div className="space-y-6 w-full max-w-7xl mx-auto pb-10">
@@ -224,18 +260,22 @@ export default function Groups() {
               <div className="flex items-center gap-2.5">
                 <h1 className="text-2xl font-extrabold text-foreground tracking-tight">Grupos</h1>
                 <Badge variant="secondary" className="bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 font-bold px-2.5 py-0.5 text-xs">
-                  {totalCount} {totalCount === 1 ? "grupo" : "grupos"}
+                  {selectedFolderId !== undefined
+                    ? `${totalCount} na pasta (${globalTotalCount} no CRM)`
+                    : `${totalCount} ${totalCount === 1 ? "grupo" : "grupos"}`}
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Gerencie e organize os grupos do WhatsApp conectados às suas instâncias.
+                {currentFolderName
+                  ? `Visualizando pasta: "${currentFolderName}". Grupos e leads registrados no CRM.`
+                  : "Grupos e contatos salvos no CRM. Sincronização periódica e sob demanda."}
               </p>
             </div>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
-          {/* Button to sync & select groups from WhatsApp Instance */}
+          {/* Button to add & register groups from WhatsApp Connection */}
           <Dialog open={syncDialogOpen} onOpenChange={setSyncDialogOpen}>
             <DialogTrigger asChild>
               <Button
@@ -243,22 +283,22 @@ export default function Groups() {
                 size="sm"
                 className="gap-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
               >
-                <Radio className="h-3.5 w-3.5" />
-                Buscar Grupos da Instância
+                <PlusCircle className="h-3.5 w-3.5" />
+                Adicionar Grupos
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-2xl md:max-w-3xl w-full max-h-[88vh] flex flex-col p-0 overflow-hidden rounded-2xl bg-card border border-border shadow-2xl">
               <DialogHeader className="p-6 pb-4 border-b border-border/70 bg-muted/20 shrink-0">
                 <div className="flex items-start gap-3">
                   <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5">
-                    <Radio className="h-5 w-5" />
+                    <PlusCircle className="h-5 w-5" />
                   </div>
                   <div>
                     <DialogTitle className="text-lg font-bold text-foreground">
-                      Buscar e Selecionar Grupos da Conexão
+                      Adicionar Grupos ao CRM
                     </DialogTitle>
                     <DialogDescription className="text-xs text-muted-foreground mt-1">
-                      Selecione uma conexão WhatsApp para listar todos os grupos disponíveis e selecione quais deseja adicionar ao CRM.
+                      Conecte-se à sua instância para listar os grupos do WhatsApp. O sistema identifica automaticamente grupos novos e existentes para registrar contatos e dados no CRM.
                     </DialogDescription>
                   </div>
                 </div>
@@ -278,6 +318,7 @@ export default function Groups() {
                         setRemoteGroups([]);
                         setSelectedJids(new Set());
                         setRemoteSearch("");
+                        setRemoteGroupFilterTab("all");
                       }}
                     >
                       <SelectTrigger className="h-10 text-xs bg-background border-border">
@@ -302,7 +343,7 @@ export default function Groups() {
                     className="h-10 px-4 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shrink-0 shadow-sm"
                   >
                     {isFetchingRemote ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
-                    {isFetchingRemote ? "Buscando..." : "Buscar Grupos"}
+                    {isFetchingRemote ? "Buscando..." : "Buscar Grupos da Conexão"}
                   </Button>
                 </div>
               </div>
@@ -311,7 +352,88 @@ export default function Groups() {
               {remoteGroups.length > 0 ? (
                 <div className="flex flex-col flex-1 min-h-0">
                   {/* Search and Selection Toolbar */}
-                  <div className="px-6 pb-3 shrink-0">
+                  <div className="px-6 pb-3 shrink-0 space-y-2.5">
+                    {/* Filter tabs: Todos, Novos, Já no CRM */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-2">
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          type="button"
+                          variant={remoteGroupFilterTab === "all" ? "secondary" : "ghost"}
+                          size="sm"
+                          onClick={() => setRemoteGroupFilterTab("all")}
+                          className="h-7 px-2.5 text-xs font-medium gap-1.5"
+                        >
+                          Todos
+                          <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                            {remoteGroups.length}
+                          </Badge>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={remoteGroupFilterTab === "new" ? "secondary" : "ghost"}
+                          size="sm"
+                          onClick={() => setRemoteGroupFilterTab("new")}
+                          className="h-7 px-2.5 text-xs font-medium gap-1.5 text-blue-600 dark:text-blue-400"
+                        >
+                          Novos
+                          <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4 bg-blue-500/15 text-blue-700 dark:text-blue-300 font-bold">
+                            {remoteNewCount}
+                          </Badge>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={remoteGroupFilterTab === "registered" ? "secondary" : "ghost"}
+                          size="sm"
+                          onClick={() => setRemoteGroupFilterTab("registered")}
+                          className="h-7 px-2.5 text-xs font-medium gap-1.5 text-emerald-600 dark:text-emerald-400"
+                        >
+                          Já no CRM
+                          <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-bold">
+                            {remoteAlreadyCount}
+                          </Badge>
+                        </Button>
+                      </div>
+
+                      {/* Fast toggle buttons */}
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const newJids = new Set<string>();
+                            remoteGroups.forEach((g) => {
+                              if (!registeredJidsSet.has(g.groupJid.toLowerCase().trim())) {
+                                newJids.add(g.groupJid);
+                              }
+                            });
+                            setSelectedJids(newJids);
+                          }}
+                          className="h-7 text-[11px] text-muted-foreground hover:text-foreground font-semibold"
+                        >
+                          Selecionar Novos ({remoteNewCount})
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedJids(new Set(remoteGroups.map((g) => g.groupJid)))}
+                          className="h-7 text-[11px] text-muted-foreground hover:text-foreground"
+                        >
+                          Todos
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedJids(new Set())}
+                          className="h-7 text-[11px] text-muted-foreground hover:text-foreground"
+                        >
+                          Limpar
+                        </Button>
+                      </div>
+                    </div>
+
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                       {/* Search inside modal */}
                       <div className="relative flex-1">
@@ -333,26 +455,30 @@ export default function Groups() {
                         )}
                       </div>
 
-                      {/* Select All Toggle Button */}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleToggleSelectAll(selectedJids.size !== remoteGroups.length)}
-                        className="h-9 px-3 text-xs font-semibold gap-2 shrink-0 border-border hover:bg-muted/60"
-                      >
-                        <Checkbox
-                          id="select-all-groups"
-                          checked={selectedJids.size === remoteGroups.length && remoteGroups.length > 0}
-                          className="pointer-events-none"
-                        />
-                        <span>
-                          {selectedJids.size === remoteGroups.length ? "Desmarcar Todos" : "Selecionar Todos"}
-                        </span>
-                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-mono font-bold bg-muted">
-                          {selectedJids.size}/{remoteGroups.length}
-                        </Badge>
-                      </Button>
+                      {/* Folder selection dropdown for import */}
+                      {folders.length > 0 && (
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <label className="text-[11px] text-muted-foreground whitespace-nowrap">
+                            Pasta destino:
+                          </label>
+                          <Select
+                            value={targetFolderIdForImport !== undefined ? (targetFolderIdForImport ?? "none") : (selectedFolderId ?? "none")}
+                            onValueChange={(val) => setTargetFolderIdForImport(val === "none" ? null : val)}
+                          >
+                            <SelectTrigger className="h-9 text-xs w-[160px] bg-background">
+                              <SelectValue placeholder="Selecione pasta..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Sem pasta (Geral)</SelectItem>
+                              {folders.map((f) => (
+                                <SelectItem key={f.id} value={f.id}>
+                                  📁 {f.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -360,11 +486,12 @@ export default function Groups() {
                   <div className="flex-1 min-h-[260px] max-h-[380px] overflow-y-auto px-6 pb-4 space-y-2 scrollbar-thin">
                     {filteredRemoteGroups.length === 0 ? (
                       <div className="text-center py-10 text-xs text-muted-foreground">
-                        Nenhum grupo encontrado com o filtro &ldquo;{remoteSearch}&rdquo;.
+                        Nenhum grupo encontrado com os filtros aplicados.
                       </div>
                     ) : (
                       filteredRemoteGroups.map((g) => {
                         const isChecked = selectedJids.has(g.groupJid);
+                        const isAlreadyRegistered = registeredJidsSet.has(g.groupJid.toLowerCase().trim());
                         return (
                           <div
                             key={g.groupJid}
@@ -372,6 +499,8 @@ export default function Groups() {
                             className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
                               isChecked
                                 ? "bg-emerald-500/10 border-emerald-500/50 shadow-sm"
+                                : isAlreadyRegistered
+                                ? "bg-muted/20 border-border/40 opacity-85 hover:opacity-100 hover:bg-muted/40"
                                 : "bg-card hover:bg-muted/40 border-border/70"
                             }`}
                           >
@@ -382,11 +511,34 @@ export default function Groups() {
                                 onClick={(e) => e.stopPropagation()}
                                 className="shrink-0"
                               />
-                              <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                              <div
+                                className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                                  isAlreadyRegistered
+                                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                    : "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                                }`}
+                              >
                                 <MessagesSquare className="h-4 w-4" />
                               </div>
                               <div className="min-w-0">
-                                <p className="text-xs font-bold text-foreground truncate">{g.name}</p>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-xs font-bold text-foreground truncate">{g.name}</p>
+                                  {isAlreadyRegistered ? (
+                                    <Badge
+                                      variant="secondary"
+                                      className="text-[10px] py-0 px-1.5 h-4 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 gap-1 shrink-0 font-semibold"
+                                    >
+                                      <CheckCircle2 className="h-2.5 w-2.5" /> Já no CRM
+                                    </Badge>
+                                  ) : (
+                                    <Badge
+                                      variant="secondary"
+                                      className="text-[10px] py-0 px-1.5 h-4 bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30 shrink-0 font-semibold"
+                                    >
+                                      Novo
+                                    </Badge>
+                                  )}
+                                </div>
                                 <p className="text-[11px] font-mono text-muted-foreground/90 truncate">{g.groupJid}</p>
                               </div>
                             </div>
@@ -409,7 +561,7 @@ export default function Groups() {
                     </div>
                     <p className="text-xs font-semibold text-foreground">Nenhum grupo listado ainda</p>
                     <p className="text-[11px] text-muted-foreground max-w-sm mx-auto">
-                      Selecione a conexão do WhatsApp acima e clique em &ldquo;Buscar Grupos&rdquo; para carregar os grupos participantes.
+                      Selecione a conexão do WhatsApp acima e clique em &ldquo;Buscar Grupos da Conexão&rdquo; para carregar os grupos participantes.
                     </p>
                   </div>
                 </div>
@@ -418,10 +570,17 @@ export default function Groups() {
               <DialogFooter className="p-4 px-6 border-t border-border/70 bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
                 <div className="text-xs text-muted-foreground self-start sm:self-auto">
                   {selectedJids.size > 0 ? (
-                    <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                      <CheckCircle2 className="h-4 w-4" />
-                      {selectedJids.size} {selectedJids.size === 1 ? "grupo selecionado" : "grupos selecionados"} de {remoteGroups.length}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                      <span className="font-semibold text-foreground">
+                        {selectedJids.size} {selectedJids.size === 1 ? "grupo selecionado" : "grupos selecionados"}
+                      </span>
+                      {selectedNewCount > 0 && selectedExistingCount > 0 && (
+                        <span className="text-muted-foreground text-[11px]">
+                          ({selectedNewCount} novos, {selectedExistingCount} já no CRM)
+                        </span>
+                      )}
+                    </div>
                   ) : (
                     <span>{remoteGroups.length > 0 ? `0 de ${remoteGroups.length} grupos selecionados` : "Nenhum grupo selecionado"}</span>
                   )}
@@ -437,7 +596,13 @@ export default function Groups() {
                     className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shadow-sm"
                   >
                     {isSyncingInstance ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <PlusCircle className="h-3.5 w-3.5" />}
-                    {isSyncingInstance ? "Adicionando..." : `Adicionar ${selectedJids.size} ${selectedJids.size === 1 ? "Grupo" : "Grupos"} ao CRM`}
+                    {isSyncingInstance
+                      ? "Registrando no CRM..."
+                      : selectedNewCount > 0 && selectedExistingCount > 0
+                      ? `Registrar ${selectedNewCount} Novos (${selectedExistingCount} Atualizações) no CRM`
+                      : selectedNewCount > 0
+                      ? `Registrar ${selectedNewCount} ${selectedNewCount === 1 ? "Novo Grupo" : "Novos Grupos"} no CRM`
+                      : `Atualizar ${selectedExistingCount} ${selectedExistingCount === 1 ? "Grupo" : "Grupos"} no CRM`}
                   </Button>
                 </div>
               </DialogFooter>
@@ -656,9 +821,17 @@ export default function Groups() {
             <MessagesSquare className="h-8 w-8" />
           </div>
           <div className="space-y-1.5 max-w-md mx-auto">
-            <h3 className="text-lg font-bold text-foreground">Nenhum grupo encontrado</h3>
+            <h3 className="text-lg font-bold text-foreground">
+              {selectedFolderId !== undefined
+                ? `Nenhum grupo na pasta "${currentFolderName}"`
+                : search.trim()
+                ? "Nenhum grupo encontrado com este filtro"
+                : "Nenhum grupo registrado no CRM ainda"}
+            </h3>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Busque e selecione os grupos de uma instância do WhatsApp para adicionar à sua plataforma.
+              {selectedFolderId !== undefined
+                ? "Esta pasta ainda não possui grupos associados. Você pode arrastar grupos para cá ou usar a opção Adicionar Grupos."
+                : "Busque os grupos conectados ao WhatsApp e registre-os diretamente no seu CRM para gerenciar mensagens, membros e leads."}
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
@@ -667,9 +840,19 @@ export default function Groups() {
               onClick={() => setSyncDialogOpen(true)}
               className="text-xs font-bold gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
             >
-              <Radio className="h-3.5 w-3.5" />
-              Buscar Grupos da Instância
+              <PlusCircle className="h-3.5 w-3.5" />
+              Adicionar Grupos
             </Button>
+            {selectedFolderId !== undefined && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedFolderId(undefined)}
+                className="text-xs font-semibold gap-2"
+              >
+                Ver todos os grupos ({globalTotalCount})
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"

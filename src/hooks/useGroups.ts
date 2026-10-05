@@ -21,8 +21,17 @@ export interface WhatsAppGroupItem {
   adminsCount: number;
   status: "active" | "inactive" | "archived";
   lastActivityAt: string | null;
+  lastSyncedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface GroupsResponse {
+  groups: WhatsAppGroupItem[];
+  totalCount: number;
+  totalPages: number;
+  allRegisteredJids?: string[];
+  globalTotalCount?: number;
 }
 
 export interface GroupFilters {
@@ -111,8 +120,8 @@ export function useGroups(filters: GroupFilters = {}) {
       const rawGroups: any[] = [];
       const seenKeys = new Set<string>();
 
-      // 0. Pre-fetch campaign_groups, sequences, folders and folder assignments
-      const [cgRes, seqRes, folderRes, assignRes] = await Promise.all([
+      // 0. Pre-fetch campaign_groups, sequences, folders, folder assignments, and group members count
+      const [cgRes, seqRes, folderRes, assignRes, memberRes] = await Promise.all([
         supabase
           .from("campaign_groups")
           .select("campaign_id, group_jid, group_name")
@@ -131,12 +140,27 @@ export function useGroups(filters: GroupFilters = {}) {
           .select("group_id, folder_id")
           .eq("company_id", activeCompanyId)
           .catch(() => ({ data: [] })),
+        supabase
+          .from("group_members")
+          .select("group_campaign_id, is_admin")
+          .catch(() => ({ data: [] })),
       ]);
 
       const campaignGroups = cgRes?.data || [];
       const messageSequences = seqRes?.data || [];
       const groupFolders = (folderRes?.data || []) as { id: string; name: string }[];
       const folderAssignments = (assignRes?.data || []) as { group_id: string; folder_id: string }[];
+      const memberList = (memberRes?.data || []) as { group_campaign_id: string; is_admin: boolean }[];
+
+      // Build member count lookup per group campaign
+      const memberCountMap = new Map<string, { total: number; admins: number }>();
+      memberList.forEach((m) => {
+        if (!m.group_campaign_id) return;
+        const curr = memberCountMap.get(m.group_campaign_id) || { total: 0, admins: 0 };
+        curr.total++;
+        if (m.is_admin) curr.admins++;
+        memberCountMap.set(m.group_campaign_id, curr);
+      });
 
       // Build folder lookup maps
       const folderNameMap = new Map<string, string>();
@@ -169,7 +193,7 @@ export function useGroups(filters: GroupFilters = {}) {
       try {
         const { data: gcData } = await supabase
           .from("group_campaigns")
-          .select("id, name, instance_id, group_jid, group_name, group_description, group_photo_url, status, created_at, updated_at")
+          .select("id, name, instance_id, group_jid, group_name, group_description, group_photo_url, status, created_at, updated_at, config")
           .eq("company_id", activeCompanyId);
 
         if (gcData) {
@@ -201,6 +225,13 @@ export function useGroups(filters: GroupFilters = {}) {
             const dedupKey = validJid || `campaign_${gc.id}`;
             if (!seenKeys.has(dedupKey)) {
               seenKeys.add(dedupKey);
+
+              const memStats = memberCountMap.get(gc.id);
+              const cfg = (gc.config as any) || {};
+              const pCount = memStats?.total || (typeof cfg.participants_count === "number" ? cfg.participants_count : 0);
+              const aCount = memStats?.admins || 0;
+              const lastSynced = cfg.last_synced_at || gc.updated_at || gc.created_at;
+
               rawGroups.push({
                 id: gc.id,
                 company_id: activeCompanyId,
@@ -210,9 +241,10 @@ export function useGroups(filters: GroupFilters = {}) {
                 name: gc.group_name || gc.name || "Grupo WhatsApp",
                 description: gc.group_description,
                 picture_url: gc.group_photo_url,
-                participants_count: 0,
-                admins_count: 0,
+                participants_count: pCount,
+                admins_count: aCount,
                 status: gc.status || "active",
+                last_synced_at: lastSynced,
                 created_at: gc.created_at,
                 updated_at: gc.updated_at,
               });
@@ -296,6 +328,7 @@ export function useGroups(filters: GroupFilters = {}) {
           adminsCount: g.admins_count || 0,
           status: g.status === "inactive" || g.status === "archived" ? g.status : "active",
           lastActivityAt: g.last_activity_at || g.updated_at || g.created_at,
+          lastSyncedAt: g.last_synced_at || null,
           createdAt: g.created_at || new Date().toISOString(),
           updatedAt: g.updated_at || new Date().toISOString(),
         };
@@ -356,10 +389,17 @@ export function useGroups(filters: GroupFilters = {}) {
       const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
       const paginatedItems = items.slice((page - 1) * pageSize, page * pageSize);
 
+      const allRegisteredJidSet = new Set<string>();
+      rawGroups.forEach((g) => {
+        if (g.group_jid) allRegisteredJidSet.add(g.group_jid.toLowerCase());
+      });
+
       return {
         groups: paginatedItems,
         totalCount,
         totalPages,
+        allRegisteredJids: Array.from(allRegisteredJidSet),
+        globalTotalCount: rawGroups.length,
       };
     },
     staleTime: 5000,
@@ -370,9 +410,19 @@ export function useGroups(filters: GroupFilters = {}) {
     mutationFn: async () => ({ migratedCount: 0 }),
   });
 
-  // Mutation to sync groups directly from a specific WhatsApp instance/connection
+  // Mutation to sync and register groups directly from a specific WhatsApp instance/connection
   const syncInstanceGroupsMutation = useMutation({
-    mutationFn: async ({ instanceId: targetInstanceId, selectedJids, groups }: { instanceId: string; selectedJids?: string[]; groups?: any[] }) => {
+    mutationFn: async ({
+      instanceId: targetInstanceId,
+      selectedJids,
+      groups,
+      targetFolderId,
+    }: {
+      instanceId: string;
+      selectedJids?: string[];
+      groups?: any[];
+      targetFolderId?: string | null;
+    }) => {
       if (!targetInstanceId) return { syncedCount: 0 };
 
       // 1. Invoke Edge Function with direct groups array and userId
@@ -390,7 +440,7 @@ export function useGroups(filters: GroupFilters = {}) {
         console.warn("[syncInstanceGroups] Edge function warning:", resErr);
       }
 
-      // 2. Direct client-side dual persistence fallback into group_campaigns and chat_conversations
+      // 2. Client-side persistence and leads registration fallback
       if (activeCompanyId && Array.isArray(groups) && groups.length > 0) {
         const targetUserId = currentUserId || activeCompanyId;
 
@@ -401,8 +451,12 @@ export function useGroups(filters: GroupFilters = {}) {
 
           const groupName = g.name || "Grupo WhatsApp";
           const groupDesc = g.description || null;
+          const participants = Array.isArray(g.participants) ? g.participants : [];
+          const participantsCount = g.participantsCount || participants.length || 0;
 
-          // Fallback A: group_campaigns
+          let savedCampaignId: string | null = null;
+
+          // Save/update group_campaigns with config stats
           try {
             const { data: existingGc } = await supabase
               .from("group_campaigns")
@@ -411,7 +465,13 @@ export function useGroups(filters: GroupFilters = {}) {
               .eq("group_jid", jid)
               .maybeSingle();
 
+            const configPayload = {
+              participants_count: participantsCount,
+              last_synced_at: new Date().toISOString(),
+            };
+
             if (existingGc?.id) {
+              savedCampaignId = existingGc.id;
               await supabase
                 .from("group_campaigns")
                 .update({
@@ -420,60 +480,168 @@ export function useGroups(filters: GroupFilters = {}) {
                   group_name: groupName,
                   name: groupName,
                   group_description: groupDesc,
+                  group_photo_url: g.pictureUrl || null,
+                  config: configPayload,
                   updated_at: new Date().toISOString(),
                 })
                 .eq("id", existingGc.id);
             } else {
-              await supabase.from("group_campaigns").insert({
-                company_id: activeCompanyId,
-                user_id: targetUserId,
-                instance_id: targetInstanceId,
-                group_jid: jid,
-                group_name: groupName,
-                name: groupName,
-                group_description: groupDesc,
-                status: "active",
-                updated_at: new Date().toISOString(),
-              });
+              const { data: insertedGc } = await supabase
+                .from("group_campaigns")
+                .insert({
+                  company_id: activeCompanyId,
+                  user_id: targetUserId,
+                  instance_id: targetInstanceId,
+                  group_jid: jid,
+                  group_name: groupName,
+                  name: groupName,
+                  group_description: groupDesc,
+                  group_photo_url: g.pictureUrl || null,
+                  status: "active",
+                  config: configPayload,
+                  updated_at: new Date().toISOString(),
+                })
+                .select("id")
+                .maybeSingle();
+
+              if (insertedGc?.id) {
+                savedCampaignId = insertedGc.id;
+              }
             }
           } catch (e) {
             console.warn("Client fallback group_campaigns error:", e);
           }
 
-          // Fallback B: chat_conversations
-          try {
-            const { data: existingConv } = await supabase
-              .from("chat_conversations")
-              .select("id")
-              .eq("company_id", activeCompanyId)
-              .eq("contact_name", jid)
-              .maybeSingle();
-
-            if (existingConv?.id) {
-              await supabase
-                .from("chat_conversations")
-                .update({
-                  instance_id: targetInstanceId,
-                  user_id: targetUserId,
-                  contact_phone: jid,
-                  last_message_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
-                })
-                .eq("id", existingConv.id);
-            } else {
-              await supabase.from("chat_conversations").insert({
-                company_id: activeCompanyId,
-                user_id: targetUserId,
-                instance_id: targetInstanceId,
-                contact_name: jid,
-                contact_phone: jid,
-                status: "open",
-                last_message_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              });
+          // If target folder is specified, assign group to folder
+          if (savedCampaignId && targetFolderId) {
+            try {
+              await supabase.from("group_folder_assignments" as any).upsert(
+                {
+                  group_id: savedCampaignId,
+                  folder_id: targetFolderId,
+                  company_id: activeCompanyId,
+                },
+                { onConflict: "group_id" }
+              );
+            } catch (e) {
+              console.warn("Error assigning group to folder:", e);
             }
-          } catch (e) {
-            console.warn("Client fallback chat_conversations error:", e);
+          }
+
+          // Register group participants into group_members AND leads
+          if (savedCampaignId && participants.length > 0) {
+            for (const p of participants) {
+              const rawPhone = p.phoneNumber || p.phone || p.phoneNumberPn || p.pn || p.jid || p.id || "";
+              let cleanPhone: string | null = null;
+              const phoneStr = String(rawPhone);
+              if (
+                phoneStr.includes("@s.whatsapp.net") ||
+                phoneStr.includes("@c.us") ||
+                (!phoneStr.includes("@lid") && phoneStr.replace(/\D/g, "").length >= 10)
+              ) {
+                const digits = phoneStr.split("@")[0].replace(/\D/g, "");
+                if (digits.length >= 10) cleanPhone = digits;
+              }
+
+              const rawLid = p.lid || p.subjectOwner || p.owner || p.id || "";
+              const lidVal = String(rawLid).includes("@lid") ? String(rawLid).trim() : null;
+
+              if (cleanPhone || lidVal) {
+                const isAdmin = p.admin === "admin" || p.admin === "superadmin" || p.isAdmin === true;
+                const memberName = p.name || p.pushName || null;
+
+                // 1. Save to group_members
+                try {
+                  const { data: exMem } = await supabase
+                    .from("group_members")
+                    .select("id")
+                    .eq("group_campaign_id", savedCampaignId)
+                    .eq("phone", cleanPhone || lidVal)
+                    .maybeSingle();
+
+                  if (exMem?.id) {
+                    await supabase
+                      .from("group_members")
+                      .update({
+                        user_id: targetUserId,
+                        name: memberName,
+                        lid: lidVal,
+                        is_admin: isAdmin,
+                      })
+                      .eq("id", exMem.id);
+                  } else {
+                    await supabase.from("group_members").insert({
+                      group_campaign_id: savedCampaignId,
+                      user_id: targetUserId,
+                      phone: cleanPhone || lidVal,
+                      lid: lidVal,
+                      name: memberName,
+                      is_admin: isAdmin,
+                    });
+                  }
+                } catch (e) {
+                  console.warn("Error saving group_member:", e);
+                }
+
+                // 2. Save/update to leads
+                try {
+                  let existingLeadId: string | null = null;
+                  if (cleanPhone) {
+                    const { data: exByP } = await supabase
+                      .from("leads")
+                      .select("id")
+                      .eq("company_id", activeCompanyId)
+                      .eq("phone", cleanPhone)
+                      .limit(1)
+                      .maybeSingle();
+                    if (exByP?.id) existingLeadId = exByP.id;
+                  }
+                  if (!existingLeadId && lidVal) {
+                    const { data: exByL } = await supabase
+                      .from("leads")
+                      .select("id")
+                      .eq("company_id", activeCompanyId)
+                      .eq("lid", lidVal)
+                      .limit(1)
+                      .maybeSingle();
+                    if (exByL?.id) existingLeadId = exByL.id;
+                  }
+
+                  const leadName =
+                    memberName && !memberName.includes("@g.us")
+                      ? memberName
+                      : cleanPhone
+                      ? `Participante ${cleanPhone}`
+                      : `LID ${lidVal}`;
+
+                  if (existingLeadId) {
+                    await supabase
+                      .from("leads")
+                      .update({
+                        source_group_id: savedCampaignId,
+                        source_group_name: groupName,
+                        updated_at: new Date().toISOString(),
+                      })
+                      .eq("id", existingLeadId);
+                  } else {
+                    await supabase.from("leads").insert({
+                      company_id: activeCompanyId,
+                      user_id: targetUserId,
+                      name: leadName,
+                      phone: cleanPhone || null,
+                      lid: lidVal || null,
+                      source_group_id: savedCampaignId,
+                      source_group_name: groupName,
+                      source_type: "grupo",
+                      status: "novo",
+                      updated_at: new Date().toISOString(),
+                    });
+                  }
+                } catch (e) {
+                  console.warn("Error saving lead:", e);
+                }
+              }
+            }
           }
         }
       }
@@ -485,11 +653,16 @@ export function useGroups(filters: GroupFilters = {}) {
       queryClient.invalidateQueries({ queryKey: ["chat_conversations"] });
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
       queryClient.invalidateQueries({ queryKey: ["group_campaigns"] });
+      queryClient.invalidateQueries({ queryKey: ["group_folders"] });
+      queryClient.invalidateQueries({ queryKey: ["group_folder_assignments"] });
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
       const count = res?.syncedCount || 0;
-      toast.success(count > 0 ? `${count} grupos adicionados com sucesso ao CRM!` : "Sincronização concluída!");
+      toast.success(
+        count > 0 ? `${count} grupos registrados com sucesso no CRM!` : "Sincronização concluída!"
+      );
     },
     onError: (err: any) => {
-      toast.error(`Erro ao adicionar grupos: ${err.message || String(err)}`);
+      toast.error(`Erro ao registrar grupos: ${err.message || String(err)}`);
     },
   });
 
@@ -519,6 +692,8 @@ export function useGroups(filters: GroupFilters = {}) {
   return {
     groups: data?.groups || [],
     totalCount: data?.totalCount || 0,
+    globalTotalCount: data?.globalTotalCount ?? (data?.totalCount || 0),
+    allRegisteredJids: data?.allRegisteredJids || [],
     totalPages: data?.totalPages || 1,
     isLoading,
     isFetching,
@@ -527,6 +702,7 @@ export function useGroups(filters: GroupFilters = {}) {
     migrateGroups: migrateGroupsMutation.mutate,
     isMigrating: migrateGroupsMutation.isPending,
     syncInstanceGroups: syncInstanceGroupsMutation.mutate,
+    syncInstanceGroupsAsync: syncInstanceGroupsMutation.mutateAsync,
     isSyncingInstance: syncInstanceGroupsMutation.isPending,
   };
 }
