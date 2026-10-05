@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { SequenceVersionsDialog } from "./SequenceVersionsDialog";
 import { WorkflowWhatsAppPreviewModal } from "./WorkflowWhatsAppPreviewModal";
 import { useSequences } from "@/hooks/useSequences";
@@ -899,10 +901,22 @@ export function UnifiedSequenceBuilder({
              <Settings className="h-4 w-4" />
              Configurações
           </Button>
-          <Button variant="outline" onClick={handleToggleActiveClick} className="rounded-xl border-slate-200 hover:bg-slate-50 gap-2 h-9 px-4 font-semibold text-slate-700">
-            {isActive ? <Pause className="h-4 w-4 text-amber-500" /> : <Play className="h-4 w-4 text-emerald-500" />}
-            {isActive ? "Pausar" : "Ativar"}
-          </Button>
+          <div className="flex items-center gap-2 h-9 px-3 rounded-xl border border-slate-200 bg-white shadow-sm hover:bg-slate-50 transition-colors">
+            <Switch 
+              checked={isActive} 
+              onCheckedChange={handleToggleActiveClick} 
+              id="sequence-active"
+            />
+            <Label 
+              htmlFor="sequence-active" 
+              className={cn(
+                "font-semibold text-sm cursor-pointer select-none",
+                isActive ? "text-[#8A3CFF]" : "text-slate-500"
+              )}
+            >
+              {isActive ? "Ativo" : "Ativar"}
+            </Label>
+          </div>
           {mode === "editor" && (
             <>
               <SequenceVersionsDialog
