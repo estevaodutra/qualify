@@ -7,6 +7,7 @@ import {
 import type { TriggerDefinition } from "./types";
 import { ScheduledTriggerConfig } from "./configs/ScheduledTriggerConfig";
 import { ApiTriggerConfig } from "./configs/ApiTriggerConfig";
+import { PipelineChangedTriggerConfig } from "./configs/PipelineChangedTriggerConfig";
 
 
 const weekdayLabel = (days: any): string => {
@@ -153,8 +154,15 @@ export const TRIGGER_DEFINITIONS: Record<string, TriggerDefinition> = {
     status: "available",
     supportedBy: [],
     defaultConfig: {},
-    summaryBuilder: () => ({ title: "Mudança no pipeline" }),
-    validate: () => [],
+    configComponent: PipelineChangedTriggerConfig,
+    summaryBuilder: (config) => {
+      if (config?.pipelineId) return { title: "Mudança de etapa", subtitle: "No pipeline configurado" };
+      return { title: "Mudança no pipeline", subtitle: "Configure o pipeline e a coluna" };
+    },
+    validate: (config) => {
+      if (!config?.pipelineId) return ["Selecione um pipeline para o gatilho funcionar."];
+      return [];
+    },
   },
   prospecting_lead: {
     type: "prospecting_lead",
@@ -221,8 +229,15 @@ export const TRIGGER_DEFINITIONS: Record<string, TriggerDefinition> = {
     status: "available",
     supportedBy: ["dispatch_sequence"],
     defaultConfig: {},
-    summaryBuilder: () => ({ title: "Negócio criado" }),
-    validate: () => [],
+    configComponent: PipelineChangedTriggerConfig,
+    summaryBuilder: (config) => {
+      if (config?.pipelineId) return { title: "Negócio criado", subtitle: "No pipeline configurado" };
+      return { title: "Negócio criado", subtitle: "Configure o pipeline" };
+    },
+    validate: (config) => {
+      if (!config?.pipelineId) return ["Selecione um pipeline para o gatilho funcionar."];
+      return [];
+    },
   },
   deal_moved: {
     type: "deal_moved",
@@ -234,8 +249,15 @@ export const TRIGGER_DEFINITIONS: Record<string, TriggerDefinition> = {
     status: "available",
     supportedBy: ["dispatch_sequence"],
     defaultConfig: {},
-    summaryBuilder: () => ({ title: "Negócio movido" }),
-    validate: () => [],
+    configComponent: PipelineChangedTriggerConfig,
+    summaryBuilder: (config) => {
+      if (config?.pipelineId) return { title: "Negócio movido", subtitle: "No pipeline configurado" };
+      return { title: "Negócio movido", subtitle: "Configure o pipeline e a coluna" };
+    },
+    validate: (config) => {
+      if (!config?.pipelineId) return ["Selecione um pipeline para o gatilho funcionar."];
+      return [];
+    },
   },
   deal_deleted: {
     type: "deal_deleted",
