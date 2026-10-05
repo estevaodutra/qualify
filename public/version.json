@@ -1,6 +1,6 @@
 {
-  "commit": "524dccbf4a7ef9390d34acd0ad681ce03ef9d667",
-  "shortCommit": "524dccb",
-  "message": "feat(workflows): support core fields in user input node",
-  "builtAt": "2026-10-05T15:40:19.061Z"
+  "commit": "8385e0a33cf844e15ebf9973e0327d001184495f",
+  "shortCommit": "8385e0a",
+  "message": "fix(workflows): fix stage query column and ignore deleted pipelines",
+  "builtAt": "2026-10-05T18:37:26.072Z"
 }

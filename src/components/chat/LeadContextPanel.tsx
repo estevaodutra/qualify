@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { 
-  User, Plus, X, FileText, Tag, ChevronDown, ChevronRight, Save, Award, Calendar, ListTodo, Paperclip, LayoutList, Download, UserPlus, Loader2
+  User, Plus, X, FileText, Tag, ChevronDown, ChevronRight, Save, Award, Calendar, ListTodo, Paperclip, LayoutList, Download, UserPlus, Loader2,
+  MoreVertical, Edit3, ArrowRight, History, Trash2, GitBranch
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,27 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Deal } from "@/types/crm.types";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { CreateDealDialog } from "./deals/CreateDealDialog";
+import { EditDealDialog } from "./deals/EditDealDialog";
+import { MoveDealPipelineDialog } from "./deals/MoveDealPipelineDialog";
+import { DealHistoryDialog } from "./deals/DealHistoryDialog";
 
 interface LeadContextPanelProps {
   conversation: ChatConversation;
@@ -41,8 +63,18 @@ export default function LeadContextPanel({ conversation, stages, onClose }: Lead
   const { lead } = conversation;
   const { createLeadFromConversation, isCreatingLead } = useConversationActions();
   const { getTagColor } = useTagColors();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<"info" | "negocios" | "tarefas" | "arquivos">("info");
+
+  // Deal management states
+  const [isCreateDealOpen, setIsCreateDealOpen] = useState(false);
+  const [editingDeal, setEditingDeal] = useState<(Deal & { pipeline?: any }) | null>(null);
+  const [movingDeal, setMovingDeal] = useState<(Deal & { pipeline?: any }) | null>(null);
+  const [historyDeal, setHistoryDeal] = useState<(Deal & { pipeline?: any }) | null>(null);
+  const [deletingDeal, setDeletingDeal] = useState<(Deal & { pipeline?: any }) | null>(null);
+  const [isDeletingDeal, setIsDeletingDeal] = useState(false);
 
   const [newTag, setNewTag] = useState("");
   const [localTags, setLocalTags] = useState<string[]>(lead?.tags || []);
@@ -95,14 +127,47 @@ export default function LeadContextPanel({ conversation, stages, onClose }: Lead
       if (!lead?.id) return [];
       const { data, error } = await supabase
         .from('deals')
-        .select('*')
+        .select(`*, pipeline:pipelines(id, name, stages:pipeline_stages(*))`)
         .eq('lead_id', lead.id)
-        .eq('status', 'open');
+        .neq('status', 'archived')
+        .order('created_at', { ascending: false });
       if (error) throw error;
-      return data as Deal[];
+      return data as (Deal & { pipeline?: any })[];
     },
     enabled: !!lead?.id
   });
+
+  const handleDeleteDeal = async () => {
+    if (!deletingDeal) return;
+    setIsDeletingDeal(true);
+    try {
+      const { error } = await supabase
+        .from('deals')
+        .delete()
+        .eq('id', deletingDeal.id);
+      if (error) throw error;
+
+      toast({
+        title: "Negócio excluído",
+        description: "O negócio foi removido com sucesso."
+      });
+
+      queryClient.invalidateQueries({ queryKey: ['lead-active-deals'] });
+      queryClient.invalidateQueries({ queryKey: ['lead-deals'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline-deals'] });
+      queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
+      setDeletingDeal(null);
+    } catch (err: any) {
+      console.error("Erro ao excluir negócio:", err);
+      toast({
+        title: "Erro ao excluir negócio",
+        description: err.message || "Não foi possível excluir o negócio.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsDeletingDeal(false);
+    }
+  };
 
   // Fetch tasks/activities
   const { data: activities, isLoading: activitiesLoading } = useQuery({
@@ -439,7 +504,20 @@ export default function LeadContextPanel({ conversation, stages, onClose }: Lead
         {/* TAB: NEGÓCIOS */}
         {activeTab === "negocios" && (
           <div className="space-y-3 animate-in fade-in duration-300">
-            <Button className="w-full rounded-xl text-xs font-bold gap-1.5 h-9 bg-primary hover:bg-primary/90 shadow-md">
+            <Button 
+              onClick={() => {
+                if (!lead) {
+                  toast({
+                    title: "Lead necessário",
+                    description: "Salve o contato como lead primeiro para associar negócios.",
+                    variant: "destructive"
+                  });
+                  return;
+                }
+                setIsCreateDealOpen(true);
+              }}
+              className="w-full rounded-xl text-xs font-bold gap-1.5 h-9 bg-primary hover:bg-primary/90 shadow-md"
+            >
               <Plus className="h-4 w-4" /> Novo Negócio
             </Button>
             
@@ -453,17 +531,74 @@ export default function LeadContextPanel({ conversation, stages, onClose }: Lead
               </div>
             ) : (
               activeDeals.map(deal => {
-                const stage = stages.find(s => s.id === deal.stage_id);
+                const dealPipeline = (deal as any).pipeline;
+                const stage = dealPipeline?.stages?.find((s: any) => s.id === deal.stage_id) 
+                  || stages.find(s => s.id === deal.stage_id);
+
                 return (
-                  <div key={deal.id} className="p-3 border border-border/40 rounded-2xl bg-background/80 shadow-sm hover:shadow-md hover:border-primary/30 transition-all cursor-pointer flex flex-col gap-2">
-                    <div className="flex justify-between items-start">
-                      <span className="font-bold text-sm text-card-foreground leading-tight">{deal.title || "Sem título"}</span>
-                      <DealValue value={deal.value} currency={deal.currency} className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold" />
+                  <div 
+                    key={deal.id} 
+                    className="p-3 border border-border/40 rounded-2xl bg-background/80 shadow-sm hover:shadow-md hover:border-primary/30 transition-all flex flex-col gap-2 relative group"
+                  >
+                    <div className="flex justify-between items-start gap-2">
+                      <div 
+                        className="flex-1 cursor-pointer"
+                        onClick={() => setEditingDeal(deal)}
+                      >
+                        <span className="font-bold text-sm text-card-foreground leading-tight hover:text-primary transition-colors block">
+                          {deal.title || "Sem título"}
+                        </span>
+                        {dealPipeline?.name && (
+                          <span className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <GitBranch className="w-2.5 h-2.5 text-primary/70" />
+                            {dealPipeline.name}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <DealValue value={deal.value} currency={deal.currency} className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold" />
+                        
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground">
+                              <MoreVertical className="h-3.5 w-3.5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuItem onClick={() => setEditingDeal(deal)} className="gap-2 text-xs cursor-pointer">
+                              <Edit3 className="h-3.5 w-3.5" /> Editar Negócio
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setMovingDeal(deal)} className="gap-2 text-xs cursor-pointer">
+                              <ArrowRight className="h-3.5 w-3.5" /> Mover de Pipeline
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setHistoryDeal(deal)} className="gap-2 text-xs cursor-pointer">
+                              <History className="h-3.5 w-3.5" /> Histórico
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              onClick={() => setDeletingDeal(deal)} 
+                              className="gap-2 text-xs text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" /> Excluir
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </div>
-                    <div className="flex justify-between items-center mt-1">
-                      <DealPipelineStage stageName={stage?.name || "Sem etapa"} stageColor={stage?.color} className="text-[10px] font-bold" />
+
+                    <div className="flex justify-between items-center mt-1 pt-1 border-t border-border/20">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <DealPipelineStage stageName={stage?.name || "Sem etapa"} stageColor={stage?.color} className="text-[10px] font-bold" />
+                        {deal.status === 'won' && (
+                          <Badge variant="outline" className="text-[9px] bg-emerald-500/10 text-emerald-600 border-emerald-500/20 px-1.5 py-0 font-semibold">Ganho</Badge>
+                        )}
+                        {deal.status === 'lost' && (
+                          <Badge variant="outline" className="text-[9px] bg-rose-500/10 text-rose-600 border-rose-500/20 px-1.5 py-0 font-semibold">Perdido</Badge>
+                        )}
+                      </div>
                       {deal.expected_close_date && (
-                        <div className="flex items-center gap-1.5 text-[10px] font-semibold text-muted-foreground bg-muted/50 px-2 py-1 rounded-md">
+                        <div className="flex items-center gap-1.5 text-[10px] font-semibold text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-md shrink-0">
                           <Calendar className="w-3 h-3 text-primary/70" />
                           {format(new Date(deal.expected_close_date), 'dd/MM/yyyy')}
                         </div>
@@ -567,6 +702,65 @@ export default function LeadContextPanel({ conversation, stages, onClose }: Lead
           </div>
         )}
       </div>
+
+      {/* Deal Dialogs */}
+      {lead && (
+        <CreateDealDialog
+          open={isCreateDealOpen}
+          onOpenChange={setIsCreateDealOpen}
+          leadId={lead.id}
+          leadName={lead.name}
+          leadPhone={lead.phone}
+        />
+      )}
+
+      {editingDeal && (
+        <EditDealDialog
+          open={!!editingDeal}
+          onOpenChange={(open) => !open && setEditingDeal(null)}
+          deal={editingDeal}
+          stages={stages}
+        />
+      )}
+
+      {movingDeal && (
+        <MoveDealPipelineDialog
+          open={!!movingDeal}
+          onOpenChange={(open) => !open && setMovingDeal(null)}
+          deal={movingDeal}
+        />
+      )}
+
+      {historyDeal && (
+        <DealHistoryDialog
+          open={!!historyDeal}
+          onOpenChange={(open) => !open && setHistoryDeal(null)}
+          deal={historyDeal}
+          leadId={lead?.id}
+        />
+      )}
+
+      {/* Delete Confirmation Alert */}
+      <AlertDialog open={!!deletingDeal} onOpenChange={(open) => !open && setDeletingDeal(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Negócio?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o negócio "{deletingDeal?.title}"? Esta ação removerá a oportunidade permanentemente do CRM e da pipeline.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingDeal}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteDeal}
+              disabled={isDeletingDeal}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeletingDeal ? "Excluindo..." : "Excluir Negócio"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
