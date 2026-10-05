@@ -184,7 +184,7 @@ export function useGroups(filters: GroupFilters = {}) {
         }
       });
 
-      // 1. Primary source: Query group_campaigns
+      // 1. Primary source: Query group_campaigns that are explicitly registered in CRM
       try {
         const { data: gcData } = await supabase
           .from("group_campaigns")
@@ -193,36 +193,20 @@ export function useGroups(filters: GroupFilters = {}) {
 
         if (gcData) {
           gcData.forEach((gc: any) => {
-            let validJid = cleanAndValidateJid(gc.group_jid);
+            const validJid = cleanAndValidateJid(gc.group_jid);
+            const cfg = (gc.config as any) || {};
+            const isExplicitCrmGroup = cfg.is_crm_group === true || cfg.registered_in_crm === true || groupToFolderMap.has(gc.id);
 
-            // Attempt to resolve real JID from campaign_groups if missing or invalid
-            if (!validJid) {
-              validJid = cgMap.get(gc.id) || null;
-              if (!validJid) {
-                for (const [seqId, campId] of seqToCampaign.entries()) {
-                  if (campId === gc.id && cgMap.has(seqId)) {
-                    validJid = cgMap.get(seqId) || null;
-                    break;
-                  }
-                }
-              }
-
-              // Background backfill if we found a valid JID
-              if (validJid) {
-                supabase
-                  .from("group_campaigns")
-                  .update({ group_jid: validJid })
-                  .eq("id", gc.id)
-                  .then(() => {});
-              }
+            // A group ONLY appears in CRM if it has a real valid WhatsApp JID AND was explicitly added to CRM
+            if (!validJid || !isExplicitCrmGroup) {
+              return;
             }
 
-            const dedupKey = validJid || `campaign_${gc.id}`;
+            const dedupKey = validJid;
             if (!seenKeys.has(dedupKey)) {
               seenKeys.add(dedupKey);
 
               const memStats = memberCountMap.get(gc.id);
-              const cfg = (gc.config as any) || {};
               const pCount = memStats?.total || (typeof cfg.participants_count === "number" ? cfg.participants_count : 0);
               const aCount = memStats?.admins || 0;
               const lastSynced = cfg.last_synced_at || gc.updated_at || gc.created_at;
@@ -231,8 +215,8 @@ export function useGroups(filters: GroupFilters = {}) {
                 id: gc.id,
                 company_id: activeCompanyId,
                 instance_id: gc.instance_id,
-                group_jid: validJid, // Real JID or null (never a fake UUID!)
-                has_valid_jid: !!validJid,
+                group_jid: validJid,
+                has_valid_jid: true,
                 name: gc.group_name || gc.name || "Grupo WhatsApp",
                 description: gc.group_description,
                 picture_url: gc.group_photo_url,
@@ -248,51 +232,6 @@ export function useGroups(filters: GroupFilters = {}) {
         }
       } catch (e) {
         console.warn("[useGroups] group_campaigns query error:", e);
-      }
-
-      // 2. Secondary source: Query chat_conversations
-      try {
-        const { data: convData } = await supabase
-          .from("chat_conversations")
-          .select("id, instance_id, contact_name, contact_phone, last_message_at, updated_at")
-          .eq("company_id", activeCompanyId);
-
-        if (convData) {
-          const groupConvs = convData.filter((c: any) => {
-            const hasGroupInName = c.contact_name?.toLowerCase().includes("grupo");
-            const isGroupPhone = c.contact_phone?.startsWith("1203") || c.contact_phone?.includes("@g.us");
-            const isGroupName = c.contact_name?.includes("@g.us") || c.contact_name?.startsWith("1203");
-            return hasGroupInName || isGroupPhone || isGroupName;
-          });
-
-          groupConvs.forEach((c: any) => {
-            // Check contact_phone first, then contact_name for real WhatsApp JID
-            const validJid = cleanAndValidateJid(c.contact_phone) || cleanAndValidateJid(c.contact_name);
-            const dedupKey = validJid || `conv_${c.id}`;
-
-            if (!seenKeys.has(dedupKey)) {
-              seenKeys.add(dedupKey);
-              rawGroups.push({
-                id: c.id,
-                company_id: activeCompanyId,
-                instance_id: c.instance_id,
-                group_jid: validJid, // Real JID or null
-                has_valid_jid: !!validJid,
-                name: c.contact_name && !c.contact_name.includes("@") ? c.contact_name : (c.contact_name?.split("@")[0] || "Grupo WhatsApp"),
-                description: null,
-                picture_url: null,
-                participants_count: 0,
-                admins_count: 0,
-                status: "active",
-                last_activity_at: c.last_message_at || c.updated_at,
-                created_at: c.updated_at || new Date().toISOString(),
-                updated_at: c.updated_at || new Date().toISOString(),
-              });
-            }
-          });
-        }
-      } catch (e) {
-        console.warn("[useGroups] chat_conversations query error:", e);
       }
 
       // Fetch instance names
@@ -445,6 +384,8 @@ export function useGroups(filters: GroupFilters = {}) {
 
             const configPayload = {
               participants_count: participantsCount,
+              is_crm_group: true,
+              registered_in_crm: true,
               last_synced_at: new Date().toISOString(),
             };
 
@@ -615,6 +556,54 @@ export function useGroups(filters: GroupFilters = {}) {
     },
   });
 
+  // Remove group from CRM
+  const removeGroupFromCrmMutation = useMutation({
+    mutationFn: async ({ groupId, groupJid }: { groupId: string; groupJid?: string | null }) => {
+      if (!activeCompanyId) throw new Error("Empresa não selecionada");
+
+      // 1. Remove folder assignment
+      await supabase
+        .from("group_folder_assignments" as any)
+        .delete()
+        .eq("company_id", activeCompanyId)
+        .eq("group_id", groupId);
+
+      // 2. Unmark or delete from group_campaigns
+      const { data: seqs } = await supabase
+        .from("message_sequences")
+        .select("id")
+        .eq("group_campaign_id", groupId)
+        .limit(1);
+
+      if (!seqs || seqs.length === 0) {
+        await supabase
+          .from("group_campaigns")
+          .delete()
+          .eq("company_id", activeCompanyId)
+          .eq("id", groupId);
+      } else {
+        await supabase
+          .from("group_campaigns")
+          .update({
+            config: { is_crm_group: false, registered_in_crm: false },
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", groupId);
+      }
+
+      return { groupId };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["groups_list"] });
+      queryClient.invalidateQueries({ queryKey: ["group_folders"] });
+      queryClient.invalidateQueries({ queryKey: ["group_folder_assignments"] });
+      toast.success("Grupo removido do CRM com sucesso!");
+    },
+    onError: (err: any) => {
+      toast.error(`Erro ao remover grupo do CRM: ${err.message || String(err)}`);
+    },
+  });
+
   // Realtime updates subscription
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -622,9 +611,6 @@ export function useGroups(filters: GroupFilters = {}) {
     const channel = supabase
       .channel("realtime_groups_channel")
       .on("postgres_changes", { event: "*", schema: "public", table: "group_campaigns" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["groups_list"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "chat_conversations" }, () => {
         queryClient.invalidateQueries({ queryKey: ["groups_list"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "group_folder_assignments" }, () => {
@@ -653,5 +639,8 @@ export function useGroups(filters: GroupFilters = {}) {
     syncInstanceGroups: syncInstanceGroupsMutation.mutate,
     syncInstanceGroupsAsync: syncInstanceGroupsMutation.mutateAsync,
     isSyncingInstance: syncInstanceGroupsMutation.isPending,
+    removeGroupFromCrm: removeGroupFromCrmMutation.mutate,
+    removeGroupFromCrmAsync: removeGroupFromCrmMutation.mutateAsync,
+    isRemovingFromCrm: removeGroupFromCrmMutation.isPending,
   };
 }

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MessagesSquare, Users, Shield, Copy, MessageSquare, Search, ChevronLeft, ChevronRight, Phone, RefreshCw, UserPlus } from "lucide-react";
+import { MessagesSquare, Users, Shield, Copy, MessageSquare, Search, ChevronLeft, ChevronRight, Phone, RefreshCw, UserPlus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,6 +19,7 @@ interface GroupDetailsDrawerProps {
   group: WhatsAppGroupItem | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onRemoveFromCrm?: (group: WhatsAppGroupItem) => void;
 }
 
 function extractPhoneAndLid(p: any): { phone: string | null; lid: string | null } {
@@ -291,6 +292,20 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
               {isSavingLeads ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
               {isSavingLeads ? "Salvando..." : "Salvar Participantes e @LID no CRM"}
             </Button>
+
+            {onRemoveFromCrm && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  onRemoveFromCrm(group);
+                }}
+                className="text-xs font-bold gap-2 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Remover do CRM
+              </Button>
+            )}
           </div>
 
           {/* Stats Bar */}

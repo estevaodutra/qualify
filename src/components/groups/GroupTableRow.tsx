@@ -27,6 +27,7 @@ import {
   FolderInput,
   Check,
   Users,
+  Trash2,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -58,6 +59,7 @@ interface GroupTableRowProps {
   folders?: GroupFolder[];
   onOpenDetails: (group: WhatsAppGroupItem) => void;
   onMoveToFolder?: (groupId: string, folderId: string | null) => void;
+  onRemoveFromCrm?: (group: WhatsAppGroupItem) => void;
 }
 
 export const GroupTableRow: React.FC<GroupTableRowProps> = ({
@@ -66,6 +68,7 @@ export const GroupTableRow: React.FC<GroupTableRowProps> = ({
   folders,
   onOpenDetails,
   onMoveToFolder,
+  onRemoveFromCrm,
 }) => {
   const navigate = useNavigate();
 
@@ -278,8 +281,39 @@ export const GroupTableRow: React.FC<GroupTableRowProps> = ({
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
               )}
+
+              {onRemoveFromCrm && (
+                <>
+                  <div className="h-px bg-border my-1" />
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemoveFromCrm(group);
+                    }}
+                    className="gap-2 text-xs text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                    <span>Remover do CRM</span>
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {onRemoveFromCrm && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemoveFromCrm(group);
+              }}
+              title="Remover do CRM"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
       </td>
     </tr>

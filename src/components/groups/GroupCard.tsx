@@ -28,6 +28,7 @@ import {
   FolderInput,
   Check,
   Users,
+  Trash2,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -39,6 +40,7 @@ interface GroupCardProps {
   folders?: GroupFolder[];
   onOpenDetails: (group: WhatsAppGroupItem) => void;
   onMoveToFolder?: (groupId: string, folderId: string | null) => void;
+  onRemoveFromCrm?: (group: WhatsAppGroupItem) => void;
 }
 
 export const GroupCard: React.FC<GroupCardProps> = ({
@@ -46,6 +48,7 @@ export const GroupCard: React.FC<GroupCardProps> = ({
   folders,
   onOpenDetails,
   onMoveToFolder,
+  onRemoveFromCrm,
 }) => {
   const navigate = useNavigate();
 
@@ -178,6 +181,22 @@ export const GroupCard: React.FC<GroupCardProps> = ({
                     ))}
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
+              )}
+
+              {onRemoveFromCrm && (
+                <>
+                  <div className="h-px bg-border my-1" />
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemoveFromCrm(group);
+                    }}
+                    className="gap-2 text-xs text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                    <span>Remover do CRM</span>
+                  </DropdownMenuItem>
+                </>
               )}
             </DropdownMenuContent>
           </DropdownMenu>

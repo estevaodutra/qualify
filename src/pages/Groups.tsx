@@ -19,7 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { MessagesSquare, Search, Filter, ArrowUpDown, RefreshCw, ChevronLeft, ChevronRight, Wand2, LayoutGrid, List, Radio, CheckCircle2, PlusCircle, Users, Smartphone, X } from "lucide-react";
+import { MessagesSquare, Search, Filter, ArrowUpDown, RefreshCw, ChevronLeft, ChevronRight, Wand2, LayoutGrid, List, Radio, CheckCircle2, PlusCircle, Users, Smartphone, X, Trash2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -50,6 +50,7 @@ export default function Groups() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null | undefined>(undefined);
   const [folderPendingDelete, setFolderPendingDelete] = useState<string | null>(null);
+  const [groupPendingRemove, setGroupPendingRemove] = useState<WhatsAppGroupItem | null>(null);
 
   // Group Folders hook
   const {
@@ -82,10 +83,10 @@ export default function Groups() {
     isLoading,
     isFetching,
     refetch,
-    migrateGroups,
-    isMigrating,
     syncInstanceGroups,
     isSyncingInstance,
+    removeGroupFromCrmAsync,
+    isRemovingFromCrm,
   } = useGroups({
     search,
     instanceId,
@@ -116,11 +117,6 @@ export default function Groups() {
     }
   });
   const uncategorizedCount = Math.max(0, globalTotalCount - assignedCount);
-
-  // Auto-run migration once on mount to organize group entries out of leads table into whatsapp_groups
-  useEffect(() => {
-    migrateGroups();
-  }, []);
 
   // Fetch instances for filter dropdown and sync dialog
   const { data: instances } = useQuery({
@@ -612,18 +608,6 @@ export default function Groups() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => migrateGroups()}
-            disabled={isMigrating}
-            className="gap-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/30 border-indigo-200/60"
-            title="Extrai grupos cadastrados na tabela de Leads e move para a tabela de Grupos"
-          >
-            <Wand2 className={`h-3.5 w-3.5 ${isMigrating ? "animate-spin" : ""}`} />
-            {isMigrating ? "Organizando..." : "Organizar Grupos da Base"}
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
             onClick={() => refetch()}
             disabled={isFetching}
             className="gap-2 text-xs font-semibold"
@@ -795,6 +779,7 @@ export default function Groups() {
                     folders={folders}
                     onOpenDetails={handleOpenDetails}
                     onMoveToFolder={(groupId, fId) => assignGroupToFolder({ groupId, folderId: fId })}
+                    onRemoveFromCrm={(g) => setGroupPendingRemove(g)}
                   />
                 ))}
               </tbody>
@@ -810,6 +795,7 @@ export default function Groups() {
                 folders={folders}
                 onOpenDetails={handleOpenDetails}
                 onMoveToFolder={(groupId, fId) => assignGroupToFolder({ groupId, folderId: fId })}
+                onRemoveFromCrm={(g) => setGroupPendingRemove(g)}
               />
             ))}
           </div>
@@ -838,7 +824,7 @@ export default function Groups() {
             <Button
               size="sm"
               onClick={() => setSyncDialogOpen(true)}
-              className="text-xs font-bold gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="text-xs font-bold gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
             >
               <PlusCircle className="h-3.5 w-3.5" />
               Adicionar Grupos
@@ -853,16 +839,6 @@ export default function Groups() {
                 Ver todos os grupos ({globalTotalCount})
               </Button>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => migrateGroups()}
-              disabled={isMigrating}
-              className="text-xs font-bold gap-2 text-indigo-600 dark:text-indigo-400"
-            >
-              <Wand2 className="h-3.5 w-3.5" />
-              Organizar Grupos da Base
-            </Button>
           </div>
         </div>
       )}
@@ -932,11 +908,49 @@ export default function Groups() {
         </DialogContent>
       </Dialog>
 
+      {/* Remove Group From CRM Confirmation Dialog */}
+      <Dialog open={!!groupPendingRemove} onOpenChange={(open) => !open && setGroupPendingRemove(null)}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-destructive flex items-center gap-2">
+              <Trash2 className="h-4 w-4" /> Remover grupo do CRM?
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground pt-1">
+              O grupo <strong>"{groupPendingRemove?.name}"</strong> deixará de ser monitorado no CRM e sairá de todas as pastas. Esta ação não apaga o grupo do seu WhatsApp.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0 pt-3">
+            <Button variant="outline" size="sm" onClick={() => setGroupPendingRemove(null)} disabled={isRemovingFromCrm}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={isRemovingFromCrm}
+              onClick={async () => {
+                if (groupPendingRemove) {
+                  await removeGroupFromCrmAsync({ groupId: groupPendingRemove.id, groupJid: groupPendingRemove.groupJid });
+                  setGroupPendingRemove(null);
+                  if (selectedGroup?.id === groupPendingRemove.id) {
+                    setDrawerOpen(false);
+                  }
+                }
+              }}
+              className="gap-2 font-bold"
+            >
+              {isRemovingFromCrm ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              {isRemovingFromCrm ? "Removendo..." : "Confirmar Remoção"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Details Drawer */}
       <GroupDetailsDrawer
         group={selectedGroup}
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
+        onRemoveFromCrm={(g) => setGroupPendingRemove(g)}
       />
     </div>
   );
