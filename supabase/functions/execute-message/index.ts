@@ -1547,14 +1547,28 @@ Deno.serve(async (req) => {
         if (!text) return text;
         let result = text;
         if (triggerContext) {
+          const respName = triggerContext.respondentName || "";
+          const first_name = respName.split(" ")[0] || "";
+
           // Built-in variables (English & Portuguese aliases)
-          result = result.replace(/\{\{name\}\}/gi, triggerContext.respondentName || "");
-          result = result.replace(/\{\{nome\}\}/gi, triggerContext.respondentName || "");
+          result = result.replace(/\{\{name\}\}/gi, respName);
+          result = result.replace(/\{name\}/gi, respName);
+          result = result.replace(/\{\{nome\}\}/gi, respName);
+          result = result.replace(/\{nome\}/gi, respName);
+          result = result.replace(/\{\{primeiro_nome\}\}/gi, first_name);
+          result = result.replace(/\{primeiro_nome\}/gi, first_name);
+          result = result.replace(/\{\{first_name\}\}/gi, first_name);
+          result = result.replace(/\{first_name\}/gi, first_name);
           result = result.replace(/\{\{phone\}\}/gi, triggerContext.respondentPhone || "");
+          result = result.replace(/\{phone\}/gi, triggerContext.respondentPhone || "");
           result = result.replace(/\{\{telefone\}\}/gi, triggerContext.respondentPhone || "");
+          result = result.replace(/\{telefone\}/gi, triggerContext.respondentPhone || "");
           result = result.replace(/\{\{celular\}\}/gi, triggerContext.respondentPhone || "");
+          result = result.replace(/\{celular\}/gi, triggerContext.respondentPhone || "");
           result = result.replace(/\{\{option\}\}/gi, triggerContext.pollOptionText || "");
+          result = result.replace(/\{option\}/gi, triggerContext.pollOptionText || "");
           result = result.replace(/\{\{opcao\}\}/gi, triggerContext.pollOptionText || "");
+          result = result.replace(/\{opcao\}/gi, triggerContext.pollOptionText || "");
           
           // Custom fields from triggerContext
           if (triggerContext.customFields) {
