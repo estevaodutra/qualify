@@ -117,7 +117,58 @@ export const TRIGGER_DEFINITIONS: Record<string, TriggerDefinition> = {
     },
     configComponent: ScheduledTriggerConfig,
   },
-  // Group Events triggers (member_join, member_leave) foram removidos conforme solicitado
+  member_join: {
+    type: "member_join",
+    label: "Membro entrar",
+    description: "Inicia quando um novo membro entra no grupo.",
+    category: "leads",
+    icon: Users,
+    color: "bg-green-500",
+    status: "available",
+    supportedBy: ["group_sequence"],
+    defaultConfig: { destinationMode: 'private', isGroup: false },
+    summaryBuilder: (config) => {
+      const selectedGroupJids = (config.selectedGroupJids as string[]) || [];
+      return {
+        title: "Membro entrou no grupo",
+        subtitle: selectedGroupJids.length > 0
+          ? `${selectedGroupJids.length} grupo(s) monitorado(s)`
+          : "Configuração pendente",
+      };
+    },
+    validate: (config) => {
+      const errors: string[] = [];
+      if (!config.selectedGroupJids || (config.selectedGroupJids as string[]).length === 0) errors.push("Selecione pelo menos um grupo monitorado.");
+      return errors;
+    },
+    configComponent: GroupEventTriggerConfig,
+  },
+  member_leave: {
+    type: "member_leave",
+    label: "Membro sair",
+    description: "Inicia quando um membro sai do grupo.",
+    category: "leads",
+    icon: LogOut,
+    color: "bg-rose-500",
+    status: "available",
+    supportedBy: ["group_sequence"],
+    defaultConfig: { destinationMode: 'private', isGroup: false },
+    summaryBuilder: (config) => {
+      const selectedGroupJids = (config.selectedGroupJids as string[]) || [];
+      return {
+        title: "Membro saiu do grupo",
+        subtitle: selectedGroupJids.length > 0
+          ? `${selectedGroupJids.length} grupo(s) monitorado(s)`
+          : "Configuração pendente",
+      };
+    },
+    validate: (config) => {
+      const errors: string[] = [];
+      if (!config.selectedGroupJids || (config.selectedGroupJids as string[]).length === 0) errors.push("Selecione pelo menos um grupo monitorado.");
+      return errors;
+    },
+    configComponent: GroupEventTriggerConfig,
+  },
   on_add: {
     type: "on_add",
     label: "Lead adicionado",
