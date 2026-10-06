@@ -22,12 +22,21 @@ export function useGroupFolders() {
   const { data: folders = [], isLoading: isLoadingFolders } = useQuery({
     queryKey: ["group_folders", activeCompanyId],
     queryFn: async () => {
-      if (!activeCompanyId) return [];
-      const { data, error } = await supabase
+      const targetUserId = user?.id;
+      if (!activeCompanyId && !targetUserId) return [];
+      
+      let query = supabase
         .from("group_folders" as any)
         .select("*")
-        .eq("company_id", activeCompanyId)
         .order("position", { ascending: true });
+        
+      if (activeCompanyId) {
+        query = query.eq("company_id", activeCompanyId);
+      } else {
+        query = query.eq("user_id", targetUserId);
+      }
+      
+      const { data, error } = await query;
 
       if (error) {
         console.warn("[useGroupFolders] fetch error:", error);

@@ -120,6 +120,14 @@ export function useGroups(filters: GroupFilters = {}) {
       const rawGroups: any[] = [];
       const seenKeys = new Set<string>();
 
+      let foldersQuery = supabase.from("group_folders" as any).select("id, name");
+      if (activeCompanyId) foldersQuery = foldersQuery.eq("company_id", activeCompanyId);
+      else if (currentUserId) foldersQuery = foldersQuery.eq("user_id", currentUserId);
+
+      let assignmentsQuery = supabase.from("group_folder_assignments" as any).select("group_id, folder_id");
+      if (activeCompanyId) assignmentsQuery = assignmentsQuery.eq("company_id", activeCompanyId);
+      else if (currentUserId) assignmentsQuery = assignmentsQuery.eq("user_id", currentUserId);
+
       // 0. Pre-fetch campaign_groups, sequences, folders, folder assignments, and group members count
       const [cgRes, seqRes, folderRes, assignRes, memberRes] = await Promise.all([
         supabase
@@ -128,14 +136,8 @@ export function useGroups(filters: GroupFilters = {}) {
         supabase
           .from("message_sequences")
           .select("id, group_campaign_id, name"),
-        supabase
-          .from("group_folders" as any)
-          .select("id, name")
-          .eq("company_id", activeCompanyId),
-        supabase
-          .from("group_folder_assignments" as any)
-          .select("group_id, folder_id")
-          .eq("company_id", activeCompanyId),
+        foldersQuery,
+        assignmentsQuery,
         supabase
           .from("group_members")
           .select("group_campaign_id, is_admin"),
@@ -186,10 +188,17 @@ export function useGroups(filters: GroupFilters = {}) {
 
       // 1. Primary source: Query group_campaigns that are explicitly registered in CRM
       try {
-        const { data: gcData } = await supabase
+        let gcQuery = supabase
           .from("group_campaigns")
-          .select("id, name, instance_id, group_jid, group_name, group_description, group_photo_url, status, created_at, updated_at, config")
-          .eq("company_id", activeCompanyId);
+          .select("id, name, instance_id, group_jid, group_name, group_description, group_photo_url, status, created_at, updated_at, config");
+          
+        if (activeCompanyId) {
+          gcQuery = gcQuery.eq("company_id", activeCompanyId);
+        } else if (currentUserId) {
+          gcQuery = gcQuery.eq("user_id", currentUserId);
+        }
+
+        const { data: gcData } = await gcQuery;
 
         if (gcData) {
           gcData.forEach((gc: any) => {
