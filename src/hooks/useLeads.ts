@@ -223,7 +223,16 @@ export function useLeads(filters: LeadFilters = {}) {
   });
 
   const updateLead = useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Lead> }) => {
+    mutationFn: async (payload: { id: string; updates?: Partial<Lead> } & Record<string, any>) => {
+      const id = payload.id;
+      const updates = payload.updates ? { ...payload.updates } : { ...payload };
+      delete (updates as any).id;
+
+      // Se o nome for string vazia, salva como null para manter o padrão sem nome
+      if (updates.name !== undefined && typeof updates.name === "string" && updates.name.trim() === "") {
+        updates.name = null;
+      }
+
       const { data, error } = await supabase.from("leads").update(updates as any).eq("id", id).select().single();
       if (error) throw error;
       return data;

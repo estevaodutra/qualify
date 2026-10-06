@@ -34,7 +34,11 @@ export function EditLeadDialog({ lead, onOpenChange, onSubmit, isLoading }: Edit
 
   const handleSubmit = () => {
     if (!lead) return;
-    onSubmit({ id: lead.id, name: name || null, phone, email: email || null, lid: lid || null, tags } as any);
+    const cleanName = name.trim() || null;
+    const cleanPhone = phone.trim();
+    const cleanEmail = email.trim() || null;
+    const cleanLid = lid.trim() || null;
+    onSubmit({ id: lead.id, name: cleanName, phone: cleanPhone, email: cleanEmail, lid: cleanLid, tags } as any);
   };
 
   const addTag = () => {
