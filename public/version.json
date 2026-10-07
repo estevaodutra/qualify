@@ -1,6 +1,6 @@
 {
-  "commit": "d364fa0f08109667ffd9797161cdf0eeeb531e98",
-  "shortCommit": "d364fa0",
-  "message": "fix(leads): stop auto-creating leads from groups and display subtle fallback when lead has no name",
-  "builtAt": "2026-10-05T19:54:19.631Z"
+  "commit": "4541004c1ef4e715eec2948a419cf57cf1b454d0",
+  "shortCommit": "4541004",
+  "message": "fix(workflows): import GroupEventTriggerConfig to resolve production crash",
+  "builtAt": "2026-10-07T22:19:00.000Z"
 }

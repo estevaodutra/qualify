@@ -8,6 +8,7 @@ import type { TriggerDefinition } from "./types";
 import { ScheduledTriggerConfig } from "./configs/ScheduledTriggerConfig";
 import { ApiTriggerConfig } from "./configs/ApiTriggerConfig";
 import { PipelineChangedTriggerConfig } from "./configs/PipelineChangedTriggerConfig";
+import { GroupEventTriggerConfig } from "./configs/GroupEventTriggerConfig";
 
 
 const weekdayLabel = (days: any): string => {
