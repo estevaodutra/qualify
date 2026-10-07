@@ -318,8 +318,10 @@ export async function processGroupEvent(
             // Direct check on message_sequences table
             if (seq.trigger_type === targetTriggerType) {
               const config = (seq.trigger_config as any) || {};
-              const triggerInstId = config.instanceId || (config.instanceIds && config.instanceIds[0]);
-              if (!triggerInstId || !instance?.id || triggerInstId === instance.id) {
+              const allowedSeqInstances: string[] = (config.instanceIds && Array.isArray(config.instanceIds) && config.instanceIds.length > 0)
+                ? config.instanceIds
+                : (config.instanceId ? [config.instanceId] : []);
+              if (allowedSeqInstances.length === 0 || !instance?.id || allowedSeqInstances.includes(instance.id)) {
                 const groups = ((config && config.selectedGroupJids) || []).map(normalizeJid);
                 if (groups.length === 0 || groups.includes(normChatJid)) {
                   isMatch = true;
@@ -332,10 +334,12 @@ export async function processGroupEvent(
               const triggers = ((node.config as any) && (node.config as any).triggers) || [];
               for (const t of triggers) {
                 if (t.type === targetTriggerType) {
-                  // Validate Instance: if trigger specified a specific instance, only that instance must execute it!
-                  const triggerInstId = t.config?.instanceId || (t.config?.instanceIds && t.config.instanceIds[0]);
-                  if (triggerInstId && instance?.id && triggerInstId !== instance.id) {
-                    console.log(`[GroupController] Trigger ${t.id} ignored: configured instance ${triggerInstId} != incoming instance ${instance.id}`);
+                  // Validate Instance: if trigger specified specific instance(s), incoming instance must match!
+                  const allowedNodeInstances: string[] = (t.config?.instanceIds && Array.isArray(t.config.instanceIds) && t.config.instanceIds.length > 0)
+                    ? t.config.instanceIds
+                    : (t.config?.instanceId ? [t.config.instanceId] : []);
+                  if (allowedNodeInstances.length > 0 && instance?.id && !allowedNodeInstances.includes(instance.id)) {
+                    console.log(`[GroupController] Trigger ${t.id} ignored: incoming instance ${instance.id} not in allowed instances ${JSON.stringify(allowedNodeInstances)}`);
                     continue;
                   }
 

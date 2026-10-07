@@ -116,7 +116,8 @@ export function useGroups(filters: GroupFilters = {}) {
       pageSize,
     ],
     queryFn: async () => {
-      if (!activeCompanyId) return { groups: [], totalCount: 0, totalPages: 1, globalTotalCount: 0 };
+      const targetUserId = currentUserId;
+      if (!activeCompanyId && !targetUserId) return { groups: [], totalCount: 0, totalPages: 1, globalTotalCount: 0 };
 
       const rawGroups: any[] = [];
       const seenKeys = new Set<string>();

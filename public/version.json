@@ -1,6 +1,6 @@
 {
-  "commit": "4541004c1ef4e715eec2948a419cf57cf1b454d0",
-  "shortCommit": "4541004",
-  "message": "fix(workflows): import GroupEventTriggerConfig to resolve production crash",
-  "builtAt": "2026-10-07T22:19:00.000Z"
+  "commit": "b87c8747f6d4e2c5794bb1385d5dcadbbae43bfd",
+  "shortCommit": "b87c874",
+  "message": "chore(debug): add debug info to GroupEventTriggerConfig",
+  "builtAt": "2026-10-07T23:06:48.679Z"
 }

@@ -21,10 +21,8 @@ export function WebhookGroupScopeConfig({ config, onChange }: WebhookGroupScopeC
   const [search, setSearch] = useState("");
 
   // Fetch folders and groups from the central system
-  const { data: foldersData } = useGroupFolders();
-  const folders = foldersData || [];
-  const { data: groupsData, isLoading: isLoadingGroups } = useGroups({ pageSize: 5000 });
-  const groups = groupsData?.groups || [];
+  const { folders = [], assignments = {}, isLoading: isLoadingFolders } = useGroupFolders();
+  const { groups = [], isLoading: isLoadingGroups } = useGroups({ pageSize: 5000 });
 
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
 
