@@ -15,6 +15,7 @@ import { EditStageDialog } from "@/components/crm/pipelines/EditStageDialog";
 import { EditPipelineDialog } from "@/components/crm/pipelines/EditPipelineDialog";
 import { toast } from "sonner";
 import { dispatchWorkflowForDealMove } from "@/lib/workflow-dispatcher";
+import { useChatExpressStore } from "@/stores/chatExpress.store";
 
 export default function Pipelines() {
   const { activeCompany } = useCompany();
@@ -337,6 +338,20 @@ export default function Pipelines() {
                         onDeleteDeal={(dealId) => deleteDealMutation.mutate(dealId)}
                         onDropDeal={(dealId, targetStageId) => {
                           moveDealMutation.mutate({ dealId, targetStageId });
+                        }}
+                        onOpenChat={(leadId) => {
+                          const matchedDeal = deals?.find(d => d.lead_id === leadId);
+                          const lead = matchedDeal?.lead;
+                          useChatExpressStore.getState().openLeadSession({
+                            leadId,
+                            leadName: lead?.name || lead?.phone || "Lead",
+                            phone: lead?.phone || null,
+                          });
+                        }}
+                        onOpenLead={(leadId) => {
+                          const matchedDeal = deals?.find(d => d.lead_id === leadId);
+                          setSelectedLead(matchedDeal?.lead || { id: leadId });
+                          setLeadDrawerOpen(true);
                         }}
                       />
                     ))}

@@ -1,6 +1,6 @@
 {
-  "commit": "0e3330d2a0af28b31a02dc1824651ba870be6d96",
-  "shortCommit": "0e3330d",
-  "message": "refactor(triggers): remove instance selection requirement from group event triggers",
-  "builtAt": "2026-10-07T23:38:20.020Z"
+  "commit": "03543bfeff24ad0e96e60e894e67f419a1f66730",
+  "shortCommit": "03543bf",
+  "message": "fix(workflows): auto-dispatch pipeline_changed triggers when deals are created or moved automatically by workflow actions",
+  "builtAt": "2026-10-07T23:48:20.258Z"
 }

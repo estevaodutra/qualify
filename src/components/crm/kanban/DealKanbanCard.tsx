@@ -9,8 +9,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
+import { cn, formatPhone } from "@/lib/utils";
 import { format } from "date-fns";
+import { useChatExpressStore } from "@/stores/chatExpress.store";
+import { toast } from "sonner";
 
 interface DealKanbanCardProps {
   deal: Deal & { lead?: Lead };
@@ -27,6 +29,28 @@ export function DealKanbanCard({ deal, onClick, onOpenLead, onOpenChat, onAddAct
   // Status definitions
   const hasOverdueActivity = false; // Mock - compute from deal.next_activity_at
   const pendingActivities = lead?.pending_activities_count || 0;
+
+  const rawPhone = lead?.phone || (deal.title?.match(/\b55\d{10,11}\b|\b\d{10,11}\b/) ? deal.title.match(/\b55\d{10,11}\b|\b\d{10,11}\b/)![0] : null);
+  const displayPhone = rawPhone ? formatPhone(rawPhone) : null;
+  const dealNumber = deal.id ? deal.id.split('-')[0] : '';
+
+  const handleOpenChat = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const targetLeadId = lead?.id || deal.lead_id;
+    if (!targetLeadId) {
+      toast.error("Nenhum lead associado a este negócio.");
+      return;
+    }
+    const safeName = (lead?.name || displayPhone || deal.title || "Lead").trim();
+
+    useChatExpressStore.getState().openLeadSession({
+      leadId: targetLeadId,
+      leadName: safeName,
+      phone: lead?.phone || rawPhone || null,
+    });
+
+    onOpenChat?.(targetLeadId);
+  };
   
   return (
     <div 
@@ -38,14 +62,19 @@ export function DealKanbanCard({ deal, onClick, onOpenLead, onOpenChat, onAddAct
     >
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2 overflow-hidden">
-          <LeadAvatar name={lead?.name || null} className="w-6 h-6" fallbackClassName="text-[10px]" />
-          <div className="flex flex-col overflow-hidden">
-            <span className="text-xs font-semibold truncate" title={lead?.name || "Desconhecido"}>
+        <div className="flex items-start gap-2 overflow-hidden">
+          <LeadAvatar name={lead?.name || null} className="w-6 h-6 mt-0.5 shrink-0" fallbackClassName="text-[10px]" />
+          <div className="flex flex-col overflow-hidden min-w-0">
+            <span className="text-xs font-semibold truncate leading-tight text-foreground" title={lead?.name || "Desconhecido"}>
               {lead?.name || "Desconhecido"}
             </span>
-            <span className="text-[10px] text-muted-foreground truncate font-mono">
-              #{deal.id.split('-')[0]}
+            {displayPhone && (
+              <span className="text-[11px] text-muted-foreground truncate font-mono leading-tight mt-0.5" title={displayPhone}>
+                {displayPhone}
+              </span>
+            )}
+            <span className="text-[10px] text-muted-foreground/70 truncate font-mono leading-tight mt-0.5">
+              #{dealNumber}
             </span>
           </div>
         </div>
@@ -65,6 +94,10 @@ export function DealKanbanCard({ deal, onClick, onOpenLead, onOpenChat, onAddAct
                 Abrir Perfil do Lead
               </DropdownMenuItem>
             )}
+            <DropdownMenuItem onClick={handleOpenChat}>
+              <MessageCircle className="w-3.5 h-3.5 mr-2 text-emerald-600" />
+              Conversar no Chat
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onAddActivity?.(deal.id); }}>
               Nova Tarefa
@@ -91,7 +124,7 @@ export function DealKanbanCard({ deal, onClick, onOpenLead, onOpenChat, onAddAct
       {/* Body */}
       <div className="flex flex-col gap-1">
         <span className="text-sm font-medium text-foreground truncate" title={deal.title}>
-          {deal.title || "Sem produto"}
+          {deal.title ? deal.title.replace(/(\b55\d{10,11}\b|\b\d{10,11}\b)/g, (m) => formatPhone(m)) : "Sem produto"}
         </span>
         <div className="flex items-center justify-between mt-1">
           <DealValue value={deal.value} currency={deal.currency} className="text-[13px]" />
@@ -130,10 +163,11 @@ export function DealKanbanCard({ deal, onClick, onOpenLead, onOpenChat, onAddAct
             <Button 
               variant="ghost" 
               size="icon" 
-              className="h-6 w-6 bg-secondary hover:bg-secondary/80 rounded-md"
-              onClick={(e) => { e.stopPropagation(); lead && onOpenChat?.(lead.id); }}
+              className="h-6 w-6 bg-secondary hover:bg-emerald-500/15 hover:text-emerald-600 rounded-md transition-colors"
+              onClick={handleOpenChat}
+              title="Abrir Chat"
             >
-              <MessageCircle className="h-3 w-3 text-muted-foreground" />
+              <MessageCircle className="h-3 w-3 text-muted-foreground hover:text-emerald-600 transition-colors" />
             </Button>
             <Button 
               variant="ghost" 
