@@ -20,7 +20,7 @@ export function useGroupFolders() {
 
   // Fetch folders
   const { data: folders = [], isLoading: isLoadingFolders } = useQuery({
-    queryKey: ["group_folders", activeCompanyId],
+    queryKey: ["group_folders", activeCompanyId, user?.id],
     queryFn: async () => {
       const targetUserId = user?.id;
       if (!activeCompanyId && !targetUserId) return [];
@@ -57,13 +57,22 @@ export function useGroupFolders() {
 
   // Fetch assignments (group_id -> folder_id)
   const { data: assignments = {}, isLoading: isLoadingAssignments } = useQuery({
-    queryKey: ["group_folder_assignments", activeCompanyId],
+    queryKey: ["group_folder_assignments", activeCompanyId, user?.id],
     queryFn: async () => {
-      if (!activeCompanyId) return {};
-      const { data, error } = await supabase
+      const targetUserId = user?.id;
+      if (!activeCompanyId && !targetUserId) return {};
+      
+      let query = supabase
         .from("group_folder_assignments" as any)
-        .select("group_id, folder_id")
-        .eq("company_id", activeCompanyId);
+        .select("group_id, folder_id");
+        
+      if (activeCompanyId) {
+        query = query.eq("company_id", activeCompanyId);
+      } else {
+        query = query.eq("user_id", targetUserId);
+      }
+      
+      const { data, error } = await query;
 
       if (error) {
         console.warn("[useGroupFolders] assignments error:", error);
@@ -82,8 +91,8 @@ export function useGroupFolders() {
   });
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["group_folders", activeCompanyId] });
-    queryClient.invalidateQueries({ queryKey: ["group_folder_assignments", activeCompanyId] });
+    queryClient.invalidateQueries({ queryKey: ["group_folders"] });
+    queryClient.invalidateQueries({ queryKey: ["group_folder_assignments"] });
   };
 
   // Create folder

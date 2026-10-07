@@ -104,6 +104,7 @@ export function useGroups(filters: GroupFilters = {}) {
     queryKey: [
       "groups_list",
       activeCompanyId,
+      currentUserId,
       search,
       instanceId,
       status,
