@@ -9,6 +9,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Pipeline, PipelineStage } from "@/types/crm.types";
 import { Plus, Loader2, GitBranch } from "lucide-react";
+import { dispatchWorkflowForDealMove } from "@/lib/workflow-dispatcher";
 
 interface AddLeadToPipelineDialogProps {
   open: boolean;
@@ -95,7 +96,7 @@ export default function AddLeadToPipelineDialog({
       const selectedStage = stages.find(s => s.id === selectedStageId);
       const stageType = selectedStage?.stage_type || "open";
 
-      const { error } = await supabase.from("deals").insert({
+      const { data: createdDeal, error } = await supabase.from("deals").insert({
         company_id: activeCompanyId,
         lead_id: leadId,
         pipeline_id: selectedPipelineId,
@@ -104,9 +105,13 @@ export default function AddLeadToPipelineDialog({
         value: 0,
         currency: "BRL",
         status: stageType === "won" ? "won" : stageType === "lost" ? "lost" : "open",
-      });
+      }).select("id").single();
 
       if (error) throw error;
+
+      if (createdDeal?.id) {
+        dispatchWorkflowForDealMove(createdDeal.id, selectedPipelineId, selectedStageId).catch(console.error);
+      }
 
       toast.success("Negócio adicionado à pipeline com sucesso!");
       queryClient.invalidateQueries({ queryKey: ["lead-deals"] });

@@ -893,6 +893,109 @@ async function waitForMessageDelivery(supabase: any, messageId: string | null, z
   return false;
 }
 
+// Helper to auto-dispatch workflows listening to pipeline_changed or deal_moved
+async function dispatchDealWorkflows(
+  supabase: any,
+  supabaseUrl: string,
+  supabaseKey: string,
+  params: {
+    dealId: string;
+    pipelineId: string;
+    stageId: string;
+    leadId?: string | null;
+    leadName?: string | null;
+    leadPhone?: string | null;
+    companyId?: string | null;
+  }
+) {
+  try {
+    const { dealId, pipelineId, stageId } = params;
+    if (!dealId || !pipelineId) return;
+
+    let targetLeadId = params.leadId;
+    let targetLeadName = params.leadName;
+    let targetLeadPhone = params.leadPhone;
+
+    if (!targetLeadPhone) {
+      if (!targetLeadId) {
+        const { data: dData } = await supabase.from('deals').select('lead_id, company_id').eq('id', dealId).single();
+        targetLeadId = dData?.lead_id;
+      }
+      if (targetLeadId) {
+        const { data: lData } = await supabase.from('leads').select('name, phone, company_id').eq('id', targetLeadId).single();
+        targetLeadName = lData?.name;
+        targetLeadPhone = lData?.phone;
+      }
+    }
+
+    if (!targetLeadPhone) {
+      console.warn(`[ExecuteMessage] dispatchDealWorkflows: No phone found for deal ${dealId}`);
+      return;
+    }
+
+    const { data: sequences } = await supabase
+      .from('message_sequences')
+      .select('id, name, trigger_config, company_id, trigger_type, sequence_nodes(node_type, config)')
+      .eq('active', true);
+
+    if (!sequences || sequences.length === 0) return;
+
+    for (const seq of sequences) {
+      const rootCfg = (seq.trigger_config as Record<string, any>) || {};
+      const triggerNodes = seq.sequence_nodes?.filter((n: any) => n.node_type === 'trigger') || [];
+
+      let allTriggers: any[] = rootCfg.triggers || [];
+      for (const node of triggerNodes) {
+        if (node.config?.triggers) {
+          allTriggers = [...allTriggers, ...node.config.triggers];
+        }
+      }
+
+      let matchingTriggerId: string | undefined = undefined;
+
+      const hasMatchingTrigger = allTriggers.some((t: any) => {
+        const matches = (t.type === 'pipeline_changed' || t.type === 'deal_moved') &&
+          t.config?.pipelineId === pipelineId &&
+          (!t.config?.stageId || t.config?.stageId === 'any' || t.config?.stageId === stageId);
+        if (matches) matchingTriggerId = t.id;
+        return matches;
+      });
+
+      const legacyMatch = !allTriggers.length &&
+        (rootCfg.triggerType === 'pipeline_changed' || rootCfg.triggerType === 'deal_moved' || seq.trigger_type === 'pipeline_changed' || seq.trigger_type === 'deal_moved') &&
+        rootCfg.pipelineId === pipelineId &&
+        (!rootCfg.stageId || rootCfg.stageId === 'any' || rootCfg.stageId === stageId);
+
+      if (hasMatchingTrigger || legacyMatch) {
+        console.log(`[ExecuteMessage] 🚀 Auto-dispatching sequence "${seq.name}" (${seq.id}) triggerId=${matchingTriggerId} for deal ${dealId} -> stage ${stageId}`);
+        fetch(`${supabaseUrl}/functions/v1/trigger-sequence`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${supabaseKey}`
+          },
+          body: JSON.stringify({
+            sequenceId: seq.id,
+            triggerId: matchingTriggerId,
+            source: "pipeline_changed",
+            name: targetLeadName || targetLeadPhone,
+            phone: targetLeadPhone,
+            companyId: seq.company_id || params.companyId,
+            triggerContext: {
+              source: "pipeline_changed",
+              dealId: dealId,
+              pipelineId: pipelineId,
+              stageId: stageId,
+            }
+          })
+        }).catch(err => console.error("[ExecuteMessage] Error invoking downstream trigger-sequence:", err));
+      }
+    }
+  } catch (e) {
+    console.error("[ExecuteMessage] Error in dispatchDealWorkflows:", e);
+  }
+}
+
 // ============= Main handler =============
 
 Deno.serve(async (req) => {
@@ -2166,6 +2269,16 @@ Deno.serve(async (req) => {
                     if (createdDeal) {
                       affectedDealIds.push(createdDeal.id);
                       console.log(`[ExecuteMessage] 💼 Deal ${createdDeal.id} created for lead ${targetLeadId} in pipeline ${pipelineId}`);
+                      // Auto-dispatch downstream workflows listening to pipeline_changed
+                      dispatchDealWorkflows(supabase, supabaseUrl, supabaseServiceKey, {
+                        dealId: createdDeal.id,
+                        pipelineId: pipelineId,
+                        stageId: stageId,
+                        leadId: targetLeadId,
+                        leadName: leadData?.name || triggerContext?.respondentName,
+                        leadPhone: phoneClean || leadData?.phone,
+                        companyId: effectiveCompanyId,
+                      });
                     } else if (dealErr) {
                       console.error(`[ExecuteMessage] ❌ Error creating deal:`, dealErr);
                     }
@@ -2189,7 +2302,7 @@ Deno.serve(async (req) => {
                 if (targetLeadId && targetStageId) {
                   const { data: deals } = await supabase
                     .from("deals")
-                    .select("id")
+                    .select("id, pipeline_id")
                     .eq("company_id", companyId)
                     .eq("lead_id", targetLeadId)
                     .eq("status", "open")
@@ -2204,6 +2317,16 @@ Deno.serve(async (req) => {
                     await supabase.from("deals").update(updatePayload).eq("id", existingDeal.id);
                     affectedDealIds.push(existingDeal.id);
                     console.log(`[ExecuteMessage] 🔄 Deal ${existingDeal.id} moved to stage ${targetStageId}`);
+                    // Auto-dispatch downstream workflows listening to pipeline_changed
+                    dispatchDealWorkflows(supabase, supabaseUrl, supabaseServiceKey, {
+                      dealId: existingDeal.id,
+                      pipelineId: targetPipelineId || existingDeal.pipeline_id,
+                      stageId: targetStageId,
+                      leadId: targetLeadId,
+                      leadName: leadData?.name || triggerContext?.respondentName,
+                      leadPhone: phoneClean || leadData?.phone,
+                      companyId: companyId,
+                    });
                   }
                 }
               } else if (actionType === "win_deal") {
@@ -2474,6 +2597,18 @@ Deno.serve(async (req) => {
                       .update(dealUpdates)
                       .eq("id", existingDeal.id);
                     affectedDealIds.push(existingDeal.id);
+
+                    if (dealUpdates.stage_id || dealUpdates.pipeline_id) {
+                      dispatchDealWorkflows(supabase, supabaseUrl, supabaseServiceKey, {
+                        dealId: existingDeal.id,
+                        pipelineId: dealUpdates.pipeline_id || existingDeal.pipeline_id,
+                        stageId: dealUpdates.stage_id || existingDeal.stage_id,
+                        leadId: targetLead.id,
+                        leadName: targetLead.name,
+                        leadPhone: targetLead.phone,
+                        companyId: typedCampaign.company_id,
+                      });
+                    }
                   } else {
                     const { data: newDeal } = await supabase
                       .from("deals")
@@ -2490,6 +2625,17 @@ Deno.serve(async (req) => {
                       .single();
                     if (newDeal) {
                       affectedDealIds.push(newDeal.id);
+                      if (dealUpdates.stage_id || dealUpdates.pipeline_id) {
+                        dispatchDealWorkflows(supabase, supabaseUrl, supabaseServiceKey, {
+                          dealId: newDeal.id,
+                          pipelineId: dealUpdates.pipeline_id,
+                          stageId: dealUpdates.stage_id,
+                          leadId: targetLead.id,
+                          leadName: targetLead.name,
+                          leadPhone: targetLead.phone,
+                          companyId: typedCampaign.company_id,
+                        });
+                      }
                     }
                   }
                 }

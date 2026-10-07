@@ -24,6 +24,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Pipeline, PipelineStage } from "@/types/crm.types";
 import { Plus, Loader2, Award, Calendar, DollarSign, FileText } from "lucide-react";
+import { dispatchWorkflowForDealMove } from "@/lib/workflow-dispatcher";
 
 interface CreateDealDialogProps {
   open: boolean;
@@ -114,7 +115,7 @@ export function CreateDealDialog({
 
       const numValue = parseFloat(value.replace(/\./g, "").replace(",", ".")) || 0;
 
-      const { error } = await supabase.from("deals").insert({
+      const { data: createdDeal, error } = await supabase.from("deals").insert({
         company_id: activeCompanyId,
         lead_id: leadId,
         pipeline_id: selectedPipelineId,
@@ -126,9 +127,13 @@ export function CreateDealDialog({
         expected_close_date: expectedCloseDate ? new Date(expectedCloseDate).toISOString() : null,
         description: description.trim() || null,
         position: 0,
-      });
+      }).select("id").single();
 
       if (error) throw error;
+
+      if (createdDeal?.id) {
+        dispatchWorkflowForDealMove(createdDeal.id, selectedPipelineId, selectedStageId).catch(console.error);
+      }
 
       toast.success("Negócio criado com sucesso!");
       queryClient.invalidateQueries({ queryKey: ["lead-active-deals", leadId] });
