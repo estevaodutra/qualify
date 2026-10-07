@@ -1,6 +1,6 @@
 {
-  "commit": "b87c8747f6d4e2c5794bb1385d5dcadbbae43bfd",
-  "shortCommit": "b87c874",
-  "message": "chore(debug): add debug info to GroupEventTriggerConfig",
-  "builtAt": "2026-10-07T23:06:48.679Z"
+  "commit": "b0560cb24166274426470ae4330be7426cce5c32",
+  "shortCommit": "b0560cb",
+  "message": "fix(triggers): fix group and folder selection in group event trigger node",
+  "builtAt": "2026-10-07T23:13:32.005Z"
 }

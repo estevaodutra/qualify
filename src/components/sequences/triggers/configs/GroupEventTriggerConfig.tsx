@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Search,
-  AlertCircle,
   Folder,
   ChevronDown,
   ChevronRight,
@@ -15,11 +14,9 @@ import {
   Users,
   RefreshCw,
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import type { TriggerConfig } from "@/components/group-campaigns/sequences/triggerTypes";
-import { useCompany } from "@/contexts/CompanyContext";
 import { useGroups, WhatsAppGroupItem } from "@/hooks/useGroups";
-import { useGroupFolders, GroupFolder } from "@/hooks/useGroupFolders";
+import { useGroupFolders } from "@/hooks/useGroupFolders";
 
 interface GroupEventTriggerConfigProps {
   campaignId?: string;
@@ -28,66 +25,13 @@ interface GroupEventTriggerConfigProps {
 }
 
 export function GroupEventTriggerConfig({ config, onChange }: GroupEventTriggerConfigProps) {
-  const { activeCompanyId } = useCompany();
-  const [instances, setInstances] = useState<{ id: string; name: string; phone: string | null; status: string | null }[]>([]);
   const [search, setSearch] = useState("");
 
   // Fetch folders and groups from the central CRM system
   const { folders = [], assignments = {}, isLoading: isLoadingFolders } = useGroupFolders();
-  const { groups = [], isLoading: isLoadingGroups, refetch: refetchGroups } = useGroups({ pageSize: 5000 });
+  const { groups = [], isLoading: isLoadingGroups } = useGroups({ pageSize: 5000 });
 
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
-
-  // Normalize selected instanceIds
-  const selectedInstanceIds = useMemo(() => {
-    let ids: string[] = [];
-    if (Array.isArray(config.instanceIds)) {
-      ids = config.instanceIds;
-    } else if (config.instanceId) {
-      ids = [config.instanceId];
-    }
-    return ids;
-  }, [config.instanceIds, config.instanceId]);
-
-  const toggleInstance = (id: string) => {
-    const next = selectedInstanceIds.includes(id)
-      ? selectedInstanceIds.filter((i) => i !== id)
-      : [...selectedInstanceIds, id];
-    onChange({ ...config, instanceIds: next, instanceId: next[0] || null });
-  };
-
-  const duplicatePhoneWarning = useMemo(() => {
-    const selectedInstances = instances.filter((i) => selectedInstanceIds.includes(i.id));
-    const phones = selectedInstances.map((i) => i.phone).filter(Boolean);
-    const uniquePhones = new Set(phones);
-    return phones.length > uniquePhones.size;
-  }, [instances, selectedInstanceIds]);
-
-  useEffect(() => {
-    const fetchInstances = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-
-      let instancesQuery = supabase
-        .from("instances")
-        .select("id, name, phone, status")
-        .order("name", { ascending: true });
-
-      if (activeCompanyId) {
-        instancesQuery = instancesQuery.eq("company_id", activeCompanyId);
-      } else {
-        instancesQuery = instancesQuery.eq("user_id", user.id).is("company_id", null);
-      }
-
-      instancesQuery.then(({ data }) => {
-        if (data) setInstances(data);
-      });
-    };
-
-    fetchInstances();
-  }, [activeCompanyId]);
 
   const selectedGroupJids = useMemo(() => {
     return Array.isArray(config.selectedGroupJids) ? (config.selectedGroupJids as string[]) : [];
@@ -205,68 +149,16 @@ export function GroupEventTriggerConfig({ config, onChange }: GroupEventTriggerC
   const isLoading = isLoadingGroups || isLoadingFolders;
 
   return (
-    <div className="space-y-5 rounded-lg bg-transparent">
-      {/* 1. Responsibles Instances */}
-      <div className="space-y-2">
-        <Label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
-          Instâncias responsáveis
-        </Label>
-        <div className="max-h-48 overflow-y-auto space-y-1 border rounded-lg p-2 bg-white shadow-sm">
-          {instances.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-2">
-              Nenhuma instância encontrada.
-            </p>
-          ) : (
-            instances.map((i) => (
-              <div
-                key={i.id}
-                className="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded transition-colors"
-              >
-                <Checkbox
-                  id={`instance-${i.id}`}
-                  checked={selectedInstanceIds.includes(i.id)}
-                  onCheckedChange={() => toggleInstance(i.id)}
-                />
-                <Label
-                  htmlFor={`instance-${i.id}`}
-                  className="text-xs font-normal cursor-pointer flex-1 flex items-center gap-2 truncate"
-                >
-                  <span
-                    className={`h-2 w-2 shrink-0 rounded-full ${
-                      i.status === "connected" ? "bg-emerald-500" : "bg-rose-500"
-                    }`}
-                    title={i.status === "connected" ? "Conectada" : "Desconectada"}
-                  />
-                  <span className="font-medium text-slate-800">{i.name}</span>
-                  <span className="text-muted-foreground text-[11px]">
-                    ({i.phone || "Sem número"})
-                  </span>
-                </Label>
-              </div>
-            ))
-          )}
-        </div>
-
-        {duplicatePhoneWarning && (
-          <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg animate-in fade-in zoom-in-95">
-            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-            <p className="text-xs font-medium">
-              Atenção: Você selecionou instâncias com o mesmo número conectado. Para evitar
-              disparos duplicados, selecione apenas uma delas.
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* 2. Monitored Groups */}
-      <div className="space-y-3 pt-2 border-t border-slate-100">
+    <div className="space-y-4 rounded-lg bg-transparent">
+      {/* Monitored Groups Header */}
+      <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
             <Label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
               Grupos Monitorados
             </Label>
-            <p className="text-[11px] text-muted-foreground">
-              Selecione quais grupos cadastrados na sua conta acionarão este gatilho
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Selecione quais grupos acionarão este gatilho ao captar o evento
             </p>
           </div>
           {selectedGroupJids.length > 0 && (
@@ -314,7 +206,7 @@ export function GroupEventTriggerConfig({ config, onChange }: GroupEventTriggerC
         </div>
 
         {/* Groups and Folders List */}
-        <div className="max-h-72 overflow-y-auto border border-slate-200 rounded-lg p-2 bg-white shadow-inner space-y-1">
+        <div className="max-h-80 overflow-y-auto border border-slate-200 rounded-lg p-2 bg-white shadow-inner space-y-1">
           {isLoading ? (
             <div className="flex items-center justify-center py-6 gap-2 text-xs text-muted-foreground">
               <RefreshCw className="h-3.5 w-3.5 animate-spin text-primary" />
