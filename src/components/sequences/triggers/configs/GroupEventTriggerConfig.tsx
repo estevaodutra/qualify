@@ -169,7 +169,7 @@ export function GroupEventTriggerConfig({ config, onChange }: GroupEventTriggerC
               {isLoadingGroups ? (
                 <p className="text-xs text-muted-foreground text-center py-2">Carregando grupos...</p>
               ) : filteredGroups.length === 0 ? (
-                <p className="text-xs text-muted-foreground text-center py-2">Nenhum grupo encontrado.</p>
+                <div className="text-xs text-muted-foreground text-center py-2">Nenhum grupo encontrado.<br/><br/><span className="text-[10px] font-mono text-slate-400">Debug: c={activeCompanyId || 'null'} / f={folders.length} / g={groups.length} / ig={String(isLoadingGroups)}</span></div>
               ) : (
                 <div className="space-y-1">
                   {foldersToShow.map(folder => {
