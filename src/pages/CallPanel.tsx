@@ -220,6 +220,60 @@ function InProgressStatusBadge({ status }: { status: string }) {
   );
 }
 
+// ── Helper to resolve real workflow / sequence names for call tasks ──
+async function fetchWorkflowNames(tasks: any[]): Promise<Record<string, string>> {
+  const map: Record<string, string> = {};
+  if (!tasks || tasks.length === 0) return map;
+
+  const workflowIds = [...new Set(tasks.map((t: any) => t.workflow_id).filter(Boolean))];
+  const queueIds = [...new Set(tasks.map((t: any) => t.queue_id).filter(Boolean))];
+
+  // 1. Fetch from message_sequences
+  if (workflowIds.length > 0) {
+    const { data: msgSeqs } = await (supabase as any)
+      .from("message_sequences")
+      .select("id, name")
+      .in("id", workflowIds);
+    if (msgSeqs) {
+      for (const s of msgSeqs) {
+        if (s.name) map[s.id] = s.name;
+      }
+    }
+
+    // 2. Fetch remaining from dispatch_sequences
+    const remainingWfIds = workflowIds.filter((id) => !map[id]);
+    if (remainingWfIds.length > 0) {
+      const { data: dispSeqs } = await (supabase as any)
+        .from("dispatch_sequences")
+        .select("id, name")
+        .in("id", remainingWfIds);
+      if (dispSeqs) {
+        for (const s of dispSeqs) {
+          if (s.name) map[s.id] = s.name;
+        }
+      }
+    }
+  }
+
+  // 3. For any tasks where workflow_id was missing or not found, check queue_id in call_campaigns
+  const neededQueueIds = queueIds.filter((qId) => {
+    return tasks.some((t: any) => t.queue_id === qId && (!t.workflow_id || !map[t.workflow_id]));
+  });
+  if (neededQueueIds.length > 0) {
+    const { data: campaigns } = await (supabase as any)
+      .from("call_campaigns")
+      .select("id, name")
+      .in("id", neededQueueIds);
+    if (campaigns) {
+      for (const c of campaigns) {
+        if (c.name) map[c.id] = c.name;
+      }
+    }
+  }
+
+  return map;
+}
+
 // ── Main Component ──
 
 export default function CallPanel() {
@@ -522,27 +576,31 @@ export default function CallPanel() {
 
         const { data: wfData } = await wfQuery;
         if (wfData) {
+          const nameMap = await fetchWorkflowNames(wfData);
           const existingIds = new Set(results.map((r: any) => r.id));
           const wfResults = wfData
             .filter((db: any) => !existingIds.has(db.id) && !existingIds.has(`wt_${db.id}`))
-            .map((db: any) => ({
-              id: `wt_${db.id}`,
-              campaignId: db.queue_id || null,
-              campaignName: "Workflow / Fila",
-              leadId: db.lead_id,
-              leadName: db.leads?.name || "Sem nome",
-              leadPhone: db.phone || db.leads?.phone || null,
-              operatorId: db.assigned_operator_id,
-              operatorName: db.call_operators?.operator_name || null,
-              callStatus: "completed",
-              createdAt: db.created_at || new Date().toISOString(),
-              endedAt: db.completed_at || db.updated_at,
-              startedAt: db.created_at,
-              durationSeconds: db.duration_seconds || 0,
-              isPriority: true,
-              actionName: db.observation ? "Finalizada" : "Atendida",
-              actionColor: "#10b981",
-            }));
+            .map((db: any) => {
+              const wfName = (db.workflow_id && nameMap[db.workflow_id]) || (db.queue_id && nameMap[db.queue_id]) || "Workflow";
+              return {
+                id: `wt_${db.id}`,
+                campaignId: db.workflow_id || db.queue_id || null,
+                campaignName: wfName,
+                leadId: db.lead_id,
+                leadName: db.leads?.name || "Sem nome",
+                leadPhone: db.phone || db.leads?.phone || null,
+                operatorId: db.assigned_operator_id,
+                operatorName: db.call_operators?.operator_name || null,
+                callStatus: "completed",
+                createdAt: db.created_at || new Date().toISOString(),
+                endedAt: db.completed_at || db.updated_at,
+                startedAt: db.created_at,
+                durationSeconds: db.duration_seconds || 0,
+                isPriority: true,
+                actionName: db.observation ? "Finalizada" : "Atendida",
+                actionColor: "#10b981",
+              };
+            });
           results = [...results, ...wfResults];
         }
       } catch (wfErr) {
@@ -641,24 +699,30 @@ export default function CallPanel() {
       const { data, error } = await query;
       if (error) throw error;
 
-      let results = (data || []).map((db: any, idx: number) => ({
-        id: `wt_${db.id}`,
-        realId: db.id,
-        campaignId: db.queue_id || null,
-        campaignName: "Workflow / Fila",
-        leadId: db.lead_id,
-        leadName: db.leads?.name || null,
-        phone: db.phone || db.leads?.phone || null,
-        isPriority: true,
-        status: db.status as string,
-        scheduledFor: db.next_attempt_at || null,
-        attemptNumber: (db.attempt_count || 0) + 1,
-        maxAttempts: db.max_attempts || 3,
-        position: 80000 + idx,
-        observations: db.observation || null,
-        source: "workflow_call_task" as const,
-        userId: db.user_id,
-      }));
+      const rawTasks = data || [];
+      const nameMap = await fetchWorkflowNames(rawTasks);
+
+      let results = rawTasks.map((db: any, idx: number) => {
+        const wfName = (db.workflow_id && nameMap[db.workflow_id]) || (db.queue_id && nameMap[db.queue_id]) || "Workflow";
+        return {
+          id: `wt_${db.id}`,
+          realId: db.id,
+          campaignId: db.workflow_id || db.queue_id || null,
+          campaignName: wfName,
+          leadId: db.lead_id,
+          leadName: db.leads?.name || null,
+          phone: db.phone || db.leads?.phone || null,
+          isPriority: true,
+          status: db.status as string,
+          scheduledFor: db.next_attempt_at || null,
+          attemptNumber: (db.attempt_count || 0) + 1,
+          maxAttempts: db.max_attempts || 3,
+          position: 80000 + idx,
+          observations: db.observation || null,
+          source: "workflow_call_task" as const,
+          userId: db.user_id,
+        };
+      });
 
       if (searchQuery) {
         const s = searchQuery.toLowerCase();
@@ -839,15 +903,17 @@ export default function CallPanel() {
 
         const { data: wfData } = await wfQuery;
         if (wfData) {
+          const nameMap = await fetchWorkflowNames(wfData);
           const existingIds = new Set(results.map((r: any) => r.id));
           const wfResults = wfData
             .filter((db: any) => !existingIds.has(db.id) && !existingIds.has(`wt_${db.id}`))
             .map((db: any) => {
               const callStatus = db.status === "attempts_exhausted" ? "max_attempts_exceeded" : db.status;
+              const wfName = (db.workflow_id && nameMap[db.workflow_id]) || (db.queue_id && nameMap[db.queue_id]) || "Workflow";
               return {
                 id: `wt_${db.id}`,
-                campaignId: db.queue_id || null,
-                campaignName: "Workflow / Fila",
+                campaignId: db.workflow_id || db.queue_id || null,
+                campaignName: wfName,
                 leadId: db.lead_id,
                 leadName: db.leads?.name || "Sem nome",
                 leadPhone: db.phone || db.leads?.phone || null,
@@ -1514,7 +1580,7 @@ export default function CallPanel() {
                   <TableHead className="w-[60px]">#</TableHead>
                   <TableHead>Lead</TableHead>
                   <TableHead className="hidden md:table-cell">Telefone</TableHead>
-                  <TableHead>Campanha</TableHead>
+                  <TableHead>Campanha / Workflow</TableHead>
                   <TableHead className="hidden md:table-cell w-[90px]">Tentativa</TableHead>
                   <TableHead className="hidden lg:table-cell w-[100px]">Agendado</TableHead>
                   <TableHead className="w-[80px]">Ações</TableHead>
@@ -1887,7 +1953,7 @@ export default function CallPanel() {
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Lead</TableHead>
                   <TableHead className="hidden md:table-cell">Telefone</TableHead>
-                  <TableHead className="hidden lg:table-cell">Campanha</TableHead>
+                  <TableHead className="hidden lg:table-cell">Campanha / Workflow</TableHead>
                   <TableHead className="hidden md:table-cell">Operador</TableHead>
                   <TableHead className="w-[80px]">Duração</TableHead>
                   <TableHead className="hidden lg:table-cell">Ação</TableHead>
@@ -1990,7 +2056,7 @@ export default function CallPanel() {
                   <TableHead className="w-[110px]">Status</TableHead>
                   <TableHead>Lead</TableHead>
                   <TableHead className="hidden md:table-cell w-[140px]">Telefone</TableHead>
-                  <TableHead className="hidden lg:table-cell w-[180px]">Campanha</TableHead>
+                  <TableHead className="hidden lg:table-cell w-[180px]">Campanha / Workflow</TableHead>
                   <TableHead className="hidden md:table-cell w-[80px]">Duração</TableHead>
                   <TableHead className="hidden md:table-cell w-[100px]">Operador</TableHead>
                   <TableHead className="w-[90px]">Ações</TableHead>

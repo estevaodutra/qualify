@@ -1,6 +1,6 @@
 {
-  "commit": "d71e33980a7b39807cd6853bf99e3fd41b4cfabb",
-  "shortCommit": "d71e339",
-  "message": "fix(workflows): isolamento estrito de contagem e fluxos por pasta e correcao da renomeacao de subpastas",
-  "builtAt": "2026-10-08T04:27:58.726Z"
+  "commit": "a7a4ef75d1a08bf39313b2f7504175f39601f882",
+  "shortCommit": "a7a4ef7",
+  "message": "fix(call-panel): persist workflow call history, inline action confirmation, and campaign status toggle",
+  "builtAt": "2026-10-08T04:35:48.505Z"
 }
