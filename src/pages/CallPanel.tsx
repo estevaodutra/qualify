@@ -14,6 +14,9 @@ import { useCallQueue, QueueItem } from "@/hooks/useCallQueue";
 import { useCallOperators } from "@/hooks/useCallOperators";
 import { OperatorsPanel } from "@/components/call-panel/OperatorsPanel";
 import { CallPopup } from "@/components/operator/CallPopup";
+import { CallPanelSidebar, CallPanelSection } from "@/components/call-panel/CallPanelSidebar";
+import { CallCampaignsManager } from "@/components/call-panel/CallCampaignsManager";
+import { CallPanelSettingsSection } from "@/components/call-panel/CallPanelSettingsSection";
 import { Users, Settings as SettingsIcon, Copy, CalendarIcon, History } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -224,6 +227,32 @@ export default function CallPanel() {
   const [activeTab, setActiveTab] = useState<string>(() =>
     searchParams.get("tab") || "queue"
   );
+  const [activeSection, setActiveSection] = useState<CallPanelSection>(() => {
+    const sec = searchParams.get("section");
+    if (sec === "campaigns" || sec === "settings") return sec;
+    return "calls";
+  });
+
+  const handleSelectSection = useCallback((sec: CallPanelSection) => {
+    setActiveSection(sec);
+    const newParams = new URLSearchParams(searchParams);
+    if (sec === "calls") {
+      newParams.delete("section");
+    } else {
+      newParams.set("section", sec);
+    }
+    setSearchParams(newParams, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    const sec = searchParams.get("section");
+    if (sec === "campaigns" || sec === "settings" || sec === "calls") {
+      setActiveSection(sec as CallPanelSection);
+    } else if (!sec) {
+      setActiveSection("calls");
+    }
+  }, [searchParams]);
+
   const [campaignFilter, setCampaignFilter] = useState<string>("all");
   const [historyStatusFilter, setHistoryStatusFilter] = useState<string>("all");
   const [historyOperatorFilter, setHistoryOperatorFilter] = useState<string>("all");
@@ -1002,8 +1031,6 @@ export default function CallPanel() {
     handleWorkflowDial
   ]);
 
-  const [panelTab, setPanelTab] = useState("calls");
-
   const statusConfig: Record<string, { label: string; dotClass: string; className: string }> = {
     running: { label: "🟢 Fila Ativa", dotClass: "bg-emerald-500 animate-pulse", className: "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400" },
     paused: { label: "⏸️ Fila Pausada", dotClass: "bg-amber-500", className: "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400" },
@@ -1015,66 +1042,63 @@ export default function CallPanel() {
   const nextInQueue = combinedQueue[0];
 
   return (
-    <div className="space-y-6" translate="no">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <PhoneCall className="h-6 w-6 text-primary" />
-            Painel de Ligações
-          </h1>
-          <p className="text-sm text-muted-foreground">Gerencie todas as ligações em tempo real</p>
-        </div>
-        {!soundEnabled ? (
-          <Button variant="outline" size="sm" onClick={requestNotifications}>
-            <Bell className="h-4 w-4 mr-2" />
-            Ativar Alertas
-          </Button>
-        ) : (
-          <Badge variant="secondary" className="gap-1 bg-emerald-100 text-emerald-700 border-emerald-300">
-            <Bell className="h-3 w-3" />
-            {notificationsEnabled ? "Alertas e notificações ativos" : "Alertas sonoros ativos"}
-          </Badge>
-        )}
-      </div>
+    <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 min-h-[85vh] pb-10" translate="no">
+      {/* Sidebar dedicated to Call Panel */}
+      <CallPanelSidebar
+        activeSection={activeSection}
+        onSelectSection={handleSelectSection}
+        queueCount={combinedQueueCount}
+        inProgressCount={inProgressEntries.length}
+        campaignsCount={campaigns.length}
+        availableOps={availableOps}
+        totalOps={operators.length}
+        queueGlobalStatus={queueGlobalStatus}
+        isAdmin={isAdmin}
+      />
 
-      {/* Embedded Operator Popup */}
-      <CallPopup embedded />
+      {/* Main Content Area */}
+      <div className="flex-1 min-w-0">
+        {/* Embedded Operator Popup - persistent across views so active calls/dialing are never missed */}
+        <CallPopup embedded />
 
-      {/* Panel Tabs */}
-      <Tabs value={panelTab} onValueChange={setPanelTab}>
-        <TabsList>
-          <TabsTrigger value="calls" className="gap-2">
-            <Phone className="h-4 w-4" /> Ligações
-          </TabsTrigger>
-          {isAdmin && (
-            <>
-              <TabsTrigger value="operators" className="gap-2">
-                <Users className="h-4 w-4" /> Operadores
-              </TabsTrigger>
-              <TabsTrigger value="settings" className="gap-2">
-                <SettingsIcon className="h-4 w-4" /> Configurações
-              </TabsTrigger>
-            </>
-          )}
-        </TabsList>
-
-        {isAdmin && (
-          <>
-            <TabsContent value="operators" className="mt-6">
-              <OperatorsPanel />
-            </TabsContent>
-
-            <TabsContent value="settings" className="mt-6">
-              <div className="text-center py-12 text-muted-foreground">
-                Configurações gerais de telefonia (em breve)
-              </div>
-            </TabsContent>
-          </>
+        {/* SECTION: Campaigns Management */}
+        {activeSection === "campaigns" && (
+          <CallCampaignsManager />
         )}
 
-        <TabsContent value="calls" className="mt-6">
+        {/* SECTION: Settings & Operators Management */}
+        {activeSection === "settings" && (
+          <CallPanelSettingsSection
+            soundEnabled={soundEnabled}
+            notificationsEnabled={notificationsEnabled}
+            onRequestNotifications={requestNotifications}
+          />
+        )}
+
+        {/* SECTION: Calls Live Operational Dashboard */}
+        {activeSection === "calls" && (
           <div className="space-y-6">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                  <PhoneCall className="h-6 w-6 text-primary" />
+                  Painel de Ligações
+                </h1>
+                <p className="text-sm text-muted-foreground">Gerencie todas as ligações em tempo real</p>
+              </div>
+              {!soundEnabled ? (
+                <Button variant="outline" size="sm" onClick={requestNotifications}>
+                  <Bell className="h-4 w-4 mr-2" />
+                  Ativar Alertas
+                </Button>
+              ) : (
+                <Badge variant="secondary" className="gap-1 bg-emerald-100 text-emerald-700 border-emerald-300">
+                  <Bell className="h-3 w-3" />
+                  {notificationsEnabled ? "Alertas e notificações ativos" : "Alertas sonoros ativos"}
+                </Badge>
+              )}
+            </div>
 
       {/* ═══════ STATUS METRICS ═══════ */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -2101,8 +2125,8 @@ export default function CallPanel() {
         />
       )}
           </div>
-        </TabsContent>
-      </Tabs>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 {
-  "commit": "d3bfa915a2ff52812cbc72efe7b487488a9937a4",
-  "shortCommit": "d3bfa91",
-  "message": "fix(workflow): garantir pausa e salvamento automatico em entradas do usuario subsequentes",
-  "builtAt": "2026-10-08T02:28:25.810Z"
+  "commit": "f1dc490b8b15edb32915765af5e2f9f1ee29d30e",
+  "shortCommit": "f1dc490",
+  "message": "fix(execute-message): corrigir referencia a variavel leadData nao declarada",
+  "builtAt": "2026-10-08T03:15:11.303Z"
 }
