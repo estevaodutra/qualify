@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -43,15 +43,15 @@ interface FolderTreeProps {
 
 const WORKFLOW_DRAG_MIME = "application/x-workflow-id";
 
-interface FolderRowProps {
+interface FolderTreeItemProps {
   node: FolderNode;
-  count: number;
-  isSelected: boolean;
+  countByFolder: Record<string, number>;
+  selectedFolderId: string | null | undefined;
   expandedMap: Record<string, boolean>;
   onToggleExpand: (folderId: string) => void;
-  onSelect: () => void;
-  onRename: (name: string) => void;
-  onDelete: () => void;
+  onSelectFolder: (folderId: string) => void;
+  onRenameFolder: (id: string, name: string) => void;
+  onDeleteFolder: (id: string) => void;
   onStartCreateSubfolder: (folderId: string) => void;
   onOpenMoveDialog: (folder: WorkflowFolder) => void;
   onMoveToRoot: (folderId: string) => void;
@@ -63,13 +63,13 @@ interface FolderRowProps {
 
 function FolderTreeItem({
   node,
-  count,
-  isSelected,
+  countByFolder,
+  selectedFolderId,
   expandedMap,
   onToggleExpand,
-  onSelect,
-  onRename,
-  onDelete,
+  onSelectFolder,
+  onRenameFolder,
+  onDeleteFolder,
   onStartCreateSubfolder,
   onOpenMoveDialog,
   onMoveToRoot,
@@ -77,19 +77,30 @@ function FolderTreeItem({
   creatingSubfolderOf,
   onCommitSubfolder,
   onCancelSubfolder,
-}: FolderRowProps) {
+}: FolderTreeItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: node.id });
   const [isRenaming, setIsRenaming] = useState(false);
   const [name, setName] = useState(node.name);
   const [isDropTarget, setIsDropTarget] = useState(false);
   const [subfolderName, setSubfolderName] = useState("");
 
-  const hasChildren = node.children.length > 0;
+  const count = countByFolder[node.id] || 0;
+  const isSelected = selectedFolderId === node.id;
+  const hasChildren = node.children && node.children.length > 0;
   const isExpanded = expandedMap[node.id] ?? true;
+
+  // Keep internal name in sync when prop changes
+  useEffect(() => {
+    setName(node.name);
+  }, [node.name]);
 
   const commitRename = () => {
     setIsRenaming(false);
-    if (name.trim() && name !== node.name) onRename(name.trim());
+    if (name.trim() && name.trim() !== node.name) {
+      onRenameFolder(node.id, name.trim());
+    } else {
+      setName(node.name);
+    }
   };
 
   const handleSubfolderSubmit = () => {
@@ -105,11 +116,12 @@ function FolderTreeItem({
         ref={setNodeRef}
         style={{ transform: CSS.Transform.toString(transform), transition }}
         className={cn(
-          "flex items-center gap-1.5 rounded-lg px-2 py-1.5 group text-sm transition-colors",
+          "flex items-center gap-1.5 rounded-lg px-2 py-1.5 group text-sm transition-colors cursor-pointer",
           isSelected ? "bg-primary/10 text-primary font-semibold" : "hover:bg-muted/70",
           isDragging && "opacity-50",
           isDropTarget && "ring-2 ring-primary/40 bg-primary/5"
         )}
+        onClick={() => onSelectFolder(node.id)}
         onDragOver={(e) => {
           if (onDropWorkflow) {
             e.preventDefault();
@@ -158,37 +170,46 @@ function FolderTreeItem({
             autoFocus
             value={name}
             onChange={(e) => setName(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
             onBlur={commitRename}
             onKeyDown={(e) => {
               if (e.key === "Enter") commitRename();
-              if (e.key === "Escape") setIsRenaming(false);
+              if (e.key === "Escape") {
+                setName(node.name);
+                setIsRenaming(false);
+              }
             }}
-            className="h-7 text-sm"
+            className="h-7 text-xs bg-background"
           />
         ) : (
-          <button className="flex-1 text-left truncate text-xs font-medium" onClick={onSelect}>
+          <span className="flex-1 text-left truncate text-xs font-medium">
             {node.name}
-          </button>
+          </span>
         )}
 
-        <span className="text-xs text-muted-foreground/60">{count}</span>
+        <span className="text-xs text-muted-foreground/60 ml-auto shrink-0">{count}</span>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 opacity-0 group-hover:opacity-100"
+              className="h-6 w-6 opacity-0 group-hover:opacity-100 shrink-0"
               onClick={(e) => e.stopPropagation()}
             >
               <MoreVertical className="h-3.5 w-3.5" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuContent align="end" className="w-44" onClick={(e) => e.stopPropagation()}>
             <DropdownMenuItem onClick={() => onStartCreateSubfolder(node.id)}>
               <FolderPlus className="h-3.5 w-3.5 mr-2 text-primary" /> Nova subpasta
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setIsRenaming(true)}>
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsRenaming(true);
+              }}
+            >
               <Pencil className="h-3.5 w-3.5 mr-2" /> Renomear
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onOpenMoveDialog(node)}>
@@ -200,7 +221,7 @@ function FolderTreeItem({
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
+            <DropdownMenuItem onClick={() => onDeleteFolder(node.id)} className="text-destructive focus:text-destructive">
               <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -214,13 +235,13 @@ function FolderTreeItem({
             <FolderTreeItem
               key={child.id}
               node={child}
-              count={child.id ? count : 0}
-              isSelected={isSelected}
+              countByFolder={countByFolder}
+              selectedFolderId={selectedFolderId}
               expandedMap={expandedMap}
               onToggleExpand={onToggleExpand}
-              onSelect={onSelect}
-              onRename={onRename}
-              onDelete={onDelete}
+              onSelectFolder={onSelectFolder}
+              onRenameFolder={onRenameFolder}
+              onDeleteFolder={onDeleteFolder}
               onStartCreateSubfolder={onStartCreateSubfolder}
               onOpenMoveDialog={onOpenMoveDialog}
               onMoveToRoot={onMoveToRoot}
@@ -232,7 +253,7 @@ function FolderTreeItem({
           ))}
 
           {creatingSubfolderOf === node.id && (
-            <div className="flex items-center gap-1.5 py-1 px-2">
+            <div className="flex items-center gap-1.5 py-1 px-2" onClick={(e) => e.stopPropagation()}>
               <FolderPlus className="w-3.5 h-3.5 text-primary shrink-0" />
               <Input
                 autoFocus
@@ -244,7 +265,7 @@ function FolderTreeItem({
                   if (e.key === "Enter") handleSubfolderSubmit();
                   if (e.key === "Escape") onCancelSubfolder();
                 }}
-                className="h-7 text-xs"
+                className="h-7 text-xs bg-background"
               />
             </div>
           )}
@@ -368,13 +389,13 @@ export function FolderTree({
                 <FolderTreeItem
                   key={rootNode.id}
                   node={rootNode}
-                  count={countByFolder[rootNode.id] || 0}
-                  isSelected={selectedFolderId === rootNode.id}
+                  countByFolder={countByFolder}
+                  selectedFolderId={selectedFolderId}
                   expandedMap={expandedMap}
                   onToggleExpand={toggleExpand}
-                  onSelect={() => onSelectFolder(rootNode.id)}
-                  onRename={(name) => onRenameFolder(rootNode.id, name)}
-                  onDelete={() => onDeleteFolder(rootNode.id)}
+                  onSelectFolder={onSelectFolder}
+                  onRenameFolder={onRenameFolder}
+                  onDeleteFolder={onDeleteFolder}
                   onStartCreateSubfolder={handleStartCreateSubfolder}
                   onOpenMoveDialog={setMovingFolder}
                   onMoveToRoot={(id) => onMoveFolder?.(id, null)}

@@ -41,17 +41,12 @@ export default function WorkflowLibrary() {
   const { definitions: allDefinitions, isLoading: loadingDefinitions, moveToFolder, deleteWorkflowDefinition, duplicateWorkflowDefinition } = useWorkflowDefinitions();
 
   const countByFolder = useMemo(() => {
-    const directCounts: Record<string, number> = {};
+    const counts: Record<string, number> = {};
     for (const def of allDefinitions) {
-      if (def.folderId) directCounts[def.folderId] = (directCounts[def.folderId] || 0) + 1;
+      if (def.folderId) counts[def.folderId] = (counts[def.folderId] || 0) + 1;
     }
-    const totalCounts: Record<string, number> = {};
-    for (const f of folders) {
-      const descendantIds = getFolderAndDescendantIds(f.id, folders);
-      totalCounts[f.id] = descendantIds.reduce((sum, id) => sum + (directCounts[id] || 0), 0);
-    }
-    return totalCounts;
-  }, [allDefinitions, folders]);
+    return counts;
+  }, [allDefinitions]);
 
   const uncategorizedCount = useMemo(
     () => allDefinitions.filter((d) => !d.folderId).length,
@@ -61,15 +56,12 @@ export default function WorkflowLibrary() {
   const visibleDefinitions = useMemo(() => {
     return allDefinitions.filter((def) => {
       if (selectedFolderId === null && def.folderId) return false;
-      if (typeof selectedFolderId === "string") {
-        const folderIds = getFolderAndDescendantIds(selectedFolderId, folders);
-        if (!def.folderId || !folderIds.includes(def.folderId)) return false;
-      }
+      if (typeof selectedFolderId === "string" && def.folderId !== selectedFolderId) return false;
       if (statusTab !== "all" && def.status !== statusTab) return false;
       if (search && !def.name.toLowerCase().includes(search.toLowerCase()) && !(def.description || "").toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [allDefinitions, selectedFolderId, folders, statusTab, search]);
+  }, [allDefinitions, selectedFolderId, statusTab, search]);
 
   const folderPendingDeleteObj = folders.find((f) => f.id === folderPendingDelete);
 

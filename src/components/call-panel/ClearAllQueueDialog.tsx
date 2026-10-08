@@ -59,16 +59,50 @@ export function ClearAllQueueDialog({ open, onOpenChange, campaignFilter }: Clea
           p_company_id: activeCompanyId,
         });
         if (error) throw error;
+
+        let total = 0;
+        let priority = 0;
+        let normal = 0;
+        let scheduled = 0;
+        let by_campaign: CampaignBreakdown[] = [];
+
         if (data && data.length > 0) {
           const row = data[0];
-          setPreview({
-            total_count: row.total_count || 0,
-            priority_count: row.priority_count || 0,
-            normal_count: row.normal_count || 0,
-            scheduled_count: row.scheduled_count || 0,
-            by_campaign: row.by_campaign || [],
+          total = row.total_count || 0;
+          priority = row.priority_count || 0;
+          normal = row.normal_count || 0;
+          scheduled = row.scheduled_count || 0;
+          by_campaign = row.by_campaign ? [...row.by_campaign] : [];
+        }
+
+        // Also count pending workflow_call_tasks
+        let wq = (supabase as any)
+          .from("workflow_call_tasks")
+          .select("id", { count: "exact", head: true })
+          .in("status", ["queued", "retry_scheduled", "assigned", "in_progress"]);
+        if (activeCompanyId) {
+          wq = wq.eq("company_id", activeCompanyId);
+        }
+        const { count: wfCount } = await wq;
+
+        if (wfCount && wfCount > 0) {
+          total += wfCount;
+          priority += wfCount;
+          by_campaign.push({
+            campaign_id: "workflow_queue",
+            campaign_name: "Workflow / Fila",
+            is_priority: true,
+            count: wfCount,
           });
         }
+
+        setPreview({
+          total_count: total,
+          priority_count: priority,
+          normal_count: normal,
+          scheduled_count: scheduled,
+          by_campaign,
+        });
       } catch (e) {
         console.error("Clear preview error:", e);
       } finally {
@@ -90,13 +124,27 @@ export function ClearAllQueueDialog({ open, onOpenChange, campaignFilter }: Clea
         .update({ call_status: "cancelled", ended_at: new Date().toISOString() })
         .in("call_status", ["scheduled", "ready"])
         .eq("company_id", activeCompanyId);
-      if (campaignFilter && campaignFilter !== "all") {
+      if (campaignFilter && campaignFilter !== "all" && campaignFilter !== "workflow_queue") {
         q = q.eq("campaign_id", campaignFilter);
       }
       await q;
 
+      // Cancel workflow_call_tasks
+      if (!campaignFilter || campaignFilter === "all" || campaignFilter === "workflow_queue") {
+        let wq = (supabase as any)
+          .from("workflow_call_tasks")
+          .update({ status: "cancelled", observation: "Cancelado via Limpar Fila" })
+          .in("status", ["queued", "retry_scheduled", "assigned", "in_progress"]);
+        if (activeCompanyId) {
+          wq = wq.eq("company_id", activeCompanyId);
+        }
+        await wq;
+      }
+
       queryClient.invalidateQueries({ queryKey: ["call-queue-items"] });
       queryClient.invalidateQueries({ queryKey: ["call_logs_queue"] });
+      queryClient.invalidateQueries({ queryKey: ["call_queue"] });
+      queryClient.invalidateQueries({ queryKey: ["workflow_call_tasks_queue"] });
       toast({
         title: "Fila esvaziada",
         description: `${preview?.total_count || 0} leads removidos da fila.`,

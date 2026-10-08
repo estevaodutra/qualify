@@ -97,6 +97,16 @@ export function RemoveFromQueueDialog({ open, onOpenChange }: RemoveFromQueueDia
         });
       }
 
+      // Count from workflow_call_tasks
+      const { count: wfCount } = await (supabase as any)
+        .from("workflow_call_tasks")
+        .select("id", { count: "exact", head: true })
+        .eq("company_id", activeCompanyId)
+        .in("status", ["queued", "retry_scheduled", "assigned", "in_progress"]);
+      if (wfCount) {
+        counts["workflow_queue"] = wfCount;
+      }
+
       setQueueCounts(counts);
     })();
   }, [open, activeCompanyId]);
@@ -118,25 +128,60 @@ export function RemoveFromQueueDialog({ open, onOpenChange }: RemoveFromQueueDia
     if (!activeCompanyId) return;
     setLoadingPreview(true);
     try {
-      const params: any = { p_company_id: activeCompanyId };
-      if (!allCampaigns && selectedCampaigns.length > 0) {
-        params.p_campaign_ids = selectedCampaigns;
+      const nonWorkflowSelected = selectedCampaigns.filter((c) => c !== "workflow_queue");
+      let total = 0;
+      let priority = 0;
+      let normal = 0;
+      let scheduled = 0;
+      let by_campaign: CampaignBreakdown[] = [];
+
+      if (allCampaigns || nonWorkflowSelected.length > 0) {
+        const params: any = { p_company_id: activeCompanyId };
+        if (!allCampaigns && nonWorkflowSelected.length > 0) {
+          params.p_campaign_ids = nonWorkflowSelected;
+        }
+        if (attemptFilter !== "all") {
+          params.p_attempt_filter = attemptFilter;
+        }
+        const { data, error } = await (supabase as any).rpc("queue_remove_preview", params);
+        if (error) throw error;
+        if (data && data.length > 0) {
+          const row = data[0];
+          total = row.total_count || 0;
+          priority = row.priority_count || 0;
+          normal = row.normal_count || 0;
+          scheduled = row.scheduled_count || 0;
+          by_campaign = row.by_campaign ? [...row.by_campaign] : [];
+        }
       }
-      if (attemptFilter !== "all") {
-        params.p_attempt_filter = attemptFilter;
+
+      // If all campaigns or workflow_queue selected, query pending workflow_call_tasks
+      if (allCampaigns || selectedCampaigns.includes("workflow_queue")) {
+        const { count: wfCount } = await (supabase as any)
+          .from("workflow_call_tasks")
+          .select("id", { count: "exact", head: true })
+          .eq("company_id", activeCompanyId)
+          .in("status", ["queued", "retry_scheduled", "assigned", "in_progress"]);
+
+        if (wfCount && wfCount > 0) {
+          total += wfCount;
+          priority += wfCount;
+          by_campaign.push({
+            campaign_id: "workflow_queue",
+            campaign_name: "Workflow / Fila",
+            is_priority: true,
+            count: wfCount,
+          });
+        }
       }
-      const { data, error } = await (supabase as any).rpc("queue_remove_preview", params);
-      if (error) throw error;
-      if (data && data.length > 0) {
-        const row = data[0];
-        setPreview({
-          total_count: row.total_count || 0,
-          priority_count: row.priority_count || 0,
-          normal_count: row.normal_count || 0,
-          scheduled_count: row.scheduled_count || 0,
-          by_campaign: row.by_campaign || [],
-        });
-      }
+
+      setPreview({
+        total_count: total,
+        priority_count: priority,
+        normal_count: normal,
+        scheduled_count: scheduled,
+        by_campaign,
+      });
     } catch (e) {
       console.error("Preview error:", e);
     } finally {
@@ -169,21 +214,48 @@ export function RemoveFromQueueDialog({ open, onOpenChange }: RemoveFromQueueDia
     if (!activeCompanyId) return;
     setIsRemoving(true);
     try {
-      const params: any = { p_company_id: activeCompanyId };
-      if (!allCampaigns && selectedCampaigns.length > 0) {
-        params.p_campaign_ids = selectedCampaigns;
+      const nonWorkflowSelected = selectedCampaigns.filter((c) => c !== "workflow_queue");
+      let totalRemoved = 0;
+      let priorityRemoved = 0;
+      let normalRemoved = 0;
+
+      if (allCampaigns || nonWorkflowSelected.length > 0) {
+        const params: any = { p_company_id: activeCompanyId };
+        if (!allCampaigns && nonWorkflowSelected.length > 0) {
+          params.p_campaign_ids = nonWorkflowSelected;
+        }
+        if (attemptFilter !== "all") {
+          params.p_attempt_filter = attemptFilter;
+        }
+        const { data, error } = await (supabase as any).rpc("queue_remove_bulk", params);
+        if (error) throw error;
+        const result = data?.[0];
+        totalRemoved += result?.removed_count || 0;
+        priorityRemoved += result?.removed_priority || 0;
+        normalRemoved += result?.removed_normal || 0;
       }
-      if (attemptFilter !== "all") {
-        params.p_attempt_filter = attemptFilter;
+
+      // If all campaigns or workflow_queue selected, cancel workflow tasks
+      if (allCampaigns || selectedCampaigns.includes("workflow_queue")) {
+        const { data: wfCancelled, error: wfErr } = await (supabase as any)
+          .from("workflow_call_tasks")
+          .update({ status: "cancelled", observation: "Removido via Fila" })
+          .eq("company_id", activeCompanyId)
+          .in("status", ["queued", "retry_scheduled", "assigned", "in_progress"])
+          .select("id");
+        if (wfErr) console.error("Error cancelling workflow tasks:", wfErr);
+        const wfCount = wfCancelled?.length || 0;
+        totalRemoved += wfCount;
+        priorityRemoved += wfCount;
       }
-      const { data, error } = await (supabase as any).rpc("queue_remove_bulk", params);
-      if (error) throw error;
-      const result = data?.[0];
+
       queryClient.invalidateQueries({ queryKey: ["call-queue-items"] });
       queryClient.invalidateQueries({ queryKey: ["call_logs_queue"] });
+      queryClient.invalidateQueries({ queryKey: ["call_queue"] });
+      queryClient.invalidateQueries({ queryKey: ["workflow_call_tasks_queue"] });
       toast({
         title: "Leads removidos da fila",
-        description: `${result?.removed_count || 0} removidos (${result?.removed_priority || 0} prioritários, ${result?.removed_normal || 0} normais)`,
+        description: `${totalRemoved} removidos (${priorityRemoved} prioritários, ${normalRemoved} normais)`,
       });
       onOpenChange(false);
     } catch (e: any) {
