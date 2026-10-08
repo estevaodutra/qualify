@@ -8,3 +8,4 @@ export { LeadHistoryDialog } from "./LeadHistoryDialog";
 export { AddToCampaignDialog } from "./AddToCampaignDialog";
 export { BulkTagDialog } from "./BulkTagDialog";
 export { ExtractLeadsDialog } from "./ExtractLeadsDialog";
+export { LeadLogDialog } from "./LeadLogDialog";

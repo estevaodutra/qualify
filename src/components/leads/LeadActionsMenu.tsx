@@ -1,13 +1,16 @@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, Pencil, History, Megaphone, Tag, Copy, ExternalLink, Ban, Trash2, Phone } from "lucide-react";
+import { MoreHorizontal, Pencil, History, Megaphone, Tag, Copy, ExternalLink, Ban, Trash2, Phone, FileText } from "lucide-react";
 import { toast } from "sonner";
+import { useSuperadmin } from "@/hooks/useSuperadmin";
+import { Badge } from "@/components/ui/badge";
 import type { Lead } from "@/hooks/useLeads";
 
 interface LeadActionsMenuProps {
   lead: Lead;
   onEdit: (lead: Lead) => void;
   onHistory: (lead: Lead) => void;
+  onShowLog?: (lead: Lead) => void;
   onAddTag: (lead: Lead) => void;
   onAddToCampaign: (lead: Lead) => void;
   onAddToQueue?: (lead: Lead) => void;
@@ -15,7 +18,8 @@ interface LeadActionsMenuProps {
   onDelete: (lead: Lead) => void;
 }
 
-export function LeadActionsMenu({ lead, onEdit, onHistory, onAddTag, onAddToCampaign, onAddToQueue, onBlock, onDelete }: LeadActionsMenuProps) {
+export function LeadActionsMenu({ lead, onEdit, onHistory, onShowLog, onAddTag, onAddToCampaign, onAddToQueue, onBlock, onDelete }: LeadActionsMenuProps) {
+  const { isSuperadmin } = useSuperadmin();
   const copyPhone = () => {
     navigator.clipboard.writeText(lead.phone);
     toast.success("Telefone copiado!");
@@ -40,6 +44,18 @@ export function LeadActionsMenu({ lead, onEdit, onHistory, onAddTag, onAddToCamp
         <DropdownMenuItem onClick={() => onHistory(lead)}>
           <History className="h-4 w-4 mr-2" /> Ver histórico
         </DropdownMenuItem>
+        {isSuperadmin && onShowLog && (
+          <DropdownMenuItem
+            onClick={() => onShowLog(lead)}
+            className="text-violet-600 focus:text-violet-700 focus:bg-violet-500/10 font-medium"
+          >
+            <FileText className="h-4 w-4 mr-2 text-violet-600" />
+            Ver log
+            <Badge variant="outline" className="ml-auto text-[10px] px-1 py-0 border-violet-300 text-violet-600 bg-violet-50">
+              Admin
+            </Badge>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => onAddToCampaign(lead)}>
           <Megaphone className="h-4 w-4 mr-2" /> Adicionar à campanha

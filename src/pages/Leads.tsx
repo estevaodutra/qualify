@@ -33,6 +33,7 @@ import {
   AddToCampaignDialog,
   BulkTagDialog,
   ExtractLeadsDialog,
+  LeadLogDialog,
 } from "@/components/leads";
 import { LeadTableRow } from "@/components/crm/leads/LeadTableRow";
 import {
@@ -88,6 +89,7 @@ export default function Leads() {
   const [extractOpen, setExtractOpen] = useState(false);
   const [editLead, setEditLead] = useState<Lead | null>(null);
   const [historyLead, setHistoryLead] = useState<Lead | null>(null);
+  const [logLead, setLogLead] = useState<Lead | null>(null);
   const [campaignDialogOpen, setCampaignDialogOpen] = useState(false);
   const [tagDialogMode, setTagDialogMode] = useState<"add" | "remove" | null>(null);
   const [workflowDialogOpen, setWorkflowDialogOpen] = useState(false);
@@ -458,6 +460,7 @@ export default function Leads() {
                     onToggleSelect={toggleSelect}
                     onEdit={setEditLead}
                     onHistory={setHistoryLead}
+                    onShowLog={setLogLead}
                     onAddTag={(l) => { setSelectedIds(new Set([l.id])); setTagDialogMode("add"); }}
                     onAddToCampaign={(l) => { setSelectedIds(new Set([l.id])); setCampaignDialogOpen(true); }}
                     onAddToQueue={(l) => { setSelectedIds(new Set([l.id])); setQueueOpen(true); }}
@@ -709,6 +712,13 @@ export default function Leads() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Superadmin Lead Origin Log Dialog */}
+      <LeadLogDialog
+        lead={logLead}
+        open={!!logLead}
+        onOpenChange={(open) => !open && setLogLead(null)}
+      />
     </div>
   );
 }

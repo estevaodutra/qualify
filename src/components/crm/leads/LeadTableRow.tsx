@@ -6,6 +6,8 @@ import { LeadActionsMenu } from "@/components/leads";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import { useSuperadmin } from "@/hooks/useSuperadmin";
+import { FileText } from "lucide-react";
 
 const WhatsappIcon = ({ className }: { className?: string }) => (
   <svg 
@@ -32,6 +34,7 @@ interface LeadTableRowProps {
   onToggleSelect: (id: string) => void;
   onEdit: (lead: Lead) => void;
   onHistory: (lead: Lead) => void;
+  onShowLog?: (lead: Lead) => void;
   onAddTag: (lead: Lead) => void;
   onAddToCampaign: (lead: Lead) => void;
   onAddToQueue?: (lead: Lead) => void;
@@ -56,6 +59,7 @@ export function LeadTableRow({
   onToggleSelect,
   onEdit,
   onHistory,
+  onShowLog,
   onAddTag,
   onAddToCampaign,
   onAddToQueue,
@@ -63,6 +67,7 @@ export function LeadTableRow({
   onDelete,
 }: LeadTableRowProps) {
   const navigate = useNavigate();
+  const { isSuperadmin } = useSuperadmin();
 
   return (
     <tr className={cn("border-b border-border/50", isEven ? "bg-transparent" : "bg-muted/30")}>
@@ -104,7 +109,21 @@ export function LeadTableRow({
         {format(new Date(lead.created_at), "dd/MM/yyyy")}
       </td>
       <td className="px-4 py-3 align-middle text-right">
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex items-center justify-end gap-1.5">
+          {/* Superadmin shortcut button */}
+          {isSuperadmin && onShowLog && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-[11px] font-medium text-violet-700 dark:text-violet-300 border-violet-300 bg-violet-50/70 dark:bg-violet-950/40 hover:bg-violet-100 dark:hover:bg-violet-900/50 flex items-center gap-1 shadow-none"
+              onClick={() => onShowLog(lead)}
+              title="Ver log de criação deste lead (Apenas Superadmin)"
+            >
+              <FileText className="h-3 w-3 text-violet-600 dark:text-violet-400" />
+              Ver log
+            </Button>
+          )}
+
           {lead.phone && (
             <Button
               variant="ghost"
@@ -116,7 +135,6 @@ export function LeadTableRow({
                     leadId: lead.id,
                     leadName: lead.name,
                     phone: lead.phone,
-                    // we don't have avatar_url in the default type but pass it if available
                   });
                 });
               }}
@@ -125,11 +143,12 @@ export function LeadTableRow({
               <WhatsappIcon className="h-5 w-5" />
             </Button>
           )}
-          {/* We reuse the existing LeadActionsMenu */}
+          {/* Lead actions dropdown menu */}
           <LeadActionsMenu
-            lead={lead as any} // Cast needed if typing isn't 100% matched yet
+            lead={lead as any}
             onEdit={() => onEdit(lead)}
             onHistory={() => onHistory(lead)}
+            onShowLog={onShowLog ? () => onShowLog(lead) : undefined}
             onAddTag={() => onAddTag(lead)}
             onAddToCampaign={() => onAddToCampaign(lead)}
             onAddToQueue={onAddToQueue ? () => onAddToQueue(lead) : undefined}
