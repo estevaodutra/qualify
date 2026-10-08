@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -17,6 +17,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useWorkflowFolders } from "@/hooks/useWorkflowFolders";
 import { useWorkflowDefinitions } from "@/hooks/useWorkflowDefinitions";
+import { buildFolderTree, flattenFolderTree } from "@/lib/workflowFolderHierarchy";
 
 interface NewWorkflowDialogProps {
   open: boolean;
@@ -41,6 +42,10 @@ export function NewWorkflowDialog({ open, onOpenChange, defaultFolderId }: NewWo
   const [newFolderName, setNewFolderName] = useState("");
   const [isDraft, setIsDraft] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
+
+  const hierarchicalFolders = useMemo(() => {
+    return flattenFolderTree(buildFolderTree(folders));
+  }, [folders]);
 
   const reset = () => {
     setName("");
@@ -154,10 +159,14 @@ export function NewWorkflowDialog({ open, onOpenChange, defaultFolderId }: NewWo
               <SelectTrigger className="h-11 rounded-xl bg-background/50 border-border/40">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-72">
                 <SelectItem value={NO_FOLDER_VALUE}>Sem pasta</SelectItem>
-                {folders.map((folder) => (
-                  <SelectItem key={folder.id} value={folder.id}>{folder.name}</SelectItem>
+                {hierarchicalFolders.map((folder) => (
+                  <SelectItem key={folder.id} value={folder.id}>
+                    {"\u00A0\u00A0".repeat(folder.depth)}
+                    {folder.depth > 0 ? "↳ 📁 " : "📁 "}
+                    {folder.name}
+                  </SelectItem>
                 ))}
                 <SelectItem value={NEW_FOLDER_VALUE}>+ Criar nova pasta</SelectItem>
               </SelectContent>

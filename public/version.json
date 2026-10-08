@@ -1,6 +1,6 @@
 {
-  "commit": "0492cb94817e6913c3a1d017e7277e8486f7ec43",
-  "shortCommit": "0492cb9",
-  "message": "feat(call-panel): adicionar sidebar com navegacao para Ligacoes, Campanhas e Configuracoes",
-  "builtAt": "2026-10-08T03:31:03.803Z"
+  "commit": "3c7b752432082b817b85fb11f796b7cfdeca6e6f",
+  "shortCommit": "3c7b752",
+  "message": "feat(call-actions): simplificar tipos de acao para Disparar Workflow e Disparar Mensagem Rapida com seletores dinamicos",
+  "builtAt": "2026-10-08T03:45:15.374Z"
 }

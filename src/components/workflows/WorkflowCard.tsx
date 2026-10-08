@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { WorkflowDefinition, WorkflowSourceType } from "@/hooks/useWorkflowDefinitions";
 import type { WorkflowFolder } from "@/hooks/useWorkflowFolders";
+import { buildFolderTree, flattenFolderTree } from "@/lib/workflowFolderHierarchy";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Rascunho",
@@ -83,6 +85,10 @@ export function WorkflowCard({ workflow, folders, onMoveToFolder, onDelete, onDu
   const meta = getWorkflowTypeMeta(workflow);
   const Icon = meta.icon;
 
+  const hierarchicalFolders = useMemo(() => {
+    return flattenFolderTree(buildFolderTree(folders));
+  }, [folders]);
+
   const openBuilder = () => {
     const legacyRoute = SOURCE_TYPE_BUILDER_ROUTE[workflow.sourceType](workflow);
     navigate(legacyRoute || `/workflows/${workflow.id}/builder`);
@@ -128,10 +134,12 @@ export function WorkflowCard({ workflow, folders, onMoveToFolder, onDelete, onDu
               <DropdownMenuSubTrigger>
                 <FolderInput className="h-3.5 w-3.5 mr-2" /> Mover para pasta
               </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent>
+              <DropdownMenuSubContent className="max-h-72 overflow-y-auto">
                 <DropdownMenuItem onClick={() => onMoveToFolder(null)}>Sem pasta</DropdownMenuItem>
-                {folders.map((folder) => (
+                {hierarchicalFolders.map((folder) => (
                   <DropdownMenuItem key={folder.id} onClick={() => onMoveToFolder(folder.id)}>
+                    {"\u00A0\u00A0".repeat(folder.depth)}
+                    {folder.depth > 0 ? "↳ 📁 " : "📁 "}
                     {folder.name}
                   </DropdownMenuItem>
                 ))}

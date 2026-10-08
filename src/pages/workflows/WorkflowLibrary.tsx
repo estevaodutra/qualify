@@ -11,6 +11,7 @@ import { WorkflowCard } from "@/components/workflows/WorkflowCard";
 import { DeleteFolderDialog } from "@/components/workflows/DeleteFolderDialog";
 import { DeleteWorkflowDialog } from "@/components/workflows/DeleteWorkflowDialog";
 import { NewWorkflowDialog } from "@/components/workflows/NewWorkflowDialog";
+import { getFolderAndDescendantIds } from "@/lib/workflowFolderHierarchy";
 
 const STATUS_TABS: { value: WorkflowStatus | "all"; label: string }[] = [
   { value: "all", label: "Todas" },
@@ -28,16 +29,29 @@ export default function WorkflowLibrary() {
   const [folderPendingDelete, setFolderPendingDelete] = useState<string | null>(null);
   const [workflowPendingDelete, setWorkflowPendingDelete] = useState<any | null>(null);
 
-  const { folders, isLoading: loadingFolders, createFolder, renameFolder, reorderFolders, deleteFolder } = useWorkflowFolders();
+  const {
+    folders,
+    isLoading: loadingFolders,
+    createFolder,
+    renameFolder,
+    moveFolder,
+    reorderFolders,
+    deleteFolder,
+  } = useWorkflowFolders();
   const { definitions: allDefinitions, isLoading: loadingDefinitions, moveToFolder, deleteWorkflowDefinition, duplicateWorkflowDefinition } = useWorkflowDefinitions();
 
   const countByFolder = useMemo(() => {
-    const counts: Record<string, number> = {};
+    const directCounts: Record<string, number> = {};
     for (const def of allDefinitions) {
-      if (def.folderId) counts[def.folderId] = (counts[def.folderId] || 0) + 1;
+      if (def.folderId) directCounts[def.folderId] = (directCounts[def.folderId] || 0) + 1;
     }
-    return counts;
-  }, [allDefinitions]);
+    const totalCounts: Record<string, number> = {};
+    for (const f of folders) {
+      const descendantIds = getFolderAndDescendantIds(f.id, folders);
+      totalCounts[f.id] = descendantIds.reduce((sum, id) => sum + (directCounts[id] || 0), 0);
+    }
+    return totalCounts;
+  }, [allDefinitions, folders]);
 
   const uncategorizedCount = useMemo(
     () => allDefinitions.filter((d) => !d.folderId).length,
@@ -47,12 +61,15 @@ export default function WorkflowLibrary() {
   const visibleDefinitions = useMemo(() => {
     return allDefinitions.filter((def) => {
       if (selectedFolderId === null && def.folderId) return false;
-      if (typeof selectedFolderId === "string" && def.folderId !== selectedFolderId) return false;
+      if (typeof selectedFolderId === "string") {
+        const folderIds = getFolderAndDescendantIds(selectedFolderId, folders);
+        if (!def.folderId || !folderIds.includes(def.folderId)) return false;
+      }
       if (statusTab !== "all" && def.status !== statusTab) return false;
       if (search && !def.name.toLowerCase().includes(search.toLowerCase()) && !(def.description || "").toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [allDefinitions, selectedFolderId, statusTab, search]);
+  }, [allDefinitions, selectedFolderId, folders, statusTab, search]);
 
   const folderPendingDeleteObj = folders.find((f) => f.id === folderPendingDelete);
 
@@ -86,8 +103,9 @@ export default function WorkflowLibrary() {
               uncategorizedCount={uncategorizedCount}
               selectedFolderId={selectedFolderId}
               onSelectFolder={setSelectedFolderId}
-              onCreateFolder={(name) => createFolder({ name })}
+              onCreateFolder={(name, parentId) => createFolder({ name, parentId })}
               onRenameFolder={(id, name) => renameFolder({ id, name })}
+              onMoveFolder={(id, parentId) => moveFolder({ id, parentId })}
               onDeleteFolder={setFolderPendingDelete}
               onReorder={reorderFolders}
               onDropWorkflow={(workflowId, folderId) => moveToFolder({ id: workflowId, folderId })}

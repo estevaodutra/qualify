@@ -9,6 +9,7 @@ export interface WorkflowFolder {
   name: string;
   description?: string;
   position: number;
+  parentId?: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -25,11 +26,17 @@ interface DbWorkflowFolder {
   updated_at: string;
 }
 
-const transformDbToFrontend = (db: DbWorkflowFolder): WorkflowFolder => ({
+interface DbFolderParent {
+  folder_id: string;
+  parent_id: string;
+}
+
+const transformDbToFrontend = (db: DbWorkflowFolder, parentId?: string | null): WorkflowFolder => ({
   id: db.id,
   name: db.name,
   description: db.description || undefined,
   position: db.position,
+  parentId: parentId || null,
   createdBy: db.created_by,
   createdAt: db.created_at,
   updatedAt: db.updated_at,
@@ -44,17 +51,33 @@ export function useWorkflowFolders() {
     queryKey: ["workflow_folders", activeCompanyId],
     queryFn: async () => {
       if (!activeCompanyId) return [];
-      const { data, error } = await supabase
-        .from("workflow_folders" as any)
-        .select("*")
-        .eq("company_id", activeCompanyId)
-        .order("position", { ascending: true });
 
-      if (error) {
-        if ((error as any).code === "42P01") return [];
-        throw error;
+      const [foldersRes, parentsRes] = await Promise.all([
+        supabase
+          .from("workflow_folders" as any)
+          .select("*")
+          .eq("company_id", activeCompanyId)
+          .order("position", { ascending: true }),
+        supabase
+          .from("workflow_folder_parents" as any)
+          .select("folder_id, parent_id")
+      ]);
+
+      if (foldersRes.error) {
+        if ((foldersRes.error as any).code === "42P01") return [];
+        throw foldersRes.error;
       }
-      return (data as unknown as DbWorkflowFolder[]).map(transformDbToFrontend);
+
+      const parentMap = new Map<string, string>();
+      if (parentsRes.data && Array.isArray(parentsRes.data)) {
+        for (const row of parentsRes.data as unknown as DbFolderParent[]) {
+          parentMap.set(row.folder_id, row.parent_id);
+        }
+      }
+
+      return (foldersRes.data as unknown as DbWorkflowFolder[]).map((f) =>
+        transformDbToFrontend(f, parentMap.get(f.id) || null)
+      );
     },
     enabled: !!user && !!activeCompanyId,
   });
@@ -62,7 +85,7 @@ export function useWorkflowFolders() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["workflow_folders", activeCompanyId] });
 
   const createFolder = useMutation({
-    mutationFn: async (input: { name: string; description?: string }) => {
+    mutationFn: async (input: { name: string; description?: string; parentId?: string | null }) => {
       if (!user || !activeCompanyId) throw new Error("Selecione uma empresa ativa");
       const { data, error } = await supabase
         .from("workflow_folders" as any)
@@ -76,7 +99,19 @@ export function useWorkflowFolders() {
         .select()
         .single();
       if (error) throw error;
-      return transformDbToFrontend(data as unknown as DbWorkflowFolder);
+
+      const createdFolder = data as unknown as DbWorkflowFolder;
+
+      if (input.parentId) {
+        await supabase
+          .from("workflow_folder_parents" as any)
+          .insert({
+            folder_id: createdFolder.id,
+            parent_id: input.parentId,
+          });
+      }
+
+      return transformDbToFrontend(createdFolder, input.parentId || null);
     },
     onSuccess: () => { invalidate(); toast.success("Pasta criada"); },
     onError: (error: Error) => toast.error("Erro ao criar pasta", { description: error.message }),
@@ -92,6 +127,33 @@ export function useWorkflowFolders() {
     },
     onSuccess: () => invalidate(),
     onError: (error: Error) => toast.error("Erro ao renomear pasta", { description: error.message }),
+  });
+
+  const moveFolder = useMutation({
+    mutationFn: async ({ id, parentId }: { id: string; parentId: string | null }) => {
+      if (id === parentId) throw new Error("Uma pasta não pode ser subpasta de si mesma");
+
+      if (!parentId) {
+        const { error } = await supabase
+          .from("workflow_folder_parents" as any)
+          .delete()
+          .eq("folder_id", id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("workflow_folder_parents" as any)
+          .upsert(
+            { folder_id: id, parent_id: parentId },
+            { onConflict: "folder_id" }
+          );
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      invalidate();
+      toast.success("Pasta movida com sucesso");
+    },
+    onError: (error: Error) => toast.error("Erro ao mover pasta", { description: error.message }),
   });
 
   const reorderFolders = useMutation({
@@ -131,6 +193,7 @@ export function useWorkflowFolders() {
     isLoading,
     createFolder: createFolder.mutateAsync,
     renameFolder: renameFolder.mutateAsync,
+    moveFolder: moveFolder.mutateAsync,
     reorderFolders: reorderFolders.mutateAsync,
     deleteFolder: deleteFolder.mutateAsync,
   };
