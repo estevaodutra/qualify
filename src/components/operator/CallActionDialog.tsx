@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,7 +12,7 @@ import { useCallActions } from "@/hooks/useCallActions";
 import { InlineScriptRunner } from "@/components/call-campaigns/operator/InlineScriptRunner";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Calendar, Phone, PhoneMissed, ChevronDown, Clock, Copy, Check, History, ChevronLeft, ChevronRight, Pencil, X, Timer, FileText, CheckCircle2, RotateCcw, Target, PenLine } from "lucide-react";
+import { Loader2, Calendar, Phone, PhoneMissed, ChevronDown, Clock, Copy, Check, History, ChevronLeft, ChevronRight, Pencil, X, Timer, FileText, CheckCircle2, RotateCcw, Target, PenLine, Maximize2, Minimize2, Minus } from "lucide-react";
 import { cn, formatPhone } from "@/lib/utils";
 import { useCallFloatingStore } from "@/stores/callFloating.store";
 import { addHours, format, setHours, setMinutes, addDays } from "date-fns";
@@ -59,6 +59,7 @@ interface CallActionDialogProps {
   operatorId?: string;
   depth?: number; // kept for backwards compat but unused
   userId?: string;
+  autoDial?: boolean;
 }
 
 interface CallLogEntry {
@@ -101,10 +102,13 @@ export function CallActionDialog({
   leadName, leadPhone, campaignName, duration,
   initialObservations, attemptNumber, maxAttempts, isPriority,
   callStatus, externalCallId, audioUrl, operatorId, userId,
+  autoDial,
 }: CallActionDialogProps) {
   const { user } = useAuth();
   const { activeCompanyId } = useCompany();
   const queryClient = useQueryClient();
+  const [isDocked, setIsDocked] = useState(true);
+  const autoDialTriggeredRef = useRef(false);
   // --- Navigation state ---
   const cleanCallId = callId?.startsWith("cl_") ? callId.replace("cl_", "") : callId;
 
@@ -128,6 +132,7 @@ export function CallActionDialog({
         isPriority, callStatus, externalCallId, audioUrl, userId,
       });
       setForwardStack([]);
+      autoDialTriggeredRef.current = false;
     }
   }, [open, callId, userId]);
 
@@ -706,19 +711,28 @@ export function CallActionDialog({
   };
 
   const handleManualDial = async () => {
-    if (!realTaskId) return;
     setIsDialing(true);
-    // Immediately set local state to dialing
     setCurrentData(prev => ({ ...prev, callStatus: "dialing" }));
     try {
       // Fetch webhook configs
-      const { data: configs } = await supabase
+      const targetUserId = currentData.userId || user?.id;
+      let { data: configs } = await supabase
         .from("webhook_configs")
         .select("url")
-        .eq("user_id", currentData.userId)
+        .eq("user_id", targetUserId)
         .eq("category", "calls")
         .eq("is_active", true)
         .limit(1);
+
+      if (!configs || configs.length === 0) {
+        const { data: fallbackConfigs } = await supabase
+          .from("webhook_configs")
+          .select("url")
+          .eq("category", "calls")
+          .eq("is_active", true)
+          .limit(1);
+        configs = fallbackConfigs;
+      }
 
       const webhookUrl = configs?.[0]?.url;
       if (!webhookUrl) {
@@ -760,75 +774,127 @@ export function CallActionDialog({
         }
       }
 
-      // Update task status in database to dialing
-      await supabase
-        .from("workflow_call_tasks")
-        .update({ status: "dialing" })
-        .eq("id", realTaskId);
-
-      const payload = {
-        action: "call.dial",
-        call: {
-          id: realTaskId,
-          status: "dialing",
-          source: "workflow"
-        },
-        lead: {
-          id: currentData.leadId,
-          phone: currentData.leadPhone,
-          name: currentData.leadName
-        },
-        operator: {
-          name: operatorDetails.name,
-          email: operatorDetails.email,
-          extension: operatorDetails.extension
-        },
-        _debug: {
-          userId: user?.id || null,
-          activeCompanyId: activeCompanyId || null,
-          hasUser: !!user,
-          operatorQueryCount: operatorQueryCount,
-          operatorQueryError: operatorQueryError
-        }
-      };
-
-      const { data: proxyData, error: proxyError } = await supabase.functions.invoke("webhook-proxy", {
-        body: { url: webhookUrl, payload }
-      });
-
-      if (proxyError) {
-        toast({ title: "Erro no Webhook", description: proxyError.message, variant: "destructive" });
-        setCurrentData(prev => ({ ...prev, callStatus: "failed" }));
-      } else {
-        // Try to extract external_call_id from proxy response
-        let externalCallId = null;
-        try {
-          const responseBody = typeof proxyData?.body === "string" ? JSON.parse(proxyData.body) : proxyData?.body;
-          const externalId = Array.isArray(responseBody) 
-            ? (responseBody[0]?.id || responseBody[0]?.call_id) 
-            : (responseBody?.id || responseBody?.call_id);
-          if (externalId) {
-            externalCallId = String(externalId);
-          }
-        } catch (e) {
-          console.warn("[handleManualDial] Failed to extract external_call_id:", e);
-        }
-
-        toast({ title: "Ligação iniciada", description: "A chamada foi disparada para o webhook." });
-        // Set local state to in_call
-        setCurrentData(prev => ({ 
-          ...prev, 
-          callStatus: "in_call",
-          ...(externalCallId ? { externalCallId } : {})
-        }));
-        // Update database to in_call
+      if (isWorkflowCall && realTaskId) {
+        // Update task status in database to dialing
         await supabase
           .from("workflow_call_tasks")
-          .update({ 
-            status: "in_call",
-            ...(externalCallId ? { external_call_id: externalCallId } : {})
-          })
+          .update({ status: "dialing", assigned_operator_id: user?.id })
           .eq("id", realTaskId);
+
+        // Invalidate queries so UI reflects dialing state immediately
+        queryClient.invalidateQueries({ queryKey: ["workflow_call_tasks_queue"] });
+
+        const payload = {
+          action: "call.dial",
+          call: {
+            id: realTaskId,
+            status: "dialing",
+            source: "workflow"
+          },
+          lead: {
+            id: currentData.leadId,
+            phone: currentData.leadPhone,
+            name: currentData.leadName
+          },
+          operator: {
+            name: operatorDetails.name,
+            email: operatorDetails.email,
+            extension: operatorDetails.extension
+          },
+          _debug: {
+            userId: user?.id || null,
+            activeCompanyId: activeCompanyId || null,
+            hasUser: !!user,
+            operatorQueryCount: operatorQueryCount,
+            operatorQueryError: operatorQueryError
+          }
+        };
+
+        const { data: proxyData, error: proxyError } = await supabase.functions.invoke("webhook-proxy", {
+          body: { url: webhookUrl, payload }
+        });
+
+        if (proxyError) {
+          toast({ title: "Erro no Webhook", description: proxyError.message, variant: "destructive" });
+          setCurrentData(prev => ({ ...prev, callStatus: "failed" }));
+          await supabase.from("workflow_call_tasks").update({ status: "failed" }).eq("id", realTaskId);
+          queryClient.invalidateQueries({ queryKey: ["workflow_call_tasks_queue"] });
+        } else {
+          // Try to extract external_call_id from proxy response
+          let externalCallId = null;
+          try {
+            const responseBody = typeof proxyData?.body === "string" ? JSON.parse(proxyData.body) : proxyData?.body;
+            const externalId = Array.isArray(responseBody) 
+              ? (responseBody[0]?.id || responseBody[0]?.call_id) 
+              : (responseBody?.id || responseBody?.call_id);
+            if (externalId) {
+              externalCallId = String(externalId);
+            }
+          } catch (e) {
+            console.warn("[handleManualDial] Failed to extract external_call_id:", e);
+          }
+
+          toast({ title: "Ligação iniciada", description: "A chamada foi disparada para o webhook." });
+          setCurrentData(prev => ({ 
+            ...prev, 
+            callStatus: "in_call",
+            ...(externalCallId ? { externalCallId } : {})
+          }));
+          await supabase
+            .from("workflow_call_tasks")
+            .update({ 
+              status: "in_call",
+              ...(externalCallId ? { external_call_id: externalCallId } : {})
+            })
+            .eq("id", realTaskId);
+          queryClient.invalidateQueries({ queryKey: ["workflow_call_tasks_queue"] });
+        }
+      } else if (currentData.callId) {
+        await (supabase as any)
+          .from("call_logs")
+          .update({ call_status: "dialing", started_at: new Date().toISOString() })
+          .eq("id", currentData.callId);
+
+        const payload = {
+          action: "call.dial",
+          call: { id: currentData.callId, status: "dialing" },
+          campaign: { id: currentData.campaignId, name: currentData.campaignName },
+          lead: { id: currentData.leadId, phone: currentData.leadPhone, name: currentData.leadName },
+          operator: operatorDetails
+        };
+
+        const { data: proxyData, error: proxyError } = await supabase.functions.invoke("webhook-proxy", {
+          body: { url: webhookUrl, payload }
+        });
+
+        if (proxyError) {
+          toast({ title: "Erro no Webhook", description: proxyError.message, variant: "destructive" });
+          setCurrentData(prev => ({ ...prev, callStatus: "failed" }));
+        } else {
+          let externalCallId = null;
+          try {
+            const responseBody = typeof proxyData?.body === "string" ? JSON.parse(proxyData.body) : proxyData?.body;
+            const externalId = Array.isArray(responseBody) ? (responseBody[0]?.id || responseBody[0]?.call_id) : (responseBody?.id || responseBody?.call_id);
+            if (externalId) externalCallId = String(externalId);
+          } catch (e) {
+            console.warn("[handleManualDial] Failed to extract external_call_id:", e);
+          }
+
+          toast({ title: "Ligação iniciada", description: "A chamada foi disparada para o webhook." });
+          setCurrentData(prev => ({ 
+            ...prev, 
+            callStatus: "in_call",
+            ...(externalCallId ? { externalCallId } : {})
+          }));
+          if (externalCallId) {
+            await (supabase as any)
+              .from("call_logs")
+              .update({ external_call_id: externalCallId })
+              .eq("id", currentData.callId);
+          }
+          queryClient.invalidateQueries({ queryKey: ["call_logs_queue"] });
+          queryClient.invalidateQueries({ queryKey: ["call_queue"] });
+        }
       }
     } catch (err: any) {
       toast({ title: "Erro", description: err.message, variant: "destructive" });
@@ -837,6 +903,17 @@ export function CallActionDialog({
       setIsDialing(false);
     }
   };
+
+  // Trigger autoDial on mount if requested
+  useEffect(() => {
+    if (open && autoDial && !autoDialTriggeredRef.current) {
+      const isPending = !currentData.callStatus || ["queued", "waiting", "ready"].includes(currentData.callStatus);
+      if (isPending) {
+        autoDialTriggeredRef.current = true;
+        handleManualDial();
+      }
+    }
+  }, [open, autoDial, currentData.callStatus]);
 
   const resetState = () => {
     setSelectedActionId(null);
@@ -847,48 +924,84 @@ export function CallActionDialog({
     setForwardStack([]);
   };
 
-  return (
-    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) { resetState(); useCallFloatingStore.getState().closeCallDialog(); } }}>
-      <DialogContent className="max-w-2xl max-h-[92vh] p-0 gap-0 overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-950">
-        {/* Lead Header */}
-        <div className="relative bg-gradient-to-b from-indigo-50/70 via-slate-50/30 to-white dark:from-indigo-950/25 dark:via-slate-900/30 dark:to-slate-950 border-b border-slate-200/70 dark:border-slate-800 px-6 pt-5 pb-3.5 space-y-3 text-center">
-          
-          {/* Top action row: navigation arrows on left, forward on right */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1 min-w-[70px]">
-              {operatorId && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs gap-1 px-2 rounded-lg text-slate-600 dark:text-slate-400 hover:text-foreground"
-                  onClick={handleGoBack}
-                  disabled={loadingPrevious}
-                >
-                  {loadingPrevious ? <Loader2 className="h-3 w-3 animate-spin" /> : <ChevronLeft className="h-3.5 w-3.5" />}
-                  Anterior
-                </Button>
-              )}
-            </div>
+  if (!open) return null;
 
-            {/* Avatar */}
-            <div className="h-14 w-14 rounded-full bg-gradient-to-tr from-violet-100 to-indigo-100 dark:from-violet-950/60 dark:to-indigo-950/60 text-primary border border-primary/20 flex items-center justify-center text-xl font-bold shadow-xs mx-auto">
-              {(currentData.leadName || "L").charAt(0).toUpperCase()}
-            </div>
+  const innerContent = (
+    <div className="flex flex-col h-full w-full overflow-hidden bg-white dark:bg-slate-950">
+      {/* Lead Header */}
+      <div className="relative bg-gradient-to-b from-indigo-50/70 via-slate-50/30 to-white dark:from-indigo-950/25 dark:via-slate-900/30 dark:to-slate-950 border-b border-slate-200/70 dark:border-slate-800 px-6 pt-4 pb-3 space-y-2.5 text-center shrink-0">
+        
+        {/* Window control buttons at absolute top-right */}
+        <div className="absolute top-2.5 right-2.5 flex items-center gap-1 z-30">
+          <button
+            type="button"
+            onClick={() => {
+              useCallFloatingStore.getState().minimizeCallDialog();
+              onOpenChange(false);
+            }}
+            className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+            title="Minimizar para balão"
+          >
+            <Minus className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsDocked((prev) => !prev)}
+            className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+            title={isDocked ? "Expandir tela cheia" : "Fixar no canto (Dock)"}
+          >
+            {isDocked ? <Maximize2 className="h-3.5 w-3.5" /> : <Minimize2 className="h-3.5 w-3.5" />}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onOpenChange(false);
+              resetState();
+              useCallFloatingStore.getState().closeCallDialog();
+            }}
+            className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+            title="Fechar"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
 
-            <div className="flex items-center justify-end gap-1 min-w-[70px]">
-              {forwardStack.length > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs gap-1 px-2 rounded-lg text-slate-600 dark:text-slate-400 hover:text-foreground"
-                  onClick={handleGoForward}
-                >
-                  Avançar
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </Button>
-              )}
-            </div>
+        {/* Top action row: navigation arrows on left, forward on right */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1 min-w-[70px]">
+            {operatorId && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs gap-1 px-2 rounded-lg text-slate-600 dark:text-slate-400 hover:text-foreground"
+                onClick={handleGoBack}
+                disabled={loadingPrevious}
+              >
+                {loadingPrevious ? <Loader2 className="h-3 w-3 animate-spin" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+                Anterior
+              </Button>
+            )}
           </div>
+
+          {/* Avatar */}
+          <div className="h-12 w-12 rounded-full bg-gradient-to-tr from-violet-100 to-indigo-100 dark:from-violet-950/60 dark:to-indigo-950/60 text-primary border border-primary/20 flex items-center justify-center text-lg font-bold shadow-xs mx-auto">
+            {(currentData.leadName || "L").charAt(0).toUpperCase()}
+          </div>
+
+          <div className="flex items-center justify-end gap-1 min-w-[70px]">
+            {forwardStack.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs gap-1 px-2 rounded-lg text-slate-600 dark:text-slate-400 hover:text-foreground"
+                onClick={handleGoForward}
+              >
+                Avançar
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
+        </div>
 
           {/* Lead Name */}
           {isEditingName ? (
@@ -1054,8 +1167,8 @@ export function CallActionDialog({
           </div>
 
           {/* Call Tab */}
-          <TabsContent value="call" className="flex-1 min-h-0 mt-0">
-            <ScrollArea className="h-[calc(90vh-320px)] px-6 py-4">
+          <TabsContent value="call" className="flex-1 min-h-0 mt-0 flex flex-col">
+            <ScrollArea className="flex-1 min-h-0 px-6 py-4">
               <div className="space-y-4">
                 
                 {/* ROTEIRO SECTION */}
@@ -1442,8 +1555,8 @@ export function CallActionDialog({
           </TabsContent>
 
           {/* History Tab */}
-          <TabsContent value="history" className="flex-1 min-h-0 mt-0">
-            <ScrollArea className="h-[calc(90vh-320px)] px-6 py-4">
+          <TabsContent value="history" className="flex-1 min-h-0 mt-0 flex flex-col">
+            <ScrollArea className="flex-1 min-h-0 px-6 py-4">
               <div className="space-y-4">
                 <div className="flex items-center justify-between pb-1">
                   <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
@@ -1542,6 +1655,28 @@ export function CallActionDialog({
             </ScrollArea>
           </TabsContent>
         </Tabs>
+    </div>
+  );
+
+  if (isDocked) {
+    return (
+      <div
+        className={cn(
+          "fixed bottom-3 right-3 sm:bottom-5 sm:right-5 z-[90]",
+          "w-[calc(100vw-24px)] sm:w-[490px] h-[660px] max-h-[88vh]",
+          "flex flex-col bg-white dark:bg-slate-950 rounded-2xl shadow-[0_12px_50px_-10px_rgba(0,0,0,0.35)] border border-slate-200/80 dark:border-slate-800 overflow-hidden",
+          "animate-in slide-in-from-bottom-5 fade-in duration-200"
+        )}
+      >
+        {innerContent}
+      </div>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) { resetState(); useCallFloatingStore.getState().closeCallDialog(); } }}>
+      <DialogContent className="max-w-2xl max-h-[92vh] p-0 gap-0 overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-950 flex flex-col [&>button]:hidden">
+        {innerContent}
       </DialogContent>
     </Dialog>
   );

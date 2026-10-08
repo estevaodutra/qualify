@@ -486,17 +486,17 @@ export default function CallPanel() {
 
   // ── In-progress entries (filtered by operator for non-admins) ──
   const myOperator = useMemo(() => {
-    if (!user || isAdmin) return null;
+    if (!user) return null;
     return operators.find(op => op.userId === user.id) || null;
-  }, [operators, user, isAdmin]);
+  }, [operators, user]);
 
   const inProgressEntries = useMemo(() => {
     const all = entries.filter(e => ["dialing", "ringing", "answered", "in_progress"].includes(e.callStatus));
-    if (myOperator) {
+    if (myOperator && !isAdmin) {
       return all.filter(e => !e.operatorId || e.operatorId === myOperator.id);
     }
     return all;
-  }, [entries, myOperator]);
+  }, [entries, myOperator, isAdmin]);
 
   // ── "Ligar a Seguir" — inserts lead at top of queue ──
   const handleDialNext = useCallback(async (entry: { leadId?: string | null; leadName?: string | null; leadPhone?: string | null; campaignId?: string | null; phone?: string | null }) => {
@@ -1029,13 +1029,24 @@ export default function CallPanel() {
     try {
       const realId = qe.id.replace("wt_", "");
       
-      const { data: configs } = await supabase
+      const targetUserId = qe.userId || user?.id;
+      let { data: configs } = await supabase
         .from("webhook_configs")
         .select("url")
-        .eq("user_id", qe.userId)
+        .eq("user_id", targetUserId)
         .eq("category", "calls")
         .eq("is_active", true)
         .limit(1);
+
+      if (!configs || configs.length === 0) {
+        const { data: fallbackConfigs } = await supabase
+          .from("webhook_configs")
+          .select("url")
+          .eq("category", "calls")
+          .eq("is_active", true)
+          .limit(1);
+        configs = fallbackConfigs;
+      }
 
       const webhookUrl = configs?.[0]?.url;
       if (!webhookUrl) {
@@ -1184,12 +1195,40 @@ export default function CallPanel() {
   // ── AUTO-DIALER LOGIC ──
   const isAutoDialingRef = useRef(false);
 
+  // Operator is available if user's own operator is available, or if queue has available operators
+  const isOperatorAvailable = useMemo(() => {
+    if (myOperator) return myOperator.status === "available";
+    return availableOps > 0;
+  }, [myOperator, availableOps]);
+
+  // Realtime subscription for workflow_call_tasks to immediately trigger auto-dialer upon arrival
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel("call-panel-workflow-tasks-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "workflow_call_tasks" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["workflow_call_tasks_queue"] });
+          queryClient.invalidateQueries({ queryKey: ["call_panel_history"] });
+          queryClient.invalidateQueries({ queryKey: ["call_panel_answered_today"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, queryClient]);
+
   useEffect(() => {
     // Condições: fila global ativa, operador disponível, operador sem ligação no momento,
     // não há painel de chamada aberto, e a fila tem itens pendentes.
+    const isQueueRunning = queueGlobalStatus === "running" || queueGlobalStatus === "mixed" || (queueGlobalStatus !== "paused" && isOperatorAvailable);
     if (
-      queueGlobalStatus === "running" &&
-      myOperator?.status === "available" &&
+      isQueueRunning &&
+      isOperatorAvailable &&
       inProgressEntries.length === 0 &&
       !viewingQueueLead &&
       combinedQueue.length > 0 &&
@@ -1198,29 +1237,42 @@ export default function CallPanel() {
       const nextLead = combinedQueue[0];
       
       // Se for um agendamento futuro, não dispara auto-dial ainda
-      if (nextLead.scheduledTo && new Date(nextLead.scheduledTo).getTime() > Date.now()) {
+      const schedTime = nextLead.scheduledFor || nextLead.scheduledTo;
+      if (schedTime && new Date(schedTime).getTime() > Date.now()) {
+        return;
+      }
+
+      // Se já estiver em andamento ou discando, não disca de novo
+      if (["dialing", "ringing", "answered", "in_progress", "in_call", "completed", "cancelled"].includes(nextLead.status)) {
         return;
       }
 
       isAutoDialingRef.current = true;
-      console.log("[Auto-Dialer] Starting auto-dial for:", nextLead.leadName || nextLead.leadPhone);
+      console.log("[Auto-Dialer] Starting auto-dial for:", nextLead.leadName || nextLead.phone);
       
       // Define a view para abrir o popup e inicia o disparo
-      setViewingQueueLead(nextLead);
-      handleWorkflowDial(nextLead).finally(() => {
-        // Libera a trava após alguns segundos (suficiente para o status da fila/operador atualizar)
+      setViewingQueueLead({ ...nextLead, autoDial: true });
+      if (nextLead.source === "workflow_call_task") {
+        handleWorkflowDial(nextLead).finally(() => {
+          setTimeout(() => {
+            isAutoDialingRef.current = false;
+          }, 4000);
+        });
+      } else {
+        dialNow(nextLead.realId || nextLead.id);
         setTimeout(() => {
           isAutoDialingRef.current = false;
-        }, 5000);
-      });
+        }, 4000);
+      }
     }
   }, [
     queueGlobalStatus,
-    myOperator?.status,
+    isOperatorAvailable,
     inProgressEntries.length,
     viewingQueueLead,
     combinedQueue,
-    handleWorkflowDial
+    handleWorkflowDial,
+    dialNow
   ]);
 
   const statusConfig: Record<string, { label: string; dotClass: string; className: string }> = {
@@ -1669,7 +1721,7 @@ export default function CallPanel() {
                                     variant="ghost"
                                     size="icon"
                                     className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                                    onClick={() => { setViewingQueueLead(qe); handleWorkflowDial(qe); }}
+                                    onClick={() => { setViewingQueueLead({ ...qe, autoDial: true }); handleWorkflowDial(qe); }}
                                   >
                                     <Phone className="h-3.5 w-3.5" />
                                   </Button>
@@ -2314,6 +2366,7 @@ export default function CallPanel() {
           initialObservations={viewingQueueLead.observations || ""}
           audioUrl={viewingQueueLead.audioUrl || null}
           userId={viewingQueueLead.userId}
+          autoDial={viewingQueueLead.autoDial}
         />
       )}
           </div>
