@@ -45,8 +45,8 @@ export function CallPopup({ embedded = false }: CallPopupProps) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Don't render if user is not an operator
-  if (isLoading || !operator) return null;
+  // Don't render if user is not an operator or if not embedded (global launcher handles floating)
+  if (isLoading || !operator || !embedded) return null;
 
   const config = statusConfig[callStatus];
   const isActive = ["dialing", "ringing", "on_call"].includes(callStatus);

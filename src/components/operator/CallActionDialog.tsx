@@ -12,8 +12,9 @@ import { useCallActions } from "@/hooks/useCallActions";
 import { InlineScriptRunner } from "@/components/call-campaigns/operator/InlineScriptRunner";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Calendar, Phone, PhoneMissed, ChevronDown, Clock, Copy, Check, History, ChevronLeft, ChevronRight, Pencil, X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Loader2, Calendar, Phone, PhoneMissed, ChevronDown, Clock, Copy, Check, History, ChevronLeft, ChevronRight, Pencil, X, Timer, FileText, CheckCircle2, RotateCcw, Target, PenLine } from "lucide-react";
+import { cn, formatPhone } from "@/lib/utils";
+import { useCallFloatingStore } from "@/stores/callFloating.store";
 import { addHours, format, setHours, setMinutes, addDays } from "date-fns";
 import { InlineReschedule } from "./InlineReschedule";
 import { useAuth } from "@/contexts/AuthContext";
@@ -140,6 +141,24 @@ export function CallActionDialog({
       }));
     }
   }, [callStatus, externalCallId, open]);
+
+  // Live timer tick when call is active
+  useEffect(() => {
+    const isActiveCall = ["on_call", "in_progress", "in_call", "answered"].includes(currentData.callStatus || "");
+    if (!open || !isActiveCall) return;
+
+    const interval = setInterval(() => {
+      setCurrentData(prev => ({ ...prev, duration: (prev.duration || 0) + 1 }));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [open, currentData.callStatus]);
+
+  useEffect(() => {
+    if (duration !== undefined && duration > 0) {
+      setCurrentData(prev => ({ ...prev, duration }));
+    }
+  }, [duration]);
 
   // --- Per-view state ---
   const { actions, isLoading: actionsLoading } = useCallActions(currentData.campaignId);
@@ -829,29 +848,49 @@ export function CallActionDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) resetState(); }}>
-      <DialogContent className="max-w-2xl max-h-[90vh] p-0 gap-0 overflow-hidden">
+    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) { resetState(); useCallFloatingStore.getState().closeCallDialog(); } }}>
+      <DialogContent className="max-w-2xl max-h-[92vh] p-0 gap-0 overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-950">
         {/* Lead Header */}
-        <div className="bg-gradient-to-b from-primary/10 to-transparent border-b px-6 py-5 space-y-2">
+        <div className="relative bg-gradient-to-b from-indigo-50/70 via-slate-50/30 to-white dark:from-indigo-950/25 dark:via-slate-900/30 dark:to-slate-950 border-b border-slate-200/70 dark:border-slate-800 px-6 pt-5 pb-3.5 space-y-3 text-center">
+          
+          {/* Top action row: navigation arrows on left, forward on right */}
           <div className="flex items-center justify-between">
-            {operatorId ? (
-              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 px-2" onClick={handleGoBack} disabled={loadingPrevious}>
-                {loadingPrevious ? <Loader2 className="h-3 w-3 animate-spin" /> : <ChevronLeft className="h-3 w-3" />}
-                Anterior
-              </Button>
-            ) : <div />}
-            <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center text-lg font-bold text-primary">
-              {currentData.leadName.charAt(0).toUpperCase()}
+            <div className="flex items-center gap-1 min-w-[70px]">
+              {operatorId && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs gap-1 px-2 rounded-lg text-slate-600 dark:text-slate-400 hover:text-foreground"
+                  onClick={handleGoBack}
+                  disabled={loadingPrevious}
+                >
+                  {loadingPrevious ? <Loader2 className="h-3 w-3 animate-spin" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+                  Anterior
+                </Button>
+              )}
             </div>
-            {forwardStack.length > 0 ? (
-              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 px-2" onClick={handleGoForward}>
-                Avançar
-                <ChevronRight className="h-3 w-3" />
-              </Button>
-            ) : (
-              <div className="w-[85px]" />
-            )}
+
+            {/* Avatar */}
+            <div className="h-14 w-14 rounded-full bg-gradient-to-tr from-violet-100 to-indigo-100 dark:from-violet-950/60 dark:to-indigo-950/60 text-primary border border-primary/20 flex items-center justify-center text-xl font-bold shadow-xs mx-auto">
+              {(currentData.leadName || "L").charAt(0).toUpperCase()}
+            </div>
+
+            <div className="flex items-center justify-end gap-1 min-w-[70px]">
+              {forwardStack.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs gap-1 px-2 rounded-lg text-slate-600 dark:text-slate-400 hover:text-foreground"
+                  onClick={handleGoForward}
+                >
+                  Avançar
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
           </div>
+
+          {/* Lead Name */}
           {isEditingName ? (
             <Input
               autoFocus
@@ -872,104 +911,171 @@ export function CallActionDialog({
                 }
                 setIsEditingName(false);
               }}
-              className="text-center text-2xl font-bold uppercase max-w-[300px] mx-auto"
+              className="text-center text-xl md:text-2xl font-black uppercase max-w-[320px] mx-auto rounded-xl border-primary/40"
             />
           ) : (
             <div className="flex items-center justify-center gap-2">
-              <h2 className="text-2xl font-bold tracking-wide uppercase text-foreground">
-                {currentData.leadName}
+              <h2 className="text-xl md:text-2xl font-black tracking-wide uppercase text-slate-900 dark:text-white">
+                {currentData.leadName || "Sem Nome"}
               </h2>
-              <button onClick={() => { setEditName(currentData.leadName); setIsEditingName(true); }} className="text-muted-foreground hover:text-foreground transition-colors">
+              <button
+                type="button"
+                onClick={() => { setEditName(currentData.leadName); setIsEditingName(true); }}
+                className="text-slate-400 hover:text-primary transition-colors p-1 rounded-md"
+                title="Editar nome do lead"
+              >
                 <Pencil className="h-4 w-4" />
               </button>
             </div>
           )}
-          <div className="flex items-center justify-center gap-2">
-            <p className="text-lg font-mono text-primary">
-              📞 {currentData.leadPhone}
-            </p>
-            {isWorkflowCall && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 px-2.5 gap-1.5 text-emerald-600 border-emerald-500/30 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
-                onClick={handleManualDial}
-                disabled={isDialing}
-              >
-                {isDialing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Phone className="h-3 w-3" />}
-                Ligar
-              </Button>
-            )}
+
+          {/* Phone Number Pill */}
+          <div className="flex items-center justify-center">
+            <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-slate-100/90 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 shadow-2xs">
+              <Phone className="h-4 w-4 text-violet-600 dark:text-violet-400 fill-violet-600/10" />
+              <span className="text-sm md:text-base font-semibold font-mono text-slate-800 dark:text-slate-200">
+                {currentData.leadPhone ? formatPhone(currentData.leadPhone) : "Sem telefone"}
+              </span>
+              {currentData.leadPhone && (
+                <button
+                  type="button"
+                  onClick={() => copyExternalId(currentData.leadPhone)}
+                  className="text-slate-400 hover:text-foreground transition-colors p-0.5 rounded"
+                  title="Copiar número de telefone"
+                >
+                  {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                </button>
+              )}
+              {isWorkflowCall && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-6 px-2.5 text-[11px] font-semibold gap-1 rounded-full text-emerald-600 border-emerald-500/40 bg-emerald-50/60 hover:bg-emerald-100/80 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 shadow-2xs transition-all"
+                  onClick={handleManualDial}
+                  disabled={isDialing}
+                >
+                  {isDialing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Phone className="h-3 w-3" />}
+                  Ligar
+                </Button>
+              )}
+            </div>
           </div>
-          <div className="flex items-center justify-center gap-2 flex-wrap">
-            <Badge variant="outline" className="text-xs">📁 {currentData.campaignName}</Badge>
-            <Badge variant="outline" className="text-xs">🔄 x{currentData.attemptNumber}/{currentData.maxAttempts}</Badge>
-            {currentData.isPriority && <Badge variant="secondary" className="text-xs">⭐ Prioridade</Badge>}
+
+          {/* Badges Row */}
+          <div className="flex items-center justify-center gap-1.5 flex-wrap">
+            {currentData.campaignName && (
+              <Badge variant="outline" className="text-xs bg-amber-500/5 text-amber-700 dark:text-amber-300 border-amber-300/60 rounded-lg py-0.5">
+                📁 {currentData.campaignName}
+              </Badge>
+            )}
+            <Badge variant="outline" className="text-xs bg-blue-500/5 text-blue-700 dark:text-blue-300 border-blue-300/60 rounded-lg py-0.5">
+              🔄 x{currentData.attemptNumber}/{currentData.maxAttempts}
+            </Badge>
+            {currentData.isPriority && (
+              <Badge variant="secondary" className="text-xs bg-amber-500/15 text-amber-800 dark:text-amber-200 border-amber-400/50 rounded-lg py-0.5 font-medium">
+                ⭐ Prioridade
+              </Badge>
+            )}
             {currentData.callStatus && (() => {
               const style = statusStyles[currentData.callStatus] || {
                 label: `📡 ${currentData.callStatus}`,
-                className: "bg-primary/10 text-primary"
+                className: "bg-primary/10 text-primary border-primary/20",
               };
               return (
-                <Badge variant="outline" className={cn("text-xs", style.className)}>
+                <Badge variant="outline" className={cn("text-xs rounded-lg py-0.5 font-medium", style.className)}>
                   {style.label}
                 </Badge>
               );
             })()}
           </div>
+
+          {/* External Call ID */}
           {currentData.externalCallId && (
-            <div className="flex items-center justify-center gap-1.5">
-              <span className="text-xs text-muted-foreground font-mono truncate max-w-[280px]">
-                🆔 {currentData.externalCallId}
-              </span>
+            <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground font-mono">
+              <span className="truncate max-w-[280px]">🆔 {currentData.externalCallId}</span>
               <button
+                type="button"
                 onClick={() => copyExternalId(currentData.externalCallId!)}
                 className="text-muted-foreground hover:text-foreground transition-colors"
+                title="Copiar ID Externo"
               >
                 {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
               </button>
             </div>
           )}
-          <p className="text-2xl font-semibold font-mono text-emerald-500">
-            ⏱️ {formatDuration(currentData.duration)}
-          </p>
+
+          {/* Audio recording player */}
           {currentData.audioUrl && (
-            <div className="rounded-lg border border-border bg-muted/20 p-2 w-full max-w-sm mx-auto">
-              <p className="text-xs font-medium text-muted-foreground mb-1">🎧 Gravação</p>
+            <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-2.5 w-full max-w-sm mx-auto shadow-2xs">
+              <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-center gap-1">
+                🎧 Gravação da chamada
+              </p>
               <audio controls className="w-full h-8" src={currentData.audioUrl} preload="metadata">
-                Seu navegador não suporta o player de áudio.
+                Seu navegador não suporta áudio.
               </audio>
             </div>
           )}
+
+          {/* Duração da chamada — CENTRALIZADO (Correção do erro do card no canto) */}
+          <div className="flex justify-center pt-1 pb-1">
+            <div className="inline-flex items-center gap-3.5 px-6 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-[0_2px_12px_rgba(0,0,0,0.05)]">
+              <div className="w-9 h-9 rounded-xl bg-violet-50 dark:bg-violet-950/60 border border-violet-100 dark:border-violet-900/60 flex items-center justify-center text-violet-600 dark:text-violet-400">
+                <Timer className="w-5 h-5" />
+              </div>
+              <div className="flex flex-col text-left">
+                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider">
+                  Duração da chamada
+                </span>
+                <span className="text-2xl md:text-3xl font-black font-mono tracking-tight text-emerald-500 leading-none mt-0.5">
+                  {formatDuration(currentData.duration)}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Tabs */}
-        <Tabs defaultValue="call" className="flex-1 flex flex-col min-h-0">
-          <TabsList className="mx-6 mt-3 w-auto self-start">
-            <TabsTrigger value="call" className="gap-1.5">
-              <Phone className="h-3.5 w-3.5" /> Ligação
-            </TabsTrigger>
-            <TabsTrigger value="history" className="gap-1.5">
-              <Clock className="h-3.5 w-3.5" /> Histórico
-            </TabsTrigger>
-          </TabsList>
+        <Tabs defaultValue="call" className="flex-1 flex flex-col min-h-0 bg-white dark:bg-slate-950">
+          <div className="px-6 pt-3 pb-2 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-900/20">
+            <TabsList className="grid grid-cols-2 w-full max-w-[340px] mx-auto p-1 bg-slate-200/60 dark:bg-slate-800/80 rounded-xl">
+              <TabsTrigger
+                value="call"
+                className="rounded-lg py-1.5 text-xs font-bold gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
+              >
+                <Phone className="h-3.5 w-3.5" /> Ligação
+              </TabsTrigger>
+              <TabsTrigger
+                value="history"
+                className="rounded-lg py-1.5 text-xs font-bold gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
+              >
+                <History className="h-3.5 w-3.5" /> Histórico
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* Call Tab */}
           <TabsContent value="call" className="flex-1 min-h-0 mt-0">
             <ScrollArea className="h-[calc(90vh-320px)] px-6 py-4">
-              <div className="space-y-6">
-                {/* Script Section */}
+              <div className="space-y-4">
+                
+                {/* ROTEIRO SECTION */}
                 <Collapsible defaultOpen>
-                  <CollapsibleTrigger className="flex items-center gap-2 w-full text-left">
-                    <ChevronDown className="h-4 w-4 transition-transform duration-200 data-[state=closed]:-rotate-90" />
-                    <span className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">📋 Roteiro</span>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="mt-3">
-                    <div className="rounded-lg border bg-muted/10 p-3">
+                  <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs overflow-hidden">
+                    <CollapsibleTrigger className="flex items-center justify-between w-full px-4 py-3 bg-slate-50/60 dark:bg-slate-900/60 hover:bg-slate-100/60 dark:hover:bg-slate-800/60 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                        <span className="text-xs font-extrabold tracking-wider uppercase text-slate-700 dark:text-slate-300">
+                          ROTEIRO
+                        </span>
+                      </div>
+                      <ChevronDown className="h-4 w-4 text-slate-400 transition-transform duration-200 data-[state=closed]:-rotate-90" />
+                    </CollapsibleTrigger>
+                    
+                    <CollapsibleContent className="p-4 border-t border-slate-100 dark:border-slate-800">
                       {isWorkflowCall ? (
                         workflowTaskLoading ? (
-                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground p-2">
-                            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> Carregando roteiro...
+                          <div className="flex items-center justify-center gap-2 py-4 text-xs text-muted-foreground">
+                            <Loader2 className="h-4 w-4 animate-spin text-primary" /> Carregando roteiro...
                           </div>
                         ) : (
                           (() => {
@@ -977,22 +1083,23 @@ export function CallActionDialog({
                             try {
                               if (workflowTask?.script && (workflowTask.script.trim().startsWith("{") || workflowTask.script.trim().startsWith("["))) {
                                 const parsed = JSON.parse(workflowTask.script);
-                                if (parsed && parsed.type === "quiz") {
+                                if (parsed && typeof parsed === "object") {
                                   quizData = parsed;
                                 }
                               }
                             } catch (e) {
-                              // Not a quiz
+                              // Not JSON
                             }
 
-                            if (quizData && quizData.quiz && quizData.quiz.length > 0) {
+                            // Case 1: Quiz structure with questions
+                            if (quizData && quizData.quiz && Array.isArray(quizData.quiz) && quizData.quiz.length > 0) {
                               const currentQuestion = quizData.quiz.find((q: any) => q.id === currentQuestionId) || quizData.quiz[0];
                               const isEnd = !currentQuestionId || currentQuestionId === "end";
 
                               return (
                                 <div className="space-y-4">
-                                  <div className="flex items-center justify-between border-b pb-2 mb-2">
-                                    <span className="text-xs font-bold text-pink-600 uppercase tracking-wider">
+                                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                                    <span className="text-xs font-bold text-violet-600 uppercase tracking-wider">
                                       {quizData.title || "Quiz Interativo"}
                                     </span>
                                     <Button
@@ -1000,33 +1107,37 @@ export function CallActionDialog({
                                       variant="ghost"
                                       size="sm"
                                       onClick={() => setCurrentQuestionId(quizData.quiz[0].id)}
-                                      className="h-6 text-[10px] text-muted-foreground hover:bg-slate-100 rounded-lg"
+                                      className="h-6 text-[10px] text-muted-foreground hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg gap-1"
                                     >
-                                      Reiniciar Quiz
+                                      <RotateCcw className="h-3 w-3" /> Reiniciar Quiz
                                     </Button>
                                   </div>
 
                                   {isEnd ? (
-                                    <div className="text-center p-4 bg-emerald-50 border border-emerald-100 rounded-xl space-y-2">
-                                      <span className="text-xl">🎉</span>
-                                      <p className="text-xs font-semibold text-emerald-800">Quiz Concluído!</p>
-                                      <p className="text-[10px] text-emerald-600 leading-normal">
-                                        Perguntas finalizadas. Por favor, registre o resultado da ligação selecionando um dos botões abaixo.
+                                    <div className="text-center p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl space-y-1.5">
+                                      <span className="text-2xl">🎉</span>
+                                      <p className="text-xs font-bold text-emerald-800 dark:text-emerald-300">Quiz Concluído!</p>
+                                      <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
+                                        Perguntas finalizadas. Por favor, registre o resultado da ligação selecionando uma ação abaixo.
                                       </p>
                                     </div>
                                   ) : (
-                                    <div className="space-y-3 animate-in fade-in duration-100">
-                                      <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
-                                        <span className="text-[9px] font-bold text-slate-400 block mb-1">PERGUNTA</span>
-                                        <p className="text-xs font-semibold text-slate-800 leading-relaxed">
+                                    <div className="space-y-3 animate-in fade-in duration-150">
+                                      <div className="p-3.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 rounded-xl">
+                                        <span className="text-[9px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider block mb-1">
+                                          PERGUNTA
+                                        </span>
+                                        <p className="text-xs md:text-sm font-semibold text-slate-800 dark:text-slate-100 leading-relaxed">
                                           {currentQuestion.questionText}
                                         </p>
                                       </div>
 
-                                      <div className="space-y-1.5 pl-2">
-                                        <span className="text-[9px] font-bold text-slate-400 block mb-1">ALTERNATIVAS</span>
+                                      <div className="space-y-1.5">
+                                        <span className="text-[9px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider block mb-1">
+                                          ALTERNATIVAS
+                                        </span>
                                         {(currentQuestion.alternatives || []).length === 0 ? (
-                                          <p className="text-[10px] text-muted-foreground italic">Nenhuma opção de resposta. O operador pode avançar.</p>
+                                          <p className="text-xs text-muted-foreground italic">Nenhuma opção de resposta cadastrada.</p>
                                         ) : (
                                           <div className="grid grid-cols-1 gap-2">
                                             {(currentQuestion.alternatives || []).map((alt: any) => (
@@ -1035,7 +1146,7 @@ export function CallActionDialog({
                                                 type="button"
                                                 variant="outline"
                                                 onClick={() => setCurrentQuestionId(alt.nextQuestionId || "end")}
-                                                className="justify-start text-left text-xs h-auto py-2.5 px-3 rounded-xl border-slate-200 hover:border-pink-600/50 hover:bg-pink-50/50 transition-all font-medium text-slate-700 hover:text-pink-700"
+                                                className="justify-start text-left text-xs h-auto py-2.5 px-3.5 rounded-xl border-slate-200 dark:border-slate-700 hover:border-violet-500/50 hover:bg-violet-50/50 dark:hover:bg-violet-950/30 transition-all font-medium text-slate-700 dark:text-slate-200 hover:text-violet-700 dark:hover:text-violet-300"
                                               >
                                                 {alt.text}
                                               </Button>
@@ -1049,8 +1160,39 @@ export function CallActionDialog({
                               );
                             }
 
+                            // Case 2: Quiz structure with empty quiz array (The bug reported in prompt!)
+                            if (quizData && quizData.type === "quiz") {
+                              return (
+                                <div className="p-4 rounded-xl bg-slate-50/70 dark:bg-slate-900/40 border border-slate-200/60 dark:border-slate-800 text-center space-y-1.5">
+                                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                                    {quizData.title || "Roteiro da Ligação"}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                                    Roteiro pronto. Nenhuma pergunta pendente cadastrada no fluxo.
+                                  </p>
+                                </div>
+                              );
+                            }
+
+                            // Case 3: Other JSON object (instructions or text)
+                            if (quizData && typeof quizData === "object") {
+                              const title = quizData.title || quizData.name;
+                              const text = quizData.content || quizData.instructions || quizData.description || quizData.message;
+                              if (text) {
+                                return (
+                                  <div className="space-y-2">
+                                    {title && <h4 className="text-xs font-bold uppercase tracking-wider text-violet-600">{title}</h4>}
+                                    <p className="text-xs md:text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
+                                      {text}
+                                    </p>
+                                  </div>
+                                );
+                              }
+                            }
+
+                            // Case 4: Plain text / Markdown script
                             return (
-                              <div className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
+                              <div className="text-xs md:text-sm leading-relaxed whitespace-pre-wrap text-slate-700 dark:text-slate-300 p-2">
                                 {workflowTask?.script || "Nenhum roteiro configurado."}
                               </div>
                             );
@@ -1059,206 +1201,240 @@ export function CallActionDialog({
                       ) : (
                         <InlineScriptRunner campaignId={currentData.campaignId} leadId={currentData.leadId} />
                       )}
-                    </div>
-                  </CollapsibleContent>
+                    </CollapsibleContent>
+                  </div>
                 </Collapsible>
 
                 {currentData.callId && !isWorkflowCall && (
-                  <>
-                    <div className="border-t" />
-                    <InlineReschedule callId={currentData.callId} />
-                    <div className="border-t" />
-                  </>
+                  <InlineReschedule callId={currentData.callId} />
                 )}
 
-                {/* Result Section */}
-                <div className="space-y-4">
-                  <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">🎯 Ações</h3>
-
-                  <div className="space-y-2">
-                    {(isWorkflowCall ? workflowTaskLoading : actionsLoading) ? (
-                      <div className="flex justify-center py-4">
-                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                      </div>
-                    ) : (
-                      <>
-                        {!isWorkflowCall && actions.length === 0 && (
-                          <div className="rounded-lg border border-dashed p-3 bg-muted/20 mb-2">
-                            <p className="text-xs text-muted-foreground">
-                              ⚠️ Nenhuma ação configurada para esta campanha. Usando ações padrão:
-                            </p>
-                          </div>
-                        )}
-                        <div className="grid grid-cols-2 gap-2">
-                          {displayActions.map((action) => {
-                            const isConfirming = confirmingActionId === action.id;
-                            const isExecuting = executingActionId === action.id;
-                            const isExecuted = executedActionIds.includes(action.id);
-                            const isSelected = selectedActionId === action.id;
-
-                            return (
-                              <div
-                                key={action.id}
-                                className={cn(
-                                  "relative flex items-center justify-between p-3 rounded-lg border text-left transition-all",
-                                  isExecuted
-                                    ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-950 dark:text-emerald-200"
-                                    : isConfirming
-                                    ? "border-primary ring-2 ring-primary/30 bg-primary/5 shadow-sm"
-                                    : isSelected
-                                    ? "border-primary bg-primary/10 shadow-sm"
-                                    : "border-border hover:border-primary/50 hover:bg-muted/40"
-                                )}
-                              >
-                                <button
-                                  type="button"
-                                  disabled={isExecuting}
-                                  onClick={() => {
-                                    if (isExecuted) return;
-                                    setSelectedActionId(action.id);
-                                    setConfirmingActionId(isConfirming ? null : action.id);
-                                  }}
-                                  className="flex items-center gap-2 flex-1 min-w-0 text-left focus:outline-none"
-                                >
-                                  <div
-                                    className="h-3 w-3 rounded-full shrink-0"
-                                    style={{ backgroundColor: action.color }}
-                                  />
-                                  <span className="font-medium text-sm truncate">{action.name}</span>
-                                </button>
-
-                                {/* Action controls: Certinho (✓) and Xizinho (✗) confirmation */}
-                                <div className="flex items-center gap-1 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
-                                  {isExecuting ? (
-                                    <div className="flex items-center gap-1 text-xs text-primary font-medium">
-                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                      <span className="hidden sm:inline">Enviando...</span>
-                                    </div>
-                                  ) : isExecuted ? (
-                                    <Badge variant="outline" className="text-[11px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300 gap-1 py-0.5">
-                                      <Check className="h-3 w-3" /> Enviado
-                                    </Badge>
-                                  ) : isConfirming ? (
-                                    <div className="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-150">
-                                      <span className="text-[10px] text-muted-foreground mr-0.5 hidden sm:inline">Enviar?</span>
-                                      <Button
-                                        type="button"
-                                        size="icon"
-                                        title="Confirmar e enviar agora"
-                                        onClick={() => handleExecuteActionNow(action)}
-                                        className="h-7 w-7 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md shadow-sm"
-                                      >
-                                        <Check className="h-4 w-4" />
-                                      </Button>
-                                      <Button
-                                        type="button"
-                                        size="icon"
-                                        variant="ghost"
-                                        title="Cancelar"
-                                        onClick={() => setConfirmingActionId(null)}
-                                        className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md"
-                                      >
-                                        <X className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                  ) : (
-                                    <span className="text-xs text-muted-foreground opacity-60">
-                                      {action.icon}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                        {actions.length > 0 && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            ℹ️ Ações carregadas da campanha "{currentData.campaignName}"
-                          </p>
-                        )}
-                      </>
-                    )}
+                {/* AÇÕES SECTION */}
+                <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Target className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                      <span className="text-xs font-extrabold tracking-wider uppercase text-slate-700 dark:text-slate-300">
+                        AÇÕES
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-muted-foreground font-medium">
+                      Selecione o desfecho da chamada
+                    </span>
                   </div>
 
-                  {/* Schedule fields */}
-                  {isScheduleType && selectedActionId && (
-                    <div className="space-y-3 rounded-lg border p-3 bg-muted/20">
-                      <Label className="text-sm font-medium flex items-center gap-1">
-                        <Calendar className="h-3 w-3" /> Quando ligar novamente?
-                      </Label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Input
-                          type="date"
-                          value={scheduledDate}
-                          onChange={(e) => setScheduledDate(e.target.value)}
-                        />
-                        <Input
-                          type="time"
-                          value={scheduledTime}
-                          onChange={(e) => setScheduledTime(e.target.value)}
-                        />
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {[
-                          { label: "+1h", date: addHours(new Date(), 1) },
-                          { label: "+3h", date: addHours(new Date(), 3) },
-                          { label: "Amanhã 9h", date: setMinutes(setHours(addDays(new Date(), 1), 9), 0) },
-                          { label: "Amanhã 14h", date: setMinutes(setHours(addDays(new Date(), 1), 14), 0) },
-                        ].map(({ label, date }) => (
-                          <Button
-                            key={label}
-                            variant="outline"
-                            size="sm"
-                            className="text-xs h-7"
-                            onClick={() => setScheduleShortcut(date)}
-                          >
-                            {label}
-                          </Button>
-                        ))}
-                      </div>
+                  {(isWorkflowCall ? workflowTaskLoading : actionsLoading) ? (
+                    <div className="flex justify-center py-6">
+                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
                     </div>
-                  )}
+                  ) : (
+                    <>
+                      {!isWorkflowCall && actions.length === 0 && (
+                        <div className="rounded-lg border border-dashed border-amber-300/60 p-3 bg-amber-50/40 dark:bg-amber-950/20 text-xs text-amber-800 dark:text-amber-300">
+                          ⚠️ Nenhuma ação customizada configurada para esta campanha. Usando ações padrão:
+                        </div>
+                      )}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        {displayActions.map((action) => {
+                          const isConfirming = confirmingActionId === action.id;
+                          const isExecuting = executingActionId === action.id;
+                          const isExecuted = executedActionIds.includes(action.id);
+                          const isSelected = selectedActionId === action.id;
 
-                  {/* Custom Message Field */}
-                  {hasCustomMessageAction && (
-                    <div className="space-y-2 rounded-lg border p-3 bg-muted/20">
-                      <Label className="text-sm font-medium">💬 Mensagem Personalizada (opcional)</Label>
-                      <Textarea
-                        value={customMessage}
-                        onChange={(e) => setCustomMessage(e.target.value)}
-                        placeholder="Digite uma mensagem personalizada..."
-                        className="mt-1"
-                        rows={3}
-                      />
-                      {actions.filter(a => a.actionType === "custom_message").map(a => (
-                        <p key={a.id} className="text-xs text-muted-foreground">
-                          Essa mensagem será enviada quando você clicar em "{a.name}".
+                          return (
+                            <div
+                              key={action.id}
+                              className={cn(
+                                "relative flex items-center justify-between p-3 rounded-xl border text-left transition-all",
+                                isExecuted
+                                  ? "border-emerald-500/50 bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-950 dark:text-emerald-200"
+                                  : isConfirming
+                                  ? "border-[#3B4DFF] ring-2 ring-[#3B4DFF]/25 bg-[#3B4DFF]/5 shadow-xs"
+                                  : isSelected
+                                  ? "border-[#3B4DFF] bg-[#3B4DFF]/10 shadow-xs"
+                                  : "border-slate-200/90 dark:border-slate-700/80 hover:border-[#3B4DFF]/50 hover:bg-slate-50/60 dark:hover:bg-slate-800/40"
+                              )}
+                            >
+                              <button
+                                type="button"
+                                disabled={isExecuting}
+                                onClick={() => {
+                                  if (isExecuted) return;
+                                  setSelectedActionId(action.id);
+                                  setConfirmingActionId(isConfirming ? null : action.id);
+                                }}
+                                className="flex items-center gap-2.5 flex-1 min-w-0 text-left focus:outline-none"
+                              >
+                                <span
+                                  className="h-3.5 w-3.5 rounded-full shrink-0 shadow-2xs"
+                                  style={{ backgroundColor: action.color }}
+                                />
+                                <span className="font-semibold text-xs md:text-sm text-slate-800 dark:text-slate-100 truncate">
+                                  {action.name}
+                                </span>
+                              </button>
+
+                              {/* Action controls: Certinho (✓) and Xizinho (✗) confirmation */}
+                              <div className="flex items-center gap-1.5 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
+                                {isExecuting ? (
+                                  <div className="flex items-center gap-1 text-xs text-primary font-semibold">
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    <span className="hidden sm:inline">Enviando...</span>
+                                  </div>
+                                ) : isExecuted ? (
+                                  <Badge variant="outline" className="text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300 gap-1 py-0.5 rounded-md">
+                                    <Check className="h-3 w-3" /> Enviado
+                                  </Badge>
+                                ) : isConfirming ? (
+                                  <div className="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-150">
+                                    <span className="text-[10px] font-medium text-slate-500 mr-0.5 hidden sm:inline">Enviar?</span>
+                                    <Button
+                                      type="button"
+                                      size="icon"
+                                      title="Confirmar e enviar agora"
+                                      onClick={() => handleExecuteActionNow(action)}
+                                      className="h-7 w-7 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-xs"
+                                    >
+                                      <Check className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      size="icon"
+                                      variant="ghost"
+                                      title="Cancelar"
+                                      onClick={() => setConfirmingActionId(null)}
+                                      className="h-7 w-7 text-slate-400 hover:text-destructive hover:bg-destructive/10 rounded-lg"
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-slate-400 opacity-60">
+                                    {action.icon}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {actions.length > 0 && (
+                        <p className="text-[11px] text-muted-foreground mt-1">
+                          ℹ️ Ações carregadas da campanha "{currentData.campaignName}"
                         </p>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Schedule fields */}
+                {isScheduleType && selectedActionId && (
+                  <div className="space-y-3 rounded-xl border border-slate-200/80 dark:border-slate-800 p-4 bg-slate-50/50 dark:bg-slate-900/50">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5 text-primary" /> Quando ligar novamente?
+                    </Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        type="date"
+                        value={scheduledDate}
+                        onChange={(e) => setScheduledDate(e.target.value)}
+                        className="rounded-xl text-xs bg-white dark:bg-slate-950"
+                      />
+                      <Input
+                        type="time"
+                        value={scheduledTime}
+                        onChange={(e) => setScheduledTime(e.target.value)}
+                        className="rounded-xl text-xs bg-white dark:bg-slate-950"
+                      />
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { label: "+1h", date: addHours(new Date(), 1) },
+                        { label: "+3h", date: addHours(new Date(), 3) },
+                        { label: "Amanhã 9h", date: setMinutes(setHours(addDays(new Date(), 1), 9), 0) },
+                        { label: "Amanhã 14h", date: setMinutes(setHours(addDays(new Date(), 1), 14), 0) },
+                      ].map(({ label, date }) => (
+                        <Button
+                          key={label}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="text-[11px] h-7 rounded-lg"
+                          onClick={() => setScheduleShortcut(date)}
+                        >
+                          {label}
+                        </Button>
                       ))}
                     </div>
-                  )}
+                  </div>
+                )}
 
-                  {/* Notes */}
-                  <div>
-                    <Label className="text-sm font-medium">📝 Observações (opcional)</Label>
+                {/* Custom Message Field */}
+                {hasCustomMessageAction && (
+                  <div className="space-y-2 rounded-xl border border-slate-200/80 dark:border-slate-800 p-4 bg-slate-50/50 dark:bg-slate-900/50">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                      💬 Mensagem Personalizada (opcional)
+                    </Label>
                     <Textarea
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Anotações sobre a ligação..."
-                      className="mt-1"
+                      value={customMessage}
+                      onChange={(e) => setCustomMessage(e.target.value)}
+                      placeholder="Digite uma mensagem personalizada..."
+                      className="mt-1 rounded-xl bg-white dark:bg-slate-950 text-xs resize-none"
                       rows={3}
                     />
+                    {actions.filter(a => a.actionType === "custom_message").map(a => (
+                      <p key={a.id} className="text-[11px] text-muted-foreground">
+                        Essa mensagem será enviada quando você clicar em "{a.name}".
+                      </p>
+                    ))}
                   </div>
+                )}
+
+                {/* OBSERVAÇÕES (OPCIONAL) */}
+                <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs p-4 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <PenLine className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                      <span className="text-xs font-extrabold tracking-wider uppercase text-slate-700 dark:text-slate-300">
+                        OBSERVAÇÕES (OPCIONAL)
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-mono text-slate-400">
+                      {notes.length}/500
+                    </span>
+                  </div>
+                  <Textarea
+                    value={notes}
+                    maxLength={500}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Anotações sobre a ligação..."
+                    className="mt-1 rounded-xl border-slate-200 dark:border-slate-700 focus-visible:ring-primary/30 min-h-[90px] resize-none text-xs md:text-sm"
+                    rows={3}
+                  />
                 </div>
 
                 {/* Footer Buttons */}
-                <div className="flex justify-end gap-2 pt-2 pb-2">
-                  <Button variant="outline" onClick={() => onOpenChange(false)}>
+                <div className="flex items-center justify-end gap-3 pt-3 pb-1 border-t border-slate-100 dark:border-slate-800">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => onOpenChange(false)}
+                    className="rounded-xl px-5 h-10 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold text-xs text-slate-700 dark:text-slate-300"
+                  >
                     Cancelar
                   </Button>
-                  <Button onClick={handleSave} disabled={!selectedActionId || isSaving}>
-                    {isSaving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-                    ✅ Salvar e Encerrar
+                  <Button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={!selectedActionId || isSaving}
+                    className="rounded-xl px-6 h-10 bg-gradient-to-r from-[#7C3AED] to-[#3B4DFF] hover:opacity-95 text-white font-bold text-xs shadow-md shadow-indigo-500/20 flex items-center gap-2 transition-all disabled:opacity-50"
+                  >
+                    {isSaving ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-white" />
+                    ) : (
+                      <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                    )}
+                    Salvar e Encerrar
                   </Button>
                 </div>
               </div>
@@ -1269,34 +1445,42 @@ export function CallActionDialog({
           <TabsContent value="history" className="flex-1 min-h-0 mt-0">
             <ScrollArea className="h-[calc(90vh-320px)] px-6 py-4">
               <div className="space-y-4">
-                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">📊 Histórico de Contatos</h3>
+                <div className="flex items-center justify-between pb-1">
+                  <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <History className="h-3.5 w-3.5 text-primary" /> Histórico de Contatos
+                  </h3>
+                  <span className="text-[11px] text-muted-foreground">{history.length} registro(s)</span>
+                </div>
 
                 {historyLoading ? (
                   <div className="flex justify-center py-8">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
                   </div>
                 ) : history.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">
-                    Nenhum histórico encontrado.
-                  </p>
+                  <div className="p-8 text-center text-xs text-muted-foreground bg-slate-50/50 dark:bg-slate-900/30 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                    Nenhum histórico encontrado para este lead.
+                  </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-2.5">
                     {history.map((entry, idx) => {
                       const isCurrent = entry.id === currentData.callId;
                       return (
                         <div
                           key={entry.id}
                           className={cn(
-                            "rounded-lg border p-3 space-y-1.5",
-                            isCurrent && "border-primary bg-primary/5"
+                            "rounded-xl border p-3.5 space-y-2 transition-all",
+                            isCurrent
+                              ? "border-primary/60 bg-primary/5 shadow-xs"
+                              : "border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900"
                           )}
                         >
                           <div className="flex items-center justify-between">
-                            <span className="font-medium text-sm">
-                              📞 Tentativa {entry.attempt_number || (history.length - idx)}
-                              {isCurrent && " (atual)"}
+                            <span className="font-bold text-xs md:text-sm text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                              <Phone className="h-3.5 w-3.5 text-primary" />
+                              Tentativa {entry.attempt_number || (history.length - idx)}
+                              {isCurrent && <Badge variant="secondary" className="text-[10px] py-0 px-1.5 ml-1">atual</Badge>}
                             </span>
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-[11px] text-muted-foreground font-mono">
                               {entry.started_at
                                 ? new Date(entry.started_at).toLocaleString("pt-BR", {
                                     day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"
@@ -1305,25 +1489,22 @@ export function CallActionDialog({
                             </span>
                           </div>
                           <div className="grid grid-cols-2 gap-x-4 text-xs text-muted-foreground">
-                            <span>Operador: {entry.operator_name}</span>
-                            <span>Duração: {entry.duration_seconds != null ? formatDuration(entry.duration_seconds) : isCurrent ? formatDuration(currentData.duration) + " (em andamento)" : "—"}</span>
+                            <span>Operador: <strong className="text-slate-700 dark:text-slate-300 font-medium">{entry.operator_name || "—"}</strong></span>
+                            <span>Duração: <strong className="font-mono text-slate-700 dark:text-slate-300 font-medium">{entry.duration_seconds != null ? formatDuration(entry.duration_seconds) : isCurrent ? formatDuration(currentData.duration) + " (em andamento)" : "—"}</strong></span>
                           </div>
-                          <div className="text-xs">
+                          <div className="flex items-center gap-2 text-xs flex-wrap">
                             <span className="text-muted-foreground">Resultado: </span>
-                            <Badge variant="outline" className="text-xs">
+                            <Badge variant="outline" className="text-[11px] rounded-md font-medium">
                               {entry.call_status === "completed" ? "✅ Atendida" :
                                entry.call_status === "no_answer" ? "📵 Não atendeu" :
                                entry.call_status === "failed" ? "⚠️ Falha" :
                                isCurrent ? "🔄 Em andamento" :
                                entry.call_status || "—"}
                             </Badge>
-                          </div>
-                          {entry.action_name && (
-                            <div className="text-xs">
-                              <span className="text-muted-foreground">⚡ Ação: </span>
+                            {entry.action_name && (
                               <Badge
                                 variant="secondary"
-                                className="text-xs"
+                                className="text-[11px] rounded-md font-medium"
                                 style={{ borderColor: entry.action_color || undefined }}
                               >
                                 <span
@@ -1332,21 +1513,23 @@ export function CallActionDialog({
                                 />
                                 {entry.action_name}
                               </Badge>
-                            </div>
-                          )}
+                            )}
+                          </div>
                           {entry.custom_message && (
-                            <div className="text-xs">
-                              <span className="text-muted-foreground">💬 Mensagem: </span>
-                              <span className="italic">&quot;{entry.custom_message}&quot;</span>
+                            <div className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg">
+                              <span className="text-muted-foreground font-medium">Mensagem: </span>
+                              <span className="italic">"{entry.custom_message}"</span>
                             </div>
                           )}
                           {entry.notes && (
-                            <p className="text-xs text-muted-foreground">Obs: {entry.notes}</p>
+                            <p className="text-xs text-slate-600 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-800/30 p-2 rounded-lg">
+                              <strong className="font-medium text-slate-700 dark:text-slate-300">Obs:</strong> {entry.notes}
+                            </p>
                           )}
                           {entry.audio_url && (
-                            <div className="mt-1.5 rounded border border-border bg-muted/10 p-1.5">
+                            <div className="mt-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 p-2">
                               <audio controls className="w-full h-7" src={entry.audio_url} preload="none">
-                                Seu navegador não suporta o player de áudio.
+                                Seu navegador não suporta áudio.
                               </audio>
                             </div>
                           )}

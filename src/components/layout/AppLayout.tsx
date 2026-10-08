@@ -7,6 +7,7 @@ import { InstanceStatusBanner } from "./InstanceStatusBanner";
 import { ImpersonationBanner } from "../admin/ImpersonationBanner";
 import { useCallQueue } from "@/hooks/useCallQueue";
 import { ChatExpressDock } from "@/components/chat/express/ChatExpressDock";
+import { CallFloatingLauncher } from "@/components/call/CallFloatingLauncher";
 import { PwaInstallPrompt } from "@/components/pwa/PwaInstallPrompt";
 
 interface AppLayoutProps {
@@ -43,6 +44,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           </main>
         </div>
 
+        {!isQuizEditor && <CallFloatingLauncher />}
         {!isQuizEditor && <ChatExpressDock />}
         {!isQuizEditor && <PwaInstallPrompt />}
       </div>
