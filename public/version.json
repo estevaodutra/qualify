@@ -1,6 +1,6 @@
 {
-  "commit": "8f750b0f5adad8842ec59cc11580384721755c69",
-  "shortCommit": "8f750b0",
-  "message": "feat(call-panel): display actual workflow name in queue, answered, and history tables",
-  "builtAt": "2026-10-08T04:39:22.410Z"
+  "commit": "3f9695103744f7361ef693e0f0bfffa85ff52428",
+  "shortCommit": "3f96951",
+  "message": "feat(workflows): adicionar node de ativar outro fluxo (trigger_workflow)",
+  "builtAt": "2026-10-08T04:40:57.200Z"
 }

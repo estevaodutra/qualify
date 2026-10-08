@@ -220,15 +220,38 @@ function InProgressStatusBadge({ status }: { status: string }) {
   );
 }
 
-// ── Helper to resolve real workflow / sequence names for call tasks ──
-async function fetchWorkflowNames(tasks: any[]): Promise<Record<string, string>> {
-  const map: Record<string, string> = {};
+// ── Helper to resolve real workflow / sequence names and priority for call tasks ──
+interface WorkflowTaskMeta {
+  name: string;
+  isPriority: boolean;
+}
+
+async function fetchWorkflowInfo(tasks: any[]): Promise<Record<string, WorkflowTaskMeta>> {
+  const map: Record<string, WorkflowTaskMeta> = {};
   if (!tasks || tasks.length === 0) return map;
 
   const workflowIds = [...new Set(tasks.map((t: any) => t.workflow_id).filter(Boolean))];
   const queueIds = [...new Set(tasks.map((t: any) => t.queue_id).filter(Boolean))];
 
-  // 1. Fetch from message_sequences
+  // 1. Fetch campaigns for priority and name
+  const queueMetaMap: Record<string, { name: string; isPriority: boolean }> = {};
+  if (queueIds.length > 0) {
+    const { data: campaigns } = await (supabase as any)
+      .from("call_campaigns")
+      .select("id, name, is_priority")
+      .in("id", queueIds);
+    if (campaigns) {
+      for (const c of campaigns) {
+        queueMetaMap[c.id] = {
+          name: c.name || "Campanha",
+          isPriority: c.is_priority ?? false,
+        };
+      }
+    }
+  }
+
+  // 2. Fetch sequence names from message_sequences
+  const seqNameMap: Record<string, string> = {};
   if (workflowIds.length > 0) {
     const { data: msgSeqs } = await (supabase as any)
       .from("message_sequences")
@@ -236,12 +259,12 @@ async function fetchWorkflowNames(tasks: any[]): Promise<Record<string, string>>
       .in("id", workflowIds);
     if (msgSeqs) {
       for (const s of msgSeqs) {
-        if (s.name) map[s.id] = s.name;
+        if (s.name) seqNameMap[s.id] = s.name;
       }
     }
 
-    // 2. Fetch remaining from dispatch_sequences
-    const remainingWfIds = workflowIds.filter((id) => !map[id]);
+    // Fetch remaining from dispatch_sequences
+    const remainingWfIds = workflowIds.filter((id) => !seqNameMap[id]);
     if (remainingWfIds.length > 0) {
       const { data: dispSeqs } = await (supabase as any)
         .from("dispatch_sequences")
@@ -249,26 +272,18 @@ async function fetchWorkflowNames(tasks: any[]): Promise<Record<string, string>>
         .in("id", remainingWfIds);
       if (dispSeqs) {
         for (const s of dispSeqs) {
-          if (s.name) map[s.id] = s.name;
+          if (s.name) seqNameMap[s.id] = s.name;
         }
       }
     }
   }
 
-  // 3. For any tasks where workflow_id was missing or not found, check queue_id in call_campaigns
-  const neededQueueIds = queueIds.filter((qId) => {
-    return tasks.some((t: any) => t.queue_id === qId && (!t.workflow_id || !map[t.workflow_id]));
-  });
-  if (neededQueueIds.length > 0) {
-    const { data: campaigns } = await (supabase as any)
-      .from("call_campaigns")
-      .select("id, name")
-      .in("id", neededQueueIds);
-    if (campaigns) {
-      for (const c of campaigns) {
-        if (c.name) map[c.id] = c.name;
-      }
-    }
+  // 3. Map each task by its ID
+  for (const t of tasks) {
+    const qMeta = t.queue_id ? queueMetaMap[t.queue_id] : null;
+    const name = (t.workflow_id && seqNameMap[t.workflow_id]) || qMeta?.name || "Workflow";
+    const isPriority = qMeta?.isPriority ?? false;
+    map[t.id] = { name, isPriority };
   }
 
   return map;
@@ -576,16 +591,16 @@ export default function CallPanel() {
 
         const { data: wfData } = await wfQuery;
         if (wfData) {
-          const nameMap = await fetchWorkflowNames(wfData);
+          const metaMap = await fetchWorkflowInfo(wfData);
           const existingIds = new Set(results.map((r: any) => r.id));
           const wfResults = wfData
             .filter((db: any) => !existingIds.has(db.id) && !existingIds.has(`wt_${db.id}`))
             .map((db: any) => {
-              const wfName = (db.workflow_id && nameMap[db.workflow_id]) || (db.queue_id && nameMap[db.queue_id]) || "Workflow";
+              const meta = metaMap[db.id];
               return {
                 id: `wt_${db.id}`,
                 campaignId: db.workflow_id || db.queue_id || null,
-                campaignName: wfName,
+                campaignName: meta?.name || "Workflow",
                 leadId: db.lead_id,
                 leadName: db.leads?.name || "Sem nome",
                 leadPhone: db.phone || db.leads?.phone || null,
@@ -596,7 +611,7 @@ export default function CallPanel() {
                 endedAt: db.completed_at || db.updated_at,
                 startedAt: db.created_at,
                 durationSeconds: db.duration_seconds || 0,
-                isPriority: true,
+                isPriority: meta?.isPriority ?? false,
                 actionName: db.observation ? "Finalizada" : "Atendida",
                 actionColor: "#10b981",
               };
@@ -700,19 +715,19 @@ export default function CallPanel() {
       if (error) throw error;
 
       const rawTasks = data || [];
-      const nameMap = await fetchWorkflowNames(rawTasks);
+      const metaMap = await fetchWorkflowInfo(rawTasks);
 
       let results = rawTasks.map((db: any, idx: number) => {
-        const wfName = (db.workflow_id && nameMap[db.workflow_id]) || (db.queue_id && nameMap[db.queue_id]) || "Workflow";
+        const meta = metaMap[db.id];
         return {
           id: `wt_${db.id}`,
           realId: db.id,
           campaignId: db.workflow_id || db.queue_id || null,
-          campaignName: wfName,
+          campaignName: meta?.name || "Workflow",
           leadId: db.lead_id,
           leadName: db.leads?.name || null,
           phone: db.phone || db.leads?.phone || null,
-          isPriority: true,
+          isPriority: meta?.isPriority ?? false,
           status: db.status as string,
           scheduledFor: db.next_attempt_at || null,
           attemptNumber: (db.attempt_count || 0) + 1,
@@ -903,17 +918,17 @@ export default function CallPanel() {
 
         const { data: wfData } = await wfQuery;
         if (wfData) {
-          const nameMap = await fetchWorkflowNames(wfData);
+          const metaMap = await fetchWorkflowInfo(wfData);
           const existingIds = new Set(results.map((r: any) => r.id));
           const wfResults = wfData
             .filter((db: any) => !existingIds.has(db.id) && !existingIds.has(`wt_${db.id}`))
             .map((db: any) => {
               const callStatus = db.status === "attempts_exhausted" ? "max_attempts_exceeded" : db.status;
-              const wfName = (db.workflow_id && nameMap[db.workflow_id]) || (db.queue_id && nameMap[db.queue_id]) || "Workflow";
+              const meta = metaMap[db.id];
               return {
                 id: `wt_${db.id}`,
                 campaignId: db.workflow_id || db.queue_id || null,
-                campaignName: wfName,
+                campaignName: meta?.name || "Workflow",
                 leadId: db.lead_id,
                 leadName: db.leads?.name || "Sem nome",
                 leadPhone: db.phone || db.leads?.phone || null,
@@ -924,7 +939,7 @@ export default function CallPanel() {
                 endedAt: db.completed_at || db.updated_at,
                 startedAt: db.created_at,
                 durationSeconds: db.duration_seconds || 0,
-                isPriority: true,
+                isPriority: meta?.isPriority ?? false,
               };
             });
           results = [...results, ...wfResults];
