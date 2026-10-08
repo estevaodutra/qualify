@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -52,6 +52,7 @@ export function CreateDealDialog({
   const [expectedCloseDate, setExpectedCloseDate] = useState<string>("");
   const [description, setDescription] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   // Reset form when opened
   useEffect(() => {
@@ -103,11 +104,13 @@ export function CreateDealDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current || isSubmitting) return;
     if (!activeCompanyId || !leadId || !selectedPipelineId || !selectedStageId) {
       toast.error("Por favor, preencha o pipeline e a etapa.");
       return;
     }
 
+    submittingRef.current = true;
     setIsSubmitting(true);
     try {
       const selectedStage = stages.find((s) => s.id === selectedStageId);
@@ -146,6 +149,7 @@ export function CreateDealDialog({
       console.error("Error creating deal:", err);
       toast.error(`Erro ao criar negócio: ${err.message || err}`);
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };

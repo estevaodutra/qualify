@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -30,6 +30,7 @@ export default function AddLeadToPipelineDialog({
   const [selectedPipelineId, setSelectedPipelineId] = useState<string>("");
   const [selectedStageId, setSelectedStageId] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   // Fetch company pipelines with stages
   const { data: pipelines = [], isLoading: isLoadingPipelines } = useQuery({
@@ -70,11 +71,13 @@ export default function AddLeadToPipelineDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current || isSubmitting) return;
     if (!activeCompanyId || !leadId || !selectedPipelineId || !selectedStageId) {
       toast.error("Por favor, selecione a pipeline e a etapa.");
       return;
     }
 
+    submittingRef.current = true;
     setIsSubmitting(true);
     try {
       // Check if lead already has an open deal in the selected pipeline
@@ -89,7 +92,6 @@ export default function AddLeadToPipelineDialog({
 
       if (existingDeal) {
         toast.warning("Este lead já possui um negócio ativo nesta pipeline.");
-        setIsSubmitting(false);
         return;
       }
 
@@ -121,6 +123,7 @@ export default function AddLeadToPipelineDialog({
       console.error("Error creating deal:", err);
       toast.error(`Erro ao adicionar à pipeline: ${err.message}`);
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };

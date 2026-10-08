@@ -1,6 +1,6 @@
 {
-  "commit": "3f9695103744f7361ef693e0f0bfffa85ff52428",
-  "shortCommit": "3f96951",
-  "message": "feat(workflows): adicionar node de ativar outro fluxo (trigger_workflow)",
-  "builtAt": "2026-10-08T04:40:57.200Z"
+  "commit": "c638dae931f4d3ff5f40ca666a9f0fe81ea0b255",
+  "shortCommit": "c638dae",
+  "message": "fix(groups): remove horizontal scrollbar and optimize table layout",
+  "builtAt": "2026-10-08T14:20:27.232Z"
 }

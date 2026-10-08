@@ -317,11 +317,37 @@ Deno.serve(async (req) => {
                           (!destinationPhone && (hasLinkedGroups || (selectedGroupJids && selectedGroupJids.length > 0)))
                         ));
 
-    const instanceId = (payload.instanceId as string) || (triggerConfig as Record<string, unknown>).instanceId as string | undefined;
-    const instanceIds = (triggerConfig as Record<string, unknown>).instanceIds as string[] | undefined;
+    const instanceId = (payload.instanceId as string) || (payload.triggerContext as any)?.instanceId || (triggerConfig as Record<string, unknown>).instanceId as string | undefined;
+    const instanceIds = (payload.instanceIds as string[]) || (payload.triggerContext as any)?.instanceIds || (triggerConfig as Record<string, unknown>).instanceIds as string[] | undefined;
     let primaryInstanceId = instanceId || (instanceIds && instanceIds.length > 0 ? instanceIds[0] : undefined);
 
-    // If no instance specified in config, resolve active connected instance for company/user
+    // If no instance specified in trigger config or payload, check sequence_nodes first
+    if (!primaryInstanceId && (typedSequence.id || sequenceId)) {
+      const targetSeqId = typedSequence.id || sequenceId;
+      const { data: seqNodes } = await supabase
+        .from("sequence_nodes")
+        .select("config, node_type, node_order")
+        .eq("sequence_id", targetSeqId)
+        .order("node_order", { ascending: true });
+
+      if (seqNodes && seqNodes.length > 0) {
+        for (const n of seqNodes) {
+          const cfg = (n.config || {}) as Record<string, any>;
+          if (cfg.instanceId) {
+            primaryInstanceId = cfg.instanceId;
+            console.log(`[TriggerSequence] Inferred primaryInstanceId ${primaryInstanceId} from sequence node ${n.node_order} (${n.node_type})`);
+            break;
+          }
+          if (Array.isArray(cfg.instanceIds) && cfg.instanceIds.length > 0) {
+            primaryInstanceId = cfg.instanceIds[0];
+            console.log(`[TriggerSequence] Inferred primaryInstanceId ${primaryInstanceId} from sequence node instanceIds pool`);
+            break;
+          }
+        }
+      }
+    }
+
+    // If still no instance specified in config, resolve active connected instance for company/user
     if (!primaryInstanceId) {
       const companyId = typedSequence.company_id || typedCampaign.company_id;
       let instQuery = supabase

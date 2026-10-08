@@ -51,13 +51,17 @@ const syncSentMessageToChat = async (
       }
     }
 
-    // Busca conversa existente por lead_id OU por telefone (ou sufixo de 8 dígitos)
+    // Busca conversa existente por lead_id OU por telefone (ou sufixo de 8 dígitos) estritamente NA MESMA instância
     let convQ = supabase
       .from("chat_conversations")
       .select("id, lead_id, instance_id, contact_name")
-      .eq("company_id", params.companyId)
-      .order("created_at", { ascending: false })
-      .limit(1);
+      .eq("company_id", params.companyId);
+
+    if (params.instanceId) {
+      convQ = convQ.eq("instance_id", params.instanceId);
+    } else {
+      convQ = convQ.is("instance_id", null);
+    }
 
     if (targetLeadId && suffix.length >= 8) {
       convQ = convQ.or(`lead_id.eq.${targetLeadId},contact_phone.eq.${cleanPhone},contact_phone.ilike.%${suffix}`);
@@ -69,7 +73,7 @@ const syncSentMessageToChat = async (
       convQ = convQ.eq("contact_phone", cleanPhone);
     }
 
-    const { data: existingConvs } = await convQ;
+    const { data: existingConvs } = await convQ.order("created_at", { ascending: false }).limit(1);
     const existingConv = existingConvs?.[0];
 
     if (existingConv) {
@@ -3106,6 +3110,7 @@ Deno.serve(async (req) => {
                 current_node_index: nextNodeIndex >= 0 ? nextNodeIndex : nodesProcessed + 1,
                 trigger_context: {
                   ...(triggerContext || {}),
+                  instanceId: activeInstanceId,
                   resumeNodeId: nextNodeId,
                 },
                 nodes_data: sortedNodes,
@@ -3680,6 +3685,7 @@ Deno.serve(async (req) => {
                   current_node_index: nextNodeIndex >= 0 ? nextNodeIndex : nodesProcessed + 1,
                   trigger_context: {
                     ...(triggerContext || {}),
+                    instanceId: activeInstanceId,
                     resumeNodeId: nextNodeId,
                   },
                   nodes_data: sortedNodes,
@@ -4003,6 +4009,7 @@ Deno.serve(async (req) => {
                 updated_at: new Date().toISOString(),
                 trigger_payload: {
                   ...(triggerContext || {}),
+                  instanceId: activeInstanceId,
                   waitingNodeId: node.id,
                   resumeNodeId: nextNodeId,
                   waitingType: "user_input"
@@ -4020,6 +4027,7 @@ Deno.serve(async (req) => {
                 current_node_id: nextNodeId,
                 trigger_context: {
                   ...(triggerContext || {}),
+                  instanceId: activeInstanceId,
                   waitingNodeId: node.id,
                   resumeNodeId: nextNodeId,
                   waitingType: "user_input"
@@ -4061,6 +4069,7 @@ Deno.serve(async (req) => {
                 message_id: typedMessage?.id || null,
                 trigger_context: {
                   ...(triggerContext || {}),
+                  instanceId: activeInstanceId,
                   resumeNodeId: node.id,
                 },
                 nodes_data: sortedNodes,
@@ -4280,6 +4289,7 @@ Deno.serve(async (req) => {
               resume_at: null,
               trigger_context: {
                 ...triggerContext,
+                instanceId: activeInstanceId,
                 resumeNodeId: node.id,
               }
             }, {
@@ -4494,6 +4504,7 @@ Deno.serve(async (req) => {
               resume_at: null,
               trigger_context: {
                 ...triggerContext,
+                instanceId: activeInstanceId,
                 resumeNodeId: node.id,
               }
             }, {
@@ -4817,6 +4828,7 @@ Deno.serve(async (req) => {
                       message_id: typedMessage?.id || null,
                       trigger_context: {
                         ...(triggerContext || {}),
+                        instanceId: activeInstanceId,
                         resumeNodeId: node.id,
                       },
                       nodes_data: sortedNodes,
@@ -4875,6 +4887,7 @@ Deno.serve(async (req) => {
                     updated_at: new Date().toISOString(),
                     trigger_payload: {
                       ...(triggerContext || {}),
+                      instanceId: activeInstanceId,
                       waitingNodeId: node.id,
                       resumeNodeId: nextNodeId,
                       waitingType: "user_input"
@@ -4892,6 +4905,7 @@ Deno.serve(async (req) => {
                     current_node_id: nextNodeId,
                     trigger_context: {
                       ...(triggerContext || {}),
+                      instanceId: activeInstanceId,
                       waitingNodeId: node.id,
                       resumeNodeId: nextNodeId,
                       waitingType: "user_input"

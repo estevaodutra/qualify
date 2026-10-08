@@ -1,6 +1,24 @@
 import { supabase } from "@/integrations/supabase/client";
 
+const recentDispatches = new Map<string, number>();
+
 export async function dispatchWorkflowForDealMove(dealId: string, pipelineId: string, stageId: string) {
+  const debounceKey = `${dealId}_${pipelineId}_${stageId}`;
+  const now = Date.now();
+  const lastTime = recentDispatches.get(debounceKey);
+  if (lastTime && now - lastTime < 10000) {
+    console.log(`[WorkflowDispatcher] Debounced duplicate dispatch for key: ${debounceKey}`);
+    return;
+  }
+  recentDispatches.set(debounceKey, now);
+
+  // Clean old entries
+  if (recentDispatches.size > 200) {
+    for (const [k, t] of recentDispatches.entries()) {
+      if (now - t > 30000) recentDispatches.delete(k);
+    }
+  }
+
   try {
     const { data: dealData } = await supabase.from('deals').select('lead_id, pipeline_id, stage_id').eq('id', dealId).single();
     if (!dealData) return;
