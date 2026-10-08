@@ -2247,6 +2247,8 @@ export function UnifiedSequenceBuilder({
                                         ? (condDef?.label || (node.config.label as string) || "Condição")
                                         : isAction
                                         ? (actionDef?.label || (node.config.label as string) || "Ações")
+                                        : node.nodeType === "trigger_workflow"
+                                        ? ((node.config.targetWorkflowName as string) || "Ativar outro fluxo")
                                         : ((node.config.label as string) || nodeInfo.label)}
                                     </p>
                                     <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
@@ -2254,6 +2256,8 @@ export function UnifiedSequenceBuilder({
                                         ? (condDef ? "Leads" : "Condição")
                                         : isAction
                                         ? (actionDef?.category.toUpperCase() || "AÇÃO CRM")
+                                        : node.nodeType === "trigger_workflow"
+                                        ? "AUTOMAÇÃO"
                                         : nodeInfo.label}
                                     </p>
                                   </div>
@@ -2285,6 +2289,14 @@ export function UnifiedSequenceBuilder({
                                   return `[${label}] ${node.config.caption || node.config.url || "Sem mídia"}${scheduleLabel}`;
                                 }
                               })()
+                            ) : node.nodeType === "trigger_workflow" ? (
+                              node.config.targetWorkflowName ? (
+                                <span className="text-slate-700 font-medium">
+                                  Disparar: <strong>{String(node.config.targetWorkflowName)}</strong>
+                                </span>
+                              ) : (
+                                "Clique para selecionar o workflow..."
+                              )
                             ) : (
                               (() => {
                                 if (node.nodeType === "content" && Array.isArray(node.config.messages) && node.config.messages.length > 0) {

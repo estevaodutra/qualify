@@ -125,13 +125,31 @@ Deno.serve(async (req) => {
     console.log(`[TriggerSequence] Payload received:`, JSON.stringify(payload).substring(0, 500));
 
     // Fetch the sequence
-    const { data: sequence, error: sequenceError } = await supabase
+    let effectiveSequenceId = sequenceId;
+    let { data: sequence, error: sequenceError } = await supabase
       .from("message_sequences")
       .select("id, name, active, group_campaign_id, user_id, company_id, trigger_type, trigger_config")
-      .eq("id", sequenceId)
-      .single();
+      .eq("id", effectiveSequenceId)
+      .maybeSingle();
 
-    if (sequenceError || !sequence) {
+    if (!sequence) {
+      const { data: wfDef } = await supabase
+        .from("workflow_definitions")
+        .select("source_id")
+        .eq("id", sequenceId)
+        .maybeSingle();
+      if (wfDef?.source_id) {
+        effectiveSequenceId = wfDef.source_id;
+        const res = await supabase
+          .from("message_sequences")
+          .select("id, name, active, group_campaign_id, user_id, company_id, trigger_type, trigger_config")
+          .eq("id", effectiveSequenceId)
+          .maybeSingle();
+        sequence = res.data;
+      }
+    }
+
+    if (!sequence) {
       console.error("[TriggerSequence] Sequence not found:", sequenceError);
       return new Response(
         JSON.stringify({ error: "Sequence not found", sequenceId }),
@@ -220,40 +238,43 @@ Deno.serve(async (req) => {
 
     // ── Deduplication guard (best-effort) ───────────────────────────────────
     // Prevent the same sequence from firing multiple times within 15 seconds.
-    // Wrapped in try-catch so errors here never block the main execution.
-    try {
-      const dedupeWindow = new Date(Date.now() - 15000).toISOString();
-      const { data: recentExec } = await supabase
-        .from("sequence_executions")
-        .select("id, created_at")
-        .eq("sequence_id", typedSequence.id)
-        .gte("created_at", dedupeWindow)
-        .limit(1)
-        .maybeSingle();
+    // Chained workflow executions and explicit skipDedupe bypass this guard.
+    const isChainedTrigger = !!payload.skipDedupe || !!(payload.triggerContext as any)?.parentWorkflowId;
+    if (!isChainedTrigger) {
+      try {
+        const dedupeWindow = new Date(Date.now() - 15000).toISOString();
+        const { data: recentExec } = await supabase
+          .from("sequence_executions")
+          .select("id, created_at")
+          .eq("sequence_id", typedSequence.id)
+          .gte("created_at", dedupeWindow)
+          .limit(1)
+          .maybeSingle();
 
-      if (recentExec) {
-        console.log(`[TriggerSequence] Deduplicated — sequence ${sequenceId} already triggered at ${recentExec.created_at}`);
-        return new Response(
-          JSON.stringify({ success: true, deduplicated: true, message: "Sequence already triggered recently" }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        if (recentExec) {
+          console.log(`[TriggerSequence] Deduplicated — sequence ${sequenceId} already triggered at ${recentExec.created_at}`);
+          return new Response(
+            JSON.stringify({ success: true, deduplicated: true, message: "Sequence already triggered recently" }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Insert lock record so concurrent calls are blocked
+        await supabase.from("sequence_executions").insert({
+          sequence_id: typedSequence.id,
+          campaign_id: typedCampaign.id || typedSequence.id,
+          user_id: typedSequence.user_id,
+          status: "processing",
+          trigger_context: {},
+          destinations: [],
+          nodes_data: [],
+          nodes_processed: 0,
+          nodes_failed: 0,
+          current_node_index: 0,
+        });
+      } catch (dedupeErr) {
+        console.warn("[TriggerSequence] Deduplication check failed (non-fatal):", dedupeErr);
       }
-
-      // Insert lock record so concurrent calls are blocked
-      await supabase.from("sequence_executions").insert({
-        sequence_id: typedSequence.id,
-        campaign_id: typedCampaign.id || typedSequence.id,
-        user_id: typedSequence.user_id,
-        status: "processing",
-        trigger_context: {},
-        destinations: [],
-        nodes_data: [],
-        nodes_processed: 0,
-        nodes_failed: 0,
-        current_node_index: 0,
-      });
-    } catch (dedupeErr) {
-      console.warn("[TriggerSequence] Deduplication check failed (non-fatal):", dedupeErr);
     }
     // ── End deduplication guard ──────────────────────────────────────────────
 

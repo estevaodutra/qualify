@@ -2494,6 +2494,115 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // ============= TRIGGER WORKFLOW (Ativar outro fluxo) =============
+        if (node.node_type === "trigger_workflow") {
+          const nodeConfig = node.config || {};
+          let targetWorkflowId = (nodeConfig.targetWorkflowId as string) || (nodeConfig.workflowId as string) || (nodeConfig.sequenceId as string);
+          const targetWorkflowName = (nodeConfig.targetWorkflowName as string) || (nodeConfig.workflowName as string) || "Workflow de Destino";
+          const companyId = typedCampaign.company_id || triggerContext?.companyId;
+
+          console.log(`[ExecuteMessage] 🚀 Executando nó trigger_workflow: acionando "${targetWorkflowName}" (${targetWorkflowId})`);
+
+          if (!targetWorkflowId) {
+            console.warn(`[ExecuteMessage] ⚠️ Nó trigger_workflow ${node.id} sem targetWorkflowId configurado. Pulando para o próximo nó.`);
+            await logNodeExecution(supabase, {
+              executionId: workflowExecutionId, userId, nodeId: node.id, nodeType: node.node_type,
+              status: "skipped", startedAt: nodeStartedAt,
+              input: { targetWorkflowId, targetWorkflowName },
+              output: { message: "Nenhum workflow de destino configurado" },
+            });
+            const nextConn = connections.find(c => c.source_node_id === node.id);
+            currentNodeId = nextConn ? nextConn.target_node_id : null;
+            nodesProcessed++;
+            continue;
+          }
+
+          // Se targetWorkflowId for o ID da tabela workflow_definitions, resolver o source_id correspondente
+          try {
+            const { data: wfDef } = await supabase
+              .from("workflow_definitions")
+              .select("id, source_id, name, status")
+              .eq("id", targetWorkflowId)
+              .maybeSingle();
+
+            if (wfDef?.source_id) {
+              console.log(`[ExecuteMessage] 🔗 Resolvido workflow_definitions (${wfDef.name}) -> source_id: ${wfDef.source_id}`);
+              targetWorkflowId = wfDef.source_id;
+            }
+          } catch (wfErr) {
+            console.warn(`[ExecuteMessage] Aviso ao resolver workflow_definition:`, wfErr);
+          }
+
+          // Disparar o novo fluxo para cada destino ativo
+          const triggeredResults: Array<{ destPhone: string; success: boolean; data?: any; error?: string }> = [];
+
+          for (const dest of activeDestinations) {
+            const rawPhone = triggerContext?.respondentPhone || (dest.isPrivate ? dest.group_jid.split("@")[0] : "");
+            const phoneClean = rawPhone ? rawPhone.replace(/\D/g, "") : dest.group_jid.split("@")[0].replace(/\D/g, "");
+
+            try {
+              const triggerUrl = `${supabaseUrl}/functions/v1/trigger-sequence`;
+              const response = await fetch(triggerUrl, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${supabaseServiceKey}`,
+                },
+                body: JSON.stringify({
+                  sequenceId: targetWorkflowId,
+                  phone: phoneClean,
+                  group_jid: dest.isPrivate ? undefined : dest.group_jid,
+                  companyId: companyId,
+                  userId: userId || typedCampaign.user_id,
+                  skipDedupe: true,
+                  triggerContext: {
+                    ...triggerContext,
+                    parentWorkflowId: effectiveSequenceId,
+                    parentExecutionId: workflowExecutionId,
+                    parentNodeId: node.id,
+                    respondentPhone: phoneClean,
+                    respondentName: triggerContext?.respondentName || dest.group_name || phoneClean,
+                    instanceId: activeInstanceId || triggerContext?.instanceId,
+                  },
+                }),
+              });
+
+              const resultText = await response.text();
+              let resultJson: any = null;
+              try {
+                resultJson = JSON.parse(resultText);
+              } catch (_) {
+                resultJson = { raw: resultText };
+              }
+
+              if (response.ok) {
+                console.log(`[ExecuteMessage] ✅ Workflow ${targetWorkflowId} ativado com sucesso para ${phoneClean}`);
+                triggeredResults.push({ destPhone: phoneClean, success: true, data: resultJson });
+              } else {
+                console.error(`[ExecuteMessage] ❌ Falha ao acionar workflow ${targetWorkflowId} para ${phoneClean}:`, resultText);
+                triggeredResults.push({ destPhone: phoneClean, success: false, error: resultText });
+              }
+            } catch (callErr: any) {
+              console.error(`[ExecuteMessage] ❌ Erro ao chamar trigger-sequence:`, callErr);
+              triggeredResults.push({ destPhone: phoneClean, success: false, error: callErr?.message || "Network error" });
+            }
+          }
+
+          await logNodeExecution(supabase, {
+            executionId: workflowExecutionId, userId, nodeId: node.id, nodeType: node.node_type,
+            status: triggeredResults.some(r => r.success) ? "success" : "failed",
+            startedAt: nodeStartedAt,
+            input: { targetWorkflowId, targetWorkflowName },
+            output: { results: triggeredResults },
+          });
+
+          // Segue para a próxima conexão configurada
+          const nextConn = connections.find(c => c.source_node_id === node.id);
+          currentNodeId = nextConn ? nextConn.target_node_id : null;
+          nodesProcessed++;
+          continue;
+        }
+
         // ============= FIELD OPERATION NODES =============
         if (node.node_type === "field_op") {
           const nodeConfig = node.config || {};

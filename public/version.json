@@ -1,6 +1,6 @@
 {
-  "commit": "a7a4ef75d1a08bf39313b2f7504175f39601f882",
-  "shortCommit": "a7a4ef7",
-  "message": "fix(call-panel): persist workflow call history, inline action confirmation, and campaign status toggle",
-  "builtAt": "2026-10-08T04:35:48.505Z"
+  "commit": "8f750b0f5adad8842ec59cc11580384721755c69",
+  "shortCommit": "8f750b0",
+  "message": "feat(call-panel): display actual workflow name in queue, answered, and history tables",
+  "builtAt": "2026-10-08T04:39:22.410Z"
 }
