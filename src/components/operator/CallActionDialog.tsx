@@ -927,170 +927,160 @@ export function CallActionDialog({
   if (!open) return null;
 
   const innerContent = (
-    <div className="flex flex-col h-full w-full overflow-hidden bg-white dark:bg-slate-950">
-      {/* Compact Lead Header */}
-      <div className="relative bg-gradient-to-b from-indigo-50/70 via-slate-50/30 to-white dark:from-indigo-950/25 dark:via-slate-900/30 dark:to-slate-950 border-b border-slate-200/70 dark:border-slate-800 px-4 py-2.5 space-y-2 shrink-0">
+    <div className="flex flex-col w-full max-h-[90vh] overflow-hidden bg-white dark:bg-slate-950">
+      {/* Compact & Balanced Lead Header */}
+      <div className="relative bg-gradient-to-b from-slate-50/90 via-slate-50/40 to-white dark:from-slate-900/90 dark:via-slate-900/40 dark:to-slate-950 border-b border-slate-200/80 dark:border-slate-800 p-3.5 space-y-2.5 shrink-0">
         
-        {/* Row 1: Back/Forward + Avatar + Name + Timer + Window controls */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0 flex-1">
+        {/* Row 1: Lead info (Avatar + Name & Phone stacked) on left; Timer + Window controls on right */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
             {operatorId && (
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 w-6 p-0 text-slate-500 hover:text-foreground shrink-0"
+                className="h-7 w-7 p-0 text-slate-400 hover:text-foreground shrink-0 rounded-lg hover:bg-slate-200/50 dark:hover:bg-slate-800"
                 onClick={handleGoBack}
                 disabled={loadingPrevious}
                 title="Lead anterior"
               >
-                {loadingPrevious ? <Loader2 className="h-3 w-3 animate-spin" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+                {loadingPrevious ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ChevronLeft className="h-4 w-4" />}
               </Button>
             )}
 
-            <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-violet-100 to-indigo-100 dark:from-violet-950/60 dark:to-indigo-950/60 text-primary border border-primary/20 flex items-center justify-center text-xs font-bold shadow-2xs shrink-0">
+            <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-violet-600 to-indigo-600 text-white font-black text-sm flex items-center justify-center shadow-xs shrink-0">
               {(currentData.leadName || "L").charAt(0).toUpperCase()}
             </div>
 
-            {/* Lead Name */}
-            {isEditingName ? (
-              <Input
-                autoFocus
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") e.currentTarget.blur();
-                  if (e.key === "Escape") { setEditName(currentData.leadName); setIsEditingName(false); }
-                }}
-                onBlur={async () => {
-                  const trimmed = editName.trim();
-                  if (trimmed && trimmed !== currentData.leadName) {
-                    await (supabase as any).from("call_leads").update({ name: trimmed }).eq("id", currentData.leadId);
-                    setCurrentData(prev => ({ ...prev, leadName: trimmed }));
-                    toast({ title: "Nome atualizado" });
-                  } else {
-                    setEditName(currentData.leadName);
-                  }
-                  setIsEditingName(false);
-                }}
-                className="h-7 text-xs font-bold uppercase max-w-[200px] rounded-lg border-primary/40 px-2 py-0"
-              />
-            ) : (
-              <div className="flex items-center gap-1 min-w-0">
-                <h2 className="text-sm font-bold tracking-wide uppercase text-slate-900 dark:text-white truncate">
-                  {currentData.leadName || "Sem Nome"}
-                </h2>
-                <button
-                  type="button"
-                  onClick={() => { setEditName(currentData.leadName); setIsEditingName(true); }}
-                  className="text-slate-400 hover:text-primary transition-colors p-0.5 rounded shrink-0"
-                  title="Editar nome do lead"
-                >
-                  <Pencil className="h-3 w-3" />
-                </button>
+            {/* Name + Phone stacked */}
+            <div className="min-w-0 flex flex-col justify-center">
+              {isEditingName ? (
+                <Input
+                  autoFocus
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                    if (e.key === "Escape") { setEditName(currentData.leadName); setIsEditingName(false); }
+                  }}
+                  onBlur={async () => {
+                    const trimmed = editName.trim();
+                    if (trimmed && trimmed !== currentData.leadName) {
+                      await (supabase as any).from("call_leads").update({ name: trimmed }).eq("id", currentData.leadId);
+                      setCurrentData(prev => ({ ...prev, leadName: trimmed }));
+                      toast({ title: "Nome atualizado" });
+                    } else {
+                      setEditName(currentData.leadName);
+                    }
+                    setIsEditingName(false);
+                  }}
+                  className="h-6 text-xs font-bold uppercase max-w-[190px] rounded-md border-primary/40 px-2 py-0"
+                />
+              ) : (
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <h2 className="text-sm font-bold tracking-tight uppercase text-slate-900 dark:text-white truncate">
+                    {currentData.leadName || "Sem Nome"}
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => { setEditName(currentData.leadName); setIsEditingName(true); }}
+                    className="text-slate-400 hover:text-primary transition-colors p-0.5 rounded shrink-0"
+                    title="Editar nome do lead"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+
+              {/* Phone with copy */}
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono mt-0.5">
+                <Phone className="h-3 w-3 text-slate-400 shrink-0" />
+                <span className="font-semibold text-[11px] text-slate-700 dark:text-slate-300">
+                  {currentData.leadPhone ? formatPhone(currentData.leadPhone) : "Sem telefone"}
+                </span>
+                {currentData.leadPhone && (
+                  <button
+                    type="button"
+                    onClick={() => copyExternalId(currentData.leadPhone)}
+                    className="text-slate-400 hover:text-foreground transition-colors p-0.5"
+                    title="Copiar telefone"
+                  >
+                    {copied ? <Check className="h-2.5 w-2.5 text-emerald-500" /> : <Copy className="h-2.5 w-2.5" />}
+                  </button>
+                )}
               </div>
-            )}
+            </div>
 
             {forwardStack.length > 0 && (
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 w-6 p-0 text-slate-500 hover:text-foreground shrink-0"
+                className="h-7 w-7 p-0 text-slate-400 hover:text-foreground shrink-0 rounded-lg hover:bg-slate-200/50 dark:hover:bg-slate-800"
                 onClick={handleGoForward}
                 title="Avançar"
               >
-                <ChevronRight className="h-3.5 w-3.5" />
+                <ChevronRight className="h-4 w-4" />
               </Button>
             )}
           </div>
 
-          {/* Integrated Timer Pill */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 shadow-2xs shrink-0">
-            <Timer className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 animate-pulse" />
-            <span className="text-xs font-black font-mono tracking-tight">
-              {formatDuration(currentData.duration)}
-            </span>
-          </div>
+          {/* Right side: Timer Pill + Window control buttons */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 shadow-2xs shrink-0">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-xs font-black font-mono tracking-tight">
+                {formatDuration(currentData.duration)}
+              </span>
+            </div>
 
-          {/* Window control buttons */}
-          <div className="flex items-center gap-0.5 shrink-0 pl-1">
-            <button
-              type="button"
-              onClick={() => {
-                useCallFloatingStore.getState().minimizeCallDialog();
-                onOpenChange(false);
-              }}
-              className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
-              title="Minimizar para balão"
-            >
-              <Minus className="h-3 w-3" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsDocked((prev) => !prev)}
-              className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
-              title={isDocked ? "Expandir tela cheia" : "Fixar no canto (Dock)"}
-            >
-              {isDocked ? <Maximize2 className="h-3 w-3" /> : <Minimize2 className="h-3 w-3" />}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                onOpenChange(false);
-                resetState();
-                useCallFloatingStore.getState().closeCallDialog();
-              }}
-              className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-              title="Fechar"
-            >
-              <X className="h-3 w-3" />
-            </button>
+            <div className="flex items-center gap-0.5 pl-1.5 border-l border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  useCallFloatingStore.getState().minimizeCallDialog();
+                  onOpenChange(false);
+                }}
+                className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                title="Minimizar para balão"
+              >
+                <Minus className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsDocked((prev) => !prev)}
+                className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                title={isDocked ? "Expandir tela cheia" : "Fixar no canto (Dock)"}
+              >
+                {isDocked ? <Maximize2 className="h-3.5 w-3.5" /> : <Minimize2 className="h-3.5 w-3.5" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenChange(false);
+                  resetState();
+                  useCallFloatingStore.getState().closeCallDialog();
+                }}
+                className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                title="Fechar"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Row 2: Phone number + Badges + Dial action inline */}
-        <div className="flex items-center justify-between gap-2 flex-wrap text-xs pt-0.5">
-          {/* Phone pill */}
-          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80">
-            <Phone className="h-3 w-3 text-violet-600 dark:text-violet-400" />
-            <span className="font-semibold font-mono text-[11px] text-slate-800 dark:text-slate-200">
-              {currentData.leadPhone ? formatPhone(currentData.leadPhone) : "Sem telefone"}
-            </span>
-            {currentData.leadPhone && (
-              <button
-                type="button"
-                onClick={() => copyExternalId(currentData.leadPhone)}
-                className="text-slate-400 hover:text-foreground transition-colors p-0.5"
-                title="Copiar telefone"
-              >
-                {copied ? <Check className="h-2.5 w-2.5 text-emerald-500" /> : <Copy className="h-2.5 w-2.5" />}
-              </button>
-            )}
-            {isWorkflowCall && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-5 px-2 text-[10px] font-semibold gap-1 rounded-full text-emerald-600 border-emerald-500/40 bg-emerald-50/60 hover:bg-emerald-100 dark:bg-emerald-950/40"
-                onClick={handleManualDial}
-                disabled={isDialing}
-              >
-                {isDialing ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Phone className="h-2.5 w-2.5" />}
-                Ligar
-              </Button>
-            )}
-          </div>
-
-          {/* Badges inline */}
-          <div className="flex items-center gap-1 flex-wrap">
+        {/* Row 2: Badges + Dial action */}
+        <div className="flex items-center justify-between gap-2 flex-wrap pt-2 border-t border-slate-200/60 dark:border-slate-800/60 text-xs">
+          <div className="flex items-center gap-1.5 flex-wrap">
             {currentData.campaignName && (
-              <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-amber-500/5 text-amber-700 dark:text-amber-300 border-amber-300/60 rounded">
+              <Badge variant="outline" className="text-[10px] py-0.5 px-2 bg-amber-500/5 text-amber-700 dark:text-amber-300 border-amber-300/60 rounded-md font-medium">
                 📁 {currentData.campaignName}
               </Badge>
             )}
-            <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-blue-500/5 text-blue-700 dark:text-blue-300 border-blue-300/60 rounded">
+            <Badge variant="outline" className="text-[10px] py-0.5 px-2 bg-blue-500/5 text-blue-700 dark:text-blue-300 border-blue-300/60 rounded-md font-medium">
               🔄 x{currentData.attemptNumber}/{currentData.maxAttempts}
             </Badge>
             {currentData.isPriority && (
-              <Badge variant="secondary" className="text-[10px] py-0 px-1.5 bg-amber-500/15 text-amber-800 dark:text-amber-200 border-amber-400/50 rounded font-medium">
+              <Badge variant="secondary" className="text-[10px] py-0.5 px-2 bg-amber-500/15 text-amber-800 dark:text-amber-200 border-amber-400/50 rounded-md font-semibold">
                 ⭐ Prioridade
               </Badge>
             )}
@@ -1100,7 +1090,7 @@ export function CallActionDialog({
                 className: "bg-primary/10 text-primary border-primary/20",
               };
               return (
-                <Badge variant="outline" className={cn("text-[10px] py-0 px-1.5 rounded font-medium", style.className)}>
+                <Badge variant="outline" className={cn("text-[10px] py-0.5 px-2 rounded-md font-medium", style.className)}>
                   {style.label}
                 </Badge>
               );
@@ -1111,6 +1101,19 @@ export function CallActionDialog({
               </span>
             )}
           </div>
+
+          {isWorkflowCall && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 px-2.5 text-[11px] font-semibold gap-1.5 rounded-lg text-emerald-600 border-emerald-500/40 bg-emerald-50/60 hover:bg-emerald-100 dark:bg-emerald-950/40"
+              onClick={handleManualDial}
+              disabled={isDialing}
+            >
+              {isDialing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Phone className="h-3 w-3" />}
+              Discar Agora
+            </Button>
+          )}
         </div>
 
         {/* Audio recording player (if available) */}
@@ -1123,29 +1126,29 @@ export function CallActionDialog({
         )}
       </div>
 
-        {/* Tabs */}
-        <Tabs defaultValue="call" className="flex-1 flex flex-col min-h-0 bg-white dark:bg-slate-950">
-          <div className="px-4 py-1.5 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-900/20 shrink-0">
-            <TabsList className="grid grid-cols-2 w-full max-w-[280px] mx-auto h-7 p-0.5 bg-slate-200/60 dark:bg-slate-800/80 rounded-lg">
-              <TabsTrigger
-                value="call"
-                className="rounded-md py-0.5 text-[11px] font-bold gap-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
-              >
-                <Phone className="h-3 w-3" /> Ligação
-              </TabsTrigger>
-              <TabsTrigger
-                value="history"
-                className="rounded-md py-0.5 text-[11px] font-bold gap-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
-              >
-                <History className="h-3 w-3" /> Histórico ({history.length})
-              </TabsTrigger>
-            </TabsList>
-          </div>
+      {/* Tabs */}
+      <Tabs defaultValue="call" className="flex-1 flex flex-col min-h-0 bg-white dark:bg-slate-950">
+        <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-900/20 shrink-0">
+          <TabsList className="grid grid-cols-2 w-full h-8 p-1 bg-slate-200/60 dark:bg-slate-800/80 rounded-lg">
+            <TabsTrigger
+              value="call"
+              className="rounded-md py-1 text-xs font-semibold gap-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
+            >
+              <Phone className="h-3.5 w-3.5" /> Ligação
+            </TabsTrigger>
+            <TabsTrigger
+              value="history"
+              className="rounded-md py-1 text-xs font-semibold gap-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
+            >
+              <History className="h-3.5 w-3.5" /> Histórico ({history.length})
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-          {/* Call Tab */}
-          <TabsContent value="call" className="flex-1 min-h-0 mt-0 flex flex-col">
-            <ScrollArea className="flex-1 min-h-0 px-3.5 py-2">
-              <div className="space-y-2.5">
+        {/* Call Tab */}
+        <TabsContent value="call" className="flex-1 min-h-0 mt-0 flex flex-col">
+          <ScrollArea className="flex-1 min-h-0 px-3.5 py-2.5 max-h-[56vh]">
+            <div className="space-y-2.5">
                 
                 {/* ROTEIRO SECTION */}
                 <Collapsible defaultOpen={false}>
@@ -1479,7 +1482,7 @@ export function CallActionDialog({
                 )}
 
                 {/* OBSERVAÇÕES (OPCIONAL) */}
-                <div className="rounded-lg border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs p-2.5 space-y-1.5">
+                <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs p-3 space-y-1.5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
                       <PenLine className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
@@ -1496,7 +1499,7 @@ export function CallActionDialog({
                     maxLength={500}
                     onChange={(e) => setNotes(e.target.value)}
                     placeholder="Anotações sobre a ligação..."
-                    className="mt-0.5 rounded-lg border-slate-200 dark:border-slate-700 focus-visible:ring-primary/30 min-h-[44px] h-12 resize-none text-xs p-2"
+                    className="mt-0.5 rounded-lg border-slate-200 dark:border-slate-700 focus-visible:ring-primary/30 min-h-[58px] h-16 resize-none text-xs p-2.5 leading-relaxed"
                     rows={2}
                   />
                 </div>
@@ -1506,7 +1509,7 @@ export function CallActionDialog({
 
           {/* History Tab */}
           <TabsContent value="history" className="flex-1 min-h-0 mt-0 flex flex-col">
-            <ScrollArea className="flex-1 min-h-0 px-6 py-4">
+            <ScrollArea className="flex-1 min-h-0 px-5 py-3.5 max-h-[56vh]">
               <div className="space-y-4">
                 <div className="flex items-center justify-between pb-1">
                   <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
@@ -1651,7 +1654,7 @@ export function CallActionDialog({
       <div
         className={cn(
           "fixed bottom-3 right-3 sm:bottom-5 sm:right-5 z-[90]",
-          "w-[calc(100vw-24px)] sm:w-[500px] md:w-[520px] h-[640px] max-h-[92vh]",
+          "w-[calc(100vw-24px)] sm:w-[480px] md:w-[500px] max-h-[88vh]",
           "flex flex-col bg-white dark:bg-slate-950 rounded-2xl shadow-[0_12px_50px_-10px_rgba(0,0,0,0.35)] border border-slate-200/80 dark:border-slate-800 overflow-hidden",
           "animate-in slide-in-from-bottom-5 fade-in duration-200"
         )}
