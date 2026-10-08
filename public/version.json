@@ -1,6 +1,6 @@
 {
-  "commit": "da7f946dde11e95029815a288d3e5a6efcb5fb4c",
-  "shortCommit": "da7f946",
-  "message": "feat(workflows): suporte a criacao e organizacao de subpastas na biblioteca",
-  "builtAt": "2026-10-08T03:53:31.087Z"
+  "commit": "d71e33980a7b39807cd6853bf99e3fd41b4cfabb",
+  "shortCommit": "d71e339",
+  "message": "fix(workflows): isolamento estrito de contagem e fluxos por pasta e correcao da renomeacao de subpastas",
+  "builtAt": "2026-10-08T04:27:58.726Z"
 }

@@ -150,19 +150,31 @@ export function ConfigTab({ campaign, onUpdate }: ConfigTabProps) {
             </p>
           </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="status">Status</Label>
-            <Select value={status} onValueChange={(v) => setStatus(v as CallCampaign["status"])}>
-              <SelectTrigger id="status">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="draft">Rascunho</SelectItem>
-                <SelectItem value="active">Ativo</SelectItem>
-                <SelectItem value="paused">Pausado</SelectItem>
-                <SelectItem value="completed">Concluído</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="flex items-center justify-between rounded-lg border p-4 bg-muted/20">
+            <div className="space-y-0.5">
+              <Label htmlFor="status-switch" className="text-sm font-medium">Status da Campanha</Label>
+              <p className="text-xs text-muted-foreground">
+                {status === "active"
+                  ? "Ativado — A campanha está em funcionamento e pronta para ligações."
+                  : "Desativado (Rascunho) — A campanha está pausada e não executa novas chamadas."}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                id="status-switch"
+                checked={status === "active"}
+                onCheckedChange={(checked) => setStatus(checked ? "active" : "draft")}
+              />
+              <span
+                className={`text-xs font-semibold ${
+                  status === "active"
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-muted-foreground"
+                }`}
+              >
+                {status === "active" ? "Ativo" : "Rascunho"}
+              </span>
+            </div>
           </div>
         </CardContent>
       </Card>

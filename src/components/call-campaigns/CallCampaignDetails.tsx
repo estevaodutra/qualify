@@ -3,6 +3,8 @@ import { CallCampaign } from "@/hooks/useCallCampaigns";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Settings, FileText, Zap, UserCheck, History } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { ConfigTab } from "./tabs/ConfigTab";
 import { ScriptTab } from "./tabs/ScriptTab";
 import { ActionsTab } from "./tabs/ActionsTab";
@@ -25,15 +27,47 @@ export function CallCampaignDetails({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={onBack}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold">{campaign.name}</h1>
-          {campaign.description && (
-            <p className="text-muted-foreground">{campaign.description}</p>
-          )}
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={onBack}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold">{campaign.name}</h1>
+              {campaign.isPriority && (
+                <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 text-xs">
+                  PRIORIDADE
+                </Badge>
+              )}
+            </div>
+            {campaign.description && (
+              <p className="text-muted-foreground">{campaign.description}</p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2.5 border rounded-lg px-3 py-1.5 bg-background shadow-sm">
+          <Switch
+            id="detail-campaign-toggle"
+            checked={campaign.status === "active"}
+            onCheckedChange={async (checked) => {
+              await onUpdate({
+                id: campaign.id,
+                updates: { status: checked ? "active" : "draft" },
+              });
+            }}
+          />
+          <label
+            htmlFor="detail-campaign-toggle"
+            className={`text-xs font-semibold cursor-pointer select-none ${
+              campaign.status === "active"
+                ? "text-emerald-600 dark:text-emerald-400"
+                : "text-muted-foreground"
+            }`}
+          >
+            {campaign.status === "active" ? "Ativo" : "Rascunho"}
+          </label>
         </div>
       </div>
 

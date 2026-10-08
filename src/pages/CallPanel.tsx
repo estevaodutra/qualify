@@ -508,6 +508,53 @@ export default function CallPanel() {
         actionColor: db.call_script_actions?.color || null,
       }));
 
+      // Also include completed workflow_call_tasks for today
+      try {
+        let wfQuery = (supabase as any)
+          .from("workflow_call_tasks")
+          .select("*, leads(name, phone), call_operators(operator_name)")
+          .eq("status", "completed")
+          .gte("created_at", todayStr)
+          .order("completed_at", { ascending: false, nullsFirst: false })
+          .limit(500);
+
+        if (activeCompanyId) wfQuery = wfQuery.eq("company_id", activeCompanyId);
+
+        const { data: wfData } = await wfQuery;
+        if (wfData) {
+          const existingIds = new Set(results.map((r: any) => r.id));
+          const wfResults = wfData
+            .filter((db: any) => !existingIds.has(db.id) && !existingIds.has(`wt_${db.id}`))
+            .map((db: any) => ({
+              id: `wt_${db.id}`,
+              campaignId: db.queue_id || null,
+              campaignName: "Workflow / Fila",
+              leadId: db.lead_id,
+              leadName: db.leads?.name || "Sem nome",
+              leadPhone: db.phone || db.leads?.phone || null,
+              operatorId: db.assigned_operator_id,
+              operatorName: db.call_operators?.operator_name || null,
+              callStatus: "completed",
+              createdAt: db.created_at || new Date().toISOString(),
+              endedAt: db.completed_at || db.updated_at,
+              startedAt: db.created_at,
+              durationSeconds: db.duration_seconds || 0,
+              isPriority: true,
+              actionName: db.observation ? "Finalizada" : "Atendida",
+              actionColor: "#10b981",
+            }));
+          results = [...results, ...wfResults];
+        }
+      } catch (wfErr) {
+        console.warn("[answeredEntries] Error fetching workflow tasks:", wfErr);
+      }
+
+      results.sort((a: any, b: any) => {
+        const timeA = new Date(a.endedAt || a.createdAt).getTime();
+        const timeB = new Date(b.endedAt || b.createdAt).getTime();
+        return timeB - timeA;
+      });
+
       if (searchQuery) {
         const s = searchQuery.toLowerCase();
         const sDigits = s.replace(/\D/g, "");
@@ -760,6 +807,70 @@ export default function CallPanel() {
           durationSeconds: db.duration_seconds || (db.started_at && db.ended_at ? Math.round((new Date(db.ended_at).getTime() - new Date(db.started_at).getTime()) / 1000) : null),
           isPriority: db.call_campaigns?.is_priority ?? false,
         };
+      });
+
+      // Also include finished workflow_call_tasks
+      try {
+        let wfQuery = (supabase as any)
+          .from("workflow_call_tasks")
+          .select("*, leads(name, phone), call_operators(operator_name)")
+          .order("created_at", { ascending: false })
+          .limit(500);
+
+        if (historyStatusFilter !== "all") {
+          const mappedStatus = historyStatusFilter === "max_attempts_exceeded" ? "attempts_exhausted" : historyStatusFilter;
+          wfQuery = wfQuery.eq("status", mappedStatus);
+        } else {
+          wfQuery = wfQuery.in("status", ["completed", "cancelled", "failed", "attempts_exhausted", "timeout"]);
+        }
+
+        if (activeCompanyId) wfQuery = wfQuery.eq("company_id", activeCompanyId);
+        if (historyOperatorFilter !== "all") wfQuery = wfQuery.eq("assigned_operator_id", historyOperatorFilter);
+        if (dateFrom) {
+          const startDate = new Date(dateFrom);
+          startDate.setHours(0, 0, 0, 0);
+          wfQuery = wfQuery.gte("created_at", startDate.toISOString());
+        }
+        if (dateTo) {
+          const endDate = new Date(dateTo);
+          endDate.setHours(23, 59, 59, 999);
+          wfQuery = wfQuery.lte("created_at", endDate.toISOString());
+        }
+
+        const { data: wfData } = await wfQuery;
+        if (wfData) {
+          const existingIds = new Set(results.map((r: any) => r.id));
+          const wfResults = wfData
+            .filter((db: any) => !existingIds.has(db.id) && !existingIds.has(`wt_${db.id}`))
+            .map((db: any) => {
+              const callStatus = db.status === "attempts_exhausted" ? "max_attempts_exceeded" : db.status;
+              return {
+                id: `wt_${db.id}`,
+                campaignId: db.queue_id || null,
+                campaignName: "Workflow / Fila",
+                leadId: db.lead_id,
+                leadName: db.leads?.name || "Sem nome",
+                leadPhone: db.phone || db.leads?.phone || null,
+                operatorId: db.assigned_operator_id,
+                operatorName: db.call_operators?.operator_name || null,
+                callStatus: callStatus || "unknown",
+                createdAt: db.created_at || new Date().toISOString(),
+                endedAt: db.completed_at || db.updated_at,
+                startedAt: db.created_at,
+                durationSeconds: db.duration_seconds || 0,
+                isPriority: true,
+              };
+            });
+          results = [...results, ...wfResults];
+        }
+      } catch (wfErr) {
+        console.warn("[historyEntries] Error fetching workflow tasks:", wfErr);
+      }
+
+      results.sort((a: any, b: any) => {
+        const timeA = new Date(a.endedAt || a.createdAt).getTime();
+        const timeB = new Date(b.endedAt || b.createdAt).getTime();
+        return timeB - timeA;
       });
 
       if (searchQuery) {

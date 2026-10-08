@@ -1381,11 +1381,14 @@ Deno.serve(async (req) => {
       .in("campaign_id", [effectiveCampaignId, sequenceId, body.sequenceId].filter(Boolean) as string[]);
 
     const hasPrivateDestinations = sendToPrivate || 
+                                   isResumedExecution ||
+                                   !!(triggerContext?.callResult) ||
                                    (targetPhones && targetPhones.length > 0) || 
                                    isManualNodeExecution || 
                                    !!(triggerContext?.groupJid) || 
                                    !!(triggerContext?.triggerId) ||
                                    !!(triggerContext?.respondentPhone) ||
+                                   !!(triggerContext?.contactPhone) ||
                                    !!(triggerContext?.uraResult);
 
     if (!hasPrivateDestinations && (groupsError || !linkedGroups || linkedGroups.length === 0)) {
@@ -4222,8 +4225,15 @@ Deno.serve(async (req) => {
               output: { status: "completed", callResult },
             });
 
-            // Find the connection matching the callResult
-            const nextConn = connections.find(c => c.source_node_id === node.id && c.condition_path === callResult);
+            // Find the connection matching the callResult or action ID/output
+            const nextConn = connections.find(c => 
+              (c.source_node_id === node.id || c.source_node_id === currentNodeId) && 
+              (c.condition_path === callResult || 
+               c.condition_path === triggerContext?.actionId || 
+               c.condition_path === triggerContext?.actionOutput ||
+               (callResult === "success" && (c.condition_path === "success" || c.condition_path === "completed")) ||
+               (callResult === "no_success" && (c.condition_path === "no_success" || c.condition_path === "failed")))
+            );
             currentNodeId = nextConn ? nextConn.target_node_id : null;
             nodesProcessed++;
             continue;

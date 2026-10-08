@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -238,10 +239,29 @@ export function CallCampaignList({
               </CardHeader>
               <CardContent>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Badge className={statusColors[campaign.status]}>
-                      {statusLabels[campaign.status]}
-                    </Badge>
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className="flex items-center gap-2"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Switch
+                        id={`campaign-toggle-${campaign.id}`}
+                        checked={campaign.status === "active"}
+                        onCheckedChange={async (checked) => {
+                          await onStatusChange(campaign.id, checked ? "active" : "draft");
+                        }}
+                      />
+                      <label
+                        htmlFor={`campaign-toggle-${campaign.id}`}
+                        className={`text-xs font-semibold cursor-pointer select-none ${
+                          campaign.status === "active"
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        {campaign.status === "active" ? "Ativo" : "Rascunho"}
+                      </label>
+                    </div>
                     {campaign.isPriority && (
                       <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 text-xs">
                         PRIORIDADE

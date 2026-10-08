@@ -12,12 +12,13 @@ import { useCallActions } from "@/hooks/useCallActions";
 import { InlineScriptRunner } from "@/components/call-campaigns/operator/InlineScriptRunner";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Calendar, Phone, PhoneMissed, ChevronDown, Clock, Copy, Check, History, ChevronLeft, ChevronRight, Pencil } from "lucide-react";
+import { Loader2, Calendar, Phone, PhoneMissed, ChevronDown, Clock, Copy, Check, History, ChevronLeft, ChevronRight, Pencil, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { addHours, format, setHours, setMinutes, addDays } from "date-fns";
 import { InlineReschedule } from "./InlineReschedule";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface CallDialogData {
   callId: string;
@@ -102,6 +103,7 @@ export function CallActionDialog({
 }: CallActionDialogProps) {
   const { user } = useAuth();
   const { activeCompanyId } = useCompany();
+  const queryClient = useQueryClient();
   // --- Navigation state ---
   const cleanCallId = callId?.startsWith("cl_") ? callId.replace("cl_", "") : callId;
 
@@ -146,6 +148,9 @@ export function CallActionDialog({
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState(currentData.leadName);
   const [selectedActionId, setSelectedActionId] = useState<string | null>(null);
+  const [confirmingActionId, setConfirmingActionId] = useState<string | null>(null);
+  const [executingActionId, setExecutingActionId] = useState<string | null>(null);
+  const [executedActionIds, setExecutedActionIds] = useState<string[]>([]);
   const [notes, setNotes] = useState(currentData.notes);
   const [customMessage, setCustomMessage] = useState("");
   const [scheduledDate, setScheduledDate] = useState("");
@@ -236,6 +241,9 @@ export function CallActionDialog({
   // Reset per-view state when currentData changes
   useEffect(() => {
     setSelectedActionId(null);
+    setConfirmingActionId(null);
+    setExecutingActionId(null);
+    setExecutedActionIds([]);
     setNotes(currentData.notes);
     setCustomMessage("");
     setEditName(currentData.leadName);
@@ -435,6 +443,123 @@ export function CallActionDialog({
     }
   };
 
+  const handleExecuteActionNow = async (action: any) => {
+    setExecutingActionId(action.id);
+    setSelectedActionId(action.id);
+    try {
+      if (isWorkflowCall && realTaskId) {
+        const { data: taskData, error: taskErr } = await (supabase as any)
+          .from("workflow_call_tasks")
+          .select("*")
+          .eq("id", realTaskId)
+          .single();
+
+        if (taskErr || !taskData) {
+          throw new Error(taskErr?.message || "Tarefa de ligação não encontrada");
+        }
+
+        let triggerPayload: any = {};
+        let effectiveCampaignId = taskData.workflow_id;
+
+        if (taskData.workflow_execution_id) {
+          const { data: wfExec } = await (supabase as any)
+            .from("workflow_executions")
+            .select("campaign_id, trigger_payload")
+            .eq("id", taskData.workflow_execution_id)
+            .maybeSingle();
+
+          if (wfExec) {
+            triggerPayload = wfExec.trigger_payload || {};
+            if (wfExec.campaign_id) {
+              effectiveCampaignId = wfExec.campaign_id;
+            }
+          }
+        }
+
+        // Find active node in sequence_nodes in case workflow was re-saved
+        let effectiveNodeId = taskData.node_id;
+        const { data: activeNodes } = await (supabase as any)
+          .from("sequence_nodes")
+          .select("id, node_type")
+          .eq("sequence_id", taskData.workflow_id);
+
+        if (activeNodes && activeNodes.length > 0) {
+          const exists = activeNodes.some((n: any) => n.id === effectiveNodeId);
+          if (!exists) {
+            const phoneNode = activeNodes.find((n: any) => n.node_type === "phone_call");
+            if (phoneNode) effectiveNodeId = phoneNode.id;
+          }
+        }
+
+        const respondentPhone = taskData.phone || currentData.leadPhone || triggerPayload.respondentPhone || "";
+        const respondentJid = respondentPhone ? `${respondentPhone}@s.whatsapp.net` : triggerPayload.respondentJid;
+
+        const mergedContext = {
+          ...triggerPayload,
+          callResult: action.id || action.output,
+          actionId: action.id,
+          actionOutput: action.output,
+          leadId: taskData.lead_id || currentData.leadId,
+          companyId: taskData.company_id || activeCompanyId,
+          respondentPhone,
+          respondentJid,
+          sendPrivate: true,
+        };
+
+        const executePayload = {
+          campaignId: effectiveCampaignId,
+          sequenceId: taskData.workflow_id,
+          executionId: taskData.workflow_execution_id,
+          startFromNodeId: effectiveNodeId,
+          triggerContext: mergedContext,
+        };
+
+        const { data: execRes, error: execErr } = await supabase.functions.invoke("execute-message", {
+          body: executePayload,
+        });
+
+        if (execErr) {
+          throw new Error(execErr.message || "Falha ao disparar workflow");
+        }
+
+        // Keep task marked in_progress with observation
+        await (supabase as any)
+          .from("workflow_call_tasks")
+          .update({
+            observation: notes || taskData.observation,
+            assigned_operator_id: operatorId || taskData.assigned_operator_id,
+            status: "in_progress",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", realTaskId);
+
+        setExecutedActionIds(prev => [...prev, action.id]);
+        setConfirmingActionId(null);
+        toast({
+          title: "✅ Mensagem enviada!",
+          description: `Ação "${action.name}" disparada no workflow. A ligação continua ativa.`,
+        });
+      } else {
+        await executeAutomation(action.id);
+        setExecutedActionIds(prev => [...prev, action.id]);
+        setConfirmingActionId(null);
+        toast({
+          title: "✅ Ação disparada!",
+          description: `Ação "${action.name}" executada com sucesso. A ligação continua ativa.`,
+        });
+      }
+    } catch (err: any) {
+      console.error("[CallActionDialog] Error executing action now:", err);
+      toast({
+        title: "Erro ao disparar ação",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setExecutingActionId(null);
+    }
+  };
+
   const handleSave = async () => {
     if (!selectedActionId) {
       toast({ title: "Selecione uma ação", variant: "destructive" });
@@ -443,19 +568,55 @@ export function CallActionDialog({
 
     setIsSaving(true);
     try {
-      if (isWorkflowCall) {
-        const { data, error } = await supabase.functions.invoke("resolve-call-task", {
-          body: {
-            taskId: realTaskId,
-            actionId: selectedActionId,
-            notes: notes || null,
-            operatorId: operatorId || null,
-          },
-        });
+      if (isWorkflowCall && realTaskId) {
+        // If not already executed during the call, execute it now
+        if (!executedActionIds.includes(selectedActionId)) {
+          const act = displayActions.find(a => a.id === selectedActionId);
+          if (act) {
+            await handleExecuteActionNow(act);
+          }
+        }
 
-        if (error) throw error;
+        const now = new Date().toISOString();
 
-        toast({ title: "Ligação finalizada", description: "O resultado da ligação foi salvo e o workflow retomado." });
+        // Finalize the task in workflow_call_tasks
+        await (supabase as any)
+          .from("workflow_call_tasks")
+          .update({
+            status: "completed",
+            observation: notes || null,
+            completed_at: now,
+          })
+          .eq("id", realTaskId);
+
+        // Also record in call_logs so it appears in standard call history and logs
+        const effectiveUserId = user?.id || currentData.userId || "95b89774-fba0-485b-b539-14cb2901befe";
+        try {
+          await (supabase as any)
+            .from("call_logs")
+            .insert({
+              user_id: effectiveUserId,
+              company_id: activeCompanyId || undefined,
+              call_status: "completed",
+              notes: notes || null,
+              operator_id: operatorId || undefined,
+              duration_seconds: currentData.duration || 0,
+              started_at: currentData.duration ? new Date(Date.now() - currentData.duration * 1000).toISOString() : now,
+              ended_at: now,
+              attempt_number: currentData.attemptNumber || 1,
+            });
+        } catch (logErr) {
+          console.warn("[CallActionDialog] Warning inserting call_log:", logErr);
+        }
+
+        // Invalidate queries so history and queue refresh immediately
+        queryClient.invalidateQueries({ queryKey: ["call_panel_history"] });
+        queryClient.invalidateQueries({ queryKey: ["call_panel_answered_today"] });
+        queryClient.invalidateQueries({ queryKey: ["workflow_call_tasks_queue"] });
+        queryClient.invalidateQueries({ queryKey: ["call_logs_queue"] });
+        queryClient.invalidateQueries({ queryKey: ["call_queue"] });
+
+        toast({ title: "Ligação finalizada", description: "O resultado da ligação foi salvo e concluído com sucesso." });
         onOpenChange(false);
         return;
       }
@@ -511,6 +672,10 @@ export function CallActionDialog({
 
       // Refresh history after save
       setHistoryVersion(v => v + 1);
+      queryClient.invalidateQueries({ queryKey: ["call_panel_history"] });
+      queryClient.invalidateQueries({ queryKey: ["call_panel_answered_today"] });
+      queryClient.invalidateQueries({ queryKey: ["call_logs_queue"] });
+      queryClient.invalidateQueries({ queryKey: ["call_queue"] });
 
       toast({ title: "Ação registrada", description: "Resultado salvo. A ligação será encerrada pelo callback." });
       onOpenChange(false);
@@ -925,26 +1090,86 @@ export function CallActionDialog({
                           </div>
                         )}
                         <div className="grid grid-cols-2 gap-2">
-                          {displayActions.map((action) => (
-                            <button
-                              key={action.id}
-                              onClick={() => setSelectedActionId(action.id)}
-                              className={cn(
-                                "rounded-lg border p-3 text-left transition-all",
-                                selectedActionId === action.id
-                                  ? "border-primary bg-primary/5 ring-2 ring-primary"
-                                  : "border-border hover:border-primary/50"
-                              )}
-                            >
-                              <div className="flex items-center gap-2">
-                                <div
-                                  className="h-3 w-3 rounded-full shrink-0"
-                                  style={{ backgroundColor: action.color }}
-                                />
-                                <span className="font-medium text-sm">{action.name}</span>
+                          {displayActions.map((action) => {
+                            const isConfirming = confirmingActionId === action.id;
+                            const isExecuting = executingActionId === action.id;
+                            const isExecuted = executedActionIds.includes(action.id);
+                            const isSelected = selectedActionId === action.id;
+
+                            return (
+                              <div
+                                key={action.id}
+                                className={cn(
+                                  "relative flex items-center justify-between p-3 rounded-lg border text-left transition-all",
+                                  isExecuted
+                                    ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-950 dark:text-emerald-200"
+                                    : isConfirming
+                                    ? "border-primary ring-2 ring-primary/30 bg-primary/5 shadow-sm"
+                                    : isSelected
+                                    ? "border-primary bg-primary/10 shadow-sm"
+                                    : "border-border hover:border-primary/50 hover:bg-muted/40"
+                                )}
+                              >
+                                <button
+                                  type="button"
+                                  disabled={isExecuting}
+                                  onClick={() => {
+                                    if (isExecuted) return;
+                                    setSelectedActionId(action.id);
+                                    setConfirmingActionId(isConfirming ? null : action.id);
+                                  }}
+                                  className="flex items-center gap-2 flex-1 min-w-0 text-left focus:outline-none"
+                                >
+                                  <div
+                                    className="h-3 w-3 rounded-full shrink-0"
+                                    style={{ backgroundColor: action.color }}
+                                  />
+                                  <span className="font-medium text-sm truncate">{action.name}</span>
+                                </button>
+
+                                {/* Action controls: Certinho (✓) and Xizinho (✗) confirmation */}
+                                <div className="flex items-center gap-1 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
+                                  {isExecuting ? (
+                                    <div className="flex items-center gap-1 text-xs text-primary font-medium">
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                      <span className="hidden sm:inline">Enviando...</span>
+                                    </div>
+                                  ) : isExecuted ? (
+                                    <Badge variant="outline" className="text-[11px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300 gap-1 py-0.5">
+                                      <Check className="h-3 w-3" /> Enviado
+                                    </Badge>
+                                  ) : isConfirming ? (
+                                    <div className="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-150">
+                                      <span className="text-[10px] text-muted-foreground mr-0.5 hidden sm:inline">Enviar?</span>
+                                      <Button
+                                        type="button"
+                                        size="icon"
+                                        title="Confirmar e enviar agora"
+                                        onClick={() => handleExecuteActionNow(action)}
+                                        className="h-7 w-7 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md shadow-sm"
+                                      >
+                                        <Check className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="ghost"
+                                        title="Cancelar"
+                                        onClick={() => setConfirmingActionId(null)}
+                                        className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md"
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground opacity-60">
+                                      {action.icon}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                            </button>
-                          ))}
+                            );
+                          })}
                         </div>
                         {actions.length > 0 && (
                           <p className="text-xs text-muted-foreground mt-1">
