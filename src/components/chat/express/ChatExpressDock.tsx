@@ -1,20 +1,30 @@
 import { useChatExpressStore } from "@/stores/chatExpress.store";
+import { useCallFloatingStore } from "@/stores/callFloating.store";
 import { ChatExpressSidebar } from "./ChatExpressSidebar";
 import { ChatExpressSessionView } from "./ChatExpressSessionView";
 import { MessageSquare, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export function ChatExpressDock() {
   const { isOpen, isMinimized, sessions, activeLeadId, restoreDock, closeAllSessions } = useChatExpressStore();
+  const isCallCardOpen = useCallFloatingStore((s) => s.isOpen && !!s.activeCall);
 
   if (!isOpen) return null;
 
   if (isMinimized) {
     return (
-      <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-5 fade-in duration-300">
+      <div
+        className={cn(
+          "fixed z-50 transition-all duration-300 ease-out",
+          isCallCardOpen
+            ? "bottom-4 md:bottom-5 right-4 md:right-[515px]"
+            : "bottom-4 md:bottom-5 right-4 md:right-[220px]"
+        )}
+      >
         <Button
           onClick={restoreDock}
-          className="h-14 bg-primary text-primary-foreground shadow-2xl rounded-full px-6 flex items-center gap-3 hover:bg-primary/90 transition-all hover:scale-105"
+          className="h-13 md:h-14 bg-primary text-primary-foreground shadow-2xl rounded-full px-5 md:px-6 flex items-center gap-3 hover:bg-primary/90 transition-all hover:scale-105 active:scale-95"
         >
           <div className="relative">
             <MessageSquare className="w-5 h-5" />
@@ -24,7 +34,7 @@ export function ChatExpressDock() {
               </span>
             )}
           </div>
-          <span className="font-semibold text-sm">Chats Abertos</span>
+          <span className="font-semibold text-xs md:text-sm">Chats Abertos</span>
         </Button>
       </div>
     );
@@ -33,8 +43,12 @@ export function ChatExpressDock() {
   const activeSession = sessions.find((s) => s.leadId === activeLeadId);
 
   return (
-    <div className="fixed bottom-0 right-0 md:bottom-6 md:right-6 z-[100] flex flex-col md:flex-row w-full h-[100dvh] md:w-[480px] md:h-[650px] max-h-[100dvh] bg-background/80 backdrop-blur-2xl md:rounded-2xl shadow-[0_8px_40px_-12px_rgba(0,0,0,0.3)] border border-border/40 overflow-hidden animate-in slide-in-from-bottom-10 fade-in duration-300">
-      
+    <div
+      className={cn(
+        "fixed bottom-0 right-0 z-[100] flex flex-col md:flex-row w-full h-[100dvh] md:w-[480px] md:h-[650px] max-h-[100dvh] bg-background/80 backdrop-blur-2xl md:rounded-2xl shadow-[0_8px_40px_-12px_rgba(0,0,0,0.3)] border border-border/40 overflow-hidden animate-in slide-in-from-bottom-10 fade-in duration-300 transition-all ease-out",
+        isCallCardOpen ? "md:bottom-5 md:right-[525px]" : "md:bottom-6 md:right-6"
+      )}
+    >
       {/* Mobile Header (Only visible on small screens to close) */}
       <div className="md:hidden h-12 border-b border-border bg-card flex items-center justify-between px-4 shrink-0">
         <span className="font-semibold text-sm flex items-center gap-2">

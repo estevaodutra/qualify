@@ -907,8 +907,8 @@ export function CallActionDialog({
   // Trigger autoDial on mount if requested
   useEffect(() => {
     if (open && autoDial && !autoDialTriggeredRef.current) {
-      const isPending = !currentData.callStatus || ["queued", "waiting", "ready"].includes(currentData.callStatus);
-      if (isPending) {
+      const alreadyConnected = ["on_call", "in_call", "answered", "completed", "ended"].includes(currentData.callStatus || "");
+      if (!alreadyConnected) {
         autoDialTriggeredRef.current = true;
         handleManualDial();
       }

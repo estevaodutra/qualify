@@ -12,6 +12,7 @@ import { useCallCampaigns } from "@/hooks/useCallCampaigns";
 import { useCallActions, CallAction } from "@/hooks/useCallActions";
 import { useCallQueue, QueueItem } from "@/hooks/useCallQueue";
 import { useCallOperators } from "@/hooks/useCallOperators";
+import { useCallFloatingStore } from "@/stores/callFloating.store";
 import { OperatorsPanel } from "@/components/call-panel/OperatorsPanel";
 import { CallPopup } from "@/components/operator/CallPopup";
 import { CallPanelSidebar, CallPanelSection } from "@/components/call-panel/CallPanelSidebar";
@@ -1252,6 +1253,24 @@ export default function CallPanel() {
       
       // Define a view para abrir o popup e inicia o disparo
       setViewingQueueLead({ ...nextLead, autoDial: true });
+      const targetCallId = nextLead.source === "workflow_call_task" ? `wt_${nextLead.realId || nextLead.id}` : (nextLead.realId || nextLead.id);
+      useCallFloatingStore.getState().openCall({
+        callId: targetCallId,
+        campaignId: nextLead.campaignId || "",
+        leadId: nextLead.leadId || "",
+        leadName: nextLead.leadName || "Lead",
+        leadPhone: nextLead.phone || "",
+        campaignName: nextLead.campaignName || "Fila",
+        duration: 0,
+        notes: nextLead.observations || "",
+        attemptNumber: nextLead.attemptNumber || 1,
+        maxAttempts: nextLead.maxAttempts || 3,
+        isPriority: nextLead.isPriority || false,
+        callStatus: "dialing",
+        userId: nextLead.userId,
+        autoDial: true,
+      });
+
       if (nextLead.source === "workflow_call_task") {
         handleWorkflowDial(nextLead).finally(() => {
           setTimeout(() => {
@@ -2347,7 +2366,7 @@ export default function CallPanel() {
       />
 
       {/* Lead Details Dialog - Full CallActionDialog */}
-      {viewingQueueLead && (
+      {viewingQueueLead && !useCallFloatingStore.getState().isOpen && (
         <CallActionDialog
           open={!!viewingQueueLead}
           onOpenChange={(open) => !open && setViewingQueueLead(null)}

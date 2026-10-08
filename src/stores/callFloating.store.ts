@@ -26,6 +26,7 @@ export interface CallDialogData {
   audioUrl?: string | null;
   userId?: string;
   operatorId?: string;
+  autoDial?: boolean;
 }
 
 interface CallFloatingState {
@@ -74,6 +75,7 @@ export const useCallFloatingStore = create<CallFloatingState>((set) => ({
         audioUrl: data?.audioUrl ?? state.activeCall?.audioUrl ?? null,
         userId: data?.userId ?? state.activeCall?.userId,
         operatorId: data?.operatorId ?? state.activeCall?.operatorId,
+        autoDial: data?.autoDial ?? state.activeCall?.autoDial,
       };
 
       return {

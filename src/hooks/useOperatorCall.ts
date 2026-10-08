@@ -179,14 +179,8 @@ export function useOperatorCall() {
         return;
       }
 
-      // If user has multiple operators, they are an admin — don't show popup
-      if (data.length > 1) {
-        setOperator(null);
-        setIsLoading(false);
-        return;
-      }
-
-      const opData = data[0];
+      // If user has multiple operators, pick the available or first one
+      const opData = data.find((o: any) => o.status === "available" || o.status === "on_call") || data[0];
 
       // Auto-set available if offline and active
       if (opData.status === "offline" && opData.is_active) {

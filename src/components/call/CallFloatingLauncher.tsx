@@ -1,7 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { useCallFloatingStore, CallDialogData } from "@/stores/callFloating.store";
 import { useChatExpressStore } from "@/stores/chatExpress.store";
 import { useOperatorCall, PopupCallStatus } from "@/hooks/useOperatorCall";
+import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
+import { supabase } from "@/integrations/supabase/client";
 import { CallActionDialog } from "@/components/operator/CallActionDialog";
 import { Button } from "@/components/ui/button";
 import { Phone, PhoneCall, PhoneOff, Loader2, Timer, CheckCircle2 } from "lucide-react";
@@ -14,6 +17,9 @@ const formatDuration = (s: number) => {
 };
 
 export function CallFloatingLauncher() {
+  const { user } = useAuth();
+  const { activeCompanyId } = useCompany();
+
   const {
     isOpen,
     isMinimized,
@@ -27,6 +33,7 @@ export function CallFloatingLauncher() {
     setDuration,
   } = useCallFloatingStore();
 
+  const isChatDockOpen = useChatExpressStore((s) => s.isOpen && !s.isMinimized);
   const isChatMinimized = useChatExpressStore((s) => s.isOpen && s.isMinimized);
 
   const {
@@ -39,6 +46,7 @@ export function CallFloatingLauncher() {
 
   const prevCallIdRef = useRef<string | null>(null);
   const userClosedCallIdRef = useRef<string | null>(null);
+  const autoDialingTaskIdRef = useRef<string | null>(null);
 
   // Sync operator call data to global floating store
   useEffect(() => {
@@ -82,6 +90,129 @@ export function CallFloatingLauncher() {
       }
     }
   }, [currentCall, opStatus, opDuration, operator?.id, setActiveCall, setCallStatus, setDuration, openCall, duration, activeCall?.callId]);
+
+  // Auto-check and auto-dial first queue item when a dispatch occurs
+  const checkAndAutoDialFirstQueueItem = useCallback(async () => {
+    if (!user) return;
+    const store = useCallFloatingStore.getState();
+    if (store.isOpen && store.activeCall) return;
+    const effStatus = (store.activeCall?.callStatus as PopupCallStatus) || store.callStatus || "idle";
+    if (["dialing", "ringing", "on_call", "in_call", "answered"].includes(effStatus)) return;
+
+    // 1. Check workflow_call_tasks (queued or assigned)
+    let wfQuery = (supabase as any)
+      .from("workflow_call_tasks")
+      .select("*, leads(name, phone)")
+      .in("status", ["queued", "assigned"])
+      .order("created_at", { ascending: true })
+      .limit(1);
+
+    if (activeCompanyId) {
+      wfQuery = wfQuery.eq("company_id", activeCompanyId);
+    }
+
+    const { data: wfTasks } = await wfQuery;
+
+    if (wfTasks && wfTasks.length > 0) {
+      const task = wfTasks[0];
+      if (autoDialingTaskIdRef.current === task.id) return;
+      autoDialingTaskIdRef.current = task.id;
+
+      const mappedData: CallDialogData = {
+        callId: `wt_${task.id}`,
+        campaignId: task.workflow_id || task.queue_id || "",
+        leadId: task.lead_id || "",
+        leadName: task.leads?.name || task.lead_name || "Lead",
+        leadPhone: task.phone || task.leads?.phone || "",
+        campaignName: "Workflow",
+        duration: 0,
+        notes: task.observation || "",
+        attemptNumber: (task.attempt_count || 0) + 1,
+        maxAttempts: task.max_attempts || 3,
+        isPriority: true,
+        callStatus: "dialing",
+        externalCallId: task.external_call_id,
+        userId: task.user_id,
+        operatorId: operator?.id,
+        autoDial: true,
+      };
+
+      store.openCall(mappedData);
+      return;
+    }
+
+    // 2. Check call_queue (waiting leads)
+    let qQuery = (supabase as any)
+      .from("call_queue")
+      .select("*, call_campaigns(name, is_priority)")
+      .eq("status", "waiting")
+      .order("is_priority", { ascending: false })
+      .order("position", { ascending: true })
+      .limit(1);
+
+    if (activeCompanyId) {
+      qQuery = qQuery.eq("company_id", activeCompanyId);
+    }
+
+    const { data: queueItems } = await qQuery;
+
+    if (queueItems && queueItems.length > 0) {
+      const qItem = queueItems[0];
+      if (autoDialingTaskIdRef.current === qItem.id) return;
+      autoDialingTaskIdRef.current = qItem.id;
+
+      const mappedData: CallDialogData = {
+        callId: qItem.id,
+        campaignId: qItem.campaign_id || "",
+        leadId: qItem.lead_id || "",
+        leadName: qItem.lead_name || "Lead",
+        leadPhone: qItem.phone || "",
+        campaignName: qItem.call_campaigns?.name || "Fila",
+        duration: 0,
+        notes: qItem.observations || "",
+        attemptNumber: qItem.attempt_number || 1,
+        maxAttempts: qItem.max_attempts || 3,
+        isPriority: qItem.call_campaigns?.is_priority || false,
+        callStatus: "dialing",
+        userId: qItem.user_id,
+        operatorId: operator?.id,
+        autoDial: true,
+      };
+
+      store.openCall(mappedData);
+    }
+  }, [user, activeCompanyId, operator?.id]);
+
+  // Realtime subscription for dispatched calls in queue
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel("global-call-dispatch-listener")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "workflow_call_tasks" },
+        (payload: any) => {
+          if (payload.eventType === "INSERT" || (payload.new && ["queued", "assigned"].includes(payload.new.status))) {
+            checkAndAutoDialFirstQueueItem();
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "call_queue" },
+        (payload: any) => {
+          if (payload.eventType === "INSERT" || (payload.new && payload.new.status === "waiting")) {
+            checkAndAutoDialFirstQueueItem();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, checkAndAutoDialFirstQueueItem]);
 
   // Handle click on floating launcher
   const handleLauncherClick = () => {
@@ -138,9 +269,9 @@ export function CallFloatingLauncher() {
       <div
         className={cn(
           "fixed z-50 transition-all duration-300 ease-out",
-          // Position relative to screen & coexistence with chat dock
-          isChatMinimized
-            ? "bottom-[84px] md:bottom-[88px] right-4 md:right-6"
+          // When Chat Express Dock window is open, slide left to avoid overlap!
+          isChatDockOpen
+            ? "bottom-4 md:bottom-6 right-4 md:right-[505px]"
             : "bottom-4 md:bottom-6 right-4 md:right-6"
         )}
       >
@@ -268,6 +399,7 @@ export function CallFloatingLauncher() {
           audioUrl={activeCall.audioUrl}
           operatorId={activeCall.operatorId || operator?.id}
           userId={activeCall.userId}
+          autoDial={activeCall.autoDial}
         />
       )}
     </>
