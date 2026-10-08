@@ -2077,7 +2077,13 @@ Deno.serve(async (req) => {
               const tags = Array.isArray(params.tags) ? params.tags : [];
               const targetUserId = typedCampaign?.user_id || triggerContext?.userId || null;
 
-              if (resolvedPhone) {
+              // Validar se o telefone é real e descartar LIDs internos do WhatsApp (14 a 16 dígitos)
+              const isLidOrInvalidPhone =
+                (triggerContext?.respondentJid && triggerContext.respondentJid.includes("@lid")) ||
+                resolvedPhone.length < 10 ||
+                resolvedPhone.length > 13;
+
+              if (resolvedPhone && !isLidOrInvalidPhone) {
                 let existingLeadQuery = supabase
                   .from("leads")
                   .select("id, name, company_id, tags")
@@ -2189,7 +2195,11 @@ Deno.serve(async (req) => {
                 let targetLeadId = leadData?.id || triggerContext?.leadId || null;
                 const effectiveCompanyId = companyId || triggerContext?.companyId || "dcb34e9a-1510-4137-aecd-cec0c6d548c4";
 
-                if (!targetLeadId && phoneClean) {
+                const isDealLid =
+                  (triggerContext?.respondentJid && triggerContext.respondentJid.includes("@lid")) ||
+                  (phoneClean && (phoneClean.length < 10 || phoneClean.length > 13));
+
+                if (!targetLeadId && phoneClean && !isDealLid) {
                   const { data: existingLead } = await supabase
                     .from("leads")
                     .select("id")
@@ -2214,8 +2224,8 @@ Deno.serve(async (req) => {
                     }
                   }
 
-                  if (!targetLeadId) {
-                    const leadName = triggerContext?.respondentName || phoneClean;
+                  if (!targetLeadId && !isDealLid) {
+                    const leadName = triggerContext?.respondentName || null;
                     const { data: newLead } = await supabase
                       .from("leads")
                       .insert({
@@ -2233,7 +2243,7 @@ Deno.serve(async (req) => {
                   }
                 }
 
-                if (pipelineId && stageId && targetLeadId) {
+                if (pipelineId && stageId && targetLeadId && !isDealLid) {
                   // Check if an open deal already exists for this lead in this pipeline
                   const { data: existingDeals } = await supabase
                     .from("deals")
