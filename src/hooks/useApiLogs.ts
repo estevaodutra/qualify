@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 export interface ApiLog {
   id: string;
   timestamp: string;
+  createdAt: string;
   method: "GET" | "POST" | "PUT" | "DELETE";
   endpoint: string;
   statusCode: number;
@@ -35,6 +36,7 @@ function transformDbToFrontend(dbLog: DbApiLog): ApiLog {
   return {
     id: dbLog.id,
     timestamp: new Date(dbLog.created_at).toLocaleString("pt-BR"),
+    createdAt: dbLog.created_at,
     method: dbLog.method as ApiLog["method"],
     endpoint: dbLog.endpoint,
     statusCode: dbLog.status_code,

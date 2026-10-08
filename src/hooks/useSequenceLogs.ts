@@ -9,6 +9,7 @@ export interface SequenceLog {
   campaignName: string | null;
   groupName: string | null;
   groupJid: string | null;
+  recipientPhone: string | null;
   nodeType: string | null;
   nodeOrder: number;
   status: string;
@@ -18,6 +19,7 @@ export interface SequenceLog {
   sequenceId: string | null;
   groupCampaignId: string;
   payload: Record<string, unknown> | null;
+  providerResponse?: Record<string, unknown> | null;
 }
 
 // Type for raw database record with new columns
@@ -40,6 +42,7 @@ interface RawLogRecord {
   response_time_ms?: number | null;
   sequence_id?: string | null;
   payload?: Record<string, unknown> | null;
+  provider_response?: Record<string, unknown> | null;
   instance_id?: string | null;
 }
 
@@ -73,6 +76,7 @@ export function useSequenceLogs(campaignId?: string) {
         campaignName: log.campaign_name || null,
         groupName: log.group_name || null,
         groupJid: log.group_jid || null,
+        recipientPhone: log.recipient_phone || null,
         nodeType: log.node_type || null,
         nodeOrder: log.node_order || 0,
         status: log.status || "sent",
@@ -82,6 +86,7 @@ export function useSequenceLogs(campaignId?: string) {
         sequenceId: log.sequence_id || null,
         groupCampaignId: log.group_campaign_id,
         payload: log.payload || null,
+        providerResponse: log.provider_response || null,
       }));
     },
     enabled: !!user,

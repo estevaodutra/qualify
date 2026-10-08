@@ -556,59 +556,32 @@ export function CompanyLogsTab({ companyId }: CompanyLogsTabProps) {
                   const payload = selectedDispatchLog.payload as Record<string, any> | null;
                   if (!payload || Object.keys(payload).length === 0) return null;
 
-                  const { curl, zapiUrl, zapiBody, ...otherPayload } = payload;
+                  const displayPayload = payload.zapiBody && typeof payload.zapiBody === "object"
+                    ? { ...otherPayload, ...payload.zapiBody }
+                    : (Object.keys(otherPayload).length > 0 ? otherPayload : payload);
 
                   return (
                     <div className="space-y-4">
-                      {curl && (
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm font-medium">Comando CURL (Z-API)</p>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-7 px-2 text-xs"
-                              onClick={() => {
-                                navigator.clipboard.writeText(curl);
-                                toast.success("CURL copiado para a área de transferência!");
-                              }}
-                            >
-                              <Copy className="h-3 w-3 mr-1" />
-                              Copiar CURL
-                            </Button>
-                          </div>
-                          <pre className="p-3 bg-muted rounded-lg text-xs font-mono whitespace-pre-wrap break-all max-h-48 overflow-auto border border-border/40">
-                            {curl}
-                          </pre>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-semibold">Payload (JSON)</p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => {
+                              navigator.clipboard.writeText(JSON.stringify(displayPayload, null, 2));
+                              toast.success("Payload copiado para a área de transferência!");
+                            }}
+                          >
+                            <Copy className="h-3 w-3 mr-1" />
+                            Copiar JSON
+                          </Button>
                         </div>
-                      )}
-
-                      {zapiUrl && (
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium">URL de Destino</p>
-                          <div className="p-2 bg-muted rounded font-mono text-xs break-all border border-border/40">
-                            {zapiUrl}
-                          </div>
-                        </div>
-                      )}
-
-                      {zapiBody && (
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium">Body Enviado (Z-API)</p>
-                          <pre className="p-3 bg-muted rounded-lg text-xs font-mono overflow-auto max-h-48 border border-border/40">
-                            {JSON.stringify(zapiBody, null, 2)}
-                          </pre>
-                        </div>
-                      )}
-
-                      {Object.keys(otherPayload).length > 0 && (
-                        <div className="space-y-2">
-                          <p className="text-sm text-muted-foreground">Payload do Sistema</p>
-                          <pre className="p-3 bg-muted rounded-lg text-xs overflow-auto max-h-48 border border-border/40">
-                            {JSON.stringify(otherPayload, null, 2)}
-                          </pre>
-                        </div>
-                      )}
+                        <pre className="p-3 bg-muted rounded-lg text-xs font-mono overflow-auto max-h-64 border border-border/40">
+                          {JSON.stringify(displayPayload, null, 2)}
+                        </pre>
+                      </div>
                     </div>
                   );
                 })()}

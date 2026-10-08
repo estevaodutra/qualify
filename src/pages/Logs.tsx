@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useLanguage } from "@/i18n";
 import { useSequenceLogs, SequenceLog } from "@/hooks/useSequenceLogs";
 import { useApiLogs, type ApiLog } from "@/hooks/useApiLogs";
@@ -12,19 +12,17 @@ import { MetricCard } from "@/components/dispatch/MetricCard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
-  RefreshCw, Download, Search, Send, CheckCircle, XCircle, Clock, Activity, 
-  Loader2, Copy
+  RefreshCw, Download, Search, CheckCircle, XCircle, Clock, Activity, 
+  Loader2, Copy, Check, Eye, Code, ArrowDownLeft, ArrowUpRight
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
-// Node type labels for dispatch logs
+// Node type labels for friendly display
 const nodeTypeLabels: Record<string, string> = {
   TEXT: "Texto", IMAGE: "Imagem", VIDEO: "Vídeo", AUDIO: "Áudio",
   DOCUMENT: "Documento", STICKER: "Sticker", BUTTONS: "Botões",
@@ -34,20 +32,22 @@ const nodeTypeLabels: Record<string, string> = {
   document: "Documento", sticker: "Sticker", buttons: "Botões",
   list: "Lista", delay: "Delay", contact: "Contato",
   location: "Localização", poll: "Enquete",
+  user_input: "Entrada do Usuário",
+  dynamic_url: "URL Dinâmica",
 };
 
 // API method colors
 const methodColors: Record<string, string> = {
   GET: "bg-blue-500/10 text-blue-600 border-blue-500/30",
-  POST: "bg-success/10 text-success border-success/30",
-  PUT: "bg-warning/10 text-warning border-warning/30",
-  DELETE: "bg-error/10 text-error border-error/30",
+  POST: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
+  PUT: "bg-amber-500/10 text-amber-600 border-amber-500/30",
+  DELETE: "bg-rose-500/10 text-rose-600 border-rose-500/30",
 };
 
 const getStatusColor = (code: number): string => {
-  if (code >= 200 && code < 300) return "bg-success/10 text-success border-success/30";
-  if (code >= 400 && code < 500) return "bg-warning/10 text-warning border-warning/30";
-  if (code >= 500) return "bg-error/10 text-error border-error/30";
+  if (code >= 200 && code < 300) return "bg-emerald-500/10 text-emerald-600 border-emerald-500/30";
+  if (code >= 400 && code < 500) return "bg-amber-500/10 text-amber-600 border-amber-500/30";
+  if (code >= 500) return "bg-rose-500/10 text-rose-600 border-rose-500/30";
   return "bg-muted text-muted-foreground";
 };
 
@@ -60,246 +60,368 @@ const mapStatus = (status: string): ValidStatus => {
   return "pending";
 };
 
+export interface UnifiedLogItem {
+  id: string;
+  rawDate: string;
+  formattedDate: string;
+  direction: "input" | "output";
+  source: string;
+  destination: string;
+  type: string;
+  status: string;
+  statusCode?: number;
+  responseTimeMs: number | null;
+  errorMessage?: string | null;
+  payload: any;
+  responsePayload: any;
+  originalType: "dispatch" | "api";
+  originalLog: SequenceLog | ApiLog;
+}
+
+// Helper to clean legacy wrapper artifacts and extract pure JSON payload
+function extractCleanPayloadFromDispatch(log: SequenceLog) {
+  let cleanPayload: any = log.payload;
+
+  if (cleanPayload && typeof cleanPayload === "object") {
+    const { curl, zapiUrl, zapiBody, ...otherPayload } = cleanPayload as Record<string, any>;
+    if (zapiBody && typeof zapiBody === "object") {
+      cleanPayload = { ...otherPayload, ...zapiBody };
+    } else if (Object.keys(otherPayload).length > 0) {
+      cleanPayload = otherPayload;
+    }
+  }
+
+  return {
+    payload: cleanPayload,
+    response: log.providerResponse || null,
+  };
+}
+
 export default function Logs() {
   const { t } = useLanguage();
   const { logs: dispatchLogs, isLoading: isLoadingDispatch, refetch: refetchDispatch } = useSequenceLogs();
   const { logs: apiLogs, isLoading: isLoadingApi, refetch: refetchApi } = useApiLogs();
   const { campaigns } = useGroupCampaigns();
   const { campaigns: dispatchCampaigns } = useDispatchCampaigns();
-  
-  // Tab state
-  const [activeTab, setActiveTab] = useState<string>("dispatch");
-  
-  // Dispatch logs state
-  const [dispatchSearch, setDispatchSearch] = useState("");
-  const [dispatchStatusFilter, setDispatchStatusFilter] = useState<string>("all");
-  const [dispatchCampaignFilter, setDispatchCampaignFilter] = useState<string>("all");
-  const [selectedDispatchLog, setSelectedDispatchLog] = useState<SequenceLog | null>(null);
-  const [showDispatchDialog, setShowDispatchDialog] = useState(false);
-  
-  // API logs state
-  const [apiSearch, setApiSearch] = useState("");
-  const [apiMethodFilter, setApiMethodFilter] = useState<string>("all");
-  const [apiStatusFilter, setApiStatusFilter] = useState<string>("all");
-  const [selectedApiLog, setSelectedApiLog] = useState<ApiLog | null>(null);
-  const [showApiDialog, setShowApiDialog] = useState(false);
-  
+
+  // Filters state
+  const [searchTerm, setSearchTerm] = useState("");
+  const [directionFilter, setDirectionFilter] = useState<"all" | "input" | "output">("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [campaignFilter, setCampaignFilter] = useState<string>("all");
+
+  // Dialog state
+  const [selectedLog, setSelectedLog] = useState<UnifiedLogItem | null>(null);
+  const [showDialog, setShowDialog] = useState(false);
+  const [copiedPayload, setCopiedPayload] = useState(false);
+  const [copiedResponse, setCopiedResponse] = useState(false);
+
   // Loading states
   const [isExporting, setIsExporting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Filter dispatch logs
-  const filteredDispatchLogs = dispatchLogs.filter((log) => {
-    const matchesSearch =
-      !dispatchSearch ||
-      log.campaignName?.toLowerCase().includes(dispatchSearch.toLowerCase()) ||
-      log.groupName?.toLowerCase().includes(dispatchSearch.toLowerCase()) ||
-      log.nodeType?.toLowerCase().includes(dispatchSearch.toLowerCase());
-    const matchesStatus = dispatchStatusFilter === "all" || log.status === dispatchStatusFilter;
-    const matchesCampaign = dispatchCampaignFilter === "all" || log.groupCampaignId === dispatchCampaignFilter;
-    return matchesSearch && matchesStatus && matchesCampaign;
-  });
+  // Combine dispatch logs and API logs into a single unified list
+  const unifiedLogs: UnifiedLogItem[] = useMemo(() => {
+    const list: UnifiedLogItem[] = [];
 
-  // Filter API logs
-  const filteredApiLogs = apiLogs.filter((log) => {
-    const matchesSearch =
-      log.endpoint.toLowerCase().includes(apiSearch.toLowerCase()) ||
-      log.ipAddress.includes(apiSearch) ||
-      log.apiKeyName.toLowerCase().includes(apiSearch.toLowerCase());
-    const matchesMethod = apiMethodFilter === "all" || log.method === apiMethodFilter;
-    const matchesStatus =
-      apiStatusFilter === "all" ||
-      (apiStatusFilter === "success" && log.statusCode >= 200 && log.statusCode < 300) ||
-      (apiStatusFilter === "client_error" && log.statusCode >= 400 && log.statusCode < 500) ||
-      (apiStatusFilter === "server_error" && log.statusCode >= 500);
-    return matchesSearch && matchesMethod && matchesStatus;
-  });
+    // Map dispatch logs (System outbound dispatches -> Output)
+    for (const d of dispatchLogs) {
+      const { payload, response } = extractCleanPayloadFromDispatch(d);
+      list.push({
+        id: `dispatch-${d.id}`,
+        rawDate: d.sentAt,
+        formattedDate: d.sentAt ? format(new Date(d.sentAt), "dd/MM HH:mm:ss") : "-",
+        direction: "output",
+        source: d.campaignName || "Campanha",
+        destination: d.groupName || d.recipientPhone || d.groupJid || "-",
+        type: nodeTypeLabels[d.nodeType || ""] || d.nodeType || "Mensagem",
+        status: d.status,
+        responseTimeMs: d.responseTimeMs,
+        errorMessage: d.errorMessage,
+        payload,
+        responsePayload: response,
+        originalType: "dispatch",
+        originalLog: d,
+      });
+    }
 
-  // Dispatch stats
-  const dispatchStats = {
-    total: dispatchLogs.length,
-    sent: dispatchLogs.filter((l) => l.status === "sent").length,
-    sending: dispatchLogs.filter((l) => l.status === "sending").length,
-    failed: dispatchLogs.filter((l) => l.status === "failed").length,
-    avgTime: dispatchLogs.filter((l) => l.responseTimeMs).length > 0
-      ? Math.round(dispatchLogs.filter((l) => l.responseTimeMs).reduce((acc, l) => acc + (l.responseTimeMs || 0), 0) / dispatchLogs.filter((l) => l.responseTimeMs).length)
-      : 0,
-  };
+    // Map API logs (Webhook calls & API requests)
+    for (const a of apiLogs) {
+      const isExternalWebhookOut = a.endpoint.startsWith("http://") || a.endpoint.startsWith("https://") || a.endpoint.includes("system-webhook");
+      const direction: "input" | "output" = isExternalWebhookOut ? "output" : "input";
+      const rawDate = a.createdAt || a.timestamp;
 
-  // API stats
-  const apiStats = {
-    total: apiLogs.length,
-    success: apiLogs.filter((l) => l.statusCode >= 200 && l.statusCode < 300).length,
-    avgTime: apiLogs.length > 0 ? Math.round(apiLogs.reduce((acc, l) => acc + l.responseTime, 0) / apiLogs.length) : 0,
-  };
+      let formattedDate = a.timestamp;
+      if (a.createdAt) {
+        try {
+          formattedDate = format(new Date(a.createdAt), "dd/MM HH:mm:ss");
+        } catch {
+          formattedDate = a.timestamp;
+        }
+      }
+
+      list.push({
+        id: `api-${a.id}`,
+        rawDate,
+        formattedDate,
+        direction,
+        source: a.apiKeyName && a.apiKeyName !== "API Key" ? a.apiKeyName : (a.ipAddress && a.ipAddress !== "Unknown" ? a.ipAddress : (direction === "input" ? "Webhook" : "Sistema")),
+        destination: a.endpoint,
+        type: a.method,
+        status: `${a.statusCode}`,
+        statusCode: a.statusCode,
+        responseTimeMs: a.responseTime,
+        errorMessage: a.errorMessage,
+        payload: a.requestBody || null,
+        responsePayload: a.responseBody || null,
+        originalType: "api",
+        originalLog: a,
+      });
+    }
+
+    // Sort descending chronologically
+    return list.sort((a, b) => {
+      const timeA = new Date(a.rawDate).getTime() || 0;
+      const timeB = new Date(b.rawDate).getTime() || 0;
+      return timeB - timeA;
+    });
+  }, [dispatchLogs, apiLogs]);
+
+  // Filtered logs
+  const filteredLogs = useMemo(() => {
+    return unifiedLogs.filter((log) => {
+      // Direction filter
+      if (directionFilter !== "all" && log.direction !== directionFilter) {
+        return false;
+      }
+
+      // Status filter
+      if (statusFilter !== "all") {
+        if (statusFilter === "success") {
+          const isSuccess = log.status === "sent" || (log.statusCode && log.statusCode >= 200 && log.statusCode < 300);
+          if (!isSuccess) return false;
+        } else if (statusFilter === "failed") {
+          const isFailed = log.status === "failed" || (log.statusCode && log.statusCode >= 400);
+          if (!isFailed) return false;
+        } else if (statusFilter === "pending") {
+          const isPending = log.status === "sending" || log.status === "pending";
+          if (!isPending) return false;
+        }
+      }
+
+      // Campaign filter (for dispatch logs)
+      if (campaignFilter !== "all") {
+        if (log.originalType !== "dispatch") return false;
+        const seqLog = log.originalLog as SequenceLog;
+        if (seqLog.groupCampaignId !== campaignFilter) return false;
+      }
+
+      // Search term
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        const matches =
+          log.source.toLowerCase().includes(term) ||
+          log.destination.toLowerCase().includes(term) ||
+          log.type.toLowerCase().includes(term) ||
+          log.status.toLowerCase().includes(term) ||
+          (log.errorMessage && log.errorMessage.toLowerCase().includes(term));
+        if (!matches) return false;
+      }
+
+      return true;
+    });
+  }, [unifiedLogs, directionFilter, statusFilter, campaignFilter, searchTerm]);
+
+  // Overall statistics
+  const stats = useMemo(() => {
+    const total = unifiedLogs.length;
+    const inputs = unifiedLogs.filter((l) => l.direction === "input").length;
+    const outputs = unifiedLogs.filter((l) => l.direction === "output").length;
+    const failures = unifiedLogs.filter((l) => l.status === "failed" || (l.statusCode && l.statusCode >= 400)).length;
+    
+    const logsWithTime = unifiedLogs.filter((l) => l.responseTimeMs != null && l.responseTimeMs > 0);
+    const avgTime = logsWithTime.length > 0
+      ? Math.round(logsWithTime.reduce((acc, l) => acc + (l.responseTimeMs || 0), 0) / logsWithTime.length)
+      : 0;
+
+    return { total, inputs, outputs, failures, avgTime };
+  }, [unifiedLogs]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    if (activeTab === "dispatch") {
-      await refetchDispatch();
-    } else {
-      await refetchApi();
-    }
+    await Promise.all([refetchDispatch(), refetchApi()]);
     setIsRefreshing(false);
-    toast.success("Logs atualizados");
+    toast.success("Logs atualizados com sucesso");
   };
 
   const handleExport = async () => {
     setIsExporting(true);
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 300));
 
-    if (activeTab === "dispatch") {
-      const headers = ["Timestamp", "Campanha", "Destino", "Tipo", "Status", "Tempo (ms)", "Erro"];
-      const csvContent = [
-        headers.join(","),
-        ...filteredDispatchLogs.map((log) =>
-          [log.sentAt, log.campaignName || "-", log.groupName || "-", log.nodeType || "-", log.status, log.responseTimeMs || "-", log.errorMessage || "-"].join(",")
-        ),
-      ].join("\n");
+    const headers = ["Timestamp", "Sentido", "Origem/Campanha", "Destino/Endpoint", "Tipo", "Status", "Tempo (ms)", "Erro"];
+    const csvContent = [
+      headers.join(","),
+      ...filteredLogs.map((log) =>
+        [
+          `"${log.formattedDate}"`,
+          log.direction.toUpperCase(),
+          `"${log.source.replace(/"/g, '""')}"`,
+          `"${log.destination.replace(/"/g, '""')}"`,
+          `"${log.type}"`,
+          log.status,
+          log.responseTimeMs || "-",
+          `"${(log.errorMessage || "").replace(/"/g, '""')}"`,
+        ].join(",")
+      ),
+    ].join("\n");
 
-      const blob = new Blob([csvContent], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `dispatch-logs-${format(new Date(), "yyyy-MM-dd")}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } else {
-      const headers = ["Timestamp", "Method", "Endpoint", "Status", "Response Time (ms)", "IP", "API Key", "Error"];
-      const csvContent = [
-        headers.join(","),
-        ...filteredApiLogs.map((log) =>
-          [log.timestamp, log.method, log.endpoint, log.statusCode, log.responseTime, log.ipAddress, `"${log.apiKeyName}"`, log.errorMessage || ""].join(",")
-        ),
-      ].join("\n");
-
-      const blob = new Blob([csvContent], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `api-logs-${format(new Date(), "yyyy-MM-dd")}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    }
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `logs-unificados-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
 
     setIsExporting(false);
-    toast.success("Logs exportados");
+    toast.success("Logs exportados com sucesso");
   };
 
-  // Dispatch columns
-  const dispatchColumns = [
+  const copyToClipboard = (text: string, isResponse = false) => {
+    navigator.clipboard.writeText(text);
+    if (isResponse) {
+      setCopiedResponse(true);
+      setTimeout(() => setCopiedResponse(false), 2000);
+    } else {
+      setCopiedPayload(true);
+      setTimeout(() => setCopiedPayload(false), 2000);
+    }
+    toast.success("JSON copiado para a área de transferência!");
+  };
+
+  // Unified columns
+  const columns = [
     {
-      key: "sentAt",
+      key: "formattedDate",
       header: "Timestamp",
-      render: (log: SequenceLog) => (
-        <span className="font-['JetBrains_Mono'] text-xs text-muted-foreground">
-          {format(new Date(log.sentAt), "dd/MM HH:mm:ss")}
+      render: (log: UnifiedLogItem) => (
+        <span className="font-['JetBrains_Mono'] text-xs text-muted-foreground whitespace-nowrap">
+          {log.formattedDate}
         </span>
       ),
     },
     {
-      key: "campaignName",
-      header: "Campanha",
-      render: (log: SequenceLog) => (
-        <span className="font-medium">{log.campaignName || "-"}</span>
+      key: "direction",
+      header: "Sentido",
+      render: (log: UnifiedLogItem) => {
+        if (log.direction === "input") {
+          return (
+            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 flex items-center gap-1 font-mono text-xs w-fit">
+              <ArrowDownLeft className="h-3 w-3" />
+              Input
+            </Badge>
+          );
+        }
+        return (
+          <Badge variant="outline" className="bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/30 flex items-center gap-1 font-mono text-xs w-fit">
+            <ArrowUpRight className="h-3 w-3" />
+            Output
+          </Badge>
+        );
+      },
+    },
+    {
+      key: "source",
+      header: "Origem / Campanha",
+      render: (log: UnifiedLogItem) => (
+        <span className="font-medium text-sm truncate max-w-[190px] block" title={log.source}>
+          {log.source}
+        </span>
       ),
     },
     {
-      key: "groupName",
-      header: "Destino",
-      render: (log: SequenceLog) => (
-        <span className="text-sm">{log.groupName || "-"}</span>
+      key: "destination",
+      header: "Destino / Endpoint",
+      render: (log: UnifiedLogItem) => (
+        <span className="font-mono text-xs truncate max-w-[200px] block text-muted-foreground" title={log.destination}>
+          {log.destination}
+        </span>
       ),
     },
     {
-      key: "nodeType",
+      key: "type",
       header: "Tipo",
-      render: (log: SequenceLog) => (
-        <Badge variant="outline" className="text-xs">
-          {nodeTypeLabels[log.nodeType || ""] || log.nodeType || "-"}
-        </Badge>
-      ),
+      render: (log: UnifiedLogItem) => {
+        if (log.originalType === "api" && methodColors[log.type]) {
+          return (
+            <Badge variant="outline" className={`font-mono text-xs font-semibold ${methodColors[log.type]}`}>
+              {log.type}
+            </Badge>
+          );
+        }
+        return (
+          <Badge variant="outline" className="text-xs">
+            {log.type}
+          </Badge>
+        );
+      },
     },
     {
       key: "status",
       header: "Status",
-      render: (log: SequenceLog) => (
-        <StatusBadge status={mapStatus(log.status)} showDot />
-      ),
+      render: (log: UnifiedLogItem) => {
+        if (log.originalType === "dispatch") {
+          return <StatusBadge status={mapStatus(log.status)} showDot />;
+        }
+        if (log.statusCode) {
+          return (
+            <Badge variant="outline" className={`font-mono text-xs ${getStatusColor(log.statusCode)}`}>
+              {log.statusCode}
+            </Badge>
+          );
+        }
+        return <Badge variant="secondary">{log.status}</Badge>;
+      },
     },
     {
       key: "responseTimeMs",
       header: "Tempo",
-      render: (log: SequenceLog) => (
-        <span className="text-sm text-muted-foreground">
-          {log.responseTimeMs ? `${log.responseTimeMs}ms` : "-"}
+      render: (log: UnifiedLogItem) => (
+        <span className="text-xs text-muted-foreground font-mono">
+          {log.responseTimeMs != null ? `${log.responseTimeMs}ms` : "-"}
         </span>
+      ),
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (log: UnifiedLogItem) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedLog(log);
+            setShowDialog(true);
+          }}
+          title="Ver payload completo"
+        >
+          <Eye className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+        </Button>
       ),
     },
   ];
 
-  // API columns
-  const apiColumns = [
-    {
-      key: "timestamp",
-      header: "Timestamp",
-      render: (log: ApiLog) => <span className="font-['JetBrains_Mono'] text-xs text-muted-foreground">{log.timestamp}</span>,
-    },
-    {
-      key: "method",
-      header: "Método",
-      render: (log: ApiLog) => (
-        <Badge variant="outline" className={`font-mono font-medium ${methodColors[log.method]}`}>
-          {log.method}
-        </Badge>
-      ),
-      className: "w-24",
-    },
-    {
-      key: "endpoint",
-      header: "Endpoint",
-      render: (log: ApiLog) => <span className="font-mono text-sm">{log.endpoint}</span>,
-    },
-    {
-      key: "statusCode",
-      header: "Status",
-      render: (log: ApiLog) => (
-        <Badge variant="outline" className={`font-mono ${getStatusColor(log.statusCode)}`}>
-          {log.statusCode}
-        </Badge>
-      ),
-      className: "w-20",
-    },
-    {
-      key: "responseTime",
-      header: "Tempo",
-      render: (log: ApiLog) => (
-        <span className={`font-mono text-sm ${log.responseTime > 1000 ? "text-warning" : ""}`}>
-          {log.responseTime}ms
-        </span>
-      ),
-      className: "w-28",
-    },
-    {
-      key: "apiKeyName",
-      header: "API Key",
-      render: (log: ApiLog) => (
-        <Badge variant="secondary" className="font-normal">
-          {log.apiKeyName}
-        </Badge>
-      ),
-    },
-  ];
-
-  const isLoading = activeTab === "dispatch" ? isLoadingDispatch : isLoadingApi;
+  const isLoading = isLoadingDispatch || isLoadingApi;
 
   if (isLoading) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-10 w-64" />
         <Skeleton className="h-12 w-full" />
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          {[...Array(5)].map((_, i) => (
             <Skeleton key={i} className="h-24" />
           ))}
         </div>
@@ -312,7 +434,7 @@ export default function Logs() {
     <div className="space-y-6">
       <PageHeader
         title={t("logs.title") || "Logs"}
-        description={t("logs.description") || "Monitore envios e chamadas da API (retenção de 72h)"}
+        description={t("logs.description") || "Monitore todos os eventos de entrada e saída do sistema (retenção de 72h)"}
         actions={
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
@@ -333,359 +455,235 @@ export default function Logs() {
         <span className="text-muted-foreground">{t("logs.retentionInfo") || "Logs são mantidos por 72 horas"}</span>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="dispatch" className="flex items-center gap-2">
-            <Send className="h-4 w-4" />
-            {t("logs.tabDispatch") || "Logs de Envio"}
-          </TabsTrigger>
-          <TabsTrigger value="api" className="flex items-center gap-2">
-            <Activity className="h-4 w-4" />
-            {t("logs.tabApi") || "Logs da API"}
-          </TabsTrigger>
-        </TabsList>
+      {/* Metrics Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <MetricCard title="Total" value={stats.total} icon={Activity} />
+        <MetricCard title="Inputs (Entradas)" value={stats.inputs} icon={ArrowDownLeft} />
+        <MetricCard title="Outputs (Saídas)" value={stats.outputs} icon={ArrowUpRight} />
+        <MetricCard title="Falhas" value={stats.failures} icon={XCircle} />
+        <MetricCard title="Tempo Médio" value={`${stats.avgTime}ms`} icon={Clock} />
+      </div>
 
-        {/* Dispatch Logs Tab */}
-        <TabsContent value="dispatch" className="space-y-6 mt-6">
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <MetricCard title="Total" value={dispatchStats.total} icon={Activity} />
-            <MetricCard title="Enviados" value={dispatchStats.sent} icon={CheckCircle} />
-            <MetricCard title="Enviando" value={dispatchStats.sending} icon={Send} />
-            <MetricCard title="Falhas" value={dispatchStats.failed} icon={XCircle} />
-            <MetricCard title="Tempo Médio" value={`${dispatchStats.avgTime}ms`} icon={Clock} />
-          </div>
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por campanha, destino, endpoint ou tipo..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-9"
+          />
+        </div>
 
-          {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por campanha, destino ou tipo..."
-                value={dispatchSearch}
-                onChange={(e) => setDispatchSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <Select value={dispatchCampaignFilter} onValueChange={setDispatchCampaignFilter}>
-              <SelectTrigger className="w-full sm:w-48">
-                <SelectValue placeholder="Campanha" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas as campanhas</SelectItem>
-                {campaigns?.map((campaign) => (
-                  <SelectItem key={campaign.id} value={campaign.id}>
-                    {campaign.name}
-                  </SelectItem>
-                ))}
-                {dispatchCampaigns?.map((campaign) => (
-                  <SelectItem key={campaign.id} value={campaign.id}>
-                    {campaign.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={dispatchStatusFilter} onValueChange={setDispatchStatusFilter}>
-              <SelectTrigger className="w-full sm:w-40">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="sent">Enviado</SelectItem>
-                <SelectItem value="sending">Enviando</SelectItem>
-                <SelectItem value="failed">Falha</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        {/* Direction Filter */}
+        <Select value={directionFilter} onValueChange={(val: any) => setDirectionFilter(val)}>
+          <SelectTrigger className="w-full sm:w-44">
+            <SelectValue placeholder="Sentido" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os Sentidos</SelectItem>
+            <SelectItem value="input">Input (Entrada)</SelectItem>
+            <SelectItem value="output">Output (Saída)</SelectItem>
+          </SelectContent>
+        </Select>
 
-          {/* Table */}
-          {filteredDispatchLogs.length === 0 ? (
-            <EmptyState
-              title="Nenhum log encontrado"
-              description="Os logs de envio aparecerão aqui quando você enviar mensagens"
-              icon={Activity}
-            />
-          ) : (
-            <DataTableWithPagination
-              columns={dispatchColumns}
-              data={filteredDispatchLogs}
-              keyExtractor={(log) => log.id}
-              onRowClick={(log) => {
-                setSelectedDispatchLog(log);
-                setShowDispatchDialog(true);
-              }}
-            />
-          )}
-        </TabsContent>
+        {/* Status Filter */}
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-full sm:w-40">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os Status</SelectItem>
+            <SelectItem value="success">Sucesso / Enviados</SelectItem>
+            <SelectItem value="failed">Falhas / Erros</SelectItem>
+            <SelectItem value="pending">Pendente / Enviando</SelectItem>
+          </SelectContent>
+        </Select>
 
-        {/* API Logs Tab */}
-        <TabsContent value="api" className="space-y-6 mt-6">
-          {/* Quick Stats */}
-          <div className="flex gap-6 text-sm">
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">Total:</span>
-              <span className="font-mono font-semibold">{apiStats.total}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-success" />
-              <span className="text-muted-foreground">Taxa de Sucesso:</span>
-              <span className="font-mono font-semibold">
-                {apiStats.total > 0 ? Math.round((apiStats.success / apiStats.total) * 100) : 0}%
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-primary" />
-              <span className="text-muted-foreground">Tempo Médio:</span>
-              <span className="font-mono font-semibold">{apiStats.avgTime}ms</span>
-            </div>
-          </div>
+        {/* Campaign Filter */}
+        {(campaigns.length > 0 || dispatchCampaigns.length > 0) && (
+          <Select value={campaignFilter} onValueChange={setCampaignFilter}>
+            <SelectTrigger className="w-full sm:w-48">
+              <SelectValue placeholder="Campanha" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as campanhas</SelectItem>
+              {campaigns?.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+              {dispatchCampaigns?.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
 
-          {/* Filters */}
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por endpoint, IP ou chave API..."
-                value={apiSearch}
-                onChange={(e) => setApiSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <Select value={apiMethodFilter} onValueChange={setApiMethodFilter}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Método" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="GET">GET</SelectItem>
-                <SelectItem value="POST">POST</SelectItem>
-                <SelectItem value="PUT">PUT</SelectItem>
-                <SelectItem value="DELETE">DELETE</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={apiStatusFilter} onValueChange={setApiStatusFilter}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="success">2xx (Success)</SelectItem>
-                <SelectItem value="client_error">4xx (Client Error)</SelectItem>
-                <SelectItem value="server_error">5xx (Server Error)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+      {/* Unified Table */}
+      {filteredLogs.length === 0 ? (
+        <EmptyState
+          title="Nenhum log encontrado"
+          description="Nenhum evento registrado corresponde aos filtros selecionados"
+          icon={Activity}
+        />
+      ) : (
+        <DataTableWithPagination
+          columns={columns}
+          data={filteredLogs}
+          keyExtractor={(log) => log.id}
+          onRowClick={(log) => {
+            setSelectedLog(log);
+            setShowDialog(true);
+          }}
+        />
+      )}
 
-          {/* Table */}
-          {filteredApiLogs.length === 0 ? (
-            <EmptyState
-              icon={Activity}
-              title="Nenhum log de API encontrado"
-              description="Logs de chamadas à API aparecerão aqui"
-            />
-          ) : (
-            <DataTableWithPagination
-              columns={apiColumns}
-              data={filteredApiLogs}
-              keyExtractor={(log) => log.id}
-              onRowClick={(log) => {
-                setSelectedApiLog(log);
-                setShowApiDialog(true);
-              }}
-            />
-          )}
-        </TabsContent>
-      </Tabs>
-
-      {/* Dispatch Detail Dialog */}
-      <Dialog open={showDispatchDialog} onOpenChange={setShowDispatchDialog}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      {/* Unified Event Payload Dialog */}
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Detalhes do Envio</DialogTitle>
-          </DialogHeader>
-          {selectedDispatchLog && (
-            <div className="space-y-4 pt-2">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Timestamp</p>
-                    <p className="font-medium">
-                      {format(new Date(selectedDispatchLog.sentAt), "dd/MM/yyyy HH:mm:ss")}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Status</p>
-                    <StatusBadge status={mapStatus(selectedDispatchLog.status)} showDot />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Campanha</p>
-                    <p className="font-medium">{selectedDispatchLog.campaignName || "-"}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Destino</p>
-                    <p className="font-medium">{selectedDispatchLog.groupName || "-"}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Tipo de Node</p>
-                    <Badge variant="outline">
-                      {nodeTypeLabels[selectedDispatchLog.nodeType || ""] || selectedDispatchLog.nodeType || "-"}
+            <div className="flex items-center justify-between pr-6">
+              <div className="flex items-center gap-2">
+                <DialogTitle>Detalhes do Log</DialogTitle>
+                {selectedLog && (
+                  selectedLog.direction === "input" ? (
+                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 flex items-center gap-1 font-mono text-xs">
+                      <ArrowDownLeft className="h-3 w-3" />
+                      Input (Entrada)
                     </Badge>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Tempo de Resposta</p>
-                    <p className="font-medium">
-                      {selectedDispatchLog.responseTimeMs ? `${selectedDispatchLog.responseTimeMs}ms` : "-"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Instância</p>
-                    <p className="font-medium">{selectedDispatchLog.instanceName || "-"}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Group JID</p>
-                    <p className="font-mono text-xs">{selectedDispatchLog.groupJid || "-"}</p>
-                  </div>
-                </div>
-
-                {selectedDispatchLog.errorMessage && (
-                  <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
-                    <p className="text-sm text-muted-foreground mb-1">Erro</p>
-                    <p className="text-sm text-destructive">{selectedDispatchLog.errorMessage}</p>
-                  </div>
+                  ) : (
+                    <Badge variant="outline" className="bg-violet-500/10 text-violet-600 border-violet-500/30 flex items-center gap-1 font-mono text-xs">
+                      <ArrowUpRight className="h-3 w-3" />
+                      Output (Saída)
+                    </Badge>
+                  )
                 )}
-
-                {(() => {
-                  const payload = selectedDispatchLog.payload as Record<string, any> | null;
-                  if (!payload || Object.keys(payload).length === 0) return null;
-
-                  const { curl, zapiUrl, zapiBody, ...otherPayload } = payload;
-
-                  return (
-                    <div className="space-y-4">
-                      {curl && (
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm font-medium">Comando CURL (Z-API)</p>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-7 px-2 text-xs"
-                              onClick={() => {
-                                navigator.clipboard.writeText(curl);
-                                toast.success("CURL copiado para a área de transferência!");
-                              }}
-                            >
-                              <Copy className="h-3 w-3 mr-1" />
-                              Copiar CURL
-                            </Button>
-                          </div>
-                          <pre className="p-3 bg-muted rounded-lg text-xs font-mono whitespace-pre-wrap break-all max-h-48 overflow-auto border border-border/40">
-                            {curl}
-                          </pre>
-                        </div>
-                      )}
-
-                      {zapiUrl && (
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium">URL de Destino</p>
-                          <div className="p-2 bg-muted rounded font-mono text-xs break-all border border-border/40">
-                            {zapiUrl}
-                          </div>
-                        </div>
-                      )}
-
-                      {zapiBody && (
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium">Body Enviado (Z-API)</p>
-                          <pre className="p-3 bg-muted rounded-lg text-xs font-mono overflow-auto max-h-48 border border-border/40">
-                            {JSON.stringify(zapiBody, null, 2)}
-                          </pre>
-                        </div>
-                      )}
-
-                      {Object.keys(otherPayload).length > 0 && (
-                        <div className="space-y-2">
-                          <p className="text-sm text-muted-foreground">Payload do Sistema</p>
-                          <pre className="p-3 bg-muted rounded-lg text-xs overflow-auto max-h-48 border border-border/40">
-                            {JSON.stringify(otherPayload, null, 2)}
-                          </pre>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
+              </div>
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* API Detail Dialog */}
-      <Dialog open={showApiDialog} onOpenChange={setShowApiDialog}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Detalhes da Chamada</DialogTitle>
-            <DialogDescription>
-              {selectedApiLog?.method} {selectedApiLog?.endpoint}
-            </DialogDescription>
           </DialogHeader>
-          {selectedApiLog && (
-            <div className="space-y-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Status</p>
-                  <Badge variant="outline" className={`font-mono ${getStatusColor(selectedApiLog.statusCode)}`}>
-                    {selectedApiLog.statusCode}
-                  </Badge>
+
+          {selectedLog && (
+            <div className="space-y-5 pt-2">
+              {/* Metadata summary grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-lg bg-muted/40 border border-border/60 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground">Timestamp</p>
+                  <p className="font-mono font-medium text-xs mt-0.5">{selectedLog.formattedDate}</p>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Timestamp</p>
-                  <p className="font-mono text-sm">{selectedApiLog.timestamp}</p>
+                <div>
+                  <p className="text-xs text-muted-foreground">Status</p>
+                  <div className="mt-0.5">
+                    {selectedLog.originalType === "dispatch" ? (
+                      <StatusBadge status={mapStatus(selectedLog.status)} showDot />
+                    ) : (
+                      <Badge variant="outline" className={`font-mono text-xs ${getStatusColor(selectedLog.statusCode || 200)}`}>
+                        {selectedLog.statusCode || selectedLog.status}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Tempo de Resposta</p>
-                  <p className="font-mono text-sm">{selectedApiLog.responseTime}ms</p>
+                <div>
+                  <p className="text-xs text-muted-foreground">Tipo / Método</p>
+                  <p className="font-medium text-xs mt-0.5">{selectedLog.type}</p>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">IP Address</p>
-                  <p className="font-mono text-sm">{selectedApiLog.ipAddress}</p>
+                <div>
+                  <p className="text-xs text-muted-foreground">Tempo de Resposta</p>
+                  <p className="font-mono font-medium text-xs mt-0.5">
+                    {selectedLog.responseTimeMs != null ? `${selectedLog.responseTimeMs}ms` : "-"}
+                  </p>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">API Key</p>
-                  <Badge variant="secondary">{selectedApiLog.apiKeyName}</Badge>
+                <div className="col-span-2">
+                  <p className="text-xs text-muted-foreground">Origem / Campanha</p>
+                  <p className="font-medium text-xs mt-0.5 truncate">{selectedLog.source}</p>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Método</p>
-                  <Badge variant="outline" className={`font-mono ${methodColors[selectedApiLog.method]}`}>
-                    {selectedApiLog.method}
-                  </Badge>
+                <div className="col-span-2">
+                  <p className="text-xs text-muted-foreground">Destino / Endpoint</p>
+                  <p className="font-mono text-xs mt-0.5 truncate">{selectedLog.destination}</p>
                 </div>
               </div>
 
-              {selectedApiLog.errorMessage && (
-                <div className="rounded-lg border border-error/30 bg-error/10 p-3">
-                  <p className="text-sm font-medium text-error">Erro</p>
-                  <p className="text-sm text-muted-foreground">{selectedApiLog.errorMessage}</p>
+              {/* Error box if present */}
+              {selectedLog.errorMessage && (
+                <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                  <p className="text-xs font-semibold text-destructive mb-1">Erro</p>
+                  <p className="text-xs text-destructive font-mono whitespace-pre-wrap">{selectedLog.errorMessage}</p>
                 </div>
               )}
 
-              {selectedApiLog.requestBody && (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">Request Body</p>
-                  <ScrollArea className="h-32 rounded-lg border bg-muted/50 p-3">
-                    <pre className="text-xs font-mono">
-                      {JSON.stringify(selectedApiLog.requestBody, null, 2)}
-                    </pre>
-                  </ScrollArea>
+              {/* Payload JSON Section */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Code className="h-4 w-4 text-primary" />
+                    <p className="text-sm font-semibold">
+                      {selectedLog.direction === "input" ? "Payload Recebido (JSON)" : "Payload Enviado (JSON)"}
+                    </p>
+                  </div>
+                  {selectedLog.payload && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-3 text-xs"
+                      onClick={() => copyToClipboard(JSON.stringify(selectedLog.payload, null, 2), false)}
+                    >
+                      {copiedPayload ? (
+                        <>
+                          <Check className="h-3.5 w-3.5 mr-1 text-emerald-600" />
+                          Copiado
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-3.5 w-3.5 mr-1" />
+                          Copiar JSON
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </div>
-              )}
 
-              {selectedApiLog.responseBody && (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">Response Body</p>
-                  <ScrollArea className="h-32 rounded-lg border bg-muted/50 p-3">
-                    <pre className="text-xs font-mono">
-                      {JSON.stringify(selectedApiLog.responseBody, null, 2)}
-                    </pre>
-                  </ScrollArea>
+                {selectedLog.payload && Object.keys(selectedLog.payload).length > 0 ? (
+                  <pre className="p-4 bg-slate-950 text-slate-100 rounded-lg text-xs font-mono overflow-auto max-h-[360px] border border-slate-800 leading-relaxed shadow-inner">
+                    {JSON.stringify(selectedLog.payload, null, 2)}
+                  </pre>
+                ) : (
+                  <div className="p-4 bg-muted/40 rounded-lg text-xs text-muted-foreground italic border text-center">
+                    Nenhum payload registrado para este log.
+                  </div>
+                )}
+              </div>
+
+              {/* Response / Provider Response JSON Section (if exists) */}
+              {selectedLog.responsePayload && Object.keys(selectedLog.responsePayload).length > 0 && (
+                <div className="space-y-2 pt-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold">Resposta do Sistema / Retorno (JSON)</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-3 text-xs"
+                      onClick={() => copyToClipboard(JSON.stringify(selectedLog.responsePayload, null, 2), true)}
+                    >
+                      {copiedResponse ? (
+                        <>
+                          <Check className="h-3.5 w-3.5 mr-1 text-emerald-600" />
+                          Copiado
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-3.5 w-3.5 mr-1" />
+                          Copiar Resposta
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <pre className="p-4 bg-slate-950 text-slate-100 rounded-lg text-xs font-mono overflow-auto max-h-[260px] border border-slate-800 leading-relaxed shadow-inner">
+                    {JSON.stringify(selectedLog.responsePayload, null, 2)}
+                  </pre>
                 </div>
               )}
             </div>
