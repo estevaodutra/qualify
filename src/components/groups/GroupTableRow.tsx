@@ -101,8 +101,8 @@ export const GroupTableRow: React.FC<GroupTableRowProps> = ({
         isEven ? "bg-transparent" : "bg-muted/20"
       )}
     >
-      {/* GRUPO: Photo + Name + Folder */}
-      <td className="px-3 py-2.5 align-middle">
+      {/* GRUPO: Photo + Name + JID + Folder */}
+      <td className="px-3.5 py-2.5 align-middle">
         <div className="flex items-center gap-2.5 min-w-0">
           <Avatar className="h-8 w-8 border border-border shrink-0">
             <AvatarImage src={group.pictureUrl || undefined} alt={group.name} className="object-cover" />
@@ -115,7 +115,7 @@ export const GroupTableRow: React.FC<GroupTableRowProps> = ({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="text-[12px] font-bold text-foreground truncate max-w-[180px] hover:text-primary transition-colors">
+                  <span className="text-[12px] font-bold text-foreground truncate max-w-[200px] hover:text-primary transition-colors">
                     {group.name}
                   </span>
                 </TooltipTrigger>
@@ -128,54 +128,37 @@ export const GroupTableRow: React.FC<GroupTableRowProps> = ({
               </Tooltip>
             </TooltipProvider>
 
-            <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+              {group.groupJid ? (
+                <button
+                  type="button"
+                  onClick={copyGroupJid}
+                  className="flex items-center gap-1 text-[10px] text-muted-foreground/80 font-mono hover:text-foreground transition-colors group/jid"
+                  title="Clique para copiar o ID do WhatsApp"
+                >
+                  <span className="truncate max-w-[130px]">{group.groupJid}</span>
+                  <Copy className="h-2.5 w-2.5 shrink-0 opacity-70 group-hover/jid:opacity-100" />
+                </button>
+              ) : (
+                <span className="text-[9px] text-amber-600 dark:text-amber-400 font-medium">Sem ID</span>
+              )}
+
               {group.folderName && (
                 <Badge
                   variant="outline"
-                  className="text-[9px] font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200/50 gap-1 px-1.5 py-0 mt-0.5"
+                  className="text-[9px] font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200/50 gap-1 px-1.5 py-0"
                 >
                   <Folder className="h-2 w-2" />
                   {group.folderName}
                 </Badge>
-              )}
-
-              {group.description && (
-                <span className="text-[10px] text-muted-foreground truncate max-w-[160px]">
-                  {group.description}
-                </span>
               )}
             </div>
           </div>
         </div>
       </td>
 
-      {/* ID DO GRUPO (JID Real ou Não Vinculado) */}
-      <td className="px-3 py-2.5 align-middle font-mono text-[11px] text-muted-foreground whitespace-nowrap">
-        {group.hasValidJid && group.groupJid ? (
-          <div className="flex items-center gap-1 max-w-[140px]">
-            <span className="truncate">{group.groupJid}</span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-4 w-4 shrink-0 text-muted-foreground hover:text-foreground"
-              onClick={copyGroupJid}
-              title="Copiar ID do WhatsApp"
-            >
-              <Copy className="h-2.5 w-2.5" />
-            </Button>
-          </div>
-        ) : (
-          <Badge
-            variant="outline"
-            className="text-[9px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/30 px-1.5 py-0.5"
-          >
-            Não vinculado
-          </Badge>
-        )}
-      </td>
-
       {/* PARTICIPANTES */}
-      <td className="px-3 py-2.5 align-middle text-center whitespace-nowrap">
+      <td className="px-2 py-2.5 align-middle text-center whitespace-nowrap w-20">
         <Badge variant="secondary" className="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border-indigo-200/60 font-semibold gap-1 px-2 py-0.5 text-[11px]">
           <Users className="h-3 w-3 text-indigo-600" />
           {group.participantsCount}
@@ -183,7 +166,7 @@ export const GroupTableRow: React.FC<GroupTableRowProps> = ({
       </td>
 
       {/* ADMINS */}
-      <td className="px-3 py-2.5 align-middle text-center whitespace-nowrap">
+      <td className="px-2 py-2.5 align-middle text-center whitespace-nowrap w-16">
         {group.adminsCount > 0 ? (
           <Badge variant="secondary" className="bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200/60 font-semibold gap-1 px-2 py-0.5 text-[11px]">
             <Shield className="h-3 w-3 text-amber-600" />
@@ -195,15 +178,15 @@ export const GroupTableRow: React.FC<GroupTableRowProps> = ({
       </td>
 
       {/* INSTÂNCIA */}
-      <td className="px-3 py-2.5 align-middle text-[11px] text-muted-foreground whitespace-nowrap">
-        <div className="flex items-center gap-1 max-w-[130px] truncate" title={group.instanceName || "Instância"}>
+      <td className="px-3 py-2.5 align-middle text-[11px] text-muted-foreground whitespace-nowrap hidden sm:table-cell w-32">
+        <div className="flex items-center gap-1 max-w-[120px] truncate" title={group.instanceName || "Instância"}>
           <Radio className="h-3 w-3 text-emerald-500 shrink-0" />
           <span className="truncate">{group.instanceName || "Instância Geral"}</span>
         </div>
       </td>
 
       {/* ÚLTIMA ATIVIDADE */}
-      <td className="px-3 py-2.5 align-middle text-[11px] text-muted-foreground whitespace-nowrap">
+      <td className="px-3 py-2.5 align-middle text-[11px] text-muted-foreground whitespace-nowrap hidden md:table-cell w-32">
         <div className="flex items-center gap-1 whitespace-nowrap">
           <Clock className="h-3 w-3 text-muted-foreground/70 shrink-0" />
           <span className="whitespace-nowrap">{timeAgo}</span>
@@ -211,12 +194,12 @@ export const GroupTableRow: React.FC<GroupTableRowProps> = ({
       </td>
 
       {/* DATA */}
-      <td className="px-3 py-2.5 align-middle text-[11px] font-mono text-muted-foreground whitespace-nowrap">
+      <td className="px-3 py-2.5 align-middle text-[11px] font-mono text-muted-foreground whitespace-nowrap hidden 2xl:table-cell w-24">
         {group.createdAt ? format(new Date(group.createdAt), "dd/MM/yyyy") : "—"}
       </td>
 
       {/* AÇÕES */}
-      <td className="px-3 py-2.5 align-middle text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+      <td className="px-3 py-2.5 align-middle text-right whitespace-nowrap w-16" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-end gap-1">
           <Button
             variant="ghost"

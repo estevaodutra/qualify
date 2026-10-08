@@ -756,17 +756,16 @@ export default function Groups() {
       ) : groups.length > 0 ? (
         viewMode === "table" ? (
           /* Table View */
-          <div className="overflow-x-auto w-full bg-card rounded-2xl border border-border shadow-sm">
+          <div className="w-full bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
             <table className="w-full border-collapse">
               <thead className="bg-muted/40">
                 <tr>
-                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Grupo</th>
-                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border whitespace-nowrap">ID (JID)</th>
-                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-center border-b border-border whitespace-nowrap">Membros</th>
-                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-center border-b border-border whitespace-nowrap">Admins</th>
-                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border whitespace-nowrap">Instância</th>
-                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border whitespace-nowrap">Última Atividade</th>
-                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border whitespace-nowrap">Data</th>
+                  <th className="px-3.5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border">Grupo</th>
+                  <th className="px-2 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-center border-b border-border whitespace-nowrap w-20">Membros</th>
+                  <th className="px-2 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-center border-b border-border whitespace-nowrap w-16">Admins</th>
+                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border whitespace-nowrap w-32 hidden sm:table-cell">Instância</th>
+                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border whitespace-nowrap w-32 hidden md:table-cell">Última Atividade</th>
+                  <th className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left border-b border-border whitespace-nowrap w-24 hidden 2xl:table-cell">Data</th>
                   <th className="px-3 py-2.5 border-b border-border w-16 text-right whitespace-nowrap">Ações</th>
                 </tr>
               </thead>
