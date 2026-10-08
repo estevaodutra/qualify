@@ -1793,11 +1793,32 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Recover saved execution record if resuming
+      let savedExecutionRecord: any = null;
+      if (isResumedExecution && executionId) {
+        try {
+          const { data: savedEx } = await supabase
+            .from("sequence_executions")
+            .select("*")
+            .eq("id", executionId)
+            .maybeSingle();
+          savedExecutionRecord = savedEx;
+          if (savedExecutionRecord?.destinations && Array.isArray(savedExecutionRecord.destinations) && savedExecutionRecord.destinations.length > 0) {
+            if (destinations.length === 0) {
+              destinations = savedExecutionRecord.destinations;
+              console.log(`[ExecuteMessage] 🔄 Recovered ${destinations.length} destinations from saved execution state`);
+            }
+          }
+        } catch (fetchSavedErr) {
+          console.warn("[ExecuteMessage] Could not fetch saved execution record (non-fatal):", fetchSavedErr);
+        }
+      }
+
       // Membership validation: private phone destinations must be active group members
       let effectiveDests = destinations;
       
-      // Skip membership validation for webhook triggers and manual node tests to allow external/test leads
-      if (!isTriggeredExecution && !isManualNodeExecution) {
+      // Skip membership validation for webhook triggers, manual node tests, and resumed executions to allow external/test leads
+      if (!isTriggeredExecution && !isManualNodeExecution && !isResumedExecution) {
         const privatePhoneDests = destinations.filter(
           (d: DestinationData) => d.isPrivate && d.group_jid?.endsWith("@s.whatsapp.net")
         );
@@ -1878,10 +1899,75 @@ Deno.serve(async (req) => {
       }
 
       while (currentNodeId) {
-        const node = sortedNodes.find(n => n.id === currentNodeId);
+        let node = sortedNodes.find(n => n.id === currentNodeId);
         if (!node) {
-          console.warn(`[ExecuteMessage] Node ${currentNodeId} not found in sequence, terminating execution.`);
-          break;
+          console.warn(`[ExecuteMessage] Node ${currentNodeId} not found directly in sortedNodes, attempting robust recovery...`);
+
+          // 1. Try to find the node in savedExecutionRecord.nodes_data (snapshot from when execution was paused)
+          if (savedExecutionRecord?.nodes_data && Array.isArray(savedExecutionRecord.nodes_data)) {
+            const savedNode = (savedExecutionRecord.nodes_data as SequenceNode[]).find((n: SequenceNode) => n.id === currentNodeId);
+            if (savedNode) {
+              const matchedNode = sortedNodes.find(n => n.node_order === savedNode.node_order) 
+                               || sortedNodes.find(n => n.node_type === savedNode.node_type);
+              if (matchedNode) {
+                console.log(`[ExecuteMessage] 🔄 Recovered node by saved order/type: ${currentNodeId} -> ${matchedNode.id} (${matchedNode.node_type})`);
+                node = matchedNode;
+                currentNodeId = matchedNode.id;
+              } else {
+                console.log(`[ExecuteMessage] 🔄 Using saved node snapshot directly: ${savedNode.id} (${savedNode.node_type})`);
+                node = savedNode;
+              }
+            }
+          }
+
+          // 2. Try to find the target of the last executed node (e.g. the delay node) via sequence_connections
+          if (!node && workflowExecutionId) {
+            try {
+              const { data: lastExecNodes } = await supabase
+                .from("workflow_node_executions")
+                .select("node_id, node_type, status, created_at")
+                .eq("execution_id", workflowExecutionId)
+                .eq("status", "success")
+                .order("created_at", { ascending: false })
+                .limit(5);
+
+              if (lastExecNodes && lastExecNodes.length > 0) {
+                for (const lastNode of lastExecNodes) {
+                  const conn = connections.find(c => c.source_node_id === lastNode.node_id);
+                  if (conn) {
+                    const targetNode = sortedNodes.find(n => n.id === conn.target_node_id);
+                    if (targetNode) {
+                      console.log(`[ExecuteMessage] 🔄 Recovered node via connection from last executed node (${lastNode.node_type} ${lastNode.node_id}): -> ${targetNode.id} (${targetNode.node_type})`);
+                      node = targetNode;
+                      currentNodeId = targetNode.id;
+                      break;
+                    }
+                  }
+                }
+              }
+            } catch (recovErr) {
+              console.warn("[ExecuteMessage] Connection-based node recovery error (non-fatal):", recovErr);
+            }
+          }
+
+          // 3. Fallback: match by startFromNodeIndex or current_node_index
+          if (!node) {
+            const targetIdx = (startFromNodeIndex !== undefined && startFromNodeIndex >= 0) 
+              ? startFromNodeIndex 
+              : (savedExecutionRecord?.current_node_index !== undefined && savedExecutionRecord.current_node_index >= 0)
+              ? savedExecutionRecord.current_node_index
+              : -1;
+            if (targetIdx >= 0 && targetIdx < sortedNodes.length) {
+              console.log(`[ExecuteMessage] 🔄 Recovered node by index ${targetIdx}: ${sortedNodes[targetIdx].id} (${sortedNodes[targetIdx].node_type})`);
+              node = sortedNodes[targetIdx];
+              currentNodeId = node.id;
+            }
+          }
+
+          if (!node) {
+            console.error(`[ExecuteMessage] ❌ Could not recover node ${currentNodeId} in sequence, terminating execution.`);
+            break;
+          }
         }
 
         // Loop counter prevention (max 5 executions of same node)
@@ -2867,6 +2953,7 @@ Deno.serve(async (req) => {
           const resumeAt = new Date(nodeStartedAt.getTime() + delayMs);
           const nextConn = connections.find(c => c.source_node_id === node.id);
           const nextNodeId = nextConn ? nextConn.target_node_id : null;
+          const nextNodeIndex = nextNodeId ? sortedNodes.findIndex(n => n.id === nextNodeId) : nodesProcessed + 1;
 
           const delayOutput = {
             delay: {
@@ -2889,11 +2976,12 @@ Deno.serve(async (req) => {
                 campaign_id: effectiveCampaignId,
                 sequence_id: effectiveSequenceId,
                 message_id: typedMessage?.id || null,
+                current_node_id: nextNodeId,
+                current_node_index: nextNodeIndex >= 0 ? nextNodeIndex : nodesProcessed + 1,
                 trigger_context: {
                   ...(triggerContext || {}),
                   resumeNodeId: nextNodeId,
                 },
-                current_node_index: 0, // Not index-based anymore, but maintain legacy column
                 nodes_data: sortedNodes,
                 destinations: effectiveDests,
                 status: "paused",
@@ -3434,6 +3522,7 @@ Deno.serve(async (req) => {
             const resumeAt = new Date(nodeStartedAt.getTime() + delayMs);
             const nextConn = connections.find(c => c.source_node_id === node.id);
             const nextNodeId = nextConn ? nextConn.target_node_id : null;
+            const nextNodeIndex = nextNodeId ? sortedNodes.findIndex(n => n.id === nextNodeId) : nodesProcessed + 1;
 
             const delayOutput = {
               delay: {
@@ -3457,6 +3546,8 @@ Deno.serve(async (req) => {
                   campaign_id: effectiveCampaignId,
                   sequence_id: effectiveSequenceId,
                   message_id: typedMessage?.id || null,
+                  current_node_id: nextNodeId,
+                  current_node_index: nextNodeIndex >= 0 ? nextNodeIndex : nodesProcessed + 1,
                   trigger_context: {
                     ...(triggerContext || {}),
                     resumeNodeId: nextNodeId,
@@ -4750,11 +4841,22 @@ Deno.serve(async (req) => {
 
       // Finalize this run's workflow_executions row (observability, non-fatal)
       try {
+        let finalDurationMs = Date.now() - startTime;
+        if (isResumedExecution && executionId) {
+          const { data: origWf } = await supabase
+            .from("workflow_executions")
+            .select("started_at")
+            .eq("id", executionId)
+            .maybeSingle();
+          if (origWf?.started_at) {
+            finalDurationMs = Math.max(0, Date.now() - new Date(origWf.started_at).getTime());
+          }
+        }
         await supabase.from("workflow_executions")
           .update({
             status: nodesFailed === 0 ? "success" : "error",
             finished_at: new Date().toISOString(),
-            duration_ms: Date.now() - startTime,
+            duration_ms: finalDurationMs,
             error_message: nodesFailed > 0 ? (firstNodeError || `${nodesFailed} node(s) failed`) : null,
           })
           .eq("id", workflowExecutionId);

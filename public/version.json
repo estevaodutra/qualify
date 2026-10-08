@@ -1,6 +1,6 @@
 {
-  "commit": "03543bfeff24ad0e96e60e894e67f419a1f66730",
-  "shortCommit": "03543bf",
-  "message": "fix(workflows): auto-dispatch pipeline_changed triggers when deals are created or moved automatically by workflow actions",
-  "builtAt": "2026-10-07T23:48:20.258Z"
+  "commit": "83d6b8225b089563014af8c0f40a7b5501c1c8df",
+  "shortCommit": "83d6b82",
+  "message": "fix(workflows): prevent create_lead and create_deal from running for WhatsApp LIDs or invalid non-phone numbers",
+  "builtAt": "2026-10-08T01:49:25.322Z"
 }

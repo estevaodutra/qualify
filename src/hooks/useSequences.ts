@@ -415,11 +415,14 @@ export function useSequenceNodes(sequenceId: string | undefined) {
         .delete()
         .eq("sequence_id", sequenceId);
 
-      // Insert new nodes and get generated IDs
+      const isUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+
+      // Insert nodes preserving existing UUIDs or generating a stable UUID for new nodes
       if (nodesToSave.length > 0) {
-        const { data: insertedNodes, error } = await supabase
-          .from("sequence_nodes")
-          .insert(nodesToSave.map((node, index) => ({
+        const rowsToInsert = nodesToSave.map((node, index) => {
+          const nodeDbId = isUUID(node.localId) ? node.localId : crypto.randomUUID();
+          return {
+            id: nodeDbId,
             sequence_id: sequenceId!,
             user_id: user.id,
             company_id: companyId,
@@ -428,17 +431,20 @@ export function useSequenceNodes(sequenceId: string | undefined) {
             position_y: node.positionY,
             node_order: node.nodeOrder ?? index,
             config: node.config as Json,
-          })))
+          };
+        });
+
+        const { data: insertedNodes, error } = await supabase
+          .from("sequence_nodes")
+          .insert(rowsToInsert)
           .select("id");
 
         if (error) throw error;
 
-        // Create mapping: localId -> dbId (by insertion order)
+        // Create mapping: localId -> dbId
         const idMapping: Record<string, string> = {};
         nodesToSave.forEach((node, index) => {
-          if (insertedNodes && insertedNodes[index]) {
-            idMapping[node.localId] = insertedNodes[index].id;
-          }
+          idMapping[node.localId] = rowsToInsert[index].id;
         });
 
         return idMapping;
