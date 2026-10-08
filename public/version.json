@@ -1,6 +1,6 @@
 {
-  "commit": "83d6b8225b089563014af8c0f40a7b5501c1c8df",
-  "shortCommit": "83d6b82",
-  "message": "fix(workflows): prevent create_lead and create_deal from running for WhatsApp LIDs or invalid non-phone numbers",
-  "builtAt": "2026-10-08T01:49:25.322Z"
+  "commit": "d3bfa915a2ff52812cbc72efe7b487488a9937a4",
+  "shortCommit": "d3bfa91",
+  "message": "fix(workflow): garantir pausa e salvamento automatico em entradas do usuario subsequentes",
+  "builtAt": "2026-10-08T02:28:25.810Z"
 }

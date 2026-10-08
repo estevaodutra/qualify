@@ -453,100 +453,118 @@ export default function MessageThread({
                     </div>
                   )}
 
-                  {/* Render content by type */}
-                  {msg.message_type === "text" && (
-                    <FormattedChatMessageText content={msg.body} />
-                  )}
+                  {/* Render content by type with fallback for media_url presence */}
+                  {(() => {
+                    const isImg = msg.message_type === "image" || 
+                      Boolean(msg.media_url && (msg.media_type === "image" || /\.(jpeg|jpg|gif|png|webp|svg)($|\?)/i.test(msg.media_url)));
 
-                  {msg.message_type === "image" && (
-                    <div className="space-y-1">
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <div className="block overflow-hidden rounded-lg border border-border/20 max-w-[240px] cursor-pointer">
-                            <img src={msg.media_url || ""} alt="Anexo" className="w-full h-auto object-cover max-h-60 hover:scale-105 transition-transform duration-300" />
-                          </div>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-4xl w-full h-auto max-h-[90vh] p-1 border-none bg-transparent shadow-none flex justify-center items-center">
-                          <img src={msg.media_url || ""} alt="Anexo Ampliado" className="max-w-full max-h-[85vh] object-contain rounded-md" />
-                        </DialogContent>
-                      </Dialog>
-                      {msg.body && !msg.body.startsWith("[") && <FormattedChatMessageText content={msg.body} className="mt-1.5" />}
-                    </div>
-                  )}
+                    const isVid = (msg.message_type === "video" || msg.message_type === "ptv" || msg.message_type === "video-note" || msg.message_type === "video_note") ||
+                      Boolean(msg.media_url && !isImg && (msg.media_type === "video" || /\.(mp4|webm|mov|mkv)($|\?)/i.test(msg.media_url)));
 
-                  {msg.message_type === "sticker" && (
-                    <div className="space-y-1">
-                      <div className="block overflow-hidden rounded-lg max-w-[160px]">
-                        <img src={msg.media_url || ""} alt="Figurinha" className="w-full h-auto object-contain max-h-40" />
-                      </div>
-                    </div>
-                  )}
+                    const isSticker = msg.message_type === "sticker";
+                    const isDoc = msg.message_type === "document" || Boolean(msg.media_url && !isImg && !isVid && msg.media_type === "document");
+                    const isLoc = msg.message_type === "location";
 
-                  {(msg.message_type === "video" || msg.message_type === "ptv" || msg.message_type === "video-note" || msg.message_type === "video_note") && (
-                    <div className="space-y-1">
-                      {msg.media_url ? (
-                        <video 
-                          src={msg.media_url} 
-                          controls 
-                          preload="metadata" 
-                          className={cn(
-                            "max-w-[240px] rounded-lg border border-border/20 max-h-60 bg-black/5",
-                            (msg.message_type === "video-note" || msg.message_type === "video_note" || msg.message_type === "ptv") && "rounded-full w-44 h-44 object-cover border-2 border-primary/30"
-                          )} 
-                        />
-                      ) : (
-                        <div className="max-w-[240px] h-32 bg-muted/50 rounded-lg border border-border/20 flex flex-col items-center justify-center text-muted-foreground p-4 text-center">
-                          <AlertCircle className="h-6 w-6 mb-2 opacity-50" />
-                          <span className="text-xs font-semibold">Mídia não carregada</span>
-                          <span className="text-[10px] mt-1 opacity-60">URL não encontrada no payload</span>
+                    const isPlaceholder = Boolean(msg.body && /^\s*\[(imagem|image|mídia|midia|foto|documento|áudio|audio|vídeo|video|mensagem|mensagem do whatsapp)\]\s*$/i.test(msg.body));
+
+                    if (isImg) {
+                      return (
+                        <div className="space-y-1">
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <div className="block overflow-hidden rounded-lg border border-border/20 max-w-[240px] cursor-pointer">
+                                <img src={msg.media_url || ""} alt="Anexo" className="w-full h-auto object-cover max-h-60 hover:scale-105 transition-transform duration-300" />
+                              </div>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-4xl w-full h-auto max-h-[90vh] p-1 border-none bg-transparent shadow-none flex justify-center items-center">
+                              <img src={msg.media_url || ""} alt="Anexo Ampliado" className="max-w-full max-h-[85vh] object-contain rounded-md" />
+                            </DialogContent>
+                          </Dialog>
+                          {msg.body && !isPlaceholder && <FormattedChatMessageText content={msg.body} className="mt-1.5" />}
                         </div>
-                      )}
-                      {msg.body && !msg.body.startsWith("[") && <FormattedChatMessageText content={msg.body} className="mt-1.5" />}
-                    </div>
-                  )}
+                      );
+                    }
 
-                  
+                    if (isSticker) {
+                      return (
+                        <div className="space-y-1">
+                          <div className="block overflow-hidden rounded-lg max-w-[160px]">
+                            <img src={msg.media_url || ""} alt="Figurinha" className="w-full h-auto object-contain max-h-40" />
+                          </div>
+                        </div>
+                      );
+                    }
 
-                  
+                    if (isVid) {
+                      return (
+                        <div className="space-y-1">
+                          {msg.media_url ? (
+                            <video 
+                              src={msg.media_url} 
+                              controls 
+                              preload="metadata" 
+                              className={cn(
+                                "max-w-[240px] rounded-lg border border-border/20 max-h-60 bg-black/5",
+                                (msg.message_type === "video-note" || msg.message_type === "video_note" || msg.message_type === "ptv") && "rounded-full w-44 h-44 object-cover border-2 border-primary/30"
+                              )} 
+                            />
+                          ) : (
+                            <div className="max-w-[240px] h-32 bg-muted/50 rounded-lg border border-border/20 flex flex-col items-center justify-center text-muted-foreground p-4 text-center">
+                              <AlertCircle className="h-6 w-6 mb-2 opacity-50" />
+                              <span className="text-xs font-semibold">Mídia não carregada</span>
+                              <span className="text-[10px] mt-1 opacity-60">URL não encontrada no payload</span>
+                            </div>
+                          )}
+                          {msg.body && !isPlaceholder && <FormattedChatMessageText content={msg.body} className="mt-1.5" />}
+                        </div>
+                      );
+                    }
 
-                  {msg.message_type === "document" && (
-                    <div className="flex items-center gap-3 bg-background/20 p-2.5 rounded-lg border border-border/10 max-w-[240px]">
-                      <FileText className="h-8 w-8 text-primary shrink-0" />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-semibold truncate text-foreground">
-                          {msg.body || "Documento"}
-                        </p>
-                        <a
-                          href={msg.media_url || "#"}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-[10px] font-bold text-primary hover:underline"
-                        >
-                          Visualizar / Baixar
-                        </a>
-                      </div>
-                    </div>
-                  )}
+                    if (isDoc) {
+                      return (
+                        <div className="flex items-center gap-3 bg-background/20 p-2.5 rounded-lg border border-border/10 max-w-[240px]">
+                          <FileText className="h-8 w-8 text-primary shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-semibold truncate text-foreground">
+                              {msg.body || "Documento"}
+                            </p>
+                            <a
+                              href={msg.media_url || "#"}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[10px] font-bold text-primary hover:underline"
+                            >
+                              Visualizar / Baixar
+                            </a>
+                          </div>
+                        </div>
+                      );
+                    }
 
-                  {msg.message_type === "location" && (
-                    <div className="flex flex-col gap-1 max-w-[240px]">
-                      <div className="flex items-center gap-1.5">
-                        <MapPin className="h-4 w-4 text-red-500" />
-                        <span className="font-semibold text-xs">Localização</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground truncate">{msg.body || "Localização compartilhada"}</p>
-                      {msg.media_url && (
-                        <a
-                          href={msg.media_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-[10px] font-bold text-primary hover:underline pt-0.5"
-                        >
-                          Ver no Google Maps
-                        </a>
-                      )}
-                    </div>
-                  )}
+                    if (isLoc) {
+                      return (
+                        <div className="flex flex-col gap-1 max-w-[240px]">
+                          <div className="flex items-center gap-1.5">
+                            <MapPin className="h-4 w-4 text-red-500" />
+                            <span className="font-semibold text-xs">Localização</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">{msg.body || "Localização compartilhada"}</p>
+                          {msg.media_url && (
+                            <a
+                              href={msg.media_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[10px] font-bold text-primary hover:underline pt-0.5"
+                            >
+                              Ver no Google Maps
+                            </a>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    return <FormattedChatMessageText content={msg.body} />;
+                  })()}
 
                   {/* Bubble Footer (Time & Status check) */}
                   <div

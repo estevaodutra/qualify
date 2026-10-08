@@ -19,10 +19,13 @@ const syncSentMessageToChat = async (
     name?: string;
     leadId?: string | null;
     body?: string;
+    mediaUrl?: string | null;
+    messageType?: string | null;
+    mediaType?: string | null;
     externalMessageId?: string | null;
   }
 ) => {
-  if (!params.phone || !params.companyId || !params.body) return;
+  if (!params.phone || !params.companyId || (!params.body && !params.mediaUrl)) return;
   const cleanPhone = params.phone.replace(/\D/g, "");
   if (!cleanPhone) return;
 
@@ -79,6 +82,10 @@ const syncSentMessageToChat = async (
       }
     }
 
+    const effectiveMsgType = params.messageType || (params.mediaUrl ? "image" : "text");
+    const effectiveMediaType = params.mediaType || (params.mediaUrl ? (params.messageType || "image") : null);
+    const previewText = params.body || (params.mediaUrl ? `[${effectiveMsgType === 'image' ? 'Imagem' : effectiveMsgType}]` : '[Mensagem]');
+
     if (!convId) {
       const { data: newConv } = await supabase
         .from("chat_conversations")
@@ -90,7 +97,7 @@ const syncSentMessageToChat = async (
           contact_name: params.name || cleanPhone,
           status: "open",
           last_message_at: new Date().toISOString(),
-          last_message_preview: params.body,
+          last_message_preview: previewText,
         })
         .select("id")
         .single();
@@ -102,8 +109,10 @@ const syncSentMessageToChat = async (
         company_id: params.companyId,
         conversation_id: convId,
         sender_type: "operator",
-        message_type: "text",
-        body: params.body,
+        message_type: effectiveMsgType,
+        body: params.body || "",
+        media_url: params.mediaUrl || null,
+        media_type: effectiveMediaType,
         status: "sent",
         message_id: params.externalMessageId || null,
         created_at: new Date().toISOString(),
@@ -113,12 +122,12 @@ const syncSentMessageToChat = async (
         .from("chat_conversations")
         .update({
           last_message_at: new Date().toISOString(),
-          last_message_preview: params.body,
+          last_message_preview: previewText,
           updated_at: new Date().toISOString(),
         })
         .eq("id", convId);
 
-      console.log(`[ExecuteMessage] Synced sent message to chat conversation ${convId}`);
+      console.log(`[ExecuteMessage] Synced sent message (${effectiveMsgType}) to chat conversation ${convId}`);
     }
   } catch (err) {
     console.error("[ExecuteMessage] Failed to sync sent message to chat_messages:", err);
@@ -3255,9 +3264,10 @@ Deno.serve(async (req) => {
                 console.log(`[ExecuteMessage] ✅ Group mgmt ${node.node_type} on ${dest.group_name}`);
                 webhookResponses.push({ nodeType: node.node_type, nodeOrder: node.node_order, destination: dest.group_jid, status: "sent", data: responseData });
                 nodeResults.push({ destination: dest.group_jid, status: "sent" });
-                const msgText = formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.caption || "";
+                const msgText = (formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.caption || "") as string;
+                const mediaUrl = (formattedConfig.url || formattedConfig.mediaUrl || formattedConfig.image || formattedConfig.fileUrl || formattedConfig.audio || formattedConfig.video || formattedConfig.document || "") as string;
                 const destPhone = dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || "";
-                if (msgText && destPhone) {
+                if ((msgText || mediaUrl) && destPhone) {
                   await syncSentMessageToChat(supabase, {
                     companyId: triggerContext?.companyId || typedCampaign?.company_id,
                     instanceId: activeInstanceId,
@@ -3265,6 +3275,9 @@ Deno.serve(async (req) => {
                     name: dest.group_name || triggerContext?.respondentName,
                     leadId: triggerContext?.leadId || null,
                     body: msgText,
+                    mediaUrl: mediaUrl || null,
+                    messageType: node.node_type === "message" ? (mediaUrl ? "image" : "text") : node.node_type,
+                    mediaType: node.node_type === "message" ? (mediaUrl ? "image" : null) : node.node_type,
                     externalMessageId: result.messageId || null,
                   });
                 }
@@ -3743,9 +3756,10 @@ Deno.serve(async (req) => {
                 } else {
                   console.log(`[ExecuteMessage] ✅ Sub-message ${subNodeType} sent to ${dest.group_name}`);
                   const msgText = (formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.question || formattedConfig.caption || subMsg.content || subMsg.text || subMsg.message || subMsg.question || "") as string;
+                  const mediaUrl = (formattedConfig.url || formattedConfig.mediaUrl || formattedConfig.image || formattedConfig.fileUrl || formattedConfig.audio || formattedConfig.video || formattedConfig.document || subMsg.url || subMsg.mediaUrl || subMsg.image || "") as string;
                   const destPhone = (dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || triggerContext?.contactPhone || "") as string;
                   const effectiveCompanyId = triggerContext?.companyId || typedCampaign?.company_id || "dcb34e9a-1510-4137-aecd-cec0c6d548c4";
-                  if (msgText && destPhone) {
+                  if ((msgText || mediaUrl) && destPhone) {
                     await syncSentMessageToChat(supabase, {
                       companyId: effectiveCompanyId,
                       instanceId: activeInstanceId,
@@ -3753,6 +3767,9 @@ Deno.serve(async (req) => {
                       name: dest.group_name || triggerContext?.respondentName,
                       leadId: triggerContext?.leadId || null,
                       body: msgText,
+                      mediaUrl: mediaUrl || null,
+                      messageType: subNodeType === "message" ? (mediaUrl ? "image" : "text") : subNodeType,
+                      mediaType: subNodeType === "message" ? (mediaUrl ? "image" : null) : subNodeType,
                       externalMessageId: externalMessageId,
                     });
                   }
@@ -4575,6 +4592,25 @@ Deno.serve(async (req) => {
               console.log(`[ExecuteMessage] ✅ Node ${node.node_type} sent to ${dest.group_name}${dest.isPrivate ? ' (private)' : ''}`);
               webhookResponses.push({ nodeType: node.node_type, nodeOrder: node.node_order, destination: dest.group_jid, status: "sent", data: responseData });
               nodeSendResults.push({ destination: dest.group_jid, status: "sent" });
+
+              const msgText = (formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.question || formattedConfig.caption || "") as string;
+              const mediaUrl = (formattedConfig.url || formattedConfig.mediaUrl || formattedConfig.image || formattedConfig.fileUrl || formattedConfig.audio || formattedConfig.video || formattedConfig.document || "") as string;
+              const destPhone = (dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || triggerContext?.contactPhone || "") as string;
+              const effectiveCompanyId = triggerContext?.companyId || typedCampaign?.company_id || "dcb34e9a-1510-4137-aecd-cec0c6d548c4";
+              if ((msgText || mediaUrl) && destPhone) {
+                await syncSentMessageToChat(supabase, {
+                  companyId: effectiveCompanyId,
+                  instanceId: activeInstanceId,
+                  phone: destPhone,
+                  name: dest.group_name || triggerContext?.respondentName,
+                  leadId: triggerContext?.leadId || null,
+                  body: msgText,
+                  mediaUrl: mediaUrl || null,
+                  messageType: node.node_type === "message" ? (mediaUrl ? "image" : "text") : node.node_type,
+                  mediaType: node.node_type === "message" ? (mediaUrl ? "image" : null) : node.node_type,
+                  externalMessageId: externalMessageId || zaapId || null,
+                });
+              }
 
               // Add to next destinations list for subsequent sequence nodes
               nextActiveDestinations.push(dest);
