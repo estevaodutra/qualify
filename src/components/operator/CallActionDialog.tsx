@@ -928,164 +928,169 @@ export function CallActionDialog({
 
   const innerContent = (
     <div className="flex flex-col h-full w-full overflow-hidden bg-white dark:bg-slate-950">
-      {/* Lead Header */}
-      <div className="relative bg-gradient-to-b from-indigo-50/70 via-slate-50/30 to-white dark:from-indigo-950/25 dark:via-slate-900/30 dark:to-slate-950 border-b border-slate-200/70 dark:border-slate-800 px-6 pt-4 pb-3 space-y-2.5 text-center shrink-0">
+      {/* Compact Lead Header */}
+      <div className="relative bg-gradient-to-b from-indigo-50/70 via-slate-50/30 to-white dark:from-indigo-950/25 dark:via-slate-900/30 dark:to-slate-950 border-b border-slate-200/70 dark:border-slate-800 px-4 py-2.5 space-y-2 shrink-0">
         
-        {/* Window control buttons at absolute top-right */}
-        <div className="absolute top-2.5 right-2.5 flex items-center gap-1 z-30">
-          <button
-            type="button"
-            onClick={() => {
-              useCallFloatingStore.getState().minimizeCallDialog();
-              onOpenChange(false);
-            }}
-            className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
-            title="Minimizar para balão"
-          >
-            <Minus className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsDocked((prev) => !prev)}
-            className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
-            title={isDocked ? "Expandir tela cheia" : "Fixar no canto (Dock)"}
-          >
-            {isDocked ? <Maximize2 className="h-3.5 w-3.5" /> : <Minimize2 className="h-3.5 w-3.5" />}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              onOpenChange(false);
-              resetState();
-              useCallFloatingStore.getState().closeCallDialog();
-            }}
-            className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-            title="Fechar"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-
-        {/* Top action row: navigation arrows on left, forward on right */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1 min-w-[70px]">
+        {/* Row 1: Back/Forward + Avatar + Name + Timer + Window controls */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
             {operatorId && (
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 text-xs gap-1 px-2 rounded-lg text-slate-600 dark:text-slate-400 hover:text-foreground"
+                className="h-6 w-6 p-0 text-slate-500 hover:text-foreground shrink-0"
                 onClick={handleGoBack}
                 disabled={loadingPrevious}
+                title="Lead anterior"
               >
                 {loadingPrevious ? <Loader2 className="h-3 w-3 animate-spin" /> : <ChevronLeft className="h-3.5 w-3.5" />}
-                Anterior
               </Button>
             )}
-          </div>
 
-          {/* Avatar */}
-          <div className="h-12 w-12 rounded-full bg-gradient-to-tr from-violet-100 to-indigo-100 dark:from-violet-950/60 dark:to-indigo-950/60 text-primary border border-primary/20 flex items-center justify-center text-lg font-bold shadow-xs mx-auto">
-            {(currentData.leadName || "L").charAt(0).toUpperCase()}
-          </div>
+            <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-violet-100 to-indigo-100 dark:from-violet-950/60 dark:to-indigo-950/60 text-primary border border-primary/20 flex items-center justify-center text-xs font-bold shadow-2xs shrink-0">
+              {(currentData.leadName || "L").charAt(0).toUpperCase()}
+            </div>
 
-          <div className="flex items-center justify-end gap-1 min-w-[70px]">
+            {/* Lead Name */}
+            {isEditingName ? (
+              <Input
+                autoFocus
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                  if (e.key === "Escape") { setEditName(currentData.leadName); setIsEditingName(false); }
+                }}
+                onBlur={async () => {
+                  const trimmed = editName.trim();
+                  if (trimmed && trimmed !== currentData.leadName) {
+                    await (supabase as any).from("call_leads").update({ name: trimmed }).eq("id", currentData.leadId);
+                    setCurrentData(prev => ({ ...prev, leadName: trimmed }));
+                    toast({ title: "Nome atualizado" });
+                  } else {
+                    setEditName(currentData.leadName);
+                  }
+                  setIsEditingName(false);
+                }}
+                className="h-7 text-xs font-bold uppercase max-w-[200px] rounded-lg border-primary/40 px-2 py-0"
+              />
+            ) : (
+              <div className="flex items-center gap-1 min-w-0">
+                <h2 className="text-sm font-bold tracking-wide uppercase text-slate-900 dark:text-white truncate">
+                  {currentData.leadName || "Sem Nome"}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => { setEditName(currentData.leadName); setIsEditingName(true); }}
+                  className="text-slate-400 hover:text-primary transition-colors p-0.5 rounded shrink-0"
+                  title="Editar nome do lead"
+                >
+                  <Pencil className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+
             {forwardStack.length > 0 && (
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 text-xs gap-1 px-2 rounded-lg text-slate-600 dark:text-slate-400 hover:text-foreground"
+                className="h-6 w-6 p-0 text-slate-500 hover:text-foreground shrink-0"
                 onClick={handleGoForward}
+                title="Avançar"
               >
-                Avançar
                 <ChevronRight className="h-3.5 w-3.5" />
               </Button>
             )}
           </div>
-        </div>
 
-          {/* Lead Name */}
-          {isEditingName ? (
-            <Input
-              autoFocus
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") e.currentTarget.blur();
-                if (e.key === "Escape") { setEditName(currentData.leadName); setIsEditingName(false); }
-              }}
-              onBlur={async () => {
-                const trimmed = editName.trim();
-                if (trimmed && trimmed !== currentData.leadName) {
-                  await (supabase as any).from("call_leads").update({ name: trimmed }).eq("id", currentData.leadId);
-                  setCurrentData(prev => ({ ...prev, leadName: trimmed }));
-                  toast({ title: "Nome atualizado" });
-                } else {
-                  setEditName(currentData.leadName);
-                }
-                setIsEditingName(false);
-              }}
-              className="text-center text-xl md:text-2xl font-black uppercase max-w-[320px] mx-auto rounded-xl border-primary/40"
-            />
-          ) : (
-            <div className="flex items-center justify-center gap-2">
-              <h2 className="text-xl md:text-2xl font-black tracking-wide uppercase text-slate-900 dark:text-white">
-                {currentData.leadName || "Sem Nome"}
-              </h2>
-              <button
-                type="button"
-                onClick={() => { setEditName(currentData.leadName); setIsEditingName(true); }}
-                className="text-slate-400 hover:text-primary transition-colors p-1 rounded-md"
-                title="Editar nome do lead"
-              >
-                <Pencil className="h-4 w-4" />
-              </button>
-            </div>
-          )}
-
-          {/* Phone Number Pill */}
-          <div className="flex items-center justify-center">
-            <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-slate-100/90 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 shadow-2xs">
-              <Phone className="h-4 w-4 text-violet-600 dark:text-violet-400 fill-violet-600/10" />
-              <span className="text-sm md:text-base font-semibold font-mono text-slate-800 dark:text-slate-200">
-                {currentData.leadPhone ? formatPhone(currentData.leadPhone) : "Sem telefone"}
-              </span>
-              {currentData.leadPhone && (
-                <button
-                  type="button"
-                  onClick={() => copyExternalId(currentData.leadPhone)}
-                  className="text-slate-400 hover:text-foreground transition-colors p-0.5 rounded"
-                  title="Copiar número de telefone"
-                >
-                  {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
-                </button>
-              )}
-              {isWorkflowCall && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-6 px-2.5 text-[11px] font-semibold gap-1 rounded-full text-emerald-600 border-emerald-500/40 bg-emerald-50/60 hover:bg-emerald-100/80 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 shadow-2xs transition-all"
-                  onClick={handleManualDial}
-                  disabled={isDialing}
-                >
-                  {isDialing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Phone className="h-3 w-3" />}
-                  Ligar
-                </Button>
-              )}
-            </div>
+          {/* Integrated Timer Pill */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 shadow-2xs shrink-0">
+            <Timer className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 animate-pulse" />
+            <span className="text-xs font-black font-mono tracking-tight">
+              {formatDuration(currentData.duration)}
+            </span>
           </div>
 
-          {/* Badges Row */}
-          <div className="flex items-center justify-center gap-1.5 flex-wrap">
+          {/* Window control buttons */}
+          <div className="flex items-center gap-0.5 shrink-0 pl-1">
+            <button
+              type="button"
+              onClick={() => {
+                useCallFloatingStore.getState().minimizeCallDialog();
+                onOpenChange(false);
+              }}
+              className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+              title="Minimizar para balão"
+            >
+              <Minus className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsDocked((prev) => !prev)}
+              className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+              title={isDocked ? "Expandir tela cheia" : "Fixar no canto (Dock)"}
+            >
+              {isDocked ? <Maximize2 className="h-3 w-3" /> : <Minimize2 className="h-3 w-3" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onOpenChange(false);
+                resetState();
+                useCallFloatingStore.getState().closeCallDialog();
+              }}
+              className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+              title="Fechar"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+
+        {/* Row 2: Phone number + Badges + Dial action inline */}
+        <div className="flex items-center justify-between gap-2 flex-wrap text-xs pt-0.5">
+          {/* Phone pill */}
+          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80">
+            <Phone className="h-3 w-3 text-violet-600 dark:text-violet-400" />
+            <span className="font-semibold font-mono text-[11px] text-slate-800 dark:text-slate-200">
+              {currentData.leadPhone ? formatPhone(currentData.leadPhone) : "Sem telefone"}
+            </span>
+            {currentData.leadPhone && (
+              <button
+                type="button"
+                onClick={() => copyExternalId(currentData.leadPhone)}
+                className="text-slate-400 hover:text-foreground transition-colors p-0.5"
+                title="Copiar telefone"
+              >
+                {copied ? <Check className="h-2.5 w-2.5 text-emerald-500" /> : <Copy className="h-2.5 w-2.5" />}
+              </button>
+            )}
+            {isWorkflowCall && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-5 px-2 text-[10px] font-semibold gap-1 rounded-full text-emerald-600 border-emerald-500/40 bg-emerald-50/60 hover:bg-emerald-100 dark:bg-emerald-950/40"
+                onClick={handleManualDial}
+                disabled={isDialing}
+              >
+                {isDialing ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Phone className="h-2.5 w-2.5" />}
+                Ligar
+              </Button>
+            )}
+          </div>
+
+          {/* Badges inline */}
+          <div className="flex items-center gap-1 flex-wrap">
             {currentData.campaignName && (
-              <Badge variant="outline" className="text-xs bg-amber-500/5 text-amber-700 dark:text-amber-300 border-amber-300/60 rounded-lg py-0.5">
+              <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-amber-500/5 text-amber-700 dark:text-amber-300 border-amber-300/60 rounded">
                 📁 {currentData.campaignName}
               </Badge>
             )}
-            <Badge variant="outline" className="text-xs bg-blue-500/5 text-blue-700 dark:text-blue-300 border-blue-300/60 rounded-lg py-0.5">
+            <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-blue-500/5 text-blue-700 dark:text-blue-300 border-blue-300/60 rounded">
               🔄 x{currentData.attemptNumber}/{currentData.maxAttempts}
             </Badge>
             {currentData.isPriority && (
-              <Badge variant="secondary" className="text-xs bg-amber-500/15 text-amber-800 dark:text-amber-200 border-amber-400/50 rounded-lg py-0.5 font-medium">
+              <Badge variant="secondary" className="text-[10px] py-0 px-1.5 bg-amber-500/15 text-amber-800 dark:text-amber-200 border-amber-400/50 rounded font-medium">
                 ⭐ Prioridade
               </Badge>
             )}
@@ -1095,96 +1100,67 @@ export function CallActionDialog({
                 className: "bg-primary/10 text-primary border-primary/20",
               };
               return (
-                <Badge variant="outline" className={cn("text-xs rounded-lg py-0.5 font-medium", style.className)}>
+                <Badge variant="outline" className={cn("text-[10px] py-0 px-1.5 rounded font-medium", style.className)}>
                   {style.label}
                 </Badge>
               );
             })()}
-          </div>
-
-          {/* External Call ID */}
-          {currentData.externalCallId && (
-            <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground font-mono">
-              <span className="truncate max-w-[280px]">🆔 {currentData.externalCallId}</span>
-              <button
-                type="button"
-                onClick={() => copyExternalId(currentData.externalCallId!)}
-                className="text-muted-foreground hover:text-foreground transition-colors"
-                title="Copiar ID Externo"
-              >
-                {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
-              </button>
-            </div>
-          )}
-
-          {/* Audio recording player */}
-          {currentData.audioUrl && (
-            <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-2.5 w-full max-w-sm mx-auto shadow-2xs">
-              <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-center gap-1">
-                🎧 Gravação da chamada
-              </p>
-              <audio controls className="w-full h-8" src={currentData.audioUrl} preload="metadata">
-                Seu navegador não suporta áudio.
-              </audio>
-            </div>
-          )}
-
-          {/* Duração da chamada — CENTRALIZADO (Correção do erro do card no canto) */}
-          <div className="flex justify-center pt-1 pb-1">
-            <div className="inline-flex items-center gap-3.5 px-6 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-[0_2px_12px_rgba(0,0,0,0.05)]">
-              <div className="w-9 h-9 rounded-xl bg-violet-50 dark:bg-violet-950/60 border border-violet-100 dark:border-violet-900/60 flex items-center justify-center text-violet-600 dark:text-violet-400">
-                <Timer className="w-5 h-5" />
-              </div>
-              <div className="flex flex-col text-left">
-                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider">
-                  Duração da chamada
-                </span>
-                <span className="text-2xl md:text-3xl font-black font-mono tracking-tight text-emerald-500 leading-none mt-0.5">
-                  {formatDuration(currentData.duration)}
-                </span>
-              </div>
-            </div>
+            {currentData.externalCallId && (
+              <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[120px]" title={currentData.externalCallId}>
+                #{currentData.externalCallId}
+              </span>
+            )}
           </div>
         </div>
 
+        {/* Audio recording player (if available) */}
+        {currentData.audioUrl && (
+          <div className="rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-1.5">
+            <audio controls className="w-full h-6" src={currentData.audioUrl} preload="metadata">
+              Seu navegador não suporta áudio.
+            </audio>
+          </div>
+        )}
+      </div>
+
         {/* Tabs */}
         <Tabs defaultValue="call" className="flex-1 flex flex-col min-h-0 bg-white dark:bg-slate-950">
-          <div className="px-6 pt-3 pb-2 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-900/20">
-            <TabsList className="grid grid-cols-2 w-full max-w-[340px] mx-auto p-1 bg-slate-200/60 dark:bg-slate-800/80 rounded-xl">
+          <div className="px-4 py-1.5 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-900/20 shrink-0">
+            <TabsList className="grid grid-cols-2 w-full max-w-[280px] mx-auto h-7 p-0.5 bg-slate-200/60 dark:bg-slate-800/80 rounded-lg">
               <TabsTrigger
                 value="call"
-                className="rounded-lg py-1.5 text-xs font-bold gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
+                className="rounded-md py-0.5 text-[11px] font-bold gap-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
               >
-                <Phone className="h-3.5 w-3.5" /> Ligação
+                <Phone className="h-3 w-3" /> Ligação
               </TabsTrigger>
               <TabsTrigger
                 value="history"
-                className="rounded-lg py-1.5 text-xs font-bold gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
+                className="rounded-md py-0.5 text-[11px] font-bold gap-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
               >
-                <History className="h-3.5 w-3.5" /> Histórico
+                <History className="h-3 w-3" /> Histórico ({history.length})
               </TabsTrigger>
             </TabsList>
           </div>
 
           {/* Call Tab */}
           <TabsContent value="call" className="flex-1 min-h-0 mt-0 flex flex-col">
-            <ScrollArea className="flex-1 min-h-0 px-6 py-4">
-              <div className="space-y-4">
+            <ScrollArea className="flex-1 min-h-0 px-3.5 py-2">
+              <div className="space-y-2.5">
                 
                 {/* ROTEIRO SECTION */}
-                <Collapsible defaultOpen>
-                  <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs overflow-hidden">
-                    <CollapsibleTrigger className="flex items-center justify-between w-full px-4 py-3 bg-slate-50/60 dark:bg-slate-900/60 hover:bg-slate-100/60 dark:hover:bg-slate-800/60 transition-colors">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-violet-600 dark:text-violet-400" />
-                        <span className="text-xs font-extrabold tracking-wider uppercase text-slate-700 dark:text-slate-300">
-                          ROTEIRO
+                <Collapsible defaultOpen={false}>
+                  <div className="rounded-lg border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs overflow-hidden">
+                    <CollapsibleTrigger className="flex items-center justify-between w-full px-3 py-1.5 bg-slate-50/60 dark:bg-slate-900/60 hover:bg-slate-100/60 dark:hover:bg-slate-800/60 transition-colors">
+                      <div className="flex items-center gap-1.5">
+                        <FileText className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                        <span className="text-[11px] font-extrabold tracking-wider uppercase text-slate-700 dark:text-slate-300">
+                          ROTEIRO DA LIGAÇÃO
                         </span>
                       </div>
-                      <ChevronDown className="h-4 w-4 text-slate-400 transition-transform duration-200 data-[state=closed]:-rotate-90" />
+                      <ChevronDown className="h-3.5 w-3.5 text-slate-400 transition-transform duration-200 data-[state=closed]:-rotate-90" />
                     </CollapsibleTrigger>
                     
-                    <CollapsibleContent className="p-4 border-t border-slate-100 dark:border-slate-800">
+                    <CollapsibleContent className="p-3 border-t border-slate-100 dark:border-slate-800 max-h-36 overflow-y-auto">
                       {isWorkflowCall ? (
                         workflowTaskLoading ? (
                           <div className="flex items-center justify-center gap-2 py-4 text-xs text-muted-foreground">
@@ -1323,31 +1299,31 @@ export function CallActionDialog({
                 )}
 
                 {/* AÇÕES SECTION */}
-                <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs p-4 space-y-3">
+                <div className="rounded-lg border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs p-2.5 space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Target className="h-4 w-4 text-violet-600 dark:text-violet-400" />
-                      <span className="text-xs font-extrabold tracking-wider uppercase text-slate-700 dark:text-slate-300">
+                    <div className="flex items-center gap-1.5">
+                      <Target className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                      <span className="text-[11px] font-extrabold tracking-wider uppercase text-slate-700 dark:text-slate-300">
                         AÇÕES
                       </span>
                     </div>
-                    <span className="text-[11px] text-muted-foreground font-medium">
+                    <span className="text-[10px] text-muted-foreground font-medium">
                       Selecione o desfecho da chamada
                     </span>
                   </div>
 
                   {(isWorkflowCall ? workflowTaskLoading : actionsLoading) ? (
-                    <div className="flex justify-center py-6">
-                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                    <div className="flex justify-center py-4">
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
                     </div>
                   ) : (
                     <>
                       {!isWorkflowCall && actions.length === 0 && (
-                        <div className="rounded-lg border border-dashed border-amber-300/60 p-3 bg-amber-50/40 dark:bg-amber-950/20 text-xs text-amber-800 dark:text-amber-300">
-                          ⚠️ Nenhuma ação customizada configurada para esta campanha. Usando ações padrão:
+                        <div className="rounded-lg border border-dashed border-amber-300/60 p-2 bg-amber-50/40 dark:bg-amber-950/20 text-[11px] text-amber-800 dark:text-amber-300">
+                          ⚠️ Nenhuma ação customizada. Usando ações padrão:
                         </div>
                       )}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                         {displayActions.map((action) => {
                           const isConfirming = confirmingActionId === action.id;
                           const isExecuting = executingActionId === action.id;
@@ -1358,13 +1334,13 @@ export function CallActionDialog({
                             <div
                               key={action.id}
                               className={cn(
-                                "relative flex items-center justify-between p-3 rounded-xl border text-left transition-all",
+                                "relative flex items-center justify-between p-2 rounded-lg border text-left transition-all",
                                 isExecuted
                                   ? "border-emerald-500/50 bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-950 dark:text-emerald-200"
                                   : isConfirming
-                                  ? "border-[#3B4DFF] ring-2 ring-[#3B4DFF]/25 bg-[#3B4DFF]/5 shadow-xs"
+                                  ? "border-[#3B4DFF] ring-2 ring-[#3B4DFF]/25 bg-[#3B4DFF]/5 shadow-2xs"
                                   : isSelected
-                                  ? "border-[#3B4DFF] bg-[#3B4DFF]/10 shadow-xs"
+                                  ? "border-[#3B4DFF] bg-[#3B4DFF]/10 shadow-2xs"
                                   : "border-slate-200/90 dark:border-slate-700/80 hover:border-[#3B4DFF]/50 hover:bg-slate-50/60 dark:hover:bg-slate-800/40"
                               )}
                             >
@@ -1376,39 +1352,38 @@ export function CallActionDialog({
                                   setSelectedActionId(action.id);
                                   setConfirmingActionId(isConfirming ? null : action.id);
                                 }}
-                                className="flex items-center gap-2.5 flex-1 min-w-0 text-left focus:outline-none"
+                                className="flex items-center gap-2 flex-1 min-w-0 text-left focus:outline-none"
                               >
                                 <span
-                                  className="h-3.5 w-3.5 rounded-full shrink-0 shadow-2xs"
+                                  className="h-2.5 w-2.5 rounded-full shrink-0 shadow-2xs"
                                   style={{ backgroundColor: action.color }}
                                 />
-                                <span className="font-semibold text-xs md:text-sm text-slate-800 dark:text-slate-100 truncate">
+                                <span className="font-semibold text-xs text-slate-800 dark:text-slate-100 truncate">
                                   {action.name}
                                 </span>
                               </button>
 
                               {/* Action controls: Certinho (✓) and Xizinho (✗) confirmation */}
-                              <div className="flex items-center gap-1.5 shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center gap-1 shrink-0 ml-1.5" onClick={(e) => e.stopPropagation()}>
                                 {isExecuting ? (
-                                  <div className="flex items-center gap-1 text-xs text-primary font-semibold">
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                    <span className="hidden sm:inline">Enviando...</span>
+                                  <div className="flex items-center gap-1 text-[10px] text-primary font-semibold">
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    <span>Enviando...</span>
                                   </div>
                                 ) : isExecuted ? (
-                                  <Badge variant="outline" className="text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300 gap-1 py-0.5 rounded-md">
-                                    <Check className="h-3 w-3" /> Enviado
+                                  <Badge variant="outline" className="text-[9px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300 gap-0.5 py-0 px-1 rounded">
+                                    <Check className="h-2.5 w-2.5" /> Enviado
                                   </Badge>
                                 ) : isConfirming ? (
                                   <div className="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-150">
-                                    <span className="text-[10px] font-medium text-slate-500 mr-0.5 hidden sm:inline">Enviar?</span>
                                     <Button
                                       type="button"
                                       size="icon"
                                       title="Confirmar e enviar agora"
                                       onClick={() => handleExecuteActionNow(action)}
-                                      className="h-7 w-7 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-xs"
+                                      className="h-6 w-6 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md shadow-xs"
                                     >
-                                      <Check className="h-3.5 w-3.5" />
+                                      <Check className="h-3 w-3" />
                                     </Button>
                                     <Button
                                       type="button"
@@ -1416,13 +1391,13 @@ export function CallActionDialog({
                                       variant="ghost"
                                       title="Cancelar"
                                       onClick={() => setConfirmingActionId(null)}
-                                      className="h-7 w-7 text-slate-400 hover:text-destructive hover:bg-destructive/10 rounded-lg"
+                                      className="h-6 w-6 text-slate-400 hover:text-destructive hover:bg-destructive/10 rounded-md"
                                     >
-                                      <X className="h-3.5 w-3.5" />
+                                      <X className="h-3 w-3" />
                                     </Button>
                                   </div>
                                 ) : (
-                                  <span className="text-xs text-slate-400 opacity-60">
+                                  <span className="text-[11px] text-slate-400 opacity-60">
                                     {action.icon}
                                   </span>
                                 )}
@@ -1432,8 +1407,8 @@ export function CallActionDialog({
                         })}
                       </div>
                       {actions.length > 0 && (
-                        <p className="text-[11px] text-muted-foreground mt-1">
-                          ℹ️ Ações carregadas da campanha "{currentData.campaignName}"
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                          ℹ️ Ações de "{currentData.campaignName}"
                         </p>
                       )}
                     </>
@@ -1504,15 +1479,15 @@ export function CallActionDialog({
                 )}
 
                 {/* OBSERVAÇÕES (OPCIONAL) */}
-                <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs p-4 space-y-2.5">
+                <div className="rounded-lg border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs p-2.5 space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <PenLine className="h-4 w-4 text-violet-600 dark:text-violet-400" />
-                      <span className="text-xs font-extrabold tracking-wider uppercase text-slate-700 dark:text-slate-300">
+                    <div className="flex items-center gap-1.5">
+                      <PenLine className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                      <span className="text-[11px] font-extrabold tracking-wider uppercase text-slate-700 dark:text-slate-300">
                         OBSERVAÇÕES (OPCIONAL)
                       </span>
                     </div>
-                    <span className="text-[11px] font-mono text-slate-400">
+                    <span className="text-[10px] font-mono text-slate-400">
                       {notes.length}/500
                     </span>
                   </div>
@@ -1521,34 +1496,9 @@ export function CallActionDialog({
                     maxLength={500}
                     onChange={(e) => setNotes(e.target.value)}
                     placeholder="Anotações sobre a ligação..."
-                    className="mt-1 rounded-xl border-slate-200 dark:border-slate-700 focus-visible:ring-primary/30 min-h-[90px] resize-none text-xs md:text-sm"
-                    rows={3}
+                    className="mt-0.5 rounded-lg border-slate-200 dark:border-slate-700 focus-visible:ring-primary/30 min-h-[44px] h-12 resize-none text-xs p-2"
+                    rows={2}
                   />
-                </div>
-
-                {/* Footer Buttons */}
-                <div className="flex items-center justify-end gap-3 pt-3 pb-1 border-t border-slate-100 dark:border-slate-800">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => onOpenChange(false)}
-                    className="rounded-xl px-5 h-10 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold text-xs text-slate-700 dark:text-slate-300"
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={handleSave}
-                    disabled={!selectedActionId || isSaving}
-                    className="rounded-xl px-6 h-10 bg-gradient-to-r from-[#7C3AED] to-[#3B4DFF] hover:opacity-95 text-white font-bold text-xs shadow-md shadow-indigo-500/20 flex items-center gap-2 transition-all disabled:opacity-50"
-                  >
-                    {isSaving ? (
-                      <Loader2 className="h-4 w-4 animate-spin text-white" />
-                    ) : (
-                      <CheckCircle2 className="h-4 w-4 text-emerald-300" />
-                    )}
-                    Salvar e Encerrar
-                  </Button>
                 </div>
               </div>
             </ScrollArea>
@@ -1655,6 +1605,44 @@ export function CallActionDialog({
             </ScrollArea>
           </TabsContent>
         </Tabs>
+
+        {/* Docked Footer Bar - Always visible without scroll */}
+        <div className="shrink-0 border-t border-slate-200/80 dark:border-slate-800 px-4 py-2 bg-slate-50/90 dark:bg-slate-900/90 backdrop-blur-md flex items-center justify-between gap-2">
+          <div className="text-[11px] text-muted-foreground truncate max-w-[200px]">
+            {selectedActionId ? (
+              <span className="font-semibold text-primary">
+                ✓ {displayActions.find(a => a.id === selectedActionId)?.name}
+              </span>
+            ) : (
+              <span className="text-slate-400">Selecione uma ação</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onOpenChange(false)}
+              className="rounded-lg px-3 h-8 text-xs font-semibold border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleSave}
+              disabled={!selectedActionId || isSaving}
+              className="rounded-lg px-4 h-8 bg-gradient-to-r from-[#7C3AED] to-[#3B4DFF] hover:opacity-95 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 disabled:opacity-50"
+            >
+              {isSaving ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-white" />
+              ) : (
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />
+              )}
+              Salvar e Encerrar
+            </Button>
+          </div>
+        </div>
     </div>
   );
 
@@ -1663,7 +1651,7 @@ export function CallActionDialog({
       <div
         className={cn(
           "fixed bottom-3 right-3 sm:bottom-5 sm:right-5 z-[90]",
-          "w-[calc(100vw-24px)] sm:w-[490px] h-[660px] max-h-[88vh]",
+          "w-[calc(100vw-24px)] sm:w-[500px] md:w-[520px] h-[640px] max-h-[92vh]",
           "flex flex-col bg-white dark:bg-slate-950 rounded-2xl shadow-[0_12px_50px_-10px_rgba(0,0,0,0.35)] border border-slate-200/80 dark:border-slate-800 overflow-hidden",
           "animate-in slide-in-from-bottom-5 fade-in duration-200"
         )}
