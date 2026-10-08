@@ -96,9 +96,11 @@ export async function processMessageEvent(
             })
             .eq("id", pendingInput.id);
 
-          // Update lead custom_field if target_field is configured
+          // Update lead core or custom field if target_field is configured
+          let isNameField = false;
+          let leadIdToUpdate = pendingInput.lead_id;
+
           if (pendingInput.target_field) {
-            let leadIdToUpdate = pendingInput.lead_id;
             if (!leadIdToUpdate) {
               const { data: leadFound } = await supabase
                 .from("leads")
@@ -109,24 +111,49 @@ export async function processMessageEvent(
               if (leadFound) leadIdToUpdate = leadFound.id;
             }
 
+            const rawField = String(pendingInput.target_field || "").trim();
+            const lowerField = rawField.toLowerCase();
+            isNameField = ["name", "nome", "nome completo", "nome_completo", "fullname", "full_name"].includes(lowerField);
+            const isEmailField = ["email", "e-mail"].includes(lowerField);
+            const isDocumentField = ["document", "cpf", "cnpj", "documento"].includes(lowerField);
+            const isCompanyField = ["company_name", "empresa", "company"].includes(lowerField);
+            const isWebsiteField = ["website", "site"].includes(lowerField);
+
+            let coreFieldToUpdate: string | null = null;
+            if (isNameField) coreFieldToUpdate = "name";
+            else if (isEmailField) coreFieldToUpdate = "email";
+            else if (isDocumentField) coreFieldToUpdate = "document";
+            else if (isCompanyField) coreFieldToUpdate = "company_name";
+            else if (isWebsiteField) coreFieldToUpdate = "website";
+
             if (leadIdToUpdate) {
-              const targetField = pendingInput.target_field;
-              const coreFields = ["name", "email", "document", "company_name", "website"];
-              
-              if (coreFields.includes(targetField)) {
+              if (coreFieldToUpdate) {
                 await supabase.from("leads").update({
-                  [targetField]: responseText,
+                  [coreFieldToUpdate]: responseText,
                   updated_at: new Date().toISOString()
                 }).eq("id", leadIdToUpdate);
-                console.log(`[MessageController] Updated core field ${targetField} = "${responseText}" on lead ${leadIdToUpdate}`);
+                console.log(`[MessageController] Updated core field ${coreFieldToUpdate} = "${responseText}" on lead ${leadIdToUpdate}`);
               } else {
                 const { data: l } = await supabase.from("leads").select("custom_fields").eq("id", leadIdToUpdate).maybeSingle();
                 const existingCustom = (l?.custom_fields as Record<string, any>) || {};
                 await supabase.from("leads").update({
-                  custom_fields: { ...existingCustom, [targetField]: responseText },
+                  custom_fields: { ...existingCustom, [rawField]: responseText },
                   updated_at: new Date().toISOString()
                 }).eq("id", leadIdToUpdate);
-                console.log(`[MessageController] Updated custom_fields.${targetField} = "${responseText}" on lead ${leadIdToUpdate}`);
+                console.log(`[MessageController] Updated custom_fields.${rawField} = "${responseText}" on lead ${leadIdToUpdate}`);
+              }
+            }
+
+            // If name was updated, synchronize chat_conversations so the chat UI updates immediately
+            if (isNameField && responseText) {
+              try {
+                await supabase
+                  .from("chat_conversations")
+                  .update({ contact_name: responseText, updated_at: new Date().toISOString() })
+                  .or(`contact_phone.eq.${senderPhone},contact_phone.ilike.%${suffix}`);
+                console.log(`[MessageController] Synchronized contact_name = "${responseText}" in chat_conversations`);
+              } catch (convSyncErr) {
+                console.warn("[MessageController] Could not sync contact_name to chat_conversations:", convSyncErr);
               }
             }
           }
@@ -155,7 +182,7 @@ export async function processMessageEvent(
                 sequenceId: pendingInput.sequence_id,
                 companyId: pendingInput.company_id,
                 userId: pendingInput.user_id,
-                leadId: pendingInput.lead_id,
+                leadId: pendingInput.lead_id || leadIdToUpdate,
                 phone: senderPhone,
                 startFromNodeId: nextNodeId,
                 resumedExecution: true,
@@ -166,10 +193,14 @@ export async function processMessageEvent(
                   userResponse: responseText,
                   userInputField: pendingInput.target_field,
                   respondentPhone: senderPhone,
-                  respondentName: context.senderName || senderPhone,
-                  leadId: pendingInput.lead_id,
+                  respondentName: isNameField ? responseText : (context.senderName || senderPhone),
+                  leadId: pendingInput.lead_id || leadIdToUpdate,
                   companyId: pendingInput.company_id,
                   instanceId: pendingInput.instance_id || instance?.id,
+                  customFields: {
+                    ...(pendingInput.target_field ? { [pendingInput.target_field]: responseText } : {}),
+                    ...(isNameField ? { name: responseText, nome: responseText } : {}),
+                  },
                 }
               })
             }).catch(resumeErr => console.error("[MessageController] Error triggering resume sequence:", resumeErr));

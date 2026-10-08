@@ -1019,6 +1019,11 @@ Deno.serve(async (req) => {
     const { messageId, campaignId, sequenceId, triggerContext, executionId, startFromNodeIndex, startFromNodeId, manualNodeIndex, targetPhones } = body;
     let effectiveCampaignId = campaignId;
 
+    if (triggerContext?.resumedFromUserInput) {
+      console.log(`[ExecuteMessage] 🔄 Resumed workflow execution from user input answer. Consuming resumedFromUserInput flag so subsequent input nodes pause correctly.`);
+      triggerContext.resumedFromUserInput = false;
+    }
+
     // Check if this is a resumed execution
     const isResumedExecution = !!executionId && (startFromNodeIndex !== undefined || startFromNodeId !== undefined);
 
@@ -3818,8 +3823,8 @@ Deno.serve(async (req) => {
             break;
           }
 
-          // If a user_input message was sent in this content node and execution wasn't resumed from user input, pause to wait for reply
-          if (hasSentUserInputInSubMessages && !triggerContext?.resumedFromUserInput) {
+          // If a user_input message was sent in this content node, pause to wait for reply
+          if (hasSentUserInputInSubMessages) {
             console.log(`[ExecuteMessage] ⏸️ User Input message sent in content node ${node.id}. Pausing workflow ${workflowExecutionId} to wait for reply...`);
 
             const nextConn = connections.find(c => c.source_node_id === node.id);
@@ -3838,7 +3843,7 @@ Deno.serve(async (req) => {
                   execution_id: workflowExecutionId,
                   sequence_id: effectiveSequenceId,
                   node_id: node.id,
-                  lead_id: triggerContext?.leadId || null,
+                  lead_id: leadData?.id || triggerContext?.leadId || null,
                   instance_id: activeInstanceId,
                   phone: destPhoneClean,
                   group_jid: dest.group_jid,
@@ -4667,7 +4672,7 @@ Deno.serve(async (req) => {
                 }
               }
 
-              if ((node.node_type === "user_input" || node.node_type === "question" || node.node_type === "pergunta") && !triggerContext?.resumedFromUserInput) {
+              if (node.node_type === "user_input" || node.node_type === "question" || node.node_type === "pergunta") {
                 console.log(`[ExecuteMessage] ⏸️ Standalone user_input message sent in node ${node.id}. Pausing workflow ${workflowExecutionId}...`);
 
                 const nextConn = connections.find(c => c.source_node_id === node.id);
