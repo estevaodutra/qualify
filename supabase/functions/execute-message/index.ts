@@ -3853,6 +3853,18 @@ Deno.serve(async (req) => {
               const targetField = (userInputSubMsgConfig?.targetField || (node.config as any)?.targetField || "") as string;
               const timeoutMs = (userInputSubMsgConfig?.timeoutMs || (node.config as any)?.timeoutMs || 3600000) as number;
 
+              let effectiveLeadId = triggerContext?.leadId || null;
+              if (!effectiveLeadId && destPhoneClean) {
+                const suffix = destPhoneClean.slice(-8);
+                const { data: leadFound } = await supabase
+                  .from("leads")
+                  .select("id")
+                  .or(`phone.eq.${destPhoneClean},phone.ilike.%${suffix}`)
+                  .limit(1)
+                  .maybeSingle();
+                if (leadFound) effectiveLeadId = leadFound.id;
+              }
+
               if (destPhoneClean) {
                 await supabase.from("workflow_user_inputs").insert({
                   company_id: typedCampaign.company_id || triggerContext?.companyId || null,
@@ -3860,7 +3872,7 @@ Deno.serve(async (req) => {
                   execution_id: workflowExecutionId,
                   sequence_id: effectiveSequenceId,
                   node_id: node.id,
-                  lead_id: leadData?.id || triggerContext?.leadId || null,
+                  lead_id: effectiveLeadId,
                   instance_id: activeInstanceId,
                   phone: destPhoneClean,
                   group_jid: dest.group_jid,
