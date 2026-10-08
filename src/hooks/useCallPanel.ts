@@ -650,25 +650,30 @@ export function useCallPanel(filters?: {
           .eq("id", actionId)
           .maybeSingle();
 
-        if (actionData?.action_type === "start_sequence" && actionData.action_config) {
-          const { campaignId: seqCampaignId, campaignType, sequenceId } = actionData.action_config as {
+        if (
+          (actionData?.action_type === "start_workflow" || actionData?.action_type === "start_sequence") &&
+          actionData.action_config
+        ) {
+          const { campaignId: seqCampaignId, campaignType, sequenceId, workflowId } = actionData.action_config as {
             campaignId?: string;
             campaignType?: string;
             sequenceId?: string;
+            workflowId?: string;
           };
+          const targetSequenceId = workflowId || sequenceId;
 
-          console.log("[CallPanel] Automation config:", { campaignType, sequenceId, seqCampaignId, leadPhone: entry?.leadPhone });
+          console.log("[CallPanel] Automation config (workflow):", { campaignType, targetSequenceId, seqCampaignId, leadPhone: entry?.leadPhone });
 
-          if (campaignType === "dispatch" && sequenceId) {
+          if (campaignType === "dispatch" && targetSequenceId) {
             if (!entry?.leadPhone) {
               console.warn("[CallPanel] leadPhone não encontrado para entry:", entry);
               automationResult = { automationSuccess: false, automationError: "Telefone do lead não encontrado para disparo" };
             } else {
-              console.log("[CallPanel] Invoking execute-dispatch-sequence:", { campaignId: seqCampaignId, sequenceId, contactPhone: entry.leadPhone });
+              console.log("[CallPanel] Invoking execute-dispatch-sequence:", { campaignId: seqCampaignId, sequenceId: targetSequenceId, contactPhone: entry.leadPhone });
               const { data: result, error: fnError } = await supabase.functions.invoke("execute-dispatch-sequence", {
                 body: {
                   campaignId: seqCampaignId,
-                  sequenceId,
+                  sequenceId: targetSequenceId,
                   contactPhone: entry.leadPhone,
                   contactName: entry.leadName || "",
                 },
@@ -678,12 +683,12 @@ export function useCallPanel(filters?: {
                 automationResult = { automationSuccess: false, automationError: result?.error || fnError?.message || "Erro no disparo" };
               }
             }
-          } else if (campaignType === "group" && sequenceId && seqCampaignId) {
-            console.log("[CallPanel] Invoking execute-message (group):", { seqCampaignId, sequenceId });
+          } else if (campaignType === "group" && targetSequenceId && seqCampaignId) {
+            console.log("[CallPanel] Invoking execute-message (group):", { seqCampaignId, sequenceId: targetSequenceId });
             const { error: fnError } = await supabase.functions.invoke("execute-message", {
               body: {
                 campaignId: seqCampaignId,
-                sequenceId,
+                sequenceId: targetSequenceId,
                 triggerContext: {
                   respondentPhone: entry?.leadPhone || "",
                   respondentName: entry?.leadName || "",
@@ -697,8 +702,67 @@ export function useCallPanel(filters?: {
               console.warn("[CallPanel] Group automation error:", fnError);
               automationResult = { automationSuccess: false, automationError: "Erro ao executar sequência de grupo" };
             }
+          } else if (targetSequenceId) {
+            console.log("[CallPanel] Invoking trigger-sequence for workflow:", { targetSequenceId, phone: entry?.leadPhone });
+            const { error: fnError } = await supabase.functions.invoke("trigger-sequence", {
+              body: {
+                sequenceId: targetSequenceId,
+                phone: entry?.leadPhone,
+                name: entry?.leadName || "",
+                contactPhone: entry?.leadPhone,
+                contactName: entry?.leadName || "",
+                triggerContext: {
+                  source: "call_panel_action",
+                  leadId: entry?.leadId,
+                  campaignId: entry?.campaignId,
+                  callLogId: callId,
+                  phone: entry?.leadPhone,
+                  name: entry?.leadName,
+                },
+              },
+            });
+            if (fnError) {
+              console.warn("[CallPanel] Trigger workflow error:", fnError);
+              automationResult = { automationSuccess: false, automationError: "Erro ao iniciar workflow" };
+            }
           } else {
-            console.log("[CallPanel] No automation match:", { campaignType, sequenceId, hasLeadPhone: !!entry?.leadPhone });
+            console.log("[CallPanel] No automation match:", { campaignType, targetSequenceId, hasLeadPhone: !!entry?.leadPhone });
+          }
+        }
+        else if (actionData?.action_type === "quick_reply" && actionData.action_config) {
+          const quickReplyId = actionData.action_config.quickReplyId as string;
+          if (!entry?.leadPhone) {
+            automationResult = { automationSuccess: false, automationError: "Telefone do lead não encontrado para envio de mensagem rápida" };
+          } else {
+            console.log("[CallPanel] Sending quick reply:", { quickReplyId, phone: entry.leadPhone });
+            const { data: replyData } = await (supabase as any)
+              .from("quick_replies")
+              .select("*")
+              .eq("id", quickReplyId)
+              .maybeSingle();
+
+            const contentJson = (replyData?.content_json as any)?.content || (replyData as any)?.content || actionData.action_config.content;
+            const messageBody = contentJson?.text || contentJson?.caption || replyData?.title || "";
+            const mediaUrl = contentJson?.mediaUrl || null;
+
+            const { error: fnError } = await supabase.functions.invoke("execute-message", {
+              body: {
+                triggerContext: {
+                  respondentPhone: entry.leadPhone,
+                  respondentName: entry.leadName || "",
+                  respondentJid: `${entry.leadPhone.replace(/\D/g, "")}@s.whatsapp.net`,
+                  sendPrivate: true,
+                },
+                manualMessage: {
+                  body: messageBody,
+                  mediaUrl: mediaUrl,
+                },
+              },
+            });
+            if (fnError) {
+              console.warn("[CallPanel] Quick reply send error:", fnError);
+              automationResult = { automationSuccess: false, automationError: "Erro ao enviar mensagem rápida" };
+            }
           }
         }
         // Webhook action

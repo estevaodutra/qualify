@@ -255,9 +255,10 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case "start_workflow":
       case "start_sequence": {
-        const sequenceId = actionConfig.sequence_id as string;
-        const sequenceType = (actionConfig.sequence_type as string) || "dispatch";
+        const sequenceId = (actionConfig.workflow_id || actionConfig.workflowId || actionConfig.sequence_id || actionConfig.sequenceId) as string;
+        const sequenceType = (actionConfig.sequence_type || actionConfig.campaignType as string) || "dispatch";
 
         if (!sequenceId) {
           results.skipped = true;
@@ -332,6 +333,62 @@ Deno.serve(async (req) => {
             console.error("[execute-call-action] group invoke error:", (e as Error).message);
             results.error = (e as Error).message;
           }
+        }
+        break;
+      }
+
+      case "quick_reply": {
+        const quickReplyId = (actionConfig.quick_reply_id || actionConfig.quickReplyId) as string;
+        if (!quickReplyId || !lead_id) {
+          results.skipped = true;
+          results.reason = "Missing quickReplyId or lead_id";
+          break;
+        }
+
+        const { data: leadForMsg } = await supabase
+          .from("call_leads")
+          .select("phone, name")
+          .eq("id", lead_id)
+          .single();
+
+        if (!leadForMsg?.phone) {
+          results.skipped = true;
+          results.reason = "Lead phone not found";
+          break;
+        }
+
+        const { data: replyData } = await supabase
+          .from("quick_replies")
+          .select("*")
+          .eq("id", quickReplyId)
+          .maybeSingle();
+
+        const contentJson = (replyData?.content_json as any)?.content || (replyData as any)?.content || actionConfig.content;
+        const messageBody = contentJson?.text || contentJson?.caption || replyData?.title || "";
+        const mediaUrl = contentJson?.mediaUrl || null;
+
+        try {
+          const { error: invokeError } = await supabase.functions.invoke("execute-message", {
+            body: {
+              triggerContext: {
+                respondentPhone: leadForMsg.phone,
+                respondentName: leadForMsg.name || "",
+                respondentJid: `${leadForMsg.phone.replace(/\D/g, "")}@s.whatsapp.net`,
+                sendPrivate: true,
+              },
+              manualMessage: {
+                body: messageBody,
+                mediaUrl: mediaUrl,
+              },
+            },
+          });
+          if (invokeError) {
+            results.error = String(invokeError);
+          } else {
+            results.success = true;
+          }
+        } catch (e) {
+          results.error = (e as Error).message;
         }
         break;
       }

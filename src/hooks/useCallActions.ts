@@ -2,7 +2,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
-export type CallActionType = "start_sequence" | "add_tag" | "update_status" | "webhook" | "none" | "custom_message";
+export type CallActionType =
+  | "start_workflow"
+  | "quick_reply"
+  | "start_sequence"
+  | "add_tag"
+  | "update_status"
+  | "webhook"
+  | "none"
+  | "custom_message";
 
 export interface CallAction {
   id: string;

@@ -1,6 +1,6 @@
 {
-  "commit": "f1dc490b8b15edb32915765af5e2f9f1ee29d30e",
-  "shortCommit": "f1dc490",
-  "message": "fix(execute-message): corrigir referencia a variavel leadData nao declarada",
-  "builtAt": "2026-10-08T03:15:11.303Z"
+  "commit": "0492cb94817e6913c3a1d017e7277e8486f7ec43",
+  "shortCommit": "0492cb9",
+  "message": "feat(call-panel): adicionar sidebar com navegacao para Ligacoes, Campanhas e Configuracoes",
+  "builtAt": "2026-10-08T03:31:03.803Z"
 }

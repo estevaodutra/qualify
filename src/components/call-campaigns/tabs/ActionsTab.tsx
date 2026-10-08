@@ -1,9 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useCallActions, CallAction, CallActionType } from "@/hooks/useCallActions";
-import { useGroupCampaigns } from "@/hooks/useGroupCampaigns";
-import { useDispatchCampaigns } from "@/hooks/useDispatchCampaigns";
-import { useSequences } from "@/hooks/useSequences";
-import { useDispatchSequences } from "@/hooks/useDispatchSequences";
+import { useWorkflowDefinitions } from "@/hooks/useWorkflowDefinitions";
+import { useQuickReplies } from "@/hooks/useQuickReplies";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,14 +16,13 @@ import {
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Edit2, Zap, GripVertical } from "lucide-react";
+import { Plus, Trash2, Edit2, Zap, GripVertical, GitBranch, MessageSquare } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import {
   DndContext,
   closestCenter,
@@ -48,8 +45,10 @@ interface ActionsTabProps {
   campaignId: string;
 }
 
-const actionTypeLabels: Record<CallActionType, string> = {
-  start_sequence: "Iniciar Sequência",
+const actionTypeLabels: Record<string, string> = {
+  start_workflow: "Disparar Workflow",
+  quick_reply: "Disparar Mensagem Rápida",
+  start_sequence: "Disparar Workflow",
   add_tag: "Adicionar Tag",
   update_status: "Atualizar Status",
   webhook: "Webhook",
@@ -66,31 +65,25 @@ const colorOptions = [
   { value: "#6b7280", label: "Cinza" },
 ];
 
-const statusOptions = [
-  { value: "completed", label: "Concluído" },
-  { value: "failed", label: "Falhou" },
-  { value: "no_answer", label: "Não Atendeu" },
-  { value: "busy", label: "Ocupado" },
-  { value: "pending", label: "Pendente" },
-];
-
-function getConfigSummary(actionType: CallActionType, config: Record<string, unknown>): string | null {
-  switch (actionType) {
-    case "start_sequence":
-      return config.sequenceId ? `Sequência: ${String(config.sequenceId).slice(0, 8)}...` : null;
-    case "add_tag":
-      return config.tag ? `Tag: ${config.tag}` : null;
-    case "update_status": {
-      const opt = statusOptions.find((s) => s.value === config.status);
-      return opt ? `Status: ${opt.label}` : null;
-    }
-    case "webhook":
-      return config.url ? `URL: ${String(config.url).slice(0, 30)}${String(config.url).length > 30 ? "..." : ""}` : null;
-    case "custom_message":
-      return config.webhook_url ? `Webhook: ${String(config.webhook_url).slice(0, 30)}...` : null;
-    default:
-      return null;
+function getConfigSummary(actionType: string, config: Record<string, unknown>): string | null {
+  if (actionType === "start_workflow" || actionType === "start_sequence") {
+    const name = (config.workflowName as string) || (config.sequenceName as string);
+    if (name) return `Fluxo: ${name}`;
+    const id = config.workflowId || config.sequenceId;
+    return id ? `Fluxo: ${String(id).slice(0, 8)}...` : null;
   }
+  if (actionType === "quick_reply") {
+    const title = (config.quickReplyTitle as string) || (config.title as string);
+    if (title) return `Mensagem Rápida: ${title}`;
+    const id = config.quickReplyId;
+    return id ? `Mensagem: ${String(id).slice(0, 8)}...` : null;
+  }
+  if (actionType === "add_tag" && config.tag) return `Tag: ${config.tag}`;
+  if (actionType === "webhook" && (config.url || config.webhook_url)) {
+    const url = String(config.url || config.webhook_url);
+    return `URL: ${url.slice(0, 30)}...`;
+  }
+  return null;
 }
 
 interface SortableActionItemProps {
@@ -103,22 +96,42 @@ function SortableActionItem({ action, onEdit, onDelete }: SortableActionItemProp
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: action.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
   const configSummary = getConfigSummary(action.actionType, action.actionConfig);
+  const isWorkflow = action.actionType === "start_workflow" || action.actionType === "start_sequence";
+  const isQuickReply = action.actionType === "quick_reply";
 
   return (
-    <div ref={setNodeRef} style={style} className="flex items-center gap-3 p-3 rounded-lg border">
+    <div ref={setNodeRef} style={style} className="flex items-center gap-3 p-3 rounded-lg border bg-card/40 hover:bg-card/70 transition-colors">
       <button type="button" className="cursor-grab active:cursor-grabbing touch-none" {...attributes} {...listeners}>
         <GripVertical className="h-4 w-4 text-muted-foreground" />
       </button>
       <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: action.color }} />
       <div className="flex-1 min-w-0">
-        <p className="font-medium">{action.name}</p>
-        <p className="text-sm text-muted-foreground">{actionTypeLabels[action.actionType]}</p>
-        {configSummary && <p className="text-xs text-muted-foreground truncate">{configSummary}</p>}
+        <div className="flex items-center gap-2">
+          <p className="font-semibold text-sm">{action.name}</p>
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-1 font-normal">
+            {isWorkflow ? (
+              <>
+                <GitBranch className="h-2.5 w-2.5 text-primary" />
+                Workflow
+              </>
+            ) : isQuickReply ? (
+              <>
+                <MessageSquare className="h-2.5 w-2.5 text-emerald-500" />
+                Mensagem Rápida
+              </>
+            ) : (
+              actionTypeLabels[action.actionType] || action.actionType
+            )}
+          </Badge>
+        </div>
+        {configSummary && (
+          <p className="text-xs text-muted-foreground truncate mt-0.5">{configSummary}</p>
+        )}
       </div>
-      <Button variant="ghost" size="icon" onClick={() => onEdit(action)}>
+      <Button variant="ghost" size="icon" className="h-8 w-8 cursor-pointer" onClick={() => onEdit(action)}>
         <Edit2 className="h-4 w-4" />
       </Button>
-      <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => onDelete(action.id)}>
+      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive cursor-pointer" onClick={() => onDelete(action.id)}>
         <Trash2 className="h-4 w-4" />
       </Button>
     </div>
@@ -128,21 +141,17 @@ function SortableActionItem({ action, onEdit, onDelete }: SortableActionItemProp
 export function ActionsTab({ campaignId }: ActionsTabProps) {
   const { actions, isLoading, createAction, updateAction, deleteAction, reorderActions, isCreating } =
     useCallActions(campaignId);
-  const { campaigns: groupCampaigns } = useGroupCampaigns();
-  const { campaigns: dispatchCampaigns } = useDispatchCampaigns();
+  const { definitions: workflows = [], isLoading: isWorkflowsLoading } = useWorkflowDefinitions();
+  const { quickReplies = [], isLoading: isRepliesLoading } = useQuickReplies();
+
   const [showDialog, setShowDialog] = useState(false);
   const [editingAction, setEditingAction] = useState<CallAction | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     color: "#10b981",
-    actionType: "none" as CallActionType,
+    actionType: "start_workflow" as CallActionType,
     actionConfig: {} as Record<string, unknown>,
   });
-  const selectedCampaignId = (formData.actionConfig.campaignId as string) || undefined;
-  const selectedCampaignType = (formData.actionConfig.campaignType as string) || undefined;
-  const { sequences: groupSequences } = useSequences(selectedCampaignType === "group" ? selectedCampaignId : undefined);
-  const { sequences: dispatchSequences } = useDispatchSequences(selectedCampaignType === "dispatch" ? selectedCampaignId : undefined);
-  const campaignSequences = selectedCampaignType === "dispatch" ? dispatchSequences : groupSequences;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -160,16 +169,24 @@ export function ActionsTab({ campaignId }: ActionsTabProps) {
 
   const handleOpenCreate = () => {
     setEditingAction(null);
-    setFormData({ name: "", color: "#10b981", actionType: "none", actionConfig: {} });
+    setFormData({
+      name: "",
+      color: "#10b981",
+      actionType: "start_workflow",
+      actionConfig: {},
+    });
     setShowDialog(true);
   };
 
   const handleOpenEdit = (action: CallAction) => {
     setEditingAction(action);
+    const normalizedType: CallActionType =
+      action.actionType === "start_sequence" ? "start_workflow" : action.actionType;
+
     setFormData({
       name: action.name,
       color: action.color,
-      actionType: action.actionType,
+      actionType: normalizedType,
       actionConfig: { ...action.actionConfig },
     });
     setShowDialog(true);
@@ -178,6 +195,14 @@ export function ActionsTab({ campaignId }: ActionsTabProps) {
   const handleActionTypeChange = (newType: CallActionType) => {
     setFormData({ ...formData, actionType: newType, actionConfig: {} });
   };
+
+  const isFormValid =
+    !!formData.name.trim() &&
+    ((formData.actionType === "start_workflow" || formData.actionType === "start_sequence")
+      ? !!(formData.actionConfig.workflowId || formData.actionConfig.sequenceId)
+      : formData.actionType === "quick_reply"
+      ? !!formData.actionConfig.quickReplyId
+      : true);
 
   const handleSubmit = async () => {
     if (!formData.name.trim()) return;
@@ -215,8 +240,8 @@ export function ActionsTab({ campaignId }: ActionsTabProps) {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Button onClick={handleOpenCreate}>
-          <Plus className="mr-2 h-4 w-4" />
+        <Button onClick={handleOpenCreate} className="gap-2 cursor-pointer">
+          <Plus className="h-4 w-4" />
           Nova Ação
         </Button>
       </div>
@@ -227,18 +252,18 @@ export function ActionsTab({ campaignId }: ActionsTabProps) {
             <Zap className="h-6 w-6 text-muted-foreground" />
           </div>
           <h3 className="text-lg font-medium mb-2">Nenhuma ação cadastrada</h3>
-          <p className="text-muted-foreground mb-4">
-            Crie ações para classificar o resultado das ligações.
+          <p className="text-muted-foreground mb-4 text-sm">
+            Crie ações para que o operador possa disparar workflows ou mensagens rápidas pelo card da ligação.
           </p>
-          <Button onClick={handleOpenCreate}>
-            <Plus className="mr-2 h-4 w-4" />
+          <Button onClick={handleOpenCreate} className="gap-2 cursor-pointer">
+            <Plus className="h-4 w-4" />
             Criar Ação
           </Button>
         </Card>
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle>Ações de Resultado ({actions.length})</CardTitle>
+            <CardTitle className="text-base">Ações de Resultado ({actions.length})</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -257,23 +282,27 @@ export function ActionsTab({ campaignId }: ActionsTabProps) {
         </Card>
       )}
 
+      {/* Dialog Nova / Editar Ação */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
               {editingAction ? "Editar Ação" : "Nova Ação"}
             </DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
+            {/* Nome da Ação */}
             <div className="grid gap-2">
               <Label htmlFor="actionName">Nome da Ação</Label>
               <Input
                 id="actionName"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Ex: Venda Concluída"
+                placeholder="Ex: Não Atendeu, Venda Concluída..."
               />
             </div>
+
+            {/* Cor */}
             <div className="grid gap-2">
               <Label>Cor</Label>
               <div className="flex gap-2">
@@ -281,10 +310,10 @@ export function ActionsTab({ campaignId }: ActionsTabProps) {
                   <button
                     key={color.value}
                     type="button"
-                    className={`w-8 h-8 rounded-full border-2 transition-all ${
+                    className={`w-8 h-8 rounded-full border-2 transition-all cursor-pointer ${
                       formData.color === color.value
-                        ? "border-foreground scale-110"
-                        : "border-transparent"
+                        ? "border-foreground scale-110 shadow-sm"
+                        : "border-transparent opacity-80 hover:opacity-100"
                     }`}
                     style={{ backgroundColor: color.value }}
                     onClick={() => setFormData({ ...formData, color: color.value })}
@@ -293,168 +322,144 @@ export function ActionsTab({ campaignId }: ActionsTabProps) {
                 ))}
               </div>
             </div>
+
+            {/* Tipo de Ação (Apenas as duas funções solicitadas) */}
             <div className="grid gap-2">
               <Label htmlFor="actionType">Tipo de Ação</Label>
               <Select
-                value={formData.actionType}
+                value={
+                  formData.actionType === "start_sequence"
+                    ? "start_workflow"
+                    : formData.actionType
+                }
                 onValueChange={(v) => handleActionTypeChange(v as CallActionType)}
               >
                 <SelectTrigger id="actionType">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(actionTypeLabels).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="start_workflow">
+                    <div className="flex items-center gap-2">
+                      <GitBranch className="h-4 w-4 text-primary" />
+                      <span className="font-medium">Disparar Workflow</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="quick_reply">
+                    <div className="flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4 text-emerald-500" />
+                      <span className="font-medium">Disparar Mensagem Rápida</span>
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Dynamic config fields */}
-            {formData.actionType === "start_sequence" && (
-              <>
-                <div className="grid gap-2">
-                  <Label>Campanha</Label>
-                  <Select
-                    value={(formData.actionConfig.campaignId as string) || ""}
-                    onValueChange={(v) => {
-                      const isGroup = groupCampaigns.some((c) => c.id === v);
-                      setFormData({
-                        ...formData,
-                        actionConfig: { campaignId: v, campaignType: isGroup ? "group" : "dispatch", sequenceId: "" },
-                      });
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione a campanha" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {groupCampaigns.length > 0 && (
-                        <SelectGroup>
-                          <SelectLabel>Campanhas de Grupo</SelectLabel>
-                          {groupCampaigns.map((c) => (
-                            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                          ))}
-                        </SelectGroup>
-                      )}
-                      {dispatchCampaigns.length > 0 && (
-                        <SelectGroup>
-                          <SelectLabel>Campanhas de Disparos</SelectLabel>
-                          {dispatchCampaigns.map((c) => (
-                            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                          ))}
-                        </SelectGroup>
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {formData.actionConfig.campaignId && (
-                  <div className="grid gap-2">
-                    <Label>Sequência</Label>
-                    <Select
-                      value={(formData.actionConfig.sequenceId as string) || ""}
-                      onValueChange={(v) =>
-                        setFormData({
-                          ...formData,
-                          actionConfig: { ...formData.actionConfig, sequenceId: v },
-                        })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione a sequência" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {campaignSequences.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-              </>
-            )}
-
-            {formData.actionType === "add_tag" && (
-              <div className="grid gap-2">
-                <Label htmlFor="tag">Nome da Tag</Label>
-                <Input
-                  id="tag"
-                  value={(formData.actionConfig.tag as string) || ""}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      actionConfig: { ...formData.actionConfig, tag: e.target.value },
-                    })
-                  }
-                  placeholder="Ex: venda-concluida"
-                />
-              </div>
-            )}
-
-            {formData.actionType === "update_status" && (
-              <div className="grid gap-2">
-                <Label htmlFor="status">Status do Lead</Label>
+            {/* Segunda caixa de seleção: Seletor de Workflow */}
+            {(formData.actionType === "start_workflow" || formData.actionType === "start_sequence") && (
+              <div className="grid gap-2 animate-in fade-in-50 duration-200">
+                <Label htmlFor="workflowSelect">Selecionar Fluxo / Workflow</Label>
                 <Select
-                  value={(formData.actionConfig.status as string) || ""}
-                  onValueChange={(v) =>
+                  value={
+                    (formData.actionConfig.workflowId as string) ||
+                    (formData.actionConfig.sequenceId as string) ||
+                    ""
+                  }
+                  onValueChange={(v) => {
+                    const selected = workflows.find((w) => w.id === v || w.sourceId === v);
+                    const name = selected?.name || "Workflow";
                     setFormData({
                       ...formData,
-                      actionConfig: { ...formData.actionConfig, status: v },
-                    })
-                  }
+                      actionConfig: {
+                        ...formData.actionConfig,
+                        workflowId: v,
+                        workflowName: name,
+                        sequenceId: v,
+                        sequenceName: name,
+                      },
+                    });
+                  }}
                 >
-                  <SelectTrigger id="status">
-                    <SelectValue placeholder="Selecione o status" />
+                  <SelectTrigger id="workflowSelect">
+                    <SelectValue placeholder="Selecione o fluxo a ser executado..." />
                   </SelectTrigger>
-                  <SelectContent>
-                    {statusOptions.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
+                  <SelectContent className="max-h-72">
+                    {workflows.length === 0 ? (
+                      <div className="p-3 text-xs text-muted-foreground text-center">
+                        Nenhum fluxo encontrado. Crie um workflow na seção Workflows.
+                      </div>
+                    ) : (
+                      workflows.map((wf) => (
+                        <SelectItem key={wf.id} value={wf.id}>
+                          <div className="flex items-center gap-2">
+                            <GitBranch className="h-3.5 w-3.5 text-primary shrink-0" />
+                            <span className="font-medium">{wf.name}</span>
+                            {wf.status && (
+                              <span className="text-[10px] text-muted-foreground ml-1">
+                                ({wf.status === "active" ? "Ativo" : wf.status})
+                              </span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  Ao clicar nesta ação no card da ligação, o fluxo selecionado será disparado para o contato.
+                </p>
               </div>
             )}
 
-            {formData.actionType === "webhook" && (
-              <div className="grid gap-2">
-                <Label htmlFor="webhookUrl">URL do Webhook</Label>
-                <Input
-                  id="webhookUrl"
-                  type="url"
-                  value={(formData.actionConfig.url as string) || ""}
-                  onChange={(e) =>
+            {/* Segunda caixa de seleção: Seletor de Mensagem Rápida */}
+            {formData.actionType === "quick_reply" && (
+              <div className="grid gap-2 animate-in fade-in-50 duration-200">
+                <Label htmlFor="quickReplySelect">Selecionar Mensagem Rápida</Label>
+                <Select
+                  value={(formData.actionConfig.quickReplyId as string) || ""}
+                  onValueChange={(v) => {
+                    const selected = quickReplies.find((r) => r.id === v);
+                    const title = selected?.title || "Mensagem Rápida";
+                    const contentJson = (selected?.content_json as any)?.content || (selected as any)?.content;
                     setFormData({
                       ...formData,
-                      actionConfig: { ...formData.actionConfig, url: e.target.value },
-                    })
-                  }
-                  placeholder="https://example.com/webhook"
-                />
-              </div>
-            )}
-
-            {formData.actionType === "custom_message" && (
-              <div className="grid gap-2">
-                <Label htmlFor="customMsgWebhookUrl">URL do Webhook</Label>
-                <Input
-                  id="customMsgWebhookUrl"
-                  type="url"
-                  value={(formData.actionConfig.webhook_url as string) || ""}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      actionConfig: { ...formData.actionConfig, webhook_url: e.target.value },
-                    })
-                  }
-                  placeholder="https://example.com/webhook"
-                />
-                <p className="text-xs text-muted-foreground">
-                  A mensagem digitada pelo operador será enviada neste webhook.
+                      actionConfig: {
+                        ...formData.actionConfig,
+                        quickReplyId: v,
+                        quickReplyTitle: title,
+                        shortcut: selected?.shortcut,
+                        contentType: selected?.content_type,
+                        content: contentJson,
+                      },
+                    });
+                  }}
+                >
+                  <SelectTrigger id="quickReplySelect">
+                    <SelectValue placeholder="Selecione a resposta rápida a enviar..." />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {quickReplies.length === 0 ? (
+                      <div className="p-3 text-xs text-muted-foreground text-center">
+                        Nenhuma resposta rápida cadastrada. Cadastre em Chat &gt; Respostas Rápidas.
+                      </div>
+                    ) : (
+                      quickReplies.map((qr) => (
+                        <SelectItem key={qr.id} value={qr.id}>
+                          <div className="flex items-center gap-2">
+                            <MessageSquare className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                            <span className="font-medium">{qr.title}</span>
+                            {qr.shortcut && (
+                              <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground font-mono">
+                                /{qr.shortcut}
+                              </span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  A mensagem rápida selecionada será enviada diretamente para o WhatsApp do contato.
                 </p>
               </div>
             )}
@@ -463,7 +468,7 @@ export function ActionsTab({ campaignId }: ActionsTabProps) {
             <Button variant="outline" onClick={() => setShowDialog(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSubmit} disabled={!formData.name.trim() || isCreating}>
+            <Button onClick={handleSubmit} disabled={!isFormValid || isCreating}>
               {editingAction ? "Salvar" : isCreating ? "Criando..." : "Criar"}
             </Button>
           </DialogFooter>
