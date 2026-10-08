@@ -371,7 +371,7 @@ Deno.serve(async (req) => {
               .eq("id", execution.sequence_id)
               .single();
 
-            if (!parentSequence || parentSequence.is_active === false) {
+            if (!parentSequence || (parentSequence.is_active === false && !(execution.trigger_context as any)?.isTest)) {
               console.log(`[Scheduler] Dispatch Sequence ${execution.sequence_id} is inactive — cancelling execution ${execution.id}`);
               await supabase
                 .from("sequence_executions")
@@ -387,7 +387,7 @@ Deno.serve(async (req) => {
               .eq("id", execution.sequence_id)
               .single();
 
-            if (!parentSequence || parentSequence.active === false) {
+            if (!parentSequence || (parentSequence.active === false && !(execution.trigger_context as any)?.isTest)) {
               console.log(`[Scheduler] Sequence ${execution.sequence_id} is inactive — cancelling execution ${execution.id}`);
               await supabase
                 .from("sequence_executions")

@@ -189,7 +189,7 @@ export function UnifiedSequenceBuilder({
       
       const { error } = await supabase.functions.invoke("trigger-sequence", {
         body: { 
-          sequenceId: sequenceId,
+          sequenceId: sequenceId, triggerContext: { isTest: true },
           triggerId: triggerId,
         }
       });
