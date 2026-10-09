@@ -46,7 +46,7 @@ export function CallFloatingLauncher() {
 
   const prevCallIdRef = useRef<string | null>(null);
   const userClosedCallIdRef = useRef<string | null>(null);
-  const autoDialingTaskIdRef = useRef<string | null>(null);
+  const dialedTaskIdsRef = useRef<Map<string, number>>(new Map());
 
   // Sync operator call data to global floating store
   useEffect(() => {
@@ -91,125 +91,137 @@ export function CallFloatingLauncher() {
     }
   }, [currentCall, opStatus, opDuration, operator?.id, setActiveCall, setCallStatus, setDuration, openCall, duration, activeCall?.callId]);
 
-  // Auto-check and auto-dial first queue item when a dispatch occurs
+  // Auto-check and auto-dial first queue item across all pages in the app
   const checkAndAutoDialFirstQueueItem = useCallback(async () => {
     if (!user) return;
     const store = useCallFloatingStore.getState();
-    if (store.isOpen && store.activeCall) return;
+    // If call popup is already open with an active call, don't interrupt
+    if (store.isOpen && store.activeCall?.callId) return;
     const effStatus = (store.activeCall?.callStatus as PopupCallStatus) || store.callStatus || "idle";
     if (["dialing", "ringing", "on_call", "in_call", "answered"].includes(effStatus)) return;
 
-    // 1. Check workflow_call_tasks (queued or assigned)
-    let wfQuery = (supabase as any)
-      .from("workflow_call_tasks")
-      .select("*, leads(name, phone)")
-      .in("status", ["queued", "assigned"])
-      .order("created_at", { ascending: true })
-      .limit(1);
+    try {
+      // 1. Check workflow_call_tasks (queued or assigned)
+      let wfQuery = (supabase as any)
+        .from("workflow_call_tasks")
+        .select("*, leads(name, phone)")
+        .in("status", ["queued", "assigned"])
+        .order("created_at", { ascending: true })
+        .limit(1);
 
-    if (activeCompanyId) {
-      wfQuery = wfQuery.eq("company_id", activeCompanyId);
-    }
+      if (activeCompanyId) {
+        wfQuery = wfQuery.or(`company_id.eq.${activeCompanyId},company_id.is.null`);
+      }
 
-    const { data: wfTasks } = await wfQuery;
+      const { data: wfTasks, error: wfError } = await wfQuery;
 
-    if (wfTasks && wfTasks.length > 0) {
-      const task = wfTasks[0];
-      if (autoDialingTaskIdRef.current === task.id) return;
-      autoDialingTaskIdRef.current = task.id;
+      if (!wfError && wfTasks && wfTasks.length > 0) {
+        const task = wfTasks[0];
+        const lastDialed = dialedTaskIdsRef.current.get(task.id);
+        const now = Date.now();
+        if (lastDialed && now - lastDialed < 15000) return;
+        dialedTaskIdsRef.current.set(task.id, now);
 
-      const mappedData: CallDialogData = {
-        callId: `wt_${task.id}`,
-        campaignId: task.workflow_id || task.queue_id || "",
-        leadId: task.lead_id || "",
-        leadName: task.leads?.name || task.lead_name || "Lead",
-        leadPhone: task.phone || task.leads?.phone || "",
-        campaignName: "Workflow",
-        duration: 0,
-        notes: task.observation || "",
-        attemptNumber: (task.attempt_count || 0) + 1,
-        maxAttempts: task.max_attempts || 3,
-        isPriority: true,
-        callStatus: "dialing",
-        externalCallId: task.external_call_id,
-        userId: task.user_id,
-        operatorId: operator?.id,
-        autoDial: true,
-      };
+        const mappedData: CallDialogData = {
+          callId: `wt_${task.id}`,
+          campaignId: task.workflow_id || task.queue_id || "",
+          leadId: task.lead_id || "",
+          leadName: task.leads?.name || task.lead_name || "Lead",
+          leadPhone: task.phone || task.leads?.phone || "",
+          campaignName: "Workflow",
+          duration: 0,
+          notes: task.observation || "",
+          attemptNumber: (task.attempt_count || 0) + 1,
+          maxAttempts: task.max_attempts || 3,
+          isPriority: true,
+          callStatus: "queued",
+          externalCallId: task.external_call_id,
+          userId: task.user_id,
+          operatorId: operator?.id,
+          autoDial: true,
+        };
 
-      store.openCall(mappedData);
-      return;
-    }
+        store.openCall(mappedData);
+        return;
+      }
 
-    // 2. Check call_queue (waiting leads)
-    let qQuery = (supabase as any)
-      .from("call_queue")
-      .select("*, call_campaigns(name, is_priority)")
-      .eq("status", "waiting")
-      .order("is_priority", { ascending: false })
-      .order("position", { ascending: true })
-      .limit(1);
+      // 2. Check call_queue (waiting leads)
+      let qQuery = (supabase as any)
+        .from("call_queue")
+        .select("*, call_campaigns(name, is_priority)")
+        .eq("status", "waiting")
+        .order("is_priority", { ascending: false })
+        .order("position", { ascending: true })
+        .limit(1);
 
-    if (activeCompanyId) {
-      qQuery = qQuery.eq("company_id", activeCompanyId);
-    }
+      if (activeCompanyId) {
+        qQuery = qQuery.or(`company_id.eq.${activeCompanyId},company_id.is.null`);
+      }
 
-    const { data: queueItems } = await qQuery;
+      const { data: queueItems, error: qError } = await qQuery;
 
-    if (queueItems && queueItems.length > 0) {
-      const qItem = queueItems[0];
-      if (autoDialingTaskIdRef.current === qItem.id) return;
-      autoDialingTaskIdRef.current = qItem.id;
+      if (!qError && queueItems && queueItems.length > 0) {
+        const qItem = queueItems[0];
+        const lastDialed = dialedTaskIdsRef.current.get(qItem.id);
+        const now = Date.now();
+        if (lastDialed && now - lastDialed < 15000) return;
+        dialedTaskIdsRef.current.set(qItem.id, now);
 
-      const mappedData: CallDialogData = {
-        callId: qItem.id,
-        campaignId: qItem.campaign_id || "",
-        leadId: qItem.lead_id || "",
-        leadName: qItem.lead_name || "Lead",
-        leadPhone: qItem.phone || "",
-        campaignName: qItem.call_campaigns?.name || "Fila",
-        duration: 0,
-        notes: qItem.observations || "",
-        attemptNumber: qItem.attempt_number || 1,
-        maxAttempts: qItem.max_attempts || 3,
-        isPriority: qItem.call_campaigns?.is_priority || false,
-        callStatus: "dialing",
-        userId: qItem.user_id,
-        operatorId: operator?.id,
-        autoDial: true,
-      };
+        const mappedData: CallDialogData = {
+          callId: qItem.id,
+          campaignId: qItem.campaign_id || "",
+          leadId: qItem.lead_id || "",
+          leadName: qItem.lead_name || "Lead",
+          leadPhone: qItem.phone || "",
+          campaignName: qItem.call_campaigns?.name || "Fila",
+          duration: 0,
+          notes: qItem.observations || "",
+          attemptNumber: qItem.attempt_number || 1,
+          maxAttempts: qItem.max_attempts || 3,
+          isPriority: qItem.call_campaigns?.is_priority || false,
+          callStatus: "queued",
+          userId: qItem.user_id,
+          operatorId: operator?.id,
+          autoDial: true,
+        };
 
-      store.openCall(mappedData);
+        store.openCall(mappedData);
+      }
+    } catch (e) {
+      console.error("[CallFloatingLauncher] auto-dial error:", e);
     }
   }, [user, activeCompanyId, operator?.id]);
 
-  // Realtime subscription for dispatched calls in queue
+  // Polling loop + Realtime subscription so dispatches are picked up in seconds from ANY page!
   useEffect(() => {
     if (!user) return;
+
+    // Check immediately on mount
+    checkAndAutoDialFirstQueueItem();
+
+    // Check every 2.5s continuously across all pages
+    const interval = setInterval(checkAndAutoDialFirstQueueItem, 2500);
 
     const channel = supabase
       .channel("global-call-dispatch-listener")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "workflow_call_tasks" },
-        (payload: any) => {
-          if (payload.eventType === "INSERT" || (payload.new && ["queued", "assigned"].includes(payload.new.status))) {
-            checkAndAutoDialFirstQueueItem();
-          }
+        () => {
+          checkAndAutoDialFirstQueueItem();
         }
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "call_queue" },
-        (payload: any) => {
-          if (payload.eventType === "INSERT" || (payload.new && payload.new.status === "waiting")) {
-            checkAndAutoDialFirstQueueItem();
-          }
+        () => {
+          checkAndAutoDialFirstQueueItem();
         }
       )
       .subscribe();
 
     return () => {
+      clearInterval(interval);
       supabase.removeChannel(channel);
     };
   }, [user, checkAndAutoDialFirstQueueItem]);
@@ -365,8 +377,8 @@ export function CallFloatingLauncher() {
                   </span>
                   <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-xs" title="Pronto para atender" />
                 </div>
-                <span className="text-[10px] text-muted-foreground font-medium">
-                  {operator ? operator.operatorName : "Disponível"}
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                  Disponível
                 </span>
               </>
             )}
