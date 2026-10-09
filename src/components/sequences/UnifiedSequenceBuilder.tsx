@@ -699,9 +699,10 @@ export function UnifiedSequenceBuilder({
     setZoom(prev => Math.min(Math.max(prev + factor, 0.05), 2.0));
   };
 
-  const handleFitView = () => {
+  const handleFitView = useCallback((nodesToFit?: LocalNode[] | unknown) => {
     const canvas = canvasRef.current;
-    if (!canvas || localNodes.length === 0) {
+    const targetNodes = Array.isArray(nodesToFit) ? nodesToFit : localNodes;
+    if (!canvas || targetNodes.length === 0) {
       setZoom(1);
       setPanOffset({ x: 80, y: 80 });
       return;
@@ -715,7 +716,7 @@ export function UnifiedSequenceBuilder({
     let maxX = -Infinity;
     let maxY = -Infinity;
 
-    localNodes.forEach(node => {
+    targetNodes.forEach(node => {
       const x = node.positionX ?? 0;
       const y = node.positionY ?? 0;
       const el = canvas.querySelector(`[data-node-wrapper="${node.id}"]`) as HTMLElement | null;
@@ -758,7 +759,42 @@ export function UnifiedSequenceBuilder({
 
     setZoom(targetZoom);
     setPanOffset({ x: targetPanX, y: targetPanY });
-  };
+  }, [localNodes]);
+
+  // Visualização primária automática ao abrir o funil (Fit View com zoom out máximo de enquadramento)
+  const lastFittedSequenceIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (isLoading || localNodes.length === 0 || mode !== "editor") return;
+    if (lastFittedSequenceIdRef.current === sequenceId) return;
+
+    let attempts = 0;
+    let timer: NodeJS.Timeout | null = null;
+
+    const tryFit = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) {
+        if (attempts++ < 25) {
+          timer = setTimeout(tryFit, 50);
+        }
+        return;
+      }
+      const rect = canvas.getBoundingClientRect();
+      if ((rect.width === 0 || rect.height === 0) && attempts++ < 25) {
+        timer = setTimeout(tryFit, 50);
+        return;
+      }
+
+      handleFitView(localNodes);
+      lastFittedSequenceIdRef.current = sequenceId || "default";
+    };
+
+    timer = setTimeout(tryFit, 60);
+
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [sequenceId, isLoading, localNodes, mode, handleFitView]);
 
   // Auto-organize flowchart layout (Sugiyama / Hierarchical DAG layout)
   const handleAutoOrganize = () => {

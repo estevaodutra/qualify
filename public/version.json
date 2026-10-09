@@ -1,6 +1,6 @@
 {
-  "commit": "b7aa9df9bfa35589e949b84363de6eb4254a6e26",
-  "shortCommit": "b7aa9df",
-  "message": "fix(workflows): sincronizar tags com gestao de tags e adicionar menu suspenso com busca no seletor de tags",
-  "builtAt": "2026-10-09T19:09:09.664Z"
+  "commit": "486bf0b3ac759beec8029a669612d8998df8f202",
+  "shortCommit": "486bf0b",
+  "message": "feat(pipelines): add drag handle icon and drag-and-drop reordering for pipelines and stage columns",
+  "builtAt": "2026-10-09T19:27:18.849Z"
 }

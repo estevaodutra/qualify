@@ -88,9 +88,10 @@ export function ExecutionCanvas({
   const handleMouseUp = () => setIsPanning(false);
   const handleZoom = (factor: number) => setZoom(prev => Math.min(Math.max(prev + factor, 0.05), 2.0));
 
-  const handleFitView = () => {
+  const handleFitView = useCallback((nodesToFit?: any) => {
     const canvas = canvasRef.current;
-    if (!canvas || nodes.length === 0) {
+    const targetNodes = Array.isArray(nodesToFit) ? nodesToFit : nodes;
+    if (!canvas || targetNodes.length === 0) {
       setZoom(1);
       setPanOffset({ x: 80, y: 80 });
       return;
@@ -103,7 +104,7 @@ export function ExecutionCanvas({
     let maxX = -Infinity;
     let maxY = -Infinity;
 
-    nodes.forEach(node => {
+    targetNodes.forEach(node => {
       const x = node.positionX ?? 0;
       const y = node.positionY ?? 0;
       const el = canvas.querySelector(`[data-node-wrapper="${node.id}"]`) as HTMLElement | null;
@@ -145,7 +146,34 @@ export function ExecutionCanvas({
 
     setZoom(targetZoom);
     setPanOffset({ x: targetPanX, y: targetPanY });
-  };
+  }, [nodes]);
+
+  const hasFittedRef = useRef(false);
+  useEffect(() => {
+    if (nodes.length === 0 || hasFittedRef.current) return;
+    let attempts = 0;
+    let timer: NodeJS.Timeout | null = null;
+
+    const tryFit = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) {
+        if (attempts++ < 20) timer = setTimeout(tryFit, 50);
+        return;
+      }
+      const rect = canvas.getBoundingClientRect();
+      if ((rect.width === 0 || rect.height === 0) && attempts++ < 20) {
+        timer = setTimeout(tryFit, 50);
+        return;
+      }
+      handleFitView(nodes);
+      hasFittedRef.current = true;
+    };
+
+    timer = setTimeout(tryFit, 60);
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [nodes, handleFitView]);
 
   return (
     <div className="flex-1 border border-slate-200/60 bg-[#F5F6FA] rounded-2xl overflow-hidden relative shadow-inner flex flex-col">
