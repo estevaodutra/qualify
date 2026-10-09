@@ -175,6 +175,52 @@ export function ExecutionCanvas({
     };
   }, [nodes, handleFitView]);
 
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest("textarea, input, select, .scroll-area, .overflow-y-auto, .overflow-auto, [data-radix-scroll-area-viewport]")) {
+        return;
+      }
+      e.preventDefault();
+
+      if (Math.abs(e.deltaY) > 0) {
+        const zoomStep = 0.08;
+        const zoomFactor = e.deltaY < 0 ? zoomStep : -zoomStep;
+
+        setZoom((prevZoom) => {
+          const newZoom = Math.min(Math.max(Number((prevZoom + zoomFactor).toFixed(3)), 0.05), 2.0);
+          if (newZoom !== prevZoom) {
+            setPanOffset(prevPan => {
+              const rect = canvas.getBoundingClientRect();
+              const mouseX = e.clientX - rect.left;
+              const mouseY = e.clientY - rect.top;
+
+              const pointX = (mouseX - prevPan.x) / prevZoom;
+              const pointY = (mouseY - prevPan.y) / prevZoom;
+
+              return {
+                x: Math.round(mouseX - pointX * newZoom),
+                y: Math.round(mouseY - pointY * newZoom)
+              };
+            });
+          }
+          return newZoom;
+        });
+      } else if (Math.abs(e.deltaX) > 0) {
+        setPanOffset(prev => ({
+          x: prev.x - e.deltaX,
+          y: prev.y
+        }));
+      }
+    };
+
+    canvas.addEventListener("wheel", handleWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", handleWheel);
+  }, []);
+
   return (
     <div className="flex-1 border border-slate-200/60 bg-[#F5F6FA] rounded-2xl overflow-hidden relative shadow-inner flex flex-col">
       <div className="absolute top-4 right-4 z-10 flex items-center gap-1 bg-white p-1 border border-slate-200/80 rounded-xl shadow-sm">

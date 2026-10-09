@@ -1,6 +1,6 @@
 {
-  "commit": "486bf0b3ac759beec8029a669612d8998df8f202",
-  "shortCommit": "486bf0b",
-  "message": "feat(pipelines): add drag handle icon and drag-and-drop reordering for pipelines and stage columns",
-  "builtAt": "2026-10-09T19:27:18.849Z"
+  "commit": "97ba5a0e167e0678d82a853349eb8a1359e53b0b",
+  "shortCommit": "97ba5a0",
+  "message": "feat(workflows): abrir funil com enquadramento total automatico (fit view / zoom out maximo)",
+  "builtAt": "2026-10-09T19:30:51.687Z"
 }

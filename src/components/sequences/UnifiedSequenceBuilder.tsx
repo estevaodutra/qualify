@@ -221,6 +221,13 @@ export function UnifiedSequenceBuilder({
     screenY: number;
   } | null>(null);
 
+  // Hovered connection state for dynamic delete button position anywhere along the line
+  const [hoveredConn, setHoveredConn] = useState<{
+    key: string;
+    x: number;
+    y: number;
+  } | null>(null);
+
   // Side panel & configuration states
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
@@ -440,6 +447,7 @@ export function UnifiedSequenceBuilder({
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
     if (e.target === canvasRef.current || (e.target as HTMLElement).classList.contains("canvas-grid")) {
       setIsPanning(true);
+      setHoveredConn(null);
       setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
     }
   };
@@ -969,39 +977,41 @@ export function UnifiedSequenceBuilder({
 
     const handleWheel = (e: WheelEvent) => {
       const target = e.target as HTMLElement;
-      if (target.closest("textarea, .scroll-area, .overflow-y-auto, .overflow-auto, [data-radix-scroll-area-viewport]")) {
-        if (!e.ctrlKey && !e.metaKey) return;
+      if (target.closest("textarea, input, select, .scroll-area, .overflow-y-auto, .overflow-auto, [data-radix-scroll-area-viewport]")) {
+        return;
       }
 
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault(); // Stop browser zoom
-        const zoomFactor = e.deltaY > 0 ? -0.1 : 0.1;
-        
+      e.preventDefault();
+
+      // Rolar para frente (deltaY < 0) => zoom in; Rolar para trás (deltaY > 0) => zoom out
+      if (Math.abs(e.deltaY) > 0) {
+        const zoomStep = 0.08;
+        const zoomFactor = e.deltaY < 0 ? zoomStep : -zoomStep;
+
         setZoom((prevZoom) => {
-          const newZoom = Math.min(Math.max(prevZoom + zoomFactor, 0.05), 2.0);
+          const newZoom = Math.min(Math.max(Number((prevZoom + zoomFactor).toFixed(3)), 0.05), 2.0);
           if (newZoom !== prevZoom) {
             setPanOffset(prevPan => {
               const rect = canvas.getBoundingClientRect();
               const mouseX = e.clientX - rect.left;
               const mouseY = e.clientY - rect.top;
-              
+
               const pointX = (mouseX - prevPan.x) / prevZoom;
               const pointY = (mouseY - prevPan.y) / prevZoom;
-              
+
               return {
-                x: mouseX - pointX * newZoom,
-                y: mouseY - pointY * newZoom
+                x: Math.round(mouseX - pointX * newZoom),
+                y: Math.round(mouseY - pointY * newZoom)
               };
             });
           }
           return newZoom;
         });
-      } else {
-        // Standard Panning
-        e.preventDefault();
+      } else if (Math.abs(e.deltaX) > 0) {
+        // Trackpad horizontal scroll
         setPanOffset(prev => ({
           x: prev.x - e.deltaX,
-          y: prev.y - e.deltaY
+          y: prev.y
         }));
       }
     };
@@ -1322,6 +1332,9 @@ export function UnifiedSequenceBuilder({
                   <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                     <path d="M 0 1 L 10 5 L 0 9 z" fill="#8A3CFF" />
                   </marker>
+                  <marker id="arrow-delete" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444" />
+                  </marker>
                 </defs>
 
                 {/* Draw saved connections */}
@@ -1347,37 +1360,74 @@ export function UnifiedSequenceBuilder({
                   const portY2 = tY + coordsIn.y;
 
                   const d = drawBezier(portX1, portY1, portX2, portY2);
-                  const midX = (portX1 + portX2) / 2;
-                  const midY = (portY1 + portY2) / 2;
+                  const connKey = `${conn.sourceNodeId}-${conn.targetNodeId}-${conn.conditionPath || "default"}`;
+                  const isHovered = hoveredConn?.key === connKey && !activePort && !draggedNodeId && !isPanning;
 
                   return (
-                    <g key={`${conn.sourceNodeId}-${conn.targetNodeId}-${idx}`} className="group">
+                    <g
+                      key={`${conn.sourceNodeId}-${conn.targetNodeId}-${idx}`}
+                      className="group"
+                      onMouseMove={(e) => {
+                        if (activePort || draggedNodeId || isPanning) return;
+                        const rect = canvasRef.current?.getBoundingClientRect();
+                        if (!rect) return;
+                        const cX = (e.clientX - rect.left - panOffset.x) / zoom;
+                        const cY = (e.clientY - rect.top - panOffset.y) / zoom;
+                        setHoveredConn({
+                          key: connKey,
+                          x: cX,
+                          y: cY,
+                        });
+                      }}
+                      onMouseLeave={() => {
+                        setHoveredConn(prev => (prev?.key === connKey ? null : prev));
+                      }}
+                    >
+                      {/* Transparent wide path for effortless hover detection anywhere along the line */}
                       <path
                         d={d}
                         fill="none"
-                        stroke="#8A3CFF"
-                        strokeWidth="2"
-                        strokeDasharray="4 4"
-                        markerEnd="url(#arrow)"
-                        className="hover:stroke-sky-400 hover:stroke-[3px] cursor-pointer transition-[stroke,stroke-width] duration-150"
-                      />
-                      <circle
-                        cx={midX}
-                        cy={midY}
-                        r="8"
-                        fill="#ef4444"
-                        className="opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity duration-200"
+                        stroke="transparent"
+                        strokeWidth="26"
+                        className="cursor-pointer"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleDeleteConnection(conn.sourceNodeId, conn.targetNodeId, conn.conditionPath || undefined);
+                          setHoveredConn(null);
                         }}
                       />
+                      {/* Visible connection path */}
                       <path
-                        d={`M ${midX - 3} ${midY - 3} L ${midX + 3} ${midY + 3} M ${midX + 3} ${midY - 3} L ${midX - 3} ${midY + 3}`}
-                        stroke="white"
-                        strokeWidth="1.5"
-                        className="opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200"
+                        d={d}
+                        fill="none"
+                        stroke={isHovered ? "#ef4444" : "#8A3CFF"}
+                        strokeWidth={isHovered ? "3" : "2"}
+                        strokeDasharray={isHovered ? "none" : "4 4"}
+                        markerEnd={isHovered ? "url(#arrow-delete)" : "url(#arrow)"}
+                        className="pointer-events-none transition-[stroke,stroke-width] duration-150"
                       />
+                      {/* Delete button positioned dynamically where the mouse is on the line */}
+                      {isHovered && hoveredConn && (
+                        <g
+                          transform={`translate(${hoveredConn.x}, ${hoveredConn.y})`}
+                          className="cursor-pointer transition-transform duration-100"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteConnection(conn.sourceNodeId, conn.targetNodeId, conn.conditionPath || undefined);
+                            setHoveredConn(null);
+                          }}
+                        >
+                          <circle r="14" fill="#ef4444" fillOpacity="0.25" />
+                          <circle r="9" fill="#ef4444" stroke="#ffffff" strokeWidth="2" className="shadow-sm" />
+                          <path
+                            d="M -3 -3 L 3 3 M 3 -3 L -3 3"
+                            stroke="white"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            className="pointer-events-none"
+                          />
+                        </g>
+                      )}
                     </g>
                   );
                 })}
