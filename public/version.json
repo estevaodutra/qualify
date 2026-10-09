@@ -1,6 +1,6 @@
 {
-  "commit": "b5f51fdd07fb685e549d0c50e814b2e814737293",
-  "shortCommit": "b5f51fd",
-  "message": "feat(workflows): implementar fit view dinamico no botao de enquadramento e botao auto-organizar fluxograma",
-  "builtAt": "2026-10-09T18:48:42.180Z"
+  "commit": "507aa840cc3626d0ca4b6addb607a81a72a21166",
+  "shortCommit": "507aa84",
+  "message": "fix(workflows): corrigir chamada de updateNodesAndSave no auto-organizar e proteger com try-catch",
+  "builtAt": "2026-10-09T19:02:34.389Z"
 }

@@ -53,16 +53,29 @@ export const ConditionEditors: React.FC<ConditionEditorsProps> = ({
           .order("order_index", { ascending: true });
         if (sData) setPipelineStages(sData);
 
-        // Tags from leads
-        const { data: leadsTags } = await supabase
-          .from("leads")
-          .select("tags")
-          .eq("company_id", activeCompanyId)
-          .not("tags", "eq", "{}");
-        if (leadsTags) {
-          const unique = Array.from(new Set(leadsTags.flatMap((l: any) => l.tags || []))).filter(Boolean);
-          setAvailableTags(unique);
+        // Tags da empresa sincronizadas com tabela tags e cache local
+        let dbTags: { name: string }[] = [];
+        try {
+          const { data: tData } = await supabase
+            .from("tags")
+            .select("name")
+            .eq("company_id", activeCompanyId)
+            .order("name", { ascending: true });
+          if (tData) dbTags = tData;
+        } catch (e) {
+          console.warn("Erro ao buscar tags:", e);
         }
+
+        let localTags: { name: string }[] = [];
+        try {
+          const raw = localStorage.getItem(`qualify_tags_${activeCompanyId}`);
+          if (raw) localTags = JSON.parse(raw);
+        } catch {}
+
+        const tagSet = new Set<string>();
+        dbTags.forEach((t) => t?.name && tagSet.add(t.name.trim()));
+        localTags.forEach((t) => t?.name && tagSet.add(t.name.trim()));
+        setAvailableTags(Array.from(tagSet));
 
         // Company Members (Attendants)
         const { data: membersData } = await supabase

@@ -4,10 +4,47 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AlertCircle, AlertTriangle, Info } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { AlertCircle, AlertTriangle, Info, Search, X, Check, ChevronsUpDown, Tag as TagIcon, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 import { ActionDefinition } from "./actionRegistry";
 import { VariablePicker } from "../VariablePicker";
+
+interface CompanyTag {
+  id?: string;
+  name: string;
+  color?: string;
+}
+
+const LOCAL_TAGS_KEY = (companyId: string) => `qualify_tags_${companyId}`;
+
+function getLocalTags(companyId: string): CompanyTag[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_TAGS_KEY(companyId));
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalTag(companyId: string, tag: { name: string; color?: string }): CompanyTag {
+  try {
+    const raw = localStorage.getItem(LOCAL_TAGS_KEY(companyId));
+    const existing: CompanyTag[] = raw ? JSON.parse(raw) : [];
+    const newTag: CompanyTag = {
+      id: `tag_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      name: tag.name.trim(),
+      color: tag.color || "#8A3CFF",
+    };
+    const updated = [...existing.filter((t) => t.name?.toLowerCase() !== newTag.name.toLowerCase()), newTag];
+    localStorage.setItem(LOCAL_TAGS_KEY(companyId), JSON.stringify(updated));
+    return newTag;
+  } catch (e) {
+    console.warn("Could not save tag locally", e);
+    return { id: `tag_${Date.now()}`, name: tag.name.trim(), color: tag.color || "#8A3CFF" };
+  }
+}
 
 interface ActionEditorsProps {
   actionDef: ActionDefinition;
@@ -26,9 +63,10 @@ export const ActionEditors: React.FC<ActionEditorsProps> = ({
 }) => {
   const [pipelines, setPipelines] = useState<any[]>([]);
   const [pipelineStages, setPipelineStages] = useState<any[]>([]);
-  const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [availableTags, setAvailableTags] = useState<CompanyTag[]>([]);
   const [companyMembers, setCompanyMembers] = useState<any[]>([]);
-  const [tagInput, setTagInput] = useState("");
+  const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
+  const [tagSearch, setTagSearch] = useState("");
 
   useEffect(() => {
     const loadResources = async () => {
@@ -50,16 +88,33 @@ export const ActionEditors: React.FC<ActionEditorsProps> = ({
           .order("order_index", { ascending: true });
         if (sData) setPipelineStages(sData);
 
-        // Tags from leads
-        const { data: leadsTags } = await supabase
-          .from("leads")
-          .select("tags")
-          .eq("company_id", activeCompanyId)
-          .not("tags", "eq", "{}");
-        if (leadsTags) {
-          const unique = Array.from(new Set(leadsTags.flatMap((l: any) => l.tags || []))).filter(Boolean);
-          setAvailableTags(unique);
+        // Tags - sincronizado com a tabela tags da empresa e o cache local oficial
+        let dbTags: CompanyTag[] = [];
+        try {
+          const { data: tData, error: tErr } = await supabase
+            .from("tags")
+            .select("id, name, color")
+            .eq("company_id", activeCompanyId)
+            .order("name", { ascending: true });
+          if (!tErr && tData) {
+            dbTags = tData as CompanyTag[];
+          }
+        } catch (err) {
+          console.warn("Erro ao buscar tags da tabela:", err);
         }
+
+        const localTags = getLocalTags(activeCompanyId);
+        const mergedMap = new Map<string, CompanyTag>();
+        dbTags.forEach((t) => {
+          if (t?.name) mergedMap.set(t.name.trim().toLowerCase(), t);
+        });
+        localTags.forEach((t) => {
+          if (t?.name && !mergedMap.has(t.name.trim().toLowerCase())) {
+            mergedMap.set(t.name.trim().toLowerCase(), t);
+          }
+        });
+
+        setAvailableTags(Array.from(mergedMap.values()));
 
         // Company Members (Attendants)
         const { data: membersData } = await supabase
@@ -181,77 +236,236 @@ export const ActionEditors: React.FC<ActionEditorsProps> = ({
         const selectedTags = (parameters.tags as string[]) || [];
         const isAdd = actionDef.type === "add_lead_tags";
 
-        const toggleTag = (tag: string) => {
-          const updated = selectedTags.includes(tag)
-            ? selectedTags.filter((t) => t !== tag)
-            : [...selectedTags, tag];
+        const toggleTag = (tagName: string) => {
+          const exists = selectedTags.some(
+            (t) => t.toLowerCase() === tagName.toLowerCase()
+          );
+          const updated = exists
+            ? selectedTags.filter((t) => t.toLowerCase() !== tagName.toLowerCase())
+            : [...selectedTags, tagName];
           updateParam("tags", updated);
         };
 
-        const handleAddNewTag = () => {
-          if (!tagInput.trim()) return;
-          const trimmed = tagInput.trim();
-          if (!selectedTags.includes(trimmed)) {
+        const removeTag = (tagName: string) => {
+          const updated = selectedTags.filter(
+            (t) => t.toLowerCase() !== tagName.toLowerCase()
+          );
+          updateParam("tags", updated);
+        };
+
+        const handleCreateAndAdd = async () => {
+          const trimmed = tagSearch.trim();
+          if (!trimmed) return;
+
+          // Adiciona aos selecionados se ainda não estiver
+          if (!selectedTags.some((t) => t.toLowerCase() === trimmed.toLowerCase())) {
             updateParam("tags", [...selectedTags, trimmed]);
           }
-          setTagInput("");
+
+          // Se a tag ainda não existir no cadastro, cadastra localmente e no banco
+          const existsInAvailable = availableTags.some(
+            (t) => t.name.toLowerCase() === trimmed.toLowerCase()
+          );
+
+          if (!existsInAvailable && activeCompanyId) {
+            const newTag = saveLocalTag(activeCompanyId, {
+              name: trimmed,
+              color: "#8A3CFF",
+            });
+            setAvailableTags((prev) => [...prev, newTag]);
+
+            try {
+              await supabase.from("tags").insert({
+                company_id: activeCompanyId,
+                name: trimmed,
+                color: "#8A3CFF",
+              });
+            } catch (err) {
+              console.warn("Falha ao persistir tag no banco:", err);
+            }
+          }
+
+          setTagSearch("");
         };
+
+        const filteredTags = availableTags.filter((t) =>
+          t.name.toLowerCase().includes(tagSearch.toLowerCase().trim())
+        );
+
+        const exactMatch = availableTags.some(
+          (t) => t.name.toLowerCase() === tagSearch.trim().toLowerCase()
+        );
 
         return (
           <div className="space-y-3">
-            <Label className="text-xs font-semibold text-slate-700">
-              Tags a {isAdd ? "adicionar" : "remover"}
-            </Label>
-
-            {isAdd && (
-              <div className="flex gap-2">
-                <Input
-                  type="text"
-                  placeholder="Digite uma tag ou busque na lista..."
-                  value={tagInput}
-                  onChange={(e) => setTagInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleAddNewTag();
-                    }
-                  }}
-                  className="h-8 text-xs rounded-xl flex-1"
-                />
-                <button
-                  type="button"
-                  onClick={handleAddNewTag}
-                  className="px-3 text-xs bg-purple-600 text-white rounded-xl hover:bg-purple-700 font-semibold shrink-0"
-                >
-                  Adicionar
-                </button>
-              </div>
-            )}
-
-            <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl p-2 space-y-1 bg-slate-50/50">
-              {availableTags.length === 0 && selectedTags.length === 0 ? (
-                <p className="text-[11px] text-slate-400 p-2 text-center">Nenhuma tag cadastrada.</p>
-              ) : (
-                Array.from(new Set([...availableTags, ...selectedTags])).map((tag) => {
-                  const isChecked = selectedTags.includes(tag);
-                  return (
-                    <div
-                      key={tag}
-                      onClick={() => toggleTag(tag)}
-                      className="flex items-center justify-between p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer text-xs"
-                    >
-                      <span className="font-medium text-slate-700">{tag}</span>
-                      <Checkbox checked={isChecked} onCheckedChange={() => toggleTag(tag)} />
-                    </div>
-                  );
-                })
-              )}
+            <div>
+              <Label className="text-xs font-semibold text-slate-700">
+                Tags a {isAdd ? "adicionar" : "remover"}
+              </Label>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                {isAdd
+                  ? "Selecione as tags que serão aplicadas ao lead."
+                  : "Selecione as tags que serão removidas do lead."}
+              </p>
             </div>
 
-            {selectedTags.length === 0 && (
-              <div className="flex items-center gap-1.5 text-amber-600 text-[11px]">
-                <AlertCircle className="h-3.5 w-3.5" />
-                <span>Selecione pelo menos uma tag.</span>
+            {/* Menu Suspenso (Dropdown) com Campo de Pesquisa */}
+            <Popover open={tagDropdownOpen} onOpenChange={setTagDropdownOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    "w-full flex items-center justify-between px-3 py-2 text-xs rounded-xl border transition-all bg-white text-left",
+                    "border-slate-200 hover:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/20 shadow-2xs cursor-pointer",
+                    tagDropdownOpen && "border-purple-500 ring-2 ring-purple-500/20"
+                  )}
+                >
+                  <div className="flex items-center gap-2 text-slate-600 truncate min-w-0">
+                    <TagIcon className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                    <span className={selectedTags.length === 0 ? "text-slate-400" : "font-medium text-slate-700 truncate"}>
+                      {selectedTags.length === 0
+                        ? "Clique para buscar e selecionar tags..."
+                        : `${selectedTags.length} tag${selectedTags.length > 1 ? "s" : ""} selecionada${selectedTags.length > 1 ? "s" : ""}`}
+                    </span>
+                  </div>
+                  <ChevronsUpDown className="w-4 h-4 text-slate-400 shrink-0 ml-2" />
+                </button>
+              </PopoverTrigger>
+
+              <PopoverContent
+                align="start"
+                sideOffset={4}
+                className="w-[var(--radix-popover-trigger-width)] min-w-[280px] p-2 rounded-2xl border border-slate-200 bg-white shadow-xl space-y-2 z-[9999]"
+              >
+                {/* Barrinha de Pesquisa */}
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                  <Input
+                    placeholder="Pesquisar tags..."
+                    value={tagSearch}
+                    onChange={(e) => setTagSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && tagSearch.trim() && isAdd) {
+                        e.preventDefault();
+                        handleCreateAndAdd();
+                      }
+                    }}
+                    autoFocus
+                    className="pl-8 h-8 text-xs rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white"
+                  />
+                </div>
+
+                {/* Lista de tags disponíveis */}
+                <div className="max-h-52 overflow-y-auto space-y-1 pr-1">
+                  {filteredTags.length === 0 && !tagSearch.trim() ? (
+                    <div className="text-center py-4 px-2">
+                      <p className="text-xs text-slate-500 font-medium">Nenhuma tag cadastrada</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Crie tags em Configurações &gt; Tags ou digite na busca para criar.
+                      </p>
+                    </div>
+                  ) : filteredTags.length === 0 && tagSearch.trim() ? (
+                    <div className="text-center py-2.5 px-2">
+                      <p className="text-xs text-slate-400">Nenhuma tag existente encontrada</p>
+                    </div>
+                  ) : (
+                    filteredTags.map((t) => {
+                      const isSelected = selectedTags.some(
+                        (st) => st.toLowerCase() === t.name.toLowerCase()
+                      );
+
+                      return (
+                        <div
+                          key={t.id || t.name}
+                          onClick={() => toggleTag(t.name)}
+                          className={cn(
+                            "flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs cursor-pointer transition-colors",
+                            isSelected
+                              ? "bg-purple-50 text-purple-900 font-semibold"
+                              : "hover:bg-slate-100 text-slate-700 font-medium"
+                          )}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs"
+                              style={{ backgroundColor: t.color || "#8A3CFF" }}
+                            />
+                            <span className="truncate">{t.name}</span>
+                          </div>
+                          {isSelected && (
+                            <Check className="w-3.5 h-3.5 text-purple-600 shrink-0 stroke-[2.5]" />
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+
+                  {/* Botão de adicionar nova tag caso digitado algo e não exista */}
+                  {isAdd && tagSearch.trim() && !exactMatch && (
+                    <button
+                      type="button"
+                      onClick={handleCreateAndAdd}
+                      className="w-full mt-1.5 flex items-center gap-2 px-2.5 py-2 text-xs rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-medium transition-colors border border-dashed border-purple-200 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                      <span className="truncate">
+                        Criar e adicionar "<strong>{tagSearch.trim()}</strong>"
+                      </span>
+                    </button>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            {/* Badges / Chips das Tags Selecionadas */}
+            {selectedTags.length > 0 ? (
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-slate-500">
+                    Tags selecionadas ({selectedTags.length}):
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => updateParam("tags", [])}
+                    className="text-[10px] text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
+                  >
+                    Limpar todas
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1.5 p-2 rounded-xl bg-slate-50/70 border border-slate-200/80 max-h-36 overflow-y-auto">
+                  {selectedTags.map((tagName) => {
+                    const tagMeta = availableTags.find(
+                      (t) => t.name.toLowerCase() === tagName.toLowerCase()
+                    );
+                    const color = tagMeta?.color || "#8A3CFF";
+
+                    return (
+                      <span
+                        key={tagName}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-white border border-slate-200 shadow-2xs text-slate-700 animate-in fade-in-50"
+                      >
+                        <span
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: color }}
+                        />
+                        <span className="truncate max-w-[150px]">{tagName}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeTag(tagName)}
+                          className="text-slate-400 hover:text-rose-500 rounded-full p-0.5 hover:bg-slate-100 transition-colors cursor-pointer ml-0.5"
+                          title="Remover tag"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 text-amber-600 text-[11px] pt-0.5">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                <span>Selecione pelo menos uma tag para esta ação.</span>
               </div>
             )}
           </div>
