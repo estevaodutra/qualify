@@ -158,6 +158,24 @@ export default function Pipelines() {
         await supabase.from("pipeline_stages").update({ order_index: update.order_index }).eq("id", update.id);
       }
     },
+    onMutate: async (newStages) => {
+      await queryClient.cancelQueries({ queryKey: ["pipeline", activePipelineId] });
+      const previousPipeline = queryClient.getQueryData(["pipeline", activePipelineId]);
+      queryClient.setQueryData(["pipeline", activePipelineId], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          stages: newStages.map((s, idx) => ({ ...s, order_index: idx })),
+        };
+      });
+      return { previousPipeline };
+    },
+    onError: (_err: any, _vars, context) => {
+      if (context?.previousPipeline) {
+        queryClient.setQueryData(["pipeline", activePipelineId], context.previousPipeline);
+      }
+      toast.error("Erro ao reordenar etapas.");
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["pipeline", activePipelineId] });
     }

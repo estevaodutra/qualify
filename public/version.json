@@ -1,6 +1,6 @@
 {
-  "commit": "507aa840cc3626d0ca4b6addb607a81a72a21166",
-  "shortCommit": "507aa84",
-  "message": "fix(workflows): corrigir chamada de updateNodesAndSave no auto-organizar e proteger com try-catch",
-  "builtAt": "2026-10-09T19:02:34.389Z"
+  "commit": "b7aa9df9bfa35589e949b84363de6eb4254a6e26",
+  "shortCommit": "b7aa9df",
+  "message": "fix(workflows): sincronizar tags com gestao de tags e adicionar menu suspenso com busca no seletor de tags",
+  "builtAt": "2026-10-09T19:09:09.664Z"
 }

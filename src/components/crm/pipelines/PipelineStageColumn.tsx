@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Deal, PipelineStage } from "@/types/crm.types";
 import { DealKanbanCard } from "@/components/crm/kanban/DealKanbanCard";
 import { Button } from "@/components/ui/button";
-import { Plus, MoreHorizontal } from "lucide-react";
+import { Plus, MoreHorizontal, GripVertical } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -100,9 +100,10 @@ export function PipelineStageColumn({
         {...listeners}
         className="p-3.5 border-b border-border/40 flex items-center justify-between sticky top-0 bg-background/50 backdrop-blur-sm z-10 rounded-t-xl group/stage cursor-grab active:cursor-grabbing"
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          <GripVertical className="w-3.5 h-3.5 text-muted-foreground/40 group-hover/stage:text-muted-foreground transition-colors shrink-0" />
           <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: stage.color || "#94a3b8" }} />
-          <span className="font-semibold text-sm text-foreground truncate max-w-[150px]">{stage.name}</span>
+          <span className="font-semibold text-sm text-foreground truncate max-w-[140px]">{stage.name}</span>
           <span className="bg-secondary text-muted-foreground text-[10px] font-bold px-2 py-0.5 rounded-full">
             {deals?.length || 0}
           </span>
