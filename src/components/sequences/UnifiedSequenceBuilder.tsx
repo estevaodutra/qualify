@@ -389,25 +389,25 @@ export function UnifiedSequenceBuilder({
     }
   }, [sequenceId, initialNodes, initialConnections, isLoading]);
 
-  const updateNodesAndSave = (updater: (prev: LocalNode[]) => LocalNode[]) => {
+  const updateNodesAndSave = (updater: ((prev: LocalNode[]) => LocalNode[]) | LocalNode[]) => {
     setLocalNodes(prev => {
-      const next = updater(prev);
+      const next = typeof updater === "function" ? (updater as (prev: LocalNode[]) => LocalNode[])(prev) : updater;
       saveChangesDebounced(next, localConnections, localWorkflowConfig, sequenceName);
       return next;
     });
   };
 
-  const updateConnectionsAndSave = (updater: (prev: LocalConnection[]) => LocalConnection[]) => {
+  const updateConnectionsAndSave = (updater: ((prev: LocalConnection[]) => LocalConnection[]) | LocalConnection[]) => {
     setLocalConnections(prev => {
-      const next = updater(prev);
+      const next = typeof updater === "function" ? (updater as (prev: LocalConnection[]) => LocalConnection[])(prev) : updater;
       saveChangesDebounced(localNodes, next, localWorkflowConfig, sequenceName);
       return next;
     });
   };
 
-  const updateWorkflowConfigAndSave = (updater: (prev: Record<string, unknown>) => Record<string, unknown>) => {
+  const updateWorkflowConfigAndSave = (updater: ((prev: Record<string, unknown>) => Record<string, unknown>) | Record<string, unknown>) => {
     setLocalWorkflowConfig(prev => {
-      const next = updater(prev);
+      const next = typeof updater === "function" ? (updater as (prev: Record<string, unknown>) => Record<string, unknown>)(prev) : updater;
       saveChangesDebounced(localNodes, localConnections, next, sequenceName);
       return next;
     });
@@ -762,166 +762,169 @@ export function UnifiedSequenceBuilder({
 
   // Auto-organize flowchart layout (Sugiyama / Hierarchical DAG layout)
   const handleAutoOrganize = () => {
-    if (localNodes.length === 0) return;
+    try {
+      if (localNodes.length === 0) return;
 
-    const NODE_WIDTH = 320;
-    const HORIZONTAL_GAP = 140;
-    const VERTICAL_GAP = 70;
-    const START_X = 60;
-    const START_Y = 100;
+      const NODE_WIDTH = 320;
+      const HORIZONTAL_GAP = 140;
+      const VERTICAL_GAP = 70;
+      const START_X = 60;
+      const START_Y = 100;
 
-    // 1. Build adjacency maps
-    const outgoing = new Map<string, string[]>();
-    const incoming = new Map<string, string[]>();
+      // 1. Build adjacency maps
+      const outgoing = new Map<string, string[]>();
+      const incoming = new Map<string, string[]>();
 
-    localNodes.forEach(n => {
-      outgoing.set(n.id, []);
-      incoming.set(n.id, []);
-    });
-
-    localConnections.forEach(c => {
-      if (outgoing.has(c.sourceNodeId) && incoming.has(c.targetNodeId)) {
-        outgoing.get(c.sourceNodeId)!.push(c.targetNodeId);
-        incoming.get(c.targetNodeId)!.push(c.sourceNodeId);
-      }
-    });
-
-    // 2. Assign horizontal layers (depth)
-    const layers = new Map<string, number>();
-    const triggerNode = localNodes.find(n => n.nodeType === "trigger");
-
-    const queue: { id: string; depth: number }[] = [];
-    const inDegreeMap = new Map<string, number>();
-    localNodes.forEach(n => {
-      inDegreeMap.set(n.id, incoming.get(n.id)?.length || 0);
-    });
-
-    if (triggerNode) {
-      queue.push({ id: triggerNode.id, depth: 0 });
-      layers.set(triggerNode.id, 0);
-    }
-
-    localNodes.forEach(n => {
-      if (n.nodeType !== "trigger" && inDegreeMap.get(n.id) === 0) {
-        queue.push({ id: n.id, depth: 0 });
-        layers.set(n.id, 0);
-      }
-    });
-
-    if (queue.length === 0 && localNodes.length > 0) {
-      queue.push({ id: localNodes[0].id, depth: 0 });
-      layers.set(localNodes[0].id, 0);
-    }
-
-    const visitedEdges = new Set<string>();
-    while (queue.length > 0) {
-      const { id, depth } = queue.shift()!;
-      const children = outgoing.get(id) || [];
-
-      for (const childId of children) {
-        const edgeKey = `${id}->${childId}`;
-        if (visitedEdges.has(edgeKey)) continue;
-        visitedEdges.add(edgeKey);
-
-        const currentDepth = layers.get(childId) ?? -1;
-        if (depth + 1 > currentDepth) {
-          layers.set(childId, depth + 1);
-        }
-
-        queue.push({ id: childId, depth: depth + 1 });
-      }
-    }
-
-    let maxDepth = 0;
-    layers.forEach(d => { if (d > maxDepth) maxDepth = d; });
-    localNodes.forEach(n => {
-      if (!layers.has(n.id)) {
-        maxDepth += 1;
-        layers.set(n.id, maxDepth);
-      }
-    });
-
-    // 3. Group node IDs by layer
-    const layerGroups = new Map<number, string[]>();
-    layers.forEach((layerIdx, nodeId) => {
-      if (!layerGroups.has(layerIdx)) {
-        layerGroups.set(layerIdx, []);
-      }
-      layerGroups.get(layerIdx)!.push(nodeId);
-    });
-
-    const sortedLayers = Array.from(layerGroups.keys()).sort((a, b) => a - b);
-
-    // 4. Measure node heights
-    const nodeHeights = new Map<string, number>();
-    localNodes.forEach(node => {
-      const el = canvasRef.current?.querySelector(`[data-node-wrapper="${node.id}"]`) as HTMLElement | null;
-      nodeHeights.set(node.id, el ? el.offsetHeight : 180);
-    });
-
-    // 5. Position nodes per layer (crossing minimization)
-    const newPositions = new Map<string, { x: number; y: number }>();
-
-    sortedLayers.forEach((layerIdx) => {
-      const nodesInLayer = layerGroups.get(layerIdx)!;
-
-      // Sort nodes in this layer based on average Y of their parents to prevent crossed lines
-      if (layerIdx > 0) {
-        nodesInLayer.sort((a, b) => {
-          const parentsA = incoming.get(a) || [];
-          const parentsB = incoming.get(b) || [];
-          const avgYA = parentsA.length > 0
-            ? parentsA.reduce((sum, pId) => sum + (newPositions.get(pId)?.y || 0), 0) / parentsA.length
-            : 0;
-          const avgYB = parentsB.length > 0
-            ? parentsB.reduce((sum, pId) => sum + (newPositions.get(pId)?.y || 0), 0) / parentsB.length
-            : 0;
-          return avgYA - avgYB;
-        });
-      }
-
-      let colHeight = 0;
-      nodesInLayer.forEach((nId, idx) => {
-        colHeight += nodeHeights.get(nId) || 180;
-        if (idx < nodesInLayer.length - 1) colHeight += VERTICAL_GAP;
+      localNodes.forEach(n => {
+        outgoing.set(n.id, []);
+        incoming.set(n.id, []);
       });
 
-      let startColY = START_Y;
-      if (layerIdx > 0) {
-        const allParents = nodesInLayer.flatMap(nId => incoming.get(nId) || []);
-        if (allParents.length > 0) {
-          const parentYs = allParents.map(pId => newPositions.get(pId)?.y || START_Y);
-          const minPY = Math.min(...parentYs);
-          const maxPY = Math.max(...parentYs);
-          const centerPY = (minPY + maxPY) / 2;
-          startColY = Math.max(START_Y, centerPY - colHeight / 2);
+      localConnections.forEach(c => {
+        if (outgoing.has(c.sourceNodeId) && incoming.has(c.targetNodeId)) {
+          outgoing.get(c.sourceNodeId)!.push(c.targetNodeId);
+          incoming.get(c.targetNodeId)!.push(c.sourceNodeId);
+        }
+      });
+
+      // 2. Assign horizontal layers (depth)
+      const layers = new Map<string, number>();
+      const triggerNode = localNodes.find(n => n.nodeType === "trigger");
+
+      const queue: { id: string; depth: number }[] = [];
+      const inDegreeMap = new Map<string, number>();
+      localNodes.forEach(n => {
+        inDegreeMap.set(n.id, incoming.get(n.id)?.length || 0);
+      });
+
+      if (triggerNode) {
+        queue.push({ id: triggerNode.id, depth: 0 });
+        layers.set(triggerNode.id, 0);
+      }
+
+      localNodes.forEach(n => {
+        if (n.nodeType !== "trigger" && inDegreeMap.get(n.id) === 0) {
+          queue.push({ id: n.id, depth: 0 });
+          layers.set(n.id, 0);
+        }
+      });
+
+      if (queue.length === 0 && localNodes.length > 0) {
+        queue.push({ id: localNodes[0].id, depth: 0 });
+        layers.set(localNodes[0].id, 0);
+      }
+
+      const visitedEdges = new Set<string>();
+      while (queue.length > 0) {
+        const { id, depth } = queue.shift()!;
+        const children = outgoing.get(id) || [];
+
+        for (const childId of children) {
+          const edgeKey = `${id}->${childId}`;
+          if (visitedEdges.has(edgeKey)) continue;
+          visitedEdges.add(edgeKey);
+
+          const currentDepth = layers.get(childId) ?? -1;
+          if (depth + 1 > currentDepth) {
+            layers.set(childId, depth + 1);
+          }
+
+          queue.push({ id: childId, depth: depth + 1 });
         }
       }
 
-      let currY = startColY;
-      nodesInLayer.forEach(nId => {
-        const h = nodeHeights.get(nId) || 180;
-        newPositions.set(nId, {
-          x: START_X + layerIdx * (NODE_WIDTH + HORIZONTAL_GAP),
-          y: Math.round(currY)
-        });
-        currY += h + VERTICAL_GAP;
+      let maxDepth = 0;
+      layers.forEach(d => { if (d > maxDepth) maxDepth = d; });
+      localNodes.forEach(n => {
+        if (!layers.has(n.id)) {
+          maxDepth += 1;
+          layers.set(n.id, maxDepth);
+        }
       });
-    });
 
-    // 6. Save positions
-    const updated = localNodes.map(node => {
-      const pos = newPositions.get(node.id);
-      return pos ? { ...node, positionX: pos.x, positionY: pos.y } : node;
-    });
+      // 3. Group node IDs by layer
+      const layerGroups = new Map<number, string[]>();
+      layers.forEach((layerIdx, nodeId) => {
+        if (!layerGroups.has(layerIdx)) {
+          layerGroups.set(layerIdx, []);
+        }
+        layerGroups.get(layerIdx)!.push(nodeId);
+      });
 
-    updateNodesAndSave(updated);
-    toast({ title: "Fluxo organizado com sucesso!" });
+      const sortedLayers = Array.from(layerGroups.keys()).sort((a, b) => a - b);
 
-    // 7. Auto fit view smoothly after DOM renders
-    setTimeout(() => {
-      handleFitView();
-    }, 80);
+      // 4. Measure node heights
+      const nodeHeights = new Map<string, number>();
+      localNodes.forEach(node => {
+        const el = canvasRef.current?.querySelector(`[data-node-wrapper="${node.id}"]`) as HTMLElement | null;
+        nodeHeights.set(node.id, el ? el.offsetHeight : 180);
+      });
+
+      // 5. Position nodes per layer (crossing minimization)
+      const newPositions = new Map<string, { x: number; y: number }>();
+
+      sortedLayers.forEach((layerIdx) => {
+        const nodesInLayer = layerGroups.get(layerIdx)!;
+
+        // Sort nodes in this layer based on average Y of their parents to prevent crossed lines
+        if (layerIdx > 0) {
+          nodesInLayer.sort((a, b) => {
+            const parentsA = incoming.get(a) || [];
+            const parentsB = incoming.get(b) || [];
+            const avgYA = parentsA.length > 0
+              ? parentsA.reduce((sum, pId) => sum + (newPositions.get(pId)?.y || 0), 0) / parentsA.length
+              : 0;
+            const avgYB = parentsB.length > 0
+              ? parentsB.reduce((sum, pId) => sum + (newPositions.get(pId)?.y || 0), 0) / parentsB.length
+              : 0;
+            return avgYA - avgYB;
+          });
+        }
+
+        let colHeight = 0;
+        nodesInLayer.forEach((nId, idx) => {
+          colHeight += nodeHeights.get(nId) || 180;
+          if (idx < nodesInLayer.length - 1) colHeight += VERTICAL_GAP;
+        });
+
+        let startColY = START_Y;
+        if (layerIdx > 0) {
+          const allParents = nodesInLayer.flatMap(nId => incoming.get(nId) || []);
+          if (allParents.length > 0) {
+            const parentYs = allParents.map(pId => newPositions.get(pId)?.y || START_Y);
+            const minPY = Math.min(...parentYs);
+            const maxPY = Math.max(...parentYs);
+            const centerPY = (minPY + maxPY) / 2;
+            startColY = Math.max(START_Y, centerPY - colHeight / 2);
+          }
+        }
+
+        let currY = startColY;
+        nodesInLayer.forEach(nId => {
+          const h = nodeHeights.get(nId) || 180;
+          newPositions.set(nId, {
+            x: START_X + layerIdx * (NODE_WIDTH + HORIZONTAL_GAP),
+            y: Math.round(currY)
+          });
+          currY += h + VERTICAL_GAP;
+        });
+      });
+
+      // 6. Save positions
+      updateNodesAndSave(prev => prev.map(node => {
+        const pos = newPositions.get(node.id);
+        return pos ? { ...node, positionX: pos.x, positionY: pos.y } : node;
+      }));
+      toast({ title: "Fluxo organizado com sucesso!" });
+
+      // 7. Auto fit view smoothly after DOM renders
+      setTimeout(() => {
+        handleFitView();
+      }, 100);
+    } catch (err) {
+      console.error("[handleAutoOrganize] Erro ao auto-organizar fluxo:", err);
+      toast({ title: "Erro ao organizar fluxo", description: "Ocorreu uma falha ao reorganizar os nós.", variant: "destructive" });
+    }
   };
 
   useEffect(() => {

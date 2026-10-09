@@ -1,6 +1,6 @@
 {
-  "commit": "9dfadf05c9afe0dd4186e3cf4c343589920b9d95",
-  "shortCommit": "9dfadf0",
-  "message": "fix(realtime): usa canal unico para workflow_task evitando erro de inscricao duplicada",
-  "builtAt": "2026-10-09T18:42:46.331Z"
+  "commit": "b5f51fdd07fb685e549d0c50e814b2e814737293",
+  "shortCommit": "b5f51fd",
+  "message": "feat(workflows): implementar fit view dinamico no botao de enquadramento e botao auto-organizar fluxograma",
+  "builtAt": "2026-10-09T18:48:42.180Z"
 }
