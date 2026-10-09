@@ -29,15 +29,20 @@ export interface CallDialogData {
   autoDial?: boolean;
 }
 
+export type FloatingView = "list" | "call";
+
 interface CallFloatingState {
   isOpen: boolean;
   isMinimized: boolean;
+  view: FloatingView;
   activeCall: CallDialogData | null;
   callStatus: FloatingCallStatus;
   duration: number;
   lastEndedAt: string | null;
 
   // Actions
+  setView: (view: FloatingView) => void;
+  openList: () => void;
   openCall: (data?: Partial<CallDialogData>) => void;
   closeCallDialog: () => void;
   minimizeCallDialog: () => void;
@@ -51,10 +56,14 @@ interface CallFloatingState {
 export const useCallFloatingStore = create<CallFloatingState>((set) => ({
   isOpen: false,
   isMinimized: false,
+  view: "list",
   activeCall: null,
   callStatus: "idle",
   duration: 0,
   lastEndedAt: null,
+
+  setView: (view) => set({ view, isOpen: true, isMinimized: false }),
+  openList: () => set({ view: "list", isOpen: true, isMinimized: false }),
 
   openCall: (data) =>
     set((state) => {
@@ -81,6 +90,7 @@ export const useCallFloatingStore = create<CallFloatingState>((set) => ({
       return {
         isOpen: true,
         isMinimized: false,
+        view: "call",
         activeCall: merged,
       };
     }),

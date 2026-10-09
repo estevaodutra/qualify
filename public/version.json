@@ -1,6 +1,6 @@
 {
-  "commit": "5f37da3492d1c3a06fca02a7dbec0a21e609e473",
-  "shortCommit": "5f37da3",
-  "message": "refactor(calls): aprimora distribuicao interna, espacamento e visibilidade dos componentes do pop-up de ligacao",
-  "builtAt": "2026-10-09T01:42:39.232Z"
+  "commit": "dd3ebab1057489e28e6ce3e5468d396f315610eb",
+  "shortCommit": "dd3ebab",
+  "message": "feat(calls): adiciona botao e integracao para abrir conversa do lead no Chat Express diretamente do pop-up de ligacao",
+  "builtAt": "2026-10-09T01:54:10.557Z"
 }

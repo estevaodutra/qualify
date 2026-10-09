@@ -250,21 +250,8 @@ export function CallFloatingLauncher() {
       };
       openCall(fallbackData);
     } else {
-      // Open empty/manual call dialog
-      openCall({
-        callId: "",
-        campaignId: "",
-        leadId: "",
-        leadName: "Nova Ligação",
-        leadPhone: "",
-        campaignName: "Discador",
-        duration: 0,
-        notes: "",
-        attemptNumber: 1,
-        maxAttempts: 3,
-        isPriority: false,
-        callStatus: "idle",
-      });
+      // Open the Mini Call Panel list!
+      store.openList();
     }
   };
 
@@ -333,7 +320,7 @@ export function CallFloatingLauncher() {
       </div>
 
       {/* Global Call Action Dialog */}
-      {isOpen && activeCall && (
+      {isOpen && (
         <CallActionDialog
           open={isOpen}
           onOpenChange={(open) => {
@@ -341,23 +328,23 @@ export function CallFloatingLauncher() {
               closeCallDialog();
             }
           }}
-          callId={activeCall.callId}
-          campaignId={activeCall.campaignId}
-          leadId={activeCall.leadId}
-          leadName={activeCall.leadName}
-          leadPhone={activeCall.leadPhone}
-          campaignName={activeCall.campaignName}
+          callId={activeCall?.callId}
+          campaignId={activeCall?.campaignId}
+          leadId={activeCall?.leadId}
+          leadName={activeCall?.leadName}
+          leadPhone={activeCall?.leadPhone}
+          campaignName={activeCall?.campaignName}
           duration={duration || opDuration}
-          attemptNumber={activeCall.attemptNumber}
-          maxAttempts={activeCall.maxAttempts}
-          isPriority={activeCall.isPriority}
+          attemptNumber={activeCall?.attemptNumber}
+          maxAttempts={activeCall?.maxAttempts}
+          isPriority={activeCall?.isPriority}
           callStatus={effectiveStatus}
-          externalCallId={activeCall.externalCallId}
-          initialObservations={activeCall.notes}
-          audioUrl={activeCall.audioUrl}
-          operatorId={activeCall.operatorId || operator?.id}
-          userId={activeCall.userId}
-          autoDial={activeCall.autoDial}
+          externalCallId={activeCall?.externalCallId}
+          initialObservations={activeCall?.notes}
+          audioUrl={activeCall?.audioUrl}
+          operatorId={activeCall?.operatorId || operator?.id}
+          userId={activeCall?.userId}
+          autoDial={activeCall?.autoDial}
         />
       )}
     </>

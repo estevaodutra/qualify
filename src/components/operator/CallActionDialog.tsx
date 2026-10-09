@@ -15,6 +15,7 @@ import { Loader2, Calendar, Phone, PhoneMissed, ChevronDown, Clock, Copy, Check,
 import { cn, formatPhone } from "@/lib/utils";
 import { useCallFloatingStore } from "@/stores/callFloating.store";
 import { useChatExpressStore } from "@/stores/chatExpress.store";
+import { MiniCallPanel } from "@/components/call/MiniCallPanel";
 import { addHours, format, setHours, setMinutes, addDays } from "date-fns";
 import { InlineReschedule } from "./InlineReschedule";
 import { useAuth } from "@/contexts/AuthContext";
@@ -42,17 +43,17 @@ interface CallDialogData {
 interface CallActionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  callId: string;
-  campaignId: string;
-  leadId: string;
-  leadName: string;
-  leadPhone: string;
-  campaignName: string;
-  duration: number;
+  callId?: string;
+  campaignId?: string;
+  leadId?: string;
+  leadName?: string;
+  leadPhone?: string;
+  campaignName?: string;
+  duration?: number;
   initialObservations?: string;
-  attemptNumber: number;
-  maxAttempts: number;
-  isPriority: boolean;
+  attemptNumber?: number;
+  maxAttempts?: number;
+  isPriority?: boolean;
   callStatus?: string;
   externalCallId?: string | null;
   audioUrl?: string | null;
@@ -107,15 +108,29 @@ export function CallActionDialog({
   const { user } = useAuth();
   const { activeCompanyId } = useCompany();
   const queryClient = useQueryClient();
+  const view = useCallFloatingStore((s) => s.view);
+  const setView = useCallFloatingStore((s) => s.setView);
   const [isDocked, setIsDocked] = useState(true);
   const autoDialTriggeredRef = useRef(false);
   // --- Navigation state ---
-  const cleanCallId = callId?.startsWith("cl_") ? callId.replace("cl_", "") : callId;
+  const cleanCallId = callId?.startsWith("cl_") ? callId.replace("cl_", "") : (callId || "");
 
   const initialData: CallDialogData = {
-    callId: cleanCallId, campaignId, leadId, leadName, leadPhone, campaignName,
-    duration, notes: initialObservations || "", attemptNumber, maxAttempts,
-    isPriority, callStatus, externalCallId, audioUrl, userId,
+    callId: cleanCallId,
+    campaignId: campaignId || "",
+    leadId: leadId || "",
+    leadName: leadName || "",
+    leadPhone: leadPhone || "",
+    campaignName: campaignName || "",
+    duration: duration || 0,
+    notes: initialObservations || "",
+    attemptNumber: attemptNumber || 1,
+    maxAttempts: maxAttempts || 3,
+    isPriority: isPriority || false,
+    callStatus,
+    externalCallId,
+    audioUrl,
+    userId,
   };
 
   const [currentData, setCurrentData] = useState<CallDialogData>(initialData);
@@ -125,11 +140,23 @@ export function CallActionDialog({
   // Keep currentData in sync with props when dialog reopens
   useEffect(() => {
     if (open) {
-      const activeCallId = callId?.startsWith("cl_") ? callId.replace("cl_", "") : callId;
+      const activeCallId = callId?.startsWith("cl_") ? callId.replace("cl_", "") : (callId || "");
       setCurrentData({
-        callId: activeCallId, campaignId, leadId, leadName, leadPhone, campaignName,
-        duration, notes: initialObservations || "", attemptNumber, maxAttempts,
-        isPriority, callStatus, externalCallId, audioUrl, userId,
+        callId: activeCallId,
+        campaignId: campaignId || "",
+        leadId: leadId || "",
+        leadName: leadName || "",
+        leadPhone: leadPhone || "",
+        campaignName: campaignName || "",
+        duration: duration || 0,
+        notes: initialObservations || "",
+        attemptNumber: attemptNumber || 1,
+        maxAttempts: maxAttempts || 3,
+        isPriority: isPriority || false,
+        callStatus,
+        externalCallId,
+        audioUrl,
+        userId,
       });
       setForwardStack([]);
       autoDialTriggeredRef.current = false;
@@ -784,7 +811,7 @@ export function CallActionDialog({
       queryClient.invalidateQueries({ queryKey: ["call_queue"] });
 
       toast({ title: "Ação registrada", description: "Resultado salvo. A ligação será encerrada pelo callback." });
-      onOpenChange(false);
+      setView("list");
     } catch (err: any) {
       toast({ title: "Erro", description: err.message, variant: "destructive" });
     } finally {
@@ -988,14 +1015,14 @@ export function CallActionDialog({
 
   // Trigger autoDial on mount if requested
   useEffect(() => {
-    if (open && autoDial && !autoDialTriggeredRef.current) {
+    if (open && autoDial && currentData.callId && !autoDialTriggeredRef.current) {
       const alreadyConnected = ["on_call", "in_call", "answered", "completed", "ended"].includes(currentData.callStatus || "");
       if (!alreadyConnected) {
         autoDialTriggeredRef.current = true;
         handleManualDial();
       }
     }
-  }, [open, autoDial, currentData.callStatus]);
+  }, [open, autoDial, currentData.callStatus, currentData.callId]);
 
   const resetState = () => {
     setSelectedActionId(null);
@@ -1016,18 +1043,15 @@ export function CallActionDialog({
         {/* Row 1: Lead info (Avatar + Name & Phone stacked) on left; Timer + Window controls on right */}
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
-            {operatorId && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0 text-slate-400 hover:text-foreground shrink-0 rounded-lg hover:bg-slate-200/50 dark:hover:bg-slate-800"
-                onClick={handleGoBack}
-                disabled={loadingPrevious}
-                title="Lead anterior"
-              >
-                {loadingPrevious ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ChevronLeft className="h-4 w-4" />}
-              </Button>
-            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0 text-slate-400 hover:text-foreground shrink-0 rounded-lg hover:bg-slate-200/50 dark:hover:bg-slate-800"
+              onClick={() => setView("list")}
+              title="Voltar para a lista de ligações"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
 
             <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-violet-600 to-indigo-600 text-white font-black text-sm flex items-center justify-center shadow-xs shrink-0">
               {(currentData.leadName || "L").charAt(0).toUpperCase()}
@@ -1746,10 +1770,10 @@ export function CallActionDialog({
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => onOpenChange(false)}
+              onClick={() => setView("list")}
               className="rounded-lg px-3 h-8 text-xs font-semibold border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
             >
-              Cancelar
+              Voltar à Fila
             </Button>
             <Button
               type="button"
@@ -1780,7 +1804,22 @@ export function CallActionDialog({
           "animate-in slide-in-from-bottom-5 fade-in duration-200 transition-all ease-out"
         )}
       >
-        {innerContent}
+        {view === "list" ? (
+          <MiniCallPanel
+            isDocked={isDocked}
+            onToggleDock={() => setIsDocked((prev) => !prev)}
+            onClose={() => {
+              onOpenChange(false);
+              useCallFloatingStore.getState().closeCallDialog();
+            }}
+            onMinimize={() => {
+              useCallFloatingStore.getState().minimizeCallDialog();
+              onOpenChange(false);
+            }}
+          />
+        ) : (
+          innerContent
+        )}
       </div>
     );
   }
@@ -1788,7 +1827,22 @@ export function CallActionDialog({
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) { resetState(); useCallFloatingStore.getState().closeCallDialog(); } }}>
       <DialogContent className="max-w-2xl max-h-[92vh] p-0 gap-0 overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-950 flex flex-col [&>button]:hidden">
-        {innerContent}
+        {view === "list" ? (
+          <MiniCallPanel
+            isDocked={isDocked}
+            onToggleDock={() => setIsDocked((prev) => !prev)}
+            onClose={() => {
+              onOpenChange(false);
+              useCallFloatingStore.getState().closeCallDialog();
+            }}
+            onMinimize={() => {
+              useCallFloatingStore.getState().minimizeCallDialog();
+              onOpenChange(false);
+            }}
+          />
+        ) : (
+          innerContent
+        )}
       </DialogContent>
     </Dialog>
   );
