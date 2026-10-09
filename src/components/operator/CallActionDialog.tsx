@@ -1053,8 +1053,8 @@ export function CallActionDialog({
               <ChevronLeft className="h-4 w-4" />
             </Button>
 
-            <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-violet-600 to-indigo-600 text-white font-black text-sm flex items-center justify-center shadow-xs shrink-0">
-              {(currentData.leadName || "L").charAt(0).toUpperCase()}
+            <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-violet-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shadow-xs shrink-0">
+              {(currentData.leadName || currentData.leadPhone || "L").substring(0, 2).toUpperCase()}
             </div>
 
             {/* Name + Phone stacked */}
@@ -1079,11 +1079,11 @@ export function CallActionDialog({
                     }
                     setIsEditingName(false);
                   }}
-                  className="h-6 text-xs font-bold uppercase max-w-[190px] rounded-md border-primary/40 px-2 py-0"
+                  className="h-6 text-xs font-bold max-w-[190px] rounded-md border-primary/40 px-2 py-0"
                 />
               ) : (
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <h2 className="text-sm font-bold tracking-tight uppercase text-slate-900 dark:text-white truncate">
+                  <h2 className="text-sm font-bold tracking-tight text-slate-900 dark:text-white truncate">
                     {currentData.leadName || "Sem Nome"}
                   </h2>
                   <button

@@ -1,6 +1,6 @@
 {
-  "commit": "749ad666787990678c08562eb8191ae2edff9926",
-  "shortCommit": "749ad66",
-  "message": "style(launcher): move bolinha verde de status para o canto superior direito",
-  "builtAt": "2026-10-09T02:20:09.438Z"
+  "commit": "af7541bb408ff30cc8432f29b3ae658d5e431d2e",
+  "shortCommit": "af7541b",
+  "message": "fix(call-dialog): mantem apenas um botao de Chat limpo na barra de acoes e remove duplicidades do cabecalho",
+  "builtAt": "2026-10-09T02:24:37.850Z"
 }
