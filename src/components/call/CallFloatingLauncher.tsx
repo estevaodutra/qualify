@@ -322,14 +322,15 @@ export function CallFloatingLauncher() {
           ) : isRinging ? (
             <Phone className="w-5 h-5 md:w-6 md:h-6 animate-pulse" />
           ) : (
-            <div className="relative flex items-center justify-center">
-              <Phone className="w-5 h-5 md:w-6 md:h-6 group-hover:scale-110 transition-transform" />
-              {/* Ready green status dot indicator */}
-              <span
-                className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-white dark:border-slate-900 shadow-xs"
-                title="Disponível"
-              />
-            </div>
+            <Phone className="w-5 h-5 md:w-6 md:h-6 group-hover:scale-110 transition-transform" />
+          )}
+
+          {/* Indicador verde de disponibilidade no canto superior direito */}
+          {!isOnCall && !isDialing && !isRinging && !isFailed && (
+            <span
+              className="absolute top-0.5 right-0.5 md:top-1 md:right-1 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-white dark:border-slate-900 shadow-xs pointer-events-none"
+              title="Disponível"
+            />
           )}
         </button>
       </div>

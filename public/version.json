@@ -1,6 +1,6 @@
 {
-  "commit": "90457cedf854d4f739d94ab73cb20efb3e9c560d",
-  "shortCommit": "90457ce",
-  "message": "fix(call-popup): corrige referencia ao openList no launcher e condicao de renderizacao do popup",
-  "builtAt": "2026-10-09T02:05:09.846Z"
+  "commit": "080726136d1784dd1d89777ea6ff34b71d919c49",
+  "shortCommit": "0807261",
+  "message": "fix(call-panel): unifica historico e chamadas ativas incluindo tarefas de workflow e call_logs com contadores e acoes de chat",
+  "builtAt": "2026-10-09T02:07:57.819Z"
 }

@@ -541,8 +541,9 @@ export function MiniCallPanel({ isDocked, onToggleDock, onMinimize, onClose }: M
       <div className="relative bg-gradient-to-b from-slate-50/90 via-slate-50/40 to-white dark:from-slate-900/90 dark:via-slate-900/40 dark:to-slate-950 border-b border-slate-200/80 dark:border-slate-800 p-3.5 space-y-2.5 shrink-0">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
-            <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-[#7C3AED] to-[#3B4DFF] text-white flex items-center justify-center shadow-xs shrink-0">
+            <div className="relative h-9 w-9 rounded-xl bg-gradient-to-tr from-[#7C3AED] to-[#3B4DFF] text-white flex items-center justify-center shadow-xs shrink-0">
               <PhoneCall className="h-4 w-4" />
+              <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-white dark:border-slate-900 shadow-2xs" />
             </div>
 
             <div className="min-w-0 flex flex-col justify-center">
