@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 
 export function ChatExpressDock() {
   const { isOpen, isMinimized, sessions, activeLeadId, restoreDock, closeAllSessions } = useChatExpressStore();
-  const isCallCardOpen = useCallFloatingStore((s) => s.isOpen && !!s.activeCall);
+  const isCallCardOpen = useCallFloatingStore((s) => s.isOpen && !s.isMinimized);
 
   if (!isOpen) return null;
 

@@ -27,6 +27,7 @@ export function CallFloatingLauncher() {
     callStatus,
     duration,
     openCall,
+    openList,
     closeCallDialog,
     setActiveCall,
     setCallStatus,
@@ -228,6 +229,20 @@ export function CallFloatingLauncher() {
 
   // Handle click on floating launcher
   const handleLauncherClick = () => {
+    if (isMinimized) {
+      if (activeCall && activeCall.callId) {
+        openCall(activeCall);
+      } else {
+        openList();
+      }
+      return;
+    }
+
+    if (isOpen) {
+      useCallFloatingStore.getState().minimizeCallDialog();
+      return;
+    }
+
     if (activeCall && activeCall.callId) {
       openCall(activeCall);
     } else if (currentCall) {
@@ -251,7 +266,7 @@ export function CallFloatingLauncher() {
       openCall(fallbackData);
     } else {
       // Open the Mini Call Panel list!
-      store.openList();
+      openList();
     }
   };
 
@@ -320,9 +335,9 @@ export function CallFloatingLauncher() {
       </div>
 
       {/* Global Call Action Dialog */}
-      {isOpen && (
+      {isOpen && !isMinimized && (
         <CallActionDialog
-          open={isOpen}
+          open={isOpen && !isMinimized}
           onOpenChange={(open) => {
             if (!open) {
               closeCallDialog();

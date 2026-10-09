@@ -1,6 +1,6 @@
 {
-  "commit": "dd3ebab1057489e28e6ce3e5468d396f315610eb",
-  "shortCommit": "dd3ebab",
-  "message": "feat(calls): adiciona botao e integracao para abrir conversa do lead no Chat Express diretamente do pop-up de ligacao",
-  "builtAt": "2026-10-09T01:54:10.557Z"
+  "commit": "9cce274ead3d4e45da3634f5f225512bbe761542",
+  "shortCommit": "9cce274",
+  "message": "feat(calls): transforma pop-up de ligacao em janela de navegacao com painel de ligacoes e card de atendimento",
+  "builtAt": "2026-10-09T01:58:22.380Z"
 }
