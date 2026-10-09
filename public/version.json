@@ -1,6 +1,6 @@
 {
-  "commit": "af7541bb408ff30cc8432f29b3ae658d5e431d2e",
-  "shortCommit": "af7541b",
-  "message": "fix(call-dialog): mantem apenas um botao de Chat limpo na barra de acoes e remove duplicidades do cabecalho",
-  "builtAt": "2026-10-09T02:24:37.850Z"
+  "commit": "3016b264ca7479d92d4eceade77d9e703c67b02d",
+  "shortCommit": "3016b26",
+  "message": "fix(call-dialog): padroniza nome do lead sem uppercase e iniciais do avatar com 2 letras igual ao chat express",
+  "builtAt": "2026-10-09T18:25:32.634Z"
 }

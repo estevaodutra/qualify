@@ -1224,9 +1224,8 @@ export default function CallPanel() {
   }, [user, queryClient]);
 
   useEffect(() => {
-    // Condições: fila global ativa, operador disponível, operador sem ligação no momento,
-    // não há painel de chamada aberto, e a fila tem itens pendentes.
-    const isQueueRunning = queueGlobalStatus === "running" || queueGlobalStatus === "mixed" || (queueGlobalStatus !== "paused" && isOperatorAvailable);
+    // Apenas disca automaticamente se a fila estiver explicitamente iniciada ('running')
+    const isQueueRunning = queueGlobalStatus === "running";
     if (
       isQueueRunning &&
       isOperatorAvailable &&
@@ -1252,7 +1251,7 @@ export default function CallPanel() {
       console.log("[Auto-Dialer] Starting auto-dial for:", nextLead.leadName || nextLead.phone);
       
       // Define a view para abrir o popup e inicia o disparo
-      setViewingQueueLead({ ...nextLead, autoDial: true });
+      setViewingQueueLead({ ...nextLead, autoDial: false });
       const targetCallId = nextLead.source === "workflow_call_task" ? `wt_${nextLead.realId || nextLead.id}` : (nextLead.realId || nextLead.id);
       useCallFloatingStore.getState().openCall({
         callId: targetCallId,
@@ -1268,20 +1267,13 @@ export default function CallPanel() {
         isPriority: nextLead.isPriority || false,
         callStatus: "dialing",
         userId: nextLead.userId,
-        autoDial: true,
+        autoDial: false,
       });
 
       if (nextLead.source === "workflow_call_task") {
-        handleWorkflowDial(nextLead).finally(() => {
-          setTimeout(() => {
-            isAutoDialingRef.current = false;
-          }, 4000);
-        });
+        handleWorkflowDial(nextLead);
       } else {
         dialNow(nextLead.realId || nextLead.id);
-        setTimeout(() => {
-          isAutoDialingRef.current = false;
-        }, 4000);
       }
     }
   }, [
@@ -1293,6 +1285,14 @@ export default function CallPanel() {
     handleWorkflowDial,
     dialNow
   ]);
+
+  // Libera a trava do discador quando a chamada for concluída/fechada
+  useEffect(() => {
+    if (!viewingQueueLead && inProgressEntries.length === 0) {
+      isAutoDialingRef.current = false;
+    }
+  }, [viewingQueueLead, inProgressEntries.length]);
+
 
   const statusConfig: Record<string, { label: string; dotClass: string; className: string }> = {
     running: { label: "🟢 Fila Ativa", dotClass: "bg-emerald-500 animate-pulse", className: "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400" },
@@ -1740,7 +1740,7 @@ export default function CallPanel() {
                                     variant="ghost"
                                     size="icon"
                                     className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                                    onClick={() => { setViewingQueueLead({ ...qe, autoDial: true }); handleWorkflowDial(qe); }}
+                                    onClick={() => { setViewingQueueLead({ ...qe, autoDial: false }); handleWorkflowDial(qe); }}
                                   >
                                     <Phone className="h-3.5 w-3.5" />
                                   </Button>
