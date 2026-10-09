@@ -15,7 +15,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  ArrowLeft, Save, Play, Pause, Trash2, ZoomIn, ZoomOut, Maximize,
+  ArrowLeft, Save, Play, Pause, Trash2, ZoomIn, ZoomOut, Maximize, LayoutGrid,
   Loader2, Info, GitBranch, Copy, PenLine, History, Sliders, ArrowRight, Plus, MessageSquare, Settings, Clock,
   ChevronUp, ChevronDown, PhoneCall, Filter, Briefcase, User, Smartphone
 } from "lucide-react";
@@ -696,11 +696,232 @@ export function UnifiedSequenceBuilder({
 
   // Zoom management
   const handleZoom = (factor: number) => {
-    setZoom(prev => Math.min(Math.max(prev + factor, 0.4), 1.8));
+    setZoom(prev => Math.min(Math.max(prev + factor, 0.05), 2.0));
   };
-  const handleResetZoom = () => {
-    setZoom(1);
-    setPanOffset({ x: 80, y: 80 });
+
+  const handleFitView = () => {
+    const canvas = canvasRef.current;
+    if (!canvas || localNodes.length === 0) {
+      setZoom(1);
+      setPanOffset({ x: 80, y: 80 });
+      return;
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    localNodes.forEach(node => {
+      const x = node.positionX ?? 0;
+      const y = node.positionY ?? 0;
+      const el = canvas.querySelector(`[data-node-wrapper="${node.id}"]`) as HTMLElement | null;
+      const w = el ? el.offsetWidth : 320;
+      const h = el ? el.offsetHeight : 180;
+
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x + w > maxX) maxX = x + w;
+      if (y + h > maxY) maxY = y + h;
+    });
+
+    if (minX === Infinity || maxX === -Infinity) {
+      setZoom(1);
+      setPanOffset({ x: 80, y: 80 });
+      return;
+    }
+
+    const padding = 60;
+    const contentWidth = Math.max(maxX - minX, 1);
+    const contentHeight = Math.max(maxY - minY, 1);
+
+    const availableWidth = Math.max(rect.width - padding * 2, 50);
+    const availableHeight = Math.max(rect.height - padding * 2, 50);
+
+    const scaleX = availableWidth / contentWidth;
+    const scaleY = availableHeight / contentHeight;
+
+    // Permitir zoom out até 0.05 (5%) para que caibam todos os nodes mesmo em fluxos gigantes
+    const targetZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.05), 1.2);
+
+    const contentCenterX = minX + contentWidth / 2;
+    const contentCenterY = minY + contentHeight / 2;
+
+    const canvasCenterX = rect.width / 2;
+    const canvasCenterY = rect.height / 2;
+
+    const targetPanX = Math.round(canvasCenterX - contentCenterX * targetZoom);
+    const targetPanY = Math.round(canvasCenterY - contentCenterY * targetZoom);
+
+    setZoom(targetZoom);
+    setPanOffset({ x: targetPanX, y: targetPanY });
+  };
+
+  // Auto-organize flowchart layout (Sugiyama / Hierarchical DAG layout)
+  const handleAutoOrganize = () => {
+    if (localNodes.length === 0) return;
+
+    const NODE_WIDTH = 320;
+    const HORIZONTAL_GAP = 140;
+    const VERTICAL_GAP = 70;
+    const START_X = 60;
+    const START_Y = 100;
+
+    // 1. Build adjacency maps
+    const outgoing = new Map<string, string[]>();
+    const incoming = new Map<string, string[]>();
+
+    localNodes.forEach(n => {
+      outgoing.set(n.id, []);
+      incoming.set(n.id, []);
+    });
+
+    localConnections.forEach(c => {
+      if (outgoing.has(c.sourceNodeId) && incoming.has(c.targetNodeId)) {
+        outgoing.get(c.sourceNodeId)!.push(c.targetNodeId);
+        incoming.get(c.targetNodeId)!.push(c.sourceNodeId);
+      }
+    });
+
+    // 2. Assign horizontal layers (depth)
+    const layers = new Map<string, number>();
+    const triggerNode = localNodes.find(n => n.nodeType === "trigger");
+
+    const queue: { id: string; depth: number }[] = [];
+    const inDegreeMap = new Map<string, number>();
+    localNodes.forEach(n => {
+      inDegreeMap.set(n.id, incoming.get(n.id)?.length || 0);
+    });
+
+    if (triggerNode) {
+      queue.push({ id: triggerNode.id, depth: 0 });
+      layers.set(triggerNode.id, 0);
+    }
+
+    localNodes.forEach(n => {
+      if (n.nodeType !== "trigger" && inDegreeMap.get(n.id) === 0) {
+        queue.push({ id: n.id, depth: 0 });
+        layers.set(n.id, 0);
+      }
+    });
+
+    if (queue.length === 0 && localNodes.length > 0) {
+      queue.push({ id: localNodes[0].id, depth: 0 });
+      layers.set(localNodes[0].id, 0);
+    }
+
+    const visitedEdges = new Set<string>();
+    while (queue.length > 0) {
+      const { id, depth } = queue.shift()!;
+      const children = outgoing.get(id) || [];
+
+      for (const childId of children) {
+        const edgeKey = `${id}->${childId}`;
+        if (visitedEdges.has(edgeKey)) continue;
+        visitedEdges.add(edgeKey);
+
+        const currentDepth = layers.get(childId) ?? -1;
+        if (depth + 1 > currentDepth) {
+          layers.set(childId, depth + 1);
+        }
+
+        queue.push({ id: childId, depth: depth + 1 });
+      }
+    }
+
+    let maxDepth = 0;
+    layers.forEach(d => { if (d > maxDepth) maxDepth = d; });
+    localNodes.forEach(n => {
+      if (!layers.has(n.id)) {
+        maxDepth += 1;
+        layers.set(n.id, maxDepth);
+      }
+    });
+
+    // 3. Group node IDs by layer
+    const layerGroups = new Map<number, string[]>();
+    layers.forEach((layerIdx, nodeId) => {
+      if (!layerGroups.has(layerIdx)) {
+        layerGroups.set(layerIdx, []);
+      }
+      layerGroups.get(layerIdx)!.push(nodeId);
+    });
+
+    const sortedLayers = Array.from(layerGroups.keys()).sort((a, b) => a - b);
+
+    // 4. Measure node heights
+    const nodeHeights = new Map<string, number>();
+    localNodes.forEach(node => {
+      const el = canvasRef.current?.querySelector(`[data-node-wrapper="${node.id}"]`) as HTMLElement | null;
+      nodeHeights.set(node.id, el ? el.offsetHeight : 180);
+    });
+
+    // 5. Position nodes per layer (crossing minimization)
+    const newPositions = new Map<string, { x: number; y: number }>();
+
+    sortedLayers.forEach((layerIdx) => {
+      const nodesInLayer = layerGroups.get(layerIdx)!;
+
+      // Sort nodes in this layer based on average Y of their parents to prevent crossed lines
+      if (layerIdx > 0) {
+        nodesInLayer.sort((a, b) => {
+          const parentsA = incoming.get(a) || [];
+          const parentsB = incoming.get(b) || [];
+          const avgYA = parentsA.length > 0
+            ? parentsA.reduce((sum, pId) => sum + (newPositions.get(pId)?.y || 0), 0) / parentsA.length
+            : 0;
+          const avgYB = parentsB.length > 0
+            ? parentsB.reduce((sum, pId) => sum + (newPositions.get(pId)?.y || 0), 0) / parentsB.length
+            : 0;
+          return avgYA - avgYB;
+        });
+      }
+
+      let colHeight = 0;
+      nodesInLayer.forEach((nId, idx) => {
+        colHeight += nodeHeights.get(nId) || 180;
+        if (idx < nodesInLayer.length - 1) colHeight += VERTICAL_GAP;
+      });
+
+      let startColY = START_Y;
+      if (layerIdx > 0) {
+        const allParents = nodesInLayer.flatMap(nId => incoming.get(nId) || []);
+        if (allParents.length > 0) {
+          const parentYs = allParents.map(pId => newPositions.get(pId)?.y || START_Y);
+          const minPY = Math.min(...parentYs);
+          const maxPY = Math.max(...parentYs);
+          const centerPY = (minPY + maxPY) / 2;
+          startColY = Math.max(START_Y, centerPY - colHeight / 2);
+        }
+      }
+
+      let currY = startColY;
+      nodesInLayer.forEach(nId => {
+        const h = nodeHeights.get(nId) || 180;
+        newPositions.set(nId, {
+          x: START_X + layerIdx * (NODE_WIDTH + HORIZONTAL_GAP),
+          y: Math.round(currY)
+        });
+        currY += h + VERTICAL_GAP;
+      });
+    });
+
+    // 6. Save positions
+    const updated = localNodes.map(node => {
+      const pos = newPositions.get(node.id);
+      return pos ? { ...node, positionX: pos.x, positionY: pos.y } : node;
+    });
+
+    updateNodesAndSave(updated);
+    toast({ title: "Fluxo organizado com sucesso!" });
+
+    // 7. Auto fit view smoothly after DOM renders
+    setTimeout(() => {
+      handleFitView();
+    }, 80);
   };
 
   useEffect(() => {
@@ -718,7 +939,7 @@ export function UnifiedSequenceBuilder({
         const zoomFactor = e.deltaY > 0 ? -0.1 : 0.1;
         
         setZoom((prevZoom) => {
-          const newZoom = Math.min(Math.max(prevZoom + zoomFactor, 0.4), 1.8);
+          const newZoom = Math.min(Math.max(prevZoom + zoomFactor, 0.05), 2.0);
           if (newZoom !== prevZoom) {
             setPanOffset(prevPan => {
               const rect = canvas.getBoundingClientRect();
@@ -965,13 +1186,24 @@ export function UnifiedSequenceBuilder({
           
           {/* Canvas Toolbar (Zoom & Controls) */}
           <div className="absolute top-4 right-4 z-10 flex items-center gap-1 bg-white p-1 border border-slate-200/80 rounded-xl shadow-sm">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2.5 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-900 text-xs font-medium flex items-center gap-1.5 transition-colors"
+              onClick={handleAutoOrganize}
+              title="Organizar nós automaticamente como um fluxograma"
+            >
+              <LayoutGrid className="h-3.5 w-3.5 text-[#8A3CFF]" />
+              <span className="font-semibold text-[11px]">Auto-organizar</span>
+            </Button>
+            <div className="h-3.5 w-[1px] bg-slate-200 mx-0.5" />
             <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg hover:bg-slate-50" onClick={() => handleZoom(0.1)} title="Aproximar">
               <ZoomIn className="h-3.5 w-3.5 text-slate-500" />
             </Button>
             <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg hover:bg-slate-50" onClick={() => handleZoom(-0.1)} title="Afastar">
               <ZoomOut className="h-3.5 w-3.5 text-slate-500" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg hover:bg-slate-50" onClick={handleResetZoom} title="Resetar Visualização">
+            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg hover:bg-slate-50" onClick={handleFitView} title="Ajustar à Tela (Ver tudo)">
               <Maximize className="h-3.5 w-3.5 text-slate-500" />
             </Button>
             <div className="h-3.5 w-[1px] bg-slate-200 mx-1" />

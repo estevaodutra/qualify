@@ -86,8 +86,66 @@ export function ExecutionCanvas({
     if (isPanning) setPanOffset({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
   };
   const handleMouseUp = () => setIsPanning(false);
-  const handleZoom = (factor: number) => setZoom(prev => Math.min(Math.max(prev + factor, 0.4), 1.8));
-  const handleResetZoom = () => { setZoom(1); setPanOffset({ x: 80, y: 80 }); };
+  const handleZoom = (factor: number) => setZoom(prev => Math.min(Math.max(prev + factor, 0.05), 2.0));
+
+  const handleFitView = () => {
+    const canvas = canvasRef.current;
+    if (!canvas || nodes.length === 0) {
+      setZoom(1);
+      setPanOffset({ x: 80, y: 80 });
+      return;
+    }
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    nodes.forEach(node => {
+      const x = node.positionX ?? 0;
+      const y = node.positionY ?? 0;
+      const el = canvas.querySelector(`[data-node-wrapper="${node.id}"]`) as HTMLElement | null;
+      const w = el ? el.offsetWidth : (node.nodeType === "trigger" || node.nodeType === "content" || node.nodeType === "phone_call" || node.nodeType === "ura" ? 320 : 220);
+      const h = el ? el.offsetHeight : 180;
+
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x + w > maxX) maxX = x + w;
+      if (y + h > maxY) maxY = y + h;
+    });
+
+    if (minX === Infinity || maxX === -Infinity) {
+      setZoom(1);
+      setPanOffset({ x: 80, y: 80 });
+      return;
+    }
+
+    const padding = 60;
+    const contentWidth = Math.max(maxX - minX, 1);
+    const contentHeight = Math.max(maxY - minY, 1);
+
+    const availableWidth = Math.max(rect.width - padding * 2, 50);
+    const availableHeight = Math.max(rect.height - padding * 2, 50);
+
+    const scaleX = availableWidth / contentWidth;
+    const scaleY = availableHeight / contentHeight;
+
+    const targetZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.05), 1.2);
+
+    const contentCenterX = minX + contentWidth / 2;
+    const contentCenterY = minY + contentHeight / 2;
+
+    const canvasCenterX = rect.width / 2;
+    const canvasCenterY = rect.height / 2;
+
+    const targetPanX = Math.round(canvasCenterX - contentCenterX * targetZoom);
+    const targetPanY = Math.round(canvasCenterY - contentCenterY * targetZoom);
+
+    setZoom(targetZoom);
+    setPanOffset({ x: targetPanX, y: targetPanY });
+  };
 
   return (
     <div className="flex-1 border border-slate-200/60 bg-[#F5F6FA] rounded-2xl overflow-hidden relative shadow-inner flex flex-col">
@@ -98,7 +156,7 @@ export function ExecutionCanvas({
         <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg hover:bg-slate-50" onClick={() => handleZoom(-0.1)} title="Afastar">
           <ZoomOut className="h-3.5 w-3.5 text-slate-500" />
         </Button>
-        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg hover:bg-slate-50" onClick={handleResetZoom} title="Resetar Visualização">
+        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg hover:bg-slate-50" onClick={handleFitView} title="Ajustar à Tela (Ver tudo)">
           <Maximize className="h-3.5 w-3.5 text-slate-500" />
         </Button>
         <div className="h-3.5 w-[1px] bg-slate-200 mx-1" />
@@ -268,6 +326,7 @@ export function ExecutionCanvas({
               return (
                 <div
                   key={node.id}
+                  data-node-wrapper={node.id}
                   style={{ position: "absolute", left: posX, top: posY, width: node.nodeType === "trigger" || node.nodeType === "content" || node.nodeType === "phone_call" || node.nodeType === "ura" ? 320 : 220, pointerEvents: "auto" }}
                   onClick={() => nodeExec && onSelectNode(node.id)}
                   className={cn(

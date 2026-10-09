@@ -1,6 +1,6 @@
 {
-  "commit": "3f5d3e707fb9f4f628e1a7145562abac7a2bb576",
-  "shortCommit": "3f5d3e7",
-  "message": "fix(calls): elimina loop continuo de discagem automatica em segundo plano",
-  "builtAt": "2026-10-09T18:31:19.220Z"
+  "commit": "9dfadf05c9afe0dd4186e3cf4c343589920b9d95",
+  "shortCommit": "9dfadf0",
+  "message": "fix(realtime): usa canal unico para workflow_task evitando erro de inscricao duplicada",
+  "builtAt": "2026-10-09T18:42:46.331Z"
 }
