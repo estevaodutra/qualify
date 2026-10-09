@@ -1,6 +1,6 @@
 {
-  "commit": "080726136d1784dd1d89777ea6ff34b71d919c49",
-  "shortCommit": "0807261",
-  "message": "fix(call-panel): unifica historico e chamadas ativas incluindo tarefas de workflow e call_logs com contadores e acoes de chat",
-  "builtAt": "2026-10-09T02:07:57.819Z"
+  "commit": "749ad666787990678c08562eb8191ae2edff9926",
+  "shortCommit": "749ad66",
+  "message": "style(launcher): move bolinha verde de status para o canto superior direito",
+  "builtAt": "2026-10-09T02:20:09.438Z"
 }

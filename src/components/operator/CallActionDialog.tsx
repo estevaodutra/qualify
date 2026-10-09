@@ -1097,34 +1097,22 @@ export function CallActionDialog({
                 </div>
               )}
 
-              {/* Phone with copy & chat */}
-              <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono mt-0.5 flex-wrap">
-                <div className="flex items-center gap-1.5">
-                  <Phone className="h-3 w-3 text-slate-400 shrink-0" />
-                  <span className="font-semibold text-[11px] text-slate-700 dark:text-slate-300">
-                    {currentData.leadPhone ? formatPhone(currentData.leadPhone) : "Sem telefone"}
-                  </span>
-                  {currentData.leadPhone && (
-                    <button
-                      type="button"
-                      onClick={() => copyExternalId(currentData.leadPhone)}
-                      className="text-slate-400 hover:text-foreground transition-colors p-0.5"
-                      title="Copiar telefone"
-                    >
-                      {copied ? <Check className="h-2.5 w-2.5 text-emerald-500" /> : <Copy className="h-2.5 w-2.5" />}
-                    </button>
-                  )}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleOpenChat}
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25 text-[10px] font-sans font-bold transition-all shadow-2xs"
-                  title="Abrir WhatsApp / Chat deste lead"
-                >
-                  <MessageSquare className="h-2.5 w-2.5 text-emerald-600 dark:text-emerald-400" />
-                  <span>Chat</span>
-                </button>
+              {/* Phone with copy */}
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono mt-0.5">
+                <Phone className="h-3 w-3 text-slate-400 shrink-0" />
+                <span className="font-semibold text-[11px] text-slate-700 dark:text-slate-300">
+                  {currentData.leadPhone ? formatPhone(currentData.leadPhone) : "Sem telefone"}
+                </span>
+                {currentData.leadPhone && (
+                  <button
+                    type="button"
+                    onClick={() => copyExternalId(currentData.leadPhone)}
+                    className="text-slate-400 hover:text-foreground transition-colors p-0.5"
+                    title="Copiar telefone"
+                  >
+                    {copied ? <Check className="h-2.5 w-2.5 text-emerald-500" /> : <Copy className="h-2.5 w-2.5" />}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1151,14 +1139,6 @@ export function CallActionDialog({
             </div>
 
             <div className="flex items-center gap-0.5 pl-1.5 border-l border-slate-200 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={handleOpenChat}
-                className="h-7 w-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
-                title="Abrir Chat Express deste lead"
-              >
-                <MessageSquare className="h-3.5 w-3.5" />
-              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -1235,10 +1215,10 @@ export function CallActionDialog({
               size="sm"
               className="h-6 px-2.5 text-[11px] font-semibold gap-1.5 rounded-lg text-emerald-600 border-emerald-500/40 bg-emerald-50/60 hover:bg-emerald-100 hover:text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 transition-all shadow-2xs"
               onClick={handleOpenChat}
-              title="Abrir balão lateral do chat"
+              title="Abrir WhatsApp / Chat deste lead"
             >
               <MessageSquare className="h-3 w-3" />
-              Abrir Chat
+              Chat
             </Button>
 
             {isWorkflowCall && (
