@@ -1,6 +1,6 @@
 {
-  "commit": "9cce274ead3d4e45da3634f5f225512bbe761542",
-  "shortCommit": "9cce274",
-  "message": "feat(calls): transforma pop-up de ligacao em janela de navegacao com painel de ligacoes e card de atendimento",
-  "builtAt": "2026-10-09T01:58:22.380Z"
+  "commit": "90457cedf854d4f739d94ab73cb20efb3e9c560d",
+  "shortCommit": "90457ce",
+  "message": "fix(call-popup): corrige referencia ao openList no launcher e condicao de renderizacao do popup",
+  "builtAt": "2026-10-09T02:05:09.846Z"
 }

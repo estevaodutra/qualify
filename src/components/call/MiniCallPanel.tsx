@@ -52,6 +52,34 @@ interface CombinedItem {
   createdAt: string;
 }
 
+interface ActiveItem {
+  id: string;
+  source: "workflow" | "call_log";
+  leadId: string;
+  leadName: string;
+  leadPhone: string;
+  campaignId: string;
+  campaignName: string;
+  callStatus: string;
+  startedAt?: string | null;
+  durationSeconds: number;
+}
+
+interface HistoryItem {
+  id: string;
+  source: "workflow" | "call_log";
+  leadId: string;
+  leadName: string;
+  leadPhone: string;
+  campaignId: string;
+  campaignName: string;
+  callStatus: string;
+  startedAt?: string | null;
+  endedAt?: string | null;
+  createdAt: string;
+  durationSeconds: number;
+}
+
 export function MiniCallPanel({ isDocked, onToggleDock, onMinimize, onClose }: MiniCallPanelProps) {
   const { activeCompanyId } = useCompany();
   const { user } = useAuth();
@@ -197,46 +225,204 @@ export function MiniCallPanel({ isDocked, onToggleDock, onMinimize, onClose }: M
     refetchInterval: 5000,
   });
 
-  // 2. Fetch Active / In Progress Calls
-  const { data: activeCalls = [], isLoading: isLoadingActive } = useQuery({
+  // 2. Fetch Active / In Progress Calls (from both workflow_call_tasks and call_logs)
+  const { data: activeCalls = [], isLoading: isLoadingActive } = useQuery<ActiveItem[]>({
     queryKey: ["mini-call-active", activeCompanyId],
     queryFn: async () => {
-      let q = (supabase as any)
-        .from("call_logs")
-        .select("id, campaign_id, lead_id, operator_id, call_status, started_at, duration_seconds, call_leads(name, phone), call_campaigns(name)")
-        .in("call_status", ["dialing", "ringing", "in_call", "on_call", "answered", "in_progress"])
-        .order("started_at", { ascending: false })
-        .limit(20);
+      const items: ActiveItem[] = [];
 
-      if (activeCompanyId) {
-        q = q.eq("company_id", activeCompanyId);
+      // 2.1 Workflow tasks in progress
+      try {
+        let wfQuery = (supabase as any)
+          .from("workflow_call_tasks")
+          .select("*, leads(name, phone)")
+          .in("status", ["in_progress", "dialing", "ringing", "answered", "on_call"])
+          .order("created_at", { ascending: false })
+          .limit(20);
+
+        if (activeCompanyId) {
+          wfQuery = wfQuery.or(`company_id.eq.${activeCompanyId},company_id.is.null`);
+        }
+
+        const { data: wfActive } = await wfQuery;
+        if (wfActive && wfActive.length > 0) {
+          const workflowIds = [...new Set(wfActive.map((t: any) => t.workflow_id).filter(Boolean))];
+          const queueIds = [...new Set(wfActive.map((t: any) => t.queue_id).filter(Boolean))];
+          const nameMap: Record<string, string> = {};
+
+          if (workflowIds.length > 0) {
+            const { data: wfs } = await (supabase as any).from("workflows").select("id, name").in("id", workflowIds);
+            wfs?.forEach((w: any) => { nameMap[w.id] = w.name; });
+          }
+          if (queueIds.length > 0) {
+            const { data: camps } = await (supabase as any).from("call_campaigns").select("id, name").in("id", queueIds);
+            camps?.forEach((c: any) => { nameMap[c.id] = c.name; });
+          }
+
+          wfActive.forEach((t: any) => {
+            const wfName = (t.workflow_id && nameMap[t.workflow_id]) || (t.queue_id && nameMap[t.queue_id]) || t.campaign_name || "Workflow";
+            items.push({
+              id: `wt_${t.id}`,
+              source: "workflow",
+              leadId: t.lead_id || "",
+              leadName: t.leads?.name || "Lead",
+              leadPhone: t.phone || t.leads?.phone || "",
+              campaignId: t.workflow_id || t.queue_id || "",
+              campaignName: wfName,
+              callStatus: t.status,
+              startedAt: t.started_at,
+              durationSeconds: t.duration_seconds || 0,
+            });
+          });
+        }
+      } catch (e) {
+        console.error("Erro ao buscar chamadas ativas de workflow:", e);
       }
 
-      const { data, error } = await q;
-      if (error) return [];
-      return data || [];
+      // 2.2 Call logs in progress
+      try {
+        let q = (supabase as any)
+          .from("call_logs")
+          .select("id, campaign_id, lead_id, operator_id, call_status, started_at, duration_seconds, call_leads(name, phone), call_campaigns(name)")
+          .in("call_status", ["dialing", "ringing", "in_call", "on_call", "answered", "in_progress"])
+          .order("started_at", { ascending: false })
+          .limit(20);
+
+        if (activeCompanyId) {
+          q = q.or(`company_id.eq.${activeCompanyId},company_id.is.null`);
+        }
+
+        const { data } = await q;
+        if (data && data.length > 0) {
+          data.forEach((c: any) => {
+            items.push({
+              id: c.id,
+              source: "call_log",
+              leadId: c.lead_id || "",
+              leadName: c.call_leads?.name || "Lead",
+              leadPhone: c.call_leads?.phone || "",
+              campaignId: c.campaign_id || "",
+              campaignName: c.call_campaigns?.name || "Geral",
+              callStatus: c.call_status,
+              startedAt: c.started_at,
+              durationSeconds: c.duration_seconds || 0,
+            });
+          });
+        }
+      } catch (e) {
+        console.error("Erro ao buscar chamadas ativas de call_logs:", e);
+      }
+
+      return items;
     },
     refetchInterval: 3000,
   });
 
-  // 3. Fetch Recent Call History
-  const { data: historyCalls = [], isLoading: isLoadingHistory } = useQuery({
+  // 3. Fetch Recent Call History (from both workflow_call_tasks and call_logs)
+  const { data: historyCalls = [], isLoading: isLoadingHistory } = useQuery<HistoryItem[]>({
     queryKey: ["mini-call-history", activeCompanyId],
     queryFn: async () => {
-      let q = (supabase as any)
-        .from("call_logs")
-        .select("id, campaign_id, lead_id, operator_id, call_status, started_at, duration_seconds, call_leads(name, phone), call_campaigns(name)")
-        .in("call_status", ["completed", "no_answer", "failed", "cancelled", "busy"])
-        .order("created_at", { ascending: false })
-        .limit(20);
+      const items: HistoryItem[] = [];
 
-      if (activeCompanyId) {
-        q = q.eq("company_id", activeCompanyId);
+      // 3.1 Finished workflow call tasks
+      try {
+        let wfQuery = (supabase as any)
+          .from("workflow_call_tasks")
+          .select("*, leads(name, phone)")
+          .in("status", ["completed", "failed", "cancelled", "no_answer", "busy", "answered"])
+          .order("created_at", { ascending: false })
+          .limit(40);
+
+        if (activeCompanyId) {
+          wfQuery = wfQuery.or(`company_id.eq.${activeCompanyId},company_id.is.null`);
+        }
+
+        const { data: wfFinished, error: wfErr } = await wfQuery;
+        if (!wfErr && wfFinished && wfFinished.length > 0) {
+          const workflowIds = [...new Set(wfFinished.map((t: any) => t.workflow_id).filter(Boolean))];
+          const queueIds = [...new Set(wfFinished.map((t: any) => t.queue_id).filter(Boolean))];
+          const nameMap: Record<string, string> = {};
+
+          if (workflowIds.length > 0) {
+            const { data: wfs } = await (supabase as any).from("workflows").select("id, name").in("id", workflowIds);
+            wfs?.forEach((w: any) => { nameMap[w.id] = w.name; });
+          }
+          if (queueIds.length > 0) {
+            const { data: camps } = await (supabase as any).from("call_campaigns").select("id, name").in("id", queueIds);
+            camps?.forEach((c: any) => { nameMap[c.id] = c.name; });
+          }
+
+          wfFinished.forEach((t: any) => {
+            const wfName = (t.workflow_id && nameMap[t.workflow_id]) || (t.queue_id && nameMap[t.queue_id]) || t.campaign_name || "Workflow";
+            items.push({
+              id: `wt_${t.id}`,
+              source: "workflow",
+              leadId: t.lead_id || "",
+              leadName: t.leads?.name || "Lead",
+              leadPhone: t.phone || t.leads?.phone || "",
+              campaignId: t.workflow_id || t.queue_id || "",
+              campaignName: wfName,
+              callStatus: t.status,
+              startedAt: t.started_at,
+              endedAt: t.completed_at || t.updated_at,
+              createdAt: t.created_at,
+              durationSeconds: t.duration_seconds || 0,
+            });
+          });
+        }
+      } catch (e) {
+        console.error("Erro ao buscar histórico de workflows:", e);
       }
 
-      const { data, error } = await q;
-      if (error) return [];
-      return data || [];
+      // 3.2 Finished call_logs
+      try {
+        let q = (supabase as any)
+          .from("call_logs")
+          .select("id, campaign_id, lead_id, operator_id, call_status, started_at, ended_at, created_at, duration_seconds, call_leads(name, phone), call_campaigns(name)")
+          .in("call_status", ["completed", "no_answer", "failed", "cancelled", "busy", "voicemail", "timeout", "max_attempts_exceeded"])
+          .order("created_at", { ascending: false })
+          .limit(30);
+
+        if (activeCompanyId) {
+          q = q.or(`company_id.eq.${activeCompanyId},company_id.is.null`);
+        }
+
+        const { data: logs, error } = await q;
+        if (!error && logs && logs.length > 0) {
+          const crmLeadIds = logs.filter((l: any) => !l.call_leads && l.lead_id).map((l: any) => l.lead_id);
+          let crmMap: Record<string, { name: string; phone: string }> = {};
+          if (crmLeadIds.length > 0) {
+            const { data: crmData } = await supabase.from("leads").select("id, name, phone").in("id", crmLeadIds);
+            crmData?.forEach((l: any) => { crmMap[l.id] = { name: l.name, phone: l.phone }; });
+          }
+
+          logs.forEach((c: any) => {
+            const crm = c.lead_id ? crmMap[c.lead_id] : null;
+            items.push({
+              id: c.id,
+              source: "call_log",
+              leadId: c.lead_id || "",
+              leadName: c.call_leads?.name || crm?.name || "Lead",
+              leadPhone: c.call_leads?.phone || crm?.phone || "",
+              campaignId: c.campaign_id || "",
+              campaignName: c.call_campaigns?.name || "Geral",
+              callStatus: c.call_status,
+              startedAt: c.started_at,
+              endedAt: c.ended_at,
+              createdAt: c.created_at,
+              durationSeconds: c.duration_seconds || 0,
+            });
+          });
+        }
+      } catch (e) {
+        console.error("Erro ao buscar histórico de call_logs:", e);
+      }
+
+      return items.sort((a, b) => {
+        const timeA = new Date(a.endedAt || a.createdAt).getTime();
+        const timeB = new Date(b.endedAt || b.createdAt).getTime();
+        return timeB - timeA;
+      });
     },
     refetchInterval: 8000,
   });
@@ -257,18 +443,24 @@ export function MiniCallPanel({ isDocked, onToggleDock, onMinimize, onClose }: M
   const filteredActive = useMemo(() => {
     if (!search.trim()) return activeCalls;
     const term = search.toLowerCase().trim();
-    return activeCalls.filter((c: any) =>
-      (c.call_leads?.name || "").toLowerCase().includes(term) ||
-      (c.call_leads?.phone || "").includes(term)
+    const cleanTerm = term.replace(/\D/g, "");
+    return activeCalls.filter(
+      (c) =>
+        c.leadName.toLowerCase().includes(term) ||
+        c.campaignName.toLowerCase().includes(term) ||
+        (cleanTerm && c.leadPhone.replace(/\D/g, "").includes(cleanTerm))
     );
   }, [activeCalls, search]);
 
   const filteredHistory = useMemo(() => {
     if (!search.trim()) return historyCalls;
     const term = search.toLowerCase().trim();
-    return historyCalls.filter((c: any) =>
-      (c.call_leads?.name || "").toLowerCase().includes(term) ||
-      (c.call_leads?.phone || "").includes(term)
+    const cleanTerm = term.replace(/\D/g, "");
+    return historyCalls.filter(
+      (c) =>
+        c.leadName.toLowerCase().includes(term) ||
+        c.campaignName.toLowerCase().includes(term) ||
+        (cleanTerm && c.leadPhone.replace(/\D/g, "").includes(cleanTerm))
     );
   }, [historyCalls, search]);
 
@@ -366,7 +558,7 @@ export function MiniCallPanel({ isDocked, onToggleDock, onMinimize, onClose }: M
                 </Badge>
               </div>
               <span className="text-[11px] text-muted-foreground truncate">
-                {queueItems.length} na fila · {activeCalls.length} em andamento
+                {queueItems.length} na fila · {activeCalls.length} em andamento · {historyCalls.length} no histórico
               </span>
             </div>
           </div>
@@ -491,7 +683,7 @@ export function MiniCallPanel({ isDocked, onToggleDock, onMinimize, onClose }: M
             )}
           >
             <History className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">Histórico</span>
+            <span className="truncate">Histórico ({historyCalls.length})</span>
           </button>
         </div>
       </div>
@@ -641,28 +833,28 @@ export function MiniCallPanel({ isDocked, onToggleDock, onMinimize, onClose }: M
                 </p>
               </div>
             ) : (
-              filteredActive.map((call: any) => (
+              filteredActive.map((call) => (
                 <div
                   key={call.id}
                   className="rounded-xl border border-blue-200/80 dark:border-blue-900/60 bg-blue-50/20 dark:bg-blue-950/20 p-3 space-y-2 shadow-2xs"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-bold text-xs text-slate-900 dark:text-white truncate">
-                      {call.call_leads?.name || "Lead"}
+                      {call.leadName || "Lead"}
                     </span>
-                    <Badge variant="outline" className="text-[10px] bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-300/40">
-                      {call.call_status}
+                    <Badge variant="outline" className="text-[10px] bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-300/40 font-semibold">
+                      {call.callStatus}
                     </Badge>
                   </div>
 
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span className="font-mono">{call.call_leads?.phone ? formatPhone(call.call_leads.phone) : "Sem telefone"}</span>
-                    <span>📁 {call.call_campaigns?.name || "Geral"}</span>
+                    <span className="font-mono">{call.leadPhone ? formatPhone(call.leadPhone) : "Sem telefone"}</span>
+                    <span className="truncate max-w-[160px]">📁 {call.campaignName || "Geral"}</span>
                   </div>
 
                   <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800 text-[11px]">
                     <span className="text-slate-500">
-                      Duração: <strong className="font-mono text-slate-700 dark:text-slate-300">{formatSecs(call.duration_seconds || 0)}</strong>
+                      Duração: <strong className="font-mono text-slate-700 dark:text-slate-300">{formatSecs(call.durationSeconds || 0)}</strong>
                     </span>
 
                     <Button
@@ -670,13 +862,13 @@ export function MiniCallPanel({ isDocked, onToggleDock, onMinimize, onClose }: M
                       onClick={() => {
                         openCall({
                           callId: call.id,
-                          campaignId: call.campaign_id,
-                          leadId: call.lead_id,
-                          leadName: call.call_leads?.name || "Lead",
-                          leadPhone: call.call_leads?.phone || "",
-                          campaignName: call.call_campaigns?.name || "Geral",
-                          duration: call.duration_seconds || 0,
-                          callStatus: call.call_status,
+                          campaignId: call.campaignId,
+                          leadId: call.leadId,
+                          leadName: call.leadName || "Lead",
+                          leadPhone: call.leadPhone || "",
+                          campaignName: call.campaignName || "Geral",
+                          duration: call.durationSeconds || 0,
+                          callStatus: call.callStatus,
                           autoDial: false,
                         });
                       }}
@@ -711,65 +903,108 @@ export function MiniCallPanel({ isDocked, onToggleDock, onMinimize, onClose }: M
                 </p>
               </div>
             ) : (
-              filteredHistory.map((call: any) => (
+              filteredHistory.map((call) => (
                 <div
                   key={call.id}
-                  className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 space-y-1.5 shadow-2xs"
+                  className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 space-y-1.5 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-bold text-xs text-slate-900 dark:text-white truncate">
-                      {call.call_leads?.name || "Lead"}
+                      {call.leadName || "Lead"}
                     </span>
                     <Badge
                       variant="outline"
                       className={cn(
-                        "text-[10px] font-medium",
-                        call.call_status === "completed"
-                          ? "bg-emerald-500/10 text-emerald-700 border-emerald-300"
-                          : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200"
+                        "text-[10px] font-medium shrink-0",
+                        call.callStatus === "completed"
+                          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800"
+                          : call.callStatus === "cancelled"
+                          ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-800"
+                          : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700"
                       )}
                     >
-                      {call.call_status === "completed"
-                        ? "✅ Atendida"
-                        : call.call_status === "no_answer"
+                      {call.callStatus === "completed"
+                        ? "✅ Concluída"
+                        : call.callStatus === "cancelled"
+                        ? "🚫 Cancelada"
+                        : call.callStatus === "no_answer"
                         ? "📵 Não atendeu"
-                        : call.call_status === "busy"
+                        : call.callStatus === "busy"
                         ? "🔴 Ocupado"
-                        : call.call_status}
+                        : call.callStatus === "failed"
+                        ? "❌ Falha"
+                        : call.callStatus}
                     </Badge>
                   </div>
 
                   <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                    <span className="font-mono">{call.call_leads?.phone ? formatPhone(call.call_leads.phone) : "—"}</span>
-                    <span>{call.started_at ? new Date(call.started_at).toLocaleDateString("pt-BR") : "—"}</span>
+                    <span className="font-mono">{call.leadPhone ? formatPhone(call.leadPhone) : "—"}</span>
+                    <span>
+                      {call.endedAt || call.createdAt
+                        ? new Date(call.endedAt || call.createdAt).toLocaleDateString("pt-BR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "—"}
+                    </span>
                   </div>
 
                   <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800 text-[11px]">
-                    <span className="text-slate-500">
-                      Duração: <strong className="font-mono text-slate-700 dark:text-slate-300">{formatSecs(call.duration_seconds || 0)}</strong>
+                    <span className="text-slate-500 truncate max-w-[170px]">
+                      📁 {call.campaignName || "Workflow"}
                     </span>
 
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        openCall({
-                          callId: call.id,
-                          campaignId: call.campaign_id,
-                          leadId: call.lead_id,
-                          leadName: call.call_leads?.name || "Lead",
-                          leadPhone: call.call_leads?.phone || "",
-                          campaignName: call.call_campaigns?.name || "Geral",
-                          duration: call.duration_seconds || 0,
-                          callStatus: call.call_status,
-                          autoDial: false,
-                        });
-                      }}
-                      className="h-6 px-2 text-[11px] rounded-md text-primary font-semibold hover:bg-primary/5"
-                    >
-                      <span>Ver Detalhes</span>
-                      <ChevronRight className="h-3 w-3" />
-                    </Button>
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          handleOpenChat({
+                            id: call.id,
+                            source: call.source === "workflow" ? "workflow" : "queue",
+                            leadId: call.leadId,
+                            leadName: call.leadName,
+                            leadPhone: call.leadPhone,
+                            campaignId: call.campaignId,
+                            campaignName: call.campaignName,
+                            isPriority: false,
+                            position: 0,
+                            attemptNumber: 1,
+                            maxAttempts: 3,
+                            createdAt: call.createdAt,
+                          })
+                        }
+                        className="h-6 w-6 p-0 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-md"
+                        title="Chat do lead"
+                      >
+                        <MessageSquare className="h-3.5 w-3.5" />
+                      </Button>
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          openCall({
+                            callId: call.id,
+                            campaignId: call.campaignId,
+                            leadId: call.leadId,
+                            leadName: call.leadName,
+                            leadPhone: call.leadPhone,
+                            campaignName: call.campaignName,
+                            duration: call.durationSeconds,
+                            callStatus: call.callStatus,
+                            autoDial: false,
+                          });
+                        }}
+                        className="h-6 px-2 text-[11px] rounded-md text-primary font-semibold hover:bg-primary/5 gap-1"
+                      >
+                        <span>Ver Card</span>
+                        <ChevronRight className="h-3 w-3" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))
