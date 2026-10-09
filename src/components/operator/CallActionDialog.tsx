@@ -5,7 +5,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useCallActions } from "@/hooks/useCallActions";
@@ -1146,14 +1145,13 @@ export function CallActionDialog({
         </div>
 
         {/* Call Tab */}
-        <TabsContent value="call" className="flex-1 min-h-0 mt-0 flex flex-col">
-          <ScrollArea className="flex-1 min-h-0 px-3.5 py-2.5">
-            <div className="space-y-2.5">
+        <TabsContent value="call" className="flex-1 min-h-0 mt-0 flex flex-col data-[state=inactive]:hidden data-[state=active]:flex">
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3.5 space-y-3.5">
                 
                 {/* ROTEIRO SECTION */}
                 <Collapsible defaultOpen={false}>
-                  <div className="rounded-lg border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs overflow-hidden">
-                    <CollapsibleTrigger className="flex items-center justify-between w-full px-3 py-1.5 bg-slate-50/60 dark:bg-slate-900/60 hover:bg-slate-100/60 dark:hover:bg-slate-800/60 transition-colors">
+                  <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs overflow-hidden">
+                    <CollapsibleTrigger className="flex items-center justify-between w-full px-3.5 py-2 bg-slate-50/60 dark:bg-slate-900/60 hover:bg-slate-100/60 dark:hover:bg-slate-800/60 transition-colors">
                       <div className="flex items-center gap-1.5">
                         <FileText className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
                         <span className="text-[11px] font-extrabold tracking-wider uppercase text-slate-700 dark:text-slate-300">
@@ -1302,7 +1300,7 @@ export function CallActionDialog({
                 )}
 
                 {/* AÇÕES SECTION */}
-                <div className="rounded-lg border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs p-2.5 space-y-1.5">
+                <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs p-3 space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
                       <Target className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
@@ -1322,11 +1320,12 @@ export function CallActionDialog({
                   ) : (
                     <>
                       {!isWorkflowCall && actions.length === 0 && (
-                        <div className="rounded-lg border border-dashed border-amber-300/60 p-2 bg-amber-50/40 dark:bg-amber-950/20 text-[11px] text-amber-800 dark:text-amber-300">
-                          ⚠️ Nenhuma ação customizada. Usando ações padrão:
+                        <div className="rounded-lg border border-dashed border-amber-300/60 p-2 bg-amber-50/40 dark:bg-amber-950/20 text-[11px] text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                          <span>⚠️</span>
+                          <span>Nenhuma ação customizada. Usando ações padrão:</span>
                         </div>
                       )}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {displayActions.map((action) => {
                           const isConfirming = confirmingActionId === action.id;
                           const isExecuting = executingActionId === action.id;
@@ -1336,21 +1335,26 @@ export function CallActionDialog({
                           return (
                             <div
                               key={action.id}
+                              onClick={() => {
+                                if (isExecuted || isExecuting) return;
+                                setSelectedActionId(action.id);
+                              }}
                               className={cn(
-                                "relative flex items-center justify-between p-2 rounded-lg border text-left transition-all",
+                                "relative flex items-center justify-between p-2.5 rounded-xl border text-left transition-all cursor-pointer select-none",
                                 isExecuted
                                   ? "border-emerald-500/50 bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-950 dark:text-emerald-200"
                                   : isConfirming
                                   ? "border-[#3B4DFF] ring-2 ring-[#3B4DFF]/25 bg-[#3B4DFF]/5 shadow-2xs"
                                   : isSelected
-                                  ? "border-[#3B4DFF] bg-[#3B4DFF]/10 shadow-2xs"
+                                  ? "border-[#3B4DFF] bg-[#3B4DFF]/10 ring-1 ring-[#3B4DFF]/30 shadow-2xs"
                                   : "border-slate-200/90 dark:border-slate-700/80 hover:border-[#3B4DFF]/50 hover:bg-slate-50/60 dark:hover:bg-slate-800/40"
                               )}
                             >
                               <button
                                 type="button"
                                 disabled={isExecuting}
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   if (isExecuted) return;
                                   setSelectedActionId(action.id);
                                   setConfirmingActionId(isConfirming ? null : action.id);
@@ -1482,7 +1486,7 @@ export function CallActionDialog({
                 )}
 
                 {/* OBSERVAÇÕES (OPCIONAL) */}
-                <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs p-3 space-y-1.5">
+                <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs p-3 space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
                       <PenLine className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
@@ -1499,17 +1503,16 @@ export function CallActionDialog({
                     maxLength={500}
                     onChange={(e) => setNotes(e.target.value)}
                     placeholder="Anotações sobre a ligação..."
-                    className="mt-0.5 rounded-lg border-slate-200 dark:border-slate-700 focus-visible:ring-primary/30 min-h-[58px] h-16 resize-none text-xs p-2.5 leading-relaxed"
-                    rows={2}
+                    className="w-full rounded-lg border-slate-200 dark:border-slate-700 focus-visible:ring-primary/30 min-h-[80px] h-[90px] resize-none text-xs p-2.5 leading-relaxed bg-white dark:bg-slate-950"
+                    rows={3}
                   />
                 </div>
               </div>
-            </ScrollArea>
           </TabsContent>
 
           {/* History Tab */}
-          <TabsContent value="history" className="flex-1 min-h-0 mt-0 flex flex-col">
-            <ScrollArea className="flex-1 min-h-0 px-5 py-3.5">
+          <TabsContent value="history" className="flex-1 min-h-0 mt-0 flex flex-col data-[state=inactive]:hidden data-[state=active]:flex">
+            <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3.5 space-y-3.5">
               <div className="space-y-4">
                 <div className="flex items-center justify-between pb-1">
                   <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
@@ -1605,16 +1608,17 @@ export function CallActionDialog({
                   </div>
                 )}
               </div>
-            </ScrollArea>
+            </div>
           </TabsContent>
         </Tabs>
 
         {/* Docked Footer Bar - Always visible without scroll */}
-        <div className="shrink-0 border-t border-slate-200/80 dark:border-slate-800 px-4 py-2 bg-slate-50/90 dark:bg-slate-900/90 backdrop-blur-md flex items-center justify-between gap-2">
-          <div className="text-[11px] text-muted-foreground truncate max-w-[200px]">
+        <div className="shrink-0 border-t border-slate-200/80 dark:border-slate-800 px-4 py-2.5 bg-slate-50/95 dark:bg-slate-900/95 backdrop-blur-md flex items-center justify-between gap-3">
+          <div className="text-[11px] text-muted-foreground truncate max-w-[210px]">
             {selectedActionId ? (
-              <span className="font-semibold text-primary">
-                ✓ {displayActions.find(a => a.id === selectedActionId)?.name}
+              <span className="font-semibold text-primary flex items-center gap-1.5 truncate">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                <span className="truncate">{displayActions.find(a => a.id === selectedActionId)?.name}</span>
               </span>
             ) : (
               <span className="text-slate-400">Selecione uma ação</span>

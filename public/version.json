@@ -1,6 +1,6 @@
 {
-  "commit": "d706aacd376d6dbe20ed001718106b50eeb01dbe",
-  "shortCommit": "d706aac",
-  "message": "feat(ui): transforma baloes flutuantes em botoes circulares apenas com icones",
-  "builtAt": "2026-10-09T00:45:27.081Z"
+  "commit": "be6277ebaa9eacaebf83e0286bd27cdb3756b485",
+  "shortCommit": "be6277e",
+  "message": "style(calls): iguala dimensoes do pop-up de ligacao com o pop-up de chat (480x650)",
+  "builtAt": "2026-10-09T00:52:39.531Z"
 }
