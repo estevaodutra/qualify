@@ -15,7 +15,7 @@ export function useChatExpress() {
   const resolveConversationMutation = useMutation({
     mutationFn: async (leadId: string) => {
       if (!activeCompanyId) throw new Error("No active company");
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from("chat_conversations")
         .select("id, instance_id, status, unread_count")
         .eq("company_id", activeCompanyId)
@@ -23,6 +23,34 @@ export function useChatExpress() {
         .maybeSingle();
 
       if (error) throw error;
+
+      // If not found by direct lead_id, try finding existing conversation by phone
+      if (!data) {
+        const session = sessions.find((s) => s.leadId === leadId);
+        if (session?.phone) {
+          const cleanPhone = session.phone.replace(/\D/g, "");
+          const { data: matchedLead } = await supabase
+            .from("leads")
+            .select("id")
+            .eq("company_id", activeCompanyId)
+            .or(`phone.ilike.%${cleanPhone}%,phone.eq.${session.phone}`)
+            .maybeSingle();
+
+          if (matchedLead) {
+            const { data: convByLead } = await supabase
+              .from("chat_conversations")
+              .select("id, instance_id, status, unread_count")
+              .eq("company_id", activeCompanyId)
+              .eq("lead_id", matchedLead.id)
+              .maybeSingle();
+
+            if (convByLead) {
+              data = convByLead;
+            }
+          }
+        }
+      }
+
       return data;
     },
     onSuccess: (data, leadId) => {

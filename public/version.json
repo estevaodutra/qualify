@@ -1,6 +1,6 @@
 {
-  "commit": "be6277ebaa9eacaebf83e0286bd27cdb3756b485",
-  "shortCommit": "be6277e",
-  "message": "style(calls): iguala dimensoes do pop-up de ligacao com o pop-up de chat (480x650)",
-  "builtAt": "2026-10-09T00:52:39.531Z"
+  "commit": "5f37da3492d1c3a06fca02a7dbec0a21e609e473",
+  "shortCommit": "5f37da3",
+  "message": "refactor(calls): aprimora distribuicao interna, espacamento e visibilidade dos componentes do pop-up de ligacao",
+  "builtAt": "2026-10-09T01:42:39.232Z"
 }

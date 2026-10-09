@@ -11,9 +11,10 @@ import { useCallActions } from "@/hooks/useCallActions";
 import { InlineScriptRunner } from "@/components/call-campaigns/operator/InlineScriptRunner";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Calendar, Phone, PhoneMissed, ChevronDown, Clock, Copy, Check, History, ChevronLeft, ChevronRight, Pencil, X, Timer, FileText, CheckCircle2, RotateCcw, Target, PenLine, Maximize2, Minimize2, Minus } from "lucide-react";
+import { Loader2, Calendar, Phone, PhoneMissed, ChevronDown, Clock, Copy, Check, History, ChevronLeft, ChevronRight, Pencil, X, Timer, FileText, CheckCircle2, RotateCcw, Target, PenLine, Maximize2, Minimize2, Minus, MessageSquare } from "lucide-react";
 import { cn, formatPhone } from "@/lib/utils";
 import { useCallFloatingStore } from "@/stores/callFloating.store";
+import { useChatExpressStore } from "@/stores/chatExpress.store";
 import { addHours, format, setHours, setMinutes, addDays } from "date-fns";
 import { InlineReschedule } from "./InlineReschedule";
 import { useAuth } from "@/contexts/AuthContext";
@@ -300,6 +301,88 @@ export function CallActionDialog({
     navigator.clipboard.writeText(id);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
+  };
+
+  const handleOpenChat = async () => {
+    let targetLeadId = currentData.leadId;
+    let targetLeadName = currentData.leadName;
+    const targetPhone = currentData.leadPhone;
+
+    try {
+      let matchedLead: { id: string; name?: string; phone?: string } | null = null;
+      
+      // 1. If leadId is set, verify if it exists in `leads` table (foreign key used by chat_conversations)
+      if (targetLeadId) {
+        const { data: leadCheck } = await supabase
+          .from("leads")
+          .select("id, name, phone")
+          .eq("id", targetLeadId)
+          .maybeSingle();
+        if (leadCheck) {
+          matchedLead = leadCheck;
+        }
+      }
+
+      // 2. If not found by ID in `leads`, search by phone number
+      if (!matchedLead && targetPhone && activeCompanyId) {
+        const cleanPhone = targetPhone.replace(/\D/g, "");
+        const { data: phoneCheck } = await supabase
+          .from("leads")
+          .select("id, name, phone")
+          .eq("company_id", activeCompanyId)
+          .or(`phone.ilike.%${cleanPhone}%,phone.eq.${targetPhone}`)
+          .maybeSingle();
+        if (phoneCheck) {
+          matchedLead = phoneCheck;
+          targetLeadId = phoneCheck.id;
+        }
+      }
+
+      // 3. If lead does not exist in `leads` yet, create it so chat_conversations can be linked
+      if (!matchedLead && activeCompanyId && (targetPhone || targetLeadName)) {
+        const { data: newLead } = await supabase
+          .from("leads")
+          .insert({
+            company_id: activeCompanyId,
+            name: targetLeadName || targetPhone || "Lead",
+            phone: targetPhone || null,
+          })
+          .select("id, name, phone")
+          .maybeSingle();
+        if (newLead) {
+          targetLeadId = newLead.id;
+          matchedLead = newLead;
+        }
+      }
+
+      const finalLeadId = targetLeadId || currentData.callId;
+      if (finalLeadId) {
+        useChatExpressStore.getState().openLeadSession({
+          leadId: finalLeadId,
+          leadName: targetLeadName || matchedLead?.name || targetPhone || "Lead",
+          phone: targetPhone || matchedLead?.phone || null,
+        });
+        toast({
+          title: "Chat aberto",
+          description: `Conversa com ${targetLeadName || "Lead"} aberta no chat express.`,
+        });
+      } else {
+        toast({
+          title: "Não foi possível abrir o chat",
+          description: "Nenhum lead ou telefone encontrado para esta ligação.",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      console.error("Erro ao abrir chat:", err);
+      if (targetLeadId) {
+        useChatExpressStore.getState().openLeadSession({
+          leadId: targetLeadId,
+          leadName: targetLeadName || targetPhone || "Lead",
+          phone: targetPhone || null,
+        });
+      }
+    }
   };
 
   const setScheduleShortcut = (date: Date) => {
@@ -990,22 +1073,34 @@ export function CallActionDialog({
                 </div>
               )}
 
-              {/* Phone with copy */}
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono mt-0.5">
-                <Phone className="h-3 w-3 text-slate-400 shrink-0" />
-                <span className="font-semibold text-[11px] text-slate-700 dark:text-slate-300">
-                  {currentData.leadPhone ? formatPhone(currentData.leadPhone) : "Sem telefone"}
-                </span>
-                {currentData.leadPhone && (
-                  <button
-                    type="button"
-                    onClick={() => copyExternalId(currentData.leadPhone)}
-                    className="text-slate-400 hover:text-foreground transition-colors p-0.5"
-                    title="Copiar telefone"
-                  >
-                    {copied ? <Check className="h-2.5 w-2.5 text-emerald-500" /> : <Copy className="h-2.5 w-2.5" />}
-                  </button>
-                )}
+              {/* Phone with copy & chat */}
+              <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono mt-0.5 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <Phone className="h-3 w-3 text-slate-400 shrink-0" />
+                  <span className="font-semibold text-[11px] text-slate-700 dark:text-slate-300">
+                    {currentData.leadPhone ? formatPhone(currentData.leadPhone) : "Sem telefone"}
+                  </span>
+                  {currentData.leadPhone && (
+                    <button
+                      type="button"
+                      onClick={() => copyExternalId(currentData.leadPhone)}
+                      className="text-slate-400 hover:text-foreground transition-colors p-0.5"
+                      title="Copiar telefone"
+                    >
+                      {copied ? <Check className="h-2.5 w-2.5 text-emerald-500" /> : <Copy className="h-2.5 w-2.5" />}
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleOpenChat}
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25 text-[10px] font-sans font-bold transition-all shadow-2xs"
+                  title="Abrir WhatsApp / Chat deste lead"
+                >
+                  <MessageSquare className="h-2.5 w-2.5 text-emerald-600 dark:text-emerald-400" />
+                  <span>Chat</span>
+                </button>
               </div>
             </div>
 
@@ -1032,6 +1127,14 @@ export function CallActionDialog({
             </div>
 
             <div className="flex items-center gap-0.5 pl-1.5 border-l border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={handleOpenChat}
+                className="h-7 w-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
+                title="Abrir Chat Express deste lead"
+              >
+                <MessageSquare className="h-3.5 w-3.5" />
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -1067,19 +1170,19 @@ export function CallActionDialog({
           </div>
         </div>
 
-        {/* Row 2: Badges + Dial action */}
+        {/* Row 2: Badges + Chat action + Dial action */}
         <div className="flex items-center justify-between gap-2 flex-wrap pt-2 border-t border-slate-200/60 dark:border-slate-800/60 text-xs">
           <div className="flex items-center gap-1.5 flex-wrap">
             {currentData.campaignName && (
-              <Badge variant="outline" className="text-[10px] py-0.5 px-2 bg-amber-500/5 text-amber-700 dark:text-amber-300 border-amber-300/60 rounded-md font-medium">
+              <Badge variant="outline" className="text-[10px] py-0.5 px-2 bg-amber-50/5 text-amber-700 dark:text-amber-300 border-amber-300/60 rounded-md font-medium">
                 📁 {currentData.campaignName}
               </Badge>
             )}
-            <Badge variant="outline" className="text-[10px] py-0.5 px-2 bg-blue-500/5 text-blue-700 dark:text-blue-300 border-blue-300/60 rounded-md font-medium">
+            <Badge variant="outline" className="text-[10px] py-0.5 px-2 bg-blue-50/5 text-blue-700 dark:text-blue-300 border-blue-300/60 rounded-md font-medium">
               🔄 x{currentData.attemptNumber}/{currentData.maxAttempts}
             </Badge>
             {currentData.isPriority && (
-              <Badge variant="secondary" className="text-[10px] py-0.5 px-2 bg-amber-500/15 text-amber-800 dark:text-amber-200 border-amber-400/50 rounded-md font-semibold">
+              <Badge variant="secondary" className="text-[10px] py-0.5 px-2 bg-amber-50/15 text-amber-800 dark:text-amber-200 border-amber-400/50 rounded-md font-semibold">
                 ⭐ Prioridade
               </Badge>
             )}
@@ -1101,18 +1204,32 @@ export function CallActionDialog({
             )}
           </div>
 
-          {isWorkflowCall && (
+          <div className="flex items-center gap-1.5">
             <Button
+              type="button"
               variant="outline"
               size="sm"
-              className="h-6 px-2.5 text-[11px] font-semibold gap-1.5 rounded-lg text-emerald-600 border-emerald-500/40 bg-emerald-50/60 hover:bg-emerald-100 dark:bg-emerald-950/40"
-              onClick={handleManualDial}
-              disabled={isDialing}
+              className="h-6 px-2.5 text-[11px] font-semibold gap-1.5 rounded-lg text-emerald-600 border-emerald-500/40 bg-emerald-50/60 hover:bg-emerald-100 hover:text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 transition-all shadow-2xs"
+              onClick={handleOpenChat}
+              title="Abrir balão lateral do chat"
             >
-              {isDialing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Phone className="h-3 w-3" />}
-              Discar Agora
+              <MessageSquare className="h-3 w-3" />
+              Abrir Chat
             </Button>
-          )}
+
+            {isWorkflowCall && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 px-2.5 text-[11px] font-semibold gap-1.5 rounded-lg text-emerald-600 border-emerald-500/40 bg-emerald-50/60 hover:bg-emerald-100 dark:bg-emerald-950/40"
+                onClick={handleManualDial}
+                disabled={isDialing}
+              >
+                {isDialing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Phone className="h-3 w-3" />}
+                Discar Agora
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Audio recording player (if available) */}
