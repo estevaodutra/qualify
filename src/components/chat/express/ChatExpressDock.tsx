@@ -18,23 +18,22 @@ export function ChatExpressDock() {
         className={cn(
           "fixed z-50 transition-all duration-300 ease-out",
           isCallCardOpen
-            ? "bottom-4 md:bottom-5 right-4 md:right-[515px]"
-            : "bottom-4 md:bottom-5 right-4 md:right-[220px]"
+            ? "bottom-4 md:bottom-6 right-4 md:right-[525px]"
+            : "bottom-4 md:bottom-6 right-[72px] md:right-[88px]"
         )}
       >
         <Button
           onClick={restoreDock}
-          className="h-13 md:h-14 bg-primary text-primary-foreground shadow-2xl rounded-full px-5 md:px-6 flex items-center gap-3 hover:bg-primary/90 transition-all hover:scale-105 active:scale-95"
+          title="Chats Abertos"
+          size="icon"
+          className="h-12 w-12 md:h-14 md:w-14 bg-gradient-to-tr from-[#7C3AED] to-[#3B4DFF] hover:opacity-95 text-white shadow-[0_8px_30px_rgb(0,0,0,0.18)] hover:shadow-[0_12px_36px_rgba(99,102,241,0.35)] rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95 relative border-2 border-white/20"
         >
-          <div className="relative">
-            <MessageSquare className="w-5 h-5" />
-            {sessions.length > 0 && (
-              <span className="absolute -top-1.5 -right-2 w-4 h-4 bg-destructive text-destructive-foreground text-[10px] flex items-center justify-center rounded-full font-bold shadow-sm">
-                {sessions.length}
-              </span>
-            )}
-          </div>
-          <span className="font-semibold text-xs md:text-sm">Chats Abertos</span>
+          <MessageSquare className="w-5 h-5 md:w-6 md:h-6" />
+          {sessions.length > 0 && (
+            <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 bg-destructive text-destructive-foreground text-[10px] flex items-center justify-center rounded-full font-bold shadow-md ring-2 ring-white dark:ring-slate-900 animate-in zoom-in">
+              {sessions.length}
+            </span>
+          )}
         </Button>
       </div>
     );

@@ -290,99 +290,45 @@ export function CallFloatingLauncher() {
         <button
           type="button"
           onClick={handleLauncherClick}
-          title="Abrir painel de chamadas"
+          title={
+            isOnCall
+              ? `Em Ligação • ${formatDuration(duration || opDuration)}`
+              : isDialing
+              ? "Discando..."
+              : isRinging
+              ? "Chamando..."
+              : "Ligações (Disponível)"
+          }
           className={cn(
-            "group relative h-13 md:h-14 px-4 md:px-5 rounded-full flex items-center gap-3 transition-all duration-300 select-none shadow-[0_8px_30px_rgb(0,0,0,0.12)] hover:shadow-[0_12px_36px_rgba(59,77,255,0.22)] active:scale-95",
-            "bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border",
-            isOnCall && "border-emerald-500/50 ring-2 ring-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/20",
-            (isDialing || isRinging) && "border-blue-500/50 ring-2 ring-blue-500/20 animate-pulse",
-            isFailed && "border-destructive/40 bg-destructive/5",
-            !isOnCall && !isDialing && !isRinging && !isFailed && "border-slate-200/80 dark:border-slate-800 hover:border-primary/50"
+            "group relative h-12 w-12 md:h-14 md:w-14 rounded-full flex items-center justify-center transition-all duration-300 select-none shadow-[0_8px_30px_rgb(0,0,0,0.18)] hover:shadow-[0_12px_36px_rgba(59,77,255,0.35)] active:scale-95 hover:scale-105 border-2 border-white/20",
+            isOnCall
+              ? "bg-emerald-500 text-white ring-4 ring-emerald-500/25 shadow-emerald-500/30"
+              : isDialing || isRinging
+              ? "bg-blue-600 text-white ring-4 ring-blue-500/25 animate-pulse"
+              : isFailed
+              ? "bg-rose-500 text-white ring-4 ring-rose-500/25"
+              : "bg-gradient-to-tr from-[#7C3AED] to-[#3B4DFF] text-white"
           )}
         >
-          {/* Status Indicator Icon */}
-          <div className="relative flex items-center justify-center">
-            {isOnCall ? (
-              <div className="relative flex items-center justify-center">
-                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
-                <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-xs">
-                  <PhoneCall className="w-4 h-4 animate-bounce" />
-                </div>
-              </div>
-            ) : isDialing ? (
-              <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-xs">
-                <Loader2 className="w-4 h-4 animate-spin" />
-              </div>
-            ) : isRinging ? (
-              <div className="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center shadow-xs">
-                <Phone className="w-4 h-4 animate-pulse" />
-              </div>
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#7C3AED] to-[#3B4DFF] text-white flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
-                <Phone className="w-4 h-4" />
-              </div>
-            )}
-          </div>
-
-          {/* Text & Information */}
-          <div className="flex flex-col text-left">
-            {isOnCall ? (
-              <>
-                <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" /> Em Ligação
-                </span>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-bold font-mono text-emerald-600 dark:text-emerald-400 leading-none">
-                    {formatDuration(duration || opDuration)}
-                  </span>
-                  {activeCall?.leadName && (
-                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[110px] md:max-w-[140px]">
-                      • {activeCall.leadName}
-                    </span>
-                  )}
-                </div>
-              </>
-            ) : isDialing ? (
-              <>
-                <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
-                  Discando...
-                </span>
-                <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[130px]">
-                  {activeCall?.leadName || "Conectando"}
-                </span>
-              </>
-            ) : isRinging ? (
-              <>
-                <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
-                  Chamando...
-                </span>
-                <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[130px]">
-                  {activeCall?.leadName || "Aguardando"}
-                </span>
-              </>
-            ) : isEnded ? (
-              <>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Finalizada
-                </span>
-                <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-                  Ligações
-                </span>
-              </>
-            ) : (
-              <>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs md:text-sm font-bold text-slate-800 dark:text-slate-100 group-hover:text-primary transition-colors">
-                    Ligações
-                  </span>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-xs" title="Pronto para atender" />
-                </div>
-                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
-                  Disponível
-                </span>
-              </>
-            )}
-          </div>
+          {isOnCall ? (
+            <div className="relative flex items-center justify-center">
+              <span className="absolute -inset-1 rounded-full bg-emerald-400 opacity-75 animate-ping" />
+              <PhoneCall className="w-5 h-5 md:w-6 md:h-6 animate-bounce" />
+            </div>
+          ) : isDialing ? (
+            <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin" />
+          ) : isRinging ? (
+            <Phone className="w-5 h-5 md:w-6 md:h-6 animate-pulse" />
+          ) : (
+            <div className="relative flex items-center justify-center">
+              <Phone className="w-5 h-5 md:w-6 md:h-6 group-hover:scale-110 transition-transform" />
+              {/* Ready green status dot indicator */}
+              <span
+                className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-white dark:border-slate-900 shadow-xs"
+                title="Disponível"
+              />
+            </div>
+          )}
         </button>
       </div>
 
