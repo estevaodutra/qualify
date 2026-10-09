@@ -262,8 +262,9 @@ export function CallActionDialog({
   useEffect(() => {
     if (!isWorkflowCall || !realTaskId || !open) return;
 
+    const channelName = `workflow_task_${realTaskId}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const channel = supabase
-      .channel(`workflow_task_${realTaskId}`)
+      .channel(channelName)
       .on(
         "postgres_changes",
         {

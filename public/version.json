@@ -1,6 +1,6 @@
 {
-  "commit": "3016b264ca7479d92d4eceade77d9e703c67b02d",
-  "shortCommit": "3016b26",
-  "message": "fix(call-dialog): padroniza nome do lead sem uppercase e iniciais do avatar com 2 letras igual ao chat express",
-  "builtAt": "2026-10-09T18:25:32.634Z"
+  "commit": "3f5d3e707fb9f4f628e1a7145562abac7a2bb576",
+  "shortCommit": "3f5d3e7",
+  "message": "fix(calls): elimina loop continuo de discagem automatica em segundo plano",
+  "builtAt": "2026-10-09T18:31:19.220Z"
 }
