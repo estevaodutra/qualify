@@ -25,62 +25,70 @@ const getFileExtension = (url: string): string => {
   return filename.split('.').pop()?.toUpperCase() || '';
 };
 
+import { WorkflowAudioPlayer } from "@/components/sequences/WorkflowAudioPlayer";
+import { WorkflowVideoPlayer } from "@/components/sequences/WorkflowVideoPlayer";
+
 // Media Preview Component
 function MediaPreview({ mediaType, url }: { mediaType: MediaType; url: string }) {
-  const [hasError, setHasError] = useState(false);
+  const [imgError, setImgError] = useState(false);
 
-  if (!url || hasError) return null;
+  if (!url) return null;
 
   switch (mediaType) {
     case "image":
     case "sticker":
+      if (imgError) {
+        return (
+          <div className="flex items-center gap-2 p-3 bg-muted/60 rounded-xl text-xs text-muted-foreground border border-slate-200">
+            <span className="truncate flex-1">Imagem vinculada: {getFilenameFromUrl(url)}</span>
+            <a href={url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1 font-semibold">
+              Ver imagem <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+        );
+      }
       return (
-        <div className="relative aspect-video rounded-lg overflow-hidden bg-muted">
+        <div className="relative aspect-video rounded-xl overflow-hidden bg-slate-100 border border-slate-200/80 shadow-xs flex items-center justify-center">
           <img
             src={url}
             alt="Preview"
             className="w-full h-full object-contain"
-            onError={() => setHasError(true)}
+            onError={() => setImgError(true)}
           />
         </div>
       );
 
     case "video":
       return (
-        <div className="relative aspect-video rounded-lg overflow-hidden bg-black">
-          <video
-            src={url}
-            controls
-            className="w-full h-full object-contain"
-            onError={() => setHasError(true)}
-          />
-        </div>
+        <WorkflowVideoPlayer url={url} title={getFilenameFromUrl(url)} />
       );
 
     case "audio":
       return (
-        <div className="p-3 bg-muted rounded-lg">
-          <audio
-            src={url}
-            controls
-            className="w-full h-8"
-            onError={() => setHasError(true)}
-          />
-        </div>
+        <WorkflowAudioPlayer url={url} title={getFilenameFromUrl(url)} />
       );
 
     case "document":
       return (
-        <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
-          <FileText className="h-8 w-8 text-muted-foreground shrink-0" />
+        <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl shadow-xs">
+          <FileText className="h-8 w-8 text-primary shrink-0" />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">
+            <p className="text-sm font-semibold truncate text-slate-800">
               {getFilenameFromUrl(url)}
             </p>
             <p className="text-xs text-muted-foreground">
-              {getFileExtension(url)}
+              Documento {getFileExtension(url)}
             </p>
           </div>
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100"
+            title="Abrir documento"
+          >
+            <ExternalLink className="h-4 w-4" />
+          </a>
         </div>
       );
 

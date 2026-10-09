@@ -58,6 +58,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { getNodeBlockDefinition, getDefaultConfigForSubType, isActionSubType } from "./nodeDefinitions";
 import { VariablePicker } from "./VariablePicker";
 import { normalizeDelayConfig, toDelayMs, formatDelayLabel } from "@/lib/workflows/delay";
+import { MediaUploader } from "@/components/group-campaigns/sequences/MediaUploader";
+import { WorkflowAudioPlayer } from "./WorkflowAudioPlayer";
+import { WorkflowVideoPlayer } from "./WorkflowVideoPlayer";
 import { useCallOperators } from "@/hooks/useCallOperators";
 import { useCallCampaigns } from "@/hooks/useCallCampaigns";
 import { getConditionDefinition } from "./conditions/conditionRegistry";
@@ -3746,10 +3749,16 @@ export function UnifiedNodeConfigPanel({
       });
     }
     return (
-      <Input
+      <MediaUploader
+        mediaType={mediaType as any}
+        currentUrl={(currConf.url as string) || ""}
+        onUpload={(url, filename) => {
+          const updates: Record<string, unknown> = { url };
+          if (filename) updates.filename = filename;
+          updMultConf(updates);
+        }}
+        onUrlChange={(url) => updConf("url", url)}
         placeholder={placeholder}
-        value={(currConf.url as string) || ""}
-        onChange={e => updConf("url", e.target.value)}
       />
     );
   };

@@ -35,6 +35,7 @@ import { TriggerTypeSelector } from "./triggers/TriggerTypeSelector";
 import { getTriggerDefinition } from "./triggers/triggerDefinitions";
 import { getConditionOutputs, getConditionDefinition } from "./conditions/conditionRegistry";
 import { getActionDefinition } from "./actions/actionRegistry";
+import { WorkflowAudioPlayer } from "./WorkflowAudioPlayer";
 
 export interface UnifiedSequenceBuilderProps {
   sequenceName: string;
@@ -2143,6 +2144,14 @@ export function UnifiedSequenceBuilder({
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </button>
                                 </div>
+                                {msg.type === "audio" && msg.url && (
+                                  <WorkflowAudioPlayer url={msg.url} compact className="mt-1" />
+                                )}
+                                {msg.type === "image" && msg.url && (
+                                  <div className="mt-1 h-14 w-full rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
+                                    <img src={msg.url} alt="Prévia" className="h-full w-full object-cover" />
+                                  </div>
+                                )}
                               </div>
                             );
                           })}

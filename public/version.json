@@ -1,6 +1,6 @@
 {
-  "commit": "97ba5a0e167e0678d82a853349eb8a1359e53b0b",
-  "shortCommit": "97ba5a0",
-  "message": "feat(workflows): abrir funil com enquadramento total automatico (fit view / zoom out maximo)",
-  "builtAt": "2026-10-09T19:30:51.687Z"
+  "commit": "e412df28a929a19a9edb5ea746ee53ae40f30fa8",
+  "shortCommit": "e412df2",
+  "message": "feat(workflows): zoom in/out com scroll do mouse e botao de excluir conexao dinamico em qualquer ponto da linha",
+  "builtAt": "2026-10-09T19:48:56.231Z"
 }

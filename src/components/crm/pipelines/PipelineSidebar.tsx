@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Pipeline, PipelineGroup } from "@/types/crm.types";
 import { Button } from "@/components/ui/button";
-import { Plus, ChevronDown, ChevronRight, MoreHorizontal, Kanban, GripVertical } from "lucide-react";
+import { Plus, ChevronDown, ChevronRight, MoreHorizontal, Kanban, GripVertical, PanelLeft } from "lucide-react";
 import { CreatePipelineGroupDialog } from "./CreatePipelineGroupDialog";
 import { EditPipelineGroupDialog } from "./EditPipelineGroupDialog";
 import { CreatePipelineDialog } from "./CreatePipelineDialog";
@@ -34,6 +34,8 @@ import { CSS } from "@dnd-kit/utilities";
 interface PipelineSidebarProps {
   activePipelineId: string | null;
   onSelectPipeline: (id: string) => void;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
 }
 
 interface SortablePipelineItemProps {
@@ -149,9 +151,21 @@ function GroupDroppableContainer({
   );
 }
 
-export function PipelineSidebar({ activePipelineId, onSelectPipeline }: PipelineSidebarProps) {
+export function PipelineSidebar({
+  activePipelineId,
+  onSelectPipeline,
+  isCollapsed,
+  onToggleCollapse,
+}: PipelineSidebarProps) {
   const { activeCompany } = useCompany();
   const queryClient = useQueryClient();
+
+  const handleSelectPipeline = (id: string) => {
+    onSelectPipeline(id);
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      onToggleCollapse();
+    }
+  };
   
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
   const [editGroup, setEditGroup] = useState<PipelineGroup | null>(null);
@@ -469,28 +483,55 @@ export function PipelineSidebar({ activePipelineId, onSelectPipeline }: Pipeline
   const activeDragPipeline = activeDragId ? localPipelines.find(p => p.id === activeDragId) : null;
 
   return (
-    <div className="w-64 border-r bg-muted/20 flex flex-col h-full flex-shrink-0">
-      <div className="p-4 flex items-center justify-between border-b">
-        <div className="flex items-center gap-2 font-semibold">
-          <Kanban className="w-5 h-5 text-primary" />
-          <span>Pipelines</span>
-        </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <Plus className="w-4 h-4" />
+    <>
+      {/* Mobile backdrop */}
+      {!isCollapsed && (
+        <div 
+          onClick={onToggleCollapse}
+          className="fixed inset-0 bg-background/80 backdrop-blur-xs z-30 md:hidden"
+        />
+      )}
+
+      <aside
+        className={cn(
+          "border-r bg-muted/20 flex flex-col h-full flex-shrink-0 transition-all duration-300 ease-in-out relative z-30 select-none",
+          isCollapsed
+            ? "w-0 min-w-0 opacity-0 pointer-events-none border-r-0 overflow-hidden"
+            : "w-64 min-w-[16rem] opacity-100 overflow-hidden max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:bg-background max-md:shadow-2xl"
+        )}
+      >
+        <div className="p-3.5 flex items-center justify-between border-b shrink-0 h-16">
+          <div className="flex items-center gap-2 font-semibold truncate">
+            <Kanban className="w-5 h-5 text-primary shrink-0" />
+            <span className="truncate">Pipelines</span>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              onClick={onToggleCollapse}
+              title="Recolher listagem de pipelines"
+            >
+              <PanelLeft className="w-4 h-4" />
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => handleCreatePipelineInGroup()}>
-              Nova Pipeline
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setCreateGroupOpen(true)}>
-              Novo Grupo
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8" title="Nova Pipeline ou Grupo">
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleCreatePipelineInGroup()}>
+                  Nova Pipeline
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setCreateGroupOpen(true)}>
+                  Novo Grupo
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
 
       <div className="flex-1 overflow-y-auto py-4">
         {loadingGroups || loadingPipelines ? (
@@ -508,7 +549,7 @@ export function PipelineSidebar({ activePipelineId, onSelectPipeline }: Pipeline
                 const groupPipelines = localPipelines
                   .filter(p => p.group_id === group.id)
                   .sort((a, b) => a.order_index - b.order_index);
-                const isCollapsed = !!collapsedGroups[group.id];
+                const isGroupCollapsed = !!collapsedGroups[group.id];
 
                 return (
                   <div key={group.id} className="space-y-1">
@@ -517,7 +558,7 @@ export function PipelineSidebar({ activePipelineId, onSelectPipeline }: Pipeline
                       className="px-4 flex items-center justify-between group/header cursor-pointer hover:text-foreground text-muted-foreground transition-colors select-none"
                     >
                       <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider">
-                        {isCollapsed ? (
+                        {isGroupCollapsed ? (
                           <ChevronRight className="w-3 h-3 shrink-0" />
                         ) : (
                           <ChevronDown className="w-3 h-3 shrink-0" />
@@ -548,7 +589,7 @@ export function PipelineSidebar({ activePipelineId, onSelectPipeline }: Pipeline
                       </DropdownMenu>
                     </div>
 
-                    {!isCollapsed && (
+                    {!isGroupCollapsed && (
                       <GroupDroppableContainer groupId={group.id}>
                         <SortableContext
                           items={groupPipelines.map(p => p.id)}
@@ -561,7 +602,7 @@ export function PipelineSidebar({ activePipelineId, onSelectPipeline }: Pipeline
                                   key={pipeline.id}
                                   pipeline={pipeline}
                                   isActive={activePipelineId === pipeline.id}
-                                  onSelect={() => onSelectPipeline(pipeline.id)}
+                                  onSelect={() => handleSelectPipeline(pipeline.id)}
                                   onEdit={() => setEditPipeline(pipeline)}
                                   onDuplicate={() => duplicatePipelineMutation.mutate(pipeline)}
                                   onArchive={() => archivePipelineMutation.mutate(pipeline.id)}
@@ -596,7 +637,7 @@ export function PipelineSidebar({ activePipelineId, onSelectPipeline }: Pipeline
                             key={pipeline.id}
                             pipeline={pipeline}
                             isActive={activePipelineId === pipeline.id}
-                            onSelect={() => onSelectPipeline(pipeline.id)}
+                            onSelect={() => handleSelectPipeline(pipeline.id)}
                             onEdit={() => setEditPipeline(pipeline)}
                             onDuplicate={() => duplicatePipelineMutation.mutate(pipeline)}
                             onArchive={() => archivePipelineMutation.mutate(pipeline.id)}
@@ -662,6 +703,7 @@ export function PipelineSidebar({ activePipelineId, onSelectPipeline }: Pipeline
         }}
         pipeline={editPipeline}
       />
-    </div>
+    </aside>
+  </>
   );
 }
