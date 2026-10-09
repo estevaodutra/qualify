@@ -927,7 +927,7 @@ export function CallActionDialog({
   if (!open) return null;
 
   const innerContent = (
-    <div className="flex flex-col w-full max-h-[90vh] overflow-hidden bg-white dark:bg-slate-950">
+    <div className="flex flex-col w-full h-full overflow-hidden bg-white dark:bg-slate-950">
       {/* Compact & Balanced Lead Header */}
       <div className="relative bg-gradient-to-b from-slate-50/90 via-slate-50/40 to-white dark:from-slate-900/90 dark:via-slate-900/40 dark:to-slate-950 border-b border-slate-200/80 dark:border-slate-800 p-3.5 space-y-2.5 shrink-0">
         
@@ -1147,7 +1147,7 @@ export function CallActionDialog({
 
         {/* Call Tab */}
         <TabsContent value="call" className="flex-1 min-h-0 mt-0 flex flex-col">
-          <ScrollArea className="flex-1 min-h-0 px-3.5 py-2.5 max-h-[56vh]">
+          <ScrollArea className="flex-1 min-h-0 px-3.5 py-2.5">
             <div className="space-y-2.5">
                 
                 {/* ROTEIRO SECTION */}
@@ -1509,7 +1509,7 @@ export function CallActionDialog({
 
           {/* History Tab */}
           <TabsContent value="history" className="flex-1 min-h-0 mt-0 flex flex-col">
-            <ScrollArea className="flex-1 min-h-0 px-5 py-3.5 max-h-[56vh]">
+            <ScrollArea className="flex-1 min-h-0 px-5 py-3.5">
               <div className="space-y-4">
                 <div className="flex items-center justify-between pb-1">
                   <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
@@ -1653,10 +1653,10 @@ export function CallActionDialog({
     return (
       <div
         className={cn(
-          "fixed bottom-3 right-3 sm:bottom-5 sm:right-5 z-[90]",
-          "w-[calc(100vw-24px)] sm:w-[480px] md:w-[500px] max-h-[88vh]",
-          "flex flex-col bg-white dark:bg-slate-950 rounded-2xl shadow-[0_12px_50px_-10px_rgba(0,0,0,0.35)] border border-slate-200/80 dark:border-slate-800 overflow-hidden",
-          "animate-in slide-in-from-bottom-5 fade-in duration-200"
+          "fixed bottom-0 right-0 md:bottom-6 md:right-6 z-[90]",
+          "w-full md:w-[480px] h-[100dvh] md:h-[650px] max-h-[100dvh]",
+          "flex flex-col bg-white dark:bg-slate-950 md:rounded-2xl shadow-[0_8px_40px_-12px_rgba(0,0,0,0.3)] border border-slate-200/80 dark:border-slate-800 overflow-hidden",
+          "animate-in slide-in-from-bottom-5 fade-in duration-200 transition-all ease-out"
         )}
       >
         {innerContent}

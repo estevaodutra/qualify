@@ -1,6 +1,6 @@
 {
-  "commit": "5da0f6d8eb6b326493d23790e973a955b8a0cbd8",
-  "shortCommit": "5da0f6d",
-  "message": "fix(workflow): isolar historico por instancia e corrigir troca indevida de canal",
-  "builtAt": "2026-10-08T16:55:35.035Z"
+  "commit": "d706aacd376d6dbe20ed001718106b50eeb01dbe",
+  "shortCommit": "d706aac",
+  "message": "feat(ui): transforma baloes flutuantes em botoes circulares apenas com icones",
+  "builtAt": "2026-10-09T00:45:27.081Z"
 }
