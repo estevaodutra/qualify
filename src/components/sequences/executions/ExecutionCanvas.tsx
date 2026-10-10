@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { LocalNode, LocalConnection, NodeCategory, RandomizerBranch } from "../shared-types";
 import { WorkflowExecution, WorkflowNodeExecution } from "@/hooks/useWorkflowExecutions";
-import { ZoomIn, ZoomOut, Maximize, Play, CheckCircle2, XCircle, Loader2, CircleDashed } from "lucide-react";
+import { ZoomIn, ZoomOut, Maximize, Play, CheckCircle2, XCircle, Loader2, CircleDashed, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -29,10 +29,12 @@ function getSortedRandomizerBranches(node: LocalNode): RandomizerBranch[] {
     .sort((a, b) => a.position - b.position);
 }
 
-const STATUS_STYLES: Record<string, { border: string; ring: string; icon: typeof CheckCircle2; iconColor: string }> = {
+const STATUS_STYLES: Record<string, { border: string; ring: string; icon: any; iconColor: string }> = {
   success: { border: "border-emerald-400", ring: "ring-emerald-400/20", icon: CheckCircle2, iconColor: "text-emerald-500" },
   error: { border: "border-destructive", ring: "ring-destructive/20", icon: XCircle, iconColor: "text-destructive" },
   running: { border: "border-amber-400", ring: "ring-amber-400/20", icon: Loader2, iconColor: "text-amber-500" },
+  waiting: { border: "border-blue-400", ring: "ring-blue-400/20", icon: Clock, iconColor: "text-blue-500" },
+  paused: { border: "border-blue-400", ring: "ring-blue-400/20", icon: Clock, iconColor: "text-blue-500" },
   not_executed: { border: "border-slate-200", ring: "ring-transparent", icon: CircleDashed, iconColor: "text-slate-300" },
 };
 
@@ -66,11 +68,6 @@ export function ExecutionCanvas({
     const sameTypeNodes = nodes.filter(n => n.nodeType === targetNode.nodeType);
     if (sameTypeExecs.length === 1 && sameTypeNodes.length === 1) {
       return sameTypeExecs[0];
-    }
-
-    const nodeIdx = sameTypeNodes.findIndex(n => n.id === nodeId);
-    if (nodeIdx >= 0 && nodeIdx < sameTypeExecs.length) {
-      return sameTypeExecs[nodeIdx];
     }
 
     return undefined;
@@ -447,7 +444,7 @@ export function ExecutionCanvas({
 
                   <div className="pt-2 flex items-center justify-between text-[9px] font-bold uppercase tracking-wider">
                     <span className={style.iconColor}>
-                      {status === "success" ? "Executado" : status === "error" ? "Erro" : status === "running" ? "Executando" : "Não percorrido"}
+                      {status === "success" ? "Executado" : status === "error" ? "Erro" : status === "running" ? "Executando" : (status === "waiting" || status === "paused") ? "Aguardando" : "Não percorrido"}
                     </span>
                     {nodeExec?.durationMs != null && <span className="text-slate-400">{nodeExec.durationMs}ms</span>}
                   </div>

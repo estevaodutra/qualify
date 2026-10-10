@@ -399,21 +399,41 @@ Deno.serve(async (req) => {
       if (payload.group_jid) {
         // If triggered by a specific group event (member_join/leave), ONLY target that specific group!
         targetGroups = [{ group_jid: payload.group_jid as string, group_name: null, instance_id: primaryInstanceId || null }];
-      } else if (existingLinkedGroups && existingLinkedGroups.length > 0) {
-        let resolved = [...existingLinkedGroups];
-        if (groupScope === "selected" && selectedGroupJids && selectedGroupJids.length > 0) {
-          const filtered = resolved.filter((g) => selectedGroupJids.includes(g.group_jid));
-          if (filtered.length > 0) resolved = filtered;
-        }
-        targetGroups = resolved.map((g) => ({ group_jid: g.group_jid, group_name: g.group_name, instance_id: g.instance_id || primaryInstanceId || null }));
-        console.log(`[TriggerSequence] Group scope "${groupScope || 'all'}" resolved ${targetGroups.length} target group(s) from campaign_groups`);
       } else if (selectedGroupJids && selectedGroupJids.length > 0) {
-        targetGroups = selectedGroupJids.map((jid) => ({
-          group_jid: jid,
-          group_name: null,
-          instance_id: primaryInstanceId || null
+        // Target ALL groups configured in selectedGroupJids
+        // Deduplicate by numeric identifier so both 123-group and 123@g.us aren't duplicated
+        const seenNumeric = new Set<string>();
+        const uniqueJids: string[] = [];
+
+        for (const rawJid of selectedGroupJids) {
+          if (!rawJid) continue;
+          const cleanNumeric = rawJid.replace(/\D/g, "");
+          if (cleanNumeric) {
+            if (seenNumeric.has(cleanNumeric)) continue;
+            seenNumeric.add(cleanNumeric);
+          }
+          uniqueJids.push(rawJid);
+        }
+
+        targetGroups = uniqueJids.map((jid) => {
+          const cleanNumeric = jid.replace(/\D/g, "");
+          const linked = (existingLinkedGroups || []).find((g) =>
+            g.group_jid === jid || (cleanNumeric && g.group_jid?.replace(/\D/g, "") === cleanNumeric)
+          );
+          return {
+            group_jid: jid,
+            group_name: linked?.group_name || null,
+            instance_id: linked?.instance_id || primaryInstanceId || null,
+          };
+        });
+        console.log(`[TriggerSequence] Resolved ${targetGroups.length} target group(s) directly from selectedGroupJids (deduped from ${selectedGroupJids.length})`);
+      } else if (existingLinkedGroups && existingLinkedGroups.length > 0) {
+        targetGroups = existingLinkedGroups.map((g) => ({
+          group_jid: g.group_jid,
+          group_name: g.group_name,
+          instance_id: g.instance_id || primaryInstanceId || null,
         }));
-        console.log(`[TriggerSequence] Resolved ${targetGroups.length} target group(s) directly from selectedGroupJids`);
+        console.log(`[TriggerSequence] Group scope "${groupScope || 'all'}" resolved ${targetGroups.length} target group(s) from campaign_groups`);
       }
     }
 

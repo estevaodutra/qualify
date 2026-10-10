@@ -1,6 +1,6 @@
 {
-  "commit": "85eaaf41855b826cbbd1cc2c2bf9a2e4a58ade3d",
-  "shortCommit": "85eaaf4",
-  "message": "fix(workflow): garantir envio de mention_all booleano no content e no payload da requisicao",
-  "builtAt": "2026-10-10T16:19:46.695Z"
+  "commit": "f6947362ead1fb845538841dc457e7dfa906d35d",
+  "shortCommit": "f694736",
+  "message": "fix(workflows): corrigir ReferenceError importando useCallback e useEffect no ExecutionCanvas",
+  "builtAt": "2026-10-10T16:32:01.243Z"
 }

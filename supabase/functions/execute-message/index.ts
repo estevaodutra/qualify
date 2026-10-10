@@ -1395,14 +1395,40 @@ Deno.serve(async (req) => {
                                    !!(triggerContext?.contactPhone) ||
                                    !!(triggerContext?.uraResult);
 
-    if (!hasPrivateDestinations && (groupsError || !linkedGroups || linkedGroups.length === 0)) {
+    let groups = (linkedGroups || []) as LinkedGroup[];
+
+    // Fallback to selectedGroupJids from sequence trigger_config if campaign_groups has no rows
+    if (groups.length === 0 && effectiveSequenceId) {
+      const { data: seqRow } = await supabase
+        .from("message_sequences")
+        .select("trigger_config")
+        .eq("id", effectiveSequenceId)
+        .maybeSingle();
+      const cfg = (seqRow?.trigger_config || {}) as Record<string, any>;
+      const selectedJids = (cfg.selectedGroupJids as string[]) || (triggerContext?.selectedGroupJids as string[]) || [];
+      if (selectedJids.length > 0) {
+        const seen = new Set<string>();
+        for (const jid of selectedJids) {
+          const clean = jid.replace(/\D/g, "");
+          if (clean && !seen.has(clean)) {
+            seen.add(clean);
+            groups.push({
+              id: crypto.randomUUID(),
+              group_jid: jid,
+              group_name: jid,
+            });
+          }
+        }
+        console.log(`[ExecuteMessage] Loaded ${groups.length} groups from sequence trigger_config.selectedGroupJids`);
+      }
+    }
+
+    if (!hasPrivateDestinations && groups.length === 0) {
       return new Response(
         JSON.stringify({ error: "No linked groups found" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    const groups = (linkedGroups || []) as LinkedGroup[];
 
     // Get user's webhook config
     const { data: webhookConfig } = await supabase
@@ -4998,22 +5024,30 @@ Deno.serve(async (req) => {
         
         console.log(`[ExecuteMessage] ✅ Resumed execution ${executionId} completed`);
         
-        // Mark other "running" executions for the same sequence as superseded
-        if (effectiveSequenceId) {
-          const { data: supersededExecutions } = await supabase
-            .from("sequence_executions")
-            .update({
-              status: "superseded",
-              error_message: `Superseded by execution ${executionId}`,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("sequence_id", effectiveSequenceId)
-            .eq("status", "running")
-            .neq("id", executionId)
-            .select("id");
-          
-          if (supersededExecutions && supersededExecutions.length > 0) {
-            console.log(`[ExecuteMessage] Marked ${supersededExecutions.length} old executions as superseded`);
+        // Only mark old "running" executions for the same sequence and SAME destination as superseded
+        if (effectiveSequenceId && executionId) {
+          const currentDestJid = (triggerContext?.groupJid || triggerContext?.respondentJid || triggerContext?.respondentPhone) as string | undefined;
+          if (currentDestJid) {
+            try {
+              const { data: supersededExecutions } = await supabase
+                .from("sequence_executions")
+                .update({
+                  status: "superseded",
+                  error_message: `Superseded by execution ${executionId}`,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("sequence_id", effectiveSequenceId)
+                .eq("status", "running")
+                .neq("id", executionId)
+                .contains("trigger_context", { groupJid: currentDestJid })
+                .select("id");
+              
+              if (supersededExecutions && supersededExecutions.length > 0) {
+                console.log(`[ExecuteMessage] Marked ${supersededExecutions.length} old executions for ${currentDestJid} as superseded`);
+              }
+            } catch (supErr) {
+              console.warn("[ExecuteMessage] Non-fatal error marking superseded executions:", supErr);
+            }
           }
         }
       }
