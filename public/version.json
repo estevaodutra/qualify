@@ -1,6 +1,6 @@
 {
-  "commit": "e412df28a929a19a9edb5ea746ee53ae40f30fa8",
-  "shortCommit": "e412df2",
-  "message": "feat(workflows): zoom in/out com scroll do mouse e botao de excluir conexao dinamico em qualquer ponto da linha",
-  "builtAt": "2026-10-09T19:48:56.231Z"
+  "commit": "306852ab2ea2735c53b6e69b57d3f328d6b1e8eb",
+  "shortCommit": "306852a",
+  "message": "feat(workflows): adicionar toggle switch de ativar/desativar nos cards de fluxo",
+  "builtAt": "2026-10-10T15:51:26.421Z"
 }
