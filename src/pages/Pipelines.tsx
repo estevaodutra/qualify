@@ -16,6 +16,8 @@ import { EditPipelineDialog } from "@/components/crm/pipelines/EditPipelineDialo
 import { toast } from "sonner";
 import { dispatchWorkflowForDealMove } from "@/lib/workflow-dispatcher";
 import { useChatExpressStore } from "@/stores/chatExpress.store";
+import { Button } from "@/components/ui/button";
+import { PanelLeft } from "lucide-react";
 
 export default function Pipelines() {
   const { activeCompany } = useCompany();
@@ -34,6 +36,23 @@ export default function Pipelines() {
   const [selectedStageToEdit, setSelectedStageToEdit] = useState<any>(null);
   
   const [editPipelineOpen, setEditPipelineOpen] = useState(false);
+  
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("qualify-pipeline-sidebar-collapsed");
+      if (saved !== null) return saved === "true";
+      return window.innerWidth < 1024;
+    }
+    return false;
+  });
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed(prev => {
+      const next = !prev;
+      localStorage.setItem("qualify-pipeline-sidebar-collapsed", String(next));
+      return next;
+    });
+  };
 
   // Initialize active pipeline from localStorage
   useEffect(() => {
@@ -314,13 +333,15 @@ export default function Pipelines() {
   };
 
   return (
-    <div className="flex h-full bg-background overflow-hidden">
+    <div className="flex h-full bg-background overflow-hidden relative">
       <PipelineSidebar 
         activePipelineId={activePipelineId} 
         onSelectPipeline={setActivePipelineId} 
+        isCollapsed={sidebarCollapsed}
+        onToggleCollapse={toggleSidebar}
       />
       
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
+      <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
         {activePipeline ? (
           <>
             <PipelineHeader 
@@ -329,6 +350,8 @@ export default function Pipelines() {
               search={search}
               setSearch={setSearch}
               onOpenSettings={() => setEditPipelineOpen(true)}
+              isSidebarCollapsed={sidebarCollapsed}
+              onToggleSidebar={toggleSidebar}
             />
             
             <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 pb-8 bg-muted/10">
@@ -402,10 +425,30 @@ export default function Pipelines() {
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center p-8">
-            <div className="text-center space-y-4 max-w-md text-muted-foreground">
-              <h2 className="text-xl font-semibold text-foreground">Bem-vindo aos Pipelines</h2>
-              <p>Selecione uma pipeline no menu lateral ou crie uma nova para começar a organizar seus negócios.</p>
+          <div className="flex-1 flex flex-col h-full">
+            <div className="p-4 border-b h-16 flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0"
+                onClick={toggleSidebar}
+                title={sidebarCollapsed ? "Expandir listagem de pipelines" : "Recolher listagem de pipelines"}
+              >
+                <PanelLeft className="w-4 h-4" />
+              </Button>
+              <h1 className="text-lg font-bold">Pipelines</h1>
+            </div>
+            <div className="flex-1 flex items-center justify-center p-8">
+              <div className="text-center space-y-4 max-w-md text-muted-foreground">
+                <h2 className="text-xl font-semibold text-foreground">Bem-vindo aos Pipelines</h2>
+                <p>Selecione uma pipeline no menu lateral ou crie uma nova para começar a organizar seus negócios.</p>
+                {sidebarCollapsed && (
+                  <Button variant="outline" size="sm" onClick={toggleSidebar} className="mt-2">
+                    <PanelLeft className="w-4 h-4 mr-2" />
+                    Abrir Lista de Pipelines
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         )}

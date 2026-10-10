@@ -1,14 +1,16 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub,
   DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  MoreVertical, FolderInput, ExternalLink, Send, Users, Skull, Activity, PhoneCall, Trash2, Copy, Webhook, CalendarClock
+  MoreVertical, FolderInput, ExternalLink, Send, Users, Skull, Activity, PhoneCall, Trash2, Copy, Webhook, CalendarClock, Power, Loader2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WorkflowDefinition, WorkflowSourceType } from "@/hooks/useWorkflowDefinitions";
@@ -78,12 +80,23 @@ interface WorkflowCardProps {
   onMoveToFolder: (folderId: string | null) => void;
   onDelete?: () => void;
   onDuplicate?: () => void;
+  onToggleActive?: (active: boolean) => Promise<unknown> | void;
 }
 
-export function WorkflowCard({ workflow, folders, onMoveToFolder, onDelete, onDuplicate }: WorkflowCardProps) {
+export function WorkflowCard({
+  workflow,
+  folders,
+  onMoveToFolder,
+  onDelete,
+  onDuplicate,
+  onToggleActive,
+}: WorkflowCardProps) {
   const navigate = useNavigate();
   const meta = getWorkflowTypeMeta(workflow);
   const Icon = meta.icon;
+  const [isToggling, setIsToggling] = useState(false);
+
+  const isActive = workflow.status === "active";
 
   const hierarchicalFolders = useMemo(() => {
     return flattenFolderTree(buildFolderTree(folders));
@@ -92,6 +105,18 @@ export function WorkflowCard({ workflow, folders, onMoveToFolder, onDelete, onDu
   const openBuilder = () => {
     const legacyRoute = SOURCE_TYPE_BUILDER_ROUTE[workflow.sourceType](workflow);
     navigate(legacyRoute || `/workflows/${workflow.id}/builder`);
+  };
+
+  const handleToggle = async (checked: boolean) => {
+    if (isToggling || !onToggleActive) return;
+    setIsToggling(true);
+    try {
+      await onToggleActive(checked);
+    } catch (err) {
+      console.error("Erro ao alternar status do workflow:", err);
+    } finally {
+      setIsToggling(false);
+    }
   };
 
   return (
@@ -125,6 +150,12 @@ export function WorkflowCard({ workflow, folders, onMoveToFolder, onDelete, onDu
             <DropdownMenuItem onClick={openBuilder}>
               <ExternalLink className="h-3.5 w-3.5 mr-2" /> Abrir automação
             </DropdownMenuItem>
+            {onToggleActive && (
+              <DropdownMenuItem onClick={() => handleToggle(!isActive)} disabled={isToggling}>
+                <Power className="h-3.5 w-3.5 mr-2 text-primary" />
+                {isActive ? "Pausar automação" : "Ativar automação"}
+              </DropdownMenuItem>
+            )}
             {onDuplicate && (
               <DropdownMenuItem onClick={onDuplicate}>
                 <Copy className="h-3.5 w-3.5 mr-2" /> Duplicar automação
@@ -153,10 +184,45 @@ export function WorkflowCard({ workflow, folders, onMoveToFolder, onDelete, onDu
           </DropdownMenuContent>
         </DropdownMenu>
       </CardHeader>
-      <CardContent className="pt-0">
-        <Button variant="ghost" size="sm" className="w-full justify-start text-primary/80 hover:text-primary" onClick={openBuilder}>
+      <CardContent className="pt-0 flex items-center justify-between gap-3">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-primary/80 hover:text-primary px-2 -ml-2 h-8 font-semibold text-xs"
+          onClick={openBuilder}
+        >
           <ExternalLink className="h-3.5 w-3.5 mr-1.5" /> Abrir
         </Button>
+
+        {onToggleActive && (
+          <div
+            className="flex items-center gap-2 px-2.5 py-1 rounded-xl border border-border/40 bg-background/50 hover:bg-muted/30 transition-colors shadow-2xs"
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            {isToggling ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-[#8A3CFF]" />
+            ) : (
+              <Switch
+                id={`workflow-toggle-${workflow.id}`}
+                checked={isActive}
+                onCheckedChange={handleToggle}
+                disabled={isToggling}
+                className="scale-90"
+              />
+            )}
+            <Label
+              htmlFor={`workflow-toggle-${workflow.id}`}
+              className={cn(
+                "text-xs font-semibold cursor-pointer select-none transition-colors",
+                isActive ? "text-[#8A3CFF] dark:text-[#a86efd]" : "text-muted-foreground"
+              )}
+            >
+              {isToggling ? "Salvando..." : isActive ? "Ativo" : "Ativar"}
+            </Label>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

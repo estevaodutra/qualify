@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
+import { validateWorkflowActivation } from "@/lib/workflows/validateActivation";
 
 export type WorkflowSourceType =
   | "dispatch_sequence" | "group_sequence" | "context_campaign" | "pirate_campaign" | "call_campaign";
@@ -149,11 +150,116 @@ export function useWorkflowDefinitions(filters?: { folderId?: string | null; sta
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: WorkflowStatus }) => {
-      const { error } = await supabase.from("workflow_definitions" as any).update({ status }).eq("id", id);
-      if (error) throw error;
+      // 1. Fetch workflow definition to get source_type, source_id, and name
+      const { data: wf, error: fetchErr } = await supabase
+        .from("workflow_definitions" as any)
+        .select("name, source_type, source_id")
+        .eq("id", id)
+        .maybeSingle();
+      if (fetchErr) throw fetchErr;
+      if (!wf) throw new Error("Automação não encontrada.");
+
+      const typedWf = wf as any;
+      const isActivating = status === "active";
+
+      // 2. If activating a sequence, validate it first
+      if (isActivating && (typedWf.source_type === "group_sequence" || typedWf.source_type === "dispatch_sequence")) {
+        const [{ data: dbNodes }, { data: dbEdges }] = await Promise.all([
+          supabase.from("sequence_nodes" as any).select("*").eq("sequence_id", typedWf.source_id),
+          supabase.from("sequence_connections" as any).select("*").eq("sequence_id", typedWf.source_id),
+        ]);
+
+        if (!dbNodes || dbNodes.length === 0) {
+          throw new Error("Esta automação ainda não possui blocos configurados.");
+        }
+
+        const localNodes = (dbNodes as any[]).map((n) => ({
+          id: n.id,
+          nodeType: n.node_type,
+          nodeOrder: n.node_order || 0,
+          positionX: n.position_x,
+          positionY: n.position_y,
+          config: n.config || {},
+        }));
+
+        const localConnections = (dbEdges || []).map((e: any) => ({
+          id: e.id,
+          sourceNodeId: e.source_node_id,
+          targetNodeId: e.target_node_id,
+          sourceHandle: e.source_handle,
+          targetHandle: e.target_handle,
+        }));
+
+        const validation = validateWorkflowActivation(localNodes, localConnections);
+        if (!validation.valid) {
+          throw new Error(validation.errors[0] || "Não é possível ativar esta automação.");
+        }
+      }
+
+      // 3. Update the underlying source
+      try {
+        if (typedWf.source_type === "group_sequence" || typedWf.source_type === "dispatch_sequence") {
+          await supabase
+            .from("message_sequences" as any)
+            .update({ active: isActivating, updated_at: new Date().toISOString() })
+            .eq("id", typedWf.source_id);
+
+          if (typedWf.source_type === "dispatch_sequence") {
+            await supabase
+              .from("dispatch_sequences" as any)
+              .update({ is_active: isActivating, updated_at: new Date().toISOString() })
+              .eq("id", typedWf.source_id);
+          }
+
+          if (!isActivating) {
+            await supabase
+              .from("sequence_executions" as any)
+              .update({ status: "cancelled", error_message: "Workflow pausado pelo usuário", updated_at: new Date().toISOString() })
+              .eq("sequence_id", typedWf.source_id)
+              .eq("status", "paused");
+          }
+        } else if (typedWf.source_type === "context_campaign") {
+          await supabase
+            .from("context_campaigns" as any)
+            .update({ status: isActivating ? "active" : "paused", updated_at: new Date().toISOString() })
+            .eq("id", typedWf.source_id);
+        } else if (typedWf.source_type === "call_campaign") {
+          await supabase
+            .from("call_campaigns" as any)
+            .update({ status: isActivating ? "active" : "paused", updated_at: new Date().toISOString() })
+            .eq("id", typedWf.source_id);
+        } else if (typedWf.source_type === "pirate_campaign") {
+          await supabase
+            .from("pirate_campaigns" as any)
+            .update({ status: isActivating ? "active" : "paused", updated_at: new Date().toISOString() })
+            .eq("id", typedWf.source_id);
+        }
+      } catch (sourceErr) {
+        console.warn("[updateStatus] Erro ao sincronizar fonte do workflow:", sourceErr);
+      }
+
+      // 4. Update workflow_definitions record
+      const { error: updateErr } = await supabase
+        .from("workflow_definitions" as any)
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq("id", id);
+      if (updateErr) throw updateErr;
+
+      return { status, name: typedWf.name };
     },
-    onSuccess: () => invalidate(),
-    onError: (error: Error) => toast.error("Erro ao atualizar status", { description: error.message }),
+    onSuccess: (result) => {
+      invalidate();
+      queryClient.invalidateQueries({ queryKey: ["message_sequences"] });
+      queryClient.invalidateQueries({ queryKey: ["group_campaigns"] });
+      queryClient.invalidateQueries({ queryKey: ["context-campaigns"] });
+      queryClient.invalidateQueries({ queryKey: ["call-campaigns"] });
+      if (result?.status === "active") {
+        toast.success(`Fluxo "${result.name}" ativado com sucesso!`);
+      } else {
+        toast.info(`Fluxo "${result.name}" desativado.`);
+      }
+    },
+    onError: (error: Error) => toast.error("Não foi possível alterar status", { description: error.message }),
   });
 
   const deleteWorkflowDefinition = useMutation({
