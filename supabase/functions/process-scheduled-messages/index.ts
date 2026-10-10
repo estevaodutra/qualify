@@ -662,6 +662,7 @@ Deno.serve(async (req) => {
             text: formatLineBreaks(message.content),
             sendPrivate: message.send_private,
             mentionMember: message.mention_member,
+            mention_all: Boolean((message as any).mention_all ?? (message as any).mentionAll ?? false),
           };
           
           if (message.media_url) {

@@ -367,7 +367,8 @@ export async function fetchZApi(
     instance_name: instanceName || "",
     api_key: apiKey,
     action: routed.action,
-    content: content
+    content: content,
+    ...(content?.mention_all !== undefined ? { mention_all: Boolean(content.mention_all) } : {})
   };
 
 

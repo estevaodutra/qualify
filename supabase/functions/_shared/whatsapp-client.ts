@@ -82,6 +82,11 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
 
   const config = node.config || {};
 
+  // Mention all group members (boolean in request body: true or false)
+  if (config.mention_all !== undefined || config.mentionAll !== undefined) {
+    body.mention_all = Boolean(config.mention_all ?? config.mentionAll);
+  }
+
   switch (action) {
     case "message.send_text":
     case "message.send_user_input":

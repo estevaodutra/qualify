@@ -28,9 +28,9 @@ interface TimelineSequenceBuilderProps {
 
 const getDefaultConfig = (nodeType: string): Record<string, unknown> => {
   switch (nodeType) {
-    case "message": return { content: "", sendPrivate: false, mentionMember: false, viewOnce: false };
-    case "image": return { url: "", caption: "", sendPrivate: false, viewOnce: false };
-    case "video": return { url: "", caption: "", sendPrivate: false, isVideoNote: false, viewOnce: false };
+    case "message": return { content: "", sendPrivate: false, mentionMember: false, mention_all: false, viewOnce: false };
+    case "image": return { url: "", caption: "", sendPrivate: false, mentionMember: false, mention_all: false, viewOnce: false };
+    case "video": return { url: "", caption: "", sendPrivate: false, mentionMember: false, mention_all: false, isVideoNote: false, viewOnce: false };
     case "audio": return { url: "", isVoiceMessage: true, sendPrivate: false, viewOnce: false };
     case "document": return { url: "", filename: "", caption: "", sendPrivate: false, viewOnce: false };
     case "sticker": return { url: "", sendPrivate: false, viewOnce: false };

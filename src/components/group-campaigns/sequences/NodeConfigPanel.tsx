@@ -141,6 +141,20 @@ export function NodeConfigPanel({ node, onUpdate, onClose }: NodeConfigPanelProp
                   onCheckedChange={(checked) => updateConfig("mentionMember", checked)}
                 />
               </div>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="mentionAll">Mencionar todos os membros</Label>
+                  <p className="text-xs text-muted-foreground">Menciona todos os participantes do grupo (@todos)</p>
+                </div>
+                <Switch
+                  id="mentionAll"
+                  checked={Boolean(node.config.mention_all ?? node.config.mentionAll ?? false)}
+                  onCheckedChange={(checked) => {
+                    updateConfig("mention_all", checked);
+                    updateConfig("mentionAll", checked);
+                  }}
+                />
+              </div>
             </>
           )}
 

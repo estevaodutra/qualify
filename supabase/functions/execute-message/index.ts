@@ -1539,6 +1539,7 @@ Deno.serve(async (req) => {
         text: formatLineBreaks(typedMessage.content),
         sendPrivate: typedMessage.send_private,
         mentionMember: typedMessage.mention_member,
+        mention_all: Boolean((typedMessage as any).mention_all ?? (typedMessage as any).mentionAll ?? false),
       };
       
       if (typedMessage.media_url) {

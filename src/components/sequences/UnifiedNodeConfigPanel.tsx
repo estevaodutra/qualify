@@ -1638,6 +1638,18 @@ export function UnifiedNodeConfigPanel({
                           onCheckedChange={checked => updateConfig("mentionMember", checked)}
                         />
                       </div>
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label>Mencionar todos os membros</Label>
+                          <p className="text-xs text-muted-foreground">Menciona todos os participantes do grupo (@todos)</p>
+                        </div>
+                        <Switch
+                          checked={Boolean(currentConfig.mention_all ?? currentConfig.mentionAll ?? false)}
+                          onCheckedChange={checked => {
+                            updateMultipleConfigs({ mention_all: checked, mentionAll: checked });
+                          }}
+                        />
+                      </div>
                     </>
                   )}
                 </>
@@ -1686,13 +1698,34 @@ export function UnifiedNodeConfigPanel({
                 />
               </div>
               {isGroup && (
-                <div className="flex items-center justify-between">
-                  <Label>Enviar no privado</Label>
-                  <Switch
-                    checked={(currentConfig.sendPrivate as boolean) || false}
-                    onCheckedChange={checked => updateConfig("sendPrivate", checked)}
-                  />
-                </div>
+                <>
+                  <div className="flex items-center justify-between">
+                    <Label>Enviar no privado</Label>
+                    <Switch
+                      checked={(currentConfig.sendPrivate as boolean) || false}
+                      onCheckedChange={checked => updateConfig("sendPrivate", checked)}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label>Mencionar membro</Label>
+                    <Switch
+                      checked={(currentConfig.mentionMember as boolean) || false}
+                      onCheckedChange={checked => updateConfig("mentionMember", checked)}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Mencionar todos os membros</Label>
+                      <p className="text-xs text-muted-foreground">Menciona todos os participantes do grupo (@todos)</p>
+                    </div>
+                    <Switch
+                      checked={Boolean(currentConfig.mention_all ?? currentConfig.mentionAll ?? false)}
+                      onCheckedChange={checked => {
+                        updateMultipleConfigs({ mention_all: checked, mentionAll: checked });
+                      }}
+                    />
+                  </div>
+                </>
               )}
             </>
           )}
@@ -1727,15 +1760,17 @@ export function UnifiedNodeConfigPanel({
                   </p>
                 )}
               </div>
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Recado (Video Note)</Label>
-                  <p className="text-xs text-muted-foreground">Envia como bolinha circular flutuante</p>
+              <div className="space-y-0.5">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Recado (Video Note)</Label>
+                    <p className="text-xs text-muted-foreground">Envia como bolinha circular flutuante</p>
+                  </div>
+                  <Switch
+                    checked={(currentConfig.isVideoNote as boolean) || false}
+                    onCheckedChange={checked => updateConfig("isVideoNote", checked)}
+                  />
                 </div>
-                <Switch
-                  checked={(currentConfig.isVideoNote as boolean) || false}
-                  onCheckedChange={checked => updateConfig("isVideoNote", checked)}
-                />
               </div>
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
@@ -1748,13 +1783,34 @@ export function UnifiedNodeConfigPanel({
                 />
               </div>
               {isGroup && (
-                <div className="flex items-center justify-between">
-                  <Label>Enviar no privado</Label>
-                  <Switch
-                    checked={(currentConfig.sendPrivate as boolean) || false}
-                    onCheckedChange={checked => updateConfig("sendPrivate", checked)}
-                  />
-                </div>
+                <>
+                  <div className="flex items-center justify-between">
+                    <Label>Enviar no privado</Label>
+                    <Switch
+                      checked={(currentConfig.sendPrivate as boolean) || false}
+                      onCheckedChange={checked => updateConfig("sendPrivate", checked)}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label>Mencionar membro</Label>
+                    <Switch
+                      checked={(currentConfig.mentionMember as boolean) || false}
+                      onCheckedChange={checked => updateConfig("mentionMember", checked)}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Mencionar todos os membros</Label>
+                      <p className="text-xs text-muted-foreground">Menciona todos os participantes do grupo (@todos)</p>
+                    </div>
+                    <Switch
+                      checked={Boolean(currentConfig.mention_all ?? currentConfig.mentionAll ?? false)}
+                      onCheckedChange={checked => {
+                        updateMultipleConfigs({ mention_all: checked, mentionAll: checked });
+                      }}
+                    />
+                  </div>
+                </>
               )}
             </>
           )}
