@@ -359,6 +359,7 @@ export async function fetchZApi(
   // Extract API key if available
   const apiKey = headers["Client-Token"] || headers["Authorization"] || Deno.env.get("CLIENT_TOKEN") || "";
 
+  const mentionAllBool = Boolean(content?.mention_all ?? false);
   const n8nPayload = {
     provider: actualProvider,
     instance_id: resolvedInstanceId || "",
@@ -367,8 +368,11 @@ export async function fetchZApi(
     instance_name: instanceName || "",
     api_key: apiKey,
     action: routed.action,
-    content: content,
-    ...(content?.mention_all !== undefined ? { mention_all: Boolean(content.mention_all) } : {})
+    mention_all: mentionAllBool,
+    content: (content && typeof content === "object") ? {
+      ...content,
+      mention_all: mentionAllBool,
+    } : content,
   };
 
 

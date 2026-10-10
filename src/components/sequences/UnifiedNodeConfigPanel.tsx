@@ -1646,6 +1646,7 @@ export function UnifiedNodeConfigPanel({
                         <Switch
                           checked={Boolean(currentConfig.mention_all ?? currentConfig.mentionAll ?? false)}
                           onCheckedChange={checked => {
+                            updateConfig("mention_all", checked);
                             updateMultipleConfigs({ mention_all: checked, mentionAll: checked });
                           }}
                         />
@@ -1721,6 +1722,7 @@ export function UnifiedNodeConfigPanel({
                     <Switch
                       checked={Boolean(currentConfig.mention_all ?? currentConfig.mentionAll ?? false)}
                       onCheckedChange={checked => {
+                        updateConfig("mention_all", checked);
                         updateMultipleConfigs({ mention_all: checked, mentionAll: checked });
                       }}
                     />
@@ -1806,6 +1808,7 @@ export function UnifiedNodeConfigPanel({
                     <Switch
                       checked={Boolean(currentConfig.mention_all ?? currentConfig.mentionAll ?? false)}
                       onCheckedChange={checked => {
+                        updateConfig("mention_all", checked);
                         updateMultipleConfigs({ mention_all: checked, mentionAll: checked });
                       }}
                     />

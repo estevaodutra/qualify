@@ -1,6 +1,6 @@
 {
-  "commit": "306852ab2ea2735c53b6e69b57d3f328d6b1e8eb",
-  "shortCommit": "306852a",
-  "message": "feat(workflows): adicionar toggle switch de ativar/desativar nos cards de fluxo",
-  "builtAt": "2026-10-10T15:51:26.421Z"
+  "commit": "e862d64f78e1de6c1e0bdcb627a67f12ff33a680",
+  "shortCommit": "e862d64",
+  "message": "chore: atualizar version.json",
+  "builtAt": "2026-10-10T15:59:46.561Z"
 }

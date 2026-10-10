@@ -3201,6 +3201,7 @@ Deno.serve(async (req) => {
               const formattedConfig = formatNodeConfig(subAction, subAction.type);
               const resolvedConfig = replaceDeep(formattedConfig) as Record<string, unknown>;
               Object.assign(formattedConfig, resolvedConfig);
+              formattedConfig.mention_all = Boolean(subAction.mention_all ?? subAction.mentionAll ?? false);
 
               if (subAction.type === "delay") {
                 const normalized = normalizeDelayConfig(formattedConfig);
@@ -3788,6 +3789,7 @@ Deno.serve(async (req) => {
                 formattedConfig[field] = replaceVariables(formattedConfig[field] as string);
               }
             });
+            formattedConfig.mention_all = Boolean(subConfig.mention_all ?? subConfig.mentionAll ?? false);
             
             // Send to all destinations
             for (const dest of activeDestinations) {
@@ -4649,6 +4651,7 @@ Deno.serve(async (req) => {
               formattedConfig[field] = replaceVariables(formattedConfig[field] as string);
             }
           });
+          formattedConfig.mention_all = Boolean(node.config?.mention_all ?? node.config?.mentionAll ?? false);
           
           const payload = buildStandardPayload({
             action,
