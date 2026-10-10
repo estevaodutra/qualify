@@ -1,6 +1,6 @@
 {
-  "commit": "e862d64f78e1de6c1e0bdcb627a67f12ff33a680",
-  "shortCommit": "e862d64",
-  "message": "chore: atualizar version.json",
-  "builtAt": "2026-10-10T15:59:46.561Z"
+  "commit": "85eaaf41855b826cbbd1cc2c2bf9a2e4a58ade3d",
+  "shortCommit": "85eaaf4",
+  "message": "fix(workflow): garantir envio de mention_all booleano no content e no payload da requisicao",
+  "builtAt": "2026-10-10T16:19:46.695Z"
 }
