@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from "react";
-import { Play, Pause, Volume2, Volume1, VolumeX, RotateCcw, ExternalLink, Loader2 } from "lucide-react";
+import { Play, Pause, Volume2, Volume1, VolumeX, RotateCcw, ExternalLink, Loader2, AlertCircle } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -134,6 +134,32 @@ export function WorkflowAudioPlayer({
 
   // Compact variant for canvas cards
   if (compact) {
+    if (hasError) {
+      return (
+        <div
+          className={cn(
+            "flex items-center gap-1.5 p-1.5 rounded-lg bg-destructive/10 border border-destructive/20 text-xs w-full text-destructive",
+            className
+          )}
+          onClick={(e) => e.stopPropagation()}
+          title="O arquivo de áudio não foi encontrado no servidor. Reenvie o arquivo no editor."
+        >
+          <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
+          <span className="text-[10px] font-semibold truncate flex-1">Áudio não encontrado no servidor</span>
+          <audio
+            ref={audioRef}
+            src={url}
+            preload="metadata"
+            onError={() => {
+              setIsLoading(false);
+              setHasError(true);
+            }}
+            className="hidden"
+          />
+        </div>
+      );
+    }
+
     return (
       <div
         className={cn(

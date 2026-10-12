@@ -3782,6 +3782,7 @@ Deno.serve(async (req) => {
           console.log(`[ExecuteMessage] Processing content node ${node.id} with ${subMessages.length} sub-messages`);
           
           let subFailed = false;
+          let subFailedError: string | null = null;
           let hasSentPollInSubMessages = false;
           let hasSentUserInputInSubMessages = false;
           let userInputSubMsgConfig: any = null;
@@ -3899,7 +3900,9 @@ Deno.serve(async (req) => {
                 
                 if (!result.ok) {
                   subFailed = true;
-                  console.error(`[ExecuteMessage] ❌ Failed to send sub-message ${subNodeType} to ${dest.group_name}`);
+                  const errDetail = typeof result.details === "string" ? result.details : JSON.stringify(result.details || "");
+                  subFailedError = `Falha ao enviar ${subNodeType} (HTTP ${result.status})${errDetail ? `: ${errDetail}` : ""}`;
+                  console.error(`[ExecuteMessage] ❌ Failed to send sub-message ${subNodeType} to ${dest.group_name}:`, subFailedError);
                 } else {
                   console.log(`[ExecuteMessage] ✅ Sub-message ${subNodeType} sent to ${dest.group_name}`);
                   const msgText = (formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.question || formattedConfig.caption || subMsg.content || subMsg.text || subMsg.message || subMsg.question || "") as string;
@@ -3955,6 +3958,7 @@ Deno.serve(async (req) => {
                 }
               } catch (err: any) {
                 subFailed = true;
+                subFailedError = err.message || String(err);
                 console.error(`[ExecuteMessage] ❌ Error sending sub-message ${subNodeType} to ${dest.group_name}:`, err);
                 if (logEntry?.id) {
                   await supabase
@@ -3978,7 +3982,8 @@ Deno.serve(async (req) => {
             status: !subFailed ? "success" : "error",
             startedAt: nodeStartedAt,
             input: node.config,
-            output: { status: "completed", subMessagesCount: subMessages.length },
+            output: { status: !subFailed ? "completed" : "failed", subMessagesCount: subMessages.length },
+            error: subFailed ? subFailedError : null,
           });
           
           if (subFailed) {

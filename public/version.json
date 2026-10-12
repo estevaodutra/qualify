@@ -1,6 +1,6 @@
 {
-  "commit": "be2992b62083967869aade3b019ae3f9f224ec0f",
-  "shortCommit": "be2992b",
-  "message": "fix(workflows): fix group destinations target and execution canvas node matching",
-  "builtAt": "2026-10-12T13:12:04.916Z"
+  "commit": "a44e08cba6a3373cfd8f07d8e5d1f700bf84acf7",
+  "shortCommit": "a44e08c",
+  "message": "fix(workflow): separar saida de resposta e timeout em nós de entrada do usuario",
+  "builtAt": "2026-10-12T14:10:05.763Z"
 }

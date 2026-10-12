@@ -79,10 +79,28 @@ export function NodeInspector({ nodeExecution, onClose }: NodeInspectorProps) {
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-slate-500 font-medium">Status do Processamento:</span>
-                <span className="font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 uppercase text-[10px]">
+                <span className={cn(
+                  "font-bold px-2 py-0.5 rounded border uppercase text-[10px]",
+                  nodeExecution.status === "error" && "text-destructive bg-destructive/10 border-destructive/30",
+                  nodeExecution.status === "success" && "text-emerald-600 bg-emerald-50 border-emerald-200",
+                  nodeExecution.status === "running" && "text-amber-600 bg-amber-50 border-amber-200",
+                  (nodeExecution.status as string) === "waiting" && "text-blue-600 bg-blue-50 border-blue-200",
+                  (!["error", "success", "running", "waiting"].includes(nodeExecution.status)) && "text-slate-600 bg-slate-100 border-slate-200"
+                )}>
                   {nodeExecution.status}
                 </span>
               </div>
+
+              {nodeExecution.status === "error" && (
+                <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-xl space-y-1.5 text-xs">
+                  <p className="font-bold text-destructive flex items-center gap-1.5">❌ Falha na Execução do Bloco</p>
+                  <p className="text-[11px] text-destructive/90 leading-relaxed">
+                    {typeof nodeExecution.error === "string" 
+                      ? nodeExecution.error 
+                      : (nodeExecution.error as any)?.message || "Ocorreu um erro no processamento deste nó. Verifique os dados na aba Erro."}
+                  </p>
+                </div>
+              )}
 
               {isTrigger && (
                 <div className="p-3 bg-emerald-50/60 border border-emerald-200/60 rounded-xl space-y-1 text-xs">
@@ -128,7 +146,7 @@ export function NodeInspector({ nodeExecution, onClose }: NodeInspectorProps) {
                 </div>
               )}
 
-              {!isTrigger && !isCondition && (
+              {!isTrigger && !isCondition && nodeExecution.status !== "error" && (
                 <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-1 text-xs">
                   <p className="font-bold text-slate-800">Ação Executada</p>
                   <p className="text-[11px] text-slate-600">O bloco de {nodeExecution.nodeType} foi processado com sucesso.</p>
