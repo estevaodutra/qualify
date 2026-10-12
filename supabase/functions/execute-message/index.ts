@@ -3817,6 +3817,28 @@ Deno.serve(async (req) => {
               }
             });
             formattedConfig.mention_all = Boolean(subConfig.mention_all ?? subConfig.mentionAll ?? false);
+
+            const isUserInputSubNode = subNodeType === "user_input" || subNodeType === "question" || subNodeType === "pergunta";
+            if (isUserInputSubNode) {
+              hasSentUserInputInSubMessages = true;
+              userInputSubMsgConfig = subMsg;
+
+              const questionText = (
+                formattedConfig.question ||
+                formattedConfig.text ||
+                formattedConfig.content ||
+                formattedConfig.message ||
+                subMsg.question ||
+                subMsg.content ||
+                subMsg.text ||
+                ""
+              ).trim();
+
+              if (!questionText) {
+                console.log(`[ExecuteMessage] ℹ️ Entrada do Usuário sem pergunta de texto no bloco de conteúdo ${node.id}. Pulando envio de mensagem vazia para WhatsApp e ativando modo de espera por resposta.`);
+                break;
+              }
+            }
             
             // Send to all destinations
             for (const dest of activeDestinations) {
@@ -3972,6 +3994,10 @@ Deno.serve(async (req) => {
                 }
               }
             }
+
+            if (isUserInputSubNode) {
+              break;
+            }
           }
           
           await logNodeExecution(supabase, {
@@ -4021,7 +4047,7 @@ Deno.serve(async (req) => {
                 if (leadFound) effectiveLeadId = leadFound.id;
               }
 
-              if (destPhoneClean) {
+              if (destPhoneClean || dest.group_jid) {
                 await supabase.from("workflow_user_inputs").insert({
                   company_id: typedCampaign.company_id || triggerContext?.companyId || null,
                   user_id: userId,
@@ -4030,7 +4056,7 @@ Deno.serve(async (req) => {
                   node_id: node.id,
                   lead_id: effectiveLeadId,
                   instance_id: activeInstanceId,
-                  phone: destPhoneClean,
+                  phone: destPhoneClean || (dest.group_jid ? dest.group_jid.replace(/\D/g, "") : ""),
                   group_jid: dest.group_jid,
                   target_field: targetField || null,
                   timeout_ms: timeoutMs,
@@ -4673,6 +4699,130 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        const isStandaloneUserInput = node.node_type === "user_input" || node.node_type === "question" || node.node_type === "pergunta";
+        if (isStandaloneUserInput) {
+          const formattedConfig = formatNodeConfig(node.config, node.node_type);
+          const standaloneQuestionText = (
+            formattedConfig.question ||
+            formattedConfig.text ||
+            formattedConfig.content ||
+            formattedConfig.message ||
+            (node.config as any)?.question ||
+            (node.config as any)?.text ||
+            (node.config as any)?.content ||
+            ""
+          ).trim();
+
+          if (!standaloneQuestionText) {
+            console.log(`[ExecuteMessage] ℹ️ Entrada do Usuário vazia no node ${node.id}. Pulando envio de mensagem para WhatsApp e pausando workflow para aguardar resposta...`);
+
+            const nextConn = connections.find(c => c.source_node_id === node.id && c.condition_path !== "timeout" && c.condition_path !== "error")
+              || connections.find(c => c.source_node_id === node.id);
+            const nextNodeId = nextConn ? nextConn.target_node_id : null;
+
+            const timeoutConn = connections.find(c => c.source_node_id === node.id && c.condition_path === "timeout");
+            const timeoutNodeId = timeoutConn ? timeoutConn.target_node_id : null;
+
+            for (const dest of activeDestinations) {
+              const rawDestPhone = triggerContext?.respondentPhone || (dest.group_jid ? dest.group_jid.split("@")[0] : "");
+              const destPhoneClean = rawDestPhone ? rawDestPhone.replace(/\D/g, "") : "";
+              const targetField = ((node.config as any)?.targetField || "") as string;
+              const timeoutMs = ((node.config as any)?.timeoutMs || 3600000) as number;
+
+              let effectiveLeadId = triggerContext?.leadId || null;
+              if (!effectiveLeadId && destPhoneClean) {
+                const suffix = destPhoneClean.slice(-8);
+                const { data: leadFound } = await supabase
+                  .from("leads")
+                  .select("id")
+                  .or(`phone.eq.${destPhoneClean},phone.ilike.%${suffix}`)
+                  .limit(1)
+                  .maybeSingle();
+                if (leadFound) effectiveLeadId = leadFound.id;
+              }
+
+              if (destPhoneClean || dest.group_jid) {
+                await supabase.from("workflow_user_inputs").insert({
+                  company_id: typedCampaign.company_id || triggerContext?.companyId || null,
+                  user_id: userId,
+                  execution_id: workflowExecutionId,
+                  sequence_id: effectiveSequenceId,
+                  node_id: node.id,
+                  lead_id: effectiveLeadId,
+                  instance_id: activeInstanceId,
+                  phone: destPhoneClean || (dest.group_jid ? dest.group_jid.replace(/\D/g, "") : ""),
+                  group_jid: dest.group_jid,
+                  target_field: targetField || null,
+                  timeout_ms: timeoutMs,
+                  status: "waiting",
+                  expires_at: new Date(Date.now() + timeoutMs).toISOString(),
+                });
+              }
+            }
+
+            await logNodeExecution(supabase, {
+              executionId: workflowExecutionId,
+              userId,
+              nodeId: node.id,
+              nodeType: node.node_type,
+              status: "success",
+              startedAt: nodeStartedAt,
+              input: formattedConfig,
+              output: { status: "waiting_for_user_input", reason: "empty_prompt_wait" },
+            });
+
+            await supabase
+              .from("workflow_executions")
+              .update({
+                status: "waiting",
+                updated_at: new Date().toISOString(),
+                trigger_payload: {
+                  ...(triggerContext || {}),
+                  instanceId: activeInstanceId,
+                  waitingNodeId: node.id,
+                  resumeNodeId: nextNodeId,
+                  timeoutNodeId: timeoutNodeId,
+                  waitingType: "user_input"
+                }
+              })
+              .eq("id", workflowExecutionId);
+
+            await supabase
+              .from("sequence_executions")
+              .upsert({
+                user_id: userId,
+                campaign_id: effectiveCampaignId,
+                sequence_id: effectiveSequenceId,
+                message_id: typedMessage?.id || null,
+                current_node_id: nextNodeId,
+                trigger_context: {
+                  ...(triggerContext || {}),
+                  instanceId: activeInstanceId,
+                  waitingNodeId: node.id,
+                  resumeNodeId: nextNodeId,
+                  timeoutNodeId: timeoutNodeId,
+                  waitingType: "user_input"
+                },
+                nodes_data: sortedNodes,
+                destinations: effectiveDests,
+                status: "paused",
+                resume_at: null,
+                nodes_processed: nodesProcessed + 1,
+                nodes_failed: nodesFailed,
+              }, { onConflict: "user_id,sequence_id" });
+
+            return new Response(
+              JSON.stringify({
+                success: true,
+                status: "waiting_for_user_input",
+                executionId: workflowExecutionId,
+                message: "Execution paused waiting for user response (empty prompt)."
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+        }
+
         // Send this node to all destinations
         const nextActiveDestinations: DestinationData[] = [];
         const nodeSendResults: Array<{ destination: string; status: string }> = [];
@@ -4908,16 +5058,28 @@ Deno.serve(async (req) => {
                 const targetField = ((node.config as any)?.targetField || "") as string;
                 const timeoutMs = ((node.config as any)?.timeoutMs || 3600000) as number;
 
-                if (destPhoneClean) {
+                let effectiveLeadId = triggerContext?.leadId || null;
+                if (!effectiveLeadId && destPhoneClean) {
+                  const suffix = destPhoneClean.slice(-8);
+                  const { data: leadFound } = await supabase
+                    .from("leads")
+                    .select("id")
+                    .or(`phone.eq.${destPhoneClean},phone.ilike.%${suffix}`)
+                    .limit(1)
+                    .maybeSingle();
+                  if (leadFound) effectiveLeadId = leadFound.id;
+                }
+
+                if (destPhoneClean || dest.group_jid) {
                   await supabase.from("workflow_user_inputs").insert({
                     company_id: typedCampaign.company_id || triggerContext?.companyId || null,
                     user_id: userId,
                     execution_id: workflowExecutionId,
                     sequence_id: effectiveSequenceId,
                     node_id: node.id,
-                    lead_id: triggerContext?.leadId || null,
+                    lead_id: effectiveLeadId,
                     instance_id: activeInstanceId,
-                    phone: destPhoneClean,
+                    phone: destPhoneClean || (dest.group_jid ? dest.group_jid.replace(/\D/g, "") : ""),
                     group_jid: dest.group_jid,
                     target_field: targetField || null,
                     timeout_ms: timeoutMs,

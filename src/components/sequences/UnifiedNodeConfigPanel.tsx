@@ -2443,6 +2443,9 @@ export function UnifiedNodeConfigPanel({
                   className="resize-none font-mono text-sm" 
                   rows={4} 
                 />
+                <p className="text-xs text-muted-foreground">
+                  Dica: Deixe em branco se a pergunta já foi feita na mensagem ou áudio anterior. O fluxo apenas aguardará a resposta do usuário sem enviar mensagem de texto adicional.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label>Salvar resposta em</Label>

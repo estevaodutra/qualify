@@ -11,8 +11,12 @@ export async function processMessageEvent(
   context: EventContext,
   rawEvent: any
 ) {
-  const CONTEXT_TRIGGER_TYPES = ["message.received", "message.sent", "text_message", "image_message", "audio_message", "video_message", "document_message", "sticker_message"];
-  const isMessage = CONTEXT_TRIGGER_TYPES.includes(classification.eventType);
+  const CONTEXT_TRIGGER_TYPES = [
+    "message.received", "message.sent", "text_message", "image_message",
+    "audio_message", "video_message", "document_message", "sticker_message",
+    "location_message", "contact_message", "button_response", "list_response", "poll_response"
+  ];
+  const isMessage = CONTEXT_TRIGGER_TYPES.includes(classification.eventType) || classification.direction === "inbound";
   const isInbound = classification.direction === "inbound" || classification.eventType === "message.received";
 
   if (!isMessage) return;
@@ -61,10 +65,31 @@ export async function processMessageEvent(
   // ==========================================
   if (isInbound && !context.isFromMe) {
     try {
-      const senderPhone = (context.senderPhone || (context.chatType !== "group" ? context.chatJid : "") || "").replace(/\D/g, "");
-      if (senderPhone) {
-        const suffix = senderPhone.slice(-8);
-        let query = supabase
+      const cleanPhone = (context.senderPhone || (context.chatType !== "group" ? context.chatJid : "") || "").replace(/\D/g, "");
+      const chatJid = context.chatJid || "";
+      const isGroup = context.chatType === "group" || chatJid.includes("@g.us") || chatJid.endsWith("-group");
+
+      let pendingInput: any = null;
+
+      // 1. If it's a group, check if there's a waiting user_input session for this group JID
+      if (isGroup && chatJid) {
+        const { data: groupInputs } = await supabase
+          .from("workflow_user_inputs")
+          .select("*")
+          .eq("status", "waiting")
+          .eq("group_jid", chatJid)
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        if (groupInputs && groupInputs.length > 0) {
+          pendingInput = groupInputs[0];
+        }
+      }
+
+      // 2. If not found by group_jid or not a group, search by phone
+      if (!pendingInput && cleanPhone) {
+        const suffix = cleanPhone.slice(-8);
+        let phoneQuery = supabase
           .from("workflow_user_inputs")
           .select("*")
           .eq("status", "waiting")
@@ -72,143 +97,231 @@ export async function processMessageEvent(
           .limit(1);
 
         if (suffix.length >= 8) {
-          query = query.or(`phone.eq.${senderPhone},phone.ilike.%${suffix}`);
+          phoneQuery = phoneQuery.or(`phone.eq.${cleanPhone},phone.ilike.%${suffix}`);
         } else {
-          query = query.eq("phone", senderPhone);
+          phoneQuery = phoneQuery.eq("phone", cleanPhone);
         }
 
-        const { data: pendingInputs } = await query;
-        const pendingInput = pendingInputs?.[0];
+        const { data: phoneInputs } = await phoneQuery;
+        if (phoneInputs && phoneInputs.length > 0) {
+          pendingInput = phoneInputs[0];
+        }
+      }
 
-        if (pendingInput) {
-          console.log(`[MessageController] 🎯 Found waiting user_input session ${pendingInput.id} for phone ${senderPhone}`);
-          const rawMsgObj = rawEvent.body || rawEvent.payload || rawEvent;
-          const responseText = (typeof rawMsgObj === "string" ? rawMsgObj : rawMsgObj?.text?.message || rawMsgObj?.text || rawMsgObj?.message?.conversation || rawMsgObj?.message?.extendedTextMessage?.text || rawMsgObj?.caption || rawMsgObj?.body || "") as string;
+      if (pendingInput) {
+        console.log(`[MessageController] 🎯 Found waiting user_input session ${pendingInput.id} for phone/chat ${cleanPhone || chatJid}`);
+        const rawMsgObj = rawEvent.body || rawEvent.payload || rawEvent;
 
-          // Mark session as answered
-          await supabase
-            .from("workflow_user_inputs")
-            .update({
-              status: "answered",
-              response_text: responseText,
-              answered_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", pendingInput.id);
+        // Extract text / caption
+        const textContent = (
+          typeof rawMsgObj === "string"
+            ? rawMsgObj
+            : rawMsgObj?.text?.message ||
+              rawMsgObj?.text ||
+              rawMsgObj?.message?.conversation ||
+              rawMsgObj?.message?.extendedTextMessage?.text ||
+              rawMsgObj?.caption ||
+              rawMsgObj?.message?.imageMessage?.caption ||
+              rawMsgObj?.message?.videoMessage?.caption ||
+              rawMsgObj?.message?.documentMessage?.caption ||
+              rawMsgObj?.body ||
+              rawEvent?.body ||
+              ""
+        ) as string;
 
-          // Update lead core or custom field if target_field is configured
-          let isNameField = false;
-          let leadIdToUpdate = pendingInput.lead_id;
+        // Extract media URL across all providers
+        const mediaUrl = (
+          rawMsgObj?.audioUrl ||
+          rawMsgObj?.audio?.audioUrl ||
+          rawMsgObj?.imageUrl ||
+          rawMsgObj?.image?.imageUrl ||
+          rawMsgObj?.videoUrl ||
+          rawMsgObj?.video?.videoUrl ||
+          rawMsgObj?.documentUrl ||
+          rawMsgObj?.document?.documentUrl ||
+          rawMsgObj?.file_url ||
+          rawMsgObj?.stickerUrl ||
+          rawMsgObj?.sticker?.stickerUrl ||
+          rawMsgObj?.mediaUrl ||
+          rawMsgObj?.url ||
+          rawMsgObj?.message?.audioMessage?.url ||
+          rawMsgObj?.message?.imageMessage?.url ||
+          rawMsgObj?.message?.videoMessage?.url ||
+          rawMsgObj?.message?.documentMessage?.url ||
+          rawMsgObj?.message?.stickerMessage?.url ||
+          rawEvent?.audioUrl ||
+          rawEvent?.imageUrl ||
+          rawEvent?.videoUrl ||
+          rawEvent?.documentUrl ||
+          rawEvent?.stickerUrl ||
+          ""
+        ) as string;
 
-          if (pendingInput.target_field) {
-            if (!leadIdToUpdate) {
-              const { data: leadFound } = await supabase
-                .from("leads")
-                .select("id")
-                .or(`phone.eq.${senderPhone},phone.ilike.%${suffix}`)
-                .limit(1)
-                .maybeSingle();
-              if (leadFound) leadIdToUpdate = leadFound.id;
+        // Identify message type
+        const evtType = classification.eventType || "";
+        const evtSubtype = classification.eventSubtype || "";
+
+        const isAudio = evtType === "audio_message" || evtSubtype === "audio" || Boolean(rawMsgObj?.audio || rawMsgObj?.audioUrl || rawEvent?.audioUrl || rawMsgObj?.message?.audioMessage);
+        const isImage = evtType === "image_message" || evtSubtype === "image" || Boolean(rawMsgObj?.image || rawMsgObj?.imageUrl || rawEvent?.imageUrl || rawMsgObj?.message?.imageMessage);
+        const isVideo = evtType === "video_message" || evtSubtype === "video" || Boolean(rawMsgObj?.video || rawMsgObj?.videoUrl || rawEvent?.videoUrl || rawMsgObj?.message?.videoMessage);
+        const isDocument = evtType === "document_message" || evtSubtype === "document" || Boolean(rawMsgObj?.document || rawMsgObj?.documentUrl || rawEvent?.documentUrl || rawMsgObj?.message?.documentMessage);
+        const isSticker = evtType === "sticker_message" || evtSubtype === "sticker" || Boolean(rawMsgObj?.sticker || rawMsgObj?.stickerUrl || rawEvent?.stickerUrl || rawMsgObj?.message?.stickerMessage);
+        const isLocation = evtType === "location_message" || evtSubtype === "location" || Boolean(rawMsgObj?.location || rawMsgObj?.message?.locationMessage);
+        const isContact = evtType === "contact_message" || evtSubtype === "contact" || Boolean(rawMsgObj?.contact || rawMsgObj?.vcard || rawMsgObj?.message?.contactMessage);
+
+        let fallbackLabel = "";
+        let detectedMediaType = "text";
+
+        if (isAudio) { fallbackLabel = "[Áudio]"; detectedMediaType = "audio"; }
+        else if (isImage) { fallbackLabel = "[Imagem]"; detectedMediaType = "image"; }
+        else if (isVideo) { fallbackLabel = "[Vídeo]"; detectedMediaType = "video"; }
+        else if (isDocument) { fallbackLabel = "[Documento]"; detectedMediaType = "document"; }
+        else if (isSticker) { fallbackLabel = "[Figurinha]"; detectedMediaType = "sticker"; }
+        else if (isLocation) { fallbackLabel = "[Localização]"; detectedMediaType = "location"; }
+        else if (isContact) { fallbackLabel = "[Contato]"; detectedMediaType = "contact"; }
+
+        const trimmedText = textContent ? textContent.trim() : "";
+        const effectiveResponseText = trimmedText || mediaUrl || fallbackLabel || "Mensagem recebida";
+        const isMediaOnly = !trimmedText && Boolean(mediaUrl || fallbackLabel);
+
+        console.log(`[MessageController] Inbound response parsed: type=${detectedMediaType}, text="${trimmedText}", mediaUrl="${mediaUrl}", effectiveResponse="${effectiveResponseText}"`);
+
+        // Mark session as answered
+        await supabase
+          .from("workflow_user_inputs")
+          .update({
+            status: "answered",
+            response_text: effectiveResponseText,
+            answered_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", pendingInput.id);
+
+        // Update lead core or custom field if target_field is configured
+        let isNameField = false;
+        let leadIdToUpdate = pendingInput.lead_id;
+
+        if (pendingInput.target_field) {
+          if (!leadIdToUpdate && cleanPhone) {
+            const suffix = cleanPhone.slice(-8);
+            const { data: leadFound } = await supabase
+              .from("leads")
+              .select("id")
+              .or(`phone.eq.${cleanPhone},phone.ilike.%${suffix}`)
+              .limit(1)
+              .maybeSingle();
+            if (leadFound) leadIdToUpdate = leadFound.id;
+          }
+
+          const rawField = String(pendingInput.target_field || "").trim();
+          const lowerField = rawField.toLowerCase();
+          isNameField = ["name", "nome", "nome completo", "nome_completo", "fullname", "full_name"].includes(lowerField);
+          const isEmailField = ["email", "e-mail"].includes(lowerField);
+          const isDocumentField = ["document", "cpf", "cnpj", "documento"].includes(lowerField);
+          const isCompanyField = ["company_name", "empresa", "company"].includes(lowerField);
+          const isWebsiteField = ["website", "site"].includes(lowerField);
+
+          let coreFieldToUpdate: string | null = null;
+          if (isNameField) {
+            // Only update core name if user sent actual text (avoid renaming contact to "[Áudio]" or a storage URL)
+            if (!isMediaOnly && trimmedText) {
+              coreFieldToUpdate = "name";
             }
+          } else if (isEmailField) coreFieldToUpdate = "email";
+          else if (isDocumentField) coreFieldToUpdate = "document";
+          else if (isCompanyField) coreFieldToUpdate = "company_name";
+          else if (isWebsiteField) coreFieldToUpdate = "website";
 
-            const rawField = String(pendingInput.target_field || "").trim();
-            const lowerField = rawField.toLowerCase();
-            isNameField = ["name", "nome", "nome completo", "nome_completo", "fullname", "full_name"].includes(lowerField);
-            const isEmailField = ["email", "e-mail"].includes(lowerField);
-            const isDocumentField = ["document", "cpf", "cnpj", "documento"].includes(lowerField);
-            const isCompanyField = ["company_name", "empresa", "company"].includes(lowerField);
-            const isWebsiteField = ["website", "site"].includes(lowerField);
-
-            let coreFieldToUpdate: string | null = null;
-            if (isNameField) coreFieldToUpdate = "name";
-            else if (isEmailField) coreFieldToUpdate = "email";
-            else if (isDocumentField) coreFieldToUpdate = "document";
-            else if (isCompanyField) coreFieldToUpdate = "company_name";
-            else if (isWebsiteField) coreFieldToUpdate = "website";
-
-            if (leadIdToUpdate) {
-              if (coreFieldToUpdate) {
-                await supabase.from("leads").update({
-                  [coreFieldToUpdate]: responseText,
-                  updated_at: new Date().toISOString()
-                }).eq("id", leadIdToUpdate);
-                console.log(`[MessageController] Updated core field ${coreFieldToUpdate} = "${responseText}" on lead ${leadIdToUpdate}`);
-              } else {
-                const { data: l } = await supabase.from("leads").select("custom_fields").eq("id", leadIdToUpdate).maybeSingle();
-                const existingCustom = (l?.custom_fields as Record<string, any>) || {};
-                await supabase.from("leads").update({
-                  custom_fields: { ...existingCustom, [rawField]: responseText },
-                  updated_at: new Date().toISOString()
-                }).eq("id", leadIdToUpdate);
-                console.log(`[MessageController] Updated custom_fields.${rawField} = "${responseText}" on lead ${leadIdToUpdate}`);
-              }
-            }
-
-            // If name was updated, synchronize chat_conversations so the chat UI updates immediately
-            if (isNameField && responseText) {
-              try {
-                await supabase
-                  .from("chat_conversations")
-                  .update({ contact_name: responseText, updated_at: new Date().toISOString() })
-                  .or(`contact_phone.eq.${senderPhone},contact_phone.ilike.%${suffix}`);
-                console.log(`[MessageController] Synchronized contact_name = "${responseText}" in chat_conversations`);
-              } catch (convSyncErr) {
-                console.warn("[MessageController] Could not sync contact_name to chat_conversations:", convSyncErr);
-              }
+          if (leadIdToUpdate) {
+            if (coreFieldToUpdate) {
+              await supabase.from("leads").update({
+                [coreFieldToUpdate]: effectiveResponseText,
+                updated_at: new Date().toISOString()
+              }).eq("id", leadIdToUpdate);
+              console.log(`[MessageController] Updated core field ${coreFieldToUpdate} = "${effectiveResponseText}" on lead ${leadIdToUpdate}`);
+            } else {
+              const { data: l } = await supabase.from("leads").select("custom_fields").eq("id", leadIdToUpdate).maybeSingle();
+              const existingCustom = (l?.custom_fields as Record<string, any>) || {};
+              await supabase.from("leads").update({
+                custom_fields: { ...existingCustom, [rawField]: effectiveResponseText },
+                updated_at: new Date().toISOString()
+              }).eq("id", leadIdToUpdate);
+              console.log(`[MessageController] Updated custom_fields.${rawField} = "${effectiveResponseText}" on lead ${leadIdToUpdate}`);
             }
           }
 
-          // Find the connection from the waiting node to the next step (success / default branch, NOT timeout and NOT error)
-          const { data: connections } = await supabase
-            .from("sequence_connections")
-            .select("target_node_id, condition_path")
-            .eq("sequence_id", pendingInput.sequence_id)
-            .eq("source_node_id", pendingInput.node_id);
+          // If name was updated, synchronize chat_conversations so the chat UI updates immediately
+          if (isNameField && !isMediaOnly && trimmedText && cleanPhone) {
+            try {
+              const suffix = cleanPhone.slice(-8);
+              await supabase
+                .from("chat_conversations")
+                .update({ contact_name: trimmedText, updated_at: new Date().toISOString() })
+                .or(`contact_phone.eq.${cleanPhone},contact_phone.ilike.%${suffix}`);
+              console.log(`[MessageController] Synchronized contact_name = "${trimmedText}" in chat_conversations`);
+            } catch (convSyncErr) {
+              console.warn("[MessageController] Could not sync contact_name to chat_conversations:", convSyncErr);
+            }
+          }
+        }
 
-          const successConn = (connections || []).find((c: any) => 
-            c.condition_path !== "timeout" && c.condition_path !== "error"
-          ) || (connections || [])[0];
+        // Find the connection from the waiting node to the next step (success / default branch, NOT timeout and NOT error)
+        const { data: connections } = await supabase
+          .from("sequence_connections")
+          .select("target_node_id, condition_path")
+          .eq("sequence_id", pendingInput.sequence_id)
+          .eq("source_node_id", pendingInput.node_id);
 
-          const nextNodeId = successConn?.target_node_id || null;
+        const successConn = (connections || []).find((c: any) => 
+          c.condition_path !== "timeout" && c.condition_path !== "error"
+        ) || (connections || [])[0];
 
-          if (nextNodeId) {
-            console.log(`[MessageController] Resuming sequence ${pendingInput.sequence_id} from node ${nextNodeId} (condition_path: ${successConn?.condition_path || "default"}) for phone ${senderPhone}`);
-            const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-            const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+        const nextNodeId = successConn?.target_node_id || null;
 
-            fetch(`${supabaseUrl}/functions/v1/trigger-sequence`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${supabaseServiceKey}`,
-              },
-              body: JSON.stringify({
-                sequenceId: pendingInput.sequence_id,
-                companyId: pendingInput.company_id,
-                userId: pendingInput.user_id,
+        if (nextNodeId) {
+          console.log(`[MessageController] Resuming sequence ${pendingInput.sequence_id} from node ${nextNodeId} (condition_path: ${successConn?.condition_path || "default"}) for phone/chat ${cleanPhone || chatJid}`);
+          const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+          const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+
+          const effectivePhone = cleanPhone || pendingInput.phone || "";
+          const respondentName = (isNameField && !isMediaOnly && trimmedText) ? trimmedText : (context.senderName || effectivePhone);
+
+          fetch(`${supabaseUrl}/functions/v1/trigger-sequence`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${supabaseServiceKey}`,
+            },
+            body: JSON.stringify({
+              sequenceId: pendingInput.sequence_id,
+              companyId: pendingInput.company_id,
+              userId: pendingInput.user_id,
+              leadId: pendingInput.lead_id || leadIdToUpdate,
+              phone: effectivePhone,
+              groupJid: pendingInput.group_jid || (isGroup ? chatJid : null),
+              startFromNodeId: nextNodeId,
+              resumedExecution: true,
+              executionId: pendingInput.execution_id,
+              triggerContext: {
+                resumedFromUserInput: true,
+                resumeNodeId: nextNodeId,
+                userResponse: effectiveResponseText,
+                mediaUrl: mediaUrl || null,
+                mediaType: detectedMediaType,
+                userInputField: pendingInput.target_field,
+                respondentPhone: effectivePhone,
+                respondentName: respondentName,
                 leadId: pendingInput.lead_id || leadIdToUpdate,
-                phone: senderPhone,
-                startFromNodeId: nextNodeId,
-                resumedExecution: true,
-                executionId: pendingInput.execution_id,
-                triggerContext: {
-                  resumedFromUserInput: true,
-                  resumeNodeId: nextNodeId,
-                  userResponse: responseText,
-                  userInputField: pendingInput.target_field,
-                  respondentPhone: senderPhone,
-                  respondentName: isNameField ? responseText : (context.senderName || senderPhone),
-                  leadId: pendingInput.lead_id || leadIdToUpdate,
-                  companyId: pendingInput.company_id,
-                  instanceId: pendingInput.instance_id || instance?.id,
-                  customFields: {
-                    ...(pendingInput.target_field ? { [pendingInput.target_field]: responseText } : {}),
-                    ...(isNameField ? { name: responseText, nome: responseText } : {}),
-                  },
-                }
-              })
-            }).catch(resumeErr => console.error("[MessageController] Error triggering resume sequence:", resumeErr));
-          }
+                companyId: pendingInput.company_id,
+                instanceId: pendingInput.instance_id || instance?.id,
+                groupJid: pendingInput.group_jid || (isGroup ? chatJid : null),
+                customFields: {
+                  ...(pendingInput.target_field ? { [pendingInput.target_field]: effectiveResponseText } : {}),
+                  ...(isNameField && !isMediaOnly && trimmedText ? { name: trimmedText, nome: trimmedText } : {}),
+                },
+              }
+            })
+          }).catch(resumeErr => console.error("[MessageController] Error triggering resume sequence:", resumeErr));
         }
       }
     } catch (userInputErr) {

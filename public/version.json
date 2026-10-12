@@ -1,6 +1,6 @@
 {
-  "commit": "a44e08cba6a3373cfd8f07d8e5d1f700bf84acf7",
-  "shortCommit": "a44e08c",
-  "message": "fix(workflow): separar saida de resposta e timeout em nós de entrada do usuario",
-  "builtAt": "2026-10-12T14:10:05.763Z"
+  "commit": "f271c46d7c6a6c26cd8f6614f551f1ccf8a76764",
+  "shortCommit": "f271c46",
+  "message": "fix(workflow): diagnostico claro de erro de envio e alerta de audio ausente",
+  "builtAt": "2026-10-12T15:01:42.624Z"
 }
