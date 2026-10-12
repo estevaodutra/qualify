@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import {
   Zap,
   X,
   AlertTriangle,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLeadExecutions, LeadExecutionItem } from "@/hooks/useLeadExecutions";
@@ -33,6 +34,48 @@ interface LeadExecutionsButtonProps {
   leadPhone?: string;
   leadName?: string;
   disabled?: boolean;
+}
+
+// Live ticking countdown badge for delays
+function CountdownBadge({ resumeAt }: { resumeAt: string }) {
+  const [timeLeft, setTimeLeft] = useState(() => {
+    return Math.max(0, Math.floor((new Date(resumeAt).getTime() - Date.now()) / 1000));
+  });
+
+  useEffect(() => {
+    const update = () => {
+      const diff = Math.max(0, Math.floor((new Date(resumeAt).getTime() - Date.now()) / 1000));
+      setTimeLeft(diff);
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [resumeAt]);
+
+  if (timeLeft <= 0) {
+    return (
+      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded-md flex items-center gap-1 shrink-0">
+        <Loader2 className="h-2.5 w-2.5 animate-spin text-emerald-600" />
+        Retomando...
+      </span>
+    );
+  }
+
+  const mins = Math.floor(timeLeft / 60);
+  const secs = timeLeft % 60;
+  const formatted = mins > 0
+    ? `${mins}m ${secs.toString().padStart(2, '0')}s`
+    : `${secs}s`;
+
+  return (
+    <span
+      className="text-[10px] font-mono font-bold text-amber-700 dark:text-amber-300 bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 rounded-md flex items-center gap-1 shrink-0 tabular-nums shadow-sm"
+      title={`Retomada prevista às ${format(new Date(resumeAt), "HH:mm:ss")}`}
+    >
+      <Clock className="h-2.5 w-2.5 text-amber-600 animate-pulse" />
+      {formatted}
+    </span>
+  );
 }
 
 export default function LeadExecutionsButton({
@@ -101,6 +144,20 @@ export default function LeadExecutionsButton({
 
   const renderStatusBadge = (status: LeadExecutionItem["status"]) => {
     switch (status) {
+      case "waiting_delay":
+        return (
+          <Badge className="bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 border-amber-500/20 flex items-center gap-1 font-semibold text-[10px] px-1.5 py-0.2">
+            <Clock className="h-2.5 w-2.5 text-amber-600 animate-pulse" />
+            Aguardando delay
+          </Badge>
+        );
+      case "waiting_user_input":
+        return (
+          <Badge className="bg-sky-500/10 text-sky-600 hover:bg-sky-500/20 border-sky-500/20 flex items-center gap-1 font-semibold text-[10px] px-1.5 py-0.2">
+            <MessageSquare className="h-2.5 w-2.5 text-sky-600" />
+            Aguardando resposta
+          </Badge>
+        );
       case "running":
         return (
           <Badge className="bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-500/20 flex items-center gap-1 font-semibold text-[10px] px-1.5 py-0.2">
@@ -359,17 +416,36 @@ export default function LeadExecutionsButton({
                     {renderStatusBadge(exec.status)}
                   </div>
 
-                  {/* Step info */}
-                  <div className="p-2 rounded-lg bg-muted/40 border border-border/40 flex items-center justify-between text-[11px]">
-                    <span className="text-muted-foreground truncate">
-                      {exec.currentNodeName || "Aguardando próxima etapa"}
-                    </span>
-                    {exec.resumeAt && (
-                      <span className="text-[10px] font-semibold text-amber-600 bg-amber-500/10 px-1.5 py-0.2 rounded shrink-0">
-                        {format(new Date(exec.resumeAt), "HH:mm:ss")}
+                  {/* Step info with precise node and live countdown */}
+                  {exec.status === "waiting_delay" || exec.waitingType === "delay" ? (
+                    <div className="p-2 rounded-lg bg-amber-500/5 border border-amber-500/20 flex items-center justify-between text-[11px] gap-2">
+                      <div className="flex items-center gap-1.5 text-amber-900 dark:text-amber-200 min-w-0 font-medium">
+                        <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                        <span className="truncate">Delay {exec.delayFormatted || "30 segundos"}</span>
+                      </div>
+                      {exec.resumeAt && <CountdownBadge resumeAt={exec.resumeAt} />}
+                    </div>
+                  ) : exec.status === "waiting_user_input" || exec.waitingType === "user_input" ? (
+                    <div className="p-2 rounded-lg bg-sky-500/5 border border-sky-500/20 flex items-center justify-between text-[11px] gap-2">
+                      <div className="flex items-center gap-1.5 text-sky-900 dark:text-sky-200 min-w-0 font-medium">
+                        <MessageSquare className="h-3.5 w-3.5 text-sky-500 shrink-0" />
+                        <span className="truncate">Aguardando resposta do usuário</span>
+                      </div>
+                      <span className="text-[10px] font-semibold text-sky-600 bg-sky-500/10 px-1.5 py-0.2 rounded shrink-0">
+                        Interação
                       </span>
-                    )}
-                  </div>
+                    </div>
+                  ) : (
+                    <div className="p-2 rounded-lg bg-muted/40 border border-border/40 flex items-center justify-between text-[11px] gap-2">
+                      <div className="flex items-center gap-1.5 text-muted-foreground min-w-0">
+                        <GitBranch className="h-3.5 w-3.5 text-primary shrink-0" />
+                        <span className="text-foreground truncate font-medium">
+                          {exec.currentNodeName || "Em processamento..."}
+                        </span>
+                      </div>
+                      {exec.resumeAt && <CountdownBadge resumeAt={exec.resumeAt} />}
+                    </div>
+                  )}
 
                   {/* Actions */}
                   <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-border/30">

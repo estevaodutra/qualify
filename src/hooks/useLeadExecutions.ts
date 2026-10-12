@@ -4,7 +4,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
-export type ExecutionDisplayStatus = "running" | "waiting" | "paused" | "completed" | "cancelled" | "error";
+export type ExecutionDisplayStatus =
+  | "running"
+  | "waiting_delay"
+  | "waiting_user_input"
+  | "waiting"
+  | "paused"
+  | "completed"
+  | "cancelled"
+  | "error";
 
 export interface LeadExecutionItem {
   id: string;
@@ -19,6 +27,8 @@ export interface LeadExecutionItem {
   durationMs: number | null;
   currentNodeId: string | null;
   currentNodeName: string | null;
+  waitingType?: "delay" | "user_input" | "poll" | "ura" | "call" | null;
+  delayFormatted?: string | null;
   resumeAt: string | null;
   errorMessage: string | null;
   triggerType: string | null;
@@ -53,7 +63,6 @@ export function useLeadExecutions({ leadId, leadPhone }: UseLeadExecutionsOption
         .order("started_at", { ascending: false })
         .limit(100);
 
-      // Note: jsonb filtering in PostgREST
       if (leadId) {
         wfQuery = wfQuery.or(`trigger_payload->>leadId.eq.${leadId},trigger_payload->>contactId.eq.${leadId}`);
       } else if (cleanPhone) {
@@ -84,11 +93,13 @@ export function useLeadExecutions({ leadId, leadPhone }: UseLeadExecutionsOption
       const rawWf: any[] = wfData || [];
       const rawSeq: any[] = seqData || [];
 
-      // 3. Collect sequence IDs to resolve workflow names
+      // 3. Collect sequence and campaign IDs to resolve workflow names
       const sequenceIds = Array.from(
         new Set([
           ...rawWf.map((r) => r.sequence_id).filter(Boolean),
           ...rawSeq.map((r) => r.sequence_id).filter(Boolean),
+          ...rawWf.map((r) => r.campaign_id).filter(Boolean),
+          ...rawSeq.map((r) => r.campaign_id).filter(Boolean),
         ])
       );
 
@@ -96,14 +107,27 @@ export function useLeadExecutions({ leadId, leadPhone }: UseLeadExecutionsOption
       const sequenceNodesMap: Record<string, Record<string, string>> = {};
 
       if (sequenceIds.length > 0) {
-        const [{ data: seqRows }, { data: dispatchRows }] = await Promise.all([
-          supabase.from("message_sequences").select("id, name, sequence_nodes(id, name, title, node_type)").in("id", sequenceIds),
+        const [{ data: defRows }, { data: seqRows }, { data: dispatchRows }, { data: campRows }] = await Promise.all([
+          supabase.from("workflow_definitions" as any).select("id, name, source_id"),
+          supabase.from("message_sequences").select("id, name, sequence_nodes(id, name, title, node_type, config)").in("id", sequenceIds),
           supabase.from("dispatch_sequences").select("id, name").in("id", sequenceIds),
+          supabase.from("group_campaigns").select("id, name").in("id", sequenceIds),
         ]);
+
+        if (defRows) {
+          for (const d of defRows as any[]) {
+            if (d.name) {
+              if (d.id) sequenceNamesMap[d.id] = d.name;
+              if (d.source_id) sequenceNamesMap[d.source_id] = d.name;
+            }
+          }
+        }
 
         if (seqRows) {
           for (const s of seqRows as any[]) {
-            sequenceNamesMap[s.id] = s.name;
+            if (s.name && !sequenceNamesMap[s.id]) {
+              sequenceNamesMap[s.id] = s.name;
+            }
             if (s.sequence_nodes && Array.isArray(s.sequence_nodes)) {
               sequenceNodesMap[s.id] = {};
               for (const n of s.sequence_nodes) {
@@ -113,9 +137,19 @@ export function useLeadExecutions({ leadId, leadPhone }: UseLeadExecutionsOption
           }
         }
 
+        if (campRows) {
+          for (const c of campRows as any[]) {
+            if (c.name && !sequenceNamesMap[c.id]) {
+              sequenceNamesMap[c.id] = c.name;
+            }
+          }
+        }
+
         if (dispatchRows) {
           for (const d of dispatchRows as any[]) {
-            sequenceNamesMap[d.id] = d.name;
+            if (d.name && !sequenceNamesMap[d.id]) {
+              sequenceNamesMap[d.id] = d.name;
+            }
           }
         }
       }
@@ -125,12 +159,71 @@ export function useLeadExecutions({ leadId, leadPhone }: UseLeadExecutionsOption
 
       // Index sequence_executions first (authoritative for in-progress & pause state)
       for (const seq of rawSeq) {
-        const isManuallyPaused = !!seq.trigger_context?.manually_paused;
+        const triggerCtx = (seq.trigger_context || {}) as Record<string, any>;
+        const nodesData = Array.isArray(seq.nodes_data) ? seq.nodes_data : [];
+        const isManuallyPaused = !!triggerCtx.manually_paused;
+
+        const isDelay = !!seq.resume_at || triggerCtx.waitingType === "delay";
+        const isUserInput = triggerCtx.waitingType === "user_input";
+
+        let waitingType: "delay" | "user_input" | "poll" | "ura" | "call" | null = null;
+        let delayFormatted: string | null = triggerCtx.delayFormatted || null;
+        let stepName = "Aguardando próxima etapa";
+
+        if (isUserInput) {
+          waitingType = "user_input";
+          stepName = "Aguardando resposta do usuário";
+        } else if (isDelay) {
+          waitingType = "delay";
+          if (!delayFormatted) {
+            const delayNode = nodesData.find((n: any) => n.node_type === "delay" || n.type === "delay");
+            if (delayNode?.config) {
+              const cfg = delayNode.config;
+              const dur = cfg.duration ?? cfg.delay_seconds ?? cfg.value ?? 30;
+              const unit = cfg.unit === "minutes" || cfg.unit === "m"
+                ? "minutos"
+                : cfg.unit === "hours" || cfg.unit === "h"
+                ? "horas"
+                : cfg.unit === "days" || cfg.unit === "d"
+                ? "dias"
+                : "segundos";
+              delayFormatted = `${dur} ${unit}`;
+            } else if (seq.resume_at) {
+              const diffSecs = Math.max(1, Math.round((new Date(seq.resume_at).getTime() - new Date(seq.updated_at || seq.created_at).getTime()) / 1000));
+              if (diffSecs < 90) delayFormatted = `${diffSecs} segundos`;
+              else if (diffSecs < 3600) delayFormatted = `${Math.round(diffSecs / 60)} minutos`;
+              else delayFormatted = `${Math.round(diffSecs / 3600)} horas`;
+            } else {
+              delayFormatted = "30 segundos";
+            }
+          }
+          stepName = `Delay ${delayFormatted}`;
+        } else if (triggerCtx.waitingType === "poll") {
+          waitingType = "poll";
+          stepName = "Aguardando voto na enquete";
+        } else if (seq.current_node_id && sequenceNodesMap[seq.sequence_id]?.[seq.current_node_id]) {
+          stepName = sequenceNodesMap[seq.sequence_id][seq.current_node_id];
+        }
+
         let mappedStatus: ExecutionDisplayStatus = "running";
         if (seq.status === "paused") {
-          mappedStatus = isManuallyPaused ? "paused" : "waiting";
+          if (isManuallyPaused) {
+            mappedStatus = "paused";
+          } else if (isDelay) {
+            mappedStatus = "waiting_delay";
+          } else if (isUserInput) {
+            mappedStatus = "waiting_user_input";
+          } else {
+            mappedStatus = "waiting";
+          }
         } else if (seq.status === "running") {
-          mappedStatus = "running";
+          if (isDelay) {
+            mappedStatus = "waiting_delay";
+          } else if (isUserInput) {
+            mappedStatus = "waiting_user_input";
+          } else {
+            mappedStatus = "running";
+          }
         } else if (seq.status === "completed") {
           mappedStatus = "completed";
         } else if (seq.status === "failed") {
@@ -139,15 +232,18 @@ export function useLeadExecutions({ leadId, leadPhone }: UseLeadExecutionsOption
           mappedStatus = "cancelled";
         }
 
-        const nodeName = seq.current_node_id && sequenceNodesMap[seq.sequence_id]?.[seq.current_node_id]
-          ? sequenceNodesMap[seq.sequence_id][seq.current_node_id]
-          : null;
+        const resolvedWorkflowName =
+          sequenceNamesMap[seq.sequence_id] ||
+          sequenceNamesMap[seq.campaign_id] ||
+          triggerCtx.workflowName ||
+          triggerCtx.sequenceName ||
+          "Workflow de Mensagens";
 
         itemsMap.set(seq.id, {
           id: seq.id,
           sequenceId: seq.sequence_id,
-          sequenceName: sequenceNamesMap[seq.sequence_id] || "Workflow sem nome",
-          sequenceType: seq.trigger_context?.campaignType === "dispatch" ? "dispatch" : "message",
+          sequenceName: resolvedWorkflowName,
+          sequenceType: triggerCtx.campaignType === "dispatch" ? "dispatch" : "message",
           campaignId: seq.campaign_id,
           status: mappedStatus,
           isManuallyPaused,
@@ -155,38 +251,74 @@ export function useLeadExecutions({ leadId, leadPhone }: UseLeadExecutionsOption
           finishedAt: null,
           durationMs: null,
           currentNodeId: seq.current_node_id || null,
-          currentNodeName: nodeName,
+          currentNodeName: stepName,
+          waitingType,
+          delayFormatted,
           resumeAt: seq.resume_at || null,
           errorMessage: seq.error_message || null,
-          triggerType: (seq.trigger_context?.triggerType as string) || "manual",
-          triggerPayload: seq.trigger_context || null,
+          triggerType: (triggerCtx.triggerType as string) || "manual",
+          triggerPayload: triggerCtx,
         });
       }
 
       // Merge / append workflow_executions
       for (const wf of rawWf) {
-        const isManuallyPaused = !!wf.trigger_payload?.manually_paused;
+        const triggerPayload = (wf.trigger_payload || {}) as Record<string, any>;
+        const isManuallyPaused = !!triggerPayload.manually_paused;
+        const isWfDelay = !!triggerPayload.resumeAt || triggerPayload.waitingType === "delay";
+        const isWfUserInput = triggerPayload.waitingType === "user_input";
+
         let mappedStatus: ExecutionDisplayStatus = "running";
         if (wf.status === "success") mappedStatus = "completed";
         else if (wf.status === "error") mappedStatus = "error";
         else if (wf.status === "cancelled") mappedStatus = "cancelled";
-        else if (wf.status === "waiting") mappedStatus = isManuallyPaused ? "paused" : "waiting";
-        else if (wf.status === "running") mappedStatus = "running";
+        else if (wf.status === "waiting") {
+          if (isManuallyPaused) mappedStatus = "paused";
+          else if (isWfDelay) mappedStatus = "waiting_delay";
+          else if (isWfUserInput) mappedStatus = "waiting_user_input";
+          else mappedStatus = "waiting";
+        } else if (wf.status === "running") {
+          if (isWfDelay) mappedStatus = "waiting_delay";
+          else if (isWfUserInput) mappedStatus = "waiting_user_input";
+          else mappedStatus = "running";
+        }
 
         const existing = itemsMap.get(wf.id);
         if (existing) {
-          // Enrich existing active execution with duration/history if finished
           if (wf.finished_at) existing.finishedAt = wf.finished_at;
           if (wf.duration_ms) existing.durationMs = wf.duration_ms;
           if (wf.error_message) existing.errorMessage = wf.error_message;
           if (wf.status === "cancelled" || wf.status === "error" || wf.status === "success") {
             existing.status = mappedStatus;
           }
+          if (existing.sequenceName === "Workflow de Mensagens" || existing.sequenceName === "Workflow sem nome") {
+            const betterName = sequenceNamesMap[wf.sequence_id] || sequenceNamesMap[wf.campaign_id] || triggerPayload.workflowName;
+            if (betterName) existing.sequenceName = betterName;
+          }
         } else {
+          const resolvedWorkflowName =
+            sequenceNamesMap[wf.sequence_id] ||
+            sequenceNamesMap[wf.campaign_id] ||
+            triggerPayload.workflowName ||
+            triggerPayload.sequenceName ||
+            "Workflow de Mensagens";
+
+          let stepName = "Aguardando próxima etapa";
+          let waitingType: "delay" | "user_input" | "poll" | "ura" | "call" | null = null;
+          let delayFormatted: string | null = triggerPayload.delayFormatted || null;
+
+          if (isWfUserInput) {
+            waitingType = "user_input";
+            stepName = "Aguardando resposta do usuário";
+          } else if (isWfDelay) {
+            waitingType = "delay";
+            stepName = `Delay ${delayFormatted || "30 segundos"}`;
+          }
+
           itemsMap.set(wf.id, {
             id: wf.id,
             sequenceId: wf.sequence_id,
-            sequenceName: sequenceNamesMap[wf.sequence_id] || "Workflow sem nome",
+            sequenceName: resolvedWorkflowName,
             sequenceType: wf.sequence_type || "message",
             campaignId: wf.campaign_id,
             status: mappedStatus,
@@ -195,8 +327,10 @@ export function useLeadExecutions({ leadId, leadPhone }: UseLeadExecutionsOption
             finishedAt: wf.finished_at,
             durationMs: wf.duration_ms,
             currentNodeId: null,
-            currentNodeName: null,
-            resumeAt: null,
+            currentNodeName: stepName,
+            waitingType,
+            delayFormatted,
+            resumeAt: triggerPayload.resumeAt || null,
             errorMessage: wf.error_message,
             triggerType: wf.trigger_type,
             triggerPayload: wf.trigger_payload,
@@ -206,15 +340,15 @@ export function useLeadExecutions({ leadId, leadPhone }: UseLeadExecutionsOption
 
       // Sort: active/paused first, then newest started_at
       return Array.from(itemsMap.values()).sort((a, b) => {
-        const isAActive = a.status === "running" || a.status === "waiting" || a.status === "paused";
-        const isBActive = b.status === "running" || b.status === "waiting" || b.status === "paused";
+        const isAActive = a.status === "running" || a.status === "waiting" || a.status === "waiting_delay" || a.status === "waiting_user_input" || a.status === "paused";
+        const isBActive = b.status === "running" || b.status === "waiting" || b.status === "waiting_delay" || b.status === "waiting_user_input" || b.status === "paused";
         if (isAActive && !isBActive) return -1;
         if (!isAActive && isBActive) return 1;
         return new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime();
       });
     },
     enabled: !!(leadId || cleanPhone),
-    refetchInterval: 5000,
+    refetchInterval: 3000,
   });
 
   // Realtime subscription for execution updates
@@ -248,7 +382,6 @@ export function useLeadExecutions({ leadId, leadPhone }: UseLeadExecutionsOption
         body: { action: "pause", executionId },
       });
       if (error) {
-        // Fallback: direct table updates
         await Promise.all([
           supabase.from("sequence_executions").update({ status: "paused" }).eq("id", executionId),
           supabase.from("workflow_executions").update({ status: "waiting" }).eq("id", executionId),
@@ -272,7 +405,6 @@ export function useLeadExecutions({ leadId, leadPhone }: UseLeadExecutionsOption
         body: { action: "stop", executionId },
       });
       if (error) {
-        // Fallback: direct table updates
         await Promise.all([
           supabase.from("sequence_executions").update({ status: "cancelled", error_message: "Cancelado pelo operador" }).eq("id", executionId),
           supabase.from("workflow_executions").update({ status: "cancelled", finished_at: new Date().toISOString() }).eq("id", executionId),
@@ -310,7 +442,12 @@ export function useLeadExecutions({ leadId, leadPhone }: UseLeadExecutionsOption
   // Filtered lists
   const activeExecutions = useMemo(() => {
     return executions.filter(
-      (e) => e.status === "running" || e.status === "waiting" || e.status === "paused"
+      (e) =>
+        e.status === "running" ||
+        e.status === "waiting" ||
+        e.status === "waiting_delay" ||
+        e.status === "waiting_user_input" ||
+        e.status === "paused"
     );
   }, [executions]);
 
