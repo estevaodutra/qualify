@@ -9,6 +9,7 @@ import { useQuickReplies } from "@/hooks/useQuickReplies";
 import { QuickReply, QuickReplyContentType, QuickReplyAction } from "@/types/quickReplyTypes";
 import { resolveVariables } from "@/utils/variableResolver";
 import QuickRepliesPanelPopover from "./quick-replies/QuickRepliesPanelPopover";
+import LeadExecutionsButton from "./executions/LeadExecutionsButton";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -708,6 +709,14 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, ext
           {/* Quick Replies Fast Selection Panel (⚡) */}
           <QuickRepliesPanelPopover
             onSelectReply={applyQuickReply}
+            disabled={isSending || isUploading}
+          />
+
+          {/* Workflow Executions Manager Button */}
+          <LeadExecutionsButton
+            leadId={leadId}
+            leadPhone={leadData?.phone}
+            leadName={leadData?.name}
             disabled={isSending || isUploading}
           />
         </div>
