@@ -158,17 +158,21 @@ export async function processMessageEvent(
             }
           }
 
-          // Find the connection from the waiting node to the next step
+          // Find the connection from the waiting node to the next step (success / default branch, NOT timeout and NOT error)
           const { data: connections } = await supabase
             .from("sequence_connections")
-            .select("target_node_id")
+            .select("target_node_id, condition_path")
             .eq("sequence_id", pendingInput.sequence_id)
             .eq("source_node_id", pendingInput.node_id);
 
-          const nextNodeId = connections?.[0]?.target_node_id || null;
+          const successConn = (connections || []).find((c: any) => 
+            c.condition_path !== "timeout" && c.condition_path !== "error"
+          ) || (connections || [])[0];
+
+          const nextNodeId = successConn?.target_node_id || null;
 
           if (nextNodeId) {
-            console.log(`[MessageController] Resuming sequence ${pendingInput.sequence_id} from node ${nextNodeId} for phone ${senderPhone}`);
+            console.log(`[MessageController] Resuming sequence ${pendingInput.sequence_id} from node ${nextNodeId} (condition_path: ${successConn?.condition_path || "default"}) for phone ${senderPhone}`);
             const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
             const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 

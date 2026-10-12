@@ -459,6 +459,99 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ============= PROCESS EXPIRED USER INPUTS (TIMEOUT BRANCH) =============
+    try {
+      const nowIso = now.toISOString();
+      const { data: expiredInputs, error: expiredError } = await supabase
+        .from("workflow_user_inputs")
+        .select("*")
+        .eq("status", "waiting")
+        .lte("expires_at", nowIso)
+        .limit(50);
+
+      if (expiredError) {
+        console.error("[Scheduler] Error fetching expired user inputs:", expiredError);
+      } else if (expiredInputs && expiredInputs.length > 0) {
+        console.log(`[Scheduler] Found ${expiredInputs.length} expired user input(s) waiting for response`);
+
+        for (const input of expiredInputs) {
+          try {
+            // Mark as timeout immediately to prevent duplicate runs
+            await supabase
+              .from("workflow_user_inputs")
+              .update({
+                status: "timeout",
+                updated_at: nowIso,
+              })
+              .eq("id", input.id);
+
+            console.log(`[Scheduler] Marked user input ${input.id} as timeout (node ${input.node_id}, sequence ${input.sequence_id}, phone ${input.phone})`);
+
+            // Find timeout connection
+            const { data: connections } = await supabase
+              .from("sequence_connections")
+              .select("target_node_id, condition_path")
+              .eq("sequence_id", input.sequence_id)
+              .eq("source_node_id", input.node_id);
+
+            const timeoutConn = (connections || []).find((c: any) => c.condition_path === "timeout");
+            const timeoutNodeId = timeoutConn?.target_node_id || null;
+
+            if (timeoutNodeId) {
+              console.log(`[Scheduler] Resuming sequence ${input.sequence_id} via timeout path node ${timeoutNodeId} for phone ${input.phone}`);
+
+              const timeoutResponse = await fetch(`${supabaseUrl}/functions/v1/trigger-sequence`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${supabaseServiceKey}`,
+                },
+                body: JSON.stringify({
+                  sequenceId: input.sequence_id,
+                  companyId: input.company_id,
+                  userId: input.user_id,
+                  leadId: input.lead_id,
+                  phone: input.phone,
+                  startFromNodeId: timeoutNodeId,
+                  resumedExecution: true,
+                  executionId: input.execution_id,
+                  triggerContext: {
+                    resumedFromUserInput: true,
+                    resumedAsTimeout: true,
+                    resumeNodeId: timeoutNodeId,
+                    userInputField: input.target_field,
+                    respondentPhone: input.phone,
+                    leadId: input.lead_id,
+                    companyId: input.company_id,
+                    instanceId: input.instance_id,
+                  }
+                }),
+              });
+
+              const timeoutResText = await timeoutResponse.text();
+              console.log(`[Scheduler] Timeout trigger response for ${input.id}:`, timeoutResText.substring(0, 300));
+            } else {
+              console.log(`[Scheduler] User input ${input.id} timed out, but no timeout branch connection was configured for node ${input.node_id}`);
+              if (input.execution_id) {
+                await supabase
+                  .from("workflow_executions")
+                  .update({
+                    status: "completed",
+                    updated_at: nowIso,
+                  })
+                  .eq("id", input.execution_id)
+                  .eq("status", "waiting");
+              }
+            }
+          } catch (itemErr) {
+            console.error(`[Scheduler] Error handling expired user input ${input.id}:`, itemErr);
+          }
+        }
+      }
+    } catch (expiredBlockErr) {
+      console.error("[Scheduler] Error in expired user inputs block:", expiredBlockErr);
+    }
+
     // ============= PROCESS SCHEDULED MESSAGES =============
 
     // Fetch all active scheduled messages

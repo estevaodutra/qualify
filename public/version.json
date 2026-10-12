@@ -1,6 +1,6 @@
 {
-  "commit": "f6947362ead1fb845538841dc457e7dfa906d35d",
-  "shortCommit": "f694736",
-  "message": "fix(workflows): corrigir ReferenceError importando useCallback e useEffect no ExecutionCanvas",
-  "builtAt": "2026-10-10T16:32:01.243Z"
+  "commit": "be2992b62083967869aade3b019ae3f9f224ec0f",
+  "shortCommit": "be2992b",
+  "message": "fix(workflows): fix group destinations target and execution canvas node matching",
+  "builtAt": "2026-10-12T13:12:04.916Z"
 }

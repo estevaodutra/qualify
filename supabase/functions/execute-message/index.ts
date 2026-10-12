@@ -3991,8 +3991,12 @@ Deno.serve(async (req) => {
           if (hasSentUserInputInSubMessages) {
             console.log(`[ExecuteMessage] ⏸️ User Input message sent in content node ${node.id}. Pausing workflow ${workflowExecutionId} to wait for reply...`);
 
-            const nextConn = connections.find(c => c.source_node_id === node.id);
+            const nextConn = connections.find(c => c.source_node_id === node.id && c.condition_path !== "timeout" && c.condition_path !== "error")
+              || connections.find(c => c.source_node_id === node.id);
             const nextNodeId = nextConn ? nextConn.target_node_id : null;
+
+            const timeoutConn = connections.find(c => c.source_node_id === node.id && c.condition_path === "timeout");
+            const timeoutNodeId = timeoutConn ? timeoutConn.target_node_id : null;
 
             for (const dest of activeDestinations) {
               const rawDestPhone = triggerContext?.respondentPhone || (dest.group_jid ? dest.group_jid.split("@")[0] : "");
@@ -4041,6 +4045,7 @@ Deno.serve(async (req) => {
                   instanceId: activeInstanceId,
                   waitingNodeId: node.id,
                   resumeNodeId: nextNodeId,
+                  timeoutNodeId: timeoutNodeId,
                   waitingType: "user_input"
                 }
               })
@@ -4059,6 +4064,7 @@ Deno.serve(async (req) => {
                   instanceId: activeInstanceId,
                   waitingNodeId: node.id,
                   resumeNodeId: nextNodeId,
+                  timeoutNodeId: timeoutNodeId,
                   waitingType: "user_input"
                 },
                 nodes_data: sortedNodes,
@@ -4120,7 +4126,8 @@ Deno.serve(async (req) => {
             );
           }
           
-          const nextConn = connections.find(c => c.source_node_id === node.id);
+          const nextConn = connections.find(c => c.source_node_id === node.id && c.condition_path !== "timeout" && c.condition_path !== "error")
+            || connections.find(c => c.source_node_id === node.id);
           currentNodeId = nextConn ? nextConn.target_node_id : null;
           nodesProcessed++;
           continue;
@@ -4884,8 +4891,12 @@ Deno.serve(async (req) => {
               if (node.node_type === "user_input" || node.node_type === "question" || node.node_type === "pergunta") {
                 console.log(`[ExecuteMessage] ⏸️ Standalone user_input message sent in node ${node.id}. Pausing workflow ${workflowExecutionId}...`);
 
-                const nextConn = connections.find(c => c.source_node_id === node.id);
+                const nextConn = connections.find(c => c.source_node_id === node.id && c.condition_path !== "timeout" && c.condition_path !== "error")
+                  || connections.find(c => c.source_node_id === node.id);
                 const nextNodeId = nextConn ? nextConn.target_node_id : null;
+
+                const timeoutConn = connections.find(c => c.source_node_id === node.id && c.condition_path === "timeout");
+                const timeoutNodeId = timeoutConn ? timeoutConn.target_node_id : null;
 
                 const rawDestPhone = triggerContext?.respondentPhone || (dest.group_jid ? dest.group_jid.split("@")[0] : "");
                 const destPhoneClean = rawDestPhone ? rawDestPhone.replace(/\D/g, "") : "";
@@ -4920,6 +4931,7 @@ Deno.serve(async (req) => {
                       instanceId: activeInstanceId,
                       waitingNodeId: node.id,
                       resumeNodeId: nextNodeId,
+                      timeoutNodeId: timeoutNodeId,
                       waitingType: "user_input"
                     }
                   })
@@ -4938,6 +4950,7 @@ Deno.serve(async (req) => {
                       instanceId: activeInstanceId,
                       waitingNodeId: node.id,
                       resumeNodeId: nextNodeId,
+                      timeoutNodeId: timeoutNodeId,
                       waitingType: "user_input"
                     },
                     nodes_data: sortedNodes,
@@ -5005,7 +5018,8 @@ Deno.serve(async (req) => {
         // Advance to the next connected node — this branch handles every
         // "sendable" node type that fell through the specific-type checks
         // above (message/media/poll/buttons/list/etc).
-        const nextConn = connections.find(c => c.source_node_id === node.id);
+        const nextConn = connections.find(c => c.source_node_id === node.id && c.condition_path !== "timeout" && c.condition_path !== "error")
+          || connections.find(c => c.source_node_id === node.id);
         currentNodeId = nextConn ? nextConn.target_node_id : null;
         nodesProcessed++;
       }
