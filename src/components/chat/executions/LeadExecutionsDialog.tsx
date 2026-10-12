@@ -36,6 +36,7 @@ interface LeadExecutionsDialogProps {
   leadId?: string;
   leadPhone?: string;
   leadName?: string;
+  executionsData?: ReturnType<typeof useLeadExecutions>;
 }
 
 export default function LeadExecutionsDialog({
@@ -44,8 +45,14 @@ export default function LeadExecutionsDialog({
   leadId,
   leadPhone,
   leadName,
+  executionsData,
 }: LeadExecutionsDialogProps) {
   const { activeCompanyId } = useCompany();
+  const fallbackData = useLeadExecutions({
+    leadId: executionsData ? undefined : (open ? leadId : undefined),
+    leadPhone: executionsData ? undefined : (open ? leadPhone : undefined),
+  });
+
   const {
     activeExecutions,
     historyExecutions,
@@ -57,7 +64,7 @@ export default function LeadExecutionsDialog({
     isStopping,
     resumeExecution,
     isResuming,
-  } = useLeadExecutions({ leadId, leadPhone });
+  } = executionsData || fallbackData;
 
   const [activeTab, setActiveTab] = useState<"active" | "history">("active");
   const [executionToStop, setExecutionToStop] = useState<LeadExecutionItem | null>(null);

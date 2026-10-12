@@ -18,7 +18,8 @@ export default function LeadExecutionsButton({
   disabled,
 }: LeadExecutionsButtonProps) {
   const [open, setOpen] = useState(false);
-  const { activeCount, isLoading } = useLeadExecutions({ leadId, leadPhone });
+  const leadExecutions = useLeadExecutions({ leadId, leadPhone });
+  const { activeCount, isLoading } = leadExecutions;
 
   return (
     <>
@@ -68,6 +69,7 @@ export default function LeadExecutionsButton({
         leadId={leadId}
         leadPhone={leadPhone}
         leadName={leadName}
+        executionsData={leadExecutions}
       />
     </>
   );

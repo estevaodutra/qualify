@@ -221,8 +221,9 @@ export function useLeadExecutions({ leadId, leadPhone }: UseLeadExecutionsOption
   useEffect(() => {
     if (!user || (!leadId && !cleanPhone)) return;
 
+    const uniqueChannelId = `lead-exec:${leadId || cleanPhone}:${Math.random().toString(36).substring(2, 9)}`;
     const channel = supabase
-      .channel(`lead-executions-${leadId || cleanPhone}`)
+      .channel(uniqueChannelId)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "sequence_executions" },
