@@ -439,22 +439,50 @@ export function useLeadExecutions({ leadId, leadPhone }: UseLeadExecutionsOption
     },
   });
 
-  // Filtered lists
-  const activeExecutions = useMemo(() => {
-    return executions.filter(
-      (e) =>
-        e.status === "running" ||
-        e.status === "waiting" ||
-        e.status === "waiting_delay" ||
-        e.status === "waiting_user_input" ||
-        e.status === "paused"
-    );
-  }, [executions]);
+  // Filtered lists (strictly enforcing 1 active execution per workflow)
+  const { activeExecutions, historyExecutions } = useMemo(() => {
+    const rawActive: LeadExecutionItem[] = [];
+    const rawHistory: LeadExecutionItem[] = [];
 
-  const historyExecutions = useMemo(() => {
-    return executions.filter(
-      (e) => e.status === "completed" || e.status === "cancelled" || e.status === "error"
-    );
+    for (const item of executions) {
+      const isActive =
+        item.status === "running" ||
+        item.status === "waiting" ||
+        item.status === "waiting_delay" ||
+        item.status === "waiting_user_input" ||
+        item.status === "paused";
+
+      if (isActive) {
+        rawActive.push(item);
+      } else {
+        rawHistory.push(item);
+      }
+    }
+
+    // Deduplicate active executions by sequenceId / sequenceName so only ONE active execution per workflow exists
+    const dedupedActive: LeadExecutionItem[] = [];
+    const seenSequences = new Set<string>();
+
+    // rawActive is already sorted by startedAt descending
+    for (const item of rawActive) {
+      const key = item.sequenceId || item.sequenceName || item.id;
+      if (!seenSequences.has(key)) {
+        seenSequences.add(key);
+        dedupedActive.push(item);
+      } else {
+        // Older duplicate active execution of the same sequence moved to history
+        rawHistory.push({
+          ...item,
+          status: "cancelled",
+          errorMessage: item.errorMessage || "Substituída por execução mais recente",
+        });
+      }
+    }
+
+    return {
+      activeExecutions: dedupedActive,
+      historyExecutions: rawHistory,
+    };
   }, [executions]);
 
   const activeCount = activeExecutions.length;

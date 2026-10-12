@@ -1920,9 +1920,65 @@ Deno.serve(async (req) => {
 
       let workflowExecutionId: string = crypto.randomUUID();
       globalWorkflowExecutionId = workflowExecutionId;
+
+      // ── REGRA DE EXECUÇÃO ÚNICA POR WORKFLOW POR LEAD ──────────────────────────
+      const effectiveLeadId = triggerContext?.leadId || triggerContext?.contactId;
+      const effectivePhone = (triggerContext?.respondentPhone || triggerContext?.contactPhone || "") as string;
+      const cleanPhone = effectivePhone ? effectivePhone.replace(/\D/g, "") : "";
+
+      if (effectiveSequenceId && (effectiveLeadId || cleanPhone)) {
+        try {
+          let existingExecQuery = supabase
+            .from("sequence_executions")
+            .select("id, status, created_at")
+            .eq("sequence_id", effectiveSequenceId)
+            .in("status", ["running", "paused", "waiting"]);
+
+          if (effectiveLeadId) {
+            existingExecQuery = existingExecQuery.or(`trigger_context->>leadId.eq.${effectiveLeadId},trigger_context->>contactId.eq.${effectiveLeadId}`);
+          } else if (cleanPhone) {
+            existingExecQuery = existingExecQuery.or(`trigger_context->>respondentPhone.ilike.%${cleanPhone}%,trigger_context->>contactPhone.ilike.%${cleanPhone}%`);
+          }
+
+          const { data: activeList } = await existingExecQuery;
+
+          if (activeList && activeList.length > 0) {
+            if (isResumedExecution) {
+              // Retomada: se não tiver executionId passado, reutilizar a execução ativa existente!
+              if (!executionId) {
+                workflowExecutionId = activeList[0].id;
+              } else {
+                workflowExecutionId = executionId;
+              }
+              // Marcar qualquer outra execução duplicada desse mesmo fluxo para esse lead como superseded/concluída
+              const dupIds = activeList.filter(e => e.id !== workflowExecutionId).map(e => e.id);
+              if (dupIds.length > 0) {
+                console.log(`[ExecuteMessage] Limpando ${dupIds.length} execuções duplicadas da sequência ${effectiveSequenceId} no lead ${effectiveLeadId || cleanPhone}`);
+                await Promise.all([
+                  supabase.from("sequence_executions").update({ status: "superseded", error_message: "Substituído por retomada de execução", updated_at: new Date().toISOString() }).in("id", dupIds),
+                  supabase.from("workflow_executions").update({ status: "success", finished_at: new Date().toISOString() }).in("id", dupIds),
+                ]);
+              }
+            } else {
+              // Nova execução do mesmo fluxo para o mesmo lead:
+              // Regra: "o mesmo fluxo não pode executar ao mesmo tempo dentro do mesmo lead, não importa a fase"
+              // Cancelar a execução anterior para que apenas a nova permaneça ativa
+              console.log(`[ExecuteMessage] Substituindo ${activeList.length} execução(ões) anterior(es) da sequência ${effectiveSequenceId} no lead ${effectiveLeadId || cleanPhone}`);
+              const oldIds = activeList.map(e => e.id);
+              await Promise.all([
+                supabase.from("sequence_executions").update({ status: "superseded", error_message: "Substituído por nova execução do mesmo fluxo", updated_at: new Date().toISOString() }).in("id", oldIds),
+                supabase.from("workflow_executions").update({ status: "cancelled", finished_at: new Date().toISOString(), error_message: "Substituído por nova execução do mesmo fluxo" }).in("id", oldIds),
+              ]);
+            }
+          }
+        } catch (checkErr) {
+          console.warn("[ExecuteMessage] Erro na verificação de deduplicação (não-fatal):", checkErr);
+        }
+      }
+
       try {
-        if (isResumedExecution && executionId) {
-          workflowExecutionId = executionId;
+        if (isResumedExecution && (executionId || workflowExecutionId)) {
+          if (executionId) workflowExecutionId = executionId;
           await supabase.from("workflow_executions").update({ status: "running" }).eq("id", workflowExecutionId);
         } else {
           const { data: newExecution, error: newExecutionError } = await supabase
@@ -4093,6 +4149,7 @@ Deno.serve(async (req) => {
             await supabase
               .from("sequence_executions")
               .upsert({
+                id: workflowExecutionId,
                 user_id: userId,
                 campaign_id: effectiveCampaignId,
                 sequence_id: effectiveSequenceId,
@@ -4137,6 +4194,7 @@ Deno.serve(async (req) => {
             await supabase
               .from("sequence_executions")
               .upsert({
+                id: workflowExecutionId,
                 user_id: userId,
                 campaign_id: effectiveCampaignId,
                 sequence_id: effectiveSequenceId,
@@ -4798,6 +4856,7 @@ Deno.serve(async (req) => {
             await supabase
               .from("sequence_executions")
               .upsert({
+                id: workflowExecutionId,
                 user_id: userId,
                 campaign_id: effectiveCampaignId,
                 sequence_id: effectiveSequenceId,
@@ -5115,6 +5174,7 @@ Deno.serve(async (req) => {
                 await supabase
                   .from("sequence_executions")
                   .upsert({
+                    id: workflowExecutionId,
                     user_id: userId,
                     campaign_id: effectiveCampaignId,
                     sequence_id: effectiveSequenceId,

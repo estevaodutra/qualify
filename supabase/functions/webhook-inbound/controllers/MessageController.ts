@@ -283,25 +283,47 @@ export async function processMessageEvent(
           const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
           const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
-          const effectivePhone = cleanPhone || pendingInput.phone || "";
-          const respondentName = (isNameField && !isMediaOnly && trimmedText) ? trimmedText : (context.senderName || effectivePhone);
+          // Clean up any duplicate active executions for this same sequence + lead
+          if (pendingInput.sequence_id && (pendingInput.lead_id || leadIdToUpdate || effectivePhone)) {
+            try {
+              let dupQuery = supabase
+                .from("sequence_executions")
+                .select("id")
+                .eq("sequence_id", pendingInput.sequence_id)
+                .in("status", ["running", "paused", "waiting"]);
 
-          fetch(`${supabaseUrl}/functions/v1/trigger-sequence`, {
+              if (pendingInput.execution_id) {
+                dupQuery = dupQuery.neq("id", pendingInput.execution_id);
+              }
+              const resolvedId = pendingInput.lead_id || leadIdToUpdate;
+              if (resolvedId) {
+                dupQuery = dupQuery.or(`trigger_context->>leadId.eq.${resolvedId},trigger_context->>contactId.eq.${resolvedId}`);
+              } else if (effectivePhone) {
+                dupQuery = dupQuery.or(`trigger_context->>respondentPhone.ilike.%${effectivePhone.slice(-8)}%,trigger_context->>contactPhone.ilike.%${effectivePhone.slice(-8)}%`);
+              }
+              const { data: dups } = await dupQuery;
+              if (dups && dups.length > 0) {
+                const dupIds = dups.map(d => d.id);
+                console.log(`[MessageController] Closing ${dupIds.length} duplicate execution(s) for sequence ${pendingInput.sequence_id}`);
+                await supabase.from("sequence_executions").update({ status: "superseded", error_message: "Substituído por retomada" }).in("id", dupIds);
+              }
+            } catch (dupErr) {
+              console.warn("[MessageController] Error cleaning duplicates:", dupErr);
+            }
+          }
+
+          fetch(`${supabaseUrl}/functions/v1/execute-message`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               "Authorization": `Bearer ${supabaseServiceKey}`,
             },
             body: JSON.stringify({
+              campaignId: pendingInput.company_id || pendingInput.sequence_id,
               sequenceId: pendingInput.sequence_id,
-              companyId: pendingInput.company_id,
-              userId: pendingInput.user_id,
-              leadId: pendingInput.lead_id || leadIdToUpdate,
-              phone: effectivePhone,
-              groupJid: pendingInput.group_jid || (isGroup ? chatJid : null),
+              executionId: pendingInput.execution_id,
               startFromNodeId: nextNodeId,
               resumedExecution: true,
-              executionId: pendingInput.execution_id,
               triggerContext: {
                 resumedFromUserInput: true,
                 resumeNodeId: nextNodeId,

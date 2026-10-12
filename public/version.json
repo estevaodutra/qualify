@@ -1,6 +1,6 @@
 {
-  "commit": "f271c46d7c6a6c26cd8f6614f551f1ccf8a76764",
-  "shortCommit": "f271c46",
-  "message": "fix(workflow): diagnostico claro de erro de envio e alerta de audio ausente",
-  "builtAt": "2026-10-12T15:01:42.624Z"
+  "commit": "907ca744a0f4adf201ebc3948ab02099ec18f254",
+  "shortCommit": "907ca74",
+  "message": "feat(chat): exibir node exato (delay com contagem regressiva ao vivo e aguardando resposta do usuario) e resolucao de nome de workflow",
+  "builtAt": "2026-10-12T19:41:02.754Z"
 }
