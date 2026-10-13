@@ -1,6 +1,6 @@
 {
-  "commit": "a99cf38ef69995d5a3824ca80f395799b4d6b81f",
-  "shortCommit": "a99cf38",
-  "message": "fix(variables): load custom fields from database, fix search in variable picker and destination selector",
-  "builtAt": "2026-10-13T16:38:40.932Z"
+  "commit": "afaf54d315d0788749ddbe36d49c8b0c9de3e03c",
+  "shortCommit": "afaf54d",
+  "message": "fix(workflows): ensure group workflows always dispatch to WhatsApp groups and never to private chat",
+  "builtAt": "2026-10-13T17:04:05.781Z"
 }

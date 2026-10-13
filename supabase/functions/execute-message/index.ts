@@ -23,19 +23,33 @@ const syncSentMessageToChat = async (
     messageType?: string | null;
     mediaType?: string | null;
     externalMessageId?: string | null;
+    isGroup?: boolean;
+    groupJid?: string;
   }
 ) => {
   if (!params.phone || !params.companyId || (!params.body && !params.mediaUrl)) return;
-  const cleanPhone = params.phone.replace(/\D/g, "");
-  if (!cleanPhone) return;
+  const rawPhone = String(params.phone).trim();
+  const cleanPhone = rawPhone.replace(/\D/g, "");
+  if (!cleanPhone && !params.groupJid) return;
+
+  const isGroup = Boolean(
+    params.isGroup ||
+    rawPhone.includes("@g.us") ||
+    rawPhone.includes("-group") ||
+    params.groupJid?.includes("@g.us") ||
+    params.groupJid?.includes("-group") ||
+    cleanPhone.length > 15 ||
+    cleanPhone.startsWith("1203")
+  );
 
   try {
     let convId: string | null = null;
-    let targetLeadId: string | null = params.leadId || null;
+    // Se for grupo, NUNCA vincula a leadId! Impede que mensagens de grupos poluam o chat privado do lead
+    let targetLeadId: string | null = isGroup ? null : (params.leadId || null);
     const suffix = cleanPhone.slice(-8);
 
-    // Se leadId não foi fornecido, busca lead existente no banco pelo telefone ou sufixo
-    if (!targetLeadId) {
+    // Se NÃO for grupo e leadId não foi fornecido, busca lead existente no banco pelo telefone ou sufixo
+    if (!isGroup && !targetLeadId) {
       let leadQ = supabase.from("leads").select("id").limit(1);
       if (suffix.length >= 8) {
         leadQ = leadQ.or(`phone.eq.${cleanPhone},phone.ilike.%${suffix}`);
@@ -51,10 +65,10 @@ const syncSentMessageToChat = async (
       }
     }
 
-    // Busca conversa existente por lead_id OU por telefone (ou sufixo de 8 dígitos) estritamente NA MESMA instância
+    // Busca conversa existente estritamente NA MESMA instância
     let convQ = supabase
       .from("chat_conversations")
-      .select("id, lead_id, instance_id, contact_name")
+      .select("id, lead_id, instance_id, contact_name, contact_phone")
       .eq("company_id", params.companyId);
 
     if (params.instanceId) {
@@ -63,14 +77,25 @@ const syncSentMessageToChat = async (
       convQ = convQ.is("instance_id", null);
     }
 
-    if (targetLeadId && suffix.length >= 8) {
-      convQ = convQ.or(`lead_id.eq.${targetLeadId},contact_phone.eq.${cleanPhone},contact_phone.ilike.%${suffix}`);
-    } else if (targetLeadId) {
-      convQ = convQ.or(`lead_id.eq.${targetLeadId},contact_phone.eq.${cleanPhone}`);
-    } else if (suffix.length >= 8) {
-      convQ = convQ.or(`contact_phone.eq.${cleanPhone},contact_phone.ilike.%${suffix}`);
+    if (isGroup) {
+      // Para grupos: NUNCA associa a lead_id! Busca apenas a conversa do grupo pelo JID ou ID numérico do grupo
+      const resolvedGroupJid = params.groupJid || (rawPhone.includes("@g.us") ? rawPhone : `${cleanPhone}@g.us`);
+      const groupNum = cleanPhone;
+
+      convQ = convQ
+        .is("lead_id", null)
+        .or(`contact_phone.eq.${resolvedGroupJid},contact_phone.eq.${groupNum},contact_name.eq.${resolvedGroupJid},contact_name.eq.${groupNum}`);
     } else {
-      convQ = convQ.eq("contact_phone", cleanPhone);
+      // Para mensagens individuais: busca pela conversa do lead ou telefone
+      if (targetLeadId && suffix.length >= 8) {
+        convQ = convQ.or(`lead_id.eq.${targetLeadId},contact_phone.eq.${cleanPhone},contact_phone.ilike.%${suffix}`);
+      } else if (targetLeadId) {
+        convQ = convQ.or(`lead_id.eq.${targetLeadId},contact_phone.eq.${cleanPhone}`);
+      } else if (suffix.length >= 8) {
+        convQ = convQ.or(`contact_phone.eq.${cleanPhone},contact_phone.ilike.%${suffix}`);
+      } else {
+        convQ = convQ.eq("contact_phone", cleanPhone);
+      }
     }
 
     const { data: existingConvs } = await convQ.order("created_at", { ascending: false }).limit(1);
@@ -79,7 +104,7 @@ const syncSentMessageToChat = async (
     if (existingConv) {
       convId = existingConv.id;
       const updates: Record<string, any> = {};
-      if (!existingConv.lead_id && targetLeadId) updates.lead_id = targetLeadId;
+      if (!isGroup && !existingConv.lead_id && targetLeadId) updates.lead_id = targetLeadId;
       if (!existingConv.instance_id && params.instanceId) updates.instance_id = params.instanceId;
       if (Object.keys(updates).length > 0) {
         await supabase.from("chat_conversations").update(updates).eq("id", convId);
@@ -91,14 +116,19 @@ const syncSentMessageToChat = async (
     const previewText = params.body || (params.mediaUrl ? `[${effectiveMsgType === 'image' ? 'Imagem' : effectiveMsgType}]` : '[Mensagem]');
 
     if (!convId) {
+      const resolvedContactPhone = isGroup 
+        ? (params.groupJid || (rawPhone.includes("@g.us") ? rawPhone : `${cleanPhone}@g.us`))
+        : cleanPhone;
+      const resolvedContactName = params.name || resolvedContactPhone;
+
       const { data: newConv } = await supabase
         .from("chat_conversations")
         .insert({
           company_id: params.companyId,
           instance_id: params.instanceId || null,
-          lead_id: targetLeadId || null,
-          contact_phone: cleanPhone,
-          contact_name: params.name || cleanPhone,
+          lead_id: isGroup ? null : (targetLeadId || null),
+          contact_phone: resolvedContactPhone,
+          contact_name: resolvedContactName,
           status: "open",
           last_message_at: new Date().toISOString(),
           last_message_preview: previewText,
@@ -131,7 +161,7 @@ const syncSentMessageToChat = async (
         })
         .eq("id", convId);
 
-      console.log(`[ExecuteMessage] Synced sent message (${effectiveMsgType}) to chat conversation ${convId}`);
+      console.log(`[ExecuteMessage] Synced sent message (${effectiveMsgType}, isGroup=${isGroup}) to chat conversation ${convId}`);
     }
   } catch (err) {
     console.error("[ExecuteMessage] Failed to sync sent message to chat_messages:", err);
@@ -3626,14 +3656,23 @@ Deno.serve(async (req) => {
                 nodeResults.push({ destination: dest.group_jid, status: "sent" });
                 const msgText = (formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.caption || "") as string;
                 const mediaUrl = (formattedConfig.url || formattedConfig.mediaUrl || formattedConfig.image || formattedConfig.fileUrl || formattedConfig.audio || formattedConfig.video || formattedConfig.document || "") as string;
-                const destPhone = dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || "";
+                const isGroupDest = Boolean(
+                  dest.group_jid?.includes("@g.us") ||
+                  dest.group_jid?.includes("-group") ||
+                  !dest.isPrivate
+                );
+                const destPhone = isGroupDest
+                  ? (dest.group_jid || "")
+                  : (dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || "");
                 if ((msgText || mediaUrl) && destPhone) {
                   await syncSentMessageToChat(supabase, {
                     companyId: triggerContext?.companyId || typedCampaign?.company_id,
                     instanceId: activeInstanceId,
                     phone: destPhone,
-                    name: dest.group_name || triggerContext?.respondentName,
-                    leadId: triggerContext?.leadId || null,
+                    name: isGroupDest ? (dest.group_name || dest.group_jid) : (dest.group_name || triggerContext?.respondentName),
+                    leadId: isGroupDest ? null : (triggerContext?.leadId || null),
+                    isGroup: isGroupDest,
+                    groupJid: isGroupDest ? dest.group_jid : undefined,
                     body: msgText,
                     mediaUrl: mediaUrl || null,
                     messageType: node.node_type === "message" ? (mediaUrl ? "image" : "text") : node.node_type,
@@ -4158,15 +4197,34 @@ Deno.serve(async (req) => {
                   console.log(`[ExecuteMessage] ✅ Sub-message ${subNodeType} sent to ${dest.group_name}`);
                   const msgText = (formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.question || formattedConfig.caption || subMsg.content || subMsg.text || subMsg.message || subMsg.question || "") as string;
                   const mediaUrl = (formattedConfig.url || formattedConfig.mediaUrl || formattedConfig.image || formattedConfig.fileUrl || formattedConfig.audio || formattedConfig.video || formattedConfig.document || subMsg.url || subMsg.mediaUrl || subMsg.image || "") as string;
-                  const destPhone = (dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || triggerContext?.contactPhone || "") as string;
+                  const isGroupDest = !isSubNodePrivate && Boolean(
+                    isWorkflowGroupMode ||
+                    dest.group_jid?.includes("@g.us") ||
+                    dest.group_jid?.includes("-group") ||
+                    !dest.isPrivate
+                  );
+                  const destPhone = isGroupDest
+                    ? (dest.group_jid || "")
+                    : ((isSubNodePrivate && triggerContext?.respondentPhone)
+                        ? triggerContext.respondentPhone
+                        : (dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || triggerContext?.contactPhone || "")
+                      );
+                  const destName = isGroupDest
+                    ? (dest.group_name || dest.group_jid)
+                    : (isSubNodePrivate
+                        ? (triggerContext?.respondentName || triggerContext?.respondentPhone)
+                        : (dest.group_name || triggerContext?.respondentName)
+                      );
                   const effectiveCompanyId = triggerContext?.companyId || typedCampaign?.company_id || "dcb34e9a-1510-4137-aecd-cec0c6d548c4";
                   if ((msgText || mediaUrl) && destPhone) {
                     await syncSentMessageToChat(supabase, {
                       companyId: effectiveCompanyId,
                       instanceId: activeInstanceId,
                       phone: destPhone,
-                      name: dest.group_name || triggerContext?.respondentName,
-                      leadId: triggerContext?.leadId || null,
+                      name: destName,
+                      leadId: isGroupDest ? null : (triggerContext?.leadId || null),
+                      isGroup: isGroupDest,
+                      groupJid: isGroupDest ? dest.group_jid : undefined,
                       body: msgText,
                       mediaUrl: mediaUrl || null,
                       messageType: subNodeType === "message" ? (mediaUrl ? "image" : "text") : subNodeType,
@@ -5171,15 +5229,34 @@ Deno.serve(async (req) => {
 
               const msgText = (formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.question || formattedConfig.caption || "") as string;
               const mediaUrl = (formattedConfig.url || formattedConfig.mediaUrl || formattedConfig.image || formattedConfig.fileUrl || formattedConfig.audio || formattedConfig.video || formattedConfig.document || "") as string;
-              const destPhone = (dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || triggerContext?.contactPhone || "") as string;
+              const isGroupDest = !isNodePrivate && Boolean(
+                isWorkflowGroupMode ||
+                dest.group_jid?.includes("@g.us") ||
+                dest.group_jid?.includes("-group") ||
+                !dest.isPrivate
+              );
+              const destPhone = isGroupDest
+                ? (dest.group_jid || "")
+                : ((isNodePrivate && triggerContext?.respondentPhone)
+                    ? triggerContext.respondentPhone
+                    : (dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || triggerContext?.contactPhone || "")
+                  );
+              const destName = isGroupDest
+                ? (dest.group_name || dest.group_jid)
+                : (isNodePrivate
+                    ? (triggerContext?.respondentName || triggerContext?.respondentPhone)
+                    : (dest.group_name || triggerContext?.respondentName)
+                  );
               const effectiveCompanyId = triggerContext?.companyId || typedCampaign?.company_id || "dcb34e9a-1510-4137-aecd-cec0c6d548c4";
               if ((msgText || mediaUrl) && destPhone) {
                 await syncSentMessageToChat(supabase, {
                   companyId: effectiveCompanyId,
                   instanceId: activeInstanceId,
                   phone: destPhone,
-                  name: dest.group_name || triggerContext?.respondentName,
-                  leadId: triggerContext?.leadId || null,
+                  name: destName,
+                  leadId: isGroupDest ? null : (triggerContext?.leadId || null),
+                  isGroup: isGroupDest,
+                  groupJid: isGroupDest ? dest.group_jid : undefined,
                   body: msgText,
                   mediaUrl: mediaUrl || null,
                   messageType: node.node_type === "message" ? (mediaUrl ? "image" : "text") : node.node_type,
