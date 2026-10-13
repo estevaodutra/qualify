@@ -1720,6 +1720,40 @@ Deno.serve(async (req) => {
           result = result.replace(/\{option\}/gi, triggerContext.pollOptionText || "");
           result = result.replace(/\{\{opcao\}\}/gi, triggerContext.pollOptionText || "");
           result = result.replace(/\{opcao\}/gi, triggerContext.pollOptionText || "");
+
+          // User response from previous user_input / question
+          const userResp = triggerContext.userResponse || "";
+          result = result.replace(/\{\{userResponse\}\}/gi, userResp);
+          result = result.replace(/\{userResponse\}/gi, userResp);
+          result = result.replace(/\{\{user_response\}\}/gi, userResp);
+          result = result.replace(/\{user_response\}/gi, userResp);
+          result = result.replace(/\{\{resposta\}\}/gi, userResp);
+          result = result.replace(/\{resposta\}/gi, userResp);
+
+          // Email
+          const emailVal = triggerContext.email || (triggerContext.customFields?.email as string) || (triggerContext.customFields?.["e-mail"] as string) || "";
+          result = result.replace(/\{\{email\}\}/gi, emailVal);
+          result = result.replace(/\{email\}/gi, emailVal);
+          result = result.replace(/\{\{e-mail\}\}/gi, emailVal);
+          result = result.replace(/\{e-mail\}/gi, emailVal);
+
+          // Document / CPF / CNPJ
+          const docVal = triggerContext.document || (triggerContext.customFields?.document as string) || (triggerContext.customFields?.cpf as string) || (triggerContext.customFields?.cnpj as string) || "";
+          result = result.replace(/\{\{document\}\}/gi, docVal);
+          result = result.replace(/\{document\}/gi, docVal);
+          result = result.replace(/\{\{documento\}\}/gi, docVal);
+          result = result.replace(/\{documento\}/gi, docVal);
+          result = result.replace(/\{\{cpf\}\}/gi, docVal);
+          result = result.replace(/\{cpf\}/gi, docVal);
+          result = result.replace(/\{\{cnpj\}\}/gi, docVal);
+          result = result.replace(/\{cnpj\}/gi, docVal);
+
+          // Company
+          const compVal = triggerContext.company_name || (triggerContext.customFields?.company_name as string) || (triggerContext.customFields?.empresa as string) || "";
+          result = result.replace(/\{\{company_name\}\}/gi, compVal);
+          result = result.replace(/\{company_name\}/gi, compVal);
+          result = result.replace(/\{\{empresa\}\}/gi, compVal);
+          result = result.replace(/\{empresa\}/gi, compVal);
           
           // Custom fields from triggerContext
           if (triggerContext.customFields) {
@@ -2727,8 +2761,50 @@ Deno.serve(async (req) => {
           if (mappings && mappings.length > 0) {
             for (const dest of activeDestinations) {
               let phoneClean = dest.group_jid.split("@")[0].replace(/\D/g, "");
+              const candidatePhone = triggerContext?.respondentPhone ? triggerContext.respondentPhone.replace(/\D/g, "") : phoneClean;
+
+              // 0. Pre-fetch target lead if available, so its properties are available as variables
+              let targetLead: any = null;
+              if (triggerContext?.leadId) {
+                const { data: leadData } = await supabase
+                  .from("leads")
+                  .select("id, name, phone, email, company_name, document, source_type, tags, custom_fields")
+                  .eq("id", triggerContext.leadId)
+                  .maybeSingle();
+                targetLead = leadData;
+              } else if (candidatePhone) {
+                const suffix = candidatePhone.slice(-8);
+                const { data: leadData } = await supabase
+                  .from("leads")
+                  .select("id, name, phone, email, company_name, document, source_type, tags, custom_fields")
+                  .eq("company_id", typedCampaign.company_id || typedCampaign.company_id)
+                  .or(`phone.eq.${candidatePhone},phone.ilike.%${suffix}`)
+                  .maybeSingle();
+                targetLead = leadData;
+              }
+
+              if (targetLead && triggerContext) {
+                triggerContext.leadId = targetLead.id;
+                if (!triggerContext.respondentName && targetLead.name) triggerContext.respondentName = targetLead.name;
+                if (!triggerContext.respondentPhone && targetLead.phone) triggerContext.respondentPhone = targetLead.phone;
+                if (!triggerContext.customFields) triggerContext.customFields = {};
+                triggerContext.customFields["name"] = targetLead.name || "";
+                triggerContext.customFields["nome"] = targetLead.name || "";
+                triggerContext.customFields["phone"] = targetLead.phone || "";
+                triggerContext.customFields["telefone"] = targetLead.phone || "";
+                triggerContext.customFields["email"] = targetLead.email || "";
+                triggerContext.customFields["document"] = targetLead.document || "";
+                triggerContext.customFields["company_name"] = targetLead.company_name || "";
+                triggerContext.customFields["empresa"] = targetLead.company_name || "";
+                if (targetLead.custom_fields && typeof targetLead.custom_fields === "object") {
+                  for (const [cfKey, cfVal] of Object.entries(targetLead.custom_fields)) {
+                    triggerContext.customFields[cfKey] = cfVal;
+                    triggerContext.customFields[`custom_fields.${cfKey}`] = cfVal;
+                  }
+                }
+              }
               
-              // 1. Compute mappings FIRST so we can extract phone before finding/creating lead
+              // 1. Compute mappings
               const leadUpdates: Record<string, any> = {};
               const cfUpdates: Record<string, any> = {};
               const dealUpdates: Record<string, any> = {};
@@ -2738,19 +2814,15 @@ Deno.serve(async (req) => {
               for (const mapping of mappings) {
                 // Resolve source value
                 let rawVal = "";
-                let cleanSource = mapping.source || "";
-                
-                // If the UI wrapped the mapping in {{ ... }}, strip it out for webhook evaluation
-                if (cleanSource.startsWith("{{") && cleanSource.endsWith("}}")) {
-                  cleanSource = cleanSource.slice(2, -2).trim();
-                }
+                let cleanSource = (mapping.source || "").trim();
 
-                if (webhookPayload && cleanSource && (cleanSource.startsWith("body.") || cleanSource.startsWith("headers.") || cleanSource.startsWith("query_params.") || cleanSource === "method")) {
+                // If only a single raw webhook property (e.g. body.campo) without brackets
+                if (cleanSource && !cleanSource.includes("{") && webhookPayload && (cleanSource.startsWith("body.") || cleanSource.startsWith("headers.") || cleanSource.startsWith("query_params.") || cleanSource === "method")) {
                   rawVal = getValueFromPath(webhookPayload, cleanSource);
-                  console.log(`[ExecuteMessage] Extracted from webhook: ${cleanSource} => ${rawVal}`);
                 } else {
+                  // Resolve all variables (name, phone, userResponse, body.xxx, custom_fields) in the manual text
                   rawVal = replaceVariables(mapping.source || "");
-                  console.log(`[ExecuteMessage] Replaced variables for: ${mapping.source} => ${rawVal}`);
+                  console.log(`[ExecuteMessage] Resolved field_op source: "${mapping.source}" => "${rawVal}"`);
                 }
 
                 // Apply transformations
@@ -2846,22 +2918,24 @@ Deno.serve(async (req) => {
                 }
               }
 
-              let targetLead = null;
-              if (phoneClean) {
-                const { data: leadData } = await supabase
+              // Auto-create lead if not exists yet so custom fields are saved
+              if (!targetLead && (phoneClean || triggerContext?.respondentPhone)) {
+                const effectivePhone = phoneClean || triggerContext?.respondentPhone;
+                const { data: newLead } = await supabase
                   .from("leads")
+                  .insert({
+                    company_id: typedCampaign.company_id || triggerContext?.companyId,
+                    phone: effectivePhone,
+                    name: triggerContext?.respondentName || effectivePhone,
+                    custom_fields: {},
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                  })
                   .select("id, name, phone, email, company_name, document, source_type, tags, custom_fields")
-                  .eq("company_id", typedCampaign.company_id || typedCampaign.company_id)
-                  .eq("phone", phoneClean)
                   .maybeSingle();
-
-                targetLead = leadData;
+                targetLead = newLead;
                 if (targetLead && triggerContext) {
                   triggerContext.leadId = targetLead.id;
-                }
-                
-                if (!targetLead) {
-                  console.log(`[ExecuteMessage] ℹ️ Lead com telefone ${phoneClean} não encontrado para a operação de campo.`);
                 }
               }
 

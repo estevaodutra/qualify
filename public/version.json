@@ -1,6 +1,6 @@
 {
-  "commit": "5d3291b84f05235657f3a500fbfbe2dfdd58debd",
-  "shortCommit": "5d3291b",
-  "message": "fix(workflows): garantir execucao unica por fluxo por lead e reutilizar mesma execucao ao responder interacao",
-  "builtAt": "2026-10-13T15:15:08.483Z"
+  "commit": "26ece56b9324865182386723d1a8628b13f3c05e",
+  "shortCommit": "26ece56",
+  "message": "fix(custom-fields): isolar opcoes em tabela relacional custom_field_options e corrigir erro de options column",
+  "builtAt": "2026-10-13T15:33:25.598Z"
 }
