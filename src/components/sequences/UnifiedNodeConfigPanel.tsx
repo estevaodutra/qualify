@@ -57,7 +57,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { getNodeBlockDefinition, getDefaultConfigForSubType, isActionSubType } from "./nodeDefinitions";
 import { VariablePicker } from "./VariablePicker";
-import { normalizeDelayConfig, toDelayMs, formatDelayLabel } from "@/lib/workflows/delay";
+import { normalizeDelayConfig, toDelayMs, formatDelayLabel, fromDelayMs, DelayUnit } from "@/lib/workflows/delay";
 import { MediaUploader } from "@/components/group-campaigns/sequences/MediaUploader";
 import { WorkflowAudioPlayer } from "./WorkflowAudioPlayer";
 import { WorkflowVideoPlayer } from "./WorkflowVideoPlayer";
@@ -2489,15 +2489,73 @@ export function UnifiedNodeConfigPanel({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label>Tempo de Espera Máximo (minutos)</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={((currentConfig.timeoutMs as number) || 3600000) / 60000}
-                  onChange={e => updateConfig("timeoutMs", parseInt(e.target.value) * 60000)}
-                />
-              </div>
+              {(() => {
+                let unit = (currentConfig.timeoutUnit as DelayUnit) || "";
+                let value = typeof currentConfig.timeoutValue === "number" ? currentConfig.timeoutValue : undefined;
+
+                if (!unit || value === undefined) {
+                  // Legacy config fallback: previously the field was in minutes (e.g. 60 -> 3600000 ms)
+                  const ms = typeof currentConfig.timeoutMs === "number" && currentConfig.timeoutMs > 0 ? currentConfig.timeoutMs : 3600000;
+                  if (ms % 60000 === 0) {
+                    unit = "minutes";
+                    value = Math.max(1, Math.round(ms / 60000));
+                  } else {
+                    const derived = fromDelayMs(ms);
+                    unit = derived.unit;
+                    value = derived.value;
+                  }
+                }
+
+                const handleTimeoutValueChange = (newVal: number) => {
+                  const val = Math.max(1, newVal || 1);
+                  const ms = toDelayMs(val, unit);
+                  updateMultipleConfigs({
+                    timeoutValue: val,
+                    timeoutUnit: unit,
+                    timeoutMs: ms,
+                  });
+                };
+
+                const handleTimeoutUnitChange = (newUnit: DelayUnit) => {
+                  const val = Math.max(1, value || 1);
+                  const ms = toDelayMs(val, newUnit);
+                  updateMultipleConfigs({
+                    timeoutValue: val,
+                    timeoutUnit: newUnit,
+                    timeoutMs: ms,
+                  });
+                };
+
+                return (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-slate-700">Tempo de Espera Máximo</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        type="number"
+                        min="1"
+                        value={value}
+                        onChange={(e) => handleTimeoutValueChange(parseInt(e.target.value) || 1)}
+                        className="h-9 rounded-xl bg-white"
+                        placeholder="Ex: 60"
+                      />
+                      <Select
+                        value={unit}
+                        onValueChange={(val) => handleTimeoutUnitChange(val as DelayUnit)}
+                      >
+                        <SelectTrigger className="h-9 rounded-xl bg-white border-border/40">
+                          <SelectValue placeholder="Selecione a unidade" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="seconds">Segundos</SelectItem>
+                          <SelectItem value="minutes">Minutos</SelectItem>
+                          <SelectItem value="hours">Horas</SelectItem>
+                          <SelectItem value="days">Dias</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="flex items-center justify-between">
                 <Label>Salvar mídia recebida?</Label>
                 <Switch

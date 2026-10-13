@@ -1,6 +1,6 @@
 {
-  "commit": "afaf54d315d0788749ddbe36d49c8b0c9de3e03c",
-  "shortCommit": "afaf54d",
-  "message": "fix(workflows): ensure group workflows always dispatch to WhatsApp groups and never to private chat",
-  "builtAt": "2026-10-13T17:04:05.781Z"
+  "commit": "9db53f0f7e8d9c620c4df72efc0a38fcc37eeb03",
+  "shortCommit": "9db53f0",
+  "message": "fix(workflows): prevent group workflow messages from syncing into lead private chat",
+  "builtAt": "2026-10-13T17:22:19.664Z"
 }

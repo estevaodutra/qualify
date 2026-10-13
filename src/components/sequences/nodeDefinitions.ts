@@ -154,7 +154,7 @@ export function getDefaultConfigForSubType(blockType: string, subType: string): 
     case "audio": return { url: "", isVoiceMessage: true, sendPrivate: false, viewOnce: false };
     case "document": return { url: "", filename: "", caption: "", sendPrivate: false, viewOnce: false };
     case "sticker": return { url: "", sendPrivate: false, viewOnce: false };
-    case "user_input": return { targetField: "", timeoutMs: 3600000, question: "", invalidMessage: "", saveMedia: false };
+    case "user_input": return { targetField: "", timeoutMs: 3600000, timeoutValue: 60, timeoutUnit: "minutes", question: "", invalidMessage: "", saveMedia: false };
     case "delay": return { delayMs: 300000, value: 5, unit: "minutes" };
     case "dynamic_url": return { url: "", caption: "", sendPrivate: false, viewOnce: false };
     case "poll": return {
