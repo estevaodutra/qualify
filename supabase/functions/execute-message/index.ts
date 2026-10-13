@@ -2868,6 +2868,14 @@ Deno.serve(async (req) => {
                     
                     if (!triggerContext.customFields) triggerContext.customFields = {};
                     (triggerContext.customFields as Record<string, string>)[cfKey] = rawVal;
+                    (triggerContext.customFields as Record<string, string>)[`custom_fields.${cfKey}`] = rawVal;
+                  } else if (fieldKey.startsWith("custom.")) {
+                    const cfKey = fieldKey.substring("custom.".length).replace(/^lead\./, "");
+                    cfUpdates[cfKey] = rawVal;
+                    leadUpdated = true;
+                    if (!triggerContext.customFields) triggerContext.customFields = {};
+                    (triggerContext.customFields as Record<string, string>)[cfKey] = rawVal;
+                    (triggerContext.customFields as Record<string, string>)[`custom_fields.${cfKey}`] = rawVal;
                   } else if (["name", "phone", "email", "company_name", "document", "source"].includes(fieldKey)) {
                     leadUpdates[fieldKey] = rawVal;
                     leadUpdated = true;
@@ -2896,7 +2904,19 @@ Deno.serve(async (req) => {
                     leadUpdated = true;
                     if (!triggerContext.customFields) triggerContext.customFields = {};
                     (triggerContext.customFields as Record<string, string>)[fieldKey] = rawVal;
+                    (triggerContext.customFields as Record<string, string>)[`custom_fields.${fieldKey}`] = rawVal;
                   }
+                } else if (targetType === "custom") {
+                  let cfKey = targetField;
+                  if (cfKey.startsWith("lead.")) {
+                    cfKey = cfKey.substring("lead.".length);
+                  }
+                  cfUpdates[cfKey] = rawVal;
+                  leadUpdated = true;
+                  if (!triggerContext.customFields) triggerContext.customFields = {};
+                  (triggerContext.customFields as Record<string, string>)[cfKey] = rawVal;
+                  (triggerContext.customFields as Record<string, string>)[`custom_fields.${cfKey}`] = rawVal;
+                  (triggerContext.customFields as Record<string, string>)[`custom.lead.${cfKey}`] = rawVal;
                 } else if (targetType === "deal") {
                   const dealField = targetField;
                   if (dealField === "title") dealUpdates.title = rawVal;

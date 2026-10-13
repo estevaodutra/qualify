@@ -1,6 +1,6 @@
 {
-  "commit": "826ca044f2ee09a27ee56946a64068ba197338b4",
-  "shortCommit": "826ca04",
-  "message": "feat(field-mapping): support multiline text area with variable insertion for compound notifications",
-  "builtAt": "2026-10-13T15:45:42.449Z"
+  "commit": "87dc16484ca7cec51951d4b42d2264bc1a3a57e2",
+  "shortCommit": "87dc164",
+  "message": "refactor(field-mapping): restore standard blue VariablePicker button and clean multiline textarea",
+  "builtAt": "2026-10-13T15:59:49.690Z"
 }

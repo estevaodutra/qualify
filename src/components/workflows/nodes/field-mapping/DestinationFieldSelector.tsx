@@ -180,17 +180,18 @@ export function DestinationFieldSelector({ value, onChange, customFields = [], o
     })).filter(cat => cat.fields.length > 0 || cat.label.toLowerCase().includes(term));
   }, [categories, search]);
 
-  const currentCategoryFields = useMemo(() => {
+  const effectiveCategory = useMemo(() => {
     if (search.trim()) {
-      const activeHasResults = filteredCategories.find(c => c.id === activeCategory)?.fields.length > 0;
-      if (!activeHasResults && filteredCategories.length > 0) {
-        setActiveCategory(filteredCategories[0].id);
-        return filteredCategories[0].fields;
-      }
-      return filteredCategories.find(c => c.id === activeCategory)?.fields || [];
+      const activeHasResults = filteredCategories.find(c => c.id === activeCategory)?.fields.length ?? 0;
+      if (activeHasResults > 0) return activeCategory;
+      if (filteredCategories.length > 0) return filteredCategories[0].id;
     }
-    return filteredCategories.find(c => c.id === activeCategory)?.fields || [];
+    return activeCategory;
   }, [filteredCategories, activeCategory, search]);
+
+  const currentCategoryFields = useMemo(() => {
+    return filteredCategories.find(c => c.id === effectiveCategory)?.fields || [];
+  }, [filteredCategories, effectiveCategory]);
 
   const getIconForType = (type?: string) => {
     switch(type) {
@@ -233,25 +234,50 @@ export function DestinationFieldSelector({ value, onChange, customFields = [], o
             className="h-10 border-0 focus-visible:ring-0 bg-transparent text-sm placeholder:text-slate-400"
           />
         </div>
-        <div className="flex h-[320px] bg-slate-50/50">
-          <div className="w-[220px] border-r border-slate-100 overflow-y-auto py-2">
-            {filteredCategories.map(cat => (
-              <div 
-                key={cat.id}
-                onClick={() => setActiveCategory(cat.id)}
-                className={cn(
-                  "px-3 py-2 text-[11px] font-semibold cursor-pointer mx-2 rounded-lg transition-colors",
-                  activeCategory === cat.id ? "bg-[#8A3CFF]/10 text-[#8A3CFF]" : "text-slate-600 hover:bg-slate-100"
-                )}
-              >
-                {cat.label}
-              </div>
-            ))}
+        {filteredCategories.length === 0 ? (
+          <div className="h-[320px] flex flex-col items-center justify-center p-6 text-center text-slate-500 bg-white">
+            <Search className="h-8 w-8 text-slate-300 mb-2" />
+            <p className="text-sm font-semibold text-slate-700">Nenhum campo encontrado</p>
+            <p className="text-xs text-slate-400 mt-1 max-w-[280px]">
+              Nenhum campo de destino corresponde à pesquisa &ldquo;{search}&rdquo;.
+            </p>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="mt-3 text-xs border-dashed text-[#8A3CFF] hover:bg-[#8A3CFF]/5 font-semibold"
+              onClick={(e) => {
+                e.stopPropagation();
+                setCreateModalOpen(true);
+              }}
+            >
+              + Criar novo campo
+            </Button>
           </div>
-          <div className="flex-1 overflow-y-auto py-2 px-1 bg-white">
-            {currentCategoryFields.length === 0 ? (
-              <div className="p-4 text-center text-sm text-slate-400 mt-4">Nenhum campo encontrado.</div>
-            ) : (
+        ) : (
+          <div className="flex h-[320px] bg-slate-50/50">
+            <div className="w-[220px] border-r border-slate-100 overflow-y-auto py-2">
+              {filteredCategories.map(cat => (
+                <div 
+                  key={cat.id}
+                  onClick={() => setActiveCategory(cat.id)}
+                  className={cn(
+                    "px-3 py-2 text-[11px] font-semibold cursor-pointer mx-2 rounded-lg transition-colors flex items-center justify-between",
+                    effectiveCategory === cat.id ? "bg-[#8A3CFF]/10 text-[#8A3CFF]" : "text-slate-600 hover:bg-slate-100"
+                  )}
+                >
+                  <span className="truncate">{cat.label}</span>
+                  {search.trim() && (
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200/80 text-slate-600 font-mono shrink-0 ml-1">
+                      {cat.fields.length}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="flex-1 overflow-y-auto py-2 px-1 bg-white">
+              {currentCategoryFields.length === 0 ? (
+                <div className="p-4 text-center text-sm text-slate-400 mt-4">Nenhum campo encontrado.</div>
+              ) : (
               currentCategoryFields.map(field => (
                 <div
                   key={field.id}
@@ -306,6 +332,7 @@ export function DestinationFieldSelector({ value, onChange, customFields = [], o
             )}
           </div>
         </div>
+        )}
       </PopoverContent>
       <QuickCreateCustomFieldDialog 
         open={createModalOpen} 

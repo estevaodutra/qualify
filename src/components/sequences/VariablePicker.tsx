@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
+import { useCompany } from "@/contexts/CompanyContext";
 import { toCanonicalPayload } from "@/lib/workflows/canonicalPayload";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -160,6 +161,7 @@ function JsonExplorerList({
 }
 
 export function VariablePicker({ onSelect, isGroup, referencePayload, triggerName = "Webhook 1" }: VariablePickerProps) {
+  const { activeCompany } = useCompany();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("campos_lead");
@@ -172,10 +174,46 @@ export function VariablePicker({ onSelect, isGroup, referencePayload, triggerNam
   // Payload real carregado
   const [fetchedPayload, setFetchedPayload] = useState<any>(null);
 
+  // Campos personalizados vindos do banco de dados (custom_fields_metadata)
+  const [dbCustomFields, setDbCustomFields] = useState<any[]>([]);
+  const [localCustomFields, setLocalCustomFields] = useState<Array<{ label: string; value: string }>>([]);
+
   // Estado para criar novo campo
   const [newFieldOpen, setNewFieldOpen] = useState(false);
   const [newFieldName, setNewFieldName] = useState("");
-  const [localCustomFields, setLocalCustomFields] = useState<Array<{ label: string; value: string }>>([]);
+
+  // Busca campos personalizados do Supabase (custom_fields_metadata)
+  const fetchCustomFields = async () => {
+    try {
+      let query = supabase
+        .from("custom_fields_metadata")
+        .select("*")
+        .order("name", { ascending: true });
+
+      if (activeCompany?.id) {
+        query = query.eq("company_id", activeCompany.id);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        console.warn("[VariablePicker] Erro ao buscar custom_fields_metadata:", error);
+      } else if (data) {
+        setDbCustomFields(data);
+      }
+    } catch (err) {
+      console.warn("[VariablePicker] Falha inesperada ao carregar campos personalizados:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchCustomFields();
+  }, [activeCompany?.id]);
+
+  useEffect(() => {
+    if (open) {
+      fetchCustomFields();
+    }
+  }, [open]);
 
   // Busca payload real do banco caso não tenha sido passado como prop
   const fetchRealPayload = async () => {
@@ -253,6 +291,51 @@ export function VariablePicker({ onSelect, isGroup, referencePayload, triggerNam
     return fetchedPayload;
   }, [referencePayload, fetchedPayload]);
 
+  // Agrupamento dos campos personalizados carregados
+  const leadCustomItems = useMemo(() => {
+    const fromDb = dbCustomFields
+      .filter((f) => !f.category || f.category === "lead")
+      .map((f) => {
+        const key = f.key || f.name.toLowerCase().replace(/[^a-z0-9_]/g, "_");
+        return {
+          label: f.name || f.label || key,
+          value: isGroup ? `{{${key}}}` : `{${key}}`,
+        };
+      });
+
+    const combined = [...fromDb];
+    for (const lf of localCustomFields) {
+      if (!combined.some(c => c.value === lf.value)) {
+        combined.push(lf);
+      }
+    }
+    return combined;
+  }, [dbCustomFields, localCustomFields, isGroup]);
+
+  const dealCustomItems = useMemo(() => {
+    return dbCustomFields
+      .filter((f) => f.category === "deal")
+      .map((f) => {
+        const key = f.key || f.name.toLowerCase().replace(/[^a-z0-9_]/g, "_");
+        return {
+          label: f.name || f.label || key,
+          value: isGroup ? `{{${key}}}` : `{${key}}`,
+        };
+      });
+  }, [dbCustomFields, isGroup]);
+
+  const companyCustomItems = useMemo(() => {
+    return dbCustomFields
+      .filter((f) => f.category === "company")
+      .map((f) => {
+        const key = f.key || f.name.toLowerCase().replace(/[^a-z0-9_]/g, "_");
+        return {
+          label: f.name || f.label || key,
+          value: isGroup ? `{{${key}}}` : `{${key}}`,
+        };
+      });
+  }, [dbCustomFields, isGroup]);
+
   // Lista de Categorias e Itens
   const categories = useMemo(() => {
     const list: Array<{ id: string; label: string; items: Array<{ label: string; value: string; isApiInput?: boolean }> }> = [
@@ -261,8 +344,11 @@ export function VariablePicker({ onSelect, isGroup, referencePayload, triggerNam
         label: isGroup ? "Campos do contato" : "Campos do lead",
         items: isGroup ? [
           { label: "Nome completo do lead", value: "{{name}}" },
+          { label: "Primeiro nome do lead", value: "{{first_name}}" },
           { label: "Telefone do lead", value: "{{phone}}" },
           { label: "Email do lead", value: "{{email}}" },
+          { label: "Documento / CPF do lead", value: "{{document}}" },
+          { label: "Empresa do lead", value: "{{company_name}}" },
           { label: "Resposta do usuário (Entrada)", value: "{{userResponse}}" },
         ] : [
           { label: "Nome completo do lead", value: "{nome}" },
@@ -316,15 +402,15 @@ export function VariablePicker({ onSelect, isGroup, referencePayload, triggerNam
       {
         id: "campos_adic_lead",
         label: "Campos adicionais do lead",
-        items: [
-          { label: "Campo personalizado (exemplo)", value: isGroup ? "{{campo_customizado}}" : "{campo_customizado}" },
-          ...localCustomFields
+        items: leadCustomItems.length > 0 ? leadCustomItems : [
+          { label: "Campo personalizado (exemplo)", value: isGroup ? "{{campo_customizado}}" : "{campo_customizado}" }
         ]
       },
       {
         id: "campos_adic_negocio",
         label: "Campos adicionais do negócio",
         items: [
+          ...dealCustomItems,
           { label: "Observações do negócio", value: isGroup ? "{{deal_notes}}" : "{deal_notes}" },
           { label: "Origem do negócio", value: isGroup ? "{{deal_source}}" : "{deal_source}" },
         ]
@@ -333,6 +419,7 @@ export function VariablePicker({ onSelect, isGroup, referencePayload, triggerNam
         id: "campos_adic_empresa",
         label: "Campos adicionais da empresa",
         items: [
+          ...companyCustomItems,
           { label: "Nome da empresa", value: isGroup ? "{{company_name}}" : "{company_name}" },
           { label: "Telefone da empresa", value: isGroup ? "{{company_phone}}" : "{company_phone}" },
         ]
@@ -360,44 +447,75 @@ export function VariablePicker({ onSelect, isGroup, referencePayload, triggerNam
     ];
 
     return list;
-  }, [isGroup, triggerName, localCustomFields]);
+  }, [isGroup, triggerName, leadCustomItems, dealCustomItems, companyCustomItems]);
 
   // Filtragem pela busca
   const filteredCategories = useMemo(() => {
     if (!search.trim()) return categories;
-    const lower = search.toLowerCase();
+    const lower = search.toLowerCase().trim();
     return categories
-      .map(cat => ({
-        ...cat,
-        items: cat.items.filter(item => 
+      .map(cat => {
+        const catMatches = cat.label.toLowerCase().includes(lower);
+        const matchingItems = cat.items.filter(item => 
           item.label.toLowerCase().includes(lower) || 
           item.value.toLowerCase().includes(lower) ||
-          cat.label.toLowerCase().includes(lower)
-        )
-      }))
-      .filter(cat => cat.items.length > 0 || cat.label.toLowerCase().includes(lower));
+          catMatches
+        );
+        return {
+          ...cat,
+          items: matchingItems
+        };
+      })
+      .filter(cat => cat.items.length > 0);
   }, [categories, search]);
 
   const activeCategory = useMemo(() => {
-    return filteredCategories.find(c => c.id === selectedCategory) || filteredCategories[0] || categories[0];
-  }, [filteredCategories, selectedCategory, categories]);
+    if (filteredCategories.length === 0) return null;
+    return filteredCategories.find(c => c.id === selectedCategory) || filteredCategories[0];
+  }, [filteredCategories, selectedCategory]);
 
-  const handleCreateField = () => {
+  const handleCreateField = async () => {
     if (!newFieldName.trim()) return;
-    const slug = newFieldName
+    const trimmed = newFieldName.trim();
+    const slug = trimmed
       .toLowerCase()
       .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/[^a-z0-9_]+/g, "_")
       .replace(/(^_|_$)/g, "");
       
     const format = isGroup ? `{{${slug}}}` : `{${slug}}`;
     
+    // Atualização otimista local
     setLocalCustomFields(prev => [...prev, {
-      label: newFieldName,
+      label: trimmed,
       value: format,
     }]);
+
+    // Persistência em custom_fields_metadata no Supabase
+    try {
+      const fieldData: any = {
+        name: trimmed,
+        key: slug,
+        type: "text",
+        category: "lead",
+        group_name: "Geral",
+        is_visible: true,
+        is_private: false,
+      };
+      if (activeCompany?.id) {
+        fieldData.company_id = activeCompany.id;
+      }
+      const { error } = await supabase.from("custom_fields_metadata").insert([fieldData]);
+      if (error) {
+        console.warn("[VariablePicker] Erro ao salvar campo no banco:", error);
+      } else {
+        await fetchCustomFields();
+      }
+    } catch (e) {
+      console.warn("[VariablePicker] Falha ao persistir campo:", e);
+    }
     
-    toast.success("Campo personalizado criado!");
+    toast.success(`Campo "${trimmed}" criado!`);
     setNewFieldName("");
     setNewFieldOpen(false);
     setSelectedCategory("campos_adic_lead");
@@ -469,64 +587,93 @@ export function VariablePicker({ onSelect, isGroup, referencePayload, triggerNam
             )}
           </div>
 
-          {/* 2 Colunas */}
-          <div className="flex h-[290px]">
-            {/* Coluna Esquerda: Categorias */}
-            <div className="w-[210px] border-r border-slate-100 overflow-y-auto p-1.5 space-y-0.5 scrollbar-thin bg-slate-50/50">
-              {filteredCategories.map((cat) => {
-                const isActive = activeCategory.id === cat.id;
-                return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => setSelectedCategory(cat.id)}
-                    className={cn(
-                      "w-full text-left px-2.5 py-2 text-xs rounded-lg transition-colors flex items-center justify-between select-none",
-                      isActive 
-                        ? "bg-slate-200/70 font-semibold text-slate-900 shadow-sm" 
-                        : "text-slate-600 hover:bg-slate-100/70"
-                    )}
-                  >
-                    <span className="truncate">{cat.label}</span>
-                    {cat.id === "entrada_dados" && (
-                      <span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0 ml-1" />
-                    )}
-                  </button>
-                );
-              })}
+          {/* 2 Colunas ou Estado Vazio na Pesquisa */}
+          {filteredCategories.length === 0 ? (
+            <div className="h-[290px] flex flex-col items-center justify-center p-6 text-center text-slate-500 bg-white">
+              <Search className="h-8 w-8 text-slate-300 mb-2" />
+              <p className="text-sm font-semibold text-slate-700">Nenhum campo encontrado</p>
+              <p className="text-xs text-slate-400 mt-1 max-w-[280px]">
+                Nenhuma variável corresponde à pesquisa &ldquo;{search}&rdquo;.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setNewFieldName(search);
+                  setOpen(false);
+                  setNewFieldOpen(true);
+                }}
+                className="mt-3 text-xs font-semibold px-3 py-1.5 rounded-lg text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors flex items-center gap-1.5"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Criar campo &ldquo;{search}&rdquo;
+              </button>
             </div>
+          ) : (
+            <div className="flex h-[290px]">
+              {/* Coluna Esquerda: Categorias */}
+              <div className="w-[210px] border-r border-slate-100 overflow-y-auto p-1.5 space-y-0.5 scrollbar-thin bg-slate-50/50">
+                {filteredCategories.map((cat) => {
+                  const isActive = activeCategory?.id === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setSelectedCategory(cat.id)}
+                      className={cn(
+                        "w-full text-left px-2.5 py-2 text-xs rounded-lg transition-colors flex items-center justify-between select-none",
+                        isActive 
+                          ? "bg-slate-200/70 font-semibold text-slate-900 shadow-sm" 
+                          : "text-slate-600 hover:bg-slate-100/70"
+                      )}
+                    >
+                      <span className="truncate">{cat.label}</span>
+                      <div className="flex items-center gap-1 shrink-0 ml-1">
+                        {search.trim() && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-600 font-mono">
+                            {cat.items.length}
+                          </span>
+                        )}
+                        {cat.id === "entrada_dados" && (
+                          <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
 
-            {/* Coluna Direita: Itens da Categoria Selecionada */}
-            <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-thin bg-white">
-              {activeCategory && activeCategory.items.length > 0 ? (
-                activeCategory.items.map((item) => (
-                  <button
-                    key={item.label}
-                    type="button"
-                    onClick={() => handleSelectItem(item)}
-                    className={cn(
-                      "w-full text-left px-3 py-2 text-xs rounded-lg hover:bg-slate-50 transition-colors flex items-center justify-between group",
-                      item.isApiInput ? "text-slate-800 font-semibold hover:bg-blue-50/50" : "text-slate-700"
-                    )}
-                  >
-                    <div className="flex items-center gap-2 truncate min-w-0">
-                      <span className="text-slate-400 font-mono text-xs shrink-0">{`{ }`}</span>
-                      <span className="truncate">{item.label}</span>
-                    </div>
-                    {!item.isApiInput && (
-                      <span className="text-[10px] text-slate-400 font-mono shrink-0 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {item.value}
-                      </span>
-                    )}
-                  </button>
-                ))
-              ) : (
-                <div className="h-full flex items-center justify-center text-xs text-slate-400">
-                  Nenhum campo disponível.
-                </div>
-              )}
+              {/* Coluna Direita: Itens da Categoria Selecionada */}
+              <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-thin bg-white">
+                {activeCategory && activeCategory.items.length > 0 ? (
+                  activeCategory.items.map((item) => (
+                    <button
+                      key={item.label + item.value}
+                      type="button"
+                      onClick={() => handleSelectItem(item)}
+                      className={cn(
+                        "w-full text-left px-3 py-2 text-xs rounded-lg hover:bg-slate-50 transition-colors flex items-center justify-between group",
+                        item.isApiInput ? "text-slate-800 font-semibold hover:bg-blue-50/50" : "text-slate-700"
+                      )}
+                    >
+                      <div className="flex items-center gap-2 truncate min-w-0">
+                        <span className="text-slate-400 font-mono text-xs shrink-0">{`{ }`}</span>
+                        <span className="truncate">{item.label}</span>
+                      </div>
+                      {!item.isApiInput && item.value && (
+                        <span className="text-[10px] text-slate-400 font-mono shrink-0 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {item.value}
+                        </span>
+                      )}
+                    </button>
+                  ))
+                ) : (
+                  <div className="h-full flex items-center justify-center text-xs text-slate-400">
+                    Nenhum campo disponível.
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Footer */}
           <div className="p-2 border-t border-slate-100 flex items-center justify-between bg-slate-50/40">
