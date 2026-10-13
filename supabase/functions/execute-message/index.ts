@@ -1375,55 +1375,81 @@ Deno.serve(async (req) => {
     // Determine user_id for logging and webhook lookup
     const userId = typedMessage?.user_id || typedCampaign.user_id;
     
-    // For triggered execution with sendPrivate, we send to the respondent, not to groups
-    const sendToPrivate = isTriggeredExecution && triggerContext?.sendPrivate;
-    
-    // Get linked groups (only required if we don't send to private destinations)
-    const { data: linkedGroups, error: groupsError } = await supabase
+    // 1. Resolve sequence trigger_config early to identify workflow destinationMode and selected groups
+    let sequenceTriggerConfig: Record<string, any> = {};
+    if (effectiveSequenceId) {
+      const { data: seqRow } = await supabase
+        .from("message_sequences")
+        .select("trigger_config, trigger_type")
+        .eq("id", effectiveSequenceId)
+        .maybeSingle();
+      sequenceTriggerConfig = (seqRow?.trigger_config || {}) as Record<string, any>;
+
+      if (!sequenceTriggerConfig.destinationMode && !sequenceTriggerConfig.selectedGroupJids) {
+        const { data: trigNode } = await supabase
+          .from("sequence_nodes")
+          .select("config")
+          .eq("sequence_id", effectiveSequenceId)
+          .in("node_type", ["trigger", "webhook"])
+          .maybeSingle();
+        if (trigNode?.config) {
+          const nodeCfg = (trigNode.config.triggerConfig || trigNode.config) as Record<string, any>;
+          sequenceTriggerConfig = { ...nodeCfg, ...sequenceTriggerConfig };
+        }
+      }
+    }
+
+    // 2. Get linked groups from campaign_groups
+    const { data: linkedGroups } = await supabase
       .from("campaign_groups")
       .select("id, group_jid, group_name")
       .in("campaign_id", [effectiveCampaignId, sequenceId, body.sequenceId].filter(Boolean) as string[]);
 
-    const hasPrivateDestinations = sendToPrivate || 
-                                   isResumedExecution ||
-                                   !!(triggerContext?.callResult) ||
-                                   (targetPhones && targetPhones.length > 0) || 
-                                   isManualNodeExecution || 
-                                   !!(triggerContext?.groupJid) || 
-                                   !!(triggerContext?.triggerId) ||
-                                   !!(triggerContext?.respondentPhone) ||
-                                   !!(triggerContext?.contactPhone) ||
-                                   !!(triggerContext?.uraResult);
-
     let groups = (linkedGroups || []) as LinkedGroup[];
 
-    // Fallback to selectedGroupJids from sequence trigger_config if campaign_groups has no rows
-    if (groups.length === 0 && effectiveSequenceId) {
-      const { data: seqRow } = await supabase
-        .from("message_sequences")
-        .select("trigger_config")
-        .eq("id", effectiveSequenceId)
-        .maybeSingle();
-      const cfg = (seqRow?.trigger_config || {}) as Record<string, any>;
-      const selectedJids = (cfg.selectedGroupJids as string[]) || (triggerContext?.selectedGroupJids as string[]) || [];
-      if (selectedJids.length > 0) {
-        const seen = new Set<string>();
-        for (const jid of selectedJids) {
-          const clean = jid.replace(/\D/g, "");
-          if (clean && !seen.has(clean)) {
-            seen.add(clean);
-            groups.push({
-              id: crypto.randomUUID(),
-              group_jid: jid,
-              group_name: jid,
-            });
-          }
+    // Fallback/populate groups from sequence trigger_config.selectedGroupJids or triggerContext.selectedGroupJids
+    const selectedJids = (sequenceTriggerConfig.selectedGroupJids as string[]) || (triggerContext?.selectedGroupJids as string[]) || [];
+    if (groups.length === 0 && selectedJids.length > 0) {
+      const seen = new Set<string>();
+      for (const jid of selectedJids) {
+        if (!jid) continue;
+        const normalized = jid.trim();
+        if (!seen.has(normalized)) {
+          seen.add(normalized);
+          groups.push({
+            id: crypto.randomUUID(),
+            group_jid: normalized,
+            group_name: normalized,
+          });
         }
-        console.log(`[ExecuteMessage] Loaded ${groups.length} groups from sequence trigger_config.selectedGroupJids`);
       }
+      console.log(`[ExecuteMessage] Loaded ${groups.length} groups from selectedGroupJids:`, groups.map(g => g.group_jid));
     }
 
-    if (!hasPrivateDestinations && groups.length === 0) {
+    // 3. Determine whether this sequence is explicitly a group workflow
+    const isWorkflowGroupMode = 
+      triggerContext?.destinationMode === "groups" ||
+      sequenceTriggerConfig.destinationMode === "groups" ||
+      (sequenceTriggerConfig.isGroup === true && sequenceTriggerConfig.destinationMode !== "individual") ||
+      (sequenceTriggerConfig.destinationMode !== "individual" && groups.length > 0);
+
+    // For triggered execution with sendPrivate, only respect it if NOT a group workflow!
+    const sendToPrivate = !isWorkflowGroupMode && isTriggeredExecution && triggerContext?.sendPrivate;
+
+    const hasPrivateDestinations = !isWorkflowGroupMode && (
+      sendToPrivate || 
+      isResumedExecution ||
+      !!(triggerContext?.callResult) ||
+      (targetPhones && targetPhones.length > 0) || 
+      isManualNodeExecution || 
+      !!(triggerContext?.groupJid) || 
+      !!(triggerContext?.triggerId) ||
+      !!(triggerContext?.respondentPhone) ||
+      !!(triggerContext?.contactPhone) ||
+      !!(triggerContext?.uraResult)
+    );
+
+    if (!hasPrivateDestinations && groups.length === 0 && !isWorkflowGroupMode) {
       return new Response(
         JSON.stringify({ error: "No linked groups found" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -1791,32 +1817,67 @@ Deno.serve(async (req) => {
         return result;
       };
 
-      // Determine destinations based on targetPhones or sendToPrivate flag
-      let destinations: DestinationData[] = targetPhones && targetPhones.length > 0
-        ? targetPhones.map((phone: string) => ({
-            group_jid: `${phone}@s.whatsapp.net`,
-            group_name: phone,
-            isPrivate: true,
-          }))
-        : (sendToPrivate || triggerContext?.sendPrivate || triggerContext?.uraResult) && triggerContext?.respondentPhone
-          ? [{ 
-              group_jid: (triggerContext.respondentJid && triggerContext.respondentJid.includes('@s.whatsapp.net')) ? triggerContext.respondentJid : `${triggerContext.respondentPhone}@s.whatsapp.net`, 
-              group_name: triggerContext.respondentName || triggerContext.respondentPhone,
-              isPrivate: true
-            }]
-          : triggerContext?.groupJid
-            ? [{
-                group_jid: triggerContext.groupJid as string,
-                group_name: (triggerContext.respondentName as string) || "Grupo",
-                isPrivate: false,
+      // Determine destinations based on whether workflow is in group mode or individual mode
+      let destinations: DestinationData[] = [];
+
+      if (isWorkflowGroupMode) {
+        // =========================================================================
+        // MODO GRUPOS DO WHATSAPP (Workflow de Grupo)
+        // Regra absoluta: NUNCA enviar para o privado do lead, mesmo que o comando
+        // tenha sido disparado em um chat privado ou tenha respondentPhone.
+        // O conteúdo do fluxo DEVE ir para os grupos configurados.
+        // =========================================================================
+        console.log(`[ExecuteMessage] 👥 Executando em MODO GRUPO (isWorkflowGroupMode=true). Total de grupos disponíveis: ${groups.length}`);
+
+        if (triggerContext?.groupJid && String(triggerContext.groupJid).includes('@g.us')) {
+          destinations = [{
+            group_jid: triggerContext.groupJid as string,
+            group_name: (triggerContext.respondentName as string) || "Grupo",
+            isPrivate: false,
+          }];
+        } else if (groups.length > 0) {
+          destinations = groups.map(g => ({
+            group_jid: g.group_jid,
+            group_name: g.group_name || "Grupo",
+            isPrivate: false,
+          }));
+        } else {
+          console.error(`[ExecuteMessage] ❌ Erro: Workflow configurado para Grupos do WhatsApp, mas nenhum grupo encontrado.`);
+          return new Response(
+            JSON.stringify({ error: "Este fluxo está configurado para Grupos do WhatsApp, mas nenhum grupo de destino foi vinculado nas configurações do workflow." }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      } else {
+        // =========================================================================
+        // MODO INDIVIDUAL / PRIVADO (DM)
+        // =========================================================================
+        destinations = targetPhones && targetPhones.length > 0
+          ? targetPhones.map((phone: string) => ({
+              group_jid: `${phone}@s.whatsapp.net`,
+              group_name: phone,
+              isPrivate: true,
+            }))
+          : (sendToPrivate || triggerContext?.sendPrivate || triggerContext?.uraResult) && triggerContext?.respondentPhone
+            ? [{ 
+                group_jid: (triggerContext.respondentJid && triggerContext.respondentJid.includes('@s.whatsapp.net')) ? triggerContext.respondentJid : `${triggerContext.respondentPhone}@s.whatsapp.net`, 
+                group_name: triggerContext.respondentName || triggerContext.respondentPhone,
+                isPrivate: true
               }]
-            : (triggerContext?.sendPrivate === false
-                ? groups.map(g => ({ group_jid: g.group_jid, group_name: g.group_name, isPrivate: false }))
-                : (triggerContext?.respondentPhone
-                    ? [{ group_jid: `${triggerContext.respondentPhone}@s.whatsapp.net`, group_name: triggerContext.respondentPhone, isPrivate: true }]
-                    : groups.map(g => ({ group_jid: g.group_jid, group_name: g.group_name, isPrivate: false }))
-                  )
-              );
+            : triggerContext?.groupJid
+              ? [{
+                  group_jid: triggerContext.groupJid as string,
+                  group_name: (triggerContext.respondentName as string) || "Grupo",
+                  isPrivate: false,
+                }]
+              : (triggerContext?.sendPrivate === false
+                  ? groups.map(g => ({ group_jid: g.group_jid, group_name: g.group_name, isPrivate: false }))
+                  : (triggerContext?.respondentPhone
+                      ? [{ group_jid: `${triggerContext.respondentPhone}@s.whatsapp.net`, group_name: triggerContext.respondentPhone, isPrivate: true }]
+                      : groups.map(g => ({ group_jid: g.group_jid, group_name: g.group_name, isPrivate: false }))
+                    )
+                );
+      }
 
       // If this is a manual test execution from the builder and we have no destinations,
       // fallback to sending to the instance's own number to allow preview/testing.
@@ -4000,6 +4061,16 @@ Deno.serve(async (req) => {
             
             // Send to all destinations
             for (const dest of activeDestinations) {
+              const isSubNodePrivate = Boolean(
+                formattedConfig.sendPrivate ?? formattedConfig.send_private ?? subMsg.sendPrivate ?? subMsg.send_private ?? false
+              );
+              const targetDestJid = (isSubNodePrivate && triggerContext?.respondentPhone)
+                ? (triggerContext.respondentJid && triggerContext.respondentJid.includes('@s.whatsapp.net') ? triggerContext.respondentJid : `${triggerContext.respondentPhone}@s.whatsapp.net`)
+                : dest.group_jid;
+              const targetDestName = (isSubNodePrivate && triggerContext?.respondentPhone)
+                ? (triggerContext.respondentName || triggerContext.respondentPhone)
+                : dest.group_name;
+
               const payload = buildStandardPayload({
                 action: subAction,
                 node: {
@@ -4021,8 +4092,8 @@ Deno.serve(async (req) => {
                   externalToken: instance.external_instance_token || "",
                 },
                 destination: {
-                  jid: dest.group_jid,
-                  name: dest.group_name,
+                  jid: targetDestJid,
+                  name: targetDestName,
                 },
               });
               
@@ -5002,6 +5073,16 @@ Deno.serve(async (req) => {
           });
           formattedConfig.mention_all = Boolean(node.config?.mention_all ?? node.config?.mentionAll ?? false);
           
+          const isNodePrivate = Boolean(
+            formattedConfig.sendPrivate ?? formattedConfig.send_private ?? node.config?.sendPrivate ?? node.config?.send_private ?? false
+          );
+          const targetDestJid = (isNodePrivate && triggerContext?.respondentPhone)
+            ? (triggerContext.respondentJid && triggerContext.respondentJid.includes('@s.whatsapp.net') ? triggerContext.respondentJid : `${triggerContext.respondentPhone}@s.whatsapp.net`)
+            : dest.group_jid;
+          const targetDestName = (isNodePrivate && triggerContext?.respondentPhone)
+            ? (triggerContext.respondentName || triggerContext.respondentPhone)
+            : dest.group_name;
+
           const payload = buildStandardPayload({
             action,
             node: {
@@ -5023,8 +5104,8 @@ Deno.serve(async (req) => {
               externalToken: instance.external_instance_token || "",
             },
             destination: {
-              jid: dest.group_jid,
-              name: dest.group_name,
+              jid: targetDestJid,
+              name: targetDestName,
             },
           });
 

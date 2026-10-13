@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
     // 1. Fetch workflow details
     const { data: workflow, error: workflowError } = await supabase
       .from("message_sequences")
-      .select("id, name, company_id, user_id")
+      .select("id, name, company_id, user_id, trigger_config, trigger_type")
       .eq("id", workflowId)
       .single();
 
@@ -38,10 +38,19 @@ Deno.serve(async (req) => {
       );
     }
 
+    const triggerConfig = (workflow.trigger_config || {}) as Record<string, any>;
+    const isGroupMode = triggerConfig.destinationMode === "groups" || 
+                        (triggerConfig.destinationMode !== "individual" && (
+                          triggerConfig.isGroup === true ||
+                          (Array.isArray(triggerConfig.selectedGroupJids) && triggerConfig.selectedGroupJids.length > 0)
+                        ));
+
+    console.log(`[StartWorkflowForLeads] Workflow ${workflow.name} destinationMode: ${triggerConfig.destinationMode || 'default'}, isGroupMode: ${isGroupMode}`);
+
     // 2. Fetch leads
     const { data: leads, error: leadsError } = await supabase
       .from("leads")
-      .select("id, name, phone")
+      .select("id, name, phone, email, company_name, document, custom_fields")
       .in("id", leadIds);
 
     if (leadsError || !leads || leads.length === 0) {
@@ -51,7 +60,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`[StartWorkflowForLeads] Starting workflow ${workflow.name} for ${leads.length} lead(s)`);
+    console.log(`[StartWorkflowForLeads] Starting workflow ${workflow.name} for ${leads.length} lead(s) (isGroupMode=${isGroupMode})`);
 
     const executeUrl = `${supabaseUrl}/functions/v1/execute-message`;
     let successCount = 0;
@@ -67,6 +76,25 @@ Deno.serve(async (req) => {
       // Format phone digits
       const cleanPhone = lead.phone.replace(/\D/g, "");
 
+      // Prepare custom fields from lead
+      const customFields: Record<string, any> = {
+        name: lead.name || "",
+        nome: lead.name || "",
+        phone: cleanPhone,
+        telefone: cleanPhone,
+        email: lead.email || "",
+        document: lead.document || "",
+        cpf: lead.document || "",
+        company_name: lead.company_name || "",
+        empresa: lead.company_name || "",
+      };
+      if (lead.custom_fields && typeof lead.custom_fields === "object") {
+        for (const [cfKey, cfVal] of Object.entries(lead.custom_fields)) {
+          customFields[cfKey] = cfVal;
+          customFields[`custom_fields.${cfKey}`] = cfVal;
+        }
+      }
+
       const executePayload = {
         campaignId: workflow.id,
         sequenceId: workflow.id,
@@ -75,7 +103,10 @@ Deno.serve(async (req) => {
           respondentPhone: cleanPhone,
           respondentName: lead.name || "",
           respondentJid: `${cleanPhone}@s.whatsapp.net`,
-          sendPrivate: true,
+          sendPrivate: !isGroupMode,
+          destinationMode: isGroupMode ? "groups" : "individual",
+          selectedGroupJids: triggerConfig.selectedGroupJids || [],
+          customFields,
           companyId: workflow.company_id,
         },
       };

@@ -1,6 +1,6 @@
 {
-  "commit": "87dc16484ca7cec51951d4b42d2264bc1a3a57e2",
-  "shortCommit": "87dc164",
-  "message": "refactor(field-mapping): restore standard blue VariablePicker button and clean multiline textarea",
-  "builtAt": "2026-10-13T15:59:49.690Z"
+  "commit": "a99cf38ef69995d5a3824ca80f395799b4d6b81f",
+  "shortCommit": "a99cf38",
+  "message": "fix(variables): load custom fields from database, fix search in variable picker and destination selector",
+  "builtAt": "2026-10-13T16:38:40.932Z"
 }
