@@ -103,7 +103,7 @@ export function CustomFieldsTab() {
     try {
       const { data, error } = await supabase
         .from("custom_fields_metadata")
-        .select("*")
+        .select("*, custom_field_options(*)")
         .eq("company_id", activeCompany.id)
         .order("created_at", { ascending: true });
 
@@ -112,7 +112,17 @@ export function CustomFieldsTab() {
       if (!data || data.length === 0) {
         await populateDefaultFields();
       } else {
-        setFields(data as CustomFieldMetadata[]);
+        const normalized = data.map((f: any) => {
+          let fieldOpts = f.options;
+          if (Array.isArray(f.custom_field_options) && f.custom_field_options.length > 0) {
+            fieldOpts = [...f.custom_field_options].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+          }
+          return {
+            ...f,
+            options: fieldOpts || []
+          };
+        });
+        setFields(normalized as CustomFieldMetadata[]);
       }
     } catch (err: any) {
       console.error("Error fetching custom fields:", err);
@@ -129,10 +139,10 @@ export function CustomFieldsTab() {
   const populateDefaultFields = async () => {
     if (!activeCompany?.id) return;
     try {
-      const defaults: Omit<CustomFieldMetadata, "id">[] = [
+      const defaults = [
         {
           company_id: activeCompany.id,
-          category: "lead",
+          category: "lead" as const,
           name: "Tipo de Projeto",
           key: "tipo_de_projeto",
           description: "Tipo de projeto de marketing contratado pelo lead",
@@ -140,15 +150,10 @@ export function CustomFieldsTab() {
           group_name: "Qualificação",
           is_visible: true,
           is_private: false,
-          options: [
-            { id: "opt_1", label: "Performance / Tráfego", value: "performance" },
-            { id: "opt_2", label: "Inbound Marketing", value: "inbound" },
-            { id: "opt_3", label: "Branding / Design", value: "branding" },
-          ],
         },
         {
           company_id: activeCompany.id,
-          category: "lead",
+          category: "lead" as const,
           name: "Orçamento Mensal",
           key: "orcamento_mensal",
           description: "Orçamento estimado de mídia mensal",
@@ -159,7 +164,7 @@ export function CustomFieldsTab() {
         },
         {
           company_id: activeCompany.id,
-          category: "deal",
+          category: "deal" as const,
           name: "Faturamento Esperado",
           key: "faturamento_esperado",
           description: "Faturamento esperado do contrato fechado",
@@ -170,7 +175,7 @@ export function CustomFieldsTab() {
         },
         {
           company_id: activeCompany.id,
-          category: "lead",
+          category: "lead" as const,
           name: "Empresa",
           key: "empresa",
           description: "Nome da empresa contratante",
@@ -183,11 +188,22 @@ export function CustomFieldsTab() {
 
       const { data: inserted, error } = await supabase
         .from("custom_fields_metadata")
-        .insert(defaults as any)
+        .insert(defaults)
         .select();
 
       if (error) throw error;
-      setFields((inserted || []) as CustomFieldMetadata[]);
+
+      // Insert default options for Tipo de Projeto
+      const tipoProjetoField = inserted?.find(f => f.key === "tipo_de_projeto");
+      if (tipoProjetoField) {
+        await supabase.from("custom_field_options").insert([
+          { field_id: tipoProjetoField.id, label: "Performance / Tráfego", value: "performance", order_index: 0 },
+          { field_id: tipoProjetoField.id, label: "Inbound Marketing", value: "inbound", order_index: 1 },
+          { field_id: tipoProjetoField.id, label: "Branding / Design", value: "branding", order_index: 2 },
+        ]);
+      }
+
+      fetchFields();
     } catch (err: any) {
       console.error("Error creating default fields:", err);
     }
@@ -291,8 +307,9 @@ export function CustomFieldsTab() {
         group_name: groupName.trim() || "Sem grupo",
         is_visible: isVisible,
         is_private: isPrivate,
-        options: type === "select" || type === "multi_select" ? options : null,
       };
+
+      let savedFieldId = currentFieldId;
 
       if (isEditing && currentFieldId) {
         const { error } = await supabase
@@ -300,15 +317,42 @@ export function CustomFieldsTab() {
           .update(fieldData as any)
           .eq("id", currentFieldId);
         if (error) throw error;
-        toast({ title: "Campo atualizado com sucesso" });
       } else {
-        const { error } = await supabase
+        const { data: insertedField, error } = await supabase
           .from("custom_fields_metadata")
-          .insert(fieldData as any);
+          .insert(fieldData as any)
+          .select("id")
+          .single();
         if (error) throw error;
-        toast({ title: "Campo criado com sucesso" });
+        savedFieldId = insertedField?.id;
       }
 
+      // Sync options if select or multi_select
+      if (savedFieldId) {
+        await supabase
+          .from("custom_field_options")
+          .delete()
+          .eq("field_id", savedFieldId);
+
+        if ((type === "select" || type === "multi_select") && options.length > 0) {
+          const optionsPayload = options.map((opt, idx) => ({
+            field_id: savedFieldId,
+            label: opt.label.trim(),
+            value: opt.value.trim() || opt.label.trim().toLowerCase().replace(/\s+/g, "_"),
+            order_index: idx,
+          }));
+
+          const { error: optError } = await supabase
+            .from("custom_field_options")
+            .insert(optionsPayload);
+
+          if (optError) {
+            console.error("Error saving custom field options:", optError);
+          }
+        }
+      }
+
+      toast({ title: isEditing ? "Campo atualizado com sucesso" : "Campo criado com sucesso" });
       setIsOpen(false);
       fetchFields();
     } catch (err: any) {

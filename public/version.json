@@ -1,6 +1,6 @@
 {
-  "commit": "907ca744a0f4adf201ebc3948ab02099ec18f254",
-  "shortCommit": "907ca74",
-  "message": "feat(chat): exibir node exato (delay com contagem regressiva ao vivo e aguardando resposta do usuario) e resolucao de nome de workflow",
-  "builtAt": "2026-10-12T19:41:02.754Z"
+  "commit": "5d3291b84f05235657f3a500fbfbe2dfdd58debd",
+  "shortCommit": "5d3291b",
+  "message": "fix(workflows): garantir execucao unica por fluxo por lead e reutilizar mesma execucao ao responder interacao",
+  "builtAt": "2026-10-13T15:15:08.483Z"
 }

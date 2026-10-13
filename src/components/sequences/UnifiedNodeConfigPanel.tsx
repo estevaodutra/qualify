@@ -554,9 +554,17 @@ export function UnifiedNodeConfigPanel({
         // Fetch custom fields
         const { data: fields } = await supabase
           .from("custom_fields_metadata")
-          .select("*")
+          .select("*, custom_field_options(*)")
           .order("name", { ascending: true });
-        if (fields) setCustomFieldsMetadata(fields);
+        if (fields) {
+          const normalized = fields.map((f: any) => ({
+            ...f,
+            options: (Array.isArray(f.custom_field_options) && f.custom_field_options.length > 0)
+              ? f.custom_field_options.map((o: any) => o.value || o.label)
+              : f.options || []
+          }));
+          setCustomFieldsMetadata(normalized);
+        }
 
         // Fetch pipeline stages
         const { data: stages } = await supabase
