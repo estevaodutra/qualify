@@ -136,19 +136,12 @@ export function FieldMappingEditor({ mapping, onChange, referencePayload }: Fiel
           />
         </section>
 
-        {/* Origem (Caixa de texto multiline com variáveis) */}
-        <section className="space-y-2.5">
-          <div>
-            <h3 className="text-sm font-bold text-slate-800">Valor (Entrada de dados)</h3>
-            <p className="text-xs text-slate-500 font-medium">
-              Escreva o texto manualmente e combine várias variáveis para montar uma notificação ou texto composto.
-            </p>
-          </div>
+        {/* Origem */}
+        <section>
           <ValueInputSelector 
             value={sourceValue}
             onChange={(val) => handleChange({ source: val })}
             referencePayload={referencePayload}
-            customFields={customFields}
           />
         </section>
 

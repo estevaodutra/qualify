@@ -262,6 +262,8 @@ export function VariablePicker({ onSelect, isGroup, referencePayload, triggerNam
         items: isGroup ? [
           { label: "Nome completo do lead", value: "{{name}}" },
           { label: "Telefone do lead", value: "{{phone}}" },
+          { label: "Email do lead", value: "{{email}}" },
+          { label: "Resposta do usuário (Entrada)", value: "{{userResponse}}" },
         ] : [
           { label: "Nome completo do lead", value: "{nome}" },
           { label: "Primeiro nome do lead", value: "{primeiro_nome}" },
@@ -271,6 +273,7 @@ export function VariablePicker({ onSelect, isGroup, referencePayload, triggerNam
           { label: "CEP do lead", value: "{cep}" },
           { label: "Endereço do lead", value: "{endereco}" },
           { label: "Cidade do lead", value: "{cidade}" },
+          { label: "Resposta do usuário (Entrada)", value: "{userResponse}" },
         ]
       },
       ...(isGroup ? [{

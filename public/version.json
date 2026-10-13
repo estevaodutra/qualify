@@ -1,6 +1,6 @@
 {
-  "commit": "26ece56b9324865182386723d1a8628b13f3c05e",
-  "shortCommit": "26ece56",
-  "message": "fix(custom-fields): isolar opcoes em tabela relacional custom_field_options e corrigir erro de options column",
-  "builtAt": "2026-10-13T15:33:25.598Z"
+  "commit": "826ca044f2ee09a27ee56946a64068ba197338b4",
+  "shortCommit": "826ca04",
+  "message": "feat(field-mapping): support multiline text area with variable insertion for compound notifications",
+  "builtAt": "2026-10-13T15:45:42.449Z"
 }
