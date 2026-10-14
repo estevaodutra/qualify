@@ -349,7 +349,7 @@ export default function Chat() {
                             </div>
                           )}
                           <h3 className="font-bold text-sm text-card-foreground leading-snug truncate group-hover:text-primary transition-colors">
-                            {selectedConv.lead?.name || selectedConv.contact_name || (isGrp ? "Grupo WhatsApp" : "Lead Sem Nome")}
+                            {selectedConv.lead?.name || (selectedConv.contact_name && selectedConv.contact_name !== "Grupo" ? selectedConv.contact_name : (isGrp ? "Grupo WhatsApp" : "Lead Sem Nome"))}
                           </h3>
                         </div>
                       );

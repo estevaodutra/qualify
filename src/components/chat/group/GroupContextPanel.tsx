@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   X,
   Users,
@@ -81,6 +81,18 @@ export default function GroupContextPanel({ conversation, onClose, onSelectConve
   const [nameInput, setNameInput] = useState(group.name);
   const [isEditingDesc, setIsEditingDesc] = useState(false);
   const [descInput, setDescInput] = useState(group.description);
+
+  useEffect(() => {
+    if (!isEditingName && group.name) {
+      setNameInput(group.name);
+    }
+  }, [group.name, isEditingName]);
+
+  useEffect(() => {
+    if (!isEditingDesc) {
+      setDescInput(group.description || "");
+    }
+  }, [group.description, isEditingDesc]);
 
   const [memberSearch, setMemberSearch] = useState("");
   const [showMemberSearch, setShowMemberSearch] = useState(false);
@@ -357,9 +369,19 @@ export default function GroupContextPanel({ conversation, onClose, onSelectConve
           </div>
 
           {/* Subtítulo: Grupo · X membros */}
-          <p className="text-xs text-muted-foreground font-medium">
-            Grupo · <span className="text-emerald-500 font-bold">{group.participantsCount || group.participants.length} membros</span>
-          </p>
+          <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground font-medium">
+            <span>Grupo</span>
+            <span>•</span>
+            {isLoading && !group.participantsCount && !group.participants.length ? (
+              <span className="text-amber-500 font-semibold flex items-center gap-1">
+                <Loader2 className="h-3 w-3 animate-spin" /> Carregando membros...
+              </span>
+            ) : (
+              <span className="text-emerald-500 font-bold">
+                {group.participantsCount || group.participants.length} membros
+              </span>
+            )}
+          </div>
 
           {/* Botões Redondos de Ação (Adicionar, Pesquisar) */}
           <div className="flex items-center justify-center gap-6 pt-2">
@@ -499,7 +521,17 @@ export default function GroupContextPanel({ conversation, onClose, onSelectConve
 
           {/* Lista de Membros */}
           <div className="space-y-1 pt-1">
-            {visibleParticipants.map((participant, index) => {
+            {isLoading && group.participants.length === 0 ? (
+              <div className="py-8 text-center text-xs text-muted-foreground flex flex-col items-center justify-center gap-2">
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                <span>Carregando membros do grupo...</span>
+              </div>
+            ) : visibleParticipants.length === 0 ? (
+              <div className="py-6 text-center text-xs text-muted-foreground/60 italic">
+                Nenhum membro encontrado.
+              </div>
+            ) : (
+              visibleParticipants.map((participant, index) => {
               const displayName = participant.name || formatPhone(participant.phone);
               const isLeadPhone = participant.phone === conversation.lead?.phone;
 
@@ -569,7 +601,7 @@ export default function GroupContextPanel({ conversation, onClose, onSelectConve
                   </div>
                 </div>
               );
-            })}
+            }))}
 
             {/* Botão Ver Tudo (Paginação) */}
             {filteredParticipants.length > 10 && !showAllMembers && (

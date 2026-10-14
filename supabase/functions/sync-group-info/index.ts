@@ -144,7 +144,7 @@ Deno.serve(async (req) => {
       metaObj.group_description ||
       null;
 
-    const pictureUrl =
+    let pictureUrl =
       metaObj.pictureUrl ||
       metaObj.picture ||
       metaObj.photo ||
@@ -152,7 +152,27 @@ Deno.serve(async (req) => {
       metaObj.icon ||
       metaObj.image ||
       metaObj.group_photo ||
+      metaObj.group_photo_url ||
       null;
+
+    // Se pictureUrl for nulo, tenta buscar foto já gravada no group_campaigns
+    if (!pictureUrl && companyId) {
+      try {
+        const { data: gcRow } = await supabase
+          .from("group_campaigns")
+          .select("group_photo_url")
+          .eq("company_id", companyId)
+          .or(`group_jid.eq.${normalizedJid},group_jid.eq.${finalGroupJid},group_jid.eq.${cleanGroupPhone}`)
+          .not("group_photo_url", "is", null)
+          .limit(1)
+          .maybeSingle();
+        if (gcRow?.group_photo_url) {
+          pictureUrl = gcRow.group_photo_url;
+        }
+      } catch (_gcErr) {
+        // Ignora erro
+      }
+    }
 
     const ownerJid =
       metaObj.ownerPn ||
@@ -270,17 +290,34 @@ Deno.serve(async (req) => {
         if (newLead) groupLeadId = newLead.id;
       }
 
-      // 4. Atualizar conversa correspondente
+      // 4. Atualizar conversa correspondente (vincula lead_id e contact_name no chat!)
       if (groupLeadId) {
         await supabase
           .from("chat_conversations")
           .update({
+            lead_id: groupLeadId,
             contact_name: groupName,
             updated_at: new Date().toISOString()
           })
           .eq("company_id", companyId)
-          .eq("lead_id", groupLeadId)
-          .eq("instance_id", instance.id);
+          .or(`lead_id.eq.${groupLeadId},contact_phone.eq.${finalGroupJid},contact_phone.eq.${finalGroupPhone},contact_phone.ilike.%${cleanGroupPhone}%`);
+      }
+
+      // 5. Atualizar group_campaigns se existir
+      try {
+        await supabase
+          .from("group_campaigns")
+          .update({
+            name: groupName,
+            group_name: groupName,
+            group_description: description,
+            group_photo_url: pictureUrl || undefined,
+            updated_at: new Date().toISOString()
+          })
+          .eq("company_id", companyId)
+          .or(`group_jid.eq.${finalGroupJid},group_jid.eq.${normalizedJid},group_jid.eq.${cleanGroupPhone}`);
+      } catch (_gcErr) {
+        // Ignora erro
       }
     }
 

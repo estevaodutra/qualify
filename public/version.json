@@ -1,6 +1,6 @@
 {
-  "commit": "9db53f0f7e8d9c620c4df72efc0a38fcc37eeb03",
-  "shortCommit": "9db53f0",
-  "message": "fix(workflows): prevent group workflow messages from syncing into lead private chat",
-  "builtAt": "2026-10-13T17:22:19.664Z"
+  "commit": "9584f12ce26a724a4940a0036f520f47c62ae76e",
+  "shortCommit": "9584f12",
+  "message": "feat(workflows): add unit dropdown (seconds, minutes, hours, days) for user input max wait timeout",
+  "builtAt": "2026-10-14T18:24:37.346Z"
 }

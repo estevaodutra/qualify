@@ -12,7 +12,7 @@ import ChatFilterDrawer from "./filters/ChatFilterDrawer";
 import ActiveFilterChips from "./filters/ActiveFilterChips";
 import ConversationActionsMenu from "./actions/ConversationActionsMenu";
 import { Button } from "@/components/ui/button";
-import { Pin, Archive, Inbox } from "lucide-react";
+import { Pin, Archive, Inbox, Users } from "lucide-react";
 
 interface InboxListProps {
   conversations: ChatConversation[];
@@ -314,9 +314,23 @@ export default function InboxList({
                       {conv.is_pinned && (
                         <Pin className="h-3.5 w-3.5 text-amber-500 shrink-0 fill-amber-500/20" title="Conversa Fixada" />
                       )}
-                      <span className="font-semibold text-sm truncate text-card-foreground">
-                        {conv.lead?.name?.trim() || conv.contact_name?.trim() || conv.lead?.phone || conv.contact_phone || "Contato Sem Nome"}
-                      </span>
+                      {(() => {
+                        const p = conv.lead?.phone || conv.contact_phone || "";
+                        const c = (conv.lead?.custom_fields as Record<string, any>) || {};
+                        const isGrp = p.length > 15 || p.includes("@g.us") || p.includes("-group") || c.is_group === true;
+                        return (
+                          <>
+                            {isGrp && (
+                              <div className="p-0.5 rounded bg-purple-500/10 text-purple-600 shrink-0" title="Grupo WhatsApp">
+                                <Users className="h-3 w-3" />
+                              </div>
+                            )}
+                            <span className="font-semibold text-sm truncate text-card-foreground">
+                              {conv.lead?.name?.trim() || (conv.contact_name && conv.contact_name !== "Grupo" ? conv.contact_name.trim() : null) || (isGrp ? "Grupo WhatsApp" : conv.lead?.phone || conv.contact_phone || "Contato Sem Nome")}
+                            </span>
+                          </>
+                        );
+                      })()}
                     </div>
                     
                     <div className="flex items-center gap-1.5 shrink-0">

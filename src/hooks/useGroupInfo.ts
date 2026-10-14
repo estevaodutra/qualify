@@ -71,6 +71,8 @@ export function useGroupInfo(conversation: ChatConversation | null) {
 
         if (error) throw error;
         if (data?.success && data.group) {
+          // Invalidate chat conversations list so the header and list reflect the real group name
+          queryClient.invalidateQueries({ queryKey: ["chat-conversations"] });
           return data.group as GroupInfo;
         }
       } catch (err: any) {
@@ -78,9 +80,9 @@ export function useGroupInfo(conversation: ChatConversation | null) {
       }
       return initialGroup;
     },
-    initialData: initialGroup,
+    placeholderData: initialGroup,
     enabled: !!isGroup && !!instanceId && !!groupJid,
-    staleTime: 1000 * 60 * 5, // 5 min
+    staleTime: (customFields.last_synced_at && (customFields.participants_count || customFields.participants?.length)) ? 1000 * 60 * 2 : 0,
   });
 
   // Mutação para forçar sincronização
@@ -96,7 +98,8 @@ export function useGroupInfo(conversation: ChatConversation | null) {
     onSuccess: (updatedGroup) => {
       if (updatedGroup) {
         queryClient.setQueryData(["group-info", conversation?.id, groupJid], updatedGroup);
-        queryClient.invalidateQueries({ queryKey: ["chat_conversations"] });
+        queryClient.invalidateQueries({ queryKey: ["chat-conversations"] });
+        queryClient.invalidateQueries({ queryKey: ["group-info"] });
         toast.success("Dados do grupo sincronizados!");
       }
     },
@@ -125,6 +128,7 @@ export function useGroupInfo(conversation: ChatConversation | null) {
         ...old,
         name: newName
       }));
+      queryClient.invalidateQueries({ queryKey: ["chat-conversations"] });
       toast.success("Nome do grupo atualizado!");
     },
     onError: (err: any) => toast.error("Falha ao renomear grupo: " + err.message)
