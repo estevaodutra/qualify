@@ -15,6 +15,7 @@ import {
   Folder, Check
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { fetchAllTagsWithAutoSync, notifyTagsUpdated } from "@/lib/tags/tagService";
 
 export interface TagGroup {
   id: string;
@@ -193,34 +194,17 @@ export function TagsTab() {
     const finalGroups = Array.from(mergedGroupsMap.values());
     setGroups(finalGroups);
 
-    // 2. Fetch Tags with fallback
-    try {
-      const { data: tagsData, error: tagsErr } = await supabase
-        .from("tags")
-        .select("*")
-        .eq("company_id", activeCompany.id)
-        .order("name", { ascending: true });
-
-      if (!tagsErr && tagsData) {
-        loadedTags = tagsData as TagItem[];
-      } else {
-        loadedTags = getLocalTags(activeCompany.id);
-      }
-    } catch {
-      loadedTags = getLocalTags(activeCompany.id);
-    }
-
-    // Merge local tags
-    const localTags = getLocalTags(activeCompany.id);
-    const mergedTagsMap = new Map<string, TagItem>();
-    loadedTags.forEach((t) => mergedTagsMap.set(t.id, t));
-    localTags.forEach((t) => {
-      if (!mergedTagsMap.has(t.id)) mergedTagsMap.set(t.id, t);
-    });
-
+    // 2. Fetch Tags with auto-sync from database, leads and workflows
+    const syncedTags = await fetchAllTagsWithAutoSync(activeCompany.id);
     const groupMap = new Map(finalGroups.map((g) => [g.id, g]));
-    const finalTags = Array.from(mergedTagsMap.values()).map((t) => ({
-      ...t,
+    const finalTags = syncedTags.map((t) => ({
+      id: t.id || `tag_${t.name}`,
+      company_id: t.company_id || activeCompany.id,
+      name: t.name,
+      color: t.color || "#8A3CFF",
+      group_id: t.group_id || null,
+      description: t.description || null,
+      created_at: t.created_at || new Date().toISOString(),
       group: t.group_id ? groupMap.get(t.group_id) || null : null,
     }));
 
@@ -230,6 +214,12 @@ export function TagsTab() {
 
   useEffect(() => {
     fetchData();
+
+    const handleTagsUpdated = () => {
+      fetchData();
+    };
+    window.addEventListener("qualify-tags-updated", handleTagsUpdated);
+    return () => window.removeEventListener("qualify-tags-updated", handleTagsUpdated);
   }, [activeCompany?.id]);
 
   // Open Tag Modal

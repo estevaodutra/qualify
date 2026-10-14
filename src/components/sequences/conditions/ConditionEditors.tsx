@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { AlertCircle, Tag as TagIcon, Layers, Users, FileText, CheckCircle2, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ConditionDefinition, getConditionOutputs } from "./conditionRegistry";
+import { fetchAllTagsWithAutoSync } from "@/lib/tags/tagService";
 
 interface ConditionEditorsProps {
   conditionDef: ConditionDefinition;
@@ -54,28 +55,10 @@ export const ConditionEditors: React.FC<ConditionEditorsProps> = ({
         if (sData) setPipelineStages(sData);
 
         // Tags da empresa sincronizadas com tabela tags e cache local
-        let dbTags: { name: string }[] = [];
-        try {
-          const { data: tData } = await supabase
-            .from("tags")
-            .select("name")
-            .eq("company_id", activeCompanyId)
-            .order("name", { ascending: true });
-          if (tData) dbTags = tData;
-        } catch (e) {
-          console.warn("Erro ao buscar tags:", e);
+        if (activeCompanyId) {
+          const tags = await fetchAllTagsWithAutoSync(activeCompanyId);
+          setAvailableTags(tags.map((t) => t.name));
         }
-
-        let localTags: { name: string }[] = [];
-        try {
-          const raw = localStorage.getItem(`qualify_tags_${activeCompanyId}`);
-          if (raw) localTags = JSON.parse(raw);
-        } catch {}
-
-        const tagSet = new Set<string>();
-        dbTags.forEach((t) => t?.name && tagSet.add(t.name.trim()));
-        localTags.forEach((t) => t?.name && tagSet.add(t.name.trim()));
-        setAvailableTags(Array.from(tagSet));
 
         // Company Members (Attendants)
         const { data: membersData } = await supabase
@@ -98,6 +81,15 @@ export const ConditionEditors: React.FC<ConditionEditorsProps> = ({
     };
 
     loadResources();
+
+    const handleTagsUpdated = async () => {
+      if (activeCompanyId) {
+        const tags = await fetchAllTagsWithAutoSync(activeCompanyId);
+        setAvailableTags(tags.map((t) => t.name));
+      }
+    };
+    window.addEventListener("qualify-tags-updated", handleTagsUpdated);
+    return () => window.removeEventListener("qualify-tags-updated", handleTagsUpdated);
   }, [activeCompanyId]);
 
   const updateParam = (key: string, value: any) => {

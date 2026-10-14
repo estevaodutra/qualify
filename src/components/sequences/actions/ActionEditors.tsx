@@ -17,34 +17,14 @@ interface CompanyTag {
   color?: string;
 }
 
-const LOCAL_TAGS_KEY = (companyId: string) => `qualify_tags_${companyId}`;
-
-function getLocalTags(companyId: string): CompanyTag[] {
-  try {
-    const raw = localStorage.getItem(LOCAL_TAGS_KEY(companyId));
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveLocalTag(companyId: string, tag: { name: string; color?: string }): CompanyTag {
-  try {
-    const raw = localStorage.getItem(LOCAL_TAGS_KEY(companyId));
-    const existing: CompanyTag[] = raw ? JSON.parse(raw) : [];
-    const newTag: CompanyTag = {
-      id: `tag_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      name: tag.name.trim(),
-      color: tag.color || "#8A3CFF",
-    };
-    const updated = [...existing.filter((t) => t.name?.toLowerCase() !== newTag.name.toLowerCase()), newTag];
-    localStorage.setItem(LOCAL_TAGS_KEY(companyId), JSON.stringify(updated));
-    return newTag;
-  } catch (e) {
-    console.warn("Could not save tag locally", e);
-    return { id: `tag_${Date.now()}`, name: tag.name.trim(), color: tag.color || "#8A3CFF" };
-  }
-}
+import {
+  CompanyTag,
+  getLocalTags,
+  saveLocalTag,
+  ensureTagExists,
+  fetchAllTagsWithAutoSync,
+  notifyTagsUpdated,
+} from "@/lib/tags/tagService";
 
 interface ActionEditorsProps {
   actionDef: ActionDefinition;
@@ -89,32 +69,10 @@ export const ActionEditors: React.FC<ActionEditorsProps> = ({
         if (sData) setPipelineStages(sData);
 
         // Tags - sincronizado com a tabela tags da empresa e o cache local oficial
-        let dbTags: CompanyTag[] = [];
-        try {
-          const { data: tData, error: tErr } = await supabase
-            .from("tags")
-            .select("id, name, color")
-            .eq("company_id", activeCompanyId)
-            .order("name", { ascending: true });
-          if (!tErr && tData) {
-            dbTags = tData as CompanyTag[];
-          }
-        } catch (err) {
-          console.warn("Erro ao buscar tags da tabela:", err);
+        if (activeCompanyId) {
+          const tags = await fetchAllTagsWithAutoSync(activeCompanyId);
+          setAvailableTags(tags);
         }
-
-        const localTags = getLocalTags(activeCompanyId);
-        const mergedMap = new Map<string, CompanyTag>();
-        dbTags.forEach((t) => {
-          if (t?.name) mergedMap.set(t.name.trim().toLowerCase(), t);
-        });
-        localTags.forEach((t) => {
-          if (t?.name && !mergedMap.has(t.name.trim().toLowerCase())) {
-            mergedMap.set(t.name.trim().toLowerCase(), t);
-          }
-        });
-
-        setAvailableTags(Array.from(mergedMap.values()));
 
         // Company Members (Attendants)
         const { data: membersData } = await supabase
@@ -135,6 +93,15 @@ export const ActionEditors: React.FC<ActionEditorsProps> = ({
     };
 
     loadResources();
+
+    const handleTagsUpdated = async () => {
+      if (activeCompanyId) {
+        const tags = await fetchAllTagsWithAutoSync(activeCompanyId);
+        setAvailableTags(tags);
+      }
+    };
+    window.addEventListener("qualify-tags-updated", handleTagsUpdated);
+    return () => window.removeEventListener("qualify-tags-updated", handleTagsUpdated);
   }, [activeCompanyId]);
 
   const updateParam = (key: string, value: any) => {
@@ -262,27 +229,12 @@ export const ActionEditors: React.FC<ActionEditorsProps> = ({
             updateParam("tags", [...selectedTags, trimmed]);
           }
 
-          // Se a tag ainda não existir no cadastro, cadastra localmente e no banco
-          const existsInAvailable = availableTags.some(
-            (t) => t.name.toLowerCase() === trimmed.toLowerCase()
-          );
-
-          if (!existsInAvailable && activeCompanyId) {
-            const newTag = saveLocalTag(activeCompanyId, {
-              name: trimmed,
-              color: "#8A3CFF",
+          if (activeCompanyId) {
+            const saved = await ensureTagExists(activeCompanyId, trimmed);
+            setAvailableTags((prev) => {
+              if (prev.some((t) => t.name.toLowerCase() === trimmed.toLowerCase())) return prev;
+              return [...prev, saved];
             });
-            setAvailableTags((prev) => [...prev, newTag]);
-
-            try {
-              await supabase.from("tags").insert({
-                company_id: activeCompanyId,
-                name: trimmed,
-                color: "#8A3CFF",
-              });
-            } catch (err) {
-              console.warn("Falha ao persistir tag no banco:", err);
-            }
           }
 
           setTagSearch("");

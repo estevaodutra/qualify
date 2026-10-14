@@ -42,8 +42,10 @@ export function EditLeadDialog({ lead, onOpenChange, onSubmit, isLoading }: Edit
   };
 
   const addTag = () => {
-    const tag = tagInput.trim().toLowerCase();
-    if (tag && !tags.includes(tag)) setTags([...tags, tag]);
+    const tag = tagInput.trim();
+    if (tag && !tags.some((t) => t.toLowerCase() === tag.toLowerCase())) {
+      setTags([...tags, tag]);
+    }
     setTagInput("");
   };
 

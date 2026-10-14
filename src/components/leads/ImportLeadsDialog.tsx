@@ -161,8 +161,10 @@ export function ImportLeadsDialog({ open, onOpenChange, onImport, isLoading, cam
   };
 
   const addTag = () => {
-    const tag = tagInput.trim().toLowerCase();
-    if (tag && !defaultTags.includes(tag)) setDefaultTags([...defaultTags, tag]);
+    const tag = tagInput.trim();
+    if (tag && !defaultTags.some((t) => t.toLowerCase() === tag.toLowerCase())) {
+      setDefaultTags([...defaultTags, tag]);
+    }
     setTagInput("");
   };
 

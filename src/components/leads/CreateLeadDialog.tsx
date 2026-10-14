@@ -28,8 +28,8 @@ export function CreateLeadDialog({ open, onOpenChange, onSubmit, isLoading }: Cr
   };
 
   const addTag = () => {
-    const tag = tagInput.trim().toLowerCase();
-    if (tag && !tags.includes(tag)) {
+    const tag = tagInput.trim();
+    if (tag && !tags.some((t) => t.toLowerCase() === tag.toLowerCase())) {
       setTags([...tags, tag]);
     }
     setTagInput("");

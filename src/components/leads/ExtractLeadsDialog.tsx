@@ -8,6 +8,8 @@ import { useDispatchCampaigns } from "@/hooks/useDispatchCampaigns";
 import { useGroupCampaigns } from "@/hooks/useGroupCampaigns";
 import { useWebhookConfigs } from "@/hooks/useWebhookConfigs";
 import { buildGroupPayload } from "@/lib/webhook-utils";
+import { useCompany } from "@/contexts/CompanyContext";
+import { ensureMultipleTagsExist } from "@/lib/tags/tagService";
 import { toast } from "sonner";
 
 import {
@@ -93,6 +95,7 @@ export function ExtractLeadsDialog({ open, onOpenChange }: Props) {
   const { campaigns: callCampaigns } = useCallCampaigns();
   const { campaigns: dispatchCampaigns } = useDispatchCampaigns();
   const { campaigns: groupCampaigns } = useGroupCampaigns();
+  const { activeCompany } = useCompany();
 
   // ── Step state ──
   const [step, setStep] = useState<Step>(1);
@@ -369,6 +372,10 @@ export function ExtractLeadsDialog({ open, onOpenChange }: Props) {
     if (!user) return;
     setStep("importing");
     setImportProgress(0);
+
+    if (activeCompany?.id && tags.length > 0) {
+      await ensureMultipleTagsExist(activeCompany.id, tags);
+    }
 
     // Group members by source group for detailed results
     const groupMap = new Map<string, ExtractedMember[]>();

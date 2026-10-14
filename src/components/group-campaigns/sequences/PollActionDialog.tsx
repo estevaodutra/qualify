@@ -43,6 +43,8 @@ import { useGroupCampaigns } from "@/hooks/useGroupCampaigns";
 import { useDispatchCampaigns } from "@/hooks/useDispatchCampaigns";
 import { useCampaignGroups } from "@/hooks/useCampaignGroups";
 import { useGroupExecutionList } from "@/hooks/useGroupExecutionList";
+import { useCompany } from "@/contexts/CompanyContext";
+import { fetchAllTagsWithAutoSync, ensureTagExists, ensureMultipleTagsExist, CompanyTag } from "@/lib/tags/tagService";
 
 // Action types
 export type PollActionType =
@@ -198,6 +200,14 @@ export function PollActionDialog({
   const sequences = isDispatchSelected ? dispatchSequences : groupSequences;
   
   const { linkedGroups } = useCampaignGroups(currentCampaignId || null);
+  const { activeCompany } = useCompany();
+  const [availableCompanyTags, setAvailableCompanyTags] = useState<CompanyTag[]>([]);
+
+  useEffect(() => {
+    if (open && activeCompany?.id) {
+      fetchAllTagsWithAutoSync(activeCompany.id).then(setAvailableCompanyTags);
+    }
+  }, [open, activeCompany?.id]);
 
   // Tag input state
   const [newTag, setNewTag] = useState("");
@@ -223,18 +233,37 @@ export function PollActionDialog({
     setConfig((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (actionType === "add_tag" && Array.isArray(config.tags) && config.tags.length > 0 && activeCompany?.id) {
+      await ensureMultipleTagsExist(activeCompany.id, config.tags as string[]);
+    }
     onSave({ actionType, config });
     onClose();
   };
 
-  const addTag = () => {
-    if (newTag.trim()) {
+  const addTag = async () => {
+    const trimmed = newTag.trim();
+    if (trimmed) {
       const tags = (config.tags as string[]) || [];
-      if (!tags.includes(newTag.trim())) {
-        updateConfig("tags", [...tags, newTag.trim()]);
+      if (!tags.includes(trimmed)) {
+        updateConfig("tags", [...tags, trimmed]);
+      }
+      if (activeCompany?.id) {
+        await ensureTagExists(activeCompany.id, trimmed);
       }
       setNewTag("");
+    }
+  };
+
+  const toggleExistingTag = async (tagName: string) => {
+    const tags = (config.tags as string[]) || [];
+    if (tags.includes(tagName)) {
+      updateConfig("tags", tags.filter((t) => t !== tagName));
+    } else {
+      updateConfig("tags", [...tags, tagName]);
+      if (activeCompany?.id) {
+        await ensureTagExists(activeCompany.id, tagName);
+      }
     }
   };
 
@@ -511,6 +540,31 @@ export function PollActionDialog({
                       </Badge>
                     ))}
                   </div>
+
+                  {availableCompanyTags.length > 0 && (
+                    <div className="pt-2">
+                      <Label className="text-xs text-muted-foreground">Tags cadastradas:</Label>
+                      <div className="flex flex-wrap gap-1.5 mt-1.5 max-h-24 overflow-y-auto">
+                        {availableCompanyTags
+                          .filter((t) => !((config.tags as string[]) || []).includes(t.name))
+                          .map((t) => (
+                            <Badge
+                              key={t.id || t.name}
+                              variant="outline"
+                              className="cursor-pointer hover:bg-primary/10 transition-colors text-xs gap-1"
+                              onClick={() => toggleExistingTag(t.name)}
+                            >
+                              <span
+                                className="h-2 w-2 rounded-full"
+                                style={{ backgroundColor: t.color || "#8A3CFF" }}
+                              />
+                              {t.name}
+                            </Badge>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
                   <p className="text-xs text-muted-foreground">
                     Tags são usadas para segmentar participantes
                   </p>

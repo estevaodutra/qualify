@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Check, Plus, Tag, Search, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { fetchAllTagsWithAutoSync, ensureTagExists, CompanyTag } from "@/lib/tags/tagService";
 
 interface TagSelectorPopoverProps {
   leadId?: string;
@@ -15,23 +16,6 @@ interface TagSelectorPopoverProps {
   onTagsChange?: (newTags: string[]) => void;
   trigger?: React.ReactNode;
   align?: "start" | "center" | "end";
-}
-
-interface TagItem {
-  id: string;
-  name: string;
-  color: string;
-}
-
-const LOCAL_TAGS_KEY = (companyId: string) => `qualify_tags_${companyId}`;
-
-function getLocalTags(companyId: string): TagItem[] {
-  try {
-    const raw = localStorage.getItem(LOCAL_TAGS_KEY(companyId));
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
 }
 
 export function TagSelectorPopover({
@@ -49,32 +33,21 @@ export function TagSelectorPopover({
   const [searchQuery, setSearchQuery] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // Fetch company system tags
-  const { data: systemTags = [], isLoading } = useQuery<TagItem[]>({
+  // Listen to cross-system tag updates
+  useEffect(() => {
+    const handleUpdate = () => {
+      queryClient.invalidateQueries({ queryKey: ["company-tags-selector", activeCompany?.id] });
+    };
+    window.addEventListener("qualify-tags-updated", handleUpdate);
+    return () => window.removeEventListener("qualify-tags-updated", handleUpdate);
+  }, [activeCompany?.id, queryClient]);
+
+  // Fetch company system tags with auto sync
+  const { data: systemTags = [], isLoading } = useQuery<CompanyTag[]>({
     queryKey: ["company-tags-selector", activeCompany?.id],
     queryFn: async () => {
       if (!activeCompany?.id) return [];
-      let dbTags: TagItem[] = [];
-      try {
-        const { data, error } = await supabase
-          .from("tags")
-          .select("id, name, color")
-          .eq("company_id", activeCompany.id)
-          .order("name", { ascending: true });
-
-        if (!error && data) dbTags = data as TagItem[];
-      } catch {
-        // Fallback silently if table cache error
-      }
-
-      const local = getLocalTags(activeCompany.id);
-      const mergedMap = new Map<string, TagItem>();
-      dbTags.forEach((t) => mergedMap.set(t.name.toLowerCase(), t));
-      local.forEach((t) => {
-        if (!mergedMap.has(t.name.toLowerCase())) mergedMap.set(t.name.toLowerCase(), t);
-      });
-
-      return Array.from(mergedMap.values());
+      return await fetchAllTagsWithAutoSync(activeCompany.id);
     },
     enabled: !!activeCompany?.id && open,
   });
@@ -83,6 +56,11 @@ export function TagSelectorPopover({
     if (!searchQuery.trim()) return systemTags;
     const q = searchQuery.toLowerCase();
     return systemTags.filter((t) => t.name.toLowerCase().includes(q));
+  }, [systemTags, searchQuery]);
+
+  const exactMatch = useMemo(() => {
+    if (!searchQuery.trim()) return true;
+    return systemTags.some((t) => t.name.toLowerCase() === searchQuery.trim().toLowerCase());
   }, [systemTags, searchQuery]);
 
   const handleToggleTag = async (tagName: string) => {
@@ -95,6 +73,9 @@ export function TagSelectorPopover({
       nextTags = currentTags.filter((t) => t.toLowerCase() !== tagName.toLowerCase());
     } else {
       nextTags = [...currentTags, tagName];
+      if (activeCompany?.id) {
+        await ensureTagExists(activeCompany.id, tagName);
+      }
     }
 
     try {
@@ -108,6 +89,7 @@ export function TagSelectorPopover({
       if (onTagsChange) onTagsChange(nextTags);
       queryClient.invalidateQueries({ queryKey: ["chat-conversations"] });
       queryClient.invalidateQueries({ queryKey: ["lead-deals"] });
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
 
       toast({
         title: exists ? "Tag removida" : "Tag adicionada",
@@ -118,6 +100,25 @@ export function TagSelectorPopover({
       toast({
         title: "Erro ao atualizar tag",
         description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleCreateNewTag = async () => {
+    const trimmed = searchQuery.trim();
+    if (!trimmed || !activeCompany?.id) return;
+    setIsUpdating(true);
+    try {
+      await ensureTagExists(activeCompany.id, trimmed);
+      await handleToggleTag(trimmed);
+      setSearchQuery("");
+    } catch (e: any) {
+      toast({
+        title: "Erro ao criar tag",
+        description: e.message,
         variant: "destructive",
       });
     } finally {
@@ -160,6 +161,19 @@ export function TagSelectorPopover({
             className="pl-8 h-7 text-xs rounded-xl border-border/40 bg-background/50"
           />
         </div>
+
+        {/* Create new tag option if not exact match */}
+        {!exactMatch && searchQuery.trim().length > 0 && (
+          <button
+            type="button"
+            onClick={handleCreateNewTag}
+            disabled={isUpdating}
+            className="w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-primary/10 text-primary hover:bg-primary/20 transition-all cursor-pointer"
+          >
+            <Plus className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">Criar &ldquo;{searchQuery.trim()}&rdquo;</span>
+          </button>
+        )}
 
         {/* List */}
         <div className="max-h-48 overflow-y-auto space-y-1 pt-1 scrollbar-thin">

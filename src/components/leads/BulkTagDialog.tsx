@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { useCompany } from "@/contexts/CompanyContext";
+import { ensureTagExists } from "@/lib/tags/tagService";
 import type { Lead } from "@/types/crm.types";
 
 interface BulkTagDialogProps {
@@ -18,6 +20,7 @@ interface BulkTagDialogProps {
 }
 
 export function BulkTagDialog({ open, onOpenChange, mode, leads, selectedIds, availableTags = [], onSubmit, isLoading }: BulkTagDialogProps) {
+  const { activeCompany } = useCompany();
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
 
@@ -69,6 +72,9 @@ export function BulkTagDialog({ open, onOpenChange, mode, leads, selectedIds, av
     const tag = tagInput.trim();
     if (tag && !selectedTags.includes(tag)) {
       setSelectedTags([...selectedTags, tag]);
+      if (activeCompany?.id) {
+        ensureTagExists(activeCompany.id, tag);
+      }
     }
     setTagInput("");
   };

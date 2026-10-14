@@ -1,6 +1,6 @@
 {
-  "commit": "12b875ba3357ba341aaebaed1490d9973cdb771f",
-  "shortCommit": "12b875b",
-  "message": "fix(chat): sincronizar nome real, descricao, membros e foto de grupos do WhatsApp no chat",
-  "builtAt": "2026-10-14T18:55:24.232Z"
+  "commit": "e93b645845598d101d718d9951d867b5054da2d7",
+  "shortCommit": "e93b645",
+  "message": "fix(chat): ajustar proporcoes do painel de dados do grupo e avatar",
+  "builtAt": "2026-10-14T20:18:34.656Z"
 }

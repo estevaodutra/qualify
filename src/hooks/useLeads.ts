@@ -1,8 +1,10 @@
+import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/contexts/CompanyContext";
 import { safeBatchUpsert } from "@/lib/supabase-batch";
+import { ensureMultipleTagsExist, fetchAllTagsWithAutoSync } from "@/lib/tags/tagService";
 
 import { Lead } from "@/types/crm.types";
 
@@ -116,61 +118,20 @@ export function useLeads(filters: LeadFilters = {}) {
     },
   });
 
+  useEffect(() => {
+    const handleUpdate = () => {
+      queryClient.invalidateQueries({ queryKey: ["leads-tags", activeCompanyId] });
+    };
+    window.addEventListener("qualify-tags-updated", handleUpdate);
+    return () => window.removeEventListener("qualify-tags-updated", handleUpdate);
+  }, [activeCompanyId, queryClient]);
+
   const tagNamesQuery = useQuery({
     queryKey: ["leads-tags", activeCompanyId],
     queryFn: async () => {
-      const tagSet = new Set<string>();
-
-      // 1. Fetch system tags from 'tags' table
-      try {
-        const { data: dbTags } = await supabase
-          .from("tags")
-          .select("name");
-        if (dbTags) {
-          dbTags.forEach((t: any) => {
-            if (t.name) tagSet.add(t.name);
-          });
-        }
-      } catch (_e) {}
-
-      // 2. Fetch local storage tags fallback
-      if (activeCompanyId) {
-        try {
-          const rawLocal = localStorage.getItem(`qualify_tags_${activeCompanyId}`);
-          if (rawLocal) {
-            const parsed = JSON.parse(rawLocal);
-            if (Array.isArray(parsed)) {
-              parsed.forEach((t: any) => {
-                if (t.name) tagSet.add(t.name);
-              });
-            }
-          }
-        } catch (_e) {}
-      }
-
-      // 3. Fetch tags used on existing leads
-      const { data: authData } = await supabase.auth.getUser();
-      const currentUserId = authData?.user?.id;
-
-      let query = supabase
-        .from("leads")
-        .select("tags")
-        .not("tags", "is", null);
-
-      if (currentUserId) {
-        query = query.eq("user_id", currentUserId);
-      }
-
-      const { data: leadRows } = await query;
-      if (leadRows) {
-        leadRows.forEach((row: any) => {
-          if (Array.isArray(row.tags)) {
-            row.tags.forEach((t: string) => tagSet.add(t));
-          }
-        });
-      }
-
-      return Array.from(tagSet);
+      if (!activeCompanyId) return [];
+      const tags = await fetchAllTagsWithAutoSync(activeCompanyId);
+      return tags.map((t) => t.name);
     },
   });
 
@@ -199,13 +160,17 @@ export function useLeads(filters: LeadFilters = {}) {
     mutationFn: async (lead: { name?: string; phone: string; email?: string; lid?: string; tags?: string[] }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
+      const cleanTags = (lead.tags || []).map((t) => t.trim()).filter(Boolean);
+      if (activeCompanyId && cleanTags.length > 0) {
+        await ensureMultipleTagsExist(activeCompanyId, cleanTags);
+      }
       const { data, error } = await supabase.from("leads").insert({
         user_id: user.id,
         name: lead.name || null,
         phone: lead.phone,
         lid: lead.lid || null,
         email: lead.email || null,
-        tags: lead.tags || [],
+        tags: cleanTags,
         source_type: "manual",
       }).select().single();
       if (error) throw error;
@@ -214,6 +179,7 @@ export function useLeads(filters: LeadFilters = {}) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
       queryClient.invalidateQueries({ queryKey: ["leads-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-tags"] });
       toast({ title: "Lead criado com sucesso" });
     },
     onError: (err: Error) => {
@@ -233,12 +199,17 @@ export function useLeads(filters: LeadFilters = {}) {
         updates.name = null;
       }
 
+      if (activeCompanyId && Array.isArray(updates.tags) && updates.tags.length > 0) {
+        await ensureMultipleTagsExist(activeCompanyId, updates.tags);
+      }
+
       const { data, error } = await supabase.from("leads").update(updates as any).eq("id", id).select().single();
       if (error) throw error;
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-tags"] });
       toast({ title: "Lead atualizado com sucesso" });
     },
     onError: (err: Error) => {
@@ -279,6 +250,11 @@ export function useLeads(filters: LeadFilters = {}) {
 
   const bulkAddTags = useMutation({
     mutationFn: async ({ ids, tags }: { ids: string[]; tags: string[] }) => {
+      const cleanTags = tags.map((t) => t.trim()).filter(Boolean);
+      if (activeCompanyId && cleanTags.length > 0) {
+        await ensureMultipleTagsExist(activeCompanyId, cleanTags);
+      }
+
       for (let i = 0; i < ids.length; i += SYNC_BATCH_SIZE) {
         const batch = ids.slice(i, i + SYNC_BATCH_SIZE);
         const { data, error: fetchErr } = await supabase.from("leads").select("id, tags").in("id", batch);
@@ -286,7 +262,7 @@ export function useLeads(filters: LeadFilters = {}) {
 
         for (const lead of data || []) {
           const existingTags: string[] = Array.isArray(lead.tags) ? lead.tags : [];
-          const merged = Array.from(new Set([...existingTags, ...tags]));
+          const merged = Array.from(new Set([...existingTags, ...cleanTags]));
           await supabase.from("leads").update({ tags: merged }).eq("id", lead.id);
         }
       }
@@ -447,11 +423,19 @@ export function useLeads(filters: LeadFilters = {}) {
         }
       }
 
+      const allTagsToRegister = new Set<string>();
+      defaultTags?.forEach((t) => t && allTagsToRegister.add(t.trim()));
+      leads.forEach((l) => l.tags?.forEach((t) => t && allTagsToRegister.add(t.trim())));
+      if (activeCompanyId && allTagsToRegister.size > 0) {
+        await ensureMultipleTagsExist(activeCompanyId, Array.from(allTagsToRegister));
+      }
+
       return { imported, updated, skipped };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
       queryClient.invalidateQueries({ queryKey: ["leads-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-tags"] });
       toast({ title: "Importação concluída" });
     },
     onError: () => toast({ title: "Erro na importação", variant: "destructive" }),
