@@ -1,6 +1,6 @@
 {
-  "commit": "e93b645845598d101d718d9951d867b5054da2d7",
-  "shortCommit": "e93b645",
-  "message": "fix(chat): ajustar proporcoes do painel de dados do grupo e avatar",
-  "builtAt": "2026-10-14T20:18:34.656Z"
+  "commit": "fc288701671c28c6593bd27b4511138f996be2b1",
+  "shortCommit": "fc28870",
+  "message": "fix(tags): persistir e sincronizar tags globalmente em workflows, leads, chat e configuracoes",
+  "builtAt": "2026-10-14T21:07:31.413Z"
 }
