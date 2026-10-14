@@ -152,25 +152,14 @@ export function PublicationsView({
       });
 
       if (isPublishNow) {
-        // Simulate direct Meta API publish execution
-        setTimeout(async () => {
-          await criafyService.updatePublicationStatus(pub.id, "PUBLISHED", {
-            published_at: new Date().toISOString(),
-            ig_media_id: `ig_${Date.now()}`,
-            ig_permalink: `https://instagram.com/p/criafy_${Date.now()}`,
-          });
-
-          await criafyService.logPublicationAttempt({
-            company_id: activeCompanyId,
-            publication_id: pub.id,
-            attempt_number: 1,
-            status: "SUCCESS",
-            raw_response_sanitized: { status_code: 200, result: "OK" },
-          });
-
-          toast.success("Publicação realizada com sucesso no Instagram!");
-          loadData();
-        }, 1500);
+        toast.loading("Enviando para a Meta Instagram Graph API...", { id: "publish-direct" });
+        try {
+          await criafyService.publishNow(pub.id);
+          toast.success("Publicação realizada com sucesso no Instagram!", { id: "publish-direct" });
+        } catch (publishErr: any) {
+          toast.error(`Falha ao publicar na Meta: ${publishErr.message}`, { id: "publish-direct" });
+        }
+        loadData();
       } else {
         toast.success("Publicação agendada com sucesso!");
         loadData();
@@ -181,6 +170,18 @@ export function PublicationsView({
       toast.error(`Erro ao salvar publicação: ${err.message}`);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleRetryPublication = async (pubId: string) => {
+    toast.loading("Tentando publicar novamente na Meta...", { id: "retry-publish" });
+    try {
+      await criafyService.publishNow(pubId);
+      toast.success("Publicação realizada com sucesso!", { id: "retry-publish" });
+      loadData();
+    } catch (err: any) {
+      toast.error(`Erro na nova tentativa: ${err.message}`, { id: "retry-publish" });
+      loadData();
     }
   };
 
@@ -303,6 +304,17 @@ export function PublicationsView({
               </div>
 
               <div className="flex items-center gap-2 self-end md:self-center">
+                {pub.status === "FAILED" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs text-rose-600 border-rose-500/30 hover:bg-rose-500/10"
+                    onClick={() => handleRetryPublication(pub.id)}
+                  >
+                    Tentar Novamente
+                  </Button>
+                )}
+
                 {pub.ig_permalink && (
                   <a
                     href={pub.ig_permalink}

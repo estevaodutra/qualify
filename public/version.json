@@ -1,6 +1,6 @@
 {
-  "commit": "24df5436fd6fa0395576253d26369d7143c43aa3",
-  "shortCommit": "24df543",
-  "message": "fix(criafy): corrigir import do Label em MediaLibraryView",
-  "builtAt": "2026-10-14T21:14:25.198Z"
+  "commit": "acd104d0f84aa386b57eecaf82b3f4d724c44ec0",
+  "shortCommit": "acd104d",
+  "message": "feat(criafy): implementar Fase 4 (validacao tecnica Meta) e Fase 5 (credenciais OpenAI centralizadas e Edge Function IA)",
+  "builtAt": "2026-10-14T21:31:46.455Z"
 }

@@ -353,6 +353,17 @@ export const criafyService = {
     if (error) throw error;
   },
 
+  async publishNow(publicationId: string): Promise<{ igMediaId: string; igPermalink?: string }> {
+    const { data, error } = await supabase.functions.invoke("criafy-publish-job", {
+      body: { publicationId },
+    });
+
+    if (error || !data?.success) {
+      throw new Error(data?.error || error?.message || "Erro ao publicar no Instagram.");
+    }
+    return data;
+  },
+
   // ==========================================
   // REGRAS DE FILA AUTOMÁTICA
   // ==========================================
