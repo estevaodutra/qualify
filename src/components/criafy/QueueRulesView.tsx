@@ -41,6 +41,7 @@ export function QueueRulesView({
   const [rule, setRule] = useState<CriafyQueueRule | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [generatingQueue, setGeneratingQueue] = useState(false);
 
   const [postsPerDay, setPostsPerDay] = useState(2);
   const [publicationTimes, setPublicationTimes] = useState<string[]>(["08:00", "18:00"]);
@@ -122,6 +123,27 @@ export function QueueRulesView({
       toast.error(`Erro ao salvar fila: ${err.message}`);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleGenerateQueue = async () => {
+    if (!targetAccount) return;
+    setGeneratingQueue(true);
+    try {
+      const res = await criafyService.generateAutoQueue(
+        targetAccount.company_id,
+        targetAccount.id
+      );
+      toast.success(
+        `${res.createdCount} publicação(ões) gerada(s) e agendada(s) automaticamente!`,
+        {
+          description: `Período: ${new Date(res.startDate).toLocaleDateString("pt-BR")} até ${new Date(res.endDate).toLocaleDateString("pt-BR")}`,
+        }
+      );
+    } catch (err: any) {
+      toast.error(`Erro ao gerar fila: ${err.message}`);
+    } finally {
+      setGeneratingQueue(false);
     }
   };
 
@@ -276,8 +298,23 @@ export function QueueRulesView({
             </div>
           </div>
 
-          <div className="pt-4 border-t border-muted flex justify-end">
-            <Button type="submit" disabled={saving} className="gap-2">
+          <div className="pt-4 border-t border-muted flex flex-col sm:flex-row items-center justify-between gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleGenerateQueue}
+              disabled={generatingQueue || !isActive}
+              className="w-full sm:w-auto text-xs gap-1.5 text-pink-600 border-pink-500/30 hover:bg-pink-500/10"
+            >
+              {generatingQueue ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Play className="w-3.5 h-3.5" />
+              )}
+              Gerar Fila com Conteúdos Disponíveis
+            </Button>
+
+            <Button type="submit" disabled={saving} className="w-full sm:w-auto gap-2">
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
               Salvar Regras de Cadência
             </Button>

@@ -16,6 +16,7 @@ import {
   BarChart3,
   CheckCircle2,
   RefreshCw,
+  CalendarDays,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -26,6 +27,7 @@ import { CriafyInstagramAccount } from "@/types/criafy";
 import { MediaLibraryView } from "@/components/criafy/MediaLibraryView";
 import { PublicationsView } from "@/components/criafy/PublicationsView";
 import { QueueRulesView } from "@/components/criafy/QueueRulesView";
+import { CriafyCalendarView } from "@/components/criafy/CriafyCalendarView";
 import { AddAccountModal } from "@/components/criafy/AddAccountModal";
 import { AccountBriefingModal } from "@/components/criafy/AccountBriefingModal";
 
@@ -293,6 +295,9 @@ export default function CriafyHub() {
           <TabsTrigger value="fila" className="text-xs gap-1.5 h-8">
             <Clock className="w-3.5 h-3.5" /> Fila Automática & Cadência
           </TabsTrigger>
+          <TabsTrigger value="calendario" className="text-xs gap-1.5 h-8">
+            <CalendarDays className="w-3.5 h-3.5" /> Calendário
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="conteudos">
@@ -313,6 +318,14 @@ export default function CriafyHub() {
 
         <TabsContent value="fila">
           <QueueRulesView
+            accounts={accounts}
+            selectedAccountId={selectedAccountId}
+            onSelectAccountFilter={setSelectedAccountId}
+          />
+        </TabsContent>
+
+        <TabsContent value="calendario">
+          <CriafyCalendarView
             accounts={accounts}
             selectedAccountId={selectedAccountId}
             onSelectAccountFilter={setSelectedAccountId}

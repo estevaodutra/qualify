@@ -1,6 +1,6 @@
 {
-  "commit": "acd104d0f84aa386b57eecaf82b3f4d724c44ec0",
-  "shortCommit": "acd104d",
-  "message": "feat(criafy): implementar Fase 4 (validacao tecnica Meta) e Fase 5 (credenciais OpenAI centralizadas e Edge Function IA)",
-  "builtAt": "2026-10-14T21:31:46.455Z"
+  "commit": "faf00d66b35fb83d92af555856ff6dd65e440b88",
+  "shortCommit": "faf00d6",
+  "message": "feat(criafy): implementar Fase 6 (publicacao direta Meta Graph API) e Fase 7 (scheduler worker server-side com pg_cron)",
+  "builtAt": "2026-10-14T21:35:03.075Z"
 }

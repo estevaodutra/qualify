@@ -395,6 +395,116 @@ export const criafyService = {
     return data;
   },
 
+  async generateAutoQueue(
+    companyId: string,
+    accountId: string,
+    limitPosts?: number
+  ): Promise<{ createdCount: number; startDate: string; endDate: string }> {
+    // 1. Obter regra de fila da conta
+    const rule = await this.getQueueRule(accountId);
+    if (!rule || !rule.is_active) {
+      throw new Error("A fila automática precisa estar ativa e configurada para esta conta.");
+    }
+
+    const times =
+      rule.publication_times && rule.publication_times.length > 0
+        ? rule.publication_times
+        : ["08:00", "18:00"];
+    const allowedDays =
+      rule.allowed_days && rule.allowed_days.length > 0
+        ? rule.allowed_days
+        : [1, 2, 3, 4, 5, 6, 7];
+
+    // 2. Buscar conteúdos ativos da empresa vinculados a esta conta
+    const allContents = await this.getContents(companyId, accountId);
+    if (allContents.length === 0) {
+      throw new Error("Nenhum conteúdo vinculado a esta conta na biblioteca de mídias.");
+    }
+
+    // 3. Buscar publicações já agendadas ou publicadas para esta conta para não duplicar conteúdos
+    const existingPubs = await this.getPublications(companyId, accountId);
+    const usedContentIds = new Set(
+      existingPubs
+        .filter((p) => p.status !== "CANCELED" && p.status !== "FAILED")
+        .map((p) => p.content_id)
+    );
+
+    const availableContents = allContents.filter((c) => !usedContentIds.has(c.id));
+    if (availableContents.length === 0) {
+      throw new Error("Todos os conteúdos vinculados a esta conta já foram agendados ou publicados!");
+    }
+
+    const contentsToQueue = limitPosts
+      ? availableContents.slice(0, limitPosts)
+      : availableContents;
+
+    // 4. Calcular slots futuros conforme os horários e dias permitidos
+    let currentDate = new Date(rule.start_date || new Date().toISOString().split("T")[0]);
+    const now = new Date();
+    if (currentDate < now) {
+      currentDate = new Date();
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    const newPublications: any[] = [];
+    let contentIdx = 0;
+    let iterations = 0;
+    const maxIterations = 365;
+
+    while (contentIdx < contentsToQueue.length && iterations < maxIterations) {
+      iterations++;
+      const jsDay = currentDate.getDay();
+      const mappedDay = jsDay === 0 ? 7 : jsDay;
+
+      if (allowedDays.includes(mappedDay)) {
+        for (const timeStr of times) {
+          if (contentIdx >= contentsToQueue.length) break;
+
+          const [hours, minutes] = timeStr.split(":").map(Number);
+          const slotDate = new Date(currentDate);
+          slotDate.setHours(hours || 0, minutes || 0, 0, 0);
+
+          const content = contentsToQueue[contentIdx];
+          let pubType: CriafyPublicationType = "FEED";
+          if (content.media_type === "VIDEO") {
+            pubType = content.aspect_ratio?.includes("9:16") ? "REEL" : "FEED";
+          } else {
+            pubType = content.aspect_ratio?.includes("9:16") ? "STORY_IMAGE" : "FEED";
+          }
+
+          newPublications.push({
+            company_id: companyId,
+            account_id: accountId,
+            content_id: content.id,
+            publication_type: pubType,
+            caption: content.title ? `${content.title}` : undefined,
+            scheduled_at: slotDate.toISOString(),
+            status: "SCHEDULED",
+            is_auto_queued: true,
+          });
+
+          contentIdx++;
+        }
+      }
+
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    if (newPublications.length > 0) {
+      const { error: insertErr } = await (supabase as any)
+        .from("criafy_publications")
+        .insert(newPublications);
+
+      if (insertErr) throw insertErr;
+    }
+
+    return {
+      createdCount: newPublications.length,
+      startDate: newPublications[0]?.scheduled_at || "",
+      endDate: newPublications[newPublications.length - 1]?.scheduled_at || "",
+    };
+  },
+
   // ==========================================
   // AUDITORIA E RESPOSTAS
   // ==========================================
