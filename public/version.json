@@ -1,6 +1,6 @@
 {
-  "commit": "9584f12ce26a724a4940a0036f520f47c62ae76e",
-  "shortCommit": "9584f12",
-  "message": "feat(workflows): add unit dropdown (seconds, minutes, hours, days) for user input max wait timeout",
-  "builtAt": "2026-10-14T18:24:37.346Z"
+  "commit": "12b875ba3357ba341aaebaed1490d9973cdb771f",
+  "shortCommit": "12b875b",
+  "message": "fix(chat): sincronizar nome real, descricao, membros e foto de grupos do WhatsApp no chat",
+  "builtAt": "2026-10-14T18:55:24.232Z"
 }

@@ -35,9 +35,9 @@ export default function ChatSidebar({
     customFields.is_group === true;
 
   return (
-    <div className={cn("h-full shrink-0 relative flex", className)}>
+    <div className={cn("h-full w-[340px] shrink-0 relative flex overflow-hidden", className)}>
       {/* 1. Quick Replies Panel (Always mounted to preserve search, group collapse, and scroll state) */}
-      <div className={cn("h-full w-full", sidebarMode !== "quick_replies" && "hidden")}>
+      <div className={cn("h-full w-[340px] shrink-0", sidebarMode !== "quick_replies" && "hidden")}>
         <QuickRepliesSidebarPanel
           onSelectReply={onSelectQuickReply}
         />
@@ -45,7 +45,7 @@ export default function ChatSidebar({
 
       {/* 2. Details Panel (GroupContextPanel for Groups, LeadContextPanel for Direct Leads) */}
       {sidebarMode === "lead_details" && (
-        <div className="h-full w-full">
+        <div className="h-full w-[340px] shrink-0 overflow-hidden">
           {isGroup ? (
             <GroupContextPanel
               conversation={conversation}

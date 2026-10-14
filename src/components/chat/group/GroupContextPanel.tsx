@@ -288,70 +288,78 @@ export default function GroupContextPanel({ conversation, onClose, onSelectConve
     setIsEditingDesc(false);
   };
 
-  const groupInitial = (group.name || "G").charAt(0).toUpperCase();
+  const groupInitial = (() => {
+    const raw = (group.name || "").trim();
+    if (!raw) return "G";
+    const cleaned = raw.replace(/^[^\p{L}\p{N}]+/u, "");
+    if (cleaned.length > 0) {
+      return Array.from(cleaned)[0].toUpperCase();
+    }
+    return Array.from(raw)[0] || "G";
+  })();
 
   return (
     <div className="h-full w-full flex flex-col bg-background/95 border-l border-border/40 overflow-y-auto select-none">
       {/* 1. Header do Painel */}
-      <div className="sticky top-0 z-20 flex items-center justify-between px-4 py-3 bg-background/95 backdrop-blur-md border-b border-border/40">
-        <div className="flex items-center gap-3">
+      <div className="sticky top-0 z-20 flex items-center justify-between px-3.5 py-2.5 bg-background/95 backdrop-blur-md border-b border-border/40">
+        <div className="flex items-center gap-2.5">
           <button
             onClick={onClose}
-            className="p-1.5 rounded-full hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors"
+            className="p-1 rounded-full hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors"
             title="Fechar dados do grupo"
           >
-            <X className="h-5 w-5" />
+            <X className="h-4 w-4" />
           </button>
-          <h2 className="text-sm font-bold text-foreground">Dados do grupo</h2>
+          <h2 className="text-xs font-bold text-foreground uppercase tracking-wider">Dados do grupo</h2>
         </div>
 
         <button
           onClick={() => syncGroup()}
           disabled={isSyncing || isLoading}
-          className="p-1.5 rounded-full hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors"
+          className="p-1 rounded-full hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors"
           title="Sincronizar informações do grupo"
         >
-          <RefreshCw className={cn("h-4 w-4", (isSyncing || isLoading) && "animate-spin text-primary")} />
+          <RefreshCw className={cn("h-3.5 w-3.5", (isSyncing || isLoading) && "animate-spin text-primary")} />
         </button>
       </div>
 
       <div className="flex-1 divide-y divide-border/30 pb-12">
         {/* 2. Banner do Grupo (Foto, Título, Subtítulo, Ações Rápidas) */}
-        <div className="flex flex-col items-center p-6 space-y-4 text-center bg-card/30">
-          {/* Avatar Grande */}
+        <div className="flex flex-col items-center p-4 space-y-2.5 text-center bg-card/30">
+          {/* Avatar Proporcional */}
           <div className="relative group">
-            <Avatar className="h-32 w-32 border-4 border-background shadow-xl ring-2 ring-border/30">
+            <Avatar className="h-20 w-20 border-2 border-background shadow-md ring-2 ring-border/20">
               <AvatarImage src={group.pictureUrl || undefined} alt={group.name} className="object-cover" />
-              <AvatarFallback className="text-3xl font-bold bg-purple-600 text-white">
+              <AvatarFallback className="text-2xl font-bold bg-purple-600 text-white select-none">
                 {groupInitial}
               </AvatarFallback>
             </Avatar>
             <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
-              <Camera className="h-7 w-7 text-white" />
+              <Camera className="h-5 w-5 text-white" />
             </div>
           </div>
 
           {/* Nome do Grupo */}
-          <div className="w-full flex items-center justify-center gap-2">
+          <div className="w-full flex items-center justify-center gap-1.5">
             {isEditingName ? (
-              <div className="flex items-center gap-2 w-full max-w-xs">
+              <div className="flex items-center gap-1.5 w-full max-w-xs">
                 <Input
                   value={nameInput}
                   onChange={(e) => setNameInput(e.target.value)}
-                  className="text-center font-bold text-base h-9"
+                  className="text-center font-bold text-xs h-8"
                   autoFocus
                   onKeyDown={(e) => e.key === "Enter" && handleSaveName()}
                 />
-                <Button size="sm" onClick={handleSaveName} disabled={isUpdatingName} className="h-9 px-3">
+                <Button size="sm" onClick={handleSaveName} disabled={isUpdatingName} className="h-8 px-2.5 text-xs">
                   Salvar
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => setIsEditingName(false)} className="h-9 px-2">
-                  <X className="h-4 w-4" />
+                <Button size="sm" variant="ghost" onClick={() => setIsEditingName(false)} className="h-8 px-2">
+                  <X className="h-3.5 w-3.5" />
                 </Button>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 max-w-full">
-                <h1 className="text-xl font-extrabold text-foreground tracking-tight line-clamp-2">
+              <div className="flex items-center justify-center gap-1 max-w-full">
+                <h1 className="text-sm font-bold text-foreground tracking-tight line-clamp-2 px-1">
                   {group.name}
                 </h1>
                 <button
@@ -362,7 +370,7 @@ export default function GroupContextPanel({ conversation, onClose, onSelectConve
                   className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
                   title="Editar nome do grupo"
                 >
-                  <Pencil className="h-4 w-4" />
+                  <Pencil className="h-3.5 w-3.5" />
                 </button>
               </div>
             )}
@@ -384,25 +392,25 @@ export default function GroupContextPanel({ conversation, onClose, onSelectConve
           </div>
 
           {/* Botões Redondos de Ação (Adicionar, Pesquisar) */}
-          <div className="flex items-center justify-center gap-6 pt-2">
+          <div className="flex items-center justify-center gap-5 pt-1">
             <button
               onClick={() => setAddMemberOpen(true)}
-              className="flex flex-col items-center gap-1.5 group cursor-pointer"
+              className="flex flex-col items-center gap-1 group cursor-pointer"
             >
-              <div className="h-11 w-11 rounded-full bg-muted flex items-center justify-center text-foreground group-hover:bg-primary group-hover:text-primary-foreground transition-colors shadow-sm">
-                <UserPlus className="h-5 w-5" />
+              <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center text-foreground group-hover:bg-primary group-hover:text-primary-foreground transition-colors shadow-sm">
+                <UserPlus className="h-4 w-4" />
               </div>
-              <span className="text-xs font-semibold text-muted-foreground group-hover:text-foreground">Adicionar</span>
+              <span className="text-[11px] font-semibold text-muted-foreground group-hover:text-foreground">Adicionar</span>
             </button>
 
             <button
               onClick={() => setShowMemberSearch(!showMemberSearch)}
-              className="flex flex-col items-center gap-1.5 group cursor-pointer"
+              className="flex flex-col items-center gap-1 group cursor-pointer"
             >
-              <div className="h-11 w-11 rounded-full bg-muted flex items-center justify-center text-foreground group-hover:bg-primary group-hover:text-primary-foreground transition-colors shadow-sm">
-                <Search className="h-5 w-5" />
+              <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center text-foreground group-hover:bg-primary group-hover:text-primary-foreground transition-colors shadow-sm">
+                <Search className="h-4 w-4" />
               </div>
-              <span className="text-xs font-semibold text-muted-foreground group-hover:text-foreground">Pesquisar</span>
+              <span className="text-[11px] font-semibold text-muted-foreground group-hover:text-foreground">Pesquisar</span>
             </button>
           </div>
         </div>
