@@ -37,6 +37,7 @@ import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { criafyService } from "@/services/criafy/criafyService";
 import { CriafyContent, CriafyInstagramAccount } from "@/types/criafy";
+import { extractAndValidateMedia } from "@/utils/criafyMediaValidator";
 
 interface MediaLibraryViewProps {
   accounts: CriafyInstagramAccount[];
@@ -91,6 +92,9 @@ export function MediaLibraryView({
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       try {
+        // Validação técnica prévia no client para Meta Instagram
+        const validation = await extractAndValidateMedia(file);
+
         // Upload to storage
         const { mediaUrl, mediaType, mimeType } = await criafyService.uploadMediaFile(
           activeCompanyId,
@@ -109,6 +113,12 @@ export function MediaLibraryView({
             media_type: mediaType,
             mime_type: mimeType,
             file_size_bytes: file.size,
+            width: validation.width || undefined,
+            height: validation.height || undefined,
+            duration_seconds: validation.durationSeconds || undefined,
+            aspect_ratio: validation.aspectRatio,
+            meta_validation_status: validation.isValid ? "VALID" : "INVALID",
+            meta_validation_errors: validation.errors,
           },
           defaultAccounts
         );
@@ -269,16 +279,36 @@ export function MediaLibraryView({
                       <ImageIcon className="w-3 h-3 mr-1 text-emerald-400" />
                     )}
                     {content.media_type}
+                    {content.duration_seconds ? ` • ${Math.round(content.duration_seconds)}s` : ""}
                   </Badge>
                 </div>
 
                 <div className="absolute top-2 right-2">
-                  <Badge
-                    variant="outline"
-                    className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] backdrop-blur-sm"
-                  >
-                    Meta Validado
-                  </Badge>
+                  {content.meta_validation_status === "VALID" ? (
+                    <Badge
+                      variant="outline"
+                      className="bg-emerald-500/80 text-white border-0 text-[10px] backdrop-blur-sm font-semibold shadow-sm"
+                    >
+                      <CheckCircle2 className="w-2.5 h-2.5 mr-1" />
+                      {content.aspect_ratio?.includes("9:16") ? "Reel / Story" : "Feed"}
+                    </Badge>
+                  ) : content.meta_validation_status === "INVALID" ? (
+                    <Badge
+                      variant="destructive"
+                      className="text-[10px] backdrop-blur-sm font-semibold"
+                      title={content.meta_validation_errors?.join(" • ") || "Incompatível com Meta"}
+                    >
+                      <AlertTriangle className="w-2.5 h-2.5 mr-1" />
+                      Incompatível
+                    </Badge>
+                  ) : (
+                    <Badge
+                      variant="outline"
+                      className="bg-black/40 text-muted-foreground text-[10px] backdrop-blur-sm"
+                    >
+                      Pendente
+                    </Badge>
+                  )}
                 </div>
               </div>
 

@@ -129,6 +129,7 @@ const App = () => {
                       <Route path="/settings/cleanup" element={<Settings />} />
                       <Route path="/settings/logs" element={<Settings />} />
                       <Route path="/settings/fields" element={<Settings />} />
+                      <Route path="/settings/credentials" element={<Settings />} />
 
                       {/* Wallet routes */}
                       <Route path="/carteira" element={<WalletPage />} />

@@ -1,6 +1,6 @@
 {
-  "commit": "fc288701671c28c6593bd27b4511138f996be2b1",
-  "shortCommit": "fc28870",
-  "message": "fix(tags): persistir e sincronizar tags globalmente em workflows, leads, chat e configuracoes",
-  "builtAt": "2026-10-14T21:07:31.413Z"
+  "commit": "24df5436fd6fa0395576253d26369d7143c43aa3",
+  "shortCommit": "24df543",
+  "message": "fix(criafy): corrigir import do Label em MediaLibraryView",
+  "builtAt": "2026-10-14T21:14:25.198Z"
 }

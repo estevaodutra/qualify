@@ -118,6 +118,27 @@ export const criafyService = {
   },
 
   // ==========================================
+  // MOTOR DE IA DO CRIAFY
+  // ==========================================
+  async generateAiCopy(params: {
+    companyId: string;
+    accountId: string;
+    contentId?: string;
+    promptType?: "CAPTION" | "HOOKS" | "SUMMARY" | "HASHTAGS";
+    publicationType?: string;
+    customInstruction?: string;
+  }): Promise<string> {
+    const { data, error } = await supabase.functions.invoke("criafy-ai-generator", {
+      body: params,
+    });
+
+    if (error || !data?.success) {
+      throw new Error(data?.error || error?.message || "Erro ao gerar copy com a IA.");
+    }
+    return data.result;
+  },
+
+  // ==========================================
   // BRIEFING DA CONTA
   // ==========================================
   async getBriefing(accountId: string): Promise<CriafyAccountBriefing | null> {

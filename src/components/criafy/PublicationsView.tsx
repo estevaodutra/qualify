@@ -106,30 +106,26 @@ export function PublicationsView({
   };
 
   const handleGenerateAiCopy = async () => {
-    if (!targetAccountId) {
+    if (!activeCompanyId || !targetAccountId) {
       toast.error("Selecione uma conta do Instagram primeiro.");
       return;
     }
 
     setGeneratingAi(true);
     try {
-      // Fetch account briefing
-      const briefing = await criafyService.getBriefing(targetAccountId);
-      const acc = accounts.find((a) => a.id === targetAccountId);
-      const content = contents.find((c) => c.id === selectedContentId);
+      const generated = await criafyService.generateAiCopy({
+        companyId: activeCompanyId,
+        accountId: targetAccountId,
+        contentId: selectedContentId || undefined,
+        publicationType,
+        promptType: "CAPTION",
+      });
 
-      // Simulate AI generation incorporating account briefing context
-      setTimeout(() => {
-        const brandName = briefing?.brand_name || acc?.name || `@${acc?.username}`;
-        const cta = briefing?.preferred_ctas?.[0] || "Comente QUERO para saber mais!";
-        const generated = `🔥 Dica imperdível de alta performance da ${brandName}!\n\nConfira o conteúdo em destaque que preparamos especialmente para você transformar seus resultados hoje.\n\n👉 ${cta}\n\n#${acc?.username} #Qualify #Criafy #InstagramGrowth`;
-
-        setCaption(generated);
-        setGeneratingAi(false);
-        toast.success("Legenda gerada pela IA com base no Briefing da conta!");
-      }, 1200);
+      setCaption(generated);
+      toast.success("Legenda gerada pela IA com base no Briefing da conta!");
     } catch (err: any) {
       toast.error(`Erro na geração por IA: ${err.message}`);
+    } finally {
       setGeneratingAi(false);
     }
   };

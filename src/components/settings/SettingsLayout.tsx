@@ -35,6 +35,7 @@ export function SettingsLayout({ children }: SettingsLayoutProps) {
       title: "INTEGRAÇÕES",
       items: [
         { title: "Connections", url: "/settings/connections", icon: Radio },
+        { title: "Credenciais de IA", url: "/settings/credentials", icon: Key },
       ],
     },
     {

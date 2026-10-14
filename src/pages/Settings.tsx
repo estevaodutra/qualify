@@ -43,6 +43,7 @@ import MembersPage from "@/pages/settings/MembersPage";
 import Instances from "@/pages/Instances";
 import { TagsTab } from "@/components/settings/TagsTab";
 import { DataCleanupTab } from "@/components/settings/DataCleanupTab";
+import { CredentialsTab } from "@/components/settings/CredentialsTab";
 
 
 interface ApiKey {
@@ -363,6 +364,8 @@ export default function Settings() {
         <TagsTab />
       ) : location.pathname === "/settings/cleanup" ? (
         <DataCleanupTab />
+      ) : location.pathname === "/settings/credentials" ? (
+        <CredentialsTab />
       ) : (
         <div className="space-y-8">
           <PageHeader
