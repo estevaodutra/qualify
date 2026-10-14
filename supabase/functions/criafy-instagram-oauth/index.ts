@@ -48,8 +48,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    const appId = Deno.env.get("META_APP_ID") || "YOUR_META_APP_ID";
-    const appSecret = Deno.env.get("META_APP_SECRET") || "YOUR_META_APP_SECRET";
+    const appId = Deno.env.get("META_APP_ID") || "244380250945643";
+    const appSecret = Deno.env.get("META_APP_SECRET") || "";
 
     // Action 1: Generate OAuth URL
     if (action === "get-auth-url") {
