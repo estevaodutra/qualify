@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Clock, LogOut, RefreshCw, Mail } from "lucide-react";
@@ -12,8 +12,22 @@ export default function AwaitingAccess() {
   const { user, signOut } = useAuth();
   const { refetch, companies, isLoading } = useCompany();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const [isChecking, setIsChecking] = useState(false);
+
+  const rawFrom = (location.state as any)?.from;
+  const from = typeof rawFrom === "string" 
+    ? rawFrom 
+    : rawFrom?.pathname 
+    ? `${rawFrom.pathname}${rawFrom.search || ''}` 
+    : "/";
+
+  useEffect(() => {
+    if (!isLoading && companies.length > 0) {
+      navigate(from, { replace: true });
+    }
+  }, [isLoading, companies.length, from, navigate]);
 
   const handleRecheck = async () => {
     setIsChecking(true);
@@ -21,7 +35,7 @@ export default function AwaitingAccess() {
     setIsChecking(false);
     // If companies arrived, ProtectedRoute will allow navigation
     if (companies.length > 0) {
-      navigate("/", { replace: true });
+      navigate(from, { replace: true });
     } else {
       toast({
         title: "Ainda sem acesso",
@@ -34,11 +48,6 @@ export default function AwaitingAccess() {
     await signOut();
     navigate("/auth", { replace: true });
   };
-
-  // If already has company while on this page, bounce to dashboard
-  if (!isLoading && companies.length > 0) {
-    navigate("/", { replace: true });
-  }
 
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden px-4 bg-background">

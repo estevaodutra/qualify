@@ -75,8 +75,35 @@ export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountMod
     try {
       const redirectUri = `${window.location.origin}/criafy`;
       const authUrl = await criafyService.getOAuthUrl(activeCompanyId, redirectUri);
-      toast.info("Redirecionando para o OAuth oficial da Meta Instagram API...");
-      window.location.href = authUrl;
+
+      const width = 600;
+      const height = 750;
+      const left = Math.max(0, Math.round(window.screenX + (window.outerWidth - width) / 2));
+      const top = Math.max(0, Math.round(window.screenY + (window.outerHeight - height) / 2));
+
+      const popup = window.open(
+        authUrl,
+        "criafy_instagram_oauth",
+        `width=${width},height=${height},left=${left},top=${top},status=no,toolbar=no,menubar=no,location=yes,resizable=yes,scrollbars=yes`
+      );
+
+      if (!popup || popup.closed || typeof popup.closed === "undefined") {
+        toast.info("Redirecionando para o OAuth oficial da Meta Instagram API...");
+        window.location.href = authUrl;
+        return;
+      }
+
+      toast.info("Janela de autorização da Meta aberta. Conclua o acesso nela.", { id: "oauth-popup" });
+      popup.focus();
+
+      const handlePopupMessage = (event: MessageEvent) => {
+        if (event.data?.type === "CRIAFY_OAUTH_SUCCESS") {
+          window.removeEventListener("message", handlePopupMessage);
+          onSuccess();
+          onOpenChange(false);
+        }
+      };
+      window.addEventListener("message", handlePopupMessage);
     } catch (err: any) {
       toast.error(`Erro ao iniciar OAuth Meta: ${err.message}`);
     }

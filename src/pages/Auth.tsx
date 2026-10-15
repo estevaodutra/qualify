@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/i18n/LanguageContext";
 import { Button } from "@/components/ui/button";
@@ -33,10 +33,18 @@ export default function Auth() {
   const { t } = useLanguage();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const rawFrom = (location.state as any)?.from;
+  const from = typeof rawFrom === "string"
+    ? rawFrom
+    : rawFrom?.pathname
+    ? `${rawFrom.pathname}${rawFrom.search || ''}`
+    : "/";
 
   useEffect(() => {
-    if (user) navigate("/", { replace: true });
-  }, [user, navigate]);
+    if (user) navigate(from, { replace: true });
+  }, [user, navigate, from]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

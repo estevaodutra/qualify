@@ -49,20 +49,61 @@ export default function CriafyHub() {
   const [selectedBriefingAccount, setSelectedBriefingAccount] =
     useState<CriafyInstagramAccount | null>(null);
 
+  function extractCompanyIdFromState(rawState: string | null): string | null {
+    if (!rawState) return null;
+    try {
+      const cleanState = rawState.replace(/#_.*$/, "").replace(/#.*$/, "").trim();
+      const payloadPart = cleanState.split(".")[0];
+      if (!payloadPart) return null;
+      const padded = payloadPart.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(payloadPart.length / 4) * 4, "=");
+      const decoded = atob(padded);
+      const parsed = JSON.parse(decoded);
+      return parsed.companyId || null;
+    } catch {
+      return null;
+    }
+  }
+
   useEffect(() => {
-    if (activeCompanyId) {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === "CRIAFY_OAUTH_SUCCESS") {
+        const count = event.data.count || 1;
+        toast.success(`Sucesso! ${count} conta(s) do Instagram conectada(s).`, {
+          id: "oauth-process",
+        });
+        if (event.data.accounts && Array.isArray(event.data.accounts) && event.data.accounts.length > 0) {
+          setAccounts((prev) => {
+            const map = new Map();
+            [...event.data.accounts, ...prev].forEach((acc) => map.set(acc.id, acc));
+            return Array.from(map.values());
+          });
+        }
+        loadAccounts();
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [activeCompanyId]);
+
+  useEffect(() => {
+    const hasOAuthParams = searchParams.has("code") || searchParams.has("error");
+    if (activeCompanyId || hasOAuthParams) {
       handleOAuthCallback();
     } else {
       setLoading(false);
     }
-  }, [activeCompanyId]);
+  }, [activeCompanyId, searchParams]);
 
   const handleOAuthCallback = async () => {
-    if (!activeCompanyId) return;
-
     const rawCode = searchParams.get("code");
     const rawState = searchParams.get("state");
     const oauthError = searchParams.get("error_description") || searchParams.get("error");
+
+    const targetCompanyId = activeCompanyId || extractCompanyIdFromState(rawState);
+    if (!targetCompanyId && !oauthError) {
+      if (!activeCompanyId) setLoading(false);
+      return;
+    }
 
     const clearOAuthParams = () => {
       const nextParams = new URLSearchParams(searchParams);
@@ -76,7 +117,11 @@ export default function CriafyHub() {
     if (oauthError) {
       toast.error(`Autorização do Instagram cancelada ou recusada: ${oauthError}`, { duration: 8000 });
       clearOAuthParams();
-      await loadAccounts();
+      if (window.opener && window.opener !== window) {
+        setTimeout(() => window.close(), 1500);
+      } else {
+        await loadAccounts();
+      }
       return;
     }
 
@@ -84,7 +129,7 @@ export default function CriafyHub() {
       const cleanCode = rawCode.replace(/#_.*$/, "").replace(/#.*$/, "").trim();
       const cleanState = rawState ? rawState.replace(/#_.*$/, "").replace(/#.*$/, "").trim() : "";
 
-      const callbackKey = `${activeCompanyId}:${cleanCode}`;
+      const callbackKey = `${targetCompanyId}:${cleanCode}`;
       if (processedOAuthCallbackRef.current === callbackKey) return;
       processedOAuthCallbackRef.current = callbackKey;
 
@@ -94,9 +139,32 @@ export default function CriafyHub() {
           throw new Error("Retorno OAuth sem state de segurança. Por favor, tente conectar novamente.");
         }
         const redirectUri = `${window.location.origin}/criafy`;
-        const res = await criafyService.exchangeOAuthCode(activeCompanyId, cleanCode, redirectUri, cleanState);
+        const res = await criafyService.exchangeOAuthCode(targetCompanyId, cleanCode, redirectUri, cleanState);
 
         const count = res.count || (res.accounts ? res.accounts.length : 1);
+
+        // Se estiver rodando dentro de uma janela popup, notifica o opener e fecha
+        if (window.opener && window.opener !== window) {
+          try {
+            window.opener.postMessage(
+              {
+                type: "CRIAFY_OAUTH_SUCCESS",
+                count,
+                accounts: res.accounts,
+              },
+              "*"
+            );
+          } catch (e) {
+            console.error("Erro ao enviar mensagem via window.opener:", e);
+          }
+          toast.success(`Sucesso! ${count} conta(s) do Instagram conectada(s).`, {
+            id: "oauth-process",
+          });
+          clearOAuthParams();
+          setTimeout(() => window.close(), 800);
+          return;
+        }
+
         toast.success(`Sucesso! ${count} conta(s) do Instagram conectada(s).`, {
           id: "oauth-process",
         });

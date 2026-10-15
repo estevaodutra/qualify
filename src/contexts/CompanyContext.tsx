@@ -28,7 +28,7 @@ const CompanyContext = createContext<CompanyContextType | undefined>(undefined);
 const STORAGE_KEY = "dispatch_active_company";
 
 export function CompanyProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { isSuperadmin } = useSuperadmin();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [activeCompanyId, setActiveCompanyId] = useState<string | null>(
@@ -40,11 +40,15 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchCompanies = useCallback(async () => {
+    if (authLoading) return;
+
     if (!user) {
       setCompanies([]);
       setIsLoading(false);
       return;
     }
+
+    setIsLoading(true);
 
     try {
       let companyRows: any[] = [];

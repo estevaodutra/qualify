@@ -1,6 +1,6 @@
 {
-  "commit": "c79b95ec5eb6fd73178419c1d8c334b36b6cb818",
-  "shortCommit": "c79b95e",
-  "message": "fix(criafy): pente fino no OAuth Meta - suporte a App Secret via banco, sanitizacao de code, trava de requisicao dupla e feedback imediato",
-  "builtAt": "2026-10-15T02:39:58.846Z"
+  "commit": "a7edd403d0af6c5b60a26694167851fd5b17e168",
+  "shortCommit": "a7edd40",
+  "message": "fix(criafy): corrigir sintaxe do import ESM no Edge Function criafy-instagram-oauth",
+  "builtAt": "2026-10-15T02:51:38.916Z"
 }

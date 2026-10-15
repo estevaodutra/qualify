@@ -36,7 +36,7 @@ export function ProtectedRoute({ children, requireCompany = true }: ProtectedRou
       );
     }
     if (companies.length === 0) {
-      return <Navigate to="/aguardando-acesso" replace />;
+      return <Navigate to="/aguardando-acesso" state={{ from: location }} replace />;
     }
   }
 
