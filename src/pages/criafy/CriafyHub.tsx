@@ -129,6 +129,25 @@ export default function CriafyHub() {
       const cleanCode = rawCode.replace(/#_.*$/, "").replace(/#.*$/, "").trim();
       const cleanState = rawState ? rawState.replace(/#_.*$/, "").replace(/#.*$/, "").trim() : "";
 
+      // Se estiver rodando dentro de uma janela popup, repassa code/state para o opener e fecha imediatamente
+      if (window.opener && window.opener !== window) {
+        try {
+          window.opener.postMessage(
+            {
+              type: "CRIAFY_OAUTH_CALLBACK",
+              code: cleanCode,
+              state: cleanState,
+            },
+            "*"
+          );
+        } catch (e) {
+          console.error("Erro ao enviar mensagem via window.opener:", e);
+        }
+        clearOAuthParams();
+        window.close();
+        return;
+      }
+
       const callbackKey = `${targetCompanyId}:${cleanCode}`;
       if (processedOAuthCallbackRef.current === callbackKey) return;
       processedOAuthCallbackRef.current = callbackKey;
@@ -142,29 +161,6 @@ export default function CriafyHub() {
         const res = await criafyService.exchangeOAuthCode(targetCompanyId, cleanCode, redirectUri, cleanState);
 
         const count = res.count || (res.accounts ? res.accounts.length : 1);
-
-        // Se estiver rodando dentro de uma janela popup, notifica o opener e fecha
-        if (window.opener && window.opener !== window) {
-          try {
-            window.opener.postMessage(
-              {
-                type: "CRIAFY_OAUTH_SUCCESS",
-                count,
-                accounts: res.accounts,
-              },
-              "*"
-            );
-          } catch (e) {
-            console.error("Erro ao enviar mensagem via window.opener:", e);
-          }
-          toast.success(`Sucesso! ${count} conta(s) do Instagram conectada(s).`, {
-            id: "oauth-process",
-          });
-          clearOAuthParams();
-          setTimeout(() => window.close(), 800);
-          return;
-        }
-
         toast.success(`Sucesso! ${count} conta(s) do Instagram conectada(s).`, {
           id: "oauth-process",
         });

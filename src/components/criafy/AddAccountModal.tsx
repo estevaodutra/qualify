@@ -96,11 +96,34 @@ export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountMod
       toast.info("Janela de autorização da Meta aberta. Conclua o acesso nela.", { id: "oauth-popup" });
       popup.focus();
 
-      const handlePopupMessage = (event: MessageEvent) => {
-        if (event.data?.type === "CRIAFY_OAUTH_SUCCESS") {
+      const handlePopupMessage = async (event: MessageEvent) => {
+        if (event.data?.type === "CRIAFY_OAUTH_CALLBACK") {
           window.removeEventListener("message", handlePopupMessage);
-          onSuccess();
-          onOpenChange(false);
+          const { code, state, error } = event.data;
+
+          if (error) {
+            toast.error(`Autorização do Instagram cancelada ou recusada: ${error}`, { id: "oauth-popup" });
+            return;
+          }
+
+          if (code && state) {
+            toast.loading("Processando autorização da Meta e conectando conta...", { id: "oauth-process" });
+            try {
+              const redirectUri = `${window.location.origin}/criafy`;
+              const res = await criafyService.exchangeOAuthCode(activeCompanyId, code, redirectUri, state);
+              const count = res.count || (res.accounts ? res.accounts.length : 1);
+              toast.success(`Sucesso! ${count} conta(s) do Instagram conectada(s).`, {
+                id: "oauth-process",
+              });
+              onSuccess();
+              onOpenChange(false);
+            } catch (err: any) {
+              toast.error(`Falha ao conectar conta via Meta OAuth: ${err.message}`, {
+                id: "oauth-process",
+                duration: 12000,
+              });
+            }
+          }
         }
       };
       window.addEventListener("message", handlePopupMessage);

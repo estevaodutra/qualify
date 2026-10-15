@@ -1,6 +1,6 @@
 {
-  "commit": "a7edd403d0af6c5b60a26694167851fd5b17e168",
-  "shortCommit": "a7edd40",
-  "message": "fix(criafy): corrigir sintaxe do import ESM no Edge Function criafy-instagram-oauth",
-  "builtAt": "2026-10-15T02:51:38.916Z"
+  "commit": "d44dabbba5b6fafaa3dd54bb0853acc12e863187",
+  "shortCommit": "d44dabb",
+  "message": "fix(criafy): suporte a oauth em popup, prevencao de race condition de sessao e recuperacao de rota de retorno",
+  "builtAt": "2026-10-15T03:03:50.009Z"
 }

@@ -139,12 +139,14 @@ Deno.serve(async (req) => {
       const stateSecret = Deno.env.get("CRIAFY_OAUTH_STATE_SECRET") || instagramAppSecret;
 
       // Sanitizar fragmentos anexados pelo Instagram (#_)
-      const cleanCode = String(code).replace(/#_.*$/, "").replace(/#.*$/, "").trim();
-      const cleanState = String(state).replace(/#_.*$/, "").replace(/#.*$/, "").trim();
-      const cleanRedirectUri = String(redirectUri).replace(/#_.*$/, "").replace(/#.*$/, "").trim();
+      const cleanCode = String(code).split("#")[0].trim();
+      const cleanState = String(state).split("#")[0].trim();
+      const cleanRedirectUri = String(redirectUri).split("#")[0].trim();
 
       // Validar state criptográfico
       await verifyCriafyOAuthState(cleanState, stateSecret, { companyId, userId: user.id, redirectUri: cleanRedirectUri });
+
+      console.log(`[Exchange Code] appId=${instagramAppId}, redirectUri=${cleanRedirectUri}, codeLen=${cleanCode.length}`);
 
       const formData = new URLSearchParams();
       formData.append("client_id", instagramAppId);
@@ -153,11 +155,22 @@ Deno.serve(async (req) => {
       formData.append("redirect_uri", cleanRedirectUri);
       formData.append("code", cleanCode);
 
-      const tokenData = await fetchMetaJson(
-        "https://api.instagram.com/oauth/access_token",
-        { method: "POST", body: formData },
-        "Instagram authorization code exchange failed"
-      );
+      let tokenData: any;
+      try {
+        tokenData = await fetchMetaJson(
+          "https://api.instagram.com/oauth/access_token",
+          { method: "POST", body: formData },
+          "Instagram authorization code exchange failed"
+        );
+      } catch (err: any) {
+        console.error("[Exchange Code] Erro da Meta:", err.message);
+        if (err.message && err.message.includes("Error validating verification code")) {
+          throw new Error(
+            `${err.message}. Verifique se o App Secret no Superadmin (/admin/criafy) pertence ao App ID ${instagramAppId}, e se o URI no Meta Developers está cadastrado exatamente como '${cleanRedirectUri}'.`
+          );
+        }
+        throw err;
+      }
       if (!tokenData.access_token || !tokenData.user_id) {
         throw new Error("Instagram authorization code exchange returned no account token");
       }
