@@ -31,7 +31,7 @@ interface QuickReplyEditorModalProps {
   onSave: (data: {
     group_id?: string | null;
     name: string;
-    shortcut: string;
+    shortcut?: string;
     content_type: QuickReplyContentType;
     content_json: QuickReplyContentPayload;
   }) => Promise<void>;
@@ -277,10 +277,6 @@ export default function QuickReplyEditorModal({
       toast.error("Por favor, preencha o nome da resposta.");
       return;
     }
-    if (!shortcut.trim()) {
-      toast.error("Por favor, preencha o atalho.");
-      return;
-    }
 
     // Validation for media contents
     if (["image", "video", "audio", "video_note", "document"].includes(contentType) && !mediaUrl) {
@@ -294,10 +290,16 @@ export default function QuickReplyEditorModal({
     }
 
     const payload = constructPayload();
+    const safeShortcut = (shortcut || name)
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, "_")
+      .slice(0, 50) || "resposta";
+
     await onSave({
       group_id: groupId,
       name: name.trim(),
-      shortcut: shortcut.trim(),
+      shortcut: safeShortcut,
       content_type: contentType,
       content_json: payload,
     });
@@ -363,12 +365,12 @@ export default function QuickReplyEditorModal({
         {/* STEP 2: Fill Details */}
         {step === 2 && (
           <form onSubmit={handleSubmit} className="space-y-4 py-2">
-            {/* Common Top Bar: Name, Shortcut, Group */}
+            {/* Common Top Bar: Name & Group */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-muted/20 p-3 rounded-2xl border border-border/40">
               <div className="space-y-1">
                 <Label className="text-xs font-semibold">Nome da Resposta</Label>
                 <Input
-                  placeholder="Ex: Abordagem Inicial"
+                  placeholder="Ex: trabalha, abordagem..."
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="text-xs rounded-xl h-9"
@@ -377,23 +379,6 @@ export default function QuickReplyEditorModal({
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-semibold flex items-center justify-between">
-                  <span>Atalho</span>
-                  <span className="text-[10px] font-normal text-muted-foreground">Único por empresa</span>
-                </Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-primary">/</span>
-                  <Input
-                    placeholder="abordagem"
-                    value={shortcut}
-                    onChange={(e) => setShortcut(e.target.value.replace(/\s+/g, "-"))}
-                    className="pl-6 text-xs rounded-xl h-9 font-mono"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1 sm:col-span-2">
                 <Label className="text-xs font-semibold">Grupo de Organização</Label>
                 <Select
                   value={groupId || "none"}

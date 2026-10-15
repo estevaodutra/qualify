@@ -418,7 +418,7 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, con
     } else {
       // Put into composer draft
       if (reply.content_type === "text" || reply.content_type === "link") {
-        const replaced = text.replace(/\/([\w\-]*)$/, sendText);
+        const replaced = text.replace(/\/([^\s]*)$/, sendText);
         setText(replaced !== text ? replaced : (text ? `${text}\n${sendText}` : sendText));
       } else {
         if (sendMediaType) setAttachedFile({ url: sendMediaUrl!, type: sendMediaType, name: reply.name });
@@ -438,12 +438,12 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, con
       const query = match[1].toLowerCase();
       setTemplateSearch(query);
 
-      // Match multimedia Quick Replies
+      // Match multimedia Quick Replies (prioritizing response name)
       const activeGroupsMap: Record<string, boolean> = {};
       (groups || []).forEach(g => { activeGroupsMap[g.id] = g.active !== false; });
 
       const matchedQuickReplies = (quickReplies || [])
-        .filter(r => (r.active !== false) && (!r.group_id || activeGroupsMap[r.group_id] !== false) && (!query || (r.shortcut && r.shortcut.toLowerCase().includes(query)) || (r.name && r.name.toLowerCase().includes(query))))
+        .filter(r => (r.active !== false) && (!r.group_id || activeGroupsMap[r.group_id] !== false) && (!query || (r.name && r.name.toLowerCase().includes(query)) || (r.shortcut && r.shortcut.toLowerCase().includes(query))))
         .map(r => {
           const payload = r.content_json?.content as any;
           let bodyPreview = "";
@@ -453,7 +453,7 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, con
           return {
             type: "quick_reply" as const,
             id: r.id,
-            shortcut: r.shortcut || r.name,
+            shortcut: r.name,
             title: r.name,
             body: bodyPreview,
             data: r,
@@ -498,7 +498,7 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, con
   };
 
   const selectTemplate = (template: ChatTemplate) => {
-    const replaced = text.replace(/\/([\w\-]*)$/, template.body);
+    const replaced = text.replace(/\/([^\s]*)$/, template.body);
     setText(replaced);
     setShowDropdown(false);
     textareaRef.current?.focus();
@@ -764,7 +764,7 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, con
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-center gap-2 mb-1">
                   <span className="font-bold text-foreground truncate">
-                    {item.type === "quick_reply" ? `/${item.shortcut}` : item.type === "template" ? `/${item.shortcut}` : item.title}
+                    {item.type === "quick_reply" ? `/${item.title || item.shortcut}` : item.type === "template" ? `/${item.shortcut}` : item.title}
                   </span>
                   <span className={cn(
                     "text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 border",

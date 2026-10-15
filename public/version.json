@@ -1,6 +1,6 @@
 {
-  "commit": "0c2b84d6fc45602354a71e5025fc9169d900e4d2",
-  "shortCommit": "0c2b84d",
-  "message": "fix(chat): prevenir insercao de mensagens vazias por eventos de grupo e limpar mensagens fantasmas",
-  "builtAt": "2026-10-15T23:33:56.110Z"
+  "commit": "274f1e3b7e28d291d699ddbc75e0a7c3d96f9665",
+  "shortCommit": "274f1e3",
+  "message": "fix(n8n-router): restaurar definicao de AbortController no fetchZApi",
+  "builtAt": "2026-10-15T23:52:31.907Z"
 }

@@ -333,7 +333,7 @@ export default function QuickRepliesManagerModal({
                                       {reply.name}
                                     </span>
                                     <span className="text-[11px] font-mono font-bold text-primary bg-primary/10 px-1.5 py-0.2 rounded-md">
-                                      /{reply.shortcut}
+                                      /{reply.name}
                                     </span>
                                     {!isReplyActive && (
                                       <Badge variant="outline" className="text-[9px] px-1 py-0 border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10 font-semibold">

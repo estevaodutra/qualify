@@ -182,21 +182,22 @@ export function useQuickReplies() {
     mutationFn: async (payload: {
       group_id?: string | null;
       name: string;
-      shortcut: string;
+      shortcut?: string;
       content_type: QuickReplyContentType;
       content_json: QuickReplyContentPayload;
     }) => {
       if (!activeCompanyId) throw new Error("Sem empresa ativa");
       
-      const normalized = normalizeShortcut(payload.shortcut);
-      if (!normalized) throw new Error("Atalho é obrigatório.");
+      const rawShortcut = payload.shortcut || payload.name;
+      let base = normalizeShortcut(rawShortcut).replace(/[^a-z0-9_-]/g, "_").slice(0, 50);
+      if (!base) base = "resposta";
 
-      // Check unique shortcut for this company
-      const existing = quickReplies.find(
-        (r) => r.normalized_shortcut === normalized
-      );
-      if (existing) {
-        throw new Error(`O atalho "/${normalized}" já está em uso por outra resposta.`);
+      // Ensure unique shortcut for this company by appending a number if needed
+      let normalized = base;
+      let counter = 1;
+      while (quickReplies.some((r) => r.normalized_shortcut === normalized)) {
+        normalized = `${base}_${counter}`;
+        counter++;
       }
 
       const nextPos = quickReplies.length > 0 ? Math.max(...quickReplies.map(r => r.position)) + 1 : 0;
@@ -251,16 +252,16 @@ export function useQuickReplies() {
       if (payload.position !== undefined) updates.position = payload.position;
       if (payload.active !== undefined) updates.active = payload.active;
 
-      if (payload.shortcut !== undefined) {
-        const normalized = normalizeShortcut(payload.shortcut);
-        if (!normalized) throw new Error("Atalho é obrigatório.");
-        
-        // Check uniqueness
-        const existing = quickReplies.find(
-          (r) => r.normalized_shortcut === normalized && r.id !== payload.id
-        );
-        if (existing) {
-          throw new Error(`O atalho "/${normalized}" já está em uso por outra resposta.`);
+      if (payload.shortcut !== undefined || payload.name !== undefined) {
+        const rawShortcut = payload.shortcut || payload.name || "";
+        let base = normalizeShortcut(rawShortcut).replace(/[^a-z0-9_-]/g, "_").slice(0, 50);
+        if (!base) base = "resposta";
+
+        let normalized = base;
+        let counter = 1;
+        while (quickReplies.some((r) => r.normalized_shortcut === normalized && r.id !== payload.id)) {
+          normalized = `${base}_${counter}`;
+          counter++;
         }
 
         updates.shortcut = normalized;
