@@ -465,6 +465,49 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
     refetchInterval: 5000,
   });
 
+  // Fetch allowed registered CRM groups for this company
+  const { data: allowedCrmGroupJids = new Set<string>() } = useQuery({
+    queryKey: ["chat-allowed-crm-groups", activeCompanyId],
+    queryFn: async () => {
+      if (!activeCompanyId) return new Set<string>();
+
+      // Fetch folder assignments
+      const { data: gfa } = await supabase
+        .from("group_folder_assignments" as any)
+        .select("group_id")
+        .eq("company_id", activeCompanyId);
+      const folderGroupIds = new Set((gfa || []).map((a: any) => a.group_id));
+
+      const { data: gcList } = await supabase
+        .from("group_campaigns")
+        .select("id, group_jid, config")
+        .eq("company_id", activeCompanyId)
+        .not("group_jid", "is", null);
+
+      const jids = new Set<string>();
+      (gcList || []).forEach((gc: any) => {
+        const cfg = (gc.config as Record<string, any>) || {};
+        const isExplicit = cfg.is_crm_group === true || cfg.registered_in_crm === true || folderGroupIds.has(gc.id);
+        const showInChat = cfg.show_in_chat !== false;
+
+        if (isExplicit && showInChat && gc.group_jid) {
+          const raw = String(gc.group_jid).trim().toLowerCase();
+          jids.add(raw);
+          const digits = raw.replace("@g.us", "").replace("-group", "").replace(/\D/g, "");
+          if (digits) {
+            jids.add(digits);
+            jids.add(`${digits}@g.us`);
+            jids.add(`${digits}-group`);
+          }
+        }
+      });
+
+      return jids;
+    },
+    enabled: !!activeCompanyId && !!user,
+    staleTime: 10000,
+  });
+
   const rawConversations = useMemo(() => conversationsData?.pages.flat() || [], [conversationsData]);
   const pinnedSet = useMemo(() => new Set(userPins), [userPins]);
 
@@ -490,10 +533,20 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
         if (c.is_archived) return false;
       }
 
+      const p = c.lead?.phone || c.contact_phone || "";
+      const customF = (c.lead?.custom_fields as Record<string, any>) || {};
+      const isGrp = p.length > 15 || p.includes("@g.us") || p.includes("-group") || customF.is_group === true;
+
+      // STRICT RULE: If it's a WhatsApp group, it MUST be registered in CRM and have chat visibility enabled
+      if (isGrp) {
+        const cleanP = p.replace("@g.us", "").replace("-group", "").trim().toLowerCase();
+        const isAllowed = allowedCrmGroupJids.has(p.toLowerCase()) || allowedCrmGroupJids.has(cleanP);
+        if (!isAllowed) {
+          return false;
+        }
+      }
+
       if (convType !== "all") {
-        const p = c.lead?.phone || c.contact_phone || "";
-        const customF = (c.lead?.custom_fields as Record<string, any>) || {};
-        const isGrp = p.length > 15 || p.includes("@g.us") || p.includes("-group") || customF.is_group === true;
         if (convType === "group" && !isGrp) return false;
         if (convType === "individual" && isGrp) return false;
       }
@@ -506,7 +559,7 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
       if (!a.is_pinned && b.is_pinned) return 1;
       return 0;
     });
-  }, [rawConversations, pinnedSet, activeCompanyId, filters]);
+  }, [rawConversations, pinnedSet, activeCompanyId, filters, allowedCrmGroupJids]);
 
   // Auto-sync CRM groups into chat_conversations
   useQuery({
@@ -514,6 +567,13 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
     queryFn: async () => {
       if (!activeCompanyId) return { synced: 0 };
       try {
+        // Fetch folder assignments
+        const { data: gfa } = await supabase
+          .from("group_folder_assignments" as any)
+          .select("group_id")
+          .eq("company_id", activeCompanyId);
+        const folderGroupIds = new Set((gfa || []).map((a: any) => a.group_id));
+
         const { data: gcList } = await supabase
           .from("group_campaigns")
           .select("id, name, group_name, group_jid, instance_id, group_description, group_photo_url, config")
@@ -530,7 +590,7 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
         const convPhoneMap = new Map<string, any>();
         (existingConvs || []).forEach((c) => {
           if (c.contact_phone) {
-            const digits = c.contact_phone.replace("@g.us", "").replace(/\D/g, "");
+            const digits = c.contact_phone.replace("@g.us", "").replace("-group", "").replace(/\D/g, "");
             convPhoneMap.set(c.contact_phone.toLowerCase(), c);
             if (digits) convPhoneMap.set(digits, c);
           }
@@ -552,8 +612,24 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
           const cleanDigits = validJid.replace("@g.us", "").replace(/\D/g, "");
           const groupName = gc.group_name || gc.name || "Grupo WhatsApp";
           const targetInstanceId = gc.instance_id || null;
+          const cfg = (gc.config as Record<string, any>) || {};
+
+          const isExplicit = cfg.is_crm_group === true || cfg.registered_in_crm === true || folderGroupIds.has(gc.id);
+          const showInChat = cfg.show_in_chat !== false;
 
           const existingConv = convPhoneMap.get(validJid.toLowerCase()) || convPhoneMap.get(cleanDigits);
+
+          // If NOT an explicit CRM group or toggled off, ensure it is archived in chat_conversations
+          if (!isExplicit || !showInChat) {
+            if (existingConv && !existingConv.is_archived) {
+              await supabase
+                .from("chat_conversations")
+                .update({ is_archived: true, updated_at: new Date().toISOString() })
+                .eq("id", existingConv.id);
+              changesMade = true;
+            }
+            continue;
+          }
 
           if (!existingConv) {
             let leadId: string | null = null;

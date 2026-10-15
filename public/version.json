@@ -1,6 +1,6 @@
 {
-  "commit": "ae4fe0cf118c1395a65178b862afef5b58a46cbd",
-  "shortCommit": "ae4fe0c",
-  "message": "fix(workflows): prioritize selectedGroupJids over legacy campaign_groups and add orphan cleanup to group modal",
-  "builtAt": "2026-10-15T15:50:56.084Z"
+  "commit": "0a88661a00febba3c8a84b870e78a3d737191552",
+  "shortCommit": "0a88661",
+  "message": "feat(chat): sincronizar grupos do CRM no chat e adicionar filtro de grupos",
+  "builtAt": "2026-10-15T16:07:55.145Z"
 }

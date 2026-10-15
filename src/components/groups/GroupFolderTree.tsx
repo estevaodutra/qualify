@@ -2,7 +2,7 @@ import { useState } from "react";
 import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Folder, FolderPlus, GripVertical, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { Folder, FolderPlus, GripVertical, MoreVertical, Pencil, Trash2, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -28,6 +28,7 @@ interface GroupFolderTreeProps {
   onDeleteFolder: (id: string) => void;
   onReorder?: (orderedIds: string[]) => void;
   onDropGroup?: (groupId: string, folderId: string | null) => void;
+  onToggleFolderChatVisibility?: (folderId: string, showInChat: boolean) => void;
 }
 
 function SortableFolderRow({
@@ -38,6 +39,7 @@ function SortableFolderRow({
   onRename,
   onDelete,
   onDropGroup,
+  onToggleFolderChatVisibility,
 }: {
   folder: GroupFolder;
   count: number;
@@ -46,6 +48,7 @@ function SortableFolderRow({
   onRename: (name: string) => void;
   onDelete: () => void;
   onDropGroup?: (groupId: string) => void;
+  onToggleFolderChatVisibility?: (folderId: string, showInChat: boolean) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: folder.id });
   const [isRenaming, setIsRenaming] = useState(false);
@@ -129,6 +132,24 @@ function SortableFolderRow({
           >
             <Pencil className="h-3.5 w-3.5" /> Renomear
           </DropdownMenuItem>
+          {onToggleFolderChatVisibility && (
+            <>
+              <div className="h-px bg-border my-1" />
+              <DropdownMenuItem
+                onClick={() => onToggleFolderChatVisibility(folder.id, true)}
+                className="text-xs gap-2 text-emerald-600 focus:text-emerald-600"
+              >
+                <Eye className="h-3.5 w-3.5" /> Exibir pasta no Chat
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => onToggleFolderChatVisibility(folder.id, false)}
+                className="text-xs gap-2 text-muted-foreground focus:text-foreground"
+              >
+                <EyeOff className="h-3.5 w-3.5" /> Ocultar pasta do Chat
+              </DropdownMenuItem>
+            </>
+          )}
+          <div className="h-px bg-border my-1" />
           <DropdownMenuItem
             onClick={onDelete}
             className="text-xs gap-2 text-destructive focus:text-destructive"
@@ -153,6 +174,7 @@ export function GroupFolderTree({
   onDeleteFolder,
   onReorder,
   onDropGroup,
+  onToggleFolderChatVisibility,
 }: GroupFolderTreeProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [newName, setNewName] = useState("");
@@ -238,6 +260,7 @@ export function GroupFolderTree({
                   onRename={(name) => onRenameFolder(folder.id, name)}
                   onDelete={() => onDeleteFolder(folder.id)}
                   onDropGroup={onDropGroup ? (groupId) => onDropGroup(groupId, folder.id) : undefined}
+                  onToggleFolderChatVisibility={onToggleFolderChatVisibility}
                 />
               ))}
             </div>

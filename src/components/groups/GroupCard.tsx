@@ -24,12 +24,15 @@ import {
   MessageSquare,
   Copy,
   Eye,
+  EyeOff,
   Folder,
   FolderInput,
   Check,
   Users,
   Trash2,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
@@ -41,6 +44,7 @@ interface GroupCardProps {
   onOpenDetails: (group: WhatsAppGroupItem) => void;
   onMoveToFolder?: (groupId: string, folderId: string | null) => void;
   onRemoveFromCrm?: (group: WhatsAppGroupItem) => void;
+  onToggleChatVisibility?: (groupId: string, showInChat: boolean) => void;
 }
 
 export const GroupCard: React.FC<GroupCardProps> = ({
@@ -49,6 +53,7 @@ export const GroupCard: React.FC<GroupCardProps> = ({
   onOpenDetails,
   onMoveToFolder,
   onRemoveFromCrm,
+  onToggleChatVisibility,
 }) => {
   const navigate = useNavigate();
 
@@ -245,6 +250,24 @@ export const GroupCard: React.FC<GroupCardProps> = ({
             <Radio className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
             <span className="truncate">{group.instanceName || "Instância Conectada"}</span>
           </Badge>
+        </div>
+
+        {/* Toggle Visibilidade no Chat */}
+        <div 
+          onClick={(e) => e.stopPropagation()} 
+          className="flex items-center justify-between py-1.5 px-3 rounded-xl bg-muted/40 border border-border/40 text-xs"
+        >
+          <div className="flex items-center gap-2 font-medium">
+            <MessageSquare className={cn("h-3.5 w-3.5", group.showInChat !== false ? "text-purple-600" : "text-muted-foreground")} />
+            <span className={group.showInChat !== false ? "text-foreground font-semibold" : "text-muted-foreground"}>
+              {group.showInChat !== false ? "Visível no Chat" : "Oculto no Chat"}
+            </span>
+          </div>
+          <Switch
+            checked={group.showInChat !== false}
+            onCheckedChange={(checked) => onToggleChatVisibility?.(group.id, checked)}
+            className="data-[state=checked]:bg-purple-600 h-5 w-9"
+          />
         </div>
 
         {/* Footer: Last activity */}

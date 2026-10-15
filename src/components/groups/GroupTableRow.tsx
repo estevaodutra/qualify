@@ -53,6 +53,8 @@ const WhatsappIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+import { Switch } from "@/components/ui/switch";
+
 interface GroupTableRowProps {
   group: WhatsAppGroupItem;
   isEven: boolean;
@@ -60,6 +62,7 @@ interface GroupTableRowProps {
   onOpenDetails: (group: WhatsAppGroupItem) => void;
   onMoveToFolder?: (groupId: string, folderId: string | null) => void;
   onRemoveFromCrm?: (group: WhatsAppGroupItem) => void;
+  onToggleChatVisibility?: (groupId: string, showInChat: boolean) => void;
 }
 
 export const GroupTableRow: React.FC<GroupTableRowProps> = ({
@@ -199,8 +202,27 @@ export const GroupTableRow: React.FC<GroupTableRowProps> = ({
       </td>
 
       {/* AÇÕES */}
-      <td className="px-3 py-2.5 align-middle text-right whitespace-nowrap w-16" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-end gap-1">
+      <td className="px-3 py-2.5 align-middle text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-end gap-1.5">
+          {onToggleChatVisibility && (
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center">
+                    <Switch
+                      checked={group.showInChat !== false}
+                      onCheckedChange={(checked) => onToggleChatVisibility(group.id, checked)}
+                      className="scale-75 data-[state=checked]:bg-emerald-500"
+                    />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  {group.showInChat !== false ? "Visível no Chat (clique para ocultar)" : "Oculto no Chat (clique para exibir)"}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+
           <Button
             variant="ghost"
             size="icon"
@@ -224,6 +246,16 @@ export const GroupTableRow: React.FC<GroupTableRowProps> = ({
               <DropdownMenuItem onClick={handleOpenChat} className="gap-2 text-xs">
                 <MessageSquare className="h-4 w-4 text-emerald-500" /> Abrir no Chat
               </DropdownMenuItem>
+
+              {onToggleChatVisibility && (
+                <DropdownMenuItem
+                  onClick={() => onToggleChatVisibility(group.id, !(group.showInChat !== false))}
+                  className="gap-2 text-xs"
+                >
+                  <MessageSquare className={cn("h-4 w-4", group.showInChat !== false ? "text-amber-500" : "text-emerald-500")} />
+                  {group.showInChat !== false ? "Ocultar do Chat" : "Exibir no Chat"}
+                </DropdownMenuItem>
+              )}
 
               {group.hasValidJid && (
                 <DropdownMenuItem onClick={copyGroupJid} className="gap-2 text-xs">

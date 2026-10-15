@@ -20,6 +20,7 @@ export interface WhatsAppGroupItem {
   participantsCount: number;
   adminsCount: number;
   status: "active" | "inactive" | "archived";
+  showInChat?: boolean;
   lastActivityAt: string | null;
   lastSyncedAt?: string | null;
   createdAt: string;
@@ -234,6 +235,7 @@ export function useGroups(filters: GroupFilters = {}) {
                 participants_count: pCount,
                 admins_count: aCount,
                 status: gc.status || "active",
+                show_in_chat: cfg.show_in_chat !== false,
                 last_synced_at: lastSynced,
                 created_at: gc.created_at,
                 updated_at: gc.updated_at,
@@ -272,6 +274,7 @@ export function useGroups(filters: GroupFilters = {}) {
           participantsCount: g.participants_count || 0,
           adminsCount: g.admins_count || 0,
           status: g.status === "inactive" || g.status === "archived" ? g.status : "active",
+          showInChat: g.show_in_chat !== false,
           lastActivityAt: g.last_activity_at || g.updated_at || g.created_at,
           lastSyncedAt: g.last_synced_at || null,
           createdAt: g.created_at || new Date().toISOString(),
@@ -723,6 +726,129 @@ export function useGroups(filters: GroupFilters = {}) {
     };
   }, [activeCompanyId, queryClient]);
 
+  // Toggle group visibility in Chat
+  const toggleGroupChatVisibilityMutation = useMutation({
+    mutationFn: async ({ groupId, showInChat }: { groupId: string; showInChat: boolean }) => {
+      if (!activeCompanyId) throw new Error("Empresa não selecionada");
+
+      const { data: gc, error: gcErr } = await supabase
+        .from("group_campaigns")
+        .select("id, config, group_jid")
+        .eq("id", groupId)
+        .single();
+
+      if (gcErr || !gc) throw new Error("Grupo não encontrado no CRM");
+
+      const nextConfig = {
+        ...((gc.config as Record<string, any>) || {}),
+        show_in_chat: showInChat,
+        updated_at: new Date().toISOString(),
+      };
+
+      await supabase
+        .from("group_campaigns")
+        .update({ config: nextConfig, updated_at: new Date().toISOString() })
+        .eq("id", groupId);
+
+      if (gc.group_jid) {
+        const j = gc.group_jid;
+        const d = j.replace("@g.us", "").replace(/\D/g, "");
+        await supabase
+          .from("chat_conversations")
+          .update({
+            is_archived: !showInChat,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("company_id", activeCompanyId)
+          .in("contact_phone", [j, d, `${d}-group`]);
+      }
+
+      return { groupId, showInChat };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["groups_list"] });
+      queryClient.invalidateQueries({ queryKey: ["chat-conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["chat-allowed-crm-groups"] });
+      queryClient.invalidateQueries({ queryKey: ["chat-auto-sync-crm-groups"] });
+      toast.success(
+        data.showInChat ? "Grupo agora está visível no Chat!" : "Grupo ocultado do Chat!"
+      );
+    },
+    onError: (err: any) => {
+      toast.error(`Erro ao alterar visibilidade: ${err.message || String(err)}`);
+    },
+  });
+
+  // Toggle all groups in folder visibility in Chat
+  const toggleFolderChatVisibilityMutation = useMutation({
+    mutationFn: async ({ folderId, showInChat }: { folderId: string; showInChat: boolean }) => {
+      if (!activeCompanyId) throw new Error("Empresa não selecionada");
+
+      const { data: assignments } = await supabase
+        .from("group_folder_assignments" as any)
+        .select("group_id")
+        .eq("company_id", activeCompanyId)
+        .eq("folder_id", folderId);
+
+      const groupIds = (assignments || []).map((a: any) => a.group_id).filter(Boolean);
+      if (groupIds.length === 0) return { updatedCount: 0, showInChat };
+
+      const { data: gcs } = await supabase
+        .from("group_campaigns")
+        .select("id, config, group_jid")
+        .in("id", groupIds);
+
+      const allJids: string[] = [];
+
+      for (const gc of gcs || []) {
+        const nextConfig = {
+          ...((gc.config as Record<string, any>) || {}),
+          show_in_chat: showInChat,
+          updated_at: new Date().toISOString(),
+        };
+
+        await supabase
+          .from("group_campaigns")
+          .update({ config: nextConfig, updated_at: new Date().toISOString() })
+          .eq("id", gc.id);
+
+        if (gc.group_jid) {
+          const j = gc.group_jid;
+          const d = j.replace("@g.us", "").replace(/\D/g, "");
+          allJids.push(j, d, `${d}-group`);
+        }
+      }
+
+      if (allJids.length > 0) {
+        await supabase
+          .from("chat_conversations")
+          .update({
+            is_archived: !showInChat,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("company_id", activeCompanyId)
+          .in("contact_phone", allJids);
+      }
+
+      return { updatedCount: groupIds.length, showInChat };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["groups_list"] });
+      queryClient.invalidateQueries({ queryKey: ["chat-conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["chat-allowed-crm-groups"] });
+      queryClient.invalidateQueries({ queryKey: ["chat-auto-sync-crm-groups"] });
+      queryClient.invalidateQueries({ queryKey: ["group_folders"] });
+      toast.success(
+        data.showInChat
+          ? `${data.updatedCount} grupos da pasta agora estão visíveis no Chat!`
+          : `${data.updatedCount} grupos da pasta foram ocultados do Chat!`
+      );
+    },
+    onError: (err: any) => {
+      toast.error(`Erro ao alterar visibilidade da pasta: ${err.message || String(err)}`);
+    },
+  });
+
   return {
     groups: data?.groups || [],
     totalCount: data?.totalCount || 0,
@@ -741,5 +867,11 @@ export function useGroups(filters: GroupFilters = {}) {
     removeGroupFromCrm: removeGroupFromCrmMutation.mutate,
     removeGroupFromCrmAsync: removeGroupFromCrmMutation.mutateAsync,
     isRemovingFromCrm: removeGroupFromCrmMutation.isPending,
+    toggleGroupChatVisibility: toggleGroupChatVisibilityMutation.mutate,
+    toggleGroupChatVisibilityAsync: toggleGroupChatVisibilityMutation.mutateAsync,
+    isTogglingChatVisibility: toggleGroupChatVisibilityMutation.isPending,
+    toggleFolderChatVisibility: toggleFolderChatVisibilityMutation.mutate,
+    toggleFolderChatVisibilityAsync: toggleFolderChatVisibilityMutation.mutateAsync,
+    isTogglingFolderChatVisibility: toggleFolderChatVisibilityMutation.isPending,
   };
 }

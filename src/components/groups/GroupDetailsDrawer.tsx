@@ -15,11 +15,14 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQueryClient } from "@tanstack/react-query";
 
+import { Switch } from "@/components/ui/switch";
+
 interface GroupDetailsDrawerProps {
   group: WhatsAppGroupItem | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onRemoveFromCrm?: (group: WhatsAppGroupItem) => void;
+  onToggleChatVisibility?: (groupId: string, showInChat: boolean) => void;
 }
 
 function extractPhoneAndLid(p: any): { phone: string | null; lid: string | null } {
@@ -46,7 +49,13 @@ function extractPhoneAndLid(p: any): { phone: string | null; lid: string | null 
   return { phone, lid };
 }
 
-export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, open, onOpenChange }) => {
+export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({
+  group,
+  open,
+  onOpenChange,
+  onRemoveFromCrm,
+  onToggleChatVisibility,
+}) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { activeCompanyId } = useCompany();
@@ -307,6 +316,38 @@ export const GroupDetailsDrawer: React.FC<GroupDetailsDrawerProps> = ({ group, o
               </Button>
             )}
           </div>
+
+          {/* Chat Visibility Card */}
+          {onToggleChatVisibility && (
+            <div className="flex items-center justify-between p-3 rounded-xl border border-border/80 bg-background shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <div className={cn(
+                  "p-2 rounded-lg",
+                  group.showInChat !== false ? "bg-emerald-500/10 text-emerald-600" : "bg-muted text-muted-foreground"
+                )}>
+                  <MessageSquare className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-foreground flex items-center gap-2">
+                    Visibilidade no Chat
+                    <Badge variant={group.showInChat !== false ? "default" : "secondary"} className="text-[10px] px-1.5 py-0 h-4">
+                      {group.showInChat !== false ? "Visível" : "Oculto"}
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    {group.showInChat !== false
+                      ? "O grupo aparece na lista de conversas do Chat do CRM"
+                      : "Oculto do Chat (usado apenas em automações/disparos)"}
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={group.showInChat !== false}
+                onCheckedChange={(checked) => onToggleChatVisibility(group.id, checked)}
+                className="data-[state=checked]:bg-emerald-500"
+              />
+            </div>
+          )}
 
           {/* Stats Bar */}
           <div className="grid grid-cols-3 gap-2 pt-1 text-center">

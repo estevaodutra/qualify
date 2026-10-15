@@ -87,6 +87,8 @@ export default function Groups() {
     isSyncingInstance,
     removeGroupFromCrmAsync,
     isRemovingFromCrm,
+    toggleGroupChatVisibility,
+    toggleFolderChatVisibility,
   } = useGroups({
     search,
     instanceId,
@@ -637,6 +639,7 @@ export default function Groups() {
             onDeleteFolder={(id) => setFolderPendingDelete(id)}
             onReorder={reorderFolders}
             onDropGroup={(groupId, fId) => assignGroupToFolder({ groupId, folderId: fId })}
+            onToggleFolderChatVisibility={(folderId, showInChat) => toggleFolderChatVisibility({ folderId, showInChat })}
           />
         </aside>
 
@@ -779,6 +782,7 @@ export default function Groups() {
                     onOpenDetails={handleOpenDetails}
                     onMoveToFolder={(groupId, fId) => assignGroupToFolder({ groupId, folderId: fId })}
                     onRemoveFromCrm={(g) => setGroupPendingRemove(g)}
+                    onToggleChatVisibility={(groupId, showInChat) => toggleGroupChatVisibility({ groupId, showInChat })}
                   />
                 ))}
               </tbody>
@@ -795,6 +799,7 @@ export default function Groups() {
                 onOpenDetails={handleOpenDetails}
                 onMoveToFolder={(groupId, fId) => assignGroupToFolder({ groupId, folderId: fId })}
                 onRemoveFromCrm={(g) => setGroupPendingRemove(g)}
+                onToggleChatVisibility={(groupId, showInChat) => toggleGroupChatVisibility({ groupId, showInChat })}
               />
             ))}
           </div>
@@ -950,6 +955,7 @@ export default function Groups() {
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
         onRemoveFromCrm={(g) => setGroupPendingRemove(g)}
+        onToggleChatVisibility={(groupId, showInChat) => toggleGroupChatVisibility({ groupId, showInChat })}
       />
     </div>
   );

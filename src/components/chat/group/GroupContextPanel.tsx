@@ -23,6 +23,7 @@ import {
   Camera,
   Loader2,
   User,
+  EyeOff,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { ChatConversation } from "@/hooks/useChat";
@@ -286,6 +287,45 @@ export default function GroupContextPanel({ conversation, onClose, onSelectConve
   const handleSaveDesc = () => {
     updateDescription(descInput.trim());
     setIsEditingDesc(false);
+  };
+
+  const handleHideFromChat = async () => {
+    try {
+      const jid = group.jid || conversation.group_jid;
+      if (conversation.id) {
+        await supabase
+          .from("chat_conversations")
+          .update({ is_archived: true })
+          .eq("id", conversation.id);
+      }
+      if (jid) {
+        const { data: campaigns } = await supabase
+          .from("group_campaigns")
+          .select("id, config")
+          .eq("group_jid", jid);
+
+        if (campaigns && campaigns.length > 0) {
+          for (const camp of campaigns) {
+            const currentCfg = (camp.config && typeof camp.config === "object" ? camp.config : {}) as any;
+            await supabase
+              .from("group_campaigns")
+              .update({
+                config: {
+                  ...currentCfg,
+                  show_in_chat: false,
+                },
+              })
+              .eq("id", camp.id);
+          }
+        }
+      }
+      queryClient.invalidateQueries({ queryKey: ["chat-conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["groups_list"] });
+      toast.success("Grupo ocultado do Chat! Ele continua cadastrado no CRM e ativo para automações.");
+      onClose?.();
+    } catch (err: any) {
+      toast.error("Erro ao ocultar grupo: " + (err.message || String(err)));
+    }
   };
 
   const groupInitial = (() => {
@@ -649,6 +689,14 @@ export default function GroupContextPanel({ conversation, onClose, onSelectConve
           <div className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-muted/50 cursor-pointer transition-colors text-foreground">
             <Bookmark className="h-4 w-4 text-muted-foreground" />
             <span className="text-xs font-semibold">Adicionar à lista</span>
+          </div>
+
+          <div
+            onClick={handleHideFromChat}
+            className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-amber-500/10 cursor-pointer transition-colors text-amber-600 dark:text-amber-400 font-semibold"
+          >
+            <EyeOff className="h-4 w-4" />
+            <span className="text-xs">Ocultar este grupo do Chat</span>
           </div>
 
           <div className="pt-2 border-t border-border/30 space-y-1">
