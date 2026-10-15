@@ -1,13 +1,22 @@
 // Meta sends a form-encoded signed_request: base64url(HMAC_SHA256).base64url(JSON).
 // Never trust the payload before checking the signature with the Criafy Instagram app secret.
 export async function verifyMetaSignedRequest(req: Request): Promise<{ user_id: string }> {
-  const secret = Deno.env.get("INSTAGRAM_APP_SECRET") || Deno.env.get("META_APP_SECRET");
-  if (!secret) throw new Error("INSTAGRAM_APP_SECRET is not configured");
-  const form = await req.formData();
+  let form: FormData;
+  try {
+    form = await req.formData();
+  } catch {
+    throw new Error("Missing or invalid form data");
+  }
+
   const signed = form.get("signed_request");
-  if (typeof signed !== "string") throw new Error("Missing signed_request");
+  if (typeof signed !== "string" || !signed) throw new Error("Missing signed_request");
+
   const [signaturePart, payloadPart, extra] = signed.split(".");
   if (!signaturePart || !payloadPart || extra) throw new Error("Malformed signed_request");
+
+  const secret = Deno.env.get("INSTAGRAM_APP_SECRET") || Deno.env.get("META_APP_SECRET");
+  if (!secret) throw new Error("INSTAGRAM_APP_SECRET is not configured");
+
   const decode = (s: string): Uint8Array => {
     const b64 = s.replace(/-/g, "+").replace(/_/g, "/");
     const raw = atob(b64.padEnd(Math.ceil(b64.length / 4) * 4, "="));

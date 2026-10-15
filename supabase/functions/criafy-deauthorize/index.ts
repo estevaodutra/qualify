@@ -31,6 +31,7 @@ Deno.serve(async (req) => {
       err?.message?.includes("signed_request") ||
       err?.message?.includes("signature") ||
       err?.message?.includes("Malformed") ||
+      err?.message?.includes("form data") ||
       err?.message?.includes("Invalid signed_request");
     return json({ error: "Unable to process request" }, isValidationError ? 400 : 500);
   }
