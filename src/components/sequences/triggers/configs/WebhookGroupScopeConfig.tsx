@@ -77,6 +77,32 @@ export function WebhookGroupScopeConfig({ config, onChange }: WebhookGroupScopeC
 
   const selectedGroupJids = config.selectedGroupJids || [];
 
+  const validJidsSet = useMemo(() => new Set(groups.map(g => g.groupJid).filter(Boolean) as string[]), [groups]);
+
+  const orphanJids = useMemo(() => {
+    if (isLoadingGroups || groups.length === 0) return [];
+    return selectedGroupJids.filter(jid => !validJidsSet.has(jid));
+  }, [selectedGroupJids, validJidsSet, isLoadingGroups, groups]);
+
+  const cleanOrphanJids = () => {
+    const next = selectedGroupJids.filter(jid => validJidsSet.has(jid));
+    onChange({ ...config, selectedGroupJids: next, groupScope: "selected" });
+  };
+
+  const handleSelectAll = () => {
+    const allJids = Array.from(new Set(groups.map(g => g.groupJid).filter(Boolean) as string[]));
+    onChange({ ...config, selectedGroupJids: allJids, groupScope: "selected" });
+  };
+
+  const handleDeselectAll = () => {
+    onChange({ ...config, selectedGroupJids: [], groupScope: "selected" });
+  };
+
+  const selectOnlyFolder = (folderId: string) => {
+    const folderGroups = groups.filter(g => g.folderId === folderId).map(g => g.groupJid).filter(Boolean) as string[];
+    onChange({ ...config, selectedGroupJids: folderGroups, groupScope: "selected" });
+  };
+
   const toggleGroup = (jid: string | null) => {
     if (!jid) return;
     const next = selectedGroupJids.includes(jid)
@@ -150,11 +176,44 @@ export function WebhookGroupScopeConfig({ config, onChange }: WebhookGroupScopeC
 
       {destinationMode === "groups" && (
         <>
-          <div className="space-y-2 pt-2 border-t">
+          <div className="flex items-center justify-between pt-2 border-t">
             <Label className="text-sm font-semibold">Grupos de destino</Label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSelectAll}
+                className="text-[11px] text-[#8A3CFF] hover:underline font-medium"
+              >
+                Selecionar todos
+              </button>
+              <span className="text-muted-foreground text-xs">•</span>
+              <button
+                type="button"
+                onClick={handleDeselectAll}
+                className="text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+              >
+                Desmarcar todos
+              </button>
+            </div>
           </div>
 
           <div className="space-y-2 pl-1 animate-in fade-in slide-in-from-top-1 duration-200">
+            {orphanJids.length > 0 && (
+              <div className="flex items-center justify-between p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs animate-in fade-in">
+                <div className="flex items-center gap-1.5 truncate">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
+                  <span className="truncate">{orphanJids.length} grupo(s) antigo(s) não constam mais no CRM.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={cleanOrphanJids}
+                  className="font-bold underline text-amber-900 hover:text-amber-700 ml-2 shrink-0 cursor-pointer"
+                >
+                  Limpar
+                </button>
+              </div>
+            )}
+
             <div className="relative mb-2">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
@@ -195,6 +254,18 @@ export function WebhookGroupScopeConfig({ config, onChange }: WebhookGroupScopeC
                             {folder.name}
                             <span className="text-[10px] font-normal text-muted-foreground ml-1">({folderGroups.length})</span>
                           </Label>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              selectOnlyFolder(folder.id);
+                            }}
+                            className="opacity-0 group-hover/folder:opacity-100 text-[10px] text-[#8A3CFF] hover:underline px-1.5 py-0.5 rounded hover:bg-[#8A3CFF]/10 transition-opacity ml-auto"
+                            title="Selecionar apenas os grupos desta pasta"
+                          >
+                            Apenas esta
+                          </button>
                         </div>
                         
                         {isExpanded && (
@@ -235,7 +306,23 @@ export function WebhookGroupScopeConfig({ config, onChange }: WebhookGroupScopeC
             </div>
             
             {selectedGroupJids.length > 0 && (
-              <p className="text-[10px] text-muted-foreground">{selectedGroupJids.length} grupo(s) selecionado(s)</p>
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                <span>
+                  {selectedGroupJids.length - orphanJids.length} grupo(s) ativo(s) selecionado(s)
+                  {orphanJids.length > 0 && (
+                    <span className="text-amber-600 font-medium ml-1">
+                      (+{orphanJids.length} indisponível(is))
+                    </span>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleDeselectAll}
+                  className="text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+                >
+                  Limpar seleção
+                </button>
+              </div>
             )}
           </div>
         </>

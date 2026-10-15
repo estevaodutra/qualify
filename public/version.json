@@ -1,6 +1,6 @@
 {
-  "commit": "fb87ade027e73bbe8ef0071c48408ad067754919",
-  "shortCommit": "fb87ade",
-  "message": "fix(criafy): priorizar app secret configurado em platform_settings pelo superadmin sobre variavel de ambiente",
-  "builtAt": "2026-10-15T14:37:49.741Z"
+  "commit": "277b7e6c6a7fe1a740973297cc6f5932478bba71",
+  "shortCommit": "277b7e6",
+  "message": "fix(chat): sync failed messages to chat and show error tooltip on hover",
+  "builtAt": "2026-10-15T14:50:11.508Z"
 }

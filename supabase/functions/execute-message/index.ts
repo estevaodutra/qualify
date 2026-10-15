@@ -1433,31 +1433,62 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 2. Get linked groups from campaign_groups
-    const { data: linkedGroups } = await supabase
-      .from("campaign_groups")
-      .select("id, group_jid, group_name")
-      .in("campaign_id", [effectiveCampaignId, sequenceId, body.sequenceId].filter(Boolean) as string[]);
-
-    let groups = (linkedGroups || []) as LinkedGroup[];
-
-    // Fallback/populate groups from sequence trigger_config.selectedGroupJids or triggerContext.selectedGroupJids
+    // 2. Resolve destination groups: Prioritize explicitly configured selectedGroupJids from workflow settings
     const selectedJids = (sequenceTriggerConfig.selectedGroupJids as string[]) || (triggerContext?.selectedGroupJids as string[]) || [];
-    if (groups.length === 0 && selectedJids.length > 0) {
+    let groups: LinkedGroup[] = [];
+
+    if (selectedJids.length > 0) {
+      // Deduplicate selected JIDs
       const seen = new Set<string>();
+      const cleanJids: string[] = [];
       for (const jid of selectedJids) {
         if (!jid) continue;
         const normalized = jid.trim();
-        if (!seen.has(normalized)) {
-          seen.add(normalized);
-          groups.push({
-            id: crypto.randomUUID(),
-            group_jid: normalized,
-            group_name: normalized,
-          });
+        const numeric = normalized.replace(/\D/g, "");
+        const dedupKey = numeric || normalized;
+        if (!seen.has(dedupKey)) {
+          seen.add(dedupKey);
+          cleanJids.push(normalized);
         }
       }
-      console.log(`[ExecuteMessage] Loaded ${groups.length} groups from selectedGroupJids:`, groups.map(g => g.group_jid));
+
+      // Fetch group names from group_campaigns
+      const { data: gcRows } = await supabase
+        .from("group_campaigns")
+        .select("group_jid, group_name, name")
+        .in("group_jid", cleanJids);
+
+      const nameMap = new Map<string, string>();
+      (gcRows || []).forEach((r: any) => {
+        if (r.group_jid) nameMap.set(r.group_jid, r.group_name || r.name || r.group_jid);
+      });
+
+      // Also check campaign_groups for any missing names
+      const { data: cgRows } = await supabase
+        .from("campaign_groups")
+        .select("group_jid, group_name")
+        .in("group_jid", cleanJids);
+      (cgRows || []).forEach((r: any) => {
+        if (r.group_jid && !nameMap.has(r.group_jid)) nameMap.set(r.group_jid, r.group_name || r.group_jid);
+      });
+
+      for (const jid of cleanJids) {
+        groups.push({
+          id: crypto.randomUUID(),
+          group_jid: jid,
+          group_name: nameMap.get(jid) || jid,
+        });
+      }
+      console.log(`[ExecuteMessage] 🎯 Prioritized ${groups.length} groups configured in workflow selectedGroupJids:`, groups.map(g => `${g.group_name} (${g.group_jid})`));
+    } else {
+      // Fallback: Get linked groups from campaign_groups
+      const { data: linkedGroups } = await supabase
+        .from("campaign_groups")
+        .select("id, group_jid, group_name")
+        .in("campaign_id", [effectiveCampaignId, sequenceId, body.sequenceId].filter(Boolean) as string[]);
+
+      groups = (linkedGroups || []) as LinkedGroup[];
+      console.log(`[ExecuteMessage] Loaded ${groups.length} groups from legacy campaign_groups:`, groups.map(g => `${g.group_name} (${g.group_jid})`));
     }
 
     // 3. Determine whether this sequence is explicitly a group workflow
