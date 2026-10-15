@@ -389,6 +389,7 @@ export default function MessageThread({
             const isInternal = msg.is_internal;
 
             if (isSystem) {
+              if (!msg.body || !msg.body.trim()) return null;
               return (
                 <div key={msg.id} className="flex justify-center my-2">
                   <span className="text-[11px] font-medium text-slate-200 bg-slate-800/80 px-3 py-1.5 rounded-xl text-center max-w-[85%] shadow-sm">
@@ -396,6 +397,11 @@ export default function MessageThread({
                   </span>
                 </div>
               );
+            }
+
+            // Hide completely empty ghost messages
+            if (!msg.body?.trim() && !msg.media_url && msg.message_type !== "location" && msg.message_type !== "contact") {
+              return null;
             }
 
             const phoneStr = conversation?.lead?.phone || conversation?.contact_phone || "";
