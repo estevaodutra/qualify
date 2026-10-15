@@ -1,6 +1,6 @@
 {
-  "commit": "ac5b32e5c6c58a2079f9713ad03157d8777a623e",
-  "shortCommit": "ac5b32e",
-  "message": "fix(workflows): fix user input resumption and add skip step button to lead executions",
-  "builtAt": "2026-10-15T17:16:55.566Z"
+  "commit": "HEAD",
+  "shortCommit": "latest",
+  "message": "fix(protocols): enforce default connection protocol to match active chat conversation instance",
+  "builtAt": "2026-10-15T17:34:00.000Z"
 }

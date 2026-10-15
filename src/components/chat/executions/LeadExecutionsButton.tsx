@@ -34,6 +34,7 @@ interface LeadExecutionsButtonProps {
   leadId?: string;
   leadPhone?: string;
   leadName?: string;
+  instanceId?: string;
   disabled?: boolean;
 }
 
@@ -83,6 +84,7 @@ export default function LeadExecutionsButton({
   leadId,
   leadPhone,
   leadName,
+  instanceId,
   disabled,
 }: LeadExecutionsButtonProps) {
   const [open, setOpen] = useState(false);
@@ -132,7 +134,11 @@ export default function LeadExecutionsButton({
     const toastId = toast.loading(`Iniciando workflow "${workflow.name}"...`);
     try {
       const { data, error } = await supabase.functions.invoke("start-workflow-for-leads", {
-        body: { workflowId: workflow.id, leadIds: [leadId] },
+        body: {
+          workflowId: workflow.id,
+          leadIds: [leadId],
+          instanceId: instanceId || undefined,
+        },
       });
       if (error) throw error;
       toast.success(data?.message || `Workflow "${workflow.name}" iniciado com sucesso!`, { id: toastId });

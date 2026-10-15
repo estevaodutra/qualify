@@ -15,7 +15,7 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { workflowId, leadIds } = await req.json();
+    const { workflowId, leadIds, instanceId } = await req.json();
 
     if (!workflowId || !leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
       return new Response(
@@ -114,6 +114,38 @@ Deno.serve(async (req) => {
         ? Array.from(new Set([...(triggerConfig.selectedGroupJids || []), targetGroupJid]))
         : (triggerConfig.selectedGroupJids || []);
 
+      // Conexão Padrão: resolver a instância ativa onde o lead está conversando
+      let leadInstanceId = instanceId;
+      if (!leadInstanceId) {
+        try {
+          const suffix = cleanPhone.length >= 8 ? cleanPhone.slice(-8) : cleanPhone;
+          let convQ = supabase
+            .from("chat_conversations")
+            .select("instance_id, last_message_at, updated_at")
+            .not("instance_id", "is", null);
+
+          if (isGroupLead && targetGroupJid) {
+            convQ = convQ.eq("contact_phone", targetGroupJid);
+          } else if (suffix) {
+            convQ = convQ.or(`lead_id.eq.${lead.id},contact_phone.ilike.%${suffix}%`);
+          } else {
+            convQ = convQ.eq("lead_id", lead.id);
+          }
+
+          const { data: convList } = await convQ
+            .order("last_message_at", { ascending: false, nullsFirst: false })
+            .order("updated_at", { ascending: false })
+            .limit(1);
+
+          if (convList && convList.length > 0 && convList[0].instance_id) {
+            leadInstanceId = convList[0].instance_id;
+            console.log(`[StartWorkflowForLeads] Resolved active conversation instance ${leadInstanceId} for lead ${lead.id} (${cleanPhone})`);
+          }
+        } catch (convErr) {
+          console.warn("[StartWorkflowForLeads] Could not resolve conversation instance for lead:", convErr);
+        }
+      }
+
       const executePayload = {
         campaignId: workflow.id,
         sequenceId: workflow.id,
@@ -128,6 +160,7 @@ Deno.serve(async (req) => {
           selectedGroupJids: targetGroupJids,
           customFields,
           companyId: workflow.company_id,
+          instanceId: leadInstanceId || undefined,
         },
       };
 

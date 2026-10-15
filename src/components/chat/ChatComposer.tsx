@@ -562,7 +562,11 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, con
     const toastId = toast.loading(`Disparando workflow "${workflow.name}"...`);
     try {
       const { data, error } = await supabase.functions.invoke("start-workflow-for-leads", {
-        body: { workflowId: workflow.id, leadIds: [targetLeadId] },
+        body: {
+          workflowId: workflow.id,
+          leadIds: [targetLeadId],
+          instanceId: conversation?.instance_id || undefined,
+        },
       });
       if (error) throw error;
       toast.success(data?.message || `Workflow "${workflow.name}" disparado com sucesso!`, { id: toastId });
@@ -822,6 +826,7 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, con
             leadId={resolvedLeadId || leadId || conversation?.lead?.id || conversation?.lead_id || undefined}
             leadPhone={leadData?.phone}
             leadName={leadData?.name}
+            instanceId={conversation?.instance_id || undefined}
             disabled={isSending || isUploading}
           />
         </div>

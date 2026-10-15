@@ -1363,6 +1363,65 @@ Deno.serve(async (req) => {
       }
     }
 
+    // =========================================================================
+    // PROTOCOLO DE CONEXÃO PADRÃO:
+    // Se a instância não foi explicitamente fornecida ou não está conectada:
+    // "a conexão padrão que vai enviar a mensagem específico para o lead é a conexão
+    // que o cara tá conversando (última mensagem da mesma conexão)."
+    // =========================================================================
+    if (!instance || instance.status !== "connected") {
+      const targetLeadId = triggerContext?.leadId || triggerContext?.contactId;
+      const rawTargetPhone = (triggerContext?.respondentPhone || triggerContext?.contactPhone || (targetPhones && targetPhones[0]) || "") as string;
+      const targetCleanPhone = rawTargetPhone ? rawTargetPhone.replace(/\D/g, "") : "";
+      const targetGroupJid = triggerContext?.groupJid as string | undefined;
+
+      if (targetLeadId || targetCleanPhone || targetGroupJid) {
+        try {
+          const suffix = targetCleanPhone.length >= 8 ? targetCleanPhone.slice(-8) : targetCleanPhone;
+          let convQ = supabase
+            .from("chat_conversations")
+            .select("instance_id, last_message_at, updated_at")
+            .not("instance_id", "is", null);
+
+          if (targetGroupJid) {
+            convQ = convQ.eq("contact_phone", targetGroupJid);
+          } else if (targetLeadId && suffix) {
+            convQ = convQ.or(`lead_id.eq.${targetLeadId},contact_phone.ilike.%${suffix}%`);
+          } else if (targetLeadId) {
+            convQ = convQ.eq("lead_id", targetLeadId);
+          } else if (suffix) {
+            convQ = convQ.ilike("contact_phone", `%${suffix}%`);
+          }
+
+          // Priorizar a conexão da última mensagem trocada com o lead
+          const { data: convRows } = await convQ
+            .order("last_message_at", { ascending: false, nullsFirst: false })
+            .order("updated_at", { ascending: false })
+            .limit(5);
+
+          if (convRows && convRows.length > 0) {
+            for (const cRow of convRows) {
+              if (cRow.instance_id) {
+                const { data: convInst } = await supabase
+                  .from("instances")
+                  .select("id, name, phone, provider, external_instance_id, external_instance_token, status")
+                  .eq("id", cRow.instance_id)
+                  .maybeSingle();
+
+                if (convInst && convInst.status === "connected") {
+                  instance = convInst as any;
+                  console.log(`[ExecuteMessage] 🎯 Conexão Padrão resolvida da conversa ativa do lead (${targetCleanPhone || targetLeadId || targetGroupJid}): ${instance.name} (${instance.id})`);
+                  break;
+                }
+              }
+            }
+          }
+        } catch (convResolveErr) {
+          console.warn("[ExecuteMessage] Erro ao buscar conexão padrão da conversa do lead:", convResolveErr);
+        }
+      }
+    }
+
     if (!instance || instance.status !== "connected") {
       const companyId = typedCampaign.company_id;
       let instQuery = supabase
@@ -2087,6 +2146,8 @@ Deno.serve(async (req) => {
       let activeDestinations = [...effectiveDests];
       const visitCounts = new Map<string, number>();
       let activeInstanceId = instance.id; // local state tracker for active channel selector
+      const defaultInstance = instance;
+      const defaultInstanceId = instance?.id;
 
       // Resume by node id when available (graph resume or poll resume), otherwise start at the first node in order
       let currentNodeId: string | null =
@@ -2300,7 +2361,7 @@ Deno.serve(async (req) => {
         if (nodeInstanceIds && nodeInstanceIds.length > 0) {
           overrideId = nodeInstanceIds[Math.floor(Math.random() * nodeInstanceIds.length)];
           console.log(`[ExecuteMessage] Node ${node.id} picked instance ${overrideId} from pool of ${nodeInstanceIds.length}`);
-        } else if (nodeInstanceId) {
+        } else if (nodeInstanceId && nodeInstanceId !== "default" && nodeInstanceId !== "") {
           overrideId = nodeInstanceId;
         }
 
@@ -2320,6 +2381,10 @@ Deno.serve(async (req) => {
           } else {
             console.warn(`[ExecuteMessage] Override instance ${overrideId} not found or not connected. Continuing with current.`);
           }
+        } else if ((!overrideId || overrideId === "default" || overrideId === "") && activeInstanceId !== defaultInstanceId && defaultInstance) {
+          console.log(`[ExecuteMessage] Node ${node.id} é Conexão Padrão. Retornando para a conexão padrão do lead: ${defaultInstance.name}`);
+          instance = defaultInstance;
+          activeInstanceId = defaultInstance.id;
         }
 
         // ============= TRIGGER (START) NODE =============
