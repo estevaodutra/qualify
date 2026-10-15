@@ -36,7 +36,7 @@ function formatDuration(ms: number | null): string {
   return `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`;
 }
 
-export function ExecutionsList({ executions, isLoading, error, selectedExecutionId, onSelect, onRefresh, onStop }: ExecutionsListProps) {
+export function ExecutionsList({ executions, isLoading, error, selectedExecutionId, onSelect, onRefresh, onStop, onSkip }: ExecutionsListProps) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
