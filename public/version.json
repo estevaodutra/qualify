@@ -1,6 +1,6 @@
 {
-  "commit": "f457bd647e42a6c23f197e656a065acab8d07d97",
-  "shortCommit": "f457bd6",
-  "message": "fix(criafy): atualizar Meta App ID para 244380250945643",
-  "builtAt": "2026-10-15T00:11:25.844Z"
+  "commit": "0e30ea23e5b71ad53c145d947335ee63f6ee27f4",
+  "shortCommit": "0e30ea2",
+  "message": "fix(criafy): validar form data e retornar HTTP 400 em payloads malformados ou sem assinatura",
+  "builtAt": "2026-10-15T02:34:57.437Z"
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +48,8 @@ export default function CriafyHub() {
   const [selectedBriefingAccount, setSelectedBriefingAccount] =
     useState<CriafyInstagramAccount | null>(null);
 
+  const oauthProcessingRef = useRef(false);
+
   useEffect(() => {
     if (activeCompanyId) {
       handleOAuthCallback();
@@ -59,28 +61,52 @@ export default function CriafyHub() {
   const handleOAuthCallback = async () => {
     if (!activeCompanyId) return;
 
-    const code = searchParams.get("code");
+    const rawCode = searchParams.get("code");
     const state = searchParams.get("state") || undefined;
-    if (code) {
-      toast.loading("Processando autorização do Instagram Meta API...", { id: "oauth-process" });
+
+    if (rawCode && !oauthProcessingRef.current) {
+      oauthProcessingRef.current = true;
+      const cleanCode = rawCode.replace(/#_.*$/, "").replace(/#.*$/, "").trim();
+
+      toast.loading("Processando autorização da Meta e conectando conta...", { id: "oauth-process" });
       try {
         const redirectUri = `${window.location.origin}/criafy`;
-        const res = await criafyService.exchangeOAuthCode(activeCompanyId, code, redirectUri, state);
-        toast.success(`Sucesso! ${res.count || 1} conta(s) do Instagram conectada(s).`, {
+        const res = await criafyService.exchangeOAuthCode(activeCompanyId, cleanCode, redirectUri, state);
+
+        const count = res.count || (res.accounts ? res.accounts.length : 1);
+        const accountNames = res.accounts?.map((a: any) => `@${a.username}`).join(", ");
+
+        toast.success(`Conta conectada com sucesso! ${accountNames || `${count} conta(s)`}`, {
           id: "oauth-process",
+          duration: 6000,
         });
-        // Clear code and state from URL
-        searchParams.delete("code");
-        searchParams.delete("state");
-        setSearchParams(searchParams);
+
+        // Atualização de estado imediata na interface
+        if (res.accounts && Array.isArray(res.accounts) && res.accounts.length > 0) {
+          setAccounts((prev) => {
+            const map = new Map();
+            [...res.accounts, ...prev].forEach((acc) => map.set(acc.id, acc));
+            return Array.from(map.values());
+          });
+        }
       } catch (err: any) {
+        console.error("[CriafyHub] Erro no OAuth callback:", err);
         toast.error(`Falha ao conectar conta via Meta OAuth: ${err.message}`, {
           id: "oauth-process",
+          duration: 10000,
         });
+      } finally {
+        // Limpar parâmetros da URL e hashes de forma atômica
+        window.history.replaceState(null, "", window.location.pathname);
+        await loadAccounts();
+        oauthProcessingRef.current = false;
       }
+      return;
     }
 
-    loadAccounts();
+    if (!rawCode) {
+      loadAccounts();
+    }
   };
 
   const loadAccounts = async () => {

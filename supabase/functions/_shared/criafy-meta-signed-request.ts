@@ -14,7 +14,19 @@ export async function verifyMetaSignedRequest(req: Request): Promise<{ user_id: 
   const [signaturePart, payloadPart, extra] = signed.split(".");
   if (!signaturePart || !payloadPart || extra) throw new Error("Malformed signed_request");
 
-  const secret = Deno.env.get("INSTAGRAM_APP_SECRET") || Deno.env.get("META_APP_SECRET");
+  let secret = Deno.env.get("INSTAGRAM_APP_SECRET") || Deno.env.get("META_APP_SECRET");
+  if (!secret) {
+    try {
+      const { url, key } = supabaseAdmin();
+      const adminRes = await fetch(`${url}/rest/v1/platform_settings?key=eq.instagram_app_secret&select=value`, {
+        headers: { apikey: key, Authorization: `Bearer ${key}` },
+      });
+      const rows = await adminRes.json();
+      if (Array.isArray(rows) && rows[0]?.value) {
+        secret = typeof rows[0].value === "string" ? rows[0].value : String(rows[0].value);
+      }
+    } catch (_) {}
+  }
   if (!secret) throw new Error("INSTAGRAM_APP_SECRET is not configured");
 
   const decode = (s: string): Uint8Array => {
