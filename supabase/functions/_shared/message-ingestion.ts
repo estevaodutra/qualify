@@ -614,7 +614,7 @@ export class MessageIngestionService {
       
       const { error: updateError } = await this.supabase
         .from("chat_messages")
-        .update({ status: statusVal })
+        .update({ status: statusVal, updated_at: new Date().toISOString() } as any)
         .or(`message_id.eq.${targetMessageId},zaap_id.eq.${targetMessageId},message_id.ilike.%${shortId}%,zaap_id.ilike.%${shortId}%`);
 
       if (updateError) {

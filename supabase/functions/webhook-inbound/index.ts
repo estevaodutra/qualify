@@ -69,6 +69,10 @@ Deno.serve(async (req) => {
       throw new Error("Missing required fields");
     }
 
+    if (payload.action && !payload.raw_event.action) {
+      payload.raw_event.action = payload.action;
+    }
+
     const url = new URL(req.url);
     const pathParts = url.pathname.split("/").filter(Boolean);
     let semanticType: SupportedMessageType | null = null;
@@ -90,8 +94,16 @@ Deno.serve(async (req) => {
 
     // Se for rota semântica (ex: /messages/text ou /webhooks/messages/image ou /messages/status)
     if (semanticType && !isPollVoteRoute) {
+      let resolvedType = semanticType;
+      if (semanticType === "status" && payload.action) {
+        const act = String(payload.action).toLowerCase();
+        if (act.includes("read")) resolvedType = "read";
+        else if (act.includes("delivered")) resolvedType = "delivered";
+        else if (act.includes("sent")) resolvedType = "sent";
+        else if (act.includes("failed")) resolvedType = "failed";
+      }
       const meta = { endpoint: url.pathname, method: req.method, ipAddress, startTime };
-      const result = await ingestionService.ingest(semanticType, payload as any, meta);
+      const result = await ingestionService.ingest(resolvedType, payload as any, meta);
       return new Response(JSON.stringify(result.body), {
         status: result.statusCode,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -110,8 +122,14 @@ Deno.serve(async (req) => {
       actionStr === "message_delivered" ||
       actionStr === "message_read"
     ) {
+      let resolvedStatusType: SupportedMessageType = "status";
+      if (actionStr.includes("read")) resolvedStatusType = "read";
+      else if (actionStr.includes("delivered")) resolvedStatusType = "delivered";
+      else if (actionStr.includes("sent")) resolvedStatusType = "sent";
+      else if (actionStr.includes("failed")) resolvedStatusType = "failed";
+
       const meta = { endpoint: url.pathname, method: req.method, ipAddress, startTime };
-      const result = await ingestionService.ingest("status", payload as any, meta);
+      const result = await ingestionService.ingest(resolvedStatusType, payload as any, meta);
       return new Response(JSON.stringify(result.body), {
         status: result.statusCode,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
