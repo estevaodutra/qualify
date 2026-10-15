@@ -1,6 +1,6 @@
 {
-  "commit": "efac38b8ea7670a35464cc19cc374599bd2de5e5",
-  "shortCommit": "efac38b",
-  "message": "fix(workflows): restrict manual group workflow dispatches strictly to the specific group",
-  "builtAt": "2026-10-15T18:18:41.033Z"
+  "commit": "109bd23985ec0481c9e64e73ec7a5e2688d93669",
+  "shortCommit": "109bd23",
+  "message": "fix(webhooks): propagate action to status resolution in webhooks function and handleStatusUpdate",
+  "builtAt": "2026-10-15T19:07:31.836Z"
 }

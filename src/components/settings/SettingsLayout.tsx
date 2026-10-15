@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { UserCircle, Settings, Users, Radio, Wallet, CreditCard, FileText, Sliders, Tag, Trash2, ChevronDown } from "lucide-react";
+import { UserCircle, Settings, Users, Radio, Wallet, CreditCard, FileText, Sliders, Tag, Trash2, ChevronDown, Key } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
