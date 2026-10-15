@@ -1,4 +1,4 @@
-import { createClient } = require ? {} : await import("https://esm.sh/@supabase/supabase-js@2");
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createCriafyOAuthState, verifyCriafyOAuthState } from "../_shared/criafyOAuthState.ts";
 
 const corsHeaders = {
