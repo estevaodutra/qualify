@@ -95,6 +95,25 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Check if lead represents a WhatsApp group
+      const leadCustomFields = (lead.custom_fields && typeof lead.custom_fields === "object" ? lead.custom_fields : {}) as Record<string, any>;
+      const isGroupLead = !!(
+        leadCustomFields.is_group ||
+        cleanPhone.startsWith("1203") ||
+        leadCustomFields.group_jid ||
+        lead.phone?.includes("@g.us") ||
+        lead.phone?.includes("-group")
+      );
+
+      const targetGroupJid = leadCustomFields.group_jid || 
+                             (cleanPhone.startsWith("1203") ? `${cleanPhone}@g.us` : null) ||
+                             (lead.phone?.includes("@g.us") ? lead.phone.trim() : null);
+
+      const effectiveGroupMode = isGroupMode || isGroupLead;
+      const targetGroupJids = targetGroupJid 
+        ? Array.from(new Set([...(triggerConfig.selectedGroupJids || []), targetGroupJid]))
+        : (triggerConfig.selectedGroupJids || []);
+
       const executePayload = {
         campaignId: workflow.id,
         sequenceId: workflow.id,
@@ -102,10 +121,11 @@ Deno.serve(async (req) => {
           leadId: lead.id,
           respondentPhone: cleanPhone,
           respondentName: lead.name || "",
-          respondentJid: `${cleanPhone}@s.whatsapp.net`,
-          sendPrivate: !isGroupMode,
-          destinationMode: isGroupMode ? "groups" : "individual",
-          selectedGroupJids: triggerConfig.selectedGroupJids || [],
+          respondentJid: isGroupLead ? (targetGroupJid || `${cleanPhone}@g.us`) : `${cleanPhone}@s.whatsapp.net`,
+          groupJid: isGroupLead ? (targetGroupJid || `${cleanPhone}@g.us`) : undefined,
+          sendPrivate: !effectiveGroupMode,
+          destinationMode: effectiveGroupMode ? "groups" : "individual",
+          selectedGroupJids: targetGroupJids,
           customFields,
           companyId: workflow.company_id,
         },

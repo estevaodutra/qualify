@@ -541,7 +541,8 @@ export default function Chat() {
               onSend={handleSendMessage}
               isSending={isSending}
               templates={templates}
-              leadId={selectedConv?.lead?.id}
+              leadId={selectedConv?.lead?.id || selectedConv?.lead_id}
+              conversation={selectedConv}
               externalQuickReply={selectedQuickReply}
             />
           </>

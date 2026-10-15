@@ -690,6 +690,36 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
             if (existingConv.contact_phone !== validJid) {
               updates.contact_phone = validJid;
             }
+            if (!existingConv.lead_id) {
+              const { data: exLead } = await supabase
+                .from("leads")
+                .select("id")
+                .eq("company_id", activeCompanyId)
+                .in("phone", [cleanDigits, validJid])
+                .maybeSingle();
+
+              if (exLead?.id) {
+                updates.lead_id = exLead.id;
+              } else {
+                const { data: newLead } = await supabase
+                  .from("leads")
+                  .insert({
+                    company_id: activeCompanyId,
+                    name: groupName,
+                    phone: cleanDigits,
+                    status: "active",
+                    custom_fields: {
+                      is_group: true,
+                      group_jid: validJid,
+                      description: gc.group_description,
+                      pictureUrl: gc.group_photo_url,
+                    },
+                  })
+                  .select("id")
+                  .maybeSingle();
+                if (newLead?.id) updates.lead_id = newLead.id;
+              }
+            }
 
             if (Object.keys(updates).length > 0) {
               updates.updated_at = new Date().toISOString();

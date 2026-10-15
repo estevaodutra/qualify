@@ -4,7 +4,7 @@ import { Send, Lock, MessageSquare, Paperclip, Smile, Loader2, Sparkles, X, File
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { ChatTemplate } from "@/hooks/useChat";
+import { ChatTemplate, ChatConversation } from "@/hooks/useChat";
 import { useQuickReplies } from "@/hooks/useQuickReplies";
 import { QuickReply, QuickReplyContentType, QuickReplyAction } from "@/types/quickReplyTypes";
 import { resolveVariables } from "@/utils/variableResolver";
@@ -21,6 +21,7 @@ interface ChatComposerProps {
   isSending: boolean;
   templates: ChatTemplate[];
   leadId?: string;
+  conversation?: ChatConversation | null;
   externalQuickReply?: QuickReply | null;
 }
 
@@ -29,15 +30,75 @@ type DropdownItem =
   | { type: 'template'; id: string; shortcut: string; title: string; body: string; data: ChatTemplate }
   | { type: 'workflow'; id: string; shortcut: string; title: string; body: string; data: any };
 
-export default function ChatComposer({ onSend, isSending, templates, leadId, externalQuickReply }: ChatComposerProps) {
+export default function ChatComposer({ onSend, isSending, templates, leadId, conversation, externalQuickReply }: ChatComposerProps) {
   const { activeCompanyId } = useCompany();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [text, setText] = useState("");
   const [isInternal, setIsInternal] = useState(false);
 
   // Quick Replies Hook
   const { quickReplies = [], groups = [], incrementUsage } = useQuickReplies();
   const [pendingQuickReplyId, setPendingQuickReplyId] = useState<string | null>(null);
+
+  // Auto-resolve leadId from conversation if not explicitly provided
+  const initialLeadId = leadId || conversation?.lead?.id || conversation?.lead_id || null;
+  const [resolvedLeadId, setResolvedLeadId] = useState<string | null>(initialLeadId);
+
+  useEffect(() => {
+    const currentId = leadId || conversation?.lead?.id || conversation?.lead_id || null;
+    if (currentId) {
+      setResolvedLeadId(currentId);
+    } else if (conversation && activeCompanyId) {
+      const resolveLead = async () => {
+        try {
+          const phone = conversation.contact_phone || "";
+          const cleanDigits = phone.replace("@g.us", "").replace("-group", "").replace(/\D/g, "");
+          const isGroup = phone.includes("@g.us") || phone.includes("-group") || cleanDigits.startsWith("1203");
+          const groupJid = isGroup ? (phone.includes("@g.us") ? phone : `${cleanDigits}@g.us`) : null;
+
+          const { data: existingLead } = await supabase
+            .from("leads")
+            .select("id")
+            .eq("company_id", activeCompanyId)
+            .or(`phone.eq.${cleanDigits},phone.eq.${phone}${groupJid ? `,phone.eq.${groupJid}` : ""}`)
+            .maybeSingle();
+
+          if (existingLead?.id) {
+            setResolvedLeadId(existingLead.id);
+            if (conversation.id && conversation.lead_id !== existingLead.id) {
+              await supabase.from("chat_conversations").update({ lead_id: existingLead.id }).eq("id", conversation.id);
+              queryClient.invalidateQueries({ queryKey: ["chat-conversations", activeCompanyId] });
+            }
+          } else {
+            const { data: newLead } = await supabase
+              .from("leads")
+              .insert({
+                company_id: activeCompanyId,
+                name: conversation.contact_name || (isGroup ? "Grupo WhatsApp" : cleanDigits),
+                phone: cleanDigits || phone,
+                status: "novo",
+                source_type: isGroup ? "whatsapp_group" : "whatsapp_inbound",
+                custom_fields: isGroup ? { is_group: true, group_jid: groupJid } : {},
+              })
+              .select("id")
+              .maybeSingle();
+
+            if (newLead?.id) {
+              setResolvedLeadId(newLead.id);
+              if (conversation.id) {
+                await supabase.from("chat_conversations").update({ lead_id: newLead.id }).eq("id", conversation.id);
+                queryClient.invalidateQueries({ queryKey: ["chat-conversations", activeCompanyId] });
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("[ChatComposer] Could not auto-resolve lead for conversation:", e);
+        }
+      };
+      resolveLead();
+    }
+  }, [leadId, conversation?.id, conversation?.lead_id, conversation?.lead?.id, activeCompanyId]);
 
   useEffect(() => {
     if (externalQuickReply) {
@@ -46,18 +107,19 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, ext
   }, [externalQuickReply]);
 
   // Fetch lead data for context resolution
+  const effectiveLeadId = resolvedLeadId || initialLeadId;
   const { data: leadData } = useQuery({
-    queryKey: ["lead-details-context", leadId],
+    queryKey: ["lead-details-context", effectiveLeadId],
     queryFn: async () => {
-      if (!leadId) return null;
+      if (!effectiveLeadId) return null;
       const { data } = await supabase
         .from("leads")
         .select("id, name, phone, email, custom_fields")
-        .eq("id", leadId)
+        .eq("id", effectiveLeadId)
         .maybeSingle();
       return data;
     },
-    enabled: !!leadId,
+    enabled: !!effectiveLeadId,
   });
 
   // Quick Replies & Workflows (Slash Commands)
@@ -219,8 +281,6 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, ext
     },
     enabled: !!activeCompanyId,
   });
-
-  const queryClient = useQueryClient();
 
   // Helper: execute automated actions configured on a quick reply
   const executeQuickReplyActions = async (actions?: QuickReplyAction[]) => {
@@ -445,8 +505,53 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, ext
   };
 
   const selectWorkflow = async (workflow: any) => {
-    if (!leadId) {
-      toast.error("Nenhum lead selecionado para disparar o workflow.");
+    let targetLeadId = resolvedLeadId || leadId || conversation?.lead?.id || conversation?.lead_id;
+
+    if (!targetLeadId && conversation && activeCompanyId) {
+      try {
+        const phone = conversation.contact_phone || "";
+        const cleanDigits = phone.replace("@g.us", "").replace("-group", "").replace(/\D/g, "");
+        const isGroup = phone.includes("@g.us") || phone.includes("-group") || cleanDigits.startsWith("1203");
+        const groupJid = isGroup ? (phone.includes("@g.us") ? phone : `${cleanDigits}@g.us`) : null;
+
+        const { data: existingLead } = await supabase
+          .from("leads")
+          .select("id")
+          .eq("company_id", activeCompanyId)
+          .or(`phone.eq.${cleanDigits},phone.eq.${phone}${groupJid ? `,phone.eq.${groupJid}` : ""}`)
+          .maybeSingle();
+
+        if (existingLead?.id) {
+          targetLeadId = existingLead.id;
+        } else {
+          const { data: newLead } = await supabase
+            .from("leads")
+            .insert({
+              company_id: activeCompanyId,
+              name: conversation.contact_name || (isGroup ? "Grupo WhatsApp" : cleanDigits),
+              phone: cleanDigits || phone,
+              status: "novo",
+              source_type: isGroup ? "whatsapp_group" : "whatsapp_inbound",
+              custom_fields: isGroup ? { is_group: true, group_jid: groupJid } : {},
+            })
+            .select("id")
+            .single();
+
+          if (newLead?.id) targetLeadId = newLead.id;
+        }
+
+        if (targetLeadId && conversation.id) {
+          setResolvedLeadId(targetLeadId);
+          await supabase.from("chat_conversations").update({ lead_id: targetLeadId }).eq("id", conversation.id);
+          queryClient.invalidateQueries({ queryKey: ["chat-conversations", activeCompanyId] });
+        }
+      } catch (err) {
+        console.error("Erro ao resolver lead para workflow:", err);
+      }
+    }
+
+    if (!targetLeadId) {
+      toast.error("Nenhum lead ou grupo selecionado para disparar o workflow.");
       return;
     }
 
@@ -457,7 +562,7 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, ext
     const toastId = toast.loading(`Disparando workflow "${workflow.name}"...`);
     try {
       const { data, error } = await supabase.functions.invoke("start-workflow-for-leads", {
-        body: { workflowId: workflow.id, leadIds: [leadId] },
+        body: { workflowId: workflow.id, leadIds: [targetLeadId] },
       });
       if (error) throw error;
       toast.success(data?.message || `Workflow "${workflow.name}" disparado com sucesso!`, { id: toastId });
@@ -714,7 +819,7 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, ext
 
           {/* Workflow Executions Manager Button */}
           <LeadExecutionsButton
-            leadId={leadId}
+            leadId={resolvedLeadId || leadId || conversation?.lead?.id || conversation?.lead_id || undefined}
             leadPhone={leadData?.phone}
             leadName={leadData?.name}
             disabled={isSending || isUploading}
