@@ -1,6 +1,6 @@
 {
-  "commit": "6ee65599db972aa9dc19613df8da932dec650f9d",
-  "shortCommit": "6ee6559",
-  "message": "fix(workflow): aumentar timeout n8n para 120s, isolar execucoes por grupo e acionar agendamento via trigger-sequence",
-  "builtAt": "2026-10-15T23:25:02.561Z"
+  "commit": "0c2b84d6fc45602354a71e5025fc9169d900e4d2",
+  "shortCommit": "0c2b84d",
+  "message": "fix(chat): prevenir insercao de mensagens vazias por eventos de grupo e limpar mensagens fantasmas",
+  "builtAt": "2026-10-15T23:33:56.110Z"
 }

@@ -383,6 +383,7 @@ export async function fetchZApi(
 
   console.log(`[n8n-router] Routing: ${endpoint} (${method}) -> ${targetUrl} [Action: ${routed.action}]`);
 
+  const controller = new AbortController();
   const isMedia = endpoint.includes("/send-video") || endpoint.includes("/send-audio") || endpoint.includes("/send-document") || endpoint.includes("/send-media");
   const timeoutMs = isMedia ? 120000 : 60000;
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
