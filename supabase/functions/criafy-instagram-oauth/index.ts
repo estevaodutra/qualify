@@ -21,9 +21,10 @@ function requiredEnv(name: string): string {
 
 async function getInstagramCredentials(adminClient?: any) {
   const appId = Deno.env.get("INSTAGRAM_APP_ID") || "1214753054314021";
-  let appSecret = Deno.env.get("INSTAGRAM_APP_SECRET") || Deno.env.get("META_APP_SECRET");
+  let appSecret: string | undefined;
 
-  if (!appSecret && adminClient) {
+  // 1. Prioridade: chave configurada pelo Superadmin no banco (platform_settings)
+  if (adminClient) {
     try {
       const { data: settingRow } = await adminClient
         .from("platform_settings")
@@ -33,13 +34,21 @@ async function getInstagramCredentials(adminClient?: any) {
         .maybeSingle();
 
       if (settingRow && settingRow.value) {
-        appSecret = typeof settingRow.value === "string"
+        const val = typeof settingRow.value === "string"
           ? settingRow.value
           : String(settingRow.value?.secret || settingRow.value?.value || settingRow.value);
+        if (val && val.trim().length > 0) {
+          appSecret = val.trim();
+        }
       }
     } catch (e: any) {
       console.warn("[OAuth] Falha ao consultar platform_settings:", e.message);
     }
+  }
+
+  // 2. Fallback: variáveis de ambiente
+  if (!appSecret) {
+    appSecret = Deno.env.get("INSTAGRAM_APP_SECRET") || Deno.env.get("META_APP_SECRET");
   }
 
   if (!appSecret) {
