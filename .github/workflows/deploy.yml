@@ -7,6 +7,7 @@ on:
       - main
     paths:
       - 'supabase/functions/**'
+      - 'supabase/migrations/20261014200000_add_criafy_instagram_account_unique.sql'
 
 jobs:
   deploy:
@@ -18,6 +19,18 @@ jobs:
       - name: Install sshpass
         run: |
           sudo apt-get update && sudo apt-get install -y sshpass
+
+      - name: Apply Criafy Instagram account migration
+        run: |
+          sshpass -p "${{ secrets.VPS_PASSWORD }}" rsync -avz -e "ssh -o StrictHostKeyChecking=no -p 22022" supabase/migrations/20261014200000_add_criafy_instagram_account_unique.sql ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/criafy-instagram-account-unique.sql
+          sshpass -p "${{ secrets.VPS_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p 22022 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} '
+            set -eu
+            DB_CONTAINER=$(docker ps --format "{{.Names}}" | grep -E "^qualify-supabase-(db|postgres)$" | head -n 1)
+            test -n "$DB_CONTAINER"
+            DB_PASSWORD=$(docker exec "$DB_CONTAINER" printenv POSTGRES_PASSWORD)
+            docker exec -e PGPASSWORD="$DB_PASSWORD" -i "$DB_CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < /tmp/criafy-instagram-account-unique.sql
+            rm -f /tmp/criafy-instagram-account-unique.sql
+          '
 
       - name: Copy functions to VPS via Rsync
         run: |
