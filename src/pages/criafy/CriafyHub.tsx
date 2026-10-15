@@ -38,6 +38,7 @@ export default function CriafyHub() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [accounts, setAccounts] = useState<CriafyInstagramAccount[]>([]);
   const [loading, setLoading] = useState(true);
+  const processedOAuthCallbackRef = useRef<string | null>(null);
 
   // Selected Account Filter
   const [selectedAccountId, setSelectedAccountId] = useState<string>("all");
@@ -47,8 +48,6 @@ export default function CriafyHub() {
   const [briefingModalOpen, setBriefingModalOpen] = useState(false);
   const [selectedBriefingAccount, setSelectedBriefingAccount] =
     useState<CriafyInstagramAccount | null>(null);
-
-  const oauthProcessingRef = useRef(false);
 
   useEffect(() => {
     if (activeCompanyId) {
@@ -62,23 +61,44 @@ export default function CriafyHub() {
     if (!activeCompanyId) return;
 
     const rawCode = searchParams.get("code");
-    const state = searchParams.get("state") || undefined;
+    const rawState = searchParams.get("state");
+    const oauthError = searchParams.get("error_description") || searchParams.get("error");
 
-    if (rawCode && !oauthProcessingRef.current) {
-      oauthProcessingRef.current = true;
+    const clearOAuthParams = () => {
+      const nextParams = new URLSearchParams(searchParams);
+      ["code", "state", "error", "error_reason", "error_description"].forEach((key) => {
+        nextParams.delete(key);
+      });
+      setSearchParams(nextParams, { replace: true });
+      window.history.replaceState(null, "", window.location.pathname);
+    };
+
+    if (oauthError) {
+      toast.error(`Autorização do Instagram cancelada ou recusada: ${oauthError}`, { duration: 8000 });
+      clearOAuthParams();
+      await loadAccounts();
+      return;
+    }
+
+    if (rawCode) {
       const cleanCode = rawCode.replace(/#_.*$/, "").replace(/#.*$/, "").trim();
+      const cleanState = rawState ? rawState.replace(/#_.*$/, "").replace(/#.*$/, "").trim() : "";
+
+      const callbackKey = `${activeCompanyId}:${cleanCode}`;
+      if (processedOAuthCallbackRef.current === callbackKey) return;
+      processedOAuthCallbackRef.current = callbackKey;
 
       toast.loading("Processando autorização da Meta e conectando conta...", { id: "oauth-process" });
       try {
+        if (!cleanState) {
+          throw new Error("Retorno OAuth sem state de segurança. Por favor, tente conectar novamente.");
+        }
         const redirectUri = `${window.location.origin}/criafy`;
-        const res = await criafyService.exchangeOAuthCode(activeCompanyId, cleanCode, redirectUri, state);
+        const res = await criafyService.exchangeOAuthCode(activeCompanyId, cleanCode, redirectUri, cleanState);
 
         const count = res.count || (res.accounts ? res.accounts.length : 1);
-        const accountNames = res.accounts?.map((a: any) => `@${a.username}`).join(", ");
-
-        toast.success(`Conta conectada com sucesso! ${accountNames || `${count} conta(s)`}`, {
+        toast.success(`Sucesso! ${count} conta(s) do Instagram conectada(s).`, {
           id: "oauth-process",
-          duration: 6000,
         });
 
         // Atualização de estado imediata na interface
@@ -89,24 +109,21 @@ export default function CriafyHub() {
             return Array.from(map.values());
           });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Erro desconhecido";
         console.error("[CriafyHub] Erro no OAuth callback:", err);
-        toast.error(`Falha ao conectar conta via Meta OAuth: ${err.message}`, {
+        toast.error(`Falha ao conectar conta via Meta OAuth: ${message}`, {
           id: "oauth-process",
           duration: 10000,
         });
       } finally {
-        // Limpar parâmetros da URL e hashes de forma atômica
-        window.history.replaceState(null, "", window.location.pathname);
+        clearOAuthParams();
         await loadAccounts();
-        oauthProcessingRef.current = false;
       }
       return;
     }
 
-    if (!rawCode) {
-      loadAccounts();
-    }
+    await loadAccounts();
   };
 
   const loadAccounts = async () => {

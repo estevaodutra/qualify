@@ -7,7 +7,9 @@ on:
       - main
       - feat/criafy-meta-compliance-callbacks
     paths:
+      - '.github/workflows/deploy.yml'
       - 'supabase/functions/**'
+      - 'supabase/migrations/20261014200000_add_criafy_instagram_account_unique.sql'
 
 jobs:
   deploy:
@@ -20,12 +22,49 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y sshpass
 
+      - name: Apply Criafy Instagram account migration
+        run: |
+          sshpass -p "${{ secrets.VPS_PASSWORD }}" rsync -avz -e "ssh -o StrictHostKeyChecking=no -p 22022" supabase/migrations/20261014200000_add_criafy_instagram_account_unique.sql ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/criafy-instagram-account-unique.sql
+          sshpass -p "${{ secrets.VPS_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p 22022 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} '
+            set -eu
+            DB_CONTAINER=$(docker ps --format "{{.Names}}" | grep -E "^qualify-supabase-(db|postgres)$" | head -n 1)
+            test -n "$DB_CONTAINER"
+            DB_PASSWORD=$(docker exec "$DB_CONTAINER" printenv POSTGRES_PASSWORD)
+            docker exec -e PGPASSWORD="$DB_PASSWORD" -i "$DB_CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < /tmp/criafy-instagram-account-unique.sql
+            rm -f /tmp/criafy-instagram-account-unique.sql
+          '
+
       - name: Copy functions to VPS via Rsync
         run: |
           # Copia a pasta de functions local para o volume do Supabase na VPS
           sshpass -p "${{ secrets.VPS_PASSWORD }}" rsync -avz -e "ssh -o StrictHostKeyChecking=no -p 22022" supabase/functions/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/root/qualify-supabase/volumes/functions/
 
-      - name: Restart functions container
+      - name: Configure OAuth secret and recreate functions container
+        env:
+          INSTAGRAM_APP_SECRET: ${{ secrets.INSTAGRAM_APP_SECRET }}
         run: |
-          # Reinicia o container que roda as Edge Functions para carregar o novo código
-          sshpass -p "${{ secrets.VPS_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p 22022 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker restart qualify-supabase-edge-functions"
+          set -eu
+          test -n "$INSTAGRAM_APP_SECRET"
+
+          secret_file=$(mktemp)
+          trap 'rm -f "$secret_file"' EXIT
+          chmod 600 "$secret_file"
+          printf 'INSTAGRAM_APP_SECRET=%s\n' "$INSTAGRAM_APP_SECRET" > "$secret_file"
+
+          sshpass -p "${{ secrets.VPS_PASSWORD }}" rsync -az -e "ssh -o StrictHostKeyChecking=no -p 22022" "$secret_file" ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/root/qualify-supabase/.env.criafy
+
+          sshpass -p "${{ secrets.VPS_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p 22022 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} '
+            set -eu
+            cd /root/qualify-supabase
+            chmod 600 .env.criafy
+
+            cat > docker-compose.criafy-oauth.yml <<"EOF"
+          services:
+            functions:
+              env_file:
+                - .env.criafy
+          EOF
+
+            docker compose -f docker-compose.yml -f docker-compose.criafy-oauth.yml up -d --force-recreate functions
+            docker exec qualify-supabase-edge-functions sh -c '\''test -n "$INSTAGRAM_APP_SECRET"'\''
+          '

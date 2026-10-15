@@ -9,6 +9,27 @@ import {
   CriafyMediaType,
   CriafyPublicationType,
 } from "@/types/criafy";
+import {
+  CriafyOAuthExchangeResult,
+  validateOAuthExchangeResult,
+} from "@/services/criafy/oauthResponse";
+
+async function functionErrorMessage(data: unknown, error: unknown, fallback: string): Promise<string> {
+  const dataError = (data as { error?: unknown } | null)?.error;
+  if (typeof dataError === "string") return dataError;
+
+  const response = (error as { context?: { clone?: () => Response } } | null)?.context;
+  if (response && typeof response.clone === "function") {
+    try {
+      const errorBody = (await response.clone().json()) as { error?: unknown };
+      if (typeof errorBody?.error === "string") return errorBody.error;
+    } catch {
+      // Fall back to the SDK error below when the response is not JSON.
+    }
+  }
+  const sdkMessage = (error as { message?: unknown } | null)?.message;
+  return typeof sdkMessage === "string" ? sdkMessage : fallback;
+}
 
 export const criafyService = {
   // ==========================================
@@ -58,20 +79,26 @@ export const criafyService = {
     });
 
     if (error || !data?.success) {
-      throw new Error(data?.error || error?.message || "Erro ao obter URL de autenticação OAuth Meta.");
+      throw new Error(await functionErrorMessage(data, error, "Erro ao obter URL de autenticação OAuth Meta."));
     }
+    if (!data.authUrl) throw new Error("A integração não retornou a URL de autenticação do Instagram.");
     return data.authUrl;
   },
 
-  async exchangeOAuthCode(companyId: string, code: string, redirectUri: string, state?: string): Promise<any> {
+  async exchangeOAuthCode(
+    companyId: string,
+    code: string,
+    redirectUri: string,
+    state: string
+  ): Promise<CriafyOAuthExchangeResult> {
     const { data, error } = await supabase.functions.invoke("criafy-instagram-oauth", {
       body: { action: "exchange-code", companyId, code, redirectUri, state },
     });
 
     if (error || !data?.success) {
-      throw new Error(data?.error || error?.message || "Erro ao processar autorização da Meta.");
+      throw new Error(await functionErrorMessage(data, error, "Erro ao processar autorização da Meta."));
     }
-    return data;
+    return validateOAuthExchangeResult(data);
   },
 
   async checkAccountTokenHealth(accountId: string): Promise<{ status: string; valid: boolean; error?: string }> {
@@ -80,7 +107,7 @@ export const criafyService = {
     });
 
     if (error || !data?.success) {
-      throw new Error(data?.error || error?.message || "Erro ao verificar status do token.");
+      throw new Error(await functionErrorMessage(data, error, "Erro ao verificar status do token."));
     }
     return data;
   },
@@ -91,7 +118,7 @@ export const criafyService = {
     });
 
     if (error || !data?.success) {
-      throw new Error(data?.error || error?.message || "Erro ao desconectar conta.");
+      throw new Error(await functionErrorMessage(data, error, "Erro ao desconectar conta."));
     }
   },
 
