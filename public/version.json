@@ -1,6 +1,6 @@
 {
-  "commit": "d44dabbba5b6fafaa3dd54bb0853acc12e863187",
-  "shortCommit": "d44dabb",
-  "message": "fix(criafy): suporte a oauth em popup, prevencao de race condition de sessao e recuperacao de rota de retorno",
-  "builtAt": "2026-10-15T03:03:50.009Z"
+  "commit": "fb87ade027e73bbe8ef0071c48408ad067754919",
+  "shortCommit": "fb87ade",
+  "message": "fix(criafy): priorizar app secret configurado em platform_settings pelo superadmin sobre variavel de ambiente",
+  "builtAt": "2026-10-15T14:37:49.741Z"
 }

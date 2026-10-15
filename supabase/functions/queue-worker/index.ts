@@ -158,6 +158,26 @@ Deno.serve(async (req) => {
           })
           .eq("id", item.queue_id);
 
+        if (item.source_type === 'chat' && item.conversation_id && newStatus === 'failed') {
+          const { data: pendingMsgs } = await adminClient
+            .from("chat_messages")
+            .select("id")
+            .eq("conversation_id", item.conversation_id)
+            .eq("status", "pending")
+            .order("created_at", { ascending: true })
+            .limit(1);
+
+          if (pendingMsgs && pendingMsgs.length > 0) {
+            await adminClient
+              .from("chat_messages")
+              .update({
+                status: "failed",
+                error_message: err.message || "Falha no envio da mensagem",
+              })
+              .eq("id", pendingMsgs[0].id);
+          }
+        }
+
         results.push({ id: item.queue_id, status: newStatus, error: err.message });
       }
     }

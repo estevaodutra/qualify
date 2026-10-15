@@ -59,7 +59,8 @@ export interface ChatMessage {
   body: string | null;
   media_url: string | null;
   media_type: string | null;
-  status: "pending" | "sent" | "delivered" | "read";
+  status: "pending" | "sent" | "delivered" | "read" | "failed";
+  error_message?: string | null;
   is_internal: boolean;
   zaap_id: string | null;
   message_id: string | null;

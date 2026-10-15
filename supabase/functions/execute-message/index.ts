@@ -25,6 +25,8 @@ const syncSentMessageToChat = async (
     externalMessageId?: string | null;
     isGroup?: boolean;
     groupJid?: string;
+    status?: string;
+    errorMessage?: string | null;
   }
 ) => {
   if (!params.phone || !params.companyId || (!params.body && !params.mediaUrl)) return;
@@ -113,7 +115,8 @@ const syncSentMessageToChat = async (
 
     const effectiveMsgType = params.messageType || (params.mediaUrl ? "image" : "text");
     const effectiveMediaType = params.mediaType || (params.mediaUrl ? (params.messageType || "image") : null);
-    const previewText = params.body || (params.mediaUrl ? `[${effectiveMsgType === 'image' ? 'Imagem' : effectiveMsgType}]` : '[Mensagem]');
+    const basePreview = params.body || (params.mediaUrl ? `[${effectiveMsgType === 'image' ? 'Imagem' : effectiveMsgType}]` : '[Mensagem]');
+    const previewText = params.status === "failed" ? `⚠️ [Falha] ${basePreview}` : basePreview;
 
     if (!convId) {
       const resolvedContactPhone = isGroup 
@@ -147,7 +150,8 @@ const syncSentMessageToChat = async (
         body: params.body || "",
         media_url: params.mediaUrl || null,
         media_type: effectiveMediaType,
-        status: "sent",
+        status: params.status || "sent",
+        error_message: params.errorMessage || null,
         message_id: params.externalMessageId || null,
         created_at: new Date().toISOString(),
       });
@@ -161,10 +165,10 @@ const syncSentMessageToChat = async (
         })
         .eq("id", convId);
 
-      console.log(`[ExecuteMessage] Synced sent message (${effectiveMsgType}, isGroup=${isGroup}) to chat conversation ${convId}`);
+      console.log(`[ExecuteMessage] Synced ${params.status || "sent"} message (${effectiveMsgType}, isGroup=${isGroup}) to chat conversation ${convId}`);
     }
   } catch (err) {
-    console.error("[ExecuteMessage] Failed to sync sent message to chat_messages:", err);
+    console.error("[ExecuteMessage] Failed to sync message to chat_messages:", err);
   }
 };
 
@@ -4188,34 +4192,55 @@ Deno.serve(async (req) => {
                     .eq("id", logEntry.id);
                 }
                 
+                const msgText = (formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.question || formattedConfig.caption || subMsg.content || subMsg.text || subMsg.message || subMsg.question || "") as string;
+                const mediaUrl = (formattedConfig.url || formattedConfig.mediaUrl || formattedConfig.image || formattedConfig.fileUrl || formattedConfig.audio || formattedConfig.video || formattedConfig.document || subMsg.url || subMsg.mediaUrl || subMsg.image || "") as string;
+                const isGroupDest = !isSubNodePrivate && Boolean(
+                  isWorkflowGroupMode ||
+                  dest.group_jid?.includes("@g.us") ||
+                  dest.group_jid?.includes("-group") ||
+                  !dest.isPrivate
+                );
+                const destPhone = isGroupDest
+                  ? (dest.group_jid || "")
+                  : ((isSubNodePrivate && triggerContext?.respondentPhone)
+                      ? triggerContext.respondentPhone
+                      : (dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || triggerContext?.contactPhone || "")
+                    );
+                const destName = isGroupDest
+                  ? (dest.group_name || dest.group_jid)
+                  : (isSubNodePrivate
+                      ? (triggerContext?.respondentName || triggerContext?.respondentPhone)
+                      : (dest.group_name || triggerContext?.respondentName)
+                    );
+                const effectiveCompanyId = triggerContext?.companyId || typedCampaign?.company_id || "dcb34e9a-1510-4137-aecd-cec0c6d548c4";
+
                 if (!result.ok) {
                   subFailed = true;
                   const errDetail = typeof result.details === "string" ? result.details : JSON.stringify(result.details || "");
                   subFailedError = `Falha ao enviar ${subNodeType} (HTTP ${result.status})${errDetail ? `: ${errDetail}` : ""}`;
                   console.error(`[ExecuteMessage] ❌ Failed to send sub-message ${subNodeType} to ${dest.group_name}:`, subFailedError);
+
+                  // Sync failed message to chat so operator sees failure and red warning icon with error tooltip
+                  if ((msgText || mediaUrl) && destPhone) {
+                    await syncSentMessageToChat(supabase, {
+                      companyId: effectiveCompanyId,
+                      instanceId: activeInstanceId,
+                      phone: destPhone,
+                      name: destName,
+                      leadId: isGroupDest ? null : (triggerContext?.leadId || null),
+                      isGroup: isGroupDest,
+                      groupJid: isGroupDest ? dest.group_jid : undefined,
+                      body: msgText,
+                      mediaUrl: mediaUrl || null,
+                      messageType: subNodeType === "message" ? (mediaUrl ? "image" : "text") : subNodeType,
+                      mediaType: subNodeType === "message" ? (mediaUrl ? "image" : null) : subNodeType,
+                      externalMessageId: null,
+                      status: "failed",
+                      errorMessage: subFailedError,
+                    });
+                  }
                 } else {
                   console.log(`[ExecuteMessage] ✅ Sub-message ${subNodeType} sent to ${dest.group_name}`);
-                  const msgText = (formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.question || formattedConfig.caption || subMsg.content || subMsg.text || subMsg.message || subMsg.question || "") as string;
-                  const mediaUrl = (formattedConfig.url || formattedConfig.mediaUrl || formattedConfig.image || formattedConfig.fileUrl || formattedConfig.audio || formattedConfig.video || formattedConfig.document || subMsg.url || subMsg.mediaUrl || subMsg.image || "") as string;
-                  const isGroupDest = !isSubNodePrivate && Boolean(
-                    isWorkflowGroupMode ||
-                    dest.group_jid?.includes("@g.us") ||
-                    dest.group_jid?.includes("-group") ||
-                    !dest.isPrivate
-                  );
-                  const destPhone = isGroupDest
-                    ? (dest.group_jid || "")
-                    : ((isSubNodePrivate && triggerContext?.respondentPhone)
-                        ? triggerContext.respondentPhone
-                        : (dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || triggerContext?.contactPhone || "")
-                      );
-                  const destName = isGroupDest
-                    ? (dest.group_name || dest.group_jid)
-                    : (isSubNodePrivate
-                        ? (triggerContext?.respondentName || triggerContext?.respondentPhone)
-                        : (dest.group_name || triggerContext?.respondentName)
-                      );
-                  const effectiveCompanyId = triggerContext?.companyId || typedCampaign?.company_id || "dcb34e9a-1510-4137-aecd-cec0c6d548c4";
                   if ((msgText || mediaUrl) && destPhone) {
                     await syncSentMessageToChat(supabase, {
                       companyId: effectiveCompanyId,
@@ -4230,6 +4255,7 @@ Deno.serve(async (req) => {
                       messageType: subNodeType === "message" ? (mediaUrl ? "image" : "text") : subNodeType,
                       mediaType: subNodeType === "message" ? (mediaUrl ? "image" : null) : subNodeType,
                       externalMessageId: externalMessageId,
+                      status: "sent",
                     });
                   }
                   if (subNodeType === "poll" && (externalMessageId || zaapId)) {
@@ -4278,6 +4304,48 @@ Deno.serve(async (req) => {
                       response_time_ms: Date.now() - sendStartTime,
                     })
                     .eq("id", logEntry.id);
+                }
+
+                // Sync caught exception failure to chat
+                const msgText = (formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.question || formattedConfig.caption || subMsg.content || subMsg.text || subMsg.message || subMsg.question || "") as string;
+                const mediaUrl = (formattedConfig.url || formattedConfig.mediaUrl || formattedConfig.image || formattedConfig.fileUrl || formattedConfig.audio || formattedConfig.video || formattedConfig.document || subMsg.url || subMsg.mediaUrl || subMsg.image || "") as string;
+                const isGroupDest = !isSubNodePrivate && Boolean(
+                  isWorkflowGroupMode ||
+                  dest.group_jid?.includes("@g.us") ||
+                  dest.group_jid?.includes("-group") ||
+                  !dest.isPrivate
+                );
+                const destPhone = isGroupDest
+                  ? (dest.group_jid || "")
+                  : ((isSubNodePrivate && triggerContext?.respondentPhone)
+                      ? triggerContext.respondentPhone
+                      : (dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || triggerContext?.contactPhone || "")
+                    );
+                const destName = isGroupDest
+                  ? (dest.group_name || dest.group_jid)
+                  : (isSubNodePrivate
+                      ? (triggerContext?.respondentName || triggerContext?.respondentPhone)
+                      : (dest.group_name || triggerContext?.respondentName)
+                    );
+                const effectiveCompanyId = triggerContext?.companyId || typedCampaign?.company_id || "dcb34e9a-1510-4137-aecd-cec0c6d548c4";
+
+                if ((msgText || mediaUrl) && destPhone) {
+                  await syncSentMessageToChat(supabase, {
+                    companyId: effectiveCompanyId,
+                    instanceId: activeInstanceId,
+                    phone: destPhone,
+                    name: destName,
+                    leadId: isGroupDest ? null : (triggerContext?.leadId || null),
+                    isGroup: isGroupDest,
+                    groupJid: isGroupDest ? dest.group_jid : undefined,
+                    body: msgText,
+                    mediaUrl: mediaUrl || null,
+                    messageType: subNodeType === "message" ? (mediaUrl ? "image" : "text") : subNodeType,
+                    mediaType: subNodeType === "message" ? (mediaUrl ? "image" : null) : subNodeType,
+                    externalMessageId: null,
+                    status: "failed",
+                    errorMessage: subFailedError,
+                  });
                 }
               }
             }
@@ -5222,32 +5290,33 @@ Deno.serve(async (req) => {
                 .eq("id", logEntry.id);
             }
 
+            const msgText = (formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.question || formattedConfig.caption || "") as string;
+            const mediaUrl = (formattedConfig.url || formattedConfig.mediaUrl || formattedConfig.image || formattedConfig.fileUrl || formattedConfig.audio || formattedConfig.video || formattedConfig.document || "") as string;
+            const isGroupDest = !isNodePrivate && Boolean(
+              isWorkflowGroupMode ||
+              dest.group_jid?.includes("@g.us") ||
+              dest.group_jid?.includes("-group") ||
+              !dest.isPrivate
+            );
+            const destPhone = isGroupDest
+              ? (dest.group_jid || "")
+              : ((isNodePrivate && triggerContext?.respondentPhone)
+                  ? triggerContext.respondentPhone
+                  : (dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || triggerContext?.contactPhone || "")
+                );
+            const destName = isGroupDest
+              ? (dest.group_name || dest.group_jid)
+              : (isNodePrivate
+                  ? (triggerContext?.respondentName || triggerContext?.respondentPhone)
+                  : (dest.group_name || triggerContext?.respondentName)
+                );
+            const effectiveCompanyId = triggerContext?.companyId || typedCampaign?.company_id || "dcb34e9a-1510-4137-aecd-cec0c6d548c4";
+
             if (result.ok) {
               console.log(`[ExecuteMessage] ✅ Node ${node.node_type} sent to ${dest.group_name}${dest.isPrivate ? ' (private)' : ''}`);
               webhookResponses.push({ nodeType: node.node_type, nodeOrder: node.node_order, destination: dest.group_jid, status: "sent", data: responseData });
               nodeSendResults.push({ destination: dest.group_jid, status: "sent" });
 
-              const msgText = (formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.question || formattedConfig.caption || "") as string;
-              const mediaUrl = (formattedConfig.url || formattedConfig.mediaUrl || formattedConfig.image || formattedConfig.fileUrl || formattedConfig.audio || formattedConfig.video || formattedConfig.document || "") as string;
-              const isGroupDest = !isNodePrivate && Boolean(
-                isWorkflowGroupMode ||
-                dest.group_jid?.includes("@g.us") ||
-                dest.group_jid?.includes("-group") ||
-                !dest.isPrivate
-              );
-              const destPhone = isGroupDest
-                ? (dest.group_jid || "")
-                : ((isNodePrivate && triggerContext?.respondentPhone)
-                    ? triggerContext.respondentPhone
-                    : (dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || triggerContext?.contactPhone || "")
-                  );
-              const destName = isGroupDest
-                ? (dest.group_name || dest.group_jid)
-                : (isNodePrivate
-                    ? (triggerContext?.respondentName || triggerContext?.respondentPhone)
-                    : (dest.group_name || triggerContext?.respondentName)
-                  );
-              const effectiveCompanyId = triggerContext?.companyId || typedCampaign?.company_id || "dcb34e9a-1510-4137-aecd-cec0c6d548c4";
               if ((msgText || mediaUrl) && destPhone) {
                 await syncSentMessageToChat(supabase, {
                   companyId: effectiveCompanyId,
@@ -5262,6 +5331,7 @@ Deno.serve(async (req) => {
                   messageType: node.node_type === "message" ? (mediaUrl ? "image" : "text") : node.node_type,
                   mediaType: node.node_type === "message" ? (mediaUrl ? "image" : null) : node.node_type,
                   externalMessageId: externalMessageId || zaapId || null,
+                  status: "sent",
                 });
               }
 
@@ -5466,21 +5536,83 @@ Deno.serve(async (req) => {
               console.log(`[ExecuteMessage] ❌ Node ${node.node_type} failed for ${dest.group_name}: HTTP ${result.status}`);
               webhookResponses.push({ nodeType: node.node_type, nodeOrder: node.node_order, destination: dest.group_jid, status: "failed", data: responseData });
               nodeSendResults.push({ destination: dest.group_jid, status: "failed" });
+
+              const nodeFailedError = (result as any).error || (responseData && typeof responseData === "object" && ((responseData as any).message || (responseData as any).error)) || `HTTP ${result.status}`;
+              if ((msgText || mediaUrl) && destPhone) {
+                await syncSentMessageToChat(supabase, {
+                  companyId: effectiveCompanyId,
+                  instanceId: activeInstanceId,
+                  phone: destPhone,
+                  name: destName,
+                  leadId: isGroupDest ? null : (triggerContext?.leadId || null),
+                  isGroup: isGroupDest,
+                  groupJid: isGroupDest ? dest.group_jid : undefined,
+                  body: msgText,
+                  mediaUrl: mediaUrl || null,
+                  messageType: node.node_type === "message" ? (mediaUrl ? "image" : "text") : node.node_type,
+                  mediaType: node.node_type === "message" ? (mediaUrl ? "image" : null) : node.node_type,
+                  externalMessageId: externalMessageId || zaapId || null,
+                  status: "failed",
+                  errorMessage: String(nodeFailedError),
+                });
+              }
             }
           } catch (err) {
             nodesFailed++;
             console.error(`[ExecuteMessage] ❌ Error sending node to ${dest.group_name}:`, err);
             nodeSendResults.push({ destination: dest.group_jid, status: "failed" });
 
+            const errMessage = err instanceof Error ? err.message : "Unknown error";
             if (logEntry?.id) {
               await supabase
                 .from("group_message_logs")
                 .update({
                   status: "failed",
-                  error_message: err instanceof Error ? err.message : "Unknown error",
+                  error_message: errMessage,
                   response_time_ms: Date.now() - sendStartTime,
                 })
                 .eq("id", logEntry.id);
+            }
+
+            const msgText = (formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.question || formattedConfig.caption || "") as string;
+            const mediaUrl = (formattedConfig.url || formattedConfig.mediaUrl || formattedConfig.image || formattedConfig.fileUrl || formattedConfig.audio || formattedConfig.video || formattedConfig.document || "") as string;
+            const isGroupDest = !isNodePrivate && Boolean(
+              isWorkflowGroupMode ||
+              dest.group_jid?.includes("@g.us") ||
+              dest.group_jid?.includes("-group") ||
+              !dest.isPrivate
+            );
+            const destPhone = isGroupDest
+              ? (dest.group_jid || "")
+              : ((isNodePrivate && triggerContext?.respondentPhone)
+                  ? triggerContext.respondentPhone
+                  : (dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || triggerContext?.contactPhone || "")
+                );
+            const destName = isGroupDest
+              ? (dest.group_name || dest.group_jid)
+              : (isNodePrivate
+                  ? (triggerContext?.respondentName || triggerContext?.respondentPhone)
+                  : (dest.group_name || triggerContext?.respondentName)
+                );
+            const effectiveCompanyId = triggerContext?.companyId || typedCampaign?.company_id || "dcb34e9a-1510-4137-aecd-cec0c6d548c4";
+
+            if ((msgText || mediaUrl) && destPhone) {
+              await syncSentMessageToChat(supabase, {
+                companyId: effectiveCompanyId,
+                instanceId: activeInstanceId,
+                phone: destPhone,
+                name: destName,
+                leadId: isGroupDest ? null : (triggerContext?.leadId || null),
+                isGroup: isGroupDest,
+                groupJid: isGroupDest ? dest.group_jid : undefined,
+                body: msgText,
+                mediaUrl: mediaUrl || null,
+                messageType: node.node_type === "message" ? (mediaUrl ? "image" : "text") : node.node_type,
+                mediaType: node.node_type === "message" ? (mediaUrl ? "image" : null) : node.node_type,
+                externalMessageId: null,
+                status: "failed",
+                errorMessage: errMessage,
+              });
             }
           }
         }

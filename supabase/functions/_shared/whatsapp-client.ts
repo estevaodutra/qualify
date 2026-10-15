@@ -371,6 +371,44 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
     }
 
     if (!response.ok) {
+      // If HTTP 500 / 502 / 503 / 504 transient error, retry once after 2 seconds
+      if (response.status >= 500) {
+        console.warn(`[whatsapp-client] Provider returned HTTP ${response.status}, retrying once in 2s...`);
+        await new Promise((r) => setTimeout(r, 2000));
+        try {
+          const retryResp = await fetchZApi(
+            endpoint,
+            "POST",
+            body,
+            headers,
+            instance.id
+          );
+          if (retryResp.ok) {
+            const retryText = await retryResp.text();
+            let retryData: any;
+            try { retryData = JSON.parse(retryText); } catch { retryData = { raw: retryText }; }
+            let norm = retryData;
+            if (Array.isArray(retryData)) norm = retryData[0] || {};
+            const rZaapId = norm.zaapId || norm.id || null;
+            const rMsgId = norm.messageId || norm.id || null;
+            const rWahaId = norm?.key?.id || null;
+            console.log(`[whatsapp-client] ✅ Retry succeeded with status ${retryResp.status}`);
+            return {
+              ok: true,
+              status: retryResp.status,
+              zaapId: rZaapId,
+              messageId: rMsgId || rWahaId,
+              details: norm,
+              requestUrl: url,
+              requestBody: body,
+              curl,
+            };
+          }
+        } catch (retryErr) {
+          console.error(`[whatsapp-client] Retry attempt failed:`, retryErr);
+        }
+      }
+
       console.error(`[whatsapp-client] Z-API Error (HTTP ${response.status}):`, responseData);
       return {
         ok: false,

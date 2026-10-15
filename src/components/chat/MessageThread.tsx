@@ -3,6 +3,7 @@ import {  Loader2, FileText, Lock, MapPin, Check, CheckCheck, User , Play, Pause
 import { ChatMessage, ChatConversation } from "@/hooks/useChat";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface MessageThreadProps {
   conversation: ChatConversation;
@@ -575,12 +576,31 @@ export default function MessageThread({
                   >
                     {formatTime(msg.created_at)}
                     {isOperator && (
-                      <span className="ml-0.5">
+                      <span className="ml-0.5 inline-flex items-center">
                         {msg.status === "pending" ? <Clock className="h-3 w-3 opacity-80" /> :
                          msg.status === "sent" ? <Check className="h-3 w-3" /> :
                          msg.status === "delivered" ? <CheckCheck className="h-3 w-3 opacity-80" /> :
                          msg.status === "read" ? <CheckCheck className="h-3 w-3 text-blue-400" /> :
-                         msg.status === "failed" ? <AlertCircle className="h-3 w-3 text-red-400" /> :
+                         msg.status === "failed" ? (
+                           <TooltipProvider delayDuration={100}>
+                             <Tooltip>
+                               <TooltipTrigger asChild>
+                                 <span className="cursor-help inline-flex items-center">
+                                   <AlertCircle className="h-3.5 w-3.5 text-red-500 hover:text-red-400 transition-colors animate-pulse" />
+                                 </span>
+                               </TooltipTrigger>
+                               <TooltipContent side="top" className="bg-destructive text-destructive-foreground text-xs max-w-xs p-2.5 rounded-xl shadow-xl border border-destructive-foreground/20 z-[9999]">
+                                 <p className="font-bold flex items-center gap-1 text-[11px] mb-0.5">
+                                   <AlertCircle className="h-3 w-3 shrink-0" />
+                                   Falha no envio
+                                 </p>
+                                 <p className="text-[10px] opacity-95 break-words font-normal leading-relaxed">
+                                   {msg.error_message || "Erro no envio pelo WhatsApp"}
+                                 </p>
+                               </TooltipContent>
+                             </Tooltip>
+                           </TooltipProvider>
+                         ) :
                          <Check className="h-3 w-3 opacity-80" />}
                       </span>
                     )}
