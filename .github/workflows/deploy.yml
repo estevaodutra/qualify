@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - main
+      - feat/criafy-meta-compliance-callbacks
     paths:
       - 'supabase/functions/**'
 

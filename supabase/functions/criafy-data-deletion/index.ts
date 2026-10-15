@@ -36,9 +36,13 @@ Deno.serve(async (req) => {
     const { error: completeError } = await db.from("criafy_meta_deletion_requests")
       .update({ status: "COMPLETED", completed_at: new Date().toISOString() }).eq("id", id);
     if (completeError) throw completeError;
-    return json({ url: `${new URL(req.url).origin}${new URL(req.url).pathname}?id=${id}`, confirmation_code: id });
-  } catch (err) {
-    console.error("[Criafy deletion] Failed:", err instanceof Error ? err.message : "unknown");
-    return json({ error: "Unable to process deletion request" }, 500);
+  } catch (err: any) {
+    console.error("[Criafy deletion] Request error:", err instanceof Error ? err.message : "unknown");
+    const isValidationError =
+      err?.message?.includes("signed_request") ||
+      err?.message?.includes("signature") ||
+      err?.message?.includes("Malformed") ||
+      err?.message?.includes("Invalid signed_request");
+    return json({ error: "Unable to process deletion request" }, isValidationError ? 400 : 500);
   }
 });

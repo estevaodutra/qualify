@@ -24,9 +24,14 @@ Deno.serve(async (req) => {
       if (cancelError) throw cancelError;
     }
     return json({ success: true });
-  } catch (err) {
+  } catch (err: any) {
     // Do not expose signature validation internals or user identifiers.
     console.error("[Criafy deauthorization] Request rejected or failed:", err instanceof Error ? err.message : "unknown");
-    return json({ error: "Unable to process request" }, 400);
+    const isValidationError =
+      err?.message?.includes("signed_request") ||
+      err?.message?.includes("signature") ||
+      err?.message?.includes("Malformed") ||
+      err?.message?.includes("Invalid signed_request");
+    return json({ error: "Unable to process request" }, isValidationError ? 400 : 500);
   }
 });
