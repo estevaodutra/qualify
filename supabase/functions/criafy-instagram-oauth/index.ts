@@ -1,355 +1,213 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createCriafyOAuthState, verifyCriafyOAuthState } from "../_shared/criafyOAuthState.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+function jsonResponse(body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+function requiredEnv(name: string): string {
+  const value = Deno.env.get(name);
+  if (!value) throw new Error(`${name} is not configured`);
+  return value;
+}
+
+function instagramCredentials() {
+  const appId = Deno.env.get("INSTAGRAM_APP_ID") || "1214753054314021";
+  const appSecret = Deno.env.get("INSTAGRAM_APP_SECRET") || Deno.env.get("META_APP_SECRET");
+  if (!appSecret) throw new Error("INSTAGRAM_APP_SECRET or META_APP_SECRET is not configured");
+  return { appId, appSecret };
+}
+
+function metaErrorMessage(data: any, fallback: string): string {
+  return data?.error?.message || data?.error_message || data?.message || fallback;
+}
+
+async function fetchMetaJson(url: string, init: RequestInit | undefined, operation: string) {
+  const response = await fetch(url, init);
+  let data: any;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error(`${operation} returned an invalid response`);
   }
+  if (!response.ok || data?.error || data?.error_message) {
+    throw new Error(`${operation}: ${metaErrorMessage(data, `HTTP ${response.status}`)}`);
+  }
+  return data;
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("Missing Authorization header");
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-    // Authenticate user
+    const supabaseUrl = requiredEnv("SUPABASE_URL");
+    const supabaseAnonKey = requiredEnv("SUPABASE_ANON_KEY");
+    const supabaseServiceKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
-    const {
-      data: { user },
-      error: userError,
-    } = await userClient.auth.getUser();
-
+    const { data: { user }, error: userError } = await userClient.auth.getUser();
     if (userError || !user) throw new Error("Unauthorized");
 
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
     const body = await req.json();
     const { action, companyId, accountId, code, state, redirectUri, provider = "INSTAGRAM" } = body;
 
-    // Verify company membership
     if (companyId) {
-      const { data: member } = await adminClient
+      const { data: member, error: memberError } = await adminClient
         .from("company_members")
         .select("id")
         .eq("company_id", companyId)
         .eq("user_id", user.id)
         .eq("is_active", true)
         .maybeSingle();
-
-      if (!member) {
-        throw new Error("Forbidden: User is not an active member of this company");
-      }
+      if (memberError) throw new Error(`Unable to verify company membership: ${memberError.message}`);
+      if (!member) throw new Error("Forbidden: User is not an active member of this company");
     }
 
-    // App Credentials com separação entre Instagram App e Meta App
-    const instagramAppId =
-      Deno.env.get("INSTAGRAM_APP_ID") || "1214753054314021";
-    const instagramAppSecret =
-      Deno.env.get("INSTAGRAM_APP_SECRET") || Deno.env.get("META_APP_SECRET") || "";
-
-    const metaAppId = Deno.env.get("META_APP_ID") || instagramAppId;
-    const metaAppSecret = Deno.env.get("META_APP_SECRET") || instagramAppSecret;
-
-    // ==========================================
-    // ACTION 1: Generate OAuth URL (Instagram Login Direto ou Facebook Login)
-    // ==========================================
     if (action === "get-auth-url") {
-      const statePayload = JSON.stringify({ companyId, userId: user.id, timestamp: Date.now() });
+      if (!companyId || !redirectUri) throw new Error("CompanyId and redirectUri are required");
+      if (provider !== "INSTAGRAM") throw new Error("Only Instagram Login for Business is supported");
+      const { appId: instagramAppId, appSecret: instagramAppSecret } = instagramCredentials();
+      const stateSecret = Deno.env.get("CRIAFY_OAUTH_STATE_SECRET") || instagramAppSecret;
 
-      if (provider === "INSTAGRAM") {
-        // Escopos modernos do Instagram Login for Business
-        const igScopes = [
-          "instagram_business_basic",
-          "instagram_business_manage_messages",
-          "instagram_business_manage_comments",
-          "instagram_business_content_publish",
-        ].join(",");
-
-        const authUrl = `https://www.instagram.com/oauth/authorize?enable_fb_login=0&force_authentication=1&client_id=${instagramAppId}&redirect_uri=${encodeURIComponent(
-          redirectUri
-        )}&response_type=code&scope=${igScopes}&state=${encodeURIComponent(statePayload)}`;
-
-        return new Response(JSON.stringify({ success: true, authUrl, provider: "INSTAGRAM" }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      } else {
-        // Fallback legado via Facebook Login com Páginas
-        const fbScopes = [
-          "instagram_basic",
-          "instagram_content_publish",
-          "pages_show_list",
-          "pages_read_engagement",
-          "business_management",
-        ].join(",");
-
-        const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${metaAppId}&redirect_uri=${encodeURIComponent(
-          redirectUri
-        )}&scope=${fbScopes}&state=${encodeURIComponent(statePayload)}&response_type=code`;
-
-        return new Response(JSON.stringify({ success: true, authUrl, provider: "FACEBOOK" }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-    }
-
-    // ==========================================
-    // ACTION 2: Exchange Code for Long-Lived Token & Register Accounts
-    // ==========================================
-    if (action === "exchange-code") {
-      if (!code || !redirectUri) throw new Error("Code and redirectUri are required");
-
-      // Validar state para proteção CSRF
-      if (state) {
-        try {
-          const parsedState = typeof state === "string" ? JSON.parse(state) : state;
-          if (parsedState.companyId && parsedState.companyId !== companyId) {
-            throw new Error("CSRF check failed: company mismatch");
-          }
-        } catch (e: any) {
-          console.warn("[OAuth] State parsing warning:", e.message);
-        }
-      }
-
-      const connectedAccounts = [];
-
-      // Tentativa 1: Fluxo Direto do Instagram Login
-      let isInstagramDirect = false;
-      try {
-        const formData = new URLSearchParams();
-        formData.append("client_id", instagramAppId);
-        formData.append("client_secret", instagramAppSecret);
-        formData.append("grant_type", "authorization_code");
-        formData.append("redirect_uri", redirectUri);
-        formData.append("code", code);
-
-        const tokenRes = await fetch("https://api.instagram.com/oauth/access_token", {
-          method: "POST",
-          body: formData,
-        });
-
-        const tokenData = await tokenRes.json();
-
-        if (tokenData.access_token && tokenData.user_id) {
-          isInstagramDirect = true;
-          const shortLivedToken = tokenData.access_token;
-          const igUserId = String(tokenData.user_id);
-
-          // Troca por Long-Lived Token (60 dias) no endpoint do Instagram
-          let longLivedToken = shortLivedToken;
-          let expiresInSeconds = 5184000;
-
-          if (instagramAppSecret) {
-            try {
-              const longRes = await fetch(
-                `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${instagramAppSecret}&access_token=${shortLivedToken}`
-              );
-              const longData = await longRes.json();
-              if (longData.access_token) {
-                longLivedToken = longData.access_token;
-                expiresInSeconds = longData.expires_in || 5184000;
-              }
-            } catch (_) {}
-          }
-
-          const tokenExpiresAt = new Date(Date.now() + expiresInSeconds * 1000).toISOString();
-
-          // Buscar dados do perfil do Instagram
-          let username = `ig_${igUserId}`;
-          let name = null;
-          let profilePic = null;
-
-          try {
-            const profileRes = await fetch(
-              `https://graph.instagram.com/v19.0/me?fields=user_id,username,name,profile_picture_url&access_token=${longLivedToken}`
-            );
-            const profileData = await profileRes.json();
-            if (profileData.username) {
-              username = profileData.username;
-              name = profileData.name || profileData.username;
-              profilePic = profileData.profile_picture_url || null;
-            }
-          } catch (_) {}
-
-          // Salvar ou atualizar na tabela criafy_instagram_accounts
-          const { data: inserted, error: insertErr } = await adminClient
-            .from("criafy_instagram_accounts")
-            .upsert(
-              {
-                company_id: companyId,
-                instagram_account_id: igUserId,
-                instagram_user_id: igUserId,
-                username,
-                name: name || username,
-                profile_picture_url: profilePic,
-                account_type: "INSTAGRAM_BUSINESS",
-                access_token: longLivedToken,
-                token_expires_at: tokenExpiresAt,
-                connection_status: "CONNECTED",
-                error_message: null,
-                created_by: user.id,
-                updated_at: new Date().toISOString(),
-              },
-              { onConflict: "company_id, instagram_account_id" }
-            )
-            .select()
-            .single();
-
-          if (!insertErr && inserted) {
-            connectedAccounts.push(inserted);
-          }
-        }
-      } catch (igErr: any) {
-        console.warn("[OAuth] Fluxo direto Instagram falhou, tentando fallback Facebook:", igErr.message);
-      }
-
-      // Tentativa 2: Fallback para o fluxo do Facebook Login
-      if (!isInstagramDirect && connectedAccounts.length === 0) {
-        const tokenUrl = `https://graph.facebook.com/v19.0/oauth/access_token?client_id=${metaAppId}&redirect_uri=${encodeURIComponent(
-          redirectUri
-        )}&client_secret=${metaAppSecret}&code=${code}`;
-
-        const tokenRes = await fetch(tokenUrl);
-        const tokenData = await tokenRes.json();
-
-        if (tokenData.error) {
-          throw new Error(`Meta OAuth Error: ${tokenData.error.message}`);
-        }
-
-        const shortLivedToken = tokenData.access_token;
-
-        const longLivedUrl = `https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${metaAppId}&client_secret=${metaAppSecret}&fb_exchange_token=${shortLivedToken}`;
-        const longLivedRes = await fetch(longLivedUrl);
-        const longLivedData = await longLivedRes.json();
-
-        const accessToken = longLivedData.access_token || shortLivedToken;
-        const expiresInSeconds = longLivedData.expires_in || 5184000;
-        const tokenExpiresAt = new Date(Date.now() + expiresInSeconds * 1000).toISOString();
-
-        const pagesUrl = `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,name,profile_picture_url}&access_token=${accessToken}`;
-        const pagesRes = await fetch(pagesUrl);
-        const pagesData = await pagesRes.json();
-
-        if (pagesData.data && Array.isArray(pagesData.data)) {
-          for (const page of pagesData.data) {
-            if (page.instagram_business_account) {
-              const igAcc = page.instagram_business_account;
-
-              const { data: inserted, error: insertErr } = await adminClient
-                .from("criafy_instagram_accounts")
-                .upsert(
-                  {
-                    company_id: companyId,
-                    instagram_account_id: igAcc.id,
-                    username: igAcc.username,
-                    name: igAcc.name || page.name,
-                    profile_picture_url: igAcc.profile_picture_url,
-                    access_token: accessToken,
-                    token_expires_at: tokenExpiresAt,
-                    connection_status: "CONNECTED",
-                    error_message: null,
-                    created_by: user.id,
-                    updated_at: new Date().toISOString(),
-                  },
-                  { onConflict: "company_id, instagram_account_id" }
-                )
-                .select()
-                .single();
-
-              if (!insertErr && inserted) {
-                connectedAccounts.push(inserted);
-              }
-            }
-          }
-        }
-      }
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          count: connectedAccounts.length,
-          accounts: connectedAccounts,
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      const signedState = await createCriafyOAuthState(
+        { companyId, userId: user.id, redirectUri, provider: "INSTAGRAM" },
+        stateSecret
       );
+      const scopes = [
+        "instagram_business_basic",
+        "instagram_business_manage_messages",
+        "instagram_business_manage_comments",
+        "instagram_business_content_publish",
+      ].join(",");
+      const authUrl = `https://www.instagram.com/oauth/authorize?enable_fb_login=0&force_authentication=1&client_id=${instagramAppId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scopes}&state=${encodeURIComponent(signedState)}`;
+      return jsonResponse({ success: true, authUrl, provider: "INSTAGRAM" });
     }
 
-    // ==========================================
-    // ACTION 3: Verify Token Health & Connection Status
-    // ==========================================
+    if (action === "exchange-code") {
+      if (!companyId || !code || !redirectUri || !state) {
+        throw new Error("CompanyId, code, redirectUri and state are required");
+      }
+      const { appId: instagramAppId, appSecret: instagramAppSecret } = instagramCredentials();
+      const stateSecret = Deno.env.get("CRIAFY_OAUTH_STATE_SECRET") || instagramAppSecret;
+      await verifyCriafyOAuthState(state, stateSecret, { companyId, userId: user.id, redirectUri });
+
+      const formData = new URLSearchParams();
+      formData.append("client_id", instagramAppId);
+      formData.append("client_secret", instagramAppSecret);
+      formData.append("grant_type", "authorization_code");
+      formData.append("redirect_uri", redirectUri);
+      formData.append("code", code);
+
+      const tokenData = await fetchMetaJson(
+        "https://api.instagram.com/oauth/access_token",
+        { method: "POST", body: formData },
+        "Instagram authorization code exchange failed"
+      );
+      if (!tokenData.access_token || !tokenData.user_id) {
+        throw new Error("Instagram authorization code exchange returned no account token");
+      }
+
+      const longLivedData = await fetchMetaJson(
+        `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${encodeURIComponent(instagramAppSecret)}&access_token=${encodeURIComponent(tokenData.access_token)}`,
+        undefined,
+        "Instagram long-lived token exchange failed"
+      );
+      if (!longLivedData.access_token) {
+        throw new Error("Instagram long-lived token exchange returned no access token");
+      }
+
+      const profileData = await fetchMetaJson(
+        `https://graph.instagram.com/v19.0/me?fields=user_id,username,name,profile_picture_url&access_token=${encodeURIComponent(longLivedData.access_token)}`,
+        undefined,
+        "Instagram profile lookup failed"
+      );
+      if (!profileData.username) throw new Error("Instagram profile lookup returned no username");
+
+      const instagramAccountId = String(profileData.user_id || tokenData.user_id);
+      const expiresInSeconds = Number(longLivedData.expires_in) || 5_184_000;
+      const { data: account, error: upsertError } = await adminClient
+        .from("criafy_instagram_accounts")
+        .upsert(
+          {
+            company_id: companyId,
+            instagram_account_id: instagramAccountId,
+            instagram_user_id: instagramAccountId,
+            username: profileData.username,
+            name: profileData.name || profileData.username,
+            profile_picture_url: profileData.profile_picture_url || null,
+            account_type: "INSTAGRAM_BUSINESS",
+            access_token: longLivedData.access_token,
+            token_expires_at: new Date(Date.now() + expiresInSeconds * 1000).toISOString(),
+            connection_status: "CONNECTED",
+            error_message: null,
+            created_by: user.id,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "company_id,instagram_account_id" }
+        )
+        .select()
+        .single();
+      if (upsertError) throw new Error(`Unable to save Instagram account: ${upsertError.message}`);
+      if (!account) throw new Error("Unable to save Instagram account: no row was returned");
+
+      return jsonResponse({ success: true, count: 1, accounts: [account] });
+    }
+
     if (action === "check-token-status") {
       if (!accountId) throw new Error("AccountId is required");
-
-      const { data: account, error: fetchErr } = await adminClient
+      const { data: account, error: fetchError } = await adminClient
         .from("criafy_instagram_accounts")
         .select("*")
         .eq("id", accountId)
         .single();
-
-      if (fetchErr || !account) throw new Error("Account not found");
+      if (fetchError || !account) throw new Error(`Account not found: ${fetchError?.message || accountId}`);
 
       if (!account.access_token) {
-        await adminClient
+        const { error: updateError } = await adminClient
           .from("criafy_instagram_accounts")
           .update({ connection_status: "DISCONNECTED", error_message: "Access token ausente" })
           .eq("id", accountId);
-
-        return new Response(
-          JSON.stringify({ success: true, status: "DISCONNECTED", valid: false }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      // Testar endpoint do Instagram ou Graph
-      let debugRes = await fetch(
-        `https://graph.instagram.com/v19.0/me?access_token=${account.access_token}`
-      );
-      let debugData = await debugRes.json();
-
-      if (debugData.error) {
-        // Fallback Graph Facebook
-        debugRes = await fetch(
-          `https://graph.facebook.com/v19.0/me?access_token=${account.access_token}`
-        );
-        debugData = await debugRes.json();
+        if (updateError) throw new Error(`Unable to update account status: ${updateError.message}`);
+        return jsonResponse({ success: true, status: "DISCONNECTED", valid: false });
       }
 
       let status = "CONNECTED";
-      let errorMsg = null;
-
-      if (debugData.error) {
+      let errorMessage: string | null = null;
+      try {
+        await fetchMetaJson(
+          `https://graph.instagram.com/v19.0/me?access_token=${encodeURIComponent(account.access_token)}`,
+          undefined,
+          "Instagram token validation failed"
+        );
+      } catch (error) {
         status = "EXPIRED";
-        errorMsg = debugData.error.message;
+        errorMessage = error instanceof Error ? error.message : "Instagram token validation failed";
       }
 
-      await adminClient
+      const { error: updateError } = await adminClient
         .from("criafy_instagram_accounts")
-        .update({
-          connection_status: status,
-          error_message: errorMsg,
-          updated_at: new Date().toISOString(),
-        })
+        .update({ connection_status: status, error_message: errorMessage, updated_at: new Date().toISOString() })
         .eq("id", accountId);
-
-      return new Response(
-        JSON.stringify({ success: true, status, valid: !debugData.error, error: errorMsg }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      if (updateError) throw new Error(`Unable to update account status: ${updateError.message}`);
+      return jsonResponse({ success: true, status, valid: status === "CONNECTED", error: errorMessage });
     }
 
-    // ==========================================
-    // ACTION 4: Disconnect Account Token
-    // ==========================================
     if (action === "disconnect-account") {
       if (!accountId) throw new Error("AccountId is required");
-
-      await adminClient
+      const { error: updateError } = await adminClient
         .from("criafy_instagram_accounts")
         .update({
           connection_status: "DISCONNECTED",
@@ -358,17 +216,14 @@ Deno.serve(async (req) => {
           updated_at: new Date().toISOString(),
         })
         .eq("id", accountId);
-
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      if (updateError) throw new Error(`Unable to disconnect account: ${updateError.message}`);
+      return jsonResponse({ success: true });
     }
 
     throw new Error(`Invalid action: ${action}`);
-  } catch (err: any) {
-    return new Response(JSON.stringify({ success: false, error: err.message }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unexpected OAuth error";
+    console.error("[Criafy OAuth]", message);
+    return jsonResponse({ success: false, error: message }, 400);
   }
 });

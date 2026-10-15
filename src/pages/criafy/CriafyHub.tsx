@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +38,7 @@ export default function CriafyHub() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [accounts, setAccounts] = useState<CriafyInstagramAccount[]>([]);
   const [loading, setLoading] = useState(true);
+  const processedOAuthCallbackRef = useRef<string | null>(null);
 
   // Selected Account Filter
   const [selectedAccountId, setSelectedAccountId] = useState<string>("all");
@@ -60,27 +61,50 @@ export default function CriafyHub() {
     if (!activeCompanyId) return;
 
     const code = searchParams.get("code");
-    const state = searchParams.get("state") || undefined;
-    if (code) {
-      toast.loading("Processando autorização do Instagram Meta API...", { id: "oauth-process" });
-      try {
-        const redirectUri = `${window.location.origin}/criafy`;
-        const res = await criafyService.exchangeOAuthCode(activeCompanyId, code, redirectUri, state);
-        toast.success(`Sucesso! ${res.count || 1} conta(s) do Instagram conectada(s).`, {
-          id: "oauth-process",
-        });
-        // Clear code and state from URL
-        searchParams.delete("code");
-        searchParams.delete("state");
-        setSearchParams(searchParams);
-      } catch (err: any) {
-        toast.error(`Falha ao conectar conta via Meta OAuth: ${err.message}`, {
-          id: "oauth-process",
-        });
-      }
+    const state = searchParams.get("state");
+    const oauthError = searchParams.get("error_description") || searchParams.get("error");
+
+    const clearOAuthParams = () => {
+      const nextParams = new URLSearchParams(searchParams);
+      ["code", "state", "error", "error_reason", "error_description"].forEach((key) => {
+        nextParams.delete(key);
+      });
+      setSearchParams(nextParams, { replace: true });
+    };
+
+    if (oauthError) {
+      toast.error(`Autorização do Instagram cancelada ou recusada: ${oauthError}`);
+      clearOAuthParams();
+      await loadAccounts();
+      return;
     }
 
-    loadAccounts();
+    if (code) {
+      const callbackKey = `${activeCompanyId}:${code}`;
+      if (processedOAuthCallbackRef.current === callbackKey) return;
+      processedOAuthCallbackRef.current = callbackKey;
+
+      toast.loading("Processando autorização do Instagram Meta API...", { id: "oauth-process" });
+      try {
+        if (!state) throw new Error("Retorno OAuth sem state. Inicie a conexão novamente.");
+        const redirectUri = `${window.location.origin}/criafy`;
+        const res = await criafyService.exchangeOAuthCode(activeCompanyId, code, redirectUri, state);
+        toast.success(`Sucesso! ${res.count} conta(s) do Instagram conectada(s).`, {
+          id: "oauth-process",
+        });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Erro desconhecido";
+        toast.error(`Falha ao conectar conta via Meta OAuth: ${message}`, {
+          id: "oauth-process",
+        });
+      } finally {
+        clearOAuthParams();
+        await loadAccounts();
+      }
+      return;
+    }
+
+    await loadAccounts();
   };
 
   const loadAccounts = async () => {
