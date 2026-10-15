@@ -12,7 +12,8 @@ import ChatFilterDrawer from "./filters/ChatFilterDrawer";
 import ActiveFilterChips from "./filters/ActiveFilterChips";
 import ConversationActionsMenu from "./actions/ConversationActionsMenu";
 import { Button } from "@/components/ui/button";
-import { Pin, Archive, Inbox, Users } from "lucide-react";
+import { Pin, Archive, Inbox, Users, Folder } from "lucide-react";
+import { useGroupFolders } from "@/hooks/useGroupFolders";
 
 interface InboxListProps {
   conversations: ChatConversation[];
@@ -48,6 +49,7 @@ export default function InboxList({
   const [sortBy, setSortBy] = useState<"recent" | "waiting">("recent");
   const [isManagerOpen, setIsManagerOpen] = useState(false);
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
+  const { folders: groupFolders = [] } = useGroupFolders();
 
   const activeCategoryCount = getActiveCategoryCount(filters as AdvancedChatFilters);
   
@@ -239,6 +241,52 @@ export default function InboxList({
             )}
           </button>
         </div>
+
+        {/* Quick Folder Filter Pills for Groups */}
+        {currentConvType === "group" && groupFolders.length > 0 && (
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 no-scrollbar scroll-smooth">
+            <button
+              type="button"
+              onClick={() => setFilters({ ...filters, groupFolderId: null } as any)}
+              className={cn(
+                "px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all flex items-center gap-1 shrink-0 cursor-pointer border",
+                !(filters as AdvancedChatFilters).groupFolderId
+                  ? "bg-purple-600 text-white border-purple-600 shadow-xs"
+                  : "bg-background/80 hover:bg-muted text-muted-foreground border-border/40"
+              )}
+            >
+              <Folder className="h-3 w-3" />
+              <span>Todas as pastas</span>
+            </button>
+            {groupFolders.map((f) => {
+              const isSelected = (filters as AdvancedChatFilters).groupFolderId === f.id;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() =>
+                    setFilters({
+                      ...filters,
+                      groupFolderId: isSelected ? null : f.id,
+                    } as any)
+                  }
+                  className={cn(
+                    "px-2.5 py-1 rounded-lg text-[11px] whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 cursor-pointer border",
+                    isSelected
+                      ? "bg-purple-600 text-white border-purple-600 font-semibold shadow-xs"
+                      : "bg-background/80 hover:bg-muted text-muted-foreground border-border/40"
+                  )}
+                >
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: f.color || "#a855f7" }}
+                  />
+                  <span>{f.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
         
         {/* View Tabs: Inbox vs Archived (Only rendered if there are archived conversations or currently viewing archived) */}
         {(archivedCount > 0 || (filters as AdvancedChatFilters).archiveMode === "archived_only") && (
@@ -316,6 +364,7 @@ export default function InboxList({
           onUpdateFilters={(next) => setFilters(next)}
           operators={operators}
           instances={instances}
+          groupFolders={groupFolders}
         />
 
         {/* Drawer Component */}

@@ -75,10 +75,13 @@ export interface AdvancedChatFilters {
   // 13. Tipo de Conversa (Todas / Leads Privados / Grupos)
   conversationType?: "all" | "individual" | "group";
 
-  // 14. Ordenação
+  // 14. Pasta de Grupos (Filtro por pasta de grupo)
+  groupFolderId?: string | null;
+
+  // 15. Ordenação
   sortBy?: SortByOption;
 
-  // 15. Busca por Texto (Preservada)
+  // 16. Busca por Texto (Preservada)
   search?: string;
 }
 
@@ -97,6 +100,7 @@ export const DEFAULT_ADVANCED_CHAT_FILTERS: AdvancedChatFilters = {
   unreadMode: "all",
   archiveMode: "active_only",
   conversationType: "all",
+  groupFolderId: null,
   sortBy: "last_message_desc",
   search: "",
 };
@@ -128,6 +132,8 @@ export function getActiveCategoryCount(filters: AdvancedChatFilters): number {
   if (filters.lastMessageAtPreset && filters.lastMessageAtPreset !== undefined) count++;
   if (filters.unreadMode && filters.unreadMode !== "all") count++;
   if (filters.archiveMode && filters.archiveMode !== "active_only") count++;
+  if (filters.conversationType && filters.conversationType !== "all") count++;
+  if (filters.groupFolderId) count++;
 
   return count;
 }

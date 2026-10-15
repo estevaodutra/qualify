@@ -11,6 +11,7 @@ interface ActiveFilterChipsProps {
   pipelines?: Array<{ id: string; name: string }>;
   stages?: Array<{ id: string; name: string }>;
   tags?: Array<string | { id: string; name: string; name_or_tag?: string }>;
+  groupFolders?: Array<{ id: string; name: string }>;
 }
 
 export default function ActiveFilterChips({
@@ -21,6 +22,7 @@ export default function ActiveFilterChips({
   pipelines = [],
   stages = [],
   tags = [],
+  groupFolders = [],
 }: ActiveFilterChipsProps) {
   // Generate individual removable chips
   const chips = useMemo(() => {
@@ -222,8 +224,17 @@ export default function ActiveFilterChips({
       });
     }
 
+    if (filters.groupFolderId) {
+      const foundFolder = groupFolders.find(f => f.id === filters.groupFolderId);
+      list.push({
+        id: `group-folder-${filters.groupFolderId}`,
+        label: `Pasta: ${foundFolder?.name || "Pasta de Grupos"}`,
+        remove: () => onUpdateFilters({ ...filters, groupFolderId: null })
+      });
+    }
+
     return list;
-  }, [filters, operators, instances, pipelines, stages, onUpdateFilters]);
+  }, [filters, operators, instances, pipelines, stages, tags, groupFolders, onUpdateFilters]);
 
   if (chips.length === 0) return null;
 

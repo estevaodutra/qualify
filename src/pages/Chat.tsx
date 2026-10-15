@@ -415,15 +415,45 @@ export default function Chat() {
 
                   {/* Below Name: Phone + Connection/Instance Selector */}
                   <div className="flex items-center gap-2 flex-wrap">
-                    {selectedConv.lead?.phone && (
-                      <span className="text-[11px] text-muted-foreground font-mono leading-none">
-                        {selectedConv.lead?.phone}
-                      </span>
-                    )}
+                    {(() => {
+                      const groupJid =
+                        (selectedConv.lead?.custom_fields as any)?.group_jid ||
+                        (selectedConv.contact_phone?.includes("@g.us") ? selectedConv.contact_phone : null) ||
+                        (selectedConv.contact_phone?.includes("-group") ? selectedConv.contact_phone.replace("-group", "@g.us") : null);
+                      const isGroup =
+                        !!groupJid ||
+                        selectedConv.contact_phone?.includes("@g.us") ||
+                        selectedConv.contact_phone?.includes("-group") ||
+                        (selectedConv.contact_phone && selectedConv.contact_phone.replace(/\D/g, "").length >= 15);
+                      const displayId = isGroup
+                        ? (groupJid || selectedConv.contact_phone || selectedConv.lead?.phone)
+                        : (selectedConv.lead?.phone || selectedConv.contact_phone);
 
-                    {selectedConv.lead?.phone && (
-                      <span className="text-muted-foreground/30 text-[10px] hidden sm:inline">•</span>
-                    )}
+                      if (!displayId) return null;
+
+                      return (
+                        <>
+                          <span
+                            className={cn(
+                              "text-[11px] font-mono leading-none transition-colors",
+                              isGroup
+                                ? "text-purple-600 dark:text-purple-400 font-semibold cursor-pointer hover:underline hover:text-purple-700 dark:hover:text-purple-300"
+                                : "text-muted-foreground"
+                            )}
+                            onClick={() => {
+                              if (displayId) {
+                                navigator.clipboard.writeText(displayId);
+                                toast.success(isGroup ? "ID do grupo copiado!" : "Telefone copiado!");
+                              }
+                            }}
+                            title={isGroup ? "Clique para copiar o ID do grupo" : "Clique para copiar o telefone"}
+                          >
+                            {displayId}
+                          </span>
+                          <span className="text-muted-foreground/30 text-[10px] hidden sm:inline">•</span>
+                        </>
+                      );
+                    })()}
 
                     {/* Instance Connection Selector */}
                     <div className="flex items-center gap-1.5 flex-wrap">

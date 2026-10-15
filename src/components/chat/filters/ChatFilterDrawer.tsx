@@ -21,9 +21,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import {
   Filter, Bookmark, Sparkles, RotateCcw, Check, Trash2, Edit2, Plus,
-  ChevronRight, AlertTriangle, Layers, Calendar, User, Tag as TagIcon, Kanban, Radio, MessageSquare, Users
+  ChevronRight, AlertTriangle, Layers, Calendar, User, Tag as TagIcon, Kanban, Radio, MessageSquare, Users, Folder
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useGroupFolders } from "@/hooks/useGroupFolders";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 interface ChatFilterDrawerProps {
@@ -45,6 +46,7 @@ export default function ChatFilterDrawer({
 }: ChatFilterDrawerProps) {
   const { activeCompanyId } = useCompany();
   const { savedFilters, saveFilter, updateFilter, renameFilter, deleteFilter, markFilterUsed } = useSavedChatFilters();
+  const { folders: groupFolders = [] } = useGroupFolders();
 
   // Local draft state for filters inside drawer
   const [draftFilters, setDraftFilters] = useState<AdvancedChatFilters>(appliedFilters);
@@ -293,6 +295,72 @@ export default function ChatFilterDrawer({
                     Grupos
                   </button>
                 </div>
+
+                {/* Sub-filtro de Pasta quando Tipo Grupos está selecionado */}
+                {draftFilters.conversationType === "group" && groupFolders.length > 0 && (
+                  <div className="pt-2.5 space-y-2 border-t border-border/30 mt-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1.5">
+                        <Folder className="h-3.5 w-3.5 text-purple-600" />
+                        <span>Filtrar por Pasta de Grupos:</span>
+                      </Label>
+                      {draftFilters.groupFolderId && (
+                        <button
+                          type="button"
+                          onClick={() => setDraftFilters({ ...draftFilters, groupFolderId: null })}
+                          className="text-[10px] text-purple-600 hover:underline cursor-pointer"
+                        >
+                          Limpar pasta
+                        </button>
+                      )}
+                    </div>
+                    <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                      <button
+                        type="button"
+                        onClick={() => setDraftFilters({ ...draftFilters, groupFolderId: null })}
+                        className={cn(
+                          "w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center justify-between cursor-pointer",
+                          !draftFilters.groupFolderId
+                            ? "bg-purple-500/15 text-purple-600 font-bold"
+                            : "hover:bg-muted text-muted-foreground"
+                        )}
+                      >
+                        <span>Todas as pastas</span>
+                        {!draftFilters.groupFolderId && <Check className="h-3.5 w-3.5" />}
+                      </button>
+                      {groupFolders.map((f) => {
+                        const isSelected = draftFilters.groupFolderId === f.id;
+                        return (
+                          <button
+                            key={f.id}
+                            type="button"
+                            onClick={() =>
+                              setDraftFilters({
+                                ...draftFilters,
+                                groupFolderId: isSelected ? null : f.id,
+                              })
+                            }
+                            className={cn(
+                              "w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center justify-between cursor-pointer",
+                              isSelected
+                                ? "bg-purple-500/15 text-purple-600 font-bold"
+                                : "hover:bg-muted text-foreground"
+                            )}
+                          >
+                            <div className="flex items-center gap-2 truncate">
+                              <span
+                                className="w-2.5 h-2.5 rounded-full shrink-0"
+                                style={{ backgroundColor: f.color || "#a855f7" }}
+                              />
+                              <span className="truncate">{f.name}</span>
+                            </div>
+                            {isSelected && <Check className="h-3.5 w-3.5 shrink-0 text-purple-600" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </AccordionContent>
             </AccordionItem>
 

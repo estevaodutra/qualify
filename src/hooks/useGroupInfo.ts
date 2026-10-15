@@ -62,27 +62,50 @@ export function useGroupInfo(conversation: ChatConversation | null) {
   } = useQuery({
     queryKey: ["group-info", conversation?.id, groupJid],
     queryFn: async (): Promise<GroupInfo> => {
-      if (!isGroup || !instanceId || !groupJid) return initialGroup;
+      if (!isGroup || !groupJid) return initialGroup;
 
-      try {
-        const { data, error } = await supabase.functions.invoke("sync-group-info", {
-          body: { instanceId, groupJid }
-        });
+      const cleanDigits = groupJid.replace("@g.us", "").replace("-group", "").replace(/\D/g, "");
 
-        if (error) throw error;
-        if (data?.success && data.group) {
-          // Invalidate chat conversations list so the header and list reflect the real group name
-          queryClient.invalidateQueries({ queryKey: ["chat-conversations"] });
-          return data.group as GroupInfo;
-        }
-      } catch (err: any) {
-        console.warn("[useGroupInfo] Error syncing group:", err.message);
-      }
-      return initialGroup;
+      // 1. Fetch group details directly from group_campaigns (CRM "groups")
+      const { data: gc } = await supabase
+        .from("group_campaigns")
+        .select("id, name, group_name, group_description, group_photo_url, config")
+        .or(`group_jid.eq.${groupJid},group_jid.ilike.%${cleanDigits}%`)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      // 2. Fetch lead details if available (participants with @lid, etc.)
+      const { data: leadRow } = await supabase
+        .from("leads")
+        .select("id, name, phone, custom_fields")
+        .or(`phone.eq.${cleanDigits},phone.eq.${groupJid}`)
+        .limit(1)
+        .maybeSingle();
+
+      const gcCfg = (gc?.config as Record<string, any>) || {};
+      const leadCfg = (leadRow?.custom_fields as Record<string, any>) || {};
+
+      const participants = leadCfg.participants || gcCfg.participants || [];
+      const participantsCount = leadCfg.participants_count || gcCfg.participants_count || participants.length || 0;
+
+      const resolvedGroup: GroupInfo = {
+        jid: groupJid,
+        phone: cleanDigits,
+        name: gc?.group_name || gc?.name || leadRow?.name || initialGroup.name,
+        description: gc?.group_description || leadCfg.description || initialGroup.description,
+        pictureUrl: gc?.group_photo_url || leadCfg.profile_picture_url || leadCfg.pictureUrl || initialGroup.pictureUrl,
+        participantsCount: participantsCount || initialGroup.participantsCount,
+        participants: participants.length > 0 ? participants : initialGroup.participants,
+        ownerJid: leadCfg.owner_jid || gcCfg.owner_jid || initialGroup.ownerJid,
+        lastSyncedAt: leadCfg.last_synced_at || gcCfg.last_synced_at || initialGroup.lastSyncedAt,
+      };
+
+      return resolvedGroup;
     },
     placeholderData: initialGroup,
-    enabled: !!isGroup && !!instanceId && !!groupJid,
-    staleTime: (customFields.last_synced_at && (customFields.participants_count || customFields.participants?.length)) ? 1000 * 60 * 2 : 0,
+    enabled: !!isGroup && !!groupJid,
+    staleTime: 1000 * 60 * 15,
   });
 
   // Mutação para forçar sincronização

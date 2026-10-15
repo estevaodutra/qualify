@@ -508,6 +508,52 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
     staleTime: 10000,
   });
 
+  // Fetch folder to group JIDs mapping
+  const { data: folderGroupJidsMap = new Map<string, Set<string>>() } = useQuery({
+    queryKey: ["chat-folder-group-jids-map", activeCompanyId],
+    queryFn: async () => {
+      if (!activeCompanyId) return new Map<string, Set<string>>();
+
+      const { data: gfa } = await supabase
+        .from("group_folder_assignments" as any)
+        .select("folder_id, group_id")
+        .eq("company_id", activeCompanyId);
+
+      const { data: gcList } = await supabase
+        .from("group_campaigns")
+        .select("id, group_jid")
+        .eq("company_id", activeCompanyId)
+        .not("group_jid", "is", null);
+
+      const idToJidMap = new Map<string, string>();
+      (gcList || []).forEach((gc: any) => {
+        if (gc.group_jid) idToJidMap.set(gc.id, gc.group_jid);
+      });
+
+      const map = new Map<string, Set<string>>();
+      (gfa || []).forEach((a: any) => {
+        if (!map.has(a.folder_id)) map.set(a.folder_id, new Set<string>());
+        const set = map.get(a.folder_id)!;
+        set.add(a.group_id);
+        const resolvedJid = idToJidMap.get(a.group_id);
+        if (resolvedJid) {
+          const raw = resolvedJid.toLowerCase().trim();
+          set.add(raw);
+          const digits = raw.replace("@g.us", "").replace("-group", "").replace(/\D/g, "");
+          if (digits) {
+            set.add(digits);
+            set.add(`${digits}@g.us`);
+            set.add(`${digits}-group`);
+          }
+        }
+      });
+
+      return map;
+    },
+    enabled: !!activeCompanyId && !!user,
+    staleTime: 10000,
+  });
+
   const rawConversations = useMemo(() => conversationsData?.pages.flat() || [], [conversationsData]);
   const pinnedSet = useMemo(() => new Set(userPins), [userPins]);
 
@@ -522,6 +568,7 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
 
     const archiveMode = (filters as AdvancedChatFilters)?.archiveMode || "active_only";
     const convType = (filters as AdvancedChatFilters)?.conversationType || "all";
+    const groupFolderId = (filters as AdvancedChatFilters)?.groupFolderId;
 
     const filtered = mapped.filter((c) => {
       if (archiveMode === "archived_only") {
@@ -544,6 +591,17 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
         if (!isAllowed) {
           return false;
         }
+
+        // Folder filter: if a group folder is selected, filter strictly by groups belonging to that folder
+        if (groupFolderId) {
+          const folderJids = folderGroupJidsMap.get(groupFolderId);
+          if (!folderJids) return false;
+          const inFolder = folderJids.has(p.toLowerCase()) || folderJids.has(cleanP);
+          if (!inFolder) return false;
+        }
+      } else if (groupFolderId) {
+        // If a group folder filter is active, individual leads are not part of group folders
+        return false;
       }
 
       if (convType !== "all") {
@@ -554,12 +612,29 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
       return true;
     });
 
-    return filtered.sort((a, b) => {
+    // Deduplicate conversations (especially groups) so the user never sees duplicate rows
+    const seenGroupKeys = new Set<string>();
+    const deduplicated = filtered.filter((c) => {
+      const p = c.lead?.phone || c.contact_phone || "";
+      const customF = (c.lead?.custom_fields as Record<string, any>) || {};
+      const isGrp = p.length > 15 || p.includes("@g.us") || p.includes("-group") || customF.is_group === true;
+      if (isGrp) {
+        const cleanDigits = p.replace("@g.us", "").replace("-group", "").replace(/\D/g, "");
+        const groupKey = cleanDigits || p.toLowerCase().trim();
+        if (seenGroupKeys.has(groupKey)) {
+          return false;
+        }
+        seenGroupKeys.add(groupKey);
+      }
+      return true;
+    });
+
+    return deduplicated.sort((a, b) => {
       if (a.is_pinned && !b.is_pinned) return -1;
       if (!a.is_pinned && b.is_pinned) return 1;
       return 0;
     });
-  }, [rawConversations, pinnedSet, activeCompanyId, filters, allowedCrmGroupJids]);
+  }, [rawConversations, pinnedSet, activeCompanyId, filters, allowedCrmGroupJids, folderGroupJidsMap]);
 
   // Auto-sync CRM groups into chat_conversations
   useQuery({

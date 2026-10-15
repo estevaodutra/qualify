@@ -80,13 +80,15 @@ const syncSentMessageToChat = async (
     }
 
     if (isGroup) {
-      // Para grupos: NUNCA associa a lead_id! Busca apenas a conversa do grupo pelo JID ou ID numérico do grupo
+      // Para grupos: busca a conversa do grupo pelo JID, telefone ou lead_id existente
       const resolvedGroupJid = params.groupJid || (rawPhone.includes("@g.us") ? rawPhone : `${cleanPhone}@g.us`);
       const groupNum = cleanPhone;
 
-      convQ = convQ
-        .is("lead_id", null)
-        .or(`contact_phone.eq.${resolvedGroupJid},contact_phone.eq.${groupNum},contact_name.eq.${resolvedGroupJid},contact_name.eq.${groupNum}`);
+      if (targetLeadId) {
+        convQ = convQ.or(`lead_id.eq.${targetLeadId},contact_phone.eq.${resolvedGroupJid},contact_phone.eq.${groupNum},contact_name.eq.${resolvedGroupJid},contact_name.eq.${groupNum}`);
+      } else {
+        convQ = convQ.or(`contact_phone.eq.${resolvedGroupJid},contact_phone.eq.${groupNum},contact_name.eq.${resolvedGroupJid},contact_name.eq.${groupNum}`);
+      }
     } else {
       // Para mensagens individuais: busca pela conversa do lead ou telefone
       if (targetLeadId && suffix.length >= 8) {
@@ -106,7 +108,7 @@ const syncSentMessageToChat = async (
     if (existingConv) {
       convId = existingConv.id;
       const updates: Record<string, any> = {};
-      if (!isGroup && !existingConv.lead_id && targetLeadId) updates.lead_id = targetLeadId;
+      if (!existingConv.lead_id && targetLeadId) updates.lead_id = targetLeadId;
       if (!existingConv.instance_id && params.instanceId) updates.instance_id = params.instanceId;
       if (Object.keys(updates).length > 0) {
         await supabase.from("chat_conversations").update(updates).eq("id", convId);
@@ -129,7 +131,7 @@ const syncSentMessageToChat = async (
         .insert({
           company_id: params.companyId,
           instance_id: params.instanceId || null,
-          lead_id: isGroup ? null : (targetLeadId || null),
+          lead_id: targetLeadId || null,
           contact_phone: resolvedContactPhone,
           contact_name: resolvedContactName,
           status: "open",
