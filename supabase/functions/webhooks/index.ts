@@ -120,6 +120,20 @@ Deno.serve(async (req) => {
     );
   }
 
+  // Propaga action para o raw_event se não estiver presente
+  if (body?.action && body?.raw_event && !body.raw_event.action) {
+    body.raw_event.action = body.action;
+  }
+
+  let resolvedType = messageType;
+  if (messageType === "status" && body?.action) {
+    const act = String(body.action).toLowerCase();
+    if (act.includes("read")) resolvedType = "read";
+    else if (act.includes("delivered")) resolvedType = "delivered";
+    else if (act.includes("sent")) resolvedType = "sent";
+    else if (act.includes("failed")) resolvedType = "failed";
+  }
+
   // 4. Ingestão através do MessageIngestionService
   const meta = {
     endpoint: url.pathname,
@@ -128,7 +142,7 @@ Deno.serve(async (req) => {
     startTime,
   };
 
-  const result = await ingestionService.ingest(messageType, body as BaseWebhookPayload, meta);
+  const result = await ingestionService.ingest(resolvedType, body as BaseWebhookPayload, meta);
 
   return new Response(JSON.stringify(result.body), {
     status: result.statusCode,

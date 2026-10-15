@@ -403,7 +403,7 @@ export class MessageIngestionService {
       // 6. Tratar Eventos Especiais (Status, Reação, Edição, Revogação)
       const isStatusType = type === "status" || type === "delivered" || type === "read" || type === "sent" || type === "failed" || type === "ack";
       if (isStatusType) {
-        await this.handleStatusUpdate(rawEvent, instance, eventId, type);
+        await this.handleStatusUpdate(rawEvent, instance, eventId, type, payload);
       } else if (type === "reaction") {
         await this.handleReaction(rawEvent, instance, eventId);
       } else if (type === "edited") {
@@ -591,12 +591,20 @@ export class MessageIngestionService {
     }
   }
 
-  private async handleStatusUpdate(rawEvent: any, instance: any, eventId: string, type: string) {
+  private async handleStatusUpdate(rawEvent: any, instance: any, eventId: string, type: string, payload?: any) {
     const targetMessageId = rawEvent.id || rawEvent.message_id || rawEvent.target_message_id;
     if (!targetMessageId) return;
 
-    let statusVal = "delivered";
-    const rawStatus = String(rawEvent.status || rawEvent.action || rawEvent.ack || type || "").toLowerCase();
+    let statusVal = "sent";
+    const rawStatus = String(
+      rawEvent.status || 
+      rawEvent.action || 
+      rawEvent.event || 
+      payload?.action || 
+      rawEvent.ack || 
+      type || 
+      ""
+    ).toLowerCase();
     
     if (rawStatus === "read" || rawStatus.includes("read") || rawStatus === "played" || rawStatus === "3") {
       statusVal = "read";
