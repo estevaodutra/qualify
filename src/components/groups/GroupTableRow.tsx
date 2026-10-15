@@ -72,6 +72,7 @@ export const GroupTableRow: React.FC<GroupTableRowProps> = ({
   onOpenDetails,
   onMoveToFolder,
   onRemoveFromCrm,
+  onToggleChatVisibility,
 }) => {
   const navigate = useNavigate();
 

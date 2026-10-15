@@ -1,6 +1,6 @@
 {
-  "commit": "0a88661a00febba3c8a84b870e78a3d737191552",
-  "shortCommit": "0a88661",
-  "message": "feat(chat): sincronizar grupos do CRM no chat e adicionar filtro de grupos",
-  "builtAt": "2026-10-15T16:07:55.145Z"
+  "commit": "9b85c8d5ac61361cc0313676d913c8a43843f180",
+  "shortCommit": "9b85c8d",
+  "message": "feat: isolar grupos do CRM no chat e adicionar chave de visibilidade por grupo e pasta",
+  "builtAt": "2026-10-15T16:12:42.738Z"
 }
