@@ -900,7 +900,7 @@ const GROUP_MANAGEMENT_NODE_TYPES = [
   "group_promote_admin", "group_remove_admin", "group_settings",
 ];
 
-async function waitForMessageDelivery(supabase: any, messageId: string | null, zaapId: string | null, timeoutMs = 8000) {
+async function waitForMessageDelivery(supabase: any, messageId: string | null, zaapId: string | null, timeoutMs = 2500) {
   if (!messageId && !zaapId) return false;
   const start = Date.now();
   console.log(`[ExecuteMessage] Waiting for delivery ack for messageId: ${messageId}, zaapId: ${zaapId}`);
@@ -937,8 +937,7 @@ async function waitForMessageDelivery(supabase: any, messageId: string | null, z
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   
-  console.log(`[ExecuteMessage] Timeout waiting for delivery ack for ${messageId || zaapId}. Fallback to safety delay.`);
-  await new Promise((resolve) => setTimeout(resolve, 2000));
+  console.log(`[ExecuteMessage] Timeout waiting for delivery ack for ${messageId || zaapId}. Continuing.`);
   return false;
 }
 
@@ -3560,7 +3559,7 @@ Deno.serve(async (req) => {
                   delayDurationMs: delayMs,
                 },
                 nodes_data: sortedNodes,
-                destinations: effectiveDests,
+                destinations: activeDestinations,
                 status: "paused",
                 resume_at: resumeAt.toISOString(),
                 nodes_processed: nodesProcessed + 1,
@@ -4149,7 +4148,7 @@ Deno.serve(async (req) => {
                     delayDurationMs: delayMs,
                   },
                   nodes_data: sortedNodes,
-                  destinations: effectiveDests,
+                  destinations: activeDestinations,
                   status: "paused",
                   resume_at: resumeAt.toISOString(),
                   nodes_processed: nodesProcessed + 1,
@@ -4272,125 +4271,235 @@ Deno.serve(async (req) => {
               }
             }
             
-            // Send to all destinations
-            for (const dest of activeDestinations) {
-              const isSubNodePrivate = Boolean(
-                formattedConfig.sendPrivate ?? formattedConfig.send_private ?? subMsg.sendPrivate ?? subMsg.send_private ?? false
-              );
-              const targetDestJid = (isSubNodePrivate && triggerContext?.respondentPhone)
-                ? (triggerContext.respondentJid && triggerContext.respondentJid.includes('@s.whatsapp.net') ? triggerContext.respondentJid : `${triggerContext.respondentPhone}@s.whatsapp.net`)
-                : dest.group_jid;
-              const targetDestName = (isSubNodePrivate && triggerContext?.respondentPhone)
-                ? (triggerContext.respondentName || triggerContext.respondentPhone)
-                : dest.group_name;
-
-              const payload = buildStandardPayload({
-                action: subAction,
-                node: {
-                  id: subMsg.id || node.id,
-                  type: subNodeType,
-                  order: node.node_order,
-                  config: formattedConfig,
-                },
-                campaign: {
-                  id: typedCampaign.id || effectiveSequenceId,
-                  name: typedCampaign.name || (typedCampaign.name || 'Workflow'),
-                },
-                instance: {
-                  id: activeInstanceId,
-                  name: instance.name,
-                  phone: instance.phone || "",
-                  provider: instance.provider,
-                  externalId: instance.external_instance_id || instance.id || "",
-                  externalToken: instance.external_instance_token || "",
-                },
-                destination: {
-                  jid: targetDestJid,
-                  name: targetDestName,
-                },
-              });
-              
-              const sendStartTime = Date.now();
-              
-              // Create log entry
-              const { data: logEntry } = await supabase
-                .from("group_message_logs")
-                .insert({
-                  user_id: userId,
-                  group_campaign_id: typedCampaign.id || effectiveSequenceId,
-                  message_id: typedMessage?.id || null,
-                  sequence_id: effectiveSequenceId,
-                  node_type: subNodeType,
-                  node_order: node.node_order,
-                  group_jid: dest.group_jid,
-                  group_name: dest.group_name,
-                  recipient_phone: dest.isPrivate ? triggerContext?.respondentPhone : null,
-                  instance_id: activeInstanceId,
-                  instance_name: instance.name,
-                  campaign_name: typedCampaign.name || (typedCampaign.name || 'Workflow'),
-                  status: "sending",
-                  payload,
-                })
-                .select()
-                .single();
-                
-              try {
-                const result = await sendWhatsAppMessage(payload);
-                const responseTimeMs = Date.now() - sendStartTime;
-                const responseData = result.details || result;
-                
-                const zaapId = result.zaapId || null;
-                const externalMessageId = result.messageId || null;
-                
-                if (logEntry?.id) {
-                  await supabase
-                    .from("group_message_logs")
-                    .update({
-                      status: result.ok ? "sent" : "failed",
-                      error_message: result.ok ? null : `HTTP ${result.status}`,
-                      response_time_ms: responseTimeMs,
-                      provider_response: responseData,
-                      zaap_id: zaapId,
-                      external_message_id: externalMessageId,
-                      payload: {
-                        ...payload,
-                        zapiUrl: result.requestUrl,
-                        zapiBody: result.requestBody,
-                        curl: result.curl,
-                      } as any,
-                    })
-                    .eq("id", logEntry.id);
-                }
-                
-                const msgText = (formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.question || formattedConfig.caption || subMsg.content || subMsg.text || subMsg.message || subMsg.question || "") as string;
-                const mediaUrl = (formattedConfig.url || formattedConfig.mediaUrl || formattedConfig.image || formattedConfig.fileUrl || formattedConfig.audio || formattedConfig.video || formattedConfig.document || subMsg.url || subMsg.mediaUrl || subMsg.image || "") as string;
-                const isGroupDest = !isSubNodePrivate && Boolean(
-                  isWorkflowGroupMode ||
-                  dest.group_jid?.includes("@g.us") ||
-                  dest.group_jid?.includes("-group") ||
-                  !dest.isPrivate
+            // Send to all destinations in parallel
+            const destResults = await Promise.allSettled(
+              activeDestinations.map(async (dest) => {
+                const isSubNodePrivate = Boolean(
+                  formattedConfig.sendPrivate ?? formattedConfig.send_private ?? subMsg.sendPrivate ?? subMsg.send_private ?? false
                 );
-                const destPhone = isGroupDest
-                  ? (dest.group_jid || "")
-                  : ((isSubNodePrivate && triggerContext?.respondentPhone)
-                      ? triggerContext.respondentPhone
-                      : (dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || triggerContext?.contactPhone || "")
-                    );
-                const destName = isGroupDest
-                  ? (dest.group_name || dest.group_jid)
-                  : (isSubNodePrivate
-                      ? (triggerContext?.respondentName || triggerContext?.respondentPhone)
-                      : (dest.group_name || triggerContext?.respondentName)
-                    );
-                const effectiveCompanyId = triggerContext?.companyId || typedCampaign?.company_id || "dcb34e9a-1510-4137-aecd-cec0c6d548c4";
+                const targetDestJid = (isSubNodePrivate && triggerContext?.respondentPhone)
+                  ? (triggerContext.respondentJid && triggerContext.respondentJid.includes('@s.whatsapp.net') ? triggerContext.respondentJid : `${triggerContext.respondentPhone}@s.whatsapp.net`)
+                  : dest.group_jid;
+                const targetDestName = (isSubNodePrivate && triggerContext?.respondentPhone)
+                  ? (triggerContext.respondentName || triggerContext.respondentPhone)
+                  : dest.group_name;
 
-                if (!result.ok) {
-                  subFailed = true;
-                  const errDetail = typeof result.details === "string" ? result.details : JSON.stringify(result.details || "");
-                  subFailedError = `Falha ao enviar ${subNodeType} (HTTP ${result.status})${errDetail ? `: ${errDetail}` : ""}`;
-                  console.error(`[ExecuteMessage] ❌ Failed to send sub-message ${subNodeType} to ${dest.group_name}:`, subFailedError);
+                const payload = buildStandardPayload({
+                  action: subAction,
+                  node: {
+                    id: subMsg.id || node.id,
+                    type: subNodeType,
+                    order: node.node_order,
+                    config: formattedConfig,
+                  },
+                  campaign: {
+                    id: typedCampaign.id || effectiveSequenceId,
+                    name: typedCampaign.name || (typedCampaign.name || 'Workflow'),
+                  },
+                  instance: {
+                    id: activeInstanceId,
+                    name: instance.name,
+                    phone: instance.phone || "",
+                    provider: instance.provider,
+                    externalId: instance.external_instance_id || instance.id || "",
+                    externalToken: instance.external_instance_token || "",
+                  },
+                  destination: {
+                    jid: targetDestJid,
+                    name: targetDestName,
+                  },
+                });
+                
+                const sendStartTime = Date.now();
+                
+                // Create log entry
+                const { data: logEntry } = await supabase
+                  .from("group_message_logs")
+                  .insert({
+                    user_id: userId,
+                    group_campaign_id: typedCampaign.id || effectiveSequenceId,
+                    message_id: typedMessage?.id || null,
+                    sequence_id: effectiveSequenceId,
+                    node_type: subNodeType,
+                    node_order: node.node_order,
+                    group_jid: dest.group_jid,
+                    group_name: dest.group_name,
+                    recipient_phone: dest.isPrivate ? triggerContext?.respondentPhone : null,
+                    instance_id: activeInstanceId,
+                    instance_name: instance.name,
+                    campaign_name: typedCampaign.name || (typedCampaign.name || 'Workflow'),
+                    status: "sending",
+                    payload,
+                  })
+                  .select()
+                  .single();
+                  
+                try {
+                  const result = await sendWhatsAppMessage(payload);
+                  const responseTimeMs = Date.now() - sendStartTime;
+                  const responseData = result.details || result;
+                  
+                  const zaapId = result.zaapId || null;
+                  const externalMessageId = result.messageId || null;
+                  
+                  if (logEntry?.id) {
+                    await supabase
+                      .from("group_message_logs")
+                      .update({
+                        status: result.ok ? "sent" : "failed",
+                        error_message: result.ok ? null : `HTTP ${result.status}`,
+                        response_time_ms: responseTimeMs,
+                        provider_response: responseData,
+                        zaap_id: zaapId,
+                        external_message_id: externalMessageId,
+                        payload: {
+                          ...payload,
+                          zapiUrl: result.requestUrl,
+                          zapiBody: result.requestBody,
+                          curl: result.curl,
+                        } as any,
+                      })
+                      .eq("id", logEntry.id);
+                  }
+                  
+                  const msgText = (formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.question || formattedConfig.caption || subMsg.content || subMsg.text || subMsg.message || subMsg.question || "") as string;
+                  const mediaUrl = (formattedConfig.url || formattedConfig.mediaUrl || formattedConfig.image || formattedConfig.fileUrl || formattedConfig.audio || formattedConfig.video || formattedConfig.document || subMsg.url || subMsg.mediaUrl || subMsg.image || "") as string;
+                  const isGroupDest = !isSubNodePrivate && Boolean(
+                    isWorkflowGroupMode ||
+                    dest.group_jid?.includes("@g.us") ||
+                    dest.group_jid?.includes("-group") ||
+                    !dest.isPrivate
+                  );
+                  const destPhone = isGroupDest
+                    ? (dest.group_jid || "")
+                    : ((isSubNodePrivate && triggerContext?.respondentPhone)
+                        ? triggerContext.respondentPhone
+                        : (dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || triggerContext?.contactPhone || "")
+                      );
+                  const destName = isGroupDest
+                    ? (dest.group_name || dest.group_jid)
+                    : (isSubNodePrivate
+                        ? (triggerContext?.respondentName || triggerContext?.respondentPhone)
+                        : (dest.group_name || triggerContext?.respondentName)
+                      );
+                  const effectiveCompanyId = triggerContext?.companyId || typedCampaign?.company_id || "dcb34e9a-1510-4137-aecd-cec0c6d548c4";
 
-                  // Sync failed message to chat so operator sees failure and red warning icon with error tooltip
+                  if (!result.ok) {
+                    const errDetail = typeof result.details === "string" ? result.details : JSON.stringify(result.details || "");
+                    const errorMsg = `Falha ao enviar ${subNodeType} (HTTP ${result.status})${errDetail ? `: ${errDetail}` : ""}`;
+                    console.error(`[ExecuteMessage] ❌ Failed to send sub-message ${subNodeType} to ${dest.group_name}:`, errorMsg);
+
+                    // Sync failed message to chat so operator sees failure and red warning icon with error tooltip
+                    if ((msgText || mediaUrl) && destPhone) {
+                      await syncSentMessageToChat(supabase, {
+                        companyId: effectiveCompanyId,
+                        instanceId: activeInstanceId,
+                        phone: destPhone,
+                        name: destName,
+                        leadId: isGroupDest ? null : (triggerContext?.leadId || null),
+                        isGroup: isGroupDest,
+                        groupJid: isGroupDest ? dest.group_jid : undefined,
+                        body: msgText,
+                        mediaUrl: mediaUrl || null,
+                        messageType: subNodeType === "message" ? (mediaUrl ? "image" : "text") : subNodeType,
+                        mediaType: subNodeType === "message" ? (mediaUrl ? "image" : null) : subNodeType,
+                        externalMessageId: null,
+                        status: "failed",
+                        errorMessage: errorMsg,
+                      });
+                    }
+                    return { ok: false, dest, error: errorMsg };
+                  } else {
+                    console.log(`[ExecuteMessage] ✅ Sub-message ${subNodeType} sent to ${dest.group_name}`);
+                    if ((msgText || mediaUrl) && destPhone) {
+                      await syncSentMessageToChat(supabase, {
+                        companyId: effectiveCompanyId,
+                        instanceId: activeInstanceId,
+                        phone: destPhone,
+                        name: destName,
+                        leadId: isGroupDest ? null : (triggerContext?.leadId || null),
+                        isGroup: isGroupDest,
+                        groupJid: isGroupDest ? dest.group_jid : undefined,
+                        body: msgText,
+                        mediaUrl: mediaUrl || null,
+                        messageType: subNodeType === "message" ? (mediaUrl ? "image" : "text") : subNodeType,
+                        mediaType: subNodeType === "message" ? (mediaUrl ? "image" : null) : subNodeType,
+                        externalMessageId: externalMessageId,
+                        status: "sent",
+                      });
+                    }
+                    if (subNodeType === "poll" && (externalMessageId || zaapId)) {
+                      const messageIdForInsert = externalMessageId || zaapId;
+                      const pollQuestion = (formattedConfig.question as string) || (formattedConfig.title as string) || "";
+                      const rawOpts = (formattedConfig.options as any[]) || (subMsg.options as any[]) || [];
+                      const pollOptions = rawOpts.map((opt, idx) => {
+                        if (typeof opt === "string") return { id: `poll_opt_${idx + 1}`, label: replaceVariables(opt) };
+                        if (opt && typeof opt === "object") return { id: opt.id || `poll_opt_${idx + 1}`, label: replaceVariables(opt.label || "") };
+                        return { id: `poll_opt_${idx + 1}`, label: String(opt || "") };
+                      });
+
+                      if (messageIdForInsert) {
+                        await supabase.from("poll_messages").insert({
+                          user_id: userId,
+                          message_id: messageIdForInsert,
+                          zaap_id: zaapId,
+                          node_id: node.id,
+                          sequence_id: effectiveSequenceId,
+                          campaign_id: typedCampaign.id || effectiveSequenceId,
+                          group_jid: dest.group_jid,
+                          instance_id: activeInstanceId,
+                          question_text: pollQuestion,
+                          options: pollOptions,
+                          sent_at: new Date().toISOString(),
+                        });
+                        hasSentPollInSubMessages = true;
+                      }
+                    }
+
+                    if (subNodeType === "user_input" || subNodeType === "question" || subNodeType === "pergunta") {
+                      hasSentUserInputInSubMessages = true;
+                      userInputSubMsgConfig = subMsg;
+                    }
+
+                    return { ok: true, dest };
+                  }
+                } catch (err: any) {
+                  const errorMsg = err.message || String(err);
+                  console.error(`[ExecuteMessage] ❌ Error sending sub-message ${subNodeType} to ${dest.group_name}:`, err);
+                  if (logEntry?.id) {
+                    await supabase
+                      .from("group_message_logs")
+                      .update({
+                        status: "failed",
+                        error_message: errorMsg,
+                        response_time_ms: Date.now() - sendStartTime,
+                      })
+                      .eq("id", logEntry.id);
+                  }
+
+                  // Sync caught exception failure to chat
+                  const msgText = (formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.question || formattedConfig.caption || subMsg.content || subMsg.text || subMsg.message || subMsg.question || "") as string;
+                  const mediaUrl = (formattedConfig.url || formattedConfig.mediaUrl || formattedConfig.image || formattedConfig.fileUrl || formattedConfig.audio || formattedConfig.video || formattedConfig.document || subMsg.url || subMsg.mediaUrl || subMsg.image || "") as string;
+                  const isGroupDest = !isSubNodePrivate && Boolean(
+                    isWorkflowGroupMode ||
+                    dest.group_jid?.includes("@g.us") ||
+                    dest.group_jid?.includes("-group") ||
+                    !dest.isPrivate
+                  );
+                  const destPhone = isGroupDest
+                    ? (dest.group_jid || "")
+                    : ((isSubNodePrivate && triggerContext?.respondentPhone)
+                        ? triggerContext.respondentPhone
+                        : (dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || triggerContext?.contactPhone || "")
+                      );
+                  const destName = isGroupDest
+                    ? (dest.group_name || dest.group_jid)
+                    : (isSubNodePrivate
+                        ? (triggerContext?.respondentName || triggerContext?.respondentPhone)
+                        : (dest.group_name || triggerContext?.respondentName)
+                      );
+                  const effectiveCompanyId = triggerContext?.companyId || typedCampaign?.company_id || "dcb34e9a-1510-4137-aecd-cec0c6d548c4";
+
                   if ((msgText || mediaUrl) && destPhone) {
                     await syncSentMessageToChat(supabase, {
                       companyId: effectiveCompanyId,
@@ -4406,118 +4515,29 @@ Deno.serve(async (req) => {
                       mediaType: subNodeType === "message" ? (mediaUrl ? "image" : null) : subNodeType,
                       externalMessageId: null,
                       status: "failed",
-                      errorMessage: subFailedError,
+                      errorMessage: errorMsg,
                     });
                   }
-                } else {
-                  console.log(`[ExecuteMessage] ✅ Sub-message ${subNodeType} sent to ${dest.group_name}`);
-                  if ((msgText || mediaUrl) && destPhone) {
-                    await syncSentMessageToChat(supabase, {
-                      companyId: effectiveCompanyId,
-                      instanceId: activeInstanceId,
-                      phone: destPhone,
-                      name: destName,
-                      leadId: isGroupDest ? null : (triggerContext?.leadId || null),
-                      isGroup: isGroupDest,
-                      groupJid: isGroupDest ? dest.group_jid : undefined,
-                      body: msgText,
-                      mediaUrl: mediaUrl || null,
-                      messageType: subNodeType === "message" ? (mediaUrl ? "image" : "text") : subNodeType,
-                      mediaType: subNodeType === "message" ? (mediaUrl ? "image" : null) : subNodeType,
-                      externalMessageId: externalMessageId,
-                      status: "sent",
-                    });
-                  }
-                  if (subNodeType === "poll" && (externalMessageId || zaapId)) {
-                    const messageIdForInsert = externalMessageId || zaapId;
-                    const pollQuestion = (formattedConfig.question as string) || (formattedConfig.title as string) || "";
-                    const rawOpts = (formattedConfig.options as any[]) || (subMsg.options as any[]) || [];
-                    const pollOptions = rawOpts.map((opt, idx) => {
-                      if (typeof opt === "string") return { id: `poll_opt_${idx + 1}`, label: replaceVariables(opt) };
-                      if (opt && typeof opt === "object") return { id: opt.id || `poll_opt_${idx + 1}`, label: replaceVariables(opt.label || "") };
-                      return { id: `poll_opt_${idx + 1}`, label: String(opt || "") };
-                    });
-
-                    if (messageIdForInsert) {
-                      await supabase.from("poll_messages").insert({
-                        user_id: userId,
-                        message_id: messageIdForInsert,
-                        zaap_id: zaapId,
-                        node_id: node.id,
-                        sequence_id: effectiveSequenceId,
-                        campaign_id: typedCampaign.id || effectiveSequenceId,
-                        group_jid: dest.group_jid,
-                        instance_id: activeInstanceId,
-                        question_text: pollQuestion,
-                        options: pollOptions,
-                        sent_at: new Date().toISOString(),
-                      });
-                      hasSentPollInSubMessages = true;
-                    }
-                  }
-
-                  if (subNodeType === "user_input" || subNodeType === "question" || subNodeType === "pergunta") {
-                    hasSentUserInputInSubMessages = true;
-                    userInputSubMsgConfig = subMsg;
-                  }
+                  return { ok: false, dest, error: errorMsg };
                 }
-              } catch (err: any) {
-                subFailed = true;
-                subFailedError = err.message || String(err);
-                console.error(`[ExecuteMessage] ❌ Error sending sub-message ${subNodeType} to ${dest.group_name}:`, err);
-                if (logEntry?.id) {
-                  await supabase
-                    .from("group_message_logs")
-                    .update({
-                      status: "failed",
-                      error_message: err.message || String(err),
-                      response_time_ms: Date.now() - sendStartTime,
-                    })
-                    .eq("id", logEntry.id);
-                }
+              })
+            );
 
-                // Sync caught exception failure to chat
-                const msgText = (formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.question || formattedConfig.caption || subMsg.content || subMsg.text || subMsg.message || subMsg.question || "") as string;
-                const mediaUrl = (formattedConfig.url || formattedConfig.mediaUrl || formattedConfig.image || formattedConfig.fileUrl || formattedConfig.audio || formattedConfig.video || formattedConfig.document || subMsg.url || subMsg.mediaUrl || subMsg.image || "") as string;
-                const isGroupDest = !isSubNodePrivate && Boolean(
-                  isWorkflowGroupMode ||
-                  dest.group_jid?.includes("@g.us") ||
-                  dest.group_jid?.includes("-group") ||
-                  !dest.isPrivate
-                );
-                const destPhone = isGroupDest
-                  ? (dest.group_jid || "")
-                  : ((isSubNodePrivate && triggerContext?.respondentPhone)
-                      ? triggerContext.respondentPhone
-                      : (dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || triggerContext?.contactPhone || "")
-                    );
-                const destName = isGroupDest
-                  ? (dest.group_name || dest.group_jid)
-                  : (isSubNodePrivate
-                      ? (triggerContext?.respondentName || triggerContext?.respondentPhone)
-                      : (dest.group_name || triggerContext?.respondentName)
-                    );
-                const effectiveCompanyId = triggerContext?.companyId || typedCampaign?.company_id || "dcb34e9a-1510-4137-aecd-cec0c6d548c4";
-
-                if ((msgText || mediaUrl) && destPhone) {
-                  await syncSentMessageToChat(supabase, {
-                    companyId: effectiveCompanyId,
-                    instanceId: activeInstanceId,
-                    phone: destPhone,
-                    name: destName,
-                    leadId: isGroupDest ? null : (triggerContext?.leadId || null),
-                    isGroup: isGroupDest,
-                    groupJid: isGroupDest ? dest.group_jid : undefined,
-                    body: msgText,
-                    mediaUrl: mediaUrl || null,
-                    messageType: subNodeType === "message" ? (mediaUrl ? "image" : "text") : subNodeType,
-                    mediaType: subNodeType === "message" ? (mediaUrl ? "image" : null) : subNodeType,
-                    externalMessageId: null,
-                    status: "failed",
-                    errorMessage: subFailedError,
-                  });
-                }
+            const successfulSubDests: DestinationData[] = [];
+            for (const r of destResults) {
+              if (r.status === "fulfilled" && r.value.ok) {
+                successfulSubDests.push(r.value.dest);
+              } else {
+                const err = r.status === "fulfilled" ? r.value.error : String(r.reason);
+                subFailedError = err;
               }
+            }
+
+            activeDestinations = successfulSubDests;
+            if (activeDestinations.length === 0) {
+              subFailed = true;
+              console.log(`[ExecuteMessage] ❌ Content node ${node.id} sub-message failed for all destinations.`);
+              break;
             }
 
             if (isUserInputSubNode) {
@@ -4625,7 +4645,7 @@ Deno.serve(async (req) => {
                   waitingType: "user_input"
                 },
                 nodes_data: sortedNodes,
-                destinations: effectiveDests,
+                destinations: activeDestinations,
                 status: "paused",
                 resume_at: null,
                 nodes_processed: nodesProcessed + 1,
@@ -4666,7 +4686,7 @@ Deno.serve(async (req) => {
                   resumeNodeId: node.id,
                 },
                 nodes_data: sortedNodes,
-                destinations: effectiveDests,
+                destinations: activeDestinations,
                 status: "paused",
                 resume_at: null,
                 nodes_processed: nodesProcessed + 1,
@@ -5332,7 +5352,7 @@ Deno.serve(async (req) => {
                   waitingType: "user_input"
                 },
                 nodes_data: sortedNodes,
-                destinations: effectiveDests,
+                destinations: activeDestinations,
                 status: "paused",
                 resume_at: null,
                 nodes_processed: nodesProcessed + 1,
@@ -5351,363 +5371,324 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Send this node to all destinations
+        // Send this node to all destinations in parallel
         const nextActiveDestinations: DestinationData[] = [];
         const nodeSendResults: Array<{ destination: string; status: string }> = [];
-        for (const dest of activeDestinations) {
-          const action = getActionForNodeType(node.node_type);
-          
-          // Clone and format config, applying variable replacement
-          const formattedConfig = formatNodeConfig(node.config, node.node_type);
-          
-          // Replace variables in text fields (including url and filename for dynamic media)
-          const textFields = ["text", "content", "message", "caption", "title", "description", "footer", "question", "url", "filename"];
-          textFields.forEach((field) => {
-            if (typeof formattedConfig[field] === "string") {
-              formattedConfig[field] = replaceVariables(formattedConfig[field] as string);
-            }
-          });
-          formattedConfig.mention_all = Boolean(node.config?.mention_all ?? node.config?.mentionAll ?? false);
-          
-          const isNodePrivate = Boolean(
-            formattedConfig.sendPrivate ?? formattedConfig.send_private ?? node.config?.sendPrivate ?? node.config?.send_private ?? false
-          );
-          const targetDestJid = (isNodePrivate && triggerContext?.respondentPhone)
-            ? (triggerContext.respondentJid && triggerContext.respondentJid.includes('@s.whatsapp.net') ? triggerContext.respondentJid : `${triggerContext.respondentPhone}@s.whatsapp.net`)
-            : dest.group_jid;
-          const targetDestName = (isNodePrivate && triggerContext?.respondentPhone)
-            ? (triggerContext.respondentName || triggerContext.respondentPhone)
-            : dest.group_name;
+        let pauseForPoll = false;
+        let pauseForUserInput = false;
+        let userInputNextNodeId: string | null = null;
+        let userInputTimeoutNodeId: string | null = null;
 
-          const payload = buildStandardPayload({
-            action,
-            node: {
-              id: node.id,
-              type: node.node_type,
-              order: node.node_order,
-              config: formattedConfig,
-            },
-            campaign: {
-              id: typedCampaign.id || effectiveSequenceId,
-              name: typedCampaign.name || (typedCampaign.name || 'Workflow'),
-            },
-            instance: {
-              id: activeInstanceId,
-              name: instance.name,
-              phone: instance.phone || "",
-              provider: instance.provider,
-              externalId: instance.external_instance_id || instance.id || "",
-              externalToken: instance.external_instance_token || "",
-            },
-            destination: {
-              jid: targetDestJid,
-              name: targetDestName,
-            },
-          });
-
-          const sendStartTime = Date.now();
-
-          // Create log entry
-          const { data: logEntry } = await supabase
-            .from("group_message_logs")
-            .insert({
-              user_id: userId,
-              group_campaign_id: typedCampaign.id || effectiveSequenceId,
-              message_id: typedMessage?.id || null,
-              sequence_id: effectiveSequenceId,
-              node_type: node.node_type,
-              node_order: node.node_order,
-              group_jid: dest.group_jid,
-              group_name: dest.group_name,
-              recipient_phone: dest.isPrivate ? triggerContext?.respondentPhone : null,
-              instance_id: activeInstanceId,
-              instance_name: instance.name,
-              campaign_name: typedCampaign.name || (typedCampaign.name || 'Workflow'),
-              status: "sending",
-              payload,
-            })
-            .select()
-            .single();
-
-          try {
-            const result = await sendWhatsAppMessage(payload);
-
-            const responseTimeMs = Date.now() - sendStartTime;
-            const responseData = result.details || result;
-
-            // Parse Z-API response
-            const zaapId = result.zaapId || null;
-            const externalMessageId = result.messageId || null;
-
-            // Update log
-            if (logEntry?.id) {
-              await supabase
-                .from("group_message_logs")
-                .update({
-                  status: result.ok ? "sent" : "failed",
-                  error_message: result.ok ? null : `HTTP ${result.status}`,
-                  response_time_ms: responseTimeMs,
-                  provider_response: responseData,
-                  zaap_id: zaapId,
-                  external_message_id: externalMessageId,
-                  payload: {
-                    ...payload,
-                    zapiUrl: result.requestUrl,
-                    zapiBody: result.requestBody,
-                    curl: result.curl,
-                  } as any,
-                })
-                .eq("id", logEntry.id);
-            }
-
-            const msgText = (formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.question || formattedConfig.caption || "") as string;
-            const mediaUrl = (formattedConfig.url || formattedConfig.mediaUrl || formattedConfig.image || formattedConfig.fileUrl || formattedConfig.audio || formattedConfig.video || formattedConfig.document || "") as string;
-            const isGroupDest = !isNodePrivate && Boolean(
-              isWorkflowGroupMode ||
-              dest.group_jid?.includes("@g.us") ||
-              dest.group_jid?.includes("-group") ||
-              !dest.isPrivate
+        const destResults = await Promise.allSettled(
+          activeDestinations.map(async (dest) => {
+            const action = getActionForNodeType(node.node_type);
+            
+            // Clone and format config, applying variable replacement
+            const formattedConfig = formatNodeConfig(node.config, node.node_type);
+            
+            // Replace variables in text fields (including url and filename for dynamic media)
+            const textFields = ["text", "content", "message", "caption", "title", "description", "footer", "question", "url", "filename"];
+            textFields.forEach((field) => {
+              if (typeof formattedConfig[field] === "string") {
+                formattedConfig[field] = replaceVariables(formattedConfig[field] as string);
+              }
+            });
+            formattedConfig.mention_all = Boolean(node.config?.mention_all ?? node.config?.mentionAll ?? false);
+            
+            const isNodePrivate = Boolean(
+              formattedConfig.sendPrivate ?? formattedConfig.send_private ?? node.config?.sendPrivate ?? node.config?.send_private ?? false
             );
-            const destPhone = isGroupDest
-              ? (dest.group_jid || "")
-              : ((isNodePrivate && triggerContext?.respondentPhone)
-                  ? triggerContext.respondentPhone
-                  : (dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || triggerContext?.contactPhone || "")
-                );
-            const destName = isGroupDest
-              ? (dest.group_name || dest.group_jid)
-              : (isNodePrivate
-                  ? (triggerContext?.respondentName || triggerContext?.respondentPhone)
-                  : (dest.group_name || triggerContext?.respondentName)
-                );
-            const effectiveCompanyId = triggerContext?.companyId || typedCampaign?.company_id || "dcb34e9a-1510-4137-aecd-cec0c6d548c4";
+            const targetDestJid = (isNodePrivate && triggerContext?.respondentPhone)
+              ? (triggerContext.respondentJid && triggerContext.respondentJid.includes('@s.whatsapp.net') ? triggerContext.respondentJid : `${triggerContext.respondentPhone}@s.whatsapp.net`)
+              : dest.group_jid;
+            const targetDestName = (isNodePrivate && triggerContext?.respondentPhone)
+              ? (triggerContext.respondentName || triggerContext.respondentPhone)
+              : dest.group_name;
 
-            if (result.ok) {
-              console.log(`[ExecuteMessage] ✅ Node ${node.node_type} sent to ${dest.group_name}${dest.isPrivate ? ' (private)' : ''}`);
-              webhookResponses.push({ nodeType: node.node_type, nodeOrder: node.node_order, destination: dest.group_jid, status: "sent", data: responseData });
-              nodeSendResults.push({ destination: dest.group_jid, status: "sent" });
+            const payload = buildStandardPayload({
+              action,
+              node: {
+                id: node.id,
+                type: node.node_type,
+                order: node.node_order,
+                config: formattedConfig,
+              },
+              campaign: {
+                id: typedCampaign.id || effectiveSequenceId,
+                name: typedCampaign.name || (typedCampaign.name || 'Workflow'),
+              },
+              instance: {
+                id: activeInstanceId,
+                name: instance.name,
+                phone: instance.phone || "",
+                provider: instance.provider,
+                externalId: instance.external_instance_id || instance.id || "",
+                externalToken: instance.external_instance_token || "",
+              },
+              destination: {
+                jid: targetDestJid,
+                name: targetDestName,
+              },
+            });
 
-              if ((msgText || mediaUrl) && destPhone) {
-                await syncSentMessageToChat(supabase, {
-                  companyId: effectiveCompanyId,
-                  instanceId: activeInstanceId,
-                  phone: destPhone,
-                  name: destName,
-                  leadId: isGroupDest ? null : (triggerContext?.leadId || null),
-                  isGroup: isGroupDest,
-                  groupJid: isGroupDest ? dest.group_jid : undefined,
-                  body: msgText,
-                  mediaUrl: mediaUrl || null,
-                  messageType: node.node_type === "message" ? (mediaUrl ? "image" : "text") : node.node_type,
-                  mediaType: node.node_type === "message" ? (mediaUrl ? "image" : null) : node.node_type,
-                  externalMessageId: externalMessageId || zaapId || null,
-                  status: "sent",
-                });
-              }
+            const sendStartTime = Date.now();
 
-              // Add to next destinations list for subsequent sequence nodes
-              nextActiveDestinations.push(dest);
+            // Create log entry
+            const { data: logEntry } = await supabase
+              .from("group_message_logs")
+              .insert({
+                user_id: userId,
+                group_campaign_id: typedCampaign.id || effectiveSequenceId,
+                message_id: typedMessage?.id || null,
+                sequence_id: effectiveSequenceId,
+                node_type: node.node_type,
+                node_order: node.node_order,
+                group_jid: dest.group_jid,
+                group_name: dest.group_name,
+                recipient_phone: dest.isPrivate ? triggerContext?.respondentPhone : null,
+                instance_id: activeInstanceId,
+                instance_name: instance.name,
+                campaign_name: typedCampaign.name || (typedCampaign.name || 'Workflow'),
+                status: "sending",
+                payload,
+              })
+              .select()
+              .single();
 
-              // If this is a poll node and send was successful, register in poll_messages
-              if (node.node_type === "poll" && (zaapId || externalMessageId)) {
-                // Use formattedConfig which has variables already replaced
-                const pollQuestion = (formattedConfig.question as string) || (formattedConfig.title as string) || "";
-                
-                // Also replace variables in options array and ensure { id, label } structure
-                const rawOptions = (formattedConfig.options as any[]) || [];
-                const pollOptions = rawOptions.map((opt, idx) => {
-                  if (typeof opt === 'string') return { id: `poll_opt_${idx + 1}`, label: replaceVariables(opt) };
-                  if (opt && typeof opt === 'object') return { id: opt.id || `poll_opt_${idx + 1}`, label: replaceVariables(opt.label || '') };
-                  return { id: `poll_opt_${idx + 1}`, label: String(opt || '') };
-                });
-                
-                // option_actions still comes from original config
-                const optionActions = ((node.config as Record<string, unknown>).optionActions as Record<string, unknown>) || {};
-                const messageIdForInsert = externalMessageId || zaapId;
-                if (!messageIdForInsert) {
-                  console.error(`[ExecuteMessage] ❌ Cannot register poll: both externalMessageId and zaapId are missing`);
-                } else {
-                  console.log(`[ExecuteMessage] Registering poll in poll_messages table with resolved values`);
-                  console.log(`[ExecuteMessage] Poll question: ${pollQuestion.substring(0, 100)}...`);
-                  
-                  const pollPayload = {
-                    user_id: userId,
-                    message_id: messageIdForInsert,
+            try {
+              const result = await sendWhatsAppMessage(payload);
+
+              const responseTimeMs = Date.now() - sendStartTime;
+              const responseData = result.details || result;
+
+              // Parse Z-API response
+              const zaapId = result.zaapId || null;
+              const externalMessageId = result.messageId || null;
+
+              // Update log
+              if (logEntry?.id) {
+                await supabase
+                  .from("group_message_logs")
+                  .update({
+                    status: result.ok ? "sent" : "failed",
+                    error_message: result.ok ? null : `HTTP ${result.status}`,
+                    response_time_ms: responseTimeMs,
+                    provider_response: responseData,
                     zaap_id: zaapId,
-                    node_id: node.id,
-                    sequence_id: effectiveSequenceId,
-                    campaign_id: typedCampaign.id || effectiveSequenceId,
-                    group_jid: dest.group_jid,
-                    instance_id: instance.id,
-                    question_text: pollQuestion,
-                    options: pollOptions,
-                    option_actions: optionActions,
-                    sent_at: new Date().toISOString(),
-                  };
-                  
-                  const { error: pollInsertError } = await supabase
-                    .from("poll_messages")
-                    .insert(pollPayload);
-                  
-                  if (pollInsertError) {
-                    console.error(`[ExecuteMessage] ❌ Failed to register poll:`, JSON.stringify({
-                      error: pollInsertError.message,
-                      code: pollInsertError.code,
-                      details: pollInsertError.details,
-                      hint: pollInsertError.hint,
-                      payload: { ...pollPayload, options: `[${pollOptions.length} items]` },
-                    }));
-                  } else {
-                    console.log(`[ExecuteMessage] ✅ Poll registered: zaap_id=${zaapId}, message_id=${messageIdForInsert}`);
-                  }
-                }
-
-                if (!triggerContext?.resumedFromPoll) {
-                  console.log(`[ExecuteMessage] ⏸️ Standalone poll message sent in node ${node.id}. Pausing workflow ${workflowExecutionId}...`);
-
-                  await supabase
-                    .from("workflow_executions")
-                    .update({ status: "waiting", updated_at: new Date().toISOString() })
-                    .eq("id", workflowExecutionId);
-
-                  await supabase
-                    .from("sequence_executions")
-                    .upsert({
-                      user_id: userId,
-                      campaign_id: effectiveCampaignId,
-                      sequence_id: effectiveSequenceId,
-                      message_id: typedMessage?.id || null,
-                      trigger_context: {
-                        ...(triggerContext || {}),
-                        instanceId: activeInstanceId,
-                        resumeNodeId: node.id,
-                      },
-                      nodes_data: sortedNodes,
-                      destinations: effectiveDests,
-                      status: "paused",
-                      resume_at: null,
-                      nodes_processed: nodesProcessed + 1,
-                      nodes_failed: nodesFailed,
-                    }, { onConflict: "user_id,sequence_id" });
-
-                  return new Response(
-                    JSON.stringify({
-                      success: true,
-                      status: "paused",
-                      executionId: workflowExecutionId,
-                      message: "Execution paused waiting for poll response."
-                    }),
-                    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-                  );
-                }
+                    external_message_id: externalMessageId,
+                    payload: {
+                      ...payload,
+                      zapiUrl: result.requestUrl,
+                      zapiBody: result.requestBody,
+                      curl: result.curl,
+                    } as any,
+                  })
+                  .eq("id", logEntry.id);
               }
 
-              if (node.node_type === "user_input" || node.node_type === "question" || node.node_type === "pergunta") {
-                console.log(`[ExecuteMessage] ⏸️ Standalone user_input message sent in node ${node.id}. Pausing workflow ${workflowExecutionId}...`);
+              const msgText = (formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.question || formattedConfig.caption || "") as string;
+              const mediaUrl = (formattedConfig.url || formattedConfig.mediaUrl || formattedConfig.image || formattedConfig.fileUrl || formattedConfig.audio || formattedConfig.video || formattedConfig.document || "") as string;
+              const isGroupDest = !isNodePrivate && Boolean(
+                isWorkflowGroupMode ||
+                dest.group_jid?.includes("@g.us") ||
+                dest.group_jid?.includes("-group") ||
+                !dest.isPrivate
+              );
+              const destPhone = isGroupDest
+                ? (dest.group_jid || "")
+                : ((isNodePrivate && triggerContext?.respondentPhone)
+                    ? triggerContext.respondentPhone
+                    : (dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || triggerContext?.contactPhone || "")
+                  );
+              const destName = isGroupDest
+                ? (dest.group_name || dest.group_jid)
+                : (isNodePrivate
+                    ? (triggerContext?.respondentName || triggerContext?.respondentPhone)
+                    : (dest.group_name || triggerContext?.respondentName)
+                  );
+              const effectiveCompanyId = triggerContext?.companyId || typedCampaign?.company_id || "dcb34e9a-1510-4137-aecd-cec0c6d548c4";
 
-                const nextConn = connections.find(c => c.source_node_id === node.id && c.condition_path !== "timeout" && c.condition_path !== "error")
-                  || connections.find(c => c.source_node_id === node.id);
-                const nextNodeId = nextConn ? nextConn.target_node_id : null;
+              if (result.ok) {
+                console.log(`[ExecuteMessage] ✅ Node ${node.node_type} sent to ${dest.group_name}${dest.isPrivate ? ' (private)' : ''}`);
+                webhookResponses.push({ nodeType: node.node_type, nodeOrder: node.node_order, destination: dest.group_jid, status: "sent", data: responseData });
 
-                const timeoutConn = connections.find(c => c.source_node_id === node.id && c.condition_path === "timeout");
-                const timeoutNodeId = timeoutConn ? timeoutConn.target_node_id : null;
-
-                const rawDestPhone = triggerContext?.respondentPhone || (dest.group_jid ? dest.group_jid.split("@")[0] : "");
-                const destPhoneClean = rawDestPhone ? rawDestPhone.replace(/\D/g, "") : "";
-                const targetField = ((node.config as any)?.targetField || "") as string;
-                const timeoutMs = ((node.config as any)?.timeoutMs || 3600000) as number;
-
-                let effectiveLeadId = triggerContext?.leadId || null;
-                if (!effectiveLeadId && destPhoneClean) {
-                  const suffix = destPhoneClean.slice(-8);
-                  const { data: leadFound } = await supabase
-                    .from("leads")
-                    .select("id")
-                    .or(`phone.eq.${destPhoneClean},phone.ilike.%${suffix}`)
-                    .limit(1)
-                    .maybeSingle();
-                  if (leadFound) effectiveLeadId = leadFound.id;
-                }
-
-                if (destPhoneClean || dest.group_jid) {
-                  await supabase.from("workflow_user_inputs").insert({
-                    company_id: typedCampaign.company_id || triggerContext?.companyId || null,
-                    user_id: userId,
-                    execution_id: workflowExecutionId,
-                    sequence_id: effectiveSequenceId,
-                    node_id: node.id,
-                    lead_id: effectiveLeadId,
-                    instance_id: activeInstanceId,
-                    phone: destPhoneClean || (dest.group_jid ? dest.group_jid.replace(/\D/g, "") : ""),
-                    group_jid: dest.group_jid,
-                    target_field: targetField || null,
-                    timeout_ms: timeoutMs,
-                    status: "waiting",
-                    expires_at: new Date(Date.now() + timeoutMs).toISOString(),
+                if ((msgText || mediaUrl) && destPhone) {
+                  await syncSentMessageToChat(supabase, {
+                    companyId: effectiveCompanyId,
+                    instanceId: activeInstanceId,
+                    phone: destPhone,
+                    name: destName,
+                    leadId: isGroupDest ? null : (triggerContext?.leadId || null),
+                    isGroup: isGroupDest,
+                    groupJid: isGroupDest ? dest.group_jid : undefined,
+                    body: msgText,
+                    mediaUrl: mediaUrl || null,
+                    messageType: node.node_type === "message" ? (mediaUrl ? "image" : "text") : node.node_type,
+                    mediaType: node.node_type === "message" ? (mediaUrl ? "image" : null) : node.node_type,
+                    externalMessageId: externalMessageId || zaapId || null,
+                    status: "sent",
                   });
                 }
 
-                await supabase
-                  .from("workflow_executions")
-                  .update({
-                    status: "waiting",
-                    updated_at: new Date().toISOString(),
-                    trigger_payload: {
-                      ...(triggerContext || {}),
-                      instanceId: activeInstanceId,
-                      waitingNodeId: node.id,
-                      resumeNodeId: nextNodeId,
-                      timeoutNodeId: timeoutNodeId,
-                      waitingType: "user_input"
+                // If this is a poll node and send was successful, register in poll_messages
+                if (node.node_type === "poll" && (zaapId || externalMessageId)) {
+                  const pollQuestion = (formattedConfig.question as string) || (formattedConfig.title as string) || "";
+                  const rawOptions = (formattedConfig.options as any[]) || [];
+                  const pollOptions = rawOptions.map((opt, idx) => {
+                    if (typeof opt === 'string') return { id: `poll_opt_${idx + 1}`, label: replaceVariables(opt) };
+                    if (opt && typeof opt === 'object') return { id: opt.id || `poll_opt_${idx + 1}`, label: replaceVariables(opt.label || '') };
+                    return { id: `poll_opt_${idx + 1}`, label: String(opt || '') };
+                  });
+                  
+                  const optionActions = ((node.config as Record<string, unknown>).optionActions as Record<string, unknown>) || {};
+                  const messageIdForInsert = externalMessageId || zaapId;
+                  if (!messageIdForInsert) {
+                    console.error(`[ExecuteMessage] ❌ Cannot register poll: both externalMessageId and zaapId are missing`);
+                  } else {
+                    const pollPayload = {
+                      user_id: userId,
+                      message_id: messageIdForInsert,
+                      zaap_id: zaapId,
+                      node_id: node.id,
+                      sequence_id: effectiveSequenceId,
+                      campaign_id: typedCampaign.id || effectiveSequenceId,
+                      group_jid: dest.group_jid,
+                      instance_id: instance.id,
+                      question_text: pollQuestion,
+                      options: pollOptions,
+                      option_actions: optionActions,
+                      sent_at: new Date().toISOString(),
+                    };
+                    
+                    const { error: pollInsertError } = await supabase
+                      .from("poll_messages")
+                      .insert(pollPayload);
+                    
+                    if (pollInsertError) {
+                      console.error(`[ExecuteMessage] ❌ Failed to register poll:`, pollInsertError.message);
+                    } else {
+                      console.log(`[ExecuteMessage] ✅ Poll registered: zaap_id=${zaapId}, message_id=${messageIdForInsert}`);
                     }
-                  })
-                  .eq("id", workflowExecutionId);
+                  }
 
+                  if (!triggerContext?.resumedFromPoll) {
+                    pauseForPoll = true;
+                  }
+                }
+
+                if (node.node_type === "user_input" || node.node_type === "question" || node.node_type === "pergunta") {
+                  pauseForUserInput = true;
+                  const nextConn = connections.find(c => c.source_node_id === node.id && c.condition_path !== "timeout" && c.condition_path !== "error")
+                    || connections.find(c => c.source_node_id === node.id);
+                  userInputNextNodeId = nextConn ? nextConn.target_node_id : null;
+
+                  const timeoutConn = connections.find(c => c.source_node_id === node.id && c.condition_path === "timeout");
+                  userInputTimeoutNodeId = timeoutConn ? timeoutConn.target_node_id : null;
+
+                  const rawDestPhone = triggerContext?.respondentPhone || (dest.group_jid ? dest.group_jid.split("@")[0] : "");
+                  const destPhoneClean = rawDestPhone ? rawDestPhone.replace(/\D/g, "") : "";
+                  const targetField = ((node.config as any)?.targetField || "") as string;
+                  const timeoutMs = ((node.config as any)?.timeoutMs || 3600000) as number;
+
+                  let effectiveLeadId = triggerContext?.leadId || null;
+                  if (!effectiveLeadId && destPhoneClean) {
+                    const suffix = destPhoneClean.slice(-8);
+                    const { data: leadFound } = await supabase
+                      .from("leads")
+                      .select("id")
+                      .or(`phone.eq.${destPhoneClean},phone.ilike.%${suffix}`)
+                      .limit(1)
+                      .maybeSingle();
+                    if (leadFound) effectiveLeadId = leadFound.id;
+                  }
+
+                  if (destPhoneClean || dest.group_jid) {
+                    await supabase.from("workflow_user_inputs").insert({
+                      company_id: typedCampaign.company_id || triggerContext?.companyId || null,
+                      user_id: userId,
+                      execution_id: workflowExecutionId,
+                      sequence_id: effectiveSequenceId,
+                      node_id: node.id,
+                      lead_id: effectiveLeadId,
+                      instance_id: activeInstanceId,
+                      phone: destPhoneClean || (dest.group_jid ? dest.group_jid.replace(/\D/g, "") : ""),
+                      group_jid: dest.group_jid,
+                      target_field: targetField || null,
+                      timeout_ms: timeoutMs,
+                      status: "waiting",
+                      expires_at: new Date(Date.now() + timeoutMs).toISOString(),
+                    });
+                  }
+                }
+
+                // Delivery wait only for 1-on-1 chats, never for groups
+                if (!isGroupDest && activeDestinations.length === 1) {
+                  await waitForMessageDelivery(supabase, result.messageId, result.zaapId, 2500);
+                }
+
+                return { ok: true, dest, status: "sent" };
+              } else {
+                console.log(`[ExecuteMessage] ❌ Node ${node.node_type} failed for ${dest.group_name}: HTTP ${result.status}`);
+                webhookResponses.push({ nodeType: node.node_type, nodeOrder: node.node_order, destination: dest.group_jid, status: "failed", data: responseData });
+
+                const nodeFailedError = (result as any).error || (responseData && typeof responseData === "object" && ((responseData as any).message || (responseData as any).error)) || `HTTP ${result.status}`;
+                if ((msgText || mediaUrl) && destPhone) {
+                  await syncSentMessageToChat(supabase, {
+                    companyId: effectiveCompanyId,
+                    instanceId: activeInstanceId,
+                    phone: destPhone,
+                    name: destName,
+                    leadId: isGroupDest ? null : (triggerContext?.leadId || null),
+                    isGroup: isGroupDest,
+                    groupJid: isGroupDest ? dest.group_jid : undefined,
+                    body: msgText,
+                    mediaUrl: mediaUrl || null,
+                    messageType: node.node_type === "message" ? (mediaUrl ? "image" : "text") : node.node_type,
+                    mediaType: node.node_type === "message" ? (mediaUrl ? "image" : null) : node.node_type,
+                    externalMessageId: externalMessageId || zaapId || null,
+                    status: "failed",
+                    errorMessage: String(nodeFailedError),
+                  });
+                }
+                return { ok: false, dest, status: "failed", error: String(nodeFailedError) };
+              }
+            } catch (err: any) {
+              const errMessage = err instanceof Error ? err.message : "Unknown error";
+              console.error(`[ExecuteMessage] ❌ Error sending node to ${dest.group_name}:`, err);
+
+              if (logEntry?.id) {
                 await supabase
-                  .from("sequence_executions")
-                  .upsert({
-                    id: workflowExecutionId,
-                    user_id: userId,
-                    campaign_id: effectiveCampaignId,
-                    sequence_id: effectiveSequenceId,
-                    message_id: typedMessage?.id || null,
-                    current_node_id: nextNodeId,
-                    trigger_context: {
-                      ...(triggerContext || {}),
-                      instanceId: activeInstanceId,
-                      waitingNodeId: node.id,
-                      resumeNodeId: nextNodeId,
-                      timeoutNodeId: timeoutNodeId,
-                      waitingType: "user_input"
-                    },
-                    nodes_data: sortedNodes,
-                    destinations: effectiveDests,
-                    status: "paused",
-                    resume_at: null,
-                    nodes_processed: nodesProcessed + 1,
-                    nodes_failed: nodesFailed,
-                  }, { onConflict: "user_id,sequence_id" });
-
-                return new Response(
-                  JSON.stringify({
-                    success: true,
-                    status: "waiting_for_user_input",
-                    executionId: workflowExecutionId,
-                    message: "Execution paused waiting for user response."
-                  }),
-                  { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-                );
+                  .from("group_message_logs")
+                  .update({
+                    status: "failed",
+                    error_message: errMessage,
+                    response_time_ms: Date.now() - sendStartTime,
+                  })
+                  .eq("id", logEntry.id);
               }
 
-              // Wait for delivery to preserve ordering before next steps
-              await waitForMessageDelivery(supabase, result.messageId, result.zaapId);
-            } else {
-              nodesFailed++;
-              console.log(`[ExecuteMessage] ❌ Node ${node.node_type} failed for ${dest.group_name}: HTTP ${result.status}`);
-              webhookResponses.push({ nodeType: node.node_type, nodeOrder: node.node_order, destination: dest.group_jid, status: "failed", data: responseData });
-              nodeSendResults.push({ destination: dest.group_jid, status: "failed" });
+              const msgText = (formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.question || formattedConfig.caption || "") as string;
+              const mediaUrl = (formattedConfig.url || formattedConfig.mediaUrl || formattedConfig.image || formattedConfig.fileUrl || formattedConfig.audio || formattedConfig.video || formattedConfig.document || "") as string;
+              const isGroupDest = !isNodePrivate && Boolean(
+                isWorkflowGroupMode ||
+                dest.group_jid?.includes("@g.us") ||
+                dest.group_jid?.includes("-group") ||
+                !dest.isPrivate
+              );
+              const destPhone = isGroupDest
+                ? (dest.group_jid || "")
+                : ((isNodePrivate && triggerContext?.respondentPhone)
+                    ? triggerContext.respondentPhone
+                    : (dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || triggerContext?.contactPhone || "")
+                  );
+              const destName = isGroupDest
+                ? (dest.group_name || dest.group_jid)
+                : (isNodePrivate
+                    ? (triggerContext?.respondentName || triggerContext?.respondentPhone)
+                    : (dest.group_name || triggerContext?.respondentName)
+                  );
+              const effectiveCompanyId = triggerContext?.companyId || typedCampaign?.company_id || "dcb34e9a-1510-4137-aecd-cec0c6d548c4";
 
-              const nodeFailedError = (result as any).error || (responseData && typeof responseData === "object" && ((responseData as any).message || (responseData as any).error)) || `HTTP ${result.status}`;
               if ((msgText || mediaUrl) && destPhone) {
                 await syncSentMessageToChat(supabase, {
                   companyId: effectiveCompanyId,
@@ -5721,70 +5702,122 @@ Deno.serve(async (req) => {
                   mediaUrl: mediaUrl || null,
                   messageType: node.node_type === "message" ? (mediaUrl ? "image" : "text") : node.node_type,
                   mediaType: node.node_type === "message" ? (mediaUrl ? "image" : null) : node.node_type,
-                  externalMessageId: externalMessageId || zaapId || null,
+                  externalMessageId: null,
                   status: "failed",
-                  errorMessage: String(nodeFailedError),
+                  errorMessage: errMessage,
                 });
               }
+              return { ok: false, dest, status: "failed", error: errMessage };
             }
-          } catch (err) {
+          })
+        );
+
+        for (const r of destResults) {
+          if (r.status === "fulfilled") {
+            nodeSendResults.push({ destination: r.value.dest.group_jid, status: r.value.status });
+            if (r.value.ok) {
+              nextActiveDestinations.push(r.value.dest);
+            } else {
+              nodesFailed++;
+            }
+          } else {
             nodesFailed++;
-            console.error(`[ExecuteMessage] ❌ Error sending node to ${dest.group_name}:`, err);
-            nodeSendResults.push({ destination: dest.group_jid, status: "failed" });
-
-            const errMessage = err instanceof Error ? err.message : "Unknown error";
-            if (logEntry?.id) {
-              await supabase
-                .from("group_message_logs")
-                .update({
-                  status: "failed",
-                  error_message: errMessage,
-                  response_time_ms: Date.now() - sendStartTime,
-                })
-                .eq("id", logEntry.id);
-            }
-
-            const msgText = (formattedConfig.text || formattedConfig.content || formattedConfig.message || formattedConfig.question || formattedConfig.caption || "") as string;
-            const mediaUrl = (formattedConfig.url || formattedConfig.mediaUrl || formattedConfig.image || formattedConfig.fileUrl || formattedConfig.audio || formattedConfig.video || formattedConfig.document || "") as string;
-            const isGroupDest = !isNodePrivate && Boolean(
-              isWorkflowGroupMode ||
-              dest.group_jid?.includes("@g.us") ||
-              dest.group_jid?.includes("-group") ||
-              !dest.isPrivate
-            );
-            const destPhone = isGroupDest
-              ? (dest.group_jid || "")
-              : ((isNodePrivate && triggerContext?.respondentPhone)
-                  ? triggerContext.respondentPhone
-                  : (dest.group_jid ? dest.group_jid.split("@")[0] : triggerContext?.respondentPhone || triggerContext?.contactPhone || "")
-                );
-            const destName = isGroupDest
-              ? (dest.group_name || dest.group_jid)
-              : (isNodePrivate
-                  ? (triggerContext?.respondentName || triggerContext?.respondentPhone)
-                  : (dest.group_name || triggerContext?.respondentName)
-                );
-            const effectiveCompanyId = triggerContext?.companyId || typedCampaign?.company_id || "dcb34e9a-1510-4137-aecd-cec0c6d548c4";
-
-            if ((msgText || mediaUrl) && destPhone) {
-              await syncSentMessageToChat(supabase, {
-                companyId: effectiveCompanyId,
-                instanceId: activeInstanceId,
-                phone: destPhone,
-                name: destName,
-                leadId: isGroupDest ? null : (triggerContext?.leadId || null),
-                isGroup: isGroupDest,
-                groupJid: isGroupDest ? dest.group_jid : undefined,
-                body: msgText,
-                mediaUrl: mediaUrl || null,
-                messageType: node.node_type === "message" ? (mediaUrl ? "image" : "text") : node.node_type,
-                mediaType: node.node_type === "message" ? (mediaUrl ? "image" : null) : node.node_type,
-                externalMessageId: null,
-                status: "failed",
-                errorMessage: errMessage,
-              });
-            }
+            nodeSendResults.push({ destination: "unknown", status: "failed" });
           }
+        }
+
+        if (pauseForPoll) {
+          console.log(`[ExecuteMessage] ⏸️ Standalone poll message sent in node ${node.id}. Pausing workflow ${workflowExecutionId}...`);
+
+          await supabase
+            .from("workflow_executions")
+            .update({ status: "waiting", updated_at: new Date().toISOString() })
+            .eq("id", workflowExecutionId);
+
+          await supabase
+            .from("sequence_executions")
+            .upsert({
+              user_id: userId,
+              campaign_id: effectiveCampaignId,
+              sequence_id: effectiveSequenceId,
+              message_id: typedMessage?.id || null,
+              trigger_context: {
+                ...(triggerContext || {}),
+                instanceId: activeInstanceId,
+                resumeNodeId: node.id,
+              },
+              nodes_data: sortedNodes,
+              destinations: nextActiveDestinations.length > 0 ? nextActiveDestinations : activeDestinations,
+              status: "paused",
+              resume_at: null,
+              nodes_processed: nodesProcessed + 1,
+              nodes_failed: nodesFailed,
+            }, { onConflict: "user_id,sequence_id" });
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              status: "paused",
+              executionId: workflowExecutionId,
+              message: "Execution paused waiting for poll response."
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (pauseForUserInput) {
+          console.log(`[ExecuteMessage] ⏸️ Standalone user_input message sent in node ${node.id}. Pausing workflow ${workflowExecutionId}...`);
+
+          await supabase
+            .from("workflow_executions")
+            .update({
+              status: "waiting",
+              updated_at: new Date().toISOString(),
+              trigger_payload: {
+                ...(triggerContext || {}),
+                instanceId: activeInstanceId,
+                waitingNodeId: node.id,
+                resumeNodeId: userInputNextNodeId,
+                timeoutNodeId: userInputTimeoutNodeId,
+                waitingType: "user_input"
+              }
+            })
+            .eq("id", workflowExecutionId);
+
+          await supabase
+            .from("sequence_executions")
+            .upsert({
+              id: workflowExecutionId,
+              user_id: userId,
+              campaign_id: effectiveCampaignId,
+              sequence_id: effectiveSequenceId,
+              message_id: typedMessage?.id || null,
+              current_node_id: userInputNextNodeId,
+              trigger_context: {
+                ...(triggerContext || {}),
+                instanceId: activeInstanceId,
+                waitingNodeId: node.id,
+                resumeNodeId: userInputNextNodeId,
+                timeoutNodeId: userInputTimeoutNodeId,
+                waitingType: "user_input"
+              },
+              nodes_data: sortedNodes,
+              destinations: nextActiveDestinations.length > 0 ? nextActiveDestinations : activeDestinations,
+              status: "paused",
+              resume_at: null,
+              nodes_processed: nodesProcessed + 1,
+              nodes_failed: nodesFailed,
+            }, { onConflict: "user_id,sequence_id" });
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              status: "waiting_for_user_input",
+              executionId: workflowExecutionId,
+              message: "Execution paused waiting for user response."
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
         }
 
         await logNodeExecution(supabase, {
@@ -5796,11 +5829,6 @@ Deno.serve(async (req) => {
         activeDestinations = nextActiveDestinations;
         if (activeDestinations.length === 0) {
           console.log(`[ExecuteMessage] No active destinations left, stopping sequence`);
-          break;
-        }
-
-        if (nodesFailed > initialNodesFailed) {
-          console.log(`[ExecuteMessage] Message node ${node.id} failed, aborting.`);
           break;
         }
 

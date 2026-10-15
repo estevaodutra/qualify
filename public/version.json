@@ -1,6 +1,6 @@
 {
-  "commit": "a29bbf8c9c8f6a2c1ff677f765a4cd0bafe6669e",
-  "shortCommit": "a29bbf8",
-  "message": "fix(settings): fix ReferenceError Key is not defined in SettingsLayout",
-  "builtAt": "2026-10-15T19:40:07.184Z"
+  "commit": "b9b7bb87189f0237323423de504ca4925e14e7cc",
+  "shortCommit": "b9b7bb8",
+  "message": "fix: ensure individual chat messages send pure phone numbers without -group",
+  "builtAt": "2026-10-15T21:21:33.301Z"
 }
