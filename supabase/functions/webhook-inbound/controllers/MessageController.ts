@@ -277,9 +277,11 @@ export async function processMessageEvent(
         ) || (connections || [])[0];
 
         const nextNodeId = successConn?.target_node_id || null;
+        const effectivePhone = (pendingInput.phone || cleanPhone || "").replace(/\D/g, "");
+        const respondentName = (context.senderName || context.chatName || "") as string;
 
         if (nextNodeId) {
-          console.log(`[MessageController] Resuming sequence ${pendingInput.sequence_id} from node ${nextNodeId} (condition_path: ${successConn?.condition_path || "default"}) for phone/chat ${cleanPhone || chatJid}`);
+          console.log(`[MessageController] Resuming sequence ${pendingInput.sequence_id} from node ${nextNodeId} (condition_path: ${successConn?.condition_path || "default"}) for phone/chat ${effectivePhone || chatJid}`);
           const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
           const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
