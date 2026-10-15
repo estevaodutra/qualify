@@ -57,20 +57,31 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
   const { action, node, instance, destination } = payload;
   const { provider, externalId, externalToken } = instance;
   
-  // Normalizar JID/Phone: para grupos, usar o JID (contém @g.us ou -group).
-  // Para privado, usar o phone.
+  // Normalizar JID/Phone: para grupos reais, usar o JID (contém @g.us ou -group).
+  // Para privado, usar o phone puro apenas com números.
+  const isActualGroup = (val: string) => {
+    if (!val) return false;
+    if (val.includes("@s.whatsapp.net") || val.includes("@c.us")) return false;
+    if (val.includes("@g.us") || val.includes("-group")) {
+      const clean = val.replace("-group", "").replace("@g.us", "").replace(/\D/g, "");
+      return clean.startsWith("1203") || clean.length > 15 || val.split(/[@-]/)[0].includes("-");
+    }
+    const clean = val.replace(/\D/g, "");
+    return clean.startsWith("1203") || clean.length > 15;
+  };
+
   let target = "";
   const jid = destination.jid || "";
   const phone = destination.phone || "";
 
-  if (jid.includes("-group") || jid.endsWith("@g.us")) {
+  if (isActualGroup(jid)) {
     target = jid.includes("@") ? jid : `${jid.replace("-group", "")}@g.us`;
-  } else if (phone.includes("-group") || phone.endsWith("@g.us")) {
+  } else if (isActualGroup(phone)) {
     target = phone.includes("@") ? phone : `${phone.replace("-group", "")}@g.us`;
-  } else if (phone) {
-    target = phone.replace("@s.whatsapp.net", "");
-  } else if (jid) {
-    target = jid.replace("@s.whatsapp.net", "");
+  } else {
+    // É conversa privada com um contato individual! Mandar apenas o número de telefone
+    const rawVal = phone || jid || "";
+    target = rawVal.replace("@s.whatsapp.net", "").replace("@c.us", "").replace("-group", "").replace("@g.us", "").replace(/\D/g, "");
   }
 
   console.log(`[whatsapp-client] Sending action ${action} to ${target} via provider ${provider}`);

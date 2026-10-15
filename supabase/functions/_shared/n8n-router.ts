@@ -183,7 +183,12 @@ function normalizeGroupJids(obj: any): any {
   if (obj === null || obj === undefined) return obj;
   if (typeof obj === "string") {
     if (obj.includes("@g.us")) {
-      return obj.replace("@g.us", "-group");
+      const clean = obj.replace("@g.us", "").replace(/\D/g, "");
+      // Grupos reais começam com 1203, têm mais de 15 dígitos ou contêm hífen de criação
+      if (clean.startsWith("1203") || clean.length > 15 || obj.split("@g.us")[0].includes("-")) {
+        return obj.replace("@g.us", "-group");
+      }
+      return clean;
     }
     return obj;
   }

@@ -1567,11 +1567,16 @@ Deno.serve(async (req) => {
     }
 
     // 3. Determine whether this sequence is explicitly a group workflow
-    const isWorkflowGroupMode = 
+    const isExplicitIndividual = 
+      triggerContext?.destinationMode === "individual" || 
+      triggerContext?.sendPrivate === true;
+
+    const isWorkflowGroupMode = !isExplicitIndividual && (
       triggerContext?.destinationMode === "groups" ||
       sequenceTriggerConfig.destinationMode === "groups" ||
       (sequenceTriggerConfig.isGroup === true && sequenceTriggerConfig.destinationMode !== "individual") ||
-      (sequenceTriggerConfig.destinationMode !== "individual" && groups.length > 0);
+      (sequenceTriggerConfig.destinationMode !== "individual" && groups.length > 0)
+    );
 
     // For triggered execution with sendPrivate, only respect it if NOT a group workflow!
     const sendToPrivate = !isWorkflowGroupMode && isTriggeredExecution && triggerContext?.sendPrivate;
@@ -1970,8 +1975,15 @@ Deno.serve(async (req) => {
         console.log(`[ExecuteMessage] 👥 Executando em MODO GRUPO (isWorkflowGroupMode=true). Total de grupos disponíveis: ${groups.length}`);
 
         const explicitGroupJid = triggerContext?.groupJid || triggerContext?.targetGroupJid;
-        const normalizedGroupJid = explicitGroupJid 
-          ? (String(explicitGroupJid).includes('@g.us') ? String(explicitGroupJid).trim() : `${String(explicitGroupJid).replace(/\D/g, '')}@g.us`)
+        const cleanDigits = String(explicitGroupJid || "").replace(/\D/g, "");
+        const isActuallyGroupJid = explicitGroupJid && !String(explicitGroupJid).includes('@s.whatsapp.net') && !String(explicitGroupJid).includes('@c.us') && (
+          String(explicitGroupJid).includes('@g.us') ||
+          String(explicitGroupJid).includes('-group') ||
+          cleanDigits.startsWith('1203') ||
+          cleanDigits.length > 15
+        );
+        const normalizedGroupJid = isActuallyGroupJid 
+          ? (String(explicitGroupJid).includes('@g.us') ? String(explicitGroupJid).trim() : `${String(explicitGroupJid).replace("-group", "").replace(/\D/g, '')}@g.us`)
           : null;
 
         if (normalizedGroupJid) {
@@ -1999,26 +2011,28 @@ Deno.serve(async (req) => {
         // =========================================================================
         destinations = targetPhones && targetPhones.length > 0
           ? targetPhones.map((phone: string) => ({
-              group_jid: `${phone}@s.whatsapp.net`,
+              group_jid: `${phone.replace(/\D/g, "")}@s.whatsapp.net`,
               group_name: phone,
               isPrivate: true,
             }))
-          : (sendToPrivate || triggerContext?.sendPrivate || triggerContext?.uraResult) && triggerContext?.respondentPhone
+          : (sendToPrivate || triggerContext?.sendPrivate || triggerContext?.uraResult || triggerContext?.destinationMode === "individual") && (triggerContext?.respondentPhone || triggerContext?.contactPhone)
             ? [{ 
-                group_jid: (triggerContext.respondentJid && triggerContext.respondentJid.includes('@s.whatsapp.net')) ? triggerContext.respondentJid : `${triggerContext.respondentPhone}@s.whatsapp.net`, 
-                group_name: triggerContext.respondentName || triggerContext.respondentPhone,
+                group_jid: (triggerContext.respondentJid && triggerContext.respondentJid.includes('@s.whatsapp.net')) 
+                  ? triggerContext.respondentJid 
+                  : `${String(triggerContext.respondentPhone || triggerContext.contactPhone).replace(/\D/g, "")}@s.whatsapp.net`, 
+                group_name: triggerContext.respondentName || triggerContext.respondentPhone || triggerContext.contactPhone,
                 isPrivate: true
               }]
-            : triggerContext?.groupJid
+            : triggerContext?.groupJid && !String(triggerContext.groupJid).includes('@s.whatsapp.net') && (String(triggerContext.groupJid).includes('@g.us') || String(triggerContext.groupJid).includes('-group') || String(triggerContext.groupJid).replace(/\D/g, '').startsWith('1203') || String(triggerContext.groupJid).replace(/\D/g, '').length > 15)
               ? [{
                   group_jid: triggerContext.groupJid as string,
                   group_name: (triggerContext.respondentName as string) || "Grupo",
                   isPrivate: false,
                 }]
-              : (triggerContext?.sendPrivate === false
+              : (triggerContext?.sendPrivate === false && groups.length > 0
                   ? groups.map(g => ({ group_jid: g.group_jid, group_name: g.group_name, isPrivate: false }))
-                  : (triggerContext?.respondentPhone
-                      ? [{ group_jid: `${triggerContext.respondentPhone}@s.whatsapp.net`, group_name: triggerContext.respondentPhone, isPrivate: true }]
+                  : ((triggerContext?.respondentPhone || triggerContext?.contactPhone)
+                      ? [{ group_jid: `${String(triggerContext.respondentPhone || triggerContext.contactPhone).replace(/\D/g, "")}@s.whatsapp.net`, group_name: triggerContext.respondentName || triggerContext.respondentPhone || triggerContext.contactPhone, isPrivate: true }]
                       : groups.map(g => ({ group_jid: g.group_jid, group_name: g.group_name, isPrivate: false }))
                     )
                 );
