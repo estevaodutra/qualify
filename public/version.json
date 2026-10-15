@@ -1,6 +1,6 @@
 {
-  "commit": "9b85c8d5ac61361cc0313676d913c8a43843f180",
-  "shortCommit": "9b85c8d",
-  "message": "feat: isolar grupos do CRM no chat e adicionar chave de visibilidade por grupo e pasta",
-  "builtAt": "2026-10-15T16:12:42.738Z"
+  "commit": "a2c7a21517965e8ebbb9631df7f5f776c99c8b88",
+  "shortCommit": "a2c7a21",
+  "message": "fix: desestruturar onToggleChatVisibility em GroupTableRow",
+  "builtAt": "2026-10-15T16:25:02.049Z"
 }

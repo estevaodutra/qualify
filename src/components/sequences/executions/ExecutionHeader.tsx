@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Copy, RotateCcw, Loader2, CheckCircle2, XCircle, Clock, Ban, Pencil } from "lucide-react";
+import { Copy, RotateCcw, Loader2, CheckCircle2, XCircle, Clock, Ban, Pencil, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { WorkflowExecution } from "@/hooks/useWorkflowExecutions";
 import { useToast } from "@/hooks/use-toast";
@@ -10,6 +10,8 @@ interface ExecutionHeaderProps {
   isRerunning?: boolean;
   onUseAsReference?: () => void;
   onEdit?: () => void;
+  onStop?: () => void;
+  isStopping?: boolean;
 }
 
 const STATUS_LABEL: Record<string, { label: string; icon: typeof CheckCircle2; className: string }> = {
@@ -28,12 +30,13 @@ function formatDuration(ms: number | null): string {
   return `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`;
 }
 
-export function ExecutionHeader({ execution, onRerun, isRerunning, onUseAsReference, onEdit }: ExecutionHeaderProps) {
+export function ExecutionHeader({ execution, onRerun, isRerunning, onUseAsReference, onEdit, onStop, isStopping }: ExecutionHeaderProps) {
   const { toast } = useToast();
   const meta = STATUS_LABEL[execution.status];
   const StatusIcon = meta.icon;
 
   const canRerun = !!onRerun && (execution.status === "success" || execution.status === "error" || execution.status === "cancelled");
+  const canStop = !!onStop && (execution.status === "running" || execution.status === "waiting");
 
   return (
     <div className="flex items-center justify-between bg-white border border-slate-200/60 px-4 py-2.5 rounded-2xl shadow-sm">
@@ -61,6 +64,22 @@ export function ExecutionHeader({ execution, onRerun, isRerunning, onUseAsRefere
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
+        {canStop && (
+          <Button
+            variant="destructive"
+            size="sm"
+            className="rounded-xl gap-1.5 h-8 px-3 text-xs font-semibold shadow-sm bg-red-600 hover:bg-red-700 text-white transition-all"
+            onClick={onStop}
+            disabled={isStopping}
+          >
+            {isStopping ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Square className="h-3.5 w-3.5 fill-current" />
+            )}
+            Parar execução
+          </Button>
+        )}
         {execution.triggerType === "webhook" && onUseAsReference && (
           <div className="flex items-center gap-1.5">
             <Button

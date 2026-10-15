@@ -81,30 +81,43 @@ serve(async (req) => {
     }
 
     if (action === "stop" || action === "cancel") {
+      const cancelReason = body.reason || "Execução interrompida pelo usuário";
+      const now = new Date().toISOString();
+
       // 1. Cancel sequence_executions
       if (seqExec) {
         await supabase
           .from("sequence_executions")
           .update({
             status: "cancelled",
-            error_message: "Execução cancelada pelo operador no chat",
-            updated_at: new Date().toISOString(),
+            error_message: cancelReason,
+            updated_at: now,
           })
           .eq("id", executionId);
       }
 
       // 2. Cancel workflow_executions
       if (wfExec) {
+        const startedAtMs = wfExec.started_at ? new Date(wfExec.started_at).getTime() : null;
+        const durationMs = startedAtMs ? Date.now() - startedAtMs : null;
+
         await supabase
           .from("workflow_executions")
           .update({
             status: "cancelled",
-            finished_at: new Date().toISOString(),
-            error_message: "Execução cancelada pelo operador no chat",
-            updated_at: new Date().toISOString(),
+            finished_at: now,
+            duration_ms: durationMs,
+            error_message: cancelReason,
+            updated_at: now,
           })
           .eq("id", executionId);
       }
+
+      // 3. Cancel any pending user inputs waiting for this execution
+      await supabase
+        .from("workflow_user_inputs")
+        .update({ status: "cancelled" })
+        .eq("execution_id", executionId);
 
       return new Response(
         JSON.stringify({ success: true, message: "Execução cancelada com sucesso.", status: "cancelled" }),

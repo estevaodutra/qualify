@@ -135,6 +135,66 @@ export function ExecutionsPanel({ sequenceId, nodes, connections, nodeCategories
     }
   };
 
+  const [isStopping, setIsStopping] = useState(false);
+
+  const handleStop = async (idToStop?: string) => {
+    const targetId = idToStop || execution?.id;
+    if (!targetId) return;
+    setIsStopping(true);
+    try {
+      // 1. Invoke manage-workflow-execution
+      await supabase.functions.invoke("manage-workflow-execution", {
+        body: {
+          action: "stop",
+          executionId: targetId,
+          reason: "Execução interrompida manualmente pelo usuário no painel de diagnóstico",
+        },
+      });
+
+      // 2. Direct database updates fallback to ensure immediate consistency
+      const now = new Date().toISOString();
+      const targetExec = executions.find(e => e.id === targetId) || execution;
+      const startedAtMs = targetExec?.startedAt ? new Date(targetExec.startedAt).getTime() : null;
+      const durationMs = startedAtMs ? Date.now() - startedAtMs : null;
+
+      await Promise.all([
+        supabase
+          .from("workflow_executions")
+          .update({
+            status: "cancelled",
+            finished_at: now,
+            duration_ms: durationMs,
+            error_message: "Execução interrompida manualmente pelo usuário",
+            updated_at: now,
+          })
+          .eq("id", targetId),
+        supabase
+          .from("sequence_executions")
+          .update({
+            status: "cancelled",
+            error_message: "Execução interrompida manualmente pelo usuário",
+            updated_at: now,
+          })
+          .eq("id", targetId),
+        supabase
+          .from("workflow_user_inputs")
+          .update({ status: "cancelled" })
+          .eq("execution_id", targetId),
+      ]);
+
+      toast({ title: "Execução interrompida", description: "O fluxo foi cancelado com sucesso." });
+      refetch();
+    } catch (err: any) {
+      toast({
+        title: "Erro ao interromper execução",
+        description: err instanceof Error ? err.message : String(err),
+        variant: "destructive",
+      });
+    } finally {
+      setIsStopping(false);
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col gap-3 min-h-0 overflow-hidden">
       {execution && (
@@ -144,6 +204,8 @@ export function ExecutionsPanel({ sequenceId, nodes, connections, nodeCategories
           isRerunning={isRerunning} 
           onUseAsReference={handleUseAsReference}
           onEdit={handleEdit}
+          onStop={handleStop}
+          isStopping={isStopping}
         />
       )}
 
@@ -155,6 +217,7 @@ export function ExecutionsPanel({ sequenceId, nodes, connections, nodeCategories
           selectedExecutionId={selectedExecutionId}
           onSelect={setSelectedExecutionId}
           onRefresh={refetch}
+          onStop={handleStop}
         />
 
         {selectedExecutionId && isDetailLoading ? (

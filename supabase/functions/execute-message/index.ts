@@ -2242,6 +2242,19 @@ Deno.serve(async (req) => {
         }
         visitCounts.set(node.id, visits);
 
+        // Check if execution was cancelled by user
+        if (workflowExecutionId) {
+          const { data: execCheck } = await supabase
+            .from("workflow_executions")
+            .select("status")
+            .eq("id", workflowExecutionId)
+            .maybeSingle();
+          if (execCheck?.status === "cancelled") {
+            console.log(`[ExecuteMessage] 🛑 Execução ${workflowExecutionId} foi cancelada pelo usuário. Encerrando processamento.`);
+            break;
+          }
+        }
+
         const activeProcessingTime = Date.now() - startTime - accumulatedDelayMs;
         if (activeProcessingTime > 60000) {
           throw new Error(`Timeout: A execução excedeu o limite de 1 minuto de processamento ativo (tempo real: ${activeProcessingTime}ms).`);

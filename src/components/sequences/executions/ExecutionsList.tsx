@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RefreshCw, Search, CheckCircle2, XCircle, Loader2, Clock, Ban } from "lucide-react";
+import { RefreshCw, Search, CheckCircle2, XCircle, Loader2, Clock, Ban, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { WorkflowExecution, WorkflowExecutionStatus } from "@/hooks/useWorkflowExecutions";
 
@@ -15,6 +15,7 @@ interface ExecutionsListProps {
   selectedExecutionId: string | null;
   onSelect: (id: string) => void;
   onRefresh: () => void;
+  onStop?: (id: string) => void;
 }
 
 const STATUS_META: Record<WorkflowExecutionStatus, { label: string; icon: typeof CheckCircle2; className: string }> = {
@@ -116,7 +117,23 @@ export function ExecutionsList({ executions, isLoading, error, selectedExecution
                       <StatusIcon className={cn("h-2.5 w-2.5", exec.status === "running" && "animate-spin")} />
                       {meta.label}
                     </span>
-                    <span className="text-[9px] text-slate-400 font-mono">{formatDuration(exec.durationMs)}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[9px] text-slate-400 font-mono">{formatDuration(exec.durationMs)}</span>
+                      {onStop && (exec.status === "running" || exec.status === "waiting") && (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onStop(exec.id);
+                          }}
+                          className="p-1 hover:bg-red-50 text-red-500 rounded-md transition-colors cursor-pointer"
+                          title="Parar execução"
+                        >
+                          <Square className="h-2.5 w-2.5 fill-current" />
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <p className="text-[10px] font-mono text-slate-500 truncate">{exec.id}</p>
                   <div className="flex items-center justify-between mt-1">
