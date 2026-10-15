@@ -1,6 +1,6 @@
 {
-  "commit": "HEAD",
-  "shortCommit": "latest",
-  "message": "fix(protocols): enforce default connection protocol to match active chat conversation instance",
-  "builtAt": "2026-10-15T17:34:00.000Z"
+  "commit": "8c8fcd58a64b395d09c083fd7f3f36b4472e892f",
+  "shortCommit": "8c8fcd5",
+  "message": "fix(workflow): fix ReferenceError onSkip is not defined in ExecutionsList",
+  "builtAt": "2026-10-15T18:10:47.364Z"
 }

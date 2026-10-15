@@ -15,7 +15,7 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { workflowId, leadIds, instanceId } = await req.json();
+    const { workflowId, leadIds, instanceId, groupJid: explicitGroupJid, isGroup: explicitIsGroup } = await req.json();
 
     if (!workflowId || !leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
       return new Response(
@@ -97,7 +97,19 @@ Deno.serve(async (req) => {
 
       // Check if lead represents a WhatsApp group
       const leadCustomFields = (lead.custom_fields && typeof lead.custom_fields === "object" ? lead.custom_fields : {}) as Record<string, any>;
+      
+      const explicitNormalizedGroup = explicitGroupJid 
+        ? (String(explicitGroupJid).includes('@g.us') ? String(explicitGroupJid).trim() : `${String(explicitGroupJid).replace(/\D/g, "")}@g.us`)
+        : null;
+
+      const targetGroupJid = explicitNormalizedGroup ||
+                             leadCustomFields.group_jid || 
+                             (cleanPhone.startsWith("1203") ? `${cleanPhone}@g.us` : null) ||
+                             (lead.phone?.includes("@g.us") ? lead.phone.trim() : null);
+
       const isGroupLead = !!(
+        explicitIsGroup ||
+        explicitNormalizedGroup ||
         leadCustomFields.is_group ||
         cleanPhone.startsWith("1203") ||
         leadCustomFields.group_jid ||
@@ -105,13 +117,13 @@ Deno.serve(async (req) => {
         lead.phone?.includes("-group")
       );
 
-      const targetGroupJid = leadCustomFields.group_jid || 
-                             (cleanPhone.startsWith("1203") ? `${cleanPhone}@g.us` : null) ||
-                             (lead.phone?.includes("@g.us") ? lead.phone.trim() : null);
-
       const effectiveGroupMode = isGroupMode || isGroupLead;
+      
+      // REGRA DE OURO: Quando o fluxo é disparado para um grupo específico
+      // (seja pelo chat do grupo ou lead que representa o grupo), o disparo DEVE ir 
+      // EXCLUSIVAMENTE para aquele grupo específico! Jamais disparar para outros grupos do workflow.
       const targetGroupJids = targetGroupJid 
-        ? Array.from(new Set([...(triggerConfig.selectedGroupJids || []), targetGroupJid]))
+        ? [targetGroupJid]
         : (triggerConfig.selectedGroupJids || []);
 
       // Conexão Padrão: resolver a instância ativa onde o lead está conversando
@@ -155,6 +167,7 @@ Deno.serve(async (req) => {
           respondentName: lead.name || "",
           respondentJid: isGroupLead ? (targetGroupJid || `${cleanPhone}@g.us`) : `${cleanPhone}@s.whatsapp.net`,
           groupJid: isGroupLead ? (targetGroupJid || `${cleanPhone}@g.us`) : undefined,
+          targetGroupJid: isGroupLead ? (targetGroupJid || `${cleanPhone}@g.us`) : undefined,
           sendPrivate: !effectiveGroupMode,
           destinationMode: effectiveGroupMode ? "groups" : "individual",
           selectedGroupJids: targetGroupJids,

@@ -35,6 +35,7 @@ interface LeadExecutionsButtonProps {
   leadPhone?: string;
   leadName?: string;
   instanceId?: string;
+  groupJid?: string;
   disabled?: boolean;
 }
 
@@ -85,6 +86,7 @@ export default function LeadExecutionsButton({
   leadPhone,
   leadName,
   instanceId,
+  groupJid,
   disabled,
 }: LeadExecutionsButtonProps) {
   const [open, setOpen] = useState(false);
@@ -133,11 +135,23 @@ export default function LeadExecutionsButton({
     setIsStartingWf(true);
     const toastId = toast.loading(`Iniciando workflow "${workflow.name}"...`);
     try {
+      const phone = leadPhone || "";
+      const cleanDigits = phone.replace("@g.us", "").replace("-group", "").replace(/\D/g, "");
+      const isGroup = Boolean(
+        groupJid ||
+        phone.includes("@g.us") ||
+        phone.includes("-group") ||
+        cleanDigits.startsWith("1203")
+      );
+      const effectiveGroupJid = groupJid || (isGroup ? (phone.includes("@g.us") ? phone : `${cleanDigits}@g.us`) : undefined);
+
       const { data, error } = await supabase.functions.invoke("start-workflow-for-leads", {
         body: {
           workflowId: workflow.id,
           leadIds: [leadId],
           instanceId: instanceId || undefined,
+          groupJid: effectiveGroupJid || undefined,
+          isGroup: isGroup,
         },
       });
       if (error) throw error;

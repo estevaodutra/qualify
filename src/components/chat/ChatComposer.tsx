@@ -566,6 +566,8 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, con
           workflowId: workflow.id,
           leadIds: [targetLeadId],
           instanceId: conversation?.instance_id || undefined,
+          groupJid: (conversation?.contact_phone?.includes("@g.us") ? conversation.contact_phone : (conversation?.contact_phone?.replace(/\D/g, "").startsWith("1203") ? `${conversation.contact_phone.replace(/\D/g, "")}@g.us` : undefined)),
+          isGroup: Boolean(conversation?.is_group || conversation?.contact_phone?.includes("@g.us") || conversation?.contact_phone?.includes("-group") || conversation?.contact_phone?.replace(/\D/g, "").startsWith("1203")),
         },
       });
       if (error) throw error;
@@ -824,9 +826,10 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, con
           {/* Workflow Executions Manager Button */}
           <LeadExecutionsButton
             leadId={resolvedLeadId || leadId || conversation?.lead?.id || conversation?.lead_id || undefined}
-            leadPhone={leadData?.phone}
-            leadName={leadData?.name}
+            leadPhone={leadData?.phone || conversation?.contact_phone || undefined}
+            leadName={leadData?.name || conversation?.contact_name || undefined}
             instanceId={conversation?.instance_id || undefined}
+            groupJid={(conversation?.contact_phone?.includes("@g.us") ? conversation.contact_phone : (conversation?.contact_phone?.replace(/\D/g, "").startsWith("1203") ? `${conversation.contact_phone.replace(/\D/g, "")}@g.us` : undefined))}
             disabled={isSending || isUploading}
           />
         </div>

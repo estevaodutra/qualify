@@ -1492,8 +1492,22 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 2. Resolve destination groups: Prioritize explicitly configured selectedGroupJids from workflow settings
-    const selectedJids = (sequenceTriggerConfig.selectedGroupJids as string[]) || (triggerContext?.selectedGroupJids as string[]) || [];
+    // 2. Resolve destination groups: Prioritize explicitly targeted group or selectedGroupJids from triggerContext
+    // REGRA FUNDAMENTAL: Se o triggerContext especifica um grupo de destino específico (ex: disparo manual no chat do grupo ou triggerContext.selectedGroupJids),
+    // ele DEVE ter prioridade absoluta sobre sequenceTriggerConfig.selectedGroupJids do workflow!
+    const triggerExplicitJid = triggerContext?.groupJid || triggerContext?.targetGroupJid;
+    const cleanTriggerExplicitJid = triggerExplicitJid 
+      ? (String(triggerExplicitJid).includes('@g.us') ? String(triggerExplicitJid).trim() : `${String(triggerExplicitJid).replace(/\D/g, '')}@g.us`)
+      : null;
+
+    let selectedJids: string[] = [];
+    if (cleanTriggerExplicitJid) {
+      selectedJids = [cleanTriggerExplicitJid];
+    } else if (triggerContext?.selectedGroupJids && Array.isArray(triggerContext.selectedGroupJids) && triggerContext.selectedGroupJids.length > 0) {
+      selectedJids = triggerContext.selectedGroupJids;
+    } else if (sequenceTriggerConfig.selectedGroupJids && Array.isArray(sequenceTriggerConfig.selectedGroupJids) && sequenceTriggerConfig.selectedGroupJids.length > 0) {
+      selectedJids = sequenceTriggerConfig.selectedGroupJids;
+    }
     let groups: LinkedGroup[] = [];
 
     if (selectedJids.length > 0) {
@@ -1953,9 +1967,14 @@ Deno.serve(async (req) => {
         // =========================================================================
         console.log(`[ExecuteMessage] 👥 Executando em MODO GRUPO (isWorkflowGroupMode=true). Total de grupos disponíveis: ${groups.length}`);
 
-        if (triggerContext?.groupJid && String(triggerContext.groupJid).includes('@g.us')) {
+        const explicitGroupJid = triggerContext?.groupJid || triggerContext?.targetGroupJid;
+        const normalizedGroupJid = explicitGroupJid 
+          ? (String(explicitGroupJid).includes('@g.us') ? String(explicitGroupJid).trim() : `${String(explicitGroupJid).replace(/\D/g, '')}@g.us`)
+          : null;
+
+        if (normalizedGroupJid) {
           destinations = [{
-            group_jid: triggerContext.groupJid as string,
+            group_jid: normalizedGroupJid,
             group_name: (triggerContext.respondentName as string) || "Grupo",
             isPrivate: false,
           }];
@@ -2084,10 +2103,9 @@ Deno.serve(async (req) => {
             }
           }
           if (savedExecutionRecord?.destinations && Array.isArray(savedExecutionRecord.destinations) && savedExecutionRecord.destinations.length > 0) {
-            if (destinations.length === 0) {
-              destinations = savedExecutionRecord.destinations;
-              console.log(`[ExecuteMessage] 🔄 Recovered ${destinations.length} destinations from saved execution state`);
-            }
+            // Prioridade absoluta: restaurar os destinos gravados no estado pausado da execução
+            destinations = savedExecutionRecord.destinations;
+            console.log(`[ExecuteMessage] 🔄 Recovered ${destinations.length} destinations from saved execution state:`, destinations.map((d: any) => d.group_jid));
           } else if (destinations.length === 0 && savedExecutionRecord) {
             const savedCtx = savedExecutionRecord.trigger_context || savedExecutionRecord.trigger_payload;
             const phone = savedCtx?.respondentPhone || savedCtx?.contactPhone || triggerContext?.respondentPhone || triggerContext?.contactPhone;
