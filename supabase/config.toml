@@ -155,3 +155,11 @@ verify_jwt = false
 
 [functions.temp-run-sql]
 verify_jwt = false
+
+# Meta calls these callbacks without a Supabase JWT.
+# Requests authenticate using the signed_request HMAC instead.
+[functions.criafy-deauthorize]
+verify_jwt = false
+
+[functions.criafy-data-deletion]
+verify_jwt = false
