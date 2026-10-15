@@ -60,16 +60,18 @@ export default function CriafyHub() {
     if (!activeCompanyId) return;
 
     const code = searchParams.get("code");
+    const state = searchParams.get("state") || undefined;
     if (code) {
       toast.loading("Processando autorização do Instagram Meta API...", { id: "oauth-process" });
       try {
         const redirectUri = `${window.location.origin}/criafy`;
-        const res = await criafyService.exchangeOAuthCode(activeCompanyId, code, redirectUri);
+        const res = await criafyService.exchangeOAuthCode(activeCompanyId, code, redirectUri, state);
         toast.success(`Sucesso! ${res.count || 1} conta(s) do Instagram conectada(s).`, {
           id: "oauth-process",
         });
-        // Clear code from URL
+        // Clear code and state from URL
         searchParams.delete("code");
+        searchParams.delete("state");
         setSearchParams(searchParams);
       } catch (err: any) {
         toast.error(`Falha ao conectar conta via Meta OAuth: ${err.message}`, {

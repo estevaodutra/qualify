@@ -63,9 +63,9 @@ export const criafyService = {
     return data.authUrl;
   },
 
-  async exchangeOAuthCode(companyId: string, code: string, redirectUri: string): Promise<any> {
+  async exchangeOAuthCode(companyId: string, code: string, redirectUri: string, state?: string): Promise<any> {
     const { data, error } = await supabase.functions.invoke("criafy-instagram-oauth", {
-      body: { action: "exchange-code", companyId, code, redirectUri },
+      body: { action: "exchange-code", companyId, code, redirectUri, state },
     });
 
     if (error || !data?.success) {

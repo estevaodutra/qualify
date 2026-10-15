@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
 
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
     const body = await req.json();
-    const { action, companyId, accountId, code, redirectUri } = body;
+    const { action, companyId, accountId, code, state, redirectUri, provider = "INSTAGRAM" } = body;
 
     // Verify company membership
     if (companyId) {
@@ -48,92 +48,223 @@ Deno.serve(async (req) => {
       }
     }
 
-    const appId = Deno.env.get("META_APP_ID") || "244380250945643";
-    const appSecret = Deno.env.get("META_APP_SECRET") || "";
+    // App Credentials com separação entre Instagram App e Meta App
+    const instagramAppId =
+      Deno.env.get("INSTAGRAM_APP_ID") || "1214753054314021";
+    const instagramAppSecret =
+      Deno.env.get("INSTAGRAM_APP_SECRET") || Deno.env.get("META_APP_SECRET") || "";
 
-    // Action 1: Generate OAuth URL
+    const metaAppId = Deno.env.get("META_APP_ID") || instagramAppId;
+    const metaAppSecret = Deno.env.get("META_APP_SECRET") || instagramAppSecret;
+
+    // ==========================================
+    // ACTION 1: Generate OAuth URL (Instagram Login Direto ou Facebook Login)
+    // ==========================================
     if (action === "get-auth-url") {
-      const scopes = [
-        "instagram_basic",
-        "instagram_content_publish",
-        "pages_show_list",
-        "pages_read_engagement",
-        "business_management",
-      ].join(",");
+      const statePayload = JSON.stringify({ companyId, userId: user.id, timestamp: Date.now() });
 
-      const state = JSON.stringify({ companyId, userId: user.id });
-      const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(
-        redirectUri
-      )}&scope=${scopes}&state=${encodeURIComponent(state)}&response_type=code`;
+      if (provider === "INSTAGRAM") {
+        // Escopos modernos do Instagram Login for Business
+        const igScopes = [
+          "instagram_business_basic",
+          "instagram_business_manage_messages",
+          "instagram_business_manage_comments",
+          "instagram_business_content_publish",
+        ].join(",");
 
-      return new Response(JSON.stringify({ success: true, authUrl }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+        const authUrl = `https://www.instagram.com/oauth/authorize?enable_fb_login=0&force_authentication=1&client_id=${instagramAppId}&redirect_uri=${encodeURIComponent(
+          redirectUri
+        )}&response_type=code&scope=${igScopes}&state=${encodeURIComponent(statePayload)}`;
+
+        return new Response(JSON.stringify({ success: true, authUrl, provider: "INSTAGRAM" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } else {
+        // Fallback legado via Facebook Login com Páginas
+        const fbScopes = [
+          "instagram_basic",
+          "instagram_content_publish",
+          "pages_show_list",
+          "pages_read_engagement",
+          "business_management",
+        ].join(",");
+
+        const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${metaAppId}&redirect_uri=${encodeURIComponent(
+          redirectUri
+        )}&scope=${fbScopes}&state=${encodeURIComponent(statePayload)}&response_type=code`;
+
+        return new Response(JSON.stringify({ success: true, authUrl, provider: "FACEBOOK" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
-    // Action 2: Exchange Code for Access Tokens & Register Instagram Business Accounts
+    // ==========================================
+    // ACTION 2: Exchange Code for Long-Lived Token & Register Accounts
+    // ==========================================
     if (action === "exchange-code") {
       if (!code || !redirectUri) throw new Error("Code and redirectUri are required");
 
-      // 1. Get short-lived token
-      const tokenUrl = `https://graph.facebook.com/v19.0/oauth/access_token?client_id=${appId}&redirect_uri=${encodeURIComponent(
-        redirectUri
-      )}&client_secret=${appSecret}&code=${code}`;
-
-      const tokenRes = await fetch(tokenUrl);
-      const tokenData = await tokenRes.json();
-
-      if (tokenData.error) {
-        throw new Error(`Meta OAuth Error: ${tokenData.error.message}`);
+      // Validar state para proteção CSRF
+      if (state) {
+        try {
+          const parsedState = typeof state === "string" ? JSON.parse(state) : state;
+          if (parsedState.companyId && parsedState.companyId !== companyId) {
+            throw new Error("CSRF check failed: company mismatch");
+          }
+        } catch (e: any) {
+          console.warn("[OAuth] State parsing warning:", e.message);
+        }
       }
-
-      const shortLivedToken = tokenData.access_token;
-
-      // 2. Exchange for 60-day long-lived token
-      const longLivedUrl = `https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${shortLivedToken}`;
-      const longLivedRes = await fetch(longLivedUrl);
-      const longLivedData = await longLivedRes.json();
-
-      const accessToken = longLivedData.access_token || shortLivedToken;
-      const expiresInSeconds = longLivedData.expires_in || 5184000; // 60 days default
-      const tokenExpiresAt = new Date(Date.now() + expiresInSeconds * 1000).toISOString();
-
-      // 3. Fetch Facebook Pages to find linked Instagram Business Accounts
-      const pagesUrl = `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,name,profile_picture_url}&access_token=${accessToken}`;
-      const pagesRes = await fetch(pagesUrl);
-      const pagesData = await pagesRes.json();
 
       const connectedAccounts = [];
 
-      if (pagesData.data && Array.isArray(pagesData.data)) {
-        for (const page of pagesData.data) {
-          if (page.instagram_business_account) {
-            const igAcc = page.instagram_business_account;
+      // Tentativa 1: Fluxo Direto do Instagram Login
+      let isInstagramDirect = false;
+      try {
+        const formData = new URLSearchParams();
+        formData.append("client_id", instagramAppId);
+        formData.append("client_secret", instagramAppSecret);
+        formData.append("grant_type", "authorization_code");
+        formData.append("redirect_uri", redirectUri);
+        formData.append("code", code);
 
-            // Upsert into criafy_instagram_accounts
-            const { data: inserted, error: insertErr } = await adminClient
-              .from("criafy_instagram_accounts")
-              .upsert(
-                {
-                  company_id: companyId,
-                  instagram_account_id: igAcc.id,
-                  username: igAcc.username,
-                  name: igAcc.name || page.name,
-                  profile_picture_url: igAcc.profile_picture_url,
-                  access_token: accessToken,
-                  token_expires_at: tokenExpiresAt,
-                  connection_status: "CONNECTED",
-                  error_message: null,
-                  created_by: user.id,
-                  updated_at: new Date().toISOString(),
-                },
-                { onConflict: "company_id, instagram_account_id" }
-              )
-              .select()
-              .single();
+        const tokenRes = await fetch("https://api.instagram.com/oauth/access_token", {
+          method: "POST",
+          body: formData,
+        });
 
-            if (!insertErr && inserted) {
-              connectedAccounts.push(inserted);
+        const tokenData = await tokenRes.json();
+
+        if (tokenData.access_token && tokenData.user_id) {
+          isInstagramDirect = true;
+          const shortLivedToken = tokenData.access_token;
+          const igUserId = String(tokenData.user_id);
+
+          // Troca por Long-Lived Token (60 dias) no endpoint do Instagram
+          let longLivedToken = shortLivedToken;
+          let expiresInSeconds = 5184000;
+
+          if (instagramAppSecret) {
+            try {
+              const longRes = await fetch(
+                `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${instagramAppSecret}&access_token=${shortLivedToken}`
+              );
+              const longData = await longRes.json();
+              if (longData.access_token) {
+                longLivedToken = longData.access_token;
+                expiresInSeconds = longData.expires_in || 5184000;
+              }
+            } catch (_) {}
+          }
+
+          const tokenExpiresAt = new Date(Date.now() + expiresInSeconds * 1000).toISOString();
+
+          // Buscar dados do perfil do Instagram
+          let username = `ig_${igUserId}`;
+          let name = null;
+          let profilePic = null;
+
+          try {
+            const profileRes = await fetch(
+              `https://graph.instagram.com/v19.0/me?fields=user_id,username,name,profile_picture_url&access_token=${longLivedToken}`
+            );
+            const profileData = await profileRes.json();
+            if (profileData.username) {
+              username = profileData.username;
+              name = profileData.name || profileData.username;
+              profilePic = profileData.profile_picture_url || null;
+            }
+          } catch (_) {}
+
+          // Salvar ou atualizar na tabela criafy_instagram_accounts
+          const { data: inserted, error: insertErr } = await adminClient
+            .from("criafy_instagram_accounts")
+            .upsert(
+              {
+                company_id: companyId,
+                instagram_account_id: igUserId,
+                instagram_user_id: igUserId,
+                username,
+                name: name || username,
+                profile_picture_url: profilePic,
+                account_type: "INSTAGRAM_BUSINESS",
+                access_token: longLivedToken,
+                token_expires_at: tokenExpiresAt,
+                connection_status: "CONNECTED",
+                error_message: null,
+                created_by: user.id,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "company_id, instagram_account_id" }
+            )
+            .select()
+            .single();
+
+          if (!insertErr && inserted) {
+            connectedAccounts.push(inserted);
+          }
+        }
+      } catch (igErr: any) {
+        console.warn("[OAuth] Fluxo direto Instagram falhou, tentando fallback Facebook:", igErr.message);
+      }
+
+      // Tentativa 2: Fallback para o fluxo do Facebook Login
+      if (!isInstagramDirect && connectedAccounts.length === 0) {
+        const tokenUrl = `https://graph.facebook.com/v19.0/oauth/access_token?client_id=${metaAppId}&redirect_uri=${encodeURIComponent(
+          redirectUri
+        )}&client_secret=${metaAppSecret}&code=${code}`;
+
+        const tokenRes = await fetch(tokenUrl);
+        const tokenData = await tokenRes.json();
+
+        if (tokenData.error) {
+          throw new Error(`Meta OAuth Error: ${tokenData.error.message}`);
+        }
+
+        const shortLivedToken = tokenData.access_token;
+
+        const longLivedUrl = `https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${metaAppId}&client_secret=${metaAppSecret}&fb_exchange_token=${shortLivedToken}`;
+        const longLivedRes = await fetch(longLivedUrl);
+        const longLivedData = await longLivedRes.json();
+
+        const accessToken = longLivedData.access_token || shortLivedToken;
+        const expiresInSeconds = longLivedData.expires_in || 5184000;
+        const tokenExpiresAt = new Date(Date.now() + expiresInSeconds * 1000).toISOString();
+
+        const pagesUrl = `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,name,profile_picture_url}&access_token=${accessToken}`;
+        const pagesRes = await fetch(pagesUrl);
+        const pagesData = await pagesRes.json();
+
+        if (pagesData.data && Array.isArray(pagesData.data)) {
+          for (const page of pagesData.data) {
+            if (page.instagram_business_account) {
+              const igAcc = page.instagram_business_account;
+
+              const { data: inserted, error: insertErr } = await adminClient
+                .from("criafy_instagram_accounts")
+                .upsert(
+                  {
+                    company_id: companyId,
+                    instagram_account_id: igAcc.id,
+                    username: igAcc.username,
+                    name: igAcc.name || page.name,
+                    profile_picture_url: igAcc.profile_picture_url,
+                    access_token: accessToken,
+                    token_expires_at: tokenExpiresAt,
+                    connection_status: "CONNECTED",
+                    error_message: null,
+                    created_by: user.id,
+                    updated_at: new Date().toISOString(),
+                  },
+                  { onConflict: "company_id, instagram_account_id" }
+                )
+                .select()
+                .single();
+
+              if (!insertErr && inserted) {
+                connectedAccounts.push(inserted);
+              }
             }
           }
         }
@@ -149,7 +280,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Action 3: Verify Token Health & Connection Status
+    // ==========================================
+    // ACTION 3: Verify Token Health & Connection Status
+    // ==========================================
     if (action === "check-token-status") {
       if (!accountId) throw new Error("AccountId is required");
 
@@ -173,11 +306,19 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Query Meta Debug Token or Me endpoint
-      const debugRes = await fetch(
-        `https://graph.facebook.com/v19.0/me?access_token=${account.access_token}`
+      // Testar endpoint do Instagram ou Graph
+      let debugRes = await fetch(
+        `https://graph.instagram.com/v19.0/me?access_token=${account.access_token}`
       );
-      const debugData = await debugRes.json();
+      let debugData = await debugRes.json();
+
+      if (debugData.error) {
+        // Fallback Graph Facebook
+        debugRes = await fetch(
+          `https://graph.facebook.com/v19.0/me?access_token=${account.access_token}`
+        );
+        debugData = await debugRes.json();
+      }
 
       let status = "CONNECTED";
       let errorMsg = null;
@@ -202,7 +343,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Action 4: Disconnect Account Token
+    // ==========================================
+    // ACTION 4: Disconnect Account Token
+    // ==========================================
     if (action === "disconnect-account") {
       if (!accountId) throw new Error("AccountId is required");
 

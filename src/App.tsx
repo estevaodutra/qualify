@@ -72,6 +72,7 @@ import AdminPlaceholder from "./components/admin/AdminPlaceholder";
 import AdminSettings from "./pages/admin/AdminSettings";
 import AdminSystemWebhooks from "./pages/admin/AdminSystemWebhooks";
 import AdminUras from "./pages/admin/AdminUras";
+import AdminCriafy from "./pages/admin/AdminCriafy";
 
 const App = () => {
   const [queryClient] = useState(() => new QueryClient());
@@ -237,6 +238,7 @@ const App = () => {
                        <Route path="configuracoes" element={<AdminSettings />} />
                       <Route path="notificacoes" element={<AdminSystemWebhooks />} />
                       <Route path="uras" element={<AdminUras />} />
+                      <Route path="criafy" element={<AdminCriafy />} />
                     </Route>
 
                     <Route path="*" element={<NotFound />} />

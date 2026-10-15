@@ -20,6 +20,7 @@ import {
   Zap,
   Smartphone,
   Bell,
+  Sparkles,
 } from "lucide-react";
 import { ImpersonationBanner } from "./ImpersonationBanner";
 import { Button } from "@/components/ui/button";
@@ -43,6 +44,7 @@ const mainItems = [
   { title: "Empresas", url: "/admin/empresas", icon: Building2 },
   { title: "Usuários", url: "/admin/usuarios", icon: Users },
   { title: "Instâncias", url: "/admin/instancias", icon: Smartphone },
+  { title: "Criafy (Meta URLs)", url: "/admin/criafy", icon: Sparkles },
 ];
 
 const financialItems = [
