@@ -1,6 +1,6 @@
 {
-  "commit": "277b7e6c6a7fe1a740973297cc6f5932478bba71",
-  "shortCommit": "277b7e6",
-  "message": "fix(chat): sync failed messages to chat and show error tooltip on hover",
-  "builtAt": "2026-10-15T14:50:11.508Z"
+  "commit": "ae4fe0cf118c1395a65178b862afef5b58a46cbd",
+  "shortCommit": "ae4fe0c",
+  "message": "fix(workflows): prioritize selectedGroupJids over legacy campaign_groups and add orphan cleanup to group modal",
+  "builtAt": "2026-10-15T15:50:56.084Z"
 }

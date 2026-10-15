@@ -21,7 +21,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import {
   Filter, Bookmark, Sparkles, RotateCcw, Check, Trash2, Edit2, Plus,
-  ChevronRight, AlertTriangle, Layers, Calendar, User, Tag as TagIcon, Kanban, Radio
+  ChevronRight, AlertTriangle, Layers, Calendar, User, Tag as TagIcon, Kanban, Radio, MessageSquare, Users
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -240,7 +240,62 @@ export default function ChatFilterDrawer({
           </div>
 
           {/* Accordion Categories */}
-          <Accordion type="multiple" defaultValue={["status", "operators", "instances"]} className="space-y-3">
+          <Accordion type="multiple" defaultValue={["type", "status", "operators", "instances"]} className="space-y-3">
+            {/* 0. Tipo de Conversa */}
+            <AccordionItem value="type" className="border border-border/40 rounded-2xl px-3 bg-card/20">
+              <AccordionTrigger className="text-xs font-bold hover:no-underline py-3">
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-purple-600" />
+                  <span>Tipo de Conversa</span>
+                  {draftFilters.conversationType && draftFilters.conversationType !== "all" && (
+                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5 font-bold bg-purple-500/20 text-purple-600">
+                      {draftFilters.conversationType === "group" ? "Grupos" : "Leads"}
+                    </Badge>
+                  )}
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="space-y-2 pt-1 pb-3 text-xs">
+                <div className="grid grid-cols-3 gap-1.5 bg-muted/40 p-1 rounded-xl border border-border/30">
+                  <button
+                    type="button"
+                    onClick={() => setDraftFilters({ ...draftFilters, conversationType: "all" })}
+                    className={cn(
+                      "py-1.5 px-2 rounded-lg text-xs font-bold transition-all text-center",
+                      (draftFilters.conversationType || "all") === "all"
+                        ? "bg-background text-primary shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    Todas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDraftFilters({ ...draftFilters, conversationType: "individual" })}
+                    className={cn(
+                      "py-1.5 px-2 rounded-lg text-xs font-bold transition-all text-center",
+                      draftFilters.conversationType === "individual"
+                        ? "bg-background text-primary shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    Leads
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDraftFilters({ ...draftFilters, conversationType: "group" })}
+                    className={cn(
+                      "py-1.5 px-2 rounded-lg text-xs font-bold transition-all text-center",
+                      draftFilters.conversationType === "group"
+                        ? "bg-background text-purple-600 shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    Grupos
+                  </button>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
             {/* 1. Status da Conversa */}
             <AccordionItem value="status" className="border border-border/40 rounded-2xl px-3 bg-card/20">
               <AccordionTrigger className="text-xs font-bold hover:no-underline py-3">

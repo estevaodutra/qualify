@@ -124,11 +124,13 @@ async function saveChatConversation(supabase: any, convData: any): Promise<boole
       updated_at: new Date().toISOString(),
     };
 
+    const cleanDigits = String(convData.contact_phone || "").replace("@g.us", "").replace(/\D/g, "");
+
     const { data: existing } = await supabase
       .from("chat_conversations")
       .select("id")
       .eq("company_id", convData.company_id)
-      .eq("contact_name", cleanData.contact_name)
+      .or(`contact_phone.eq.${cleanData.contact_phone},contact_phone.eq.${cleanDigits},contact_phone.eq.${cleanDigits}-group`)
       .maybeSingle();
 
     if (existing?.id) {
@@ -137,7 +139,9 @@ async function saveChatConversation(supabase: any, convData: any): Promise<boole
         .update({
           instance_id: cleanData.instance_id,
           user_id: cleanData.user_id,
-          last_message_at: cleanData.last_message_at,
+          contact_name: cleanData.contact_name,
+          contact_phone: cleanData.contact_phone,
+          is_archived: false,
           updated_at: cleanData.updated_at,
         })
         .eq("id", existing.id);
@@ -472,7 +476,7 @@ Deno.serve(async (req) => {
         company_id: companyId,
         user_id: targetUserId,
         instance_id: instance.id,
-        contact_name: groupJid,
+        contact_name: subject || groupJid,
         contact_phone: groupJid,
       });
 

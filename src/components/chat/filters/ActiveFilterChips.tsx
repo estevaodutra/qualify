@@ -208,6 +208,20 @@ export default function ActiveFilterChips({
       });
     }
 
+    if (filters.conversationType === "group") {
+      list.push({
+        id: "type-group",
+        label: "Tipo: Grupos",
+        remove: () => onUpdateFilters({ ...filters, conversationType: "all" })
+      });
+    } else if (filters.conversationType === "individual") {
+      list.push({
+        id: "type-individual",
+        label: "Tipo: Leads",
+        remove: () => onUpdateFilters({ ...filters, conversationType: "all" })
+      });
+    }
+
     return list;
   }, [filters, operators, instances, pipelines, stages, onUpdateFilters]);
 

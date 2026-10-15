@@ -148,16 +148,30 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Fetch lead details
-    const { data: lead, error: leadErr } = await adminClient
-      .from("leads")
-      .select("id, phone, name")
-      .eq("id", conv.lead_id)
-      .single();
+    // Fetch lead details or fallback to conversation phone
+    let targetPhone = "";
+    let targetLeadId = conv.lead_id || null;
 
-    if (leadErr || !lead) {
+    if (conv.lead_id) {
+      const { data: lead } = await adminClient
+        .from("leads")
+        .select("id, phone, name")
+        .eq("id", conv.lead_id)
+        .maybeSingle();
+
+      if (lead?.phone) {
+        targetPhone = lead.phone;
+        targetLeadId = lead.id;
+      }
+    }
+
+    if (!targetPhone && conv.contact_phone) {
+      targetPhone = conv.contact_phone;
+    }
+
+    if (!targetPhone) {
       return new Response(
-        JSON.stringify({ error: "Lead details not found" }),
+        JSON.stringify({ error: "Lead details or contact phone not found" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -168,14 +182,14 @@ Deno.serve(async (req) => {
       .insert({
         company_id: conv.company_id,
         instance_id: conv.instance_id,
-        phone: lead.phone,
+        phone: targetPhone,
         message_type: mediaUrl ? (mediaType || "image") : "text",
         body,
         media_url: mediaUrl || null,
         media_type: mediaType || null,
         source_type: "chat",
         conversation_id: conversationId,
-        lead_id: lead.id,
+        lead_id: targetLeadId,
         priority: 100, // Chat priority
         status: "pending",
       })

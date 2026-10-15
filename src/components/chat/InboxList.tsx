@@ -98,7 +98,7 @@ export default function InboxList({
   };
 
   // Group conversations by lead_id so each lead appears ONLY ONCE in the Inbox list.
-  // The conversation with the latest last_message_at is displayed as primary.
+  // Group conversations are kept unique by their JID so different groups are never collapsed.
   const sortedConversations = useMemo(() => {
     const map = new Map<string, {
       primary: ChatConversation;
@@ -107,7 +107,14 @@ export default function InboxList({
     }>();
 
     conversations.forEach((conv) => {
-      const key = conv.lead_id || conv.lead?.phone || conv.id;
+      const p = conv.lead?.phone || conv.contact_phone || "";
+      const c = (conv.lead?.custom_fields as Record<string, any>) || {};
+      const isGrp = p.length > 15 || p.includes("@g.us") || p.includes("-group") || c.is_group === true;
+
+      const key = isGrp
+        ? (p.includes("@g.us") || p.includes("-group") || p.startsWith("1203") ? p.toLowerCase() : conv.id)
+        : (conv.lead_id || conv.lead?.phone || conv.id);
+
       const existing = map.get(key);
 
       if (!existing) {
@@ -147,6 +154,22 @@ export default function InboxList({
     });
   }, [conversations, sortBy]);
 
+  // Compute total counts for type tabs
+  const { totalGroupsCount, totalIndividualCount } = useMemo(() => {
+    let groups = 0;
+    let individual = 0;
+    conversations.forEach((conv) => {
+      const p = conv.lead?.phone || conv.contact_phone || "";
+      const c = (conv.lead?.custom_fields as Record<string, any>) || {};
+      const isGrp = p.length > 15 || p.includes("@g.us") || p.includes("-group") || c.is_group === true;
+      if (isGrp) groups++;
+      else individual++;
+    });
+    return { totalGroupsCount: groups, totalIndividualCount: individual };
+  }, [conversations]);
+
+  const currentConvType = (filters as AdvancedChatFilters).conversationType || "all";
+
   return (
     <div className="w-full h-full flex flex-col overflow-hidden bg-card/10 border-r border-border/40">
       {/* Header Search & Sort */}
@@ -168,6 +191,54 @@ export default function InboxList({
           open={isManagerOpen}
           onOpenChange={setIsManagerOpen}
         />
+
+        {/* Conversation Type Filter: Todas | Leads | Grupos */}
+        <div className="flex bg-muted/40 p-1 rounded-xl gap-1 border border-border/30">
+          <button
+            type="button"
+            onClick={() => setFilters({ ...filters, conversationType: "all" } as any)}
+            className={cn(
+              "flex-1 py-1 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
+              currentConvType === "all"
+                ? "bg-background text-primary shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+            <span>Todas</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilters({ ...filters, conversationType: "individual" } as any)}
+            className={cn(
+              "flex-1 py-1 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
+              currentConvType === "individual"
+                ? "bg-background text-primary shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <User className="h-3.5 w-3.5" />
+            <span>Leads</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilters({ ...filters, conversationType: "group" } as any)}
+            className={cn(
+              "flex-1 py-1 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer relative",
+              currentConvType === "group"
+                ? "bg-background text-purple-600 shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Users className="h-3.5 w-3.5 text-purple-600" />
+            <span>Grupos</span>
+            {totalGroupsCount > 0 && (
+              <span className="text-[10px] bg-purple-500/20 text-purple-600 px-1.5 py-0.2 rounded-full font-extrabold ml-0.5">
+                {totalGroupsCount}
+              </span>
+            )}
+          </button>
+        </div>
         
         {/* View Tabs: Inbox vs Archived (Only rendered if there are archived conversations or currently viewing archived) */}
         {(archivedCount > 0 || (filters as AdvancedChatFilters).archiveMode === "archived_only") && (

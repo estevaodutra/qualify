@@ -190,6 +190,13 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
           }
         }
 
+        // 0.1 Conversation Type (All / Individual Leads / Groups)
+        if (advFilters?.conversationType === "group") {
+          query = query.or("contact_phone.ilike.%@g.us%,contact_phone.ilike.%-group%,contact_phone.ilike.1203%");
+        } else if (advFilters?.conversationType === "individual") {
+          query = query.not("contact_phone", "ilike", "%@g.us%").not("contact_phone", "ilike", "%-group%").not("contact_phone", "ilike", "1203%");
+        }
+
         // 1. Statuses (Multi-select / Legacy)
         if (advFilters?.statuses && advFilters.statuses.length > 0) {
           const hasUnread = advFilters.statuses.includes("unread");
@@ -471,16 +478,27 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
     }));
 
     const archiveMode = (filters as AdvancedChatFilters)?.archiveMode || "active_only";
+    const convType = (filters as AdvancedChatFilters)?.conversationType || "all";
 
     const filtered = mapped.filter((c) => {
       if (archiveMode === "archived_only") {
-        return c.is_archived === true;
+        if (!c.is_archived) return false;
+      } else if (archiveMode === "all") {
+        // do not filter by is_archived
+      } else {
+        // default: active_only
+        if (c.is_archived) return false;
       }
-      if (archiveMode === "all") {
-        return true;
+
+      if (convType !== "all") {
+        const p = c.lead?.phone || c.contact_phone || "";
+        const customF = (c.lead?.custom_fields as Record<string, any>) || {};
+        const isGrp = p.length > 15 || p.includes("@g.us") || p.includes("-group") || customF.is_group === true;
+        if (convType === "group" && !isGrp) return false;
+        if (convType === "individual" && isGrp) return false;
       }
-      // default: active_only
-      return !c.is_archived;
+
+      return true;
     });
 
     return filtered.sort((a, b) => {
@@ -489,6 +507,137 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
       return 0;
     });
   }, [rawConversations, pinnedSet, activeCompanyId, filters]);
+
+  // Auto-sync CRM groups into chat_conversations
+  useQuery({
+    queryKey: ["chat-auto-sync-crm-groups", activeCompanyId],
+    queryFn: async () => {
+      if (!activeCompanyId) return { synced: 0 };
+      try {
+        const { data: gcList } = await supabase
+          .from("group_campaigns")
+          .select("id, name, group_name, group_jid, instance_id, group_description, group_photo_url, config")
+          .eq("company_id", activeCompanyId)
+          .not("group_jid", "is", null);
+
+        if (!gcList || gcList.length === 0) return { synced: 0 };
+
+        const { data: existingConvs } = await supabase
+          .from("chat_conversations")
+          .select("id, contact_name, contact_phone, lead_id, instance_id, is_archived")
+          .eq("company_id", activeCompanyId);
+
+        const convPhoneMap = new Map<string, any>();
+        (existingConvs || []).forEach((c) => {
+          if (c.contact_phone) {
+            const digits = c.contact_phone.replace("@g.us", "").replace(/\D/g, "");
+            convPhoneMap.set(c.contact_phone.toLowerCase(), c);
+            if (digits) convPhoneMap.set(digits, c);
+          }
+        });
+
+        let changesMade = false;
+
+        for (const gc of gcList) {
+          const rawJid = gc.group_jid;
+          if (!rawJid) continue;
+          let validJid = rawJid.trim();
+          if (validJid.endsWith("-group")) validJid = validJid.replace(/-group$/, "@g.us");
+          if (!validJid.includes("@g.us")) {
+            const d = validJid.replace(/\D/g, "");
+            if (d.startsWith("1203") || d.length >= 15) validJid = `${d}@g.us`;
+          }
+          if (!validJid.includes("@g.us")) continue;
+
+          const cleanDigits = validJid.replace("@g.us", "").replace(/\D/g, "");
+          const groupName = gc.group_name || gc.name || "Grupo WhatsApp";
+          const targetInstanceId = gc.instance_id || null;
+
+          const existingConv = convPhoneMap.get(validJid.toLowerCase()) || convPhoneMap.get(cleanDigits);
+
+          if (!existingConv) {
+            let leadId: string | null = null;
+            const { data: exLead } = await supabase
+              .from("leads")
+              .select("id")
+              .eq("company_id", activeCompanyId)
+              .in("phone", [cleanDigits, validJid])
+              .maybeSingle();
+
+            if (exLead?.id) {
+              leadId = exLead.id;
+            } else {
+              const { data: newLead } = await supabase
+                .from("leads")
+                .insert({
+                  company_id: activeCompanyId,
+                  name: groupName,
+                  phone: cleanDigits,
+                  status: "active",
+                  custom_fields: {
+                    is_group: true,
+                    group_jid: validJid,
+                    description: gc.group_description,
+                    pictureUrl: gc.group_photo_url,
+                  },
+                })
+                .select("id")
+                .maybeSingle();
+              if (newLead?.id) leadId = newLead.id;
+            }
+
+            await supabase.from("chat_conversations").insert({
+              company_id: activeCompanyId,
+              instance_id: targetInstanceId,
+              lead_id: leadId,
+              contact_phone: validJid,
+              contact_name: groupName,
+              status: "open",
+              is_archived: false,
+              unread_count: 0,
+              last_message_preview: "Grupo sincronizado do CRM",
+              last_message_at: new Date().toISOString(),
+            });
+
+            changesMade = true;
+          } else {
+            const updates: Record<string, any> = {};
+            if (existingConv.contact_name === "Grupo" || !existingConv.contact_name) {
+              updates.contact_name = groupName;
+            }
+            if (existingConv.is_archived) {
+              updates.is_archived = false;
+            }
+            if (!existingConv.instance_id && targetInstanceId) {
+              updates.instance_id = targetInstanceId;
+            }
+            if (existingConv.contact_phone !== validJid) {
+              updates.contact_phone = validJid;
+            }
+
+            if (Object.keys(updates).length > 0) {
+              updates.updated_at = new Date().toISOString();
+              await supabase
+                .from("chat_conversations")
+                .update(updates)
+                .eq("id", existingConv.id);
+              changesMade = true;
+            }
+          }
+        }
+
+        if (changesMade) {
+          queryClient.invalidateQueries({ queryKey: ["chat-conversations", activeCompanyId] });
+        }
+        return { synced: gcList.length };
+      } catch (err) {
+        console.warn("[useChat] Error auto-syncing CRM groups:", err);
+        return { synced: 0 };
+      }
+    },
+    enabled: !!activeCompanyId && !!user,
+    staleTime: 60000,
+  });
 
 
   // 2. Fetch Pipeline Stages

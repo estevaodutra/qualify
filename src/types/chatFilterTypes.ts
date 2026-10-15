@@ -72,10 +72,13 @@ export interface AdvancedChatFilters {
   // 12. Arquivamento
   archiveMode?: "active_only" | "archived_only" | "all";
 
-  // 13. Ordenação
+  // 13. Tipo de Conversa (Todas / Leads Privados / Grupos)
+  conversationType?: "all" | "individual" | "group";
+
+  // 14. Ordenação
   sortBy?: SortByOption;
 
-  // 14. Busca por Texto (Preservada)
+  // 15. Busca por Texto (Preservada)
   search?: string;
 }
 
@@ -93,6 +96,7 @@ export const DEFAULT_ADVANCED_CHAT_FILTERS: AdvancedChatFilters = {
   operatorPresence: "all",
   unreadMode: "all",
   archiveMode: "active_only",
+  conversationType: "all",
   sortBy: "last_message_desc",
   search: "",
 };

@@ -442,6 +442,94 @@ export function useGroups(filters: GroupFilters = {}) {
             console.warn("Client group_campaigns error:", e);
           }
 
+          // Immediately sync group into leads and chat_conversations so it is ready in Chat
+          try {
+            const cleanDigits = jid.replace("@g.us", "").replace(/\D/g, "");
+            
+            // 1. Lead for group
+            const { data: existingLead } = await supabase
+              .from("leads")
+              .select("id, custom_fields")
+              .eq("company_id", activeCompanyId)
+              .in("phone", [cleanDigits, jid])
+              .maybeSingle();
+
+            const groupCustomPayload = {
+              is_group: true,
+              group_jid: jid,
+              description: groupDesc,
+              pictureUrl: g.pictureUrl || null,
+              participants_count: participantsCount,
+              last_synced_at: new Date().toISOString(),
+            };
+
+            let leadId: string | null = existingLead?.id || null;
+
+            if (existingLead) {
+              await supabase
+                .from("leads")
+                .update({
+                  name: groupName,
+                  custom_fields: { ...(existingLead.custom_fields || {}), ...groupCustomPayload },
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", existingLead.id);
+            } else {
+              const { data: newLead } = await supabase
+                .from("leads")
+                .insert({
+                  company_id: activeCompanyId,
+                  user_id: targetUserId,
+                  name: groupName,
+                  phone: cleanDigits,
+                  status: "active",
+                  custom_fields: groupCustomPayload,
+                })
+                .select("id")
+                .maybeSingle();
+              if (newLead?.id) leadId = newLead.id;
+            }
+
+            // 2. Chat conversation for group
+            const { data: existingConv } = await supabase
+              .from("chat_conversations")
+              .select("id, contact_name, is_archived, instance_id")
+              .eq("company_id", activeCompanyId)
+              .in("contact_phone", [jid, cleanDigits, `${cleanDigits}-group`])
+              .maybeSingle();
+
+            if (existingConv?.id) {
+              await supabase
+                .from("chat_conversations")
+                .update({
+                  contact_name: groupName,
+                  contact_phone: jid,
+                  lead_id: leadId,
+                  instance_id: targetInstanceId || existingConv.instance_id,
+                  is_archived: false,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", existingConv.id);
+            } else {
+              await supabase
+                .from("chat_conversations")
+                .insert({
+                  company_id: activeCompanyId,
+                  instance_id: targetInstanceId,
+                  lead_id: leadId,
+                  contact_phone: jid,
+                  contact_name: groupName,
+                  status: "open",
+                  is_archived: false,
+                  unread_count: 0,
+                  last_message_preview: "Grupo registrado no CRM",
+                  last_message_at: new Date().toISOString(),
+                });
+            }
+          } catch (chatSyncErr) {
+            console.warn("Client chat_conversations sync error:", chatSyncErr);
+          }
+
           // If target folder is specified, assign group to folder with correct Postgres constraint
           if (savedCampaignId && targetFolderId) {
             try {
