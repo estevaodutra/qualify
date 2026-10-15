@@ -439,6 +439,24 @@ export function useLeadExecutions({ leadId, leadPhone }: UseLeadExecutionsOption
     },
   });
 
+  // Skip / Advance execution mutation
+  const skipMutation = useMutation({
+    mutationFn: async (executionId: string) => {
+      const { data, error } = await supabase.functions.invoke("manage-workflow-execution", {
+        body: { action: "skip", executionId },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success("Avançado para a próxima etapa!");
+      queryClient.invalidateQueries({ queryKey });
+    },
+    onError: (err: any) => {
+      toast.error(`Erro ao avançar execução: ${err.message || err}`);
+    },
+  });
+
   // Filtered lists (strictly enforcing 1 active execution per workflow)
   const { activeExecutions, historyExecutions } = useMemo(() => {
     const rawActive: LeadExecutionItem[] = [];
@@ -501,5 +519,7 @@ export function useLeadExecutions({ leadId, leadPhone }: UseLeadExecutionsOption
     isStopping: stopMutation.isPending,
     resumeExecution: resumeMutation.mutate,
     isResuming: resumeMutation.isPending,
+    skipExecution: skipMutation.mutate,
+    isSkipping: skipMutation.isPending,
   };
 }

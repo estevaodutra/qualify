@@ -1,6 +1,6 @@
 {
-  "commit": "ff60b5820048f8ed265f966574df3b2ea1a4bb82",
-  "shortCommit": "ff60b58",
-  "message": "feat(executions): add stop workflow execution button and cancellation support",
-  "builtAt": "2026-10-15T16:30:27.126Z"
+  "commit": "HEAD",
+  "shortCommit": "latest",
+  "message": "fix(workflows): fix user input resumption and add skip button to lead executions",
+  "builtAt": "2026-10-15T16:50:00.000Z"
 }

@@ -127,7 +127,9 @@ serve(async (req) => {
 
     if (action === "resume") {
       const activeExec = seqExec || wfExec;
-      const isDispatch = (activeExec.trigger_context || activeExec.trigger_payload)?.campaignType === "dispatch";
+      const trigCtx = (activeExec.trigger_context || activeExec.trigger_payload || {}) as Record<string, any>;
+      const isDispatch = trigCtx?.campaignType === "dispatch";
+      const respondentPhone = trigCtx.respondentPhone || trigCtx.contactPhone || trigCtx.phone || "";
 
       // 1. Mark as running
       if (seqExec) {
@@ -136,7 +138,7 @@ serve(async (req) => {
           .update({
             status: "running",
             trigger_context: {
-              ...(seqExec.trigger_context || {}),
+              ...trigCtx,
               manually_paused: false,
             },
             updated_at: new Date().toISOString(),
@@ -150,7 +152,7 @@ serve(async (req) => {
           .update({
             status: "running",
             trigger_payload: {
-              ...(wfExec.trigger_payload || {}),
+              ...trigCtx,
               manually_paused: false,
             },
             updated_at: new Date().toISOString(),
@@ -167,37 +169,45 @@ serve(async (req) => {
         ? {
             campaignId: activeExec.campaign_id,
             sequenceId: activeExec.sequence_id,
-            contactPhone: (activeExec.trigger_context || activeExec.trigger_payload)?.contactPhone || "",
-            contactName: (activeExec.trigger_context || activeExec.trigger_payload)?.contactName || "",
-            contactId: (activeExec.trigger_context || activeExec.trigger_payload)?.contactId || undefined,
-            customFields: (activeExec.trigger_context || activeExec.trigger_payload)?.customFields || {},
+            contactPhone: respondentPhone,
+            contactName: trigCtx.contactName || trigCtx.respondentName || "",
+            contactId: trigCtx.contactId || trigCtx.leadId || undefined,
+            customFields: trigCtx.customFields || {},
             executionId: activeExec.id,
             startFromStepIndex: activeExec.current_node_index ?? 0,
           }
         : {
-            campaignId: activeExec.campaign_id,
+            campaignId: activeExec.campaign_id || activeExec.sequence_id,
             sequenceId: activeExec.sequence_id,
             messageId: activeExec.message_id ?? null,
-            triggerContext: {
-              ...(activeExec.trigger_context || activeExec.trigger_payload || {}),
-              isResumedExecution: true,
-              manually_paused: false,
-            },
             executionId: activeExec.id,
+            resumedExecution: true,
             startFromNodeIndex: activeExec.current_node_index ?? 0,
-            startFromNodeId: activeExec.current_node_id || (activeExec.trigger_context || activeExec.trigger_payload)?.resumeNodeId,
+            startFromNodeId: activeExec.current_node_id || trigCtx.resumeNodeId,
+            targetPhones: respondentPhone ? [respondentPhone] : [],
+            triggerContext: {
+              ...trigCtx,
+              isResumedExecution: true,
+              resumedExecution: true,
+              manually_paused: false,
+              sendPrivate: !trigCtx.groupJid || trigCtx.destinationMode !== "groups",
+            },
           };
 
-      fetch(fetchUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${supabaseServiceKey}`,
-        },
-        body: JSON.stringify(fetchBody),
-      }).catch((fetchErr) => {
+      try {
+        const resumeRes = await fetch(fetchUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify(fetchBody),
+        });
+        const resumeResText = await resumeRes.text();
+        console.log(`[ManageWorkflowExecution] Resume worker response (${resumeRes.status}):`, resumeResText);
+      } catch (fetchErr) {
         console.error("[ManageWorkflowExecution] Error triggering resume worker:", fetchErr);
-      });
+      }
 
       return new Response(
         JSON.stringify({ success: true, message: "Execução retomada com sucesso.", status: "running" }),
@@ -205,8 +215,168 @@ serve(async (req) => {
       );
     }
 
+    if (action === "skip" || action === "advance") {
+      const activeExec = seqExec || wfExec;
+      const trigCtx = (activeExec.trigger_context || activeExec.trigger_payload || {}) as Record<string, any>;
+      const isDispatch = trigCtx?.campaignType === "dispatch";
+      const respondentPhone = trigCtx.respondentPhone || trigCtx.contactPhone || trigCtx.phone || "";
+      const currentWaitingNodeId = trigCtx.waitingNodeId || activeExec.current_node_id;
+
+      // 1. Determine next node (targetNodeId)
+      let targetNodeId: string | null = trigCtx.resumeNodeId || null;
+
+      // If we don't have resumeNodeId, or if it's a delay node, query sequence_connections
+      if (!targetNodeId || trigCtx.waitingType === "delay") {
+        const fromNodeId = (trigCtx.waitingType === "delay" && trigCtx.delayNodeId)
+          ? trigCtx.delayNodeId
+          : (currentWaitingNodeId || targetNodeId);
+
+        if (fromNodeId) {
+          const { data: conns } = await supabase
+            .from("sequence_connections")
+            .select("target_node_id, condition_path")
+            .eq("sequence_id", activeExec.sequence_id)
+            .eq("source_node_id", fromNodeId);
+
+          const successConn = (conns || []).find((c: any) =>
+            c.condition_path !== "timeout" && c.condition_path !== "error"
+          ) || (conns || [])[0];
+
+          if (successConn?.target_node_id) {
+            targetNodeId = successConn.target_node_id;
+          }
+        }
+      }
+
+      // Fallback: check next node by order in sequence_nodes
+      if (!targetNodeId && currentWaitingNodeId) {
+        const { data: nodes } = await supabase
+          .from("sequence_nodes")
+          .select("id, node_order")
+          .eq("sequence_id", activeExec.sequence_id)
+          .order("node_order", { ascending: true });
+
+        if (nodes && nodes.length > 0) {
+          const currIdx = nodes.findIndex((n: any) => n.id === currentWaitingNodeId);
+          if (currIdx >= 0 && currIdx + 1 < nodes.length) {
+            targetNodeId = nodes[currIdx + 1].id;
+          }
+        }
+      }
+
+      console.log(`[ManageWorkflowExecution] Skipping execution ${executionId} from node ${currentWaitingNodeId} to node ${targetNodeId}`);
+
+      // 2. Mark any pending user inputs waiting for this execution as skipped
+      await supabase
+        .from("workflow_user_inputs")
+        .update({
+          status: "skipped",
+          response_text: "Avançado manualmente pelo operador",
+          answered_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("execution_id", executionId)
+        .in("status", ["waiting", "pending"]);
+
+      // 3. Mark sequence_executions & workflow_executions as running
+      const now = new Date().toISOString();
+      if (seqExec) {
+        await supabase
+          .from("sequence_executions")
+          .update({
+            status: "running",
+            current_node_id: targetNodeId,
+            resume_at: null,
+            trigger_context: {
+              ...trigCtx,
+              manually_paused: false,
+              skippedNodeId: currentWaitingNodeId,
+              resumeNodeId: targetNodeId,
+            },
+            updated_at: now,
+          })
+          .eq("id", executionId);
+      }
+
+      if (wfExec) {
+        await supabase
+          .from("workflow_executions")
+          .update({
+            status: "running",
+            trigger_payload: {
+              ...trigCtx,
+              manually_paused: false,
+              skippedNodeId: currentWaitingNodeId,
+              resumeNodeId: targetNodeId,
+            },
+            updated_at: now,
+          })
+          .eq("id", executionId);
+      }
+
+      // 4. Call execute function to resume workflow processing from targetNodeId immediately
+      const fetchUrl = isDispatch
+        ? `${supabaseUrl}/functions/v1/execute-dispatch-sequence`
+        : `${supabaseUrl}/functions/v1/execute-message`;
+
+      const fetchBody = isDispatch
+        ? {
+            campaignId: activeExec.campaign_id,
+            sequenceId: activeExec.sequence_id,
+            contactPhone: respondentPhone,
+            contactName: trigCtx.contactName || trigCtx.respondentName || "",
+            contactId: trigCtx.contactId || trigCtx.leadId || undefined,
+            customFields: trigCtx.customFields || {},
+            executionId: activeExec.id,
+            startFromNodeId: targetNodeId,
+          }
+        : {
+            campaignId: activeExec.campaign_id || activeExec.sequence_id,
+            sequenceId: activeExec.sequence_id,
+            executionId: activeExec.id,
+            startFromNodeId: targetNodeId,
+            resumedExecution: true,
+            targetPhones: respondentPhone ? [respondentPhone] : [],
+            triggerContext: {
+              ...trigCtx,
+              isResumedExecution: true,
+              resumedExecution: true,
+              manually_paused: false,
+              sendPrivate: !trigCtx.groupJid || trigCtx.destinationMode !== "groups",
+              respondentPhone,
+              manualSkip: true,
+              startFromNodeId: targetNodeId,
+            },
+          };
+
+      try {
+        const skipRes = await fetch(fetchUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify(fetchBody),
+        });
+        const skipResText = await skipRes.text();
+        console.log(`[ManageWorkflowExecution] Skip worker response (${skipRes.status}):`, skipResText);
+      } catch (fetchErr) {
+        console.error("[ManageWorkflowExecution] Error triggering skip worker:", fetchErr);
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "Execução avançada para a próxima etapa com sucesso.",
+          status: "running",
+          targetNodeId,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     return new Response(
-      JSON.stringify({ error: `Ação '${action}' não reconhecida. Suportadas: 'pause', 'stop', 'resume'.` }),
+      JSON.stringify({ error: `Ação '${action}' não reconhecida. Suportadas: 'pause', 'stop', 'resume', 'skip', 'advance'.` }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {

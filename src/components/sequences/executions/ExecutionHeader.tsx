@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Copy, RotateCcw, Loader2, CheckCircle2, XCircle, Clock, Ban, Pencil, Square } from "lucide-react";
+import { Copy, RotateCcw, Loader2, CheckCircle2, XCircle, Clock, Ban, Pencil, Square, FastForward } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { WorkflowExecution } from "@/hooks/useWorkflowExecutions";
 import { useToast } from "@/hooks/use-toast";
@@ -12,6 +12,8 @@ interface ExecutionHeaderProps {
   onEdit?: () => void;
   onStop?: () => void;
   isStopping?: boolean;
+  onSkip?: () => void;
+  isSkipping?: boolean;
 }
 
 const STATUS_LABEL: Record<string, { label: string; icon: typeof CheckCircle2; className: string }> = {
@@ -30,13 +32,14 @@ function formatDuration(ms: number | null): string {
   return `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`;
 }
 
-export function ExecutionHeader({ execution, onRerun, isRerunning, onUseAsReference, onEdit, onStop, isStopping }: ExecutionHeaderProps) {
+export function ExecutionHeader({ execution, onRerun, isRerunning, onUseAsReference, onEdit, onStop, isStopping, onSkip, isSkipping }: ExecutionHeaderProps) {
   const { toast } = useToast();
   const meta = STATUS_LABEL[execution.status];
   const StatusIcon = meta.icon;
 
   const canRerun = !!onRerun && (execution.status === "success" || execution.status === "error" || execution.status === "cancelled");
   const canStop = !!onStop && (execution.status === "running" || execution.status === "waiting");
+  const canSkip = !!onSkip && (execution.status === "running" || execution.status === "waiting");
 
   return (
     <div className="flex items-center justify-between bg-white border border-slate-200/60 px-4 py-2.5 rounded-2xl shadow-sm">
@@ -64,6 +67,22 @@ export function ExecutionHeader({ execution, onRerun, isRerunning, onUseAsRefere
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
+        {canSkip && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-xl gap-1.5 h-8 px-3 text-xs font-semibold shadow-sm border-sky-300 text-sky-700 hover:bg-sky-50 transition-all"
+            onClick={onSkip}
+            disabled={isSkipping}
+          >
+            {isSkipping ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <FastForward className="h-3.5 w-3.5" />
+            )}
+            Pular etapa
+          </Button>
+        )}
         {canStop && (
           <Button
             variant="destructive"

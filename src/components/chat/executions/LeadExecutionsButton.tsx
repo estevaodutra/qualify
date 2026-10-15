@@ -19,6 +19,7 @@ import {
   X,
   AlertTriangle,
   MessageSquare,
+  FastForward,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLeadExecutions, LeadExecutionItem } from "@/hooks/useLeadExecutions";
@@ -99,6 +100,8 @@ export default function LeadExecutionsButton({
     isStopping,
     resumeExecution,
     isResuming,
+    skipExecution,
+    isSkipping,
   } = leadExecutions;
 
   const [activeTab, setActiveTab] = useState<"active" | "history">("active");
@@ -479,6 +482,18 @@ export default function LeadExecutionsButton({
                       </div>
                     ) : (
                       <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={isSkipping}
+                          onClick={() => skipExecution(exec.id)}
+                          title="Pular para o próximo passo"
+                          className="h-7 text-xs font-semibold gap-1 rounded-lg border-sky-500/30 text-sky-600 hover:bg-sky-500/10 px-2.5"
+                        >
+                          {isSkipping ? <Loader2 className="h-3 w-3 animate-spin" /> : <FastForward className="h-3 w-3" />}
+                          Pular
+                        </Button>
+
                         {exec.status === "paused" ? (
                           <Button
                             variant="default"

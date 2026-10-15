@@ -312,38 +312,68 @@ export async function processMessageEvent(
             }
           }
 
-          fetch(`${supabaseUrl}/functions/v1/execute-message`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${supabaseServiceKey}`,
-            },
-            body: JSON.stringify({
-              campaignId: pendingInput.company_id || pendingInput.sequence_id,
-              sequenceId: pendingInput.sequence_id,
-              executionId: pendingInput.execution_id,
-              startFromNodeId: nextNodeId,
-              resumedExecution: true,
-              triggerContext: {
-                resumedFromUserInput: true,
-                resumeNodeId: nextNodeId,
-                userResponse: effectiveResponseText,
-                mediaUrl: mediaUrl || null,
-                mediaType: detectedMediaType,
-                userInputField: pendingInput.target_field,
-                respondentPhone: effectivePhone,
-                respondentName: respondentName,
-                leadId: pendingInput.lead_id || leadIdToUpdate,
-                companyId: pendingInput.company_id,
-                instanceId: pendingInput.instance_id || instance?.id,
-                groupJid: pendingInput.group_jid || (isGroup ? chatJid : null),
-                customFields: {
-                  ...(pendingInput.target_field ? { [pendingInput.target_field]: effectiveResponseText } : {}),
-                  ...(isNameField && !isMediaOnly && trimmedText ? { name: trimmedText, nome: trimmedText } : {}),
-                },
-              }
-            })
-          }).catch(resumeErr => console.error("[MessageController] Error triggering resume sequence:", resumeErr));
+          // Resolve effective campaign ID and base trigger payload from workflow_executions if execution_id exists
+          let resolvedCampaignId = pendingInput.sequence_id;
+          let basePayload: Record<string, any> = {};
+          if (pendingInput.execution_id) {
+            const { data: wfRow } = await supabase
+              .from("workflow_executions")
+              .select("campaign_id, trigger_payload")
+              .eq("id", pendingInput.execution_id)
+              .maybeSingle();
+            if (wfRow?.campaign_id) resolvedCampaignId = wfRow.campaign_id;
+            if (wfRow?.trigger_payload) basePayload = (wfRow.trigger_payload || {}) as Record<string, any>;
+
+            // Immediately mark execution as running so it leaves "waiting" status
+            await supabase
+              .from("workflow_executions")
+              .update({ status: "running", updated_at: new Date().toISOString() })
+              .eq("id", pendingInput.execution_id);
+          }
+
+          try {
+            const resumeRes = await fetch(`${supabaseUrl}/functions/v1/execute-message`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${supabaseServiceKey}`,
+              },
+              body: JSON.stringify({
+                campaignId: resolvedCampaignId,
+                sequenceId: pendingInput.sequence_id,
+                executionId: pendingInput.execution_id,
+                startFromNodeId: nextNodeId,
+                resumedExecution: true,
+                targetPhones: (effectivePhone && !isGroup) ? [effectivePhone] : [],
+                triggerContext: {
+                  ...basePayload,
+                  resumedFromUserInput: true,
+                  resumeNodeId: nextNodeId,
+                  userResponse: effectiveResponseText,
+                  mediaUrl: mediaUrl || null,
+                  mediaType: detectedMediaType,
+                  userInputField: pendingInput.target_field,
+                  respondentPhone: effectivePhone || basePayload.respondentPhone,
+                  respondentName: respondentName || basePayload.respondentName,
+                  sendPrivate: !isGroup,
+                  destinationMode: isGroup ? "groups" : "individual",
+                  leadId: pendingInput.lead_id || leadIdToUpdate || basePayload.leadId,
+                  companyId: pendingInput.company_id || basePayload.companyId,
+                  instanceId: pendingInput.instance_id || instance?.id || basePayload.instanceId,
+                  groupJid: pendingInput.group_jid || (isGroup ? chatJid : null),
+                  customFields: {
+                    ...(basePayload.customFields || {}),
+                    ...(pendingInput.target_field ? { [pendingInput.target_field]: effectiveResponseText } : {}),
+                    ...(isNameField && !isMediaOnly && trimmedText ? { name: trimmedText, nome: trimmedText } : {}),
+                  },
+                }
+              })
+            });
+            const resumeResText = await resumeRes.text();
+            console.log(`[MessageController] Resume sequence response (${resumeRes.status}):`, resumeResText);
+          } catch (resumeErr) {
+            console.error("[MessageController] Error triggering resume sequence:", resumeErr);
+          }
         }
       }
     } catch (userInputErr) {

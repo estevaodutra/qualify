@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RefreshCw, Search, CheckCircle2, XCircle, Loader2, Clock, Ban, Square } from "lucide-react";
+import { RefreshCw, Search, CheckCircle2, XCircle, Loader2, Clock, Ban, Square, FastForward } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { WorkflowExecution, WorkflowExecutionStatus } from "@/hooks/useWorkflowExecutions";
 
@@ -16,6 +16,7 @@ interface ExecutionsListProps {
   onSelect: (id: string) => void;
   onRefresh: () => void;
   onStop?: (id: string) => void;
+  onSkip?: (id: string) => void;
 }
 
 const STATUS_META: Record<WorkflowExecutionStatus, { label: string; icon: typeof CheckCircle2; className: string }> = {
@@ -119,6 +120,20 @@ export function ExecutionsList({ executions, isLoading, error, selectedExecution
                     </span>
                     <div className="flex items-center gap-1.5">
                       <span className="text-[9px] text-slate-400 font-mono">{formatDuration(exec.durationMs)}</span>
+                      {onSkip && (exec.status === "running" || exec.status === "waiting") && (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSkip(exec.id);
+                          }}
+                          className="p-1 hover:bg-sky-50 text-sky-600 rounded-md transition-colors cursor-pointer"
+                          title="Pular etapa"
+                        >
+                          <FastForward className="h-2.5 w-2.5" />
+                        </span>
+                      )}
                       {onStop && (exec.status === "running" || exec.status === "waiting") && (
                         <span
                           role="button"

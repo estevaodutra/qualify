@@ -136,6 +136,32 @@ export function ExecutionsPanel({ sequenceId, nodes, connections, nodeCategories
   };
 
   const [isStopping, setIsStopping] = useState(false);
+  const [isSkipping, setIsSkipping] = useState(false);
+
+  const handleSkip = async (idToSkip?: string) => {
+    const targetId = idToSkip || execution?.id;
+    if (!targetId) return;
+    setIsSkipping(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("manage-workflow-execution", {
+        body: {
+          action: "skip",
+          executionId: targetId,
+        },
+      });
+      if (error) throw error;
+      toast({ title: "Etapa avançada", description: "O fluxo avançou para a próxima etapa." });
+      refetch();
+    } catch (err: any) {
+      toast({
+        title: "Erro ao avançar etapa",
+        description: err instanceof Error ? err.message : String(err),
+        variant: "destructive",
+      });
+    } finally {
+      setIsSkipping(false);
+    }
+  };
 
   const handleStop = async (idToStop?: string) => {
     const targetId = idToStop || execution?.id;
@@ -206,6 +232,8 @@ export function ExecutionsPanel({ sequenceId, nodes, connections, nodeCategories
           onEdit={handleEdit}
           onStop={handleStop}
           isStopping={isStopping}
+          onSkip={handleSkip}
+          isSkipping={isSkipping}
         />
       )}
 
@@ -218,6 +246,7 @@ export function ExecutionsPanel({ sequenceId, nodes, connections, nodeCategories
           onSelect={setSelectedExecutionId}
           onRefresh={refetch}
           onStop={handleStop}
+          onSkip={handleSkip}
         />
 
         {selectedExecutionId && isDetailLoading ? (

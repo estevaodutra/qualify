@@ -2011,10 +2011,37 @@ Deno.serve(async (req) => {
             .eq("id", executionId)
             .maybeSingle();
           savedExecutionRecord = savedEx;
+          if (!savedExecutionRecord) {
+            const { data: wfEx } = await supabase
+              .from("workflow_executions")
+              .select("*")
+              .eq("id", executionId)
+              .maybeSingle();
+            if (wfEx) {
+              savedExecutionRecord = {
+                ...wfEx,
+                trigger_context: wfEx.trigger_payload,
+              };
+            }
+          }
           if (savedExecutionRecord?.destinations && Array.isArray(savedExecutionRecord.destinations) && savedExecutionRecord.destinations.length > 0) {
             if (destinations.length === 0) {
               destinations = savedExecutionRecord.destinations;
               console.log(`[ExecuteMessage] 🔄 Recovered ${destinations.length} destinations from saved execution state`);
+            }
+          } else if (destinations.length === 0 && savedExecutionRecord) {
+            const savedCtx = savedExecutionRecord.trigger_context || savedExecutionRecord.trigger_payload;
+            const phone = savedCtx?.respondentPhone || savedCtx?.contactPhone || triggerContext?.respondentPhone || triggerContext?.contactPhone;
+            if (phone) {
+              const cleanP = String(phone).replace(/\D/g, "");
+              if (cleanP) {
+                destinations = [{
+                  group_jid: `${cleanP}@s.whatsapp.net`,
+                  group_name: savedCtx?.respondentName || triggerContext?.respondentName || cleanP,
+                  isPrivate: true,
+                }];
+                console.log(`[ExecuteMessage] 🔄 Recovered private destination ${cleanP} from saved execution record trigger context`);
+              }
             }
           }
         } catch (fetchSavedErr) {
@@ -2078,7 +2105,7 @@ Deno.serve(async (req) => {
         : isDirectSequenceExecution ? "manual"
         : "message";
 
-      let workflowExecutionId: string = crypto.randomUUID();
+      let workflowExecutionId: string = (isResumedExecution && executionId) ? executionId : crypto.randomUUID();
       globalWorkflowExecutionId = workflowExecutionId;
 
       // ── REGRA DE EXECUÇÃO ÚNICA POR WORKFLOW POR LEAD ──────────────────────────
@@ -2139,7 +2166,7 @@ Deno.serve(async (req) => {
       try {
         if (isResumedExecution && (executionId || workflowExecutionId)) {
           if (executionId) workflowExecutionId = executionId;
-          await supabase.from("workflow_executions").update({ status: "running" }).eq("id", workflowExecutionId);
+          await supabase.from("workflow_executions").update({ status: "running", updated_at: new Date().toISOString() }).eq("id", workflowExecutionId);
         } else {
           const { data: newExecution, error: newExecutionError } = await supabase
             .from("workflow_executions")
