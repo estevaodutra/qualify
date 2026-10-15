@@ -383,8 +383,9 @@ export async function fetchZApi(
 
   console.log(`[n8n-router] Routing: ${endpoint} (${method}) -> ${targetUrl} [Action: ${routed.action}]`);
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 seconds timeout
+  const isMedia = endpoint.includes("/send-video") || endpoint.includes("/send-audio") || endpoint.includes("/send-document") || endpoint.includes("/send-media");
+  const timeoutMs = isMedia ? 120000 : 60000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(targetUrl, {
@@ -442,7 +443,7 @@ export async function fetchZApi(
   } catch (err: any) {
     clearTimeout(timeoutId);
     if (err.name === 'AbortError') {
-      throw new Error("N8N Webhook Timeout (Demorou mais de 45 segundos)");
+      throw new Error(`N8N Webhook Timeout (Demorou mais de ${Math.round(timeoutMs / 1000)} segundos)`);
     }
     throw err;
   }

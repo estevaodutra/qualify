@@ -1988,9 +1988,45 @@ Deno.serve(async (req) => {
         if (normalizedGroupJid) {
           destinations = [{
             group_jid: normalizedGroupJid,
-            group_name: (triggerContext.respondentName as string) || "Grupo",
+            group_name: (triggerContext?.respondentName as string) || "Grupo",
             isPrivate: false,
           }];
+        } else if (groups.length > 1 && !isResumedExecution && !isManualNodeExecution) {
+          console.log(`[ExecuteMessage] 🔀 Multi-group workflow with ${groups.length} groups triggered without specific groupJid. Fanning out to individual executions per group.`);
+          
+          const fanoutResults = [];
+          for (const g of groups) {
+            try {
+              const fanoutRes = await fetch(`${supabaseUrl}/functions/v1/execute-message`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${supabaseServiceKey}`,
+                },
+                body: JSON.stringify({
+                  campaignId: effectiveCampaignId,
+                  sequenceId: effectiveSequenceId,
+                  startFromNodeId: startFromNodeId,
+                  triggerContext: {
+                    ...triggerContext,
+                    groupJid: g.group_jid,
+                    targetGroupJid: g.group_jid,
+                    respondentName: g.group_name || "Grupo",
+                  },
+                }),
+              });
+              const resJson = await fanoutRes.json();
+              fanoutResults.push({ groupJid: g.group_jid, ok: fanoutRes.ok, result: resJson });
+            } catch (err: any) {
+              console.error(`[ExecuteMessage] Fanout failed for group ${g.group_jid}:`, err);
+              fanoutResults.push({ groupJid: g.group_jid, ok: false, error: err.message });
+            }
+          }
+
+          return new Response(
+            JSON.stringify({ success: true, fannedOut: true, groupCount: groups.length, groups: fanoutResults }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
         } else if (groups.length > 0) {
           destinations = groups.map(g => ({
             group_jid: g.group_jid,

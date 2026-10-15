@@ -388,6 +388,8 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
         await new Promise((r) => setTimeout(r, 2000));
         try {
           const retryResp = await fetchZApi(
+            externalId || instance.id || "",
+            externalToken || "",
             endpoint,
             "POST",
             body,

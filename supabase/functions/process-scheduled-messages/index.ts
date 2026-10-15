@@ -1295,19 +1295,18 @@ Deno.serve(async (req) => {
                 status: "executing",
               });
             
-            console.log(`[Scheduler] 🚀 Triggering sequence ${sequence.name} via execute-message...`);
+            console.log(`[Scheduler] 🚀 Triggering sequence ${sequence.name} via trigger-sequence...`);
             
-            // Call execute-message with sequenceId and triggerId
-            const response = await fetch(`${supabaseUrl}/functions/v1/execute-message`, {
+            // Call trigger-sequence to resolve destinations and fan out cleanly per group
+            const response = await fetch(`${supabaseUrl}/functions/v1/trigger-sequence`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
                 "Authorization": `Bearer ${supabaseServiceKey}`,
               },
               body: JSON.stringify({
-                campaignId: sequence.id, // Fallback
                 sequenceId: sequence.id,
-                triggerContext: { triggerId: trigger.id }
+                triggerId: trigger.id,
               }),
             });
 
