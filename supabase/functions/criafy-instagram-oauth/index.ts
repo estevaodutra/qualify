@@ -181,7 +181,7 @@ Deno.serve(async (req) => {
       const tokenExpiresAt = new Date(Date.now() + expiresInSeconds * 1000).toISOString();
 
       // 3. Buscar as Páginas do Facebook autorizadas e suas Contas Profissionais do Instagram
-      const pagesUrl = `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,name,profile_picture_url}&access_token=${userAccessToken}`;
+      const pagesUrl = `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,name,profile_picture_url},connected_instagram_account{id,username,name,profile_picture_url}&access_token=${userAccessToken}`;
       const pagesRes = await fetch(pagesUrl);
       const pagesData = await pagesRes.json();
 
@@ -190,12 +190,14 @@ Deno.serve(async (req) => {
       }
 
       const connectedAccounts = [];
+      const foundPages: string[] = [];
 
       if (pagesData.data && Array.isArray(pagesData.data)) {
         for (const page of pagesData.data) {
-          if (page.instagram_business_account) {
-            const igAcc = page.instagram_business_account;
+          if (page.name) foundPages.push(page.name);
+          const igAcc = page.instagram_business_account || page.connected_instagram_account;
 
+          if (igAcc) {
             // O token de página (Page Access Token) derivado de um long-lived token é permanente para publicações
             const accountToken = page.access_token || userAccessToken;
 
@@ -233,8 +235,13 @@ Deno.serve(async (req) => {
       }
 
       if (connectedAccounts.length === 0) {
+        if (foundPages.length === 0) {
+          throw new Error(
+            "Nenhuma Página do Facebook foi selecionada ou encontrada. No momento de autorizar no Facebook, certifique-se de marcar a sua Página e conceder todas as permissões."
+          );
+        }
         throw new Error(
-          "Autorização concluída com sucesso no Facebook, mas nenhuma das Páginas autorizadas possui uma Conta Profissional do Instagram vinculada. Acesse o Meta Business Suite ou as Configurações da Página no Facebook e vincule a conta do Instagram à Página."
+          `Página(s) encontrada(s): [${foundPages.join(", ")}], porém nenhuma delas tem um Instagram Profissional vinculado. Vincule a conta @fornecedor.dutra à sua Página no Meta Business Suite ou no app do Instagram (Editar Perfil > Página).`
         );
       }
 
