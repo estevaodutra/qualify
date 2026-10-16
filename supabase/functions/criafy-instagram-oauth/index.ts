@@ -127,9 +127,11 @@ Deno.serve(async (req) => {
         "business_management",
       ].join(",");
 
+      // Força a Meta a exibir a seleção de BM, Páginas e Instagram
+      const extras = JSON.stringify({ setup: { channel: "IG_API_ONBOARDING" } });
       const authUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(
         cleanRedirectUri
-      )}&response_type=code&scope=${scopes}&state=${encodeURIComponent(signedState)}`;
+      )}&response_type=code&scope=${scopes}&state=${encodeURIComponent(signedState)}&auth_type=rerequest&extras=${encodeURIComponent(extras)}`;
 
       return jsonResponse({ success: true, authUrl, provider: "FACEBOOK_BUSINESS" });
     }
