@@ -1,6 +1,6 @@
 {
-  "commit": "6b6b13f4ff66e89f1193a9527a865c0cac7af85a",
-  "shortCommit": "6b6b13f",
-  "message": "fix(whatsapp): format group destinations as @g.us, member mentions as @c.us without leading @, and keep normal messages pure digits",
-  "builtAt": "2026-10-16T01:46:32.441Z"
+  "commit": "7a9a3816c16bf91d0947248e0e6d68d3fca65c95",
+  "shortCommit": "7a9a381",
+  "message": "feat(chat): adiciona identificador único por URL /chat/:conversationId, consolidação de histórico e badge de cópia de ID",
+  "builtAt": "2026-10-16T14:02:35.602Z"
 }

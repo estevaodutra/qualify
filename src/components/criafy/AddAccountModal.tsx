@@ -154,11 +154,14 @@ export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountMod
             type="button"
             variant="outline"
             onClick={handleOAuthConnect}
-            className="w-full bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 text-white font-medium hover:opacity-90 transition-all border-0 shadow-sm flex items-center justify-center gap-2 py-5"
+            className="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-pink-600 text-white font-medium hover:opacity-95 transition-all border-0 shadow-sm flex items-center justify-center gap-2 py-5"
           >
             <Instagram className="w-5 h-5" />
-            Conectar via OAuth Oficial Meta
+            Conectar via Meta (Facebook & Business Manager)
           </Button>
+          <p className="text-[11px] text-muted-foreground text-center -mt-2">
+            Permite selecionar sua BM, Página do Facebook e Conta do Instagram profissional vinculada.
+          </p>
 
           <div className="relative my-4">
             <div className="absolute inset-0 flex items-center">

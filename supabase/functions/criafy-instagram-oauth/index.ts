@@ -20,25 +20,29 @@ function requiredEnv(name: string): string {
 }
 
 async function getInstagramCredentials(adminClient?: any) {
-  const appId = Deno.env.get("INSTAGRAM_APP_ID") || "1214753054314021";
+  let appId: string | undefined;
   let appSecret: string | undefined;
 
-  // 1. Prioridade: chave configurada pelo Superadmin no banco (platform_settings)
+  // 1. Prioridade: chaves configuradas em platform_settings pelo Superadmin
   if (adminClient) {
     try {
-      const { data: settingRow } = await adminClient
+      const { data: rows } = await adminClient
         .from("platform_settings")
-        .select("value")
-        .in("key", ["instagram_app_secret", "meta_app_secret", "criafy_instagram_app_secret"])
-        .limit(1)
-        .maybeSingle();
+        .select("key, value")
+        .in("key", ["meta_app_id", "instagram_app_id", "instagram_app_secret", "meta_app_secret", "criafy_instagram_app_secret"]);
 
-      if (settingRow && settingRow.value) {
-        const val = typeof settingRow.value === "string"
-          ? settingRow.value
-          : String(settingRow.value?.secret || settingRow.value?.value || settingRow.value);
-        if (val && val.trim().length > 0) {
-          appSecret = val.trim();
+      if (rows && Array.isArray(rows)) {
+        for (const row of rows) {
+          const val = typeof row.value === "string"
+            ? row.value
+            : String(row.value?.secret || row.value?.value || row.value || "");
+          if (val && val.trim().length > 0) {
+            if (row.key === "meta_app_id" || row.key === "instagram_app_id") {
+              if (!appId) appId = val.trim();
+            } else if (!appSecret) {
+              appSecret = val.trim();
+            }
+          }
         }
       }
     } catch (e: any) {
@@ -46,9 +50,12 @@ async function getInstagramCredentials(adminClient?: any) {
     }
   }
 
-  // 2. Fallback: variáveis de ambiente
+  // 2. Fallbacks: variáveis de ambiente ou App ID padrão do Criafy
+  if (!appId) {
+    appId = Deno.env.get("META_APP_ID") || Deno.env.get("INSTAGRAM_APP_ID") || "160193948766835";
+  }
   if (!appSecret) {
-    appSecret = Deno.env.get("INSTAGRAM_APP_SECRET") || Deno.env.get("META_APP_SECRET");
+    appSecret = Deno.env.get("META_APP_SECRET") || Deno.env.get("INSTAGRAM_APP_SECRET");
   }
 
   if (!appSecret) {
@@ -58,24 +65,6 @@ async function getInstagramCredentials(adminClient?: any) {
   }
 
   return { appId, appSecret };
-}
-
-function metaErrorMessage(data: any, fallback: string): string {
-  return data?.error?.message || data?.error_message || data?.message || fallback;
-}
-
-async function fetchMetaJson(url: string, init: RequestInit | undefined, operation: string) {
-  const response = await fetch(url, init);
-  let data: any;
-  try {
-    data = await response.json();
-  } catch {
-    throw new Error(`${operation} returned an invalid response`);
-  }
-  if (!response.ok || data?.error || data?.error_message) {
-    throw new Error(`${operation}: ${metaErrorMessage(data, `HTTP ${response.status}`)}`);
-  }
-  return data;
 }
 
 Deno.serve(async (req) => {
@@ -96,7 +85,7 @@ Deno.serve(async (req) => {
 
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
     const body = await req.json();
-    const { action, companyId, accountId, code, state, redirectUri, provider = "INSTAGRAM" } = body;
+    const { action, companyId, accountId, code, state, redirectUri } = body;
 
     if (companyId) {
       const { data: member, error: memberError } = await adminClient
@@ -111,43 +100,52 @@ Deno.serve(async (req) => {
     }
 
     // ==========================================
-    // ACTION 1: Generate OAuth URL (Instagram Login for Business)
+    // ACTION 1: Generate OAuth URL (Facebook Login for Business com BM)
     // ==========================================
     if (action === "get-auth-url") {
       if (!companyId || !redirectUri) throw new Error("CompanyId and redirectUri are required");
-      if (provider !== "INSTAGRAM") throw new Error("Only Instagram Login for Business is supported");
 
-      const { appId: instagramAppId, appSecret: instagramAppSecret } = await getInstagramCredentials(adminClient);
-      const stateSecret = Deno.env.get("CRIAFY_OAUTH_STATE_SECRET") || instagramAppSecret;
+      const { appId, appSecret } = await getInstagramCredentials(adminClient);
+      const stateSecret = Deno.env.get("CRIAFY_OAUTH_STATE_SECRET") || appSecret;
 
-      const cleanRedirectUri = String(redirectUri).replace(/#_.*$/, "").replace(/#.*$/, "").trim();
+      const cleanRedirectUri = String(redirectUri).split("#")[0].trim();
 
       const signedState = await createCriafyOAuthState(
         { companyId, userId: user.id, redirectUri: cleanRedirectUri, provider: "INSTAGRAM" },
         stateSecret
       );
+
+      // Permissões oficiais da Meta Graph API para BM, Páginas e Instagram
       const scopes = [
-        "instagram_business_basic",
-        "instagram_business_manage_messages",
-        "instagram_business_manage_comments",
-        "instagram_business_content_publish",
+        "pages_show_list",
+        "pages_read_engagement",
+        "pages_manage_posts",
+        "instagram_basic",
+        "instagram_content_publish",
+        "instagram_manage_comments",
+        "instagram_manage_messages",
+        "business_management",
       ].join(",");
-      const authUrl = `https://www.instagram.com/oauth/authorize?enable_fb_login=0&force_authentication=1&client_id=${instagramAppId}&redirect_uri=${encodeURIComponent(cleanRedirectUri)}&response_type=code&scope=${scopes}&state=${encodeURIComponent(signedState)}`;
-      return jsonResponse({ success: true, authUrl, provider: "INSTAGRAM" });
+
+      const authUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(
+        cleanRedirectUri
+      )}&response_type=code&scope=${scopes}&state=${encodeURIComponent(signedState)}`;
+
+      return jsonResponse({ success: true, authUrl, provider: "FACEBOOK_BUSINESS" });
     }
 
     // ==========================================
-    // ACTION 2: Exchange Code for Long-Lived Token & Upsert Account
+    // ACTION 2: Exchange Code via Facebook Graph API & Register Accounts
     // ==========================================
     if (action === "exchange-code") {
       if (!companyId || !code || !redirectUri || !state) {
         throw new Error("CompanyId, code, redirectUri and state are required");
       }
 
-      const { appId: instagramAppId, appSecret: instagramAppSecret } = await getInstagramCredentials(adminClient);
-      const stateSecret = Deno.env.get("CRIAFY_OAUTH_STATE_SECRET") || instagramAppSecret;
+      const { appId, appSecret } = await getInstagramCredentials(adminClient);
+      const stateSecret = Deno.env.get("CRIAFY_OAUTH_STATE_SECRET") || appSecret;
 
-      // Sanitizar fragmentos anexados pelo Instagram (#_)
+      // Sanitizar fragmentos anexados pelo Facebook (#_)
       const cleanCode = String(code).split("#")[0].trim();
       const cleanState = String(state).split("#")[0].trim();
       const cleanRedirectUri = String(redirectUri).split("#")[0].trim();
@@ -155,130 +153,144 @@ Deno.serve(async (req) => {
       // Validar state criptográfico
       await verifyCriafyOAuthState(cleanState, stateSecret, { companyId, userId: user.id, redirectUri: cleanRedirectUri });
 
-      console.log(`[Exchange Code] appId=${instagramAppId}, redirectUri=${cleanRedirectUri}, codeLen=${cleanCode.length}`);
+      console.log(`[Exchange Code BM] appId=${appId}, redirectUri=${cleanRedirectUri}, codeLen=${cleanCode.length}`);
 
-      const formData = new URLSearchParams();
-      formData.append("client_id", instagramAppId);
-      formData.append("client_secret", instagramAppSecret);
-      formData.append("grant_type", "authorization_code");
-      formData.append("redirect_uri", cleanRedirectUri);
-      formData.append("code", cleanCode);
+      // 1. Trocar o código temporário por Short-Lived User Token
+      const tokenUrl = `https://graph.facebook.com/v21.0/oauth/access_token?client_id=${appId}&redirect_uri=${encodeURIComponent(
+        cleanRedirectUri
+      )}&client_secret=${appSecret}&code=${cleanCode}`;
 
-      let tokenData: any;
-      try {
-        tokenData = await fetchMetaJson(
-          "https://api.instagram.com/oauth/access_token",
-          { method: "POST", body: formData },
-          "Instagram authorization code exchange failed"
-        );
-      } catch (err: any) {
-        console.error("[Exchange Code] Erro da Meta:", err.message);
-        if (err.message && err.message.includes("Error validating verification code")) {
-          throw new Error(
-            `${err.message}. Verifique se o App Secret no Superadmin (/admin/criafy) pertence ao App ID ${instagramAppId}, e se o URI no Meta Developers está cadastrado exatamente como '${cleanRedirectUri}'.`
-          );
-        }
-        throw err;
-      }
-      if (!tokenData.access_token || !tokenData.user_id) {
-        throw new Error("Instagram authorization code exchange returned no account token");
+      const tokenRes = await fetch(tokenUrl);
+      const tokenData = await tokenRes.json();
+
+      if (tokenData.error) {
+        console.error("[Exchange Code BM] Erro Meta:", tokenData.error);
+        throw new Error(`Meta OAuth Error: ${tokenData.error.message || JSON.stringify(tokenData.error)}`);
       }
 
-      const longLivedData = await fetchMetaJson(
-        `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${encodeURIComponent(instagramAppSecret)}&access_token=${encodeURIComponent(tokenData.access_token)}`,
-        undefined,
-        "Instagram long-lived token exchange failed"
-      );
-      if (!longLivedData.access_token) {
-        throw new Error("Instagram long-lived token exchange returned no access token");
-      }
+      const shortLivedToken = tokenData.access_token;
+      if (!shortLivedToken) throw new Error("A Meta não retornou o token de acesso do usuário.");
 
-      let profileData: any;
-      try {
-        profileData = await fetchMetaJson(
-          `https://graph.instagram.com/v22.0/me?fields=user_id,username,name,profile_picture_url&access_token=${encodeURIComponent(longLivedData.access_token)}`,
-          undefined,
-          "Instagram profile lookup failed"
-        );
-      } catch (_) {
-        // Fallback v19.0
-        profileData = await fetchMetaJson(
-          `https://graph.instagram.com/v19.0/me?fields=user_id,username,name,profile_picture_url&access_token=${encodeURIComponent(longLivedData.access_token)}`,
-          undefined,
-          "Instagram profile lookup fallback failed"
-        );
-      }
+      // 2. Estender o token do usuário para 60 dias (Long-Lived Token)
+      const longLivedUrl = `https://graph.facebook.com/v21.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${shortLivedToken}`;
+      const longLivedRes = await fetch(longLivedUrl);
+      const longLivedData = await longLivedRes.json();
 
-      if (!profileData.username) throw new Error("Instagram profile lookup returned no username");
-
-      const instagramAccountId = String(profileData.user_id || tokenData.user_id);
+      const userAccessToken = longLivedData.access_token || shortLivedToken;
       const expiresInSeconds = Number(longLivedData.expires_in) || 5_184_000;
-      const { data: account, error: upsertError } = await adminClient
-        .from("criafy_instagram_accounts")
-        .upsert(
-          {
-            company_id: companyId,
-            instagram_account_id: instagramAccountId,
-            instagram_user_id: instagramAccountId,
-            username: profileData.username,
-            name: profileData.name || profileData.username,
-            profile_picture_url: profileData.profile_picture_url || null,
-            account_type: "INSTAGRAM_BUSINESS",
-            access_token: longLivedData.access_token,
-            token_expires_at: new Date(Date.now() + expiresInSeconds * 1000).toISOString(),
-            connection_status: "CONNECTED",
-            error_message: null,
-            created_by: user.id,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "company_id,instagram_account_id" }
-        )
-        .select()
-        .single();
-      if (upsertError) throw new Error(`Unable to save Instagram account: ${upsertError.message}`);
-      if (!account) throw new Error("Unable to save Instagram account: no row was returned");
+      const tokenExpiresAt = new Date(Date.now() + expiresInSeconds * 1000).toISOString();
 
-      return jsonResponse({ success: true, count: 1, accounts: [account] });
+      // 3. Buscar as Páginas do Facebook autorizadas e suas Contas Profissionais do Instagram
+      const pagesUrl = `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,name,profile_picture_url}&access_token=${userAccessToken}`;
+      const pagesRes = await fetch(pagesUrl);
+      const pagesData = await pagesRes.json();
+
+      if (pagesData.error) {
+        throw new Error(`Erro ao buscar páginas da Meta: ${pagesData.error.message}`);
+      }
+
+      const connectedAccounts = [];
+
+      if (pagesData.data && Array.isArray(pagesData.data)) {
+        for (const page of pagesData.data) {
+          if (page.instagram_business_account) {
+            const igAcc = page.instagram_business_account;
+
+            // O token de página (Page Access Token) derivado de um long-lived token é permanente para publicações
+            const accountToken = page.access_token || userAccessToken;
+
+            const { data: inserted, error: insertErr } = await adminClient
+              .from("criafy_instagram_accounts")
+              .upsert(
+                {
+                  company_id: companyId,
+                  instagram_account_id: String(igAcc.id),
+                  instagram_user_id: String(igAcc.id),
+                  facebook_page_id: String(page.id),
+                  username: igAcc.username,
+                  name: igAcc.name || page.name,
+                  profile_picture_url: igAcc.profile_picture_url || null,
+                  account_type: "INSTAGRAM_BUSINESS",
+                  access_token: accountToken,
+                  token_expires_at: tokenExpiresAt,
+                  connection_status: "CONNECTED",
+                  error_message: null,
+                  created_by: user.id,
+                  updated_at: new Date().toISOString(),
+                },
+                { onConflict: "company_id,instagram_account_id" }
+              )
+              .select()
+              .single();
+
+            if (insertErr) {
+              console.error("[OAuth BM] Erro ao salvar conta:", insertErr);
+            } else if (inserted) {
+              connectedAccounts.push(inserted);
+            }
+          }
+        }
+      }
+
+      if (connectedAccounts.length === 0) {
+        throw new Error(
+          "Autorização concluída com sucesso no Facebook, mas nenhuma das Páginas autorizadas possui uma Conta Profissional do Instagram vinculada. Acesse o Meta Business Suite ou as Configurações da Página no Facebook e vincule a conta do Instagram à Página."
+        );
+      }
+
+      return jsonResponse({
+        success: true,
+        count: connectedAccounts.length,
+        accounts: connectedAccounts,
+      });
     }
 
     // ==========================================
-    // ACTION: Gestão do App Secret (Superadmin)
+    // ACTION: Gestão de Credenciais Meta (Superadmin)
     // ==========================================
     if (action === "save-meta-secret") {
-      const { secret } = body;
-      if (!secret || typeof secret !== "string" || secret.trim().length < 8) {
-        throw new Error("Secret inválido. O App Secret deve ter pelo menos 8 caracteres.");
-      }
-
-      const { error: upsertErr } = await adminClient
-        .from("platform_settings")
-        .upsert(
+      const { appId, secret } = body;
+      if (secret && typeof secret === "string" && secret.trim().length >= 8) {
+        await adminClient.from("platform_settings").upsert(
           {
             key: "instagram_app_secret",
             value: secret.trim(),
-            description: "Meta Instagram App Secret para Criafy OAuth",
+            description: "Meta App Secret para Criafy OAuth",
             updated_at: new Date().toISOString(),
           },
           { onConflict: "key" }
         );
+      }
 
-      if (upsertErr) throw upsertErr;
+      if (appId && typeof appId === "string" && appId.trim().length >= 5) {
+        await adminClient.from("platform_settings").upsert(
+          {
+            key: "meta_app_id",
+            value: appId.trim(),
+            description: "Meta App ID Principal da Criafy",
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "key" }
+        );
+      }
 
-      return jsonResponse({ success: true, message: "App Secret salvo com sucesso no banco de dados." });
+      return jsonResponse({ success: true, message: "Credenciais da Meta salvas com sucesso no banco de dados." });
     }
 
     if (action === "get-meta-secret-status") {
       let isConfigured = false;
       let masked: string | null = null;
+      let configuredAppId: string | null = null;
       try {
-        const { appSecret } = await getInstagramCredentials(adminClient);
+        const { appId, appSecret } = await getInstagramCredentials(adminClient);
+        configuredAppId = appId;
         if (appSecret && appSecret.length > 5) {
           isConfigured = true;
           masked = "••••••••••••" + appSecret.slice(-4);
         }
       } catch (_) {}
 
-      return jsonResponse({ success: true, isConfigured, maskedSecret: masked });
+      return jsonResponse({ success: true, isConfigured, maskedSecret: masked, appId: configuredAppId });
     }
 
     // ==========================================
@@ -294,32 +306,32 @@ Deno.serve(async (req) => {
       if (fetchError || !account) throw new Error(`Account not found: ${fetchError?.message || accountId}`);
 
       if (!account.access_token) {
-        const { error: updateError } = await adminClient
+        await adminClient
           .from("criafy_instagram_accounts")
           .update({ connection_status: "DISCONNECTED", error_message: "Access token ausente" })
           .eq("id", accountId);
-        if (updateError) throw new Error(`Unable to update account status: ${updateError.message}`);
         return jsonResponse({ success: true, status: "DISCONNECTED", valid: false });
       }
 
       let status = "CONNECTED";
       let errorMessage: string | null = null;
       try {
-        await fetchMetaJson(
-          `https://graph.instagram.com/v19.0/me?access_token=${encodeURIComponent(account.access_token)}`,
-          undefined,
-          "Instagram token validation failed"
-        );
+        const checkUrl = `https://graph.facebook.com/v21.0/${account.instagram_account_id}?fields=id,username&access_token=${encodeURIComponent(account.access_token)}`;
+        const checkRes = await fetch(checkUrl);
+        const checkData = await checkRes.json();
+        if (checkData.error) {
+          status = "EXPIRED";
+          errorMessage = checkData.error.message;
+        }
       } catch (error) {
         status = "EXPIRED";
-        errorMessage = error instanceof Error ? error.message : "Instagram token validation failed";
+        errorMessage = error instanceof Error ? error.message : "Meta token validation failed";
       }
 
-      const { error: updateError } = await adminClient
+      await adminClient
         .from("criafy_instagram_accounts")
         .update({ connection_status: status, error_message: errorMessage, updated_at: new Date().toISOString() })
         .eq("id", accountId);
-      if (updateError) throw new Error(`Unable to update account status: ${updateError.message}`);
       return jsonResponse({ success: true, status, valid: status === "CONNECTED", error: errorMessage });
     }
 

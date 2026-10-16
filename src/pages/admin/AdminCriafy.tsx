@@ -136,11 +136,13 @@ const META_URLS: MetaUrlItem[] = [
 
 export default function AdminCriafy() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [appId, setAppId] = useState("160193948766835");
   const [appSecret, setAppSecret] = useState("");
   const [showSecret, setShowSecret] = useState(false);
   const [isSavingSecret, setIsSavingSecret] = useState(false);
-  const [secretStatus, setSecretStatus] = useState<{ configured: boolean; masked?: string | null }>({
+  const [secretStatus, setSecretStatus] = useState<{ configured: boolean; masked?: string | null; appId?: string }>({
     configured: false,
+    appId: "160193948766835",
   });
 
   useEffect(() => {
@@ -151,52 +153,79 @@ export default function AdminCriafy() {
     try {
       const { data } = await supabase
         .from("platform_settings")
-        .select("value")
-        .eq("key", "instagram_app_secret")
-        .maybeSingle();
+        .select("key, value")
+        .in("key", ["meta_app_id", "instagram_app_secret"]);
 
-      if (data && data.value) {
-        const val = typeof data.value === "string" ? data.value : String(data.value?.secret || data.value);
-        if (val && val.length > 4) {
-          setSecretStatus({
-            configured: true,
-            masked: "••••••••••••" + val.slice(-4),
-          });
-          return;
+      let configured = false;
+      let masked: string | null = null;
+      let currentAppId = "160193948766835";
+
+      if (data && Array.isArray(data)) {
+        for (const item of data) {
+          if (item.key === "meta_app_id" && item.value) {
+            currentAppId = typeof item.value === "string" ? item.value : String(item.value);
+            setAppId(currentAppId);
+          }
+          if (item.key === "instagram_app_secret" && item.value) {
+            const val = typeof item.value === "string" ? item.value : String(item.value);
+            if (val && val.length > 4) {
+              configured = true;
+              masked = "••••••••••••" + val.slice(-4);
+            }
+          }
         }
       }
-      setSecretStatus({ configured: false });
+
+      setSecretStatus({ configured, masked, appId: currentAppId });
     } catch (_) {
-      setSecretStatus({ configured: false });
+      setSecretStatus({ configured: false, appId: "160193948766835" });
     }
   };
 
   const handleSaveSecret = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!appSecret.trim() || appSecret.trim().length < 8) {
-      toast.error("Informe um App Secret válido (mínimo de 8 caracteres obtido na Meta).");
+    if (!appId.trim() || appId.trim().length < 5) {
+      toast.error("Informe um Meta App ID válido.");
       return;
     }
 
     setIsSavingSecret(true);
     try {
-      const { error } = await supabase.from("platform_settings").upsert(
+      // 1. Salvar App ID
+      await supabase.from("platform_settings").upsert(
         {
-          key: "instagram_app_secret",
-          value: appSecret.trim(),
-          description: "Meta Instagram App Secret para Criafy OAuth",
+          key: "meta_app_id",
+          value: appId.trim(),
+          description: "Meta App ID Principal da Criafy",
           updated_at: new Date().toISOString(),
         },
         { onConflict: "key" }
       );
 
-      if (error) throw error;
+      // 2. Salvar App Secret se informado
+      if (appSecret.trim()) {
+        if (appSecret.trim().length < 8) {
+          toast.error("O App Secret deve ter no mínimo 8 caracteres.");
+          setIsSavingSecret(false);
+          return;
+        }
 
-      toast.success("Chave Secreta do Aplicativo (App Secret) salva com sucesso!");
+        await supabase.from("platform_settings").upsert(
+          {
+            key: "instagram_app_secret",
+            value: appSecret.trim(),
+            description: "Meta App Secret para Criafy OAuth",
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "key" }
+        );
+      }
+
+      toast.success("Credenciais da Meta salvas com sucesso!");
       setAppSecret("");
       await loadSecretStatus();
     } catch (err: any) {
-      toast.error(`Erro ao salvar App Secret: ${err.message}`);
+      toast.error(`Erro ao salvar credenciais: ${err.message}`);
     } finally {
       setIsSavingSecret(false);
     }
@@ -269,23 +298,23 @@ export default function AdminCriafy() {
         <Card className="border-border/60 shadow-sm">
           <CardHeader className="pb-2">
             <CardDescription className="text-xs uppercase font-semibold text-muted-foreground flex items-center justify-between">
-              Instagram App ID
+              Meta App ID (Principal)
               <Key className="h-4 w-4 text-indigo-500" />
             </CardDescription>
             <div className="flex items-center justify-between pt-1">
-              <CardTitle className="text-lg font-mono font-bold">1214753054314021</CardTitle>
+              <CardTitle className="text-lg font-mono font-bold">{secretStatus.appId || "160193948766835"}</CardTitle>
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => copyToClipboard("1214753054314021", "app_id", "Instagram App ID")}
+                onClick={() => copyToClipboard(secretStatus.appId || "160193948766835", "app_id", "Meta App ID")}
               >
                 {copiedId === "app_id" ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
               </Button>
             </div>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground">
-            Identificador oficial do app no Meta Developers.
+            App ID oficial da Criafy (D2X Negócios Digitais).
           </CardContent>
         </Card>
 
@@ -319,7 +348,7 @@ export default function AdminCriafy() {
         </Card>
       </div>
 
-      {/* Card de Configuração de App Secret */}
+      {/* Card de Configuração de Credenciais Meta */}
       <Card className="border-border/60 shadow-sm bg-gradient-to-br from-card to-muted/20">
         <CardHeader className="pb-3 border-b">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -327,7 +356,7 @@ export default function AdminCriafy() {
               <div className="flex items-center gap-2">
                 <Lock className="h-5 w-5 text-indigo-500" />
                 <CardTitle className="text-base font-semibold">
-                  Chave Secreta do Aplicativo Meta (App Secret)
+                  Credenciais do Aplicativo Meta (App ID & App Secret)
                 </CardTitle>
                 {secretStatus.configured ? (
                   <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-xs gap-1">
@@ -342,27 +371,41 @@ export default function AdminCriafy() {
                 )}
               </div>
               <CardDescription className="text-xs">
-                Obrigatório para concluir a troca de tokens do Instagram OAuth e validar assinaturas criptográficas da Meta.
+                Utilizado na autorização com a Meta via Facebook Login for Business (seleção de BM, Páginas e Instagram).
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent className="pt-4">
-          <form onSubmit={handleSaveSecret} className="space-y-3">
-            <div className="space-y-1.5 max-w-xl">
-              <Label htmlFor="meta_app_secret" className="text-xs font-medium">
-                Cole a Chave Secreta (App Secret) obtida no portal Meta Developers:
-              </Label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
+          <form onSubmit={handleSaveSecret} className="space-y-4 max-w-2xl">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="meta_app_id" className="text-xs font-medium">
+                  Meta App ID (Identificação do Aplicativo):
+                </Label>
+                <Input
+                  id="meta_app_id"
+                  type="text"
+                  placeholder="Ex: 160193948766835"
+                  value={appId}
+                  onChange={(e) => setAppId(e.target.value)}
+                  className="font-mono text-xs"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="meta_app_secret" className="text-xs font-medium">
+                  Chave Secreta do Aplicativo (App Secret):
+                </Label>
+                <div className="relative">
                   <Input
                     id="meta_app_secret"
                     type={showSecret ? "text" : "password"}
-                    placeholder={secretStatus.configured ? "Substituir segredo atual..." : "Cole aqui o App Secret (ex: a1b2c3d4...)"}
+                    placeholder={secretStatus.configured ? "Substituir segredo atual..." : "Cole aqui o App Secret"}
                     value={appSecret}
                     onChange={(e) => setAppSecret(e.target.value)}
                     className="font-mono text-xs pr-10"
-                    required
                   />
                   <Button
                     type="button"
@@ -374,29 +417,32 @@ export default function AdminCriafy() {
                     {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
                 </div>
-                <Button
-                  type="submit"
-                  size="sm"
-                  disabled={isSavingSecret || !appSecret.trim()}
-                  className="gap-1.5 h-9 bg-indigo-600 hover:bg-indigo-700 text-white shrink-0"
-                >
-                  {isSavingSecret ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Salvando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4" />
-                      <span>Salvar App Secret</span>
-                    </>
-                  )}
-                </Button>
               </div>
             </div>
-            <p className="text-[11px] text-muted-foreground">
-              Localização na Meta: <strong>developers.facebook.com</strong> &gt; <strong>Criafy</strong> &gt; <strong>Configurações Básicas</strong> &gt; <strong>Chave Secreta do Aplicativo</strong> &gt; <em>Mostrar</em>.
-            </p>
+
+            <div className="flex items-center justify-between pt-1">
+              <p className="text-[11px] text-muted-foreground">
+                Localização na Meta: <strong>developers.facebook.com</strong> &gt; <strong>Criafy</strong> &gt; <strong>Configurações do aplicativo</strong> &gt; <strong>Básico</strong>.
+              </p>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={isSavingSecret || !appId.trim()}
+                className="gap-1.5 h-9 bg-indigo-600 hover:bg-indigo-700 text-white shrink-0"
+              >
+                {isSavingSecret ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Salvando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4" />
+                    <span>Salvar Credenciais</span>
+                  </>
+                )}
+              </Button>
+            </div>
           </form>
         </CardContent>
       </Card>
