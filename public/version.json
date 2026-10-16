@@ -1,6 +1,6 @@
 {
-  "commit": "274f1e3b7e28d291d699ddbc75e0a7c3d96f9665",
-  "shortCommit": "274f1e3",
-  "message": "fix(n8n-router): restaurar definicao de AbortController no fetchZApi",
-  "builtAt": "2026-10-15T23:52:31.907Z"
+  "commit": "7340c7b8bda7eaa9031db6cce652dfe19c2bb6bb",
+  "shortCommit": "7340c7b",
+  "message": "feat(quick-replies): remove campo de atalho e busca pelo nome da resposta com barra",
+  "builtAt": "2026-10-16T00:23:30.883Z"
 }

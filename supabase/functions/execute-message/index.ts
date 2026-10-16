@@ -4343,6 +4343,7 @@ Deno.serve(async (req) => {
                   destination: {
                     jid: targetDestJid,
                     name: targetDestName,
+                    phone: triggerContext?.respondentPhone || dest.recipient_phone || dest.phone || "",
                   },
                 });
                 
@@ -5464,6 +5465,7 @@ Deno.serve(async (req) => {
               destination: {
                 jid: targetDestJid,
                 name: targetDestName,
+                phone: triggerContext?.respondentPhone || dest.recipient_phone || dest.phone || "",
               },
             });
 

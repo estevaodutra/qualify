@@ -152,21 +152,40 @@ Deno.serve(async (req) => {
     let targetPhone = "";
     let targetLeadId = conv.lead_id || null;
 
-    if (conv.lead_id) {
-      const { data: lead } = await adminClient
-        .from("leads")
-        .select("id, phone, name")
-        .eq("id", conv.lead_id)
-        .maybeSingle();
+    const isGroupConv = Boolean(
+      conv.is_group ||
+      conv.contact_phone?.includes("@g.us") ||
+      conv.contact_phone?.includes("-group") ||
+      conv.contact_phone?.replace(/\D/g, "").startsWith("1203") ||
+      (conv.contact_phone && conv.contact_phone.replace(/\D/g, "").length > 15)
+    );
 
-      if (lead?.phone) {
-        targetPhone = lead.phone;
-        targetLeadId = lead.id;
+    if (isGroupConv) {
+      // Em conversas de grupo, sempre enviar para o JID do grupo com @g.us
+      const cleanDigits = (conv.contact_phone || "").replace("@g.us", "").replace("-group", "").replace(/\D/g, "");
+      targetPhone = `${cleanDigits}@g.us`;
+    } else {
+      if (conv.lead_id) {
+        const { data: lead } = await adminClient
+          .from("leads")
+          .select("id, phone, name")
+          .eq("id", conv.lead_id)
+          .maybeSingle();
+
+        if (lead?.phone) {
+          targetPhone = lead.phone;
+          targetLeadId = lead.id;
+        }
       }
-    }
 
-    if (!targetPhone && conv.contact_phone) {
-      targetPhone = conv.contact_phone;
+      if (!targetPhone && conv.contact_phone) {
+        targetPhone = conv.contact_phone;
+      }
+
+      if (targetPhone) {
+        // Mensagem normal individual: apenas dígitos limpos, NUNCA @c.us nem prefixo @
+        targetPhone = targetPhone.replace("@s.whatsapp.net", "").replace("@c.us", "").replace("-group", "").replace("@g.us", "").replace(/\D/g, "");
+      }
     }
 
     if (!targetPhone) {

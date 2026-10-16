@@ -57,8 +57,8 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
   const { action, node, instance, destination } = payload;
   const { provider, externalId, externalToken } = instance;
   
-  // Normalizar JID/Phone: para grupos reais, usar o JID (contém @g.us ou -group).
-  // Para privado, usar o phone puro apenas com números.
+  // Normalizar JID/Phone: para grupos reais, usar o JID com @g.us.
+  // Para privado, usar o phone puro apenas com números (sem @c.us, sem @).
   const isActualGroup = (val: string) => {
     if (!val) return false;
     if (val.includes("@s.whatsapp.net") || val.includes("@c.us")) return false;
@@ -73,28 +73,57 @@ export async function sendWhatsAppMessage(payload: StandardizedPayload): Promise
   let target = "";
   const jid = destination.jid || "";
   const phone = destination.phone || "";
+  const isGroup = isActualGroup(jid) || isActualGroup(phone);
 
-  if (isActualGroup(jid)) {
-    target = jid.includes("@") ? jid : `${jid.replace("-group", "")}@g.us`;
-  } else if (isActualGroup(phone)) {
-    target = phone.includes("@") ? phone : `${phone.replace("-group", "")}@g.us`;
+  if (isGroup) {
+    const rawVal = isActualGroup(jid) ? jid : phone;
+    const cleanDigits = rawVal.replace("-group", "").replace("@g.us", "").replace(/\D/g, "");
+    // Para grupos no WAHA/Z-API: sempre enviar com @g.us (nunca colocar prefixo @)
+    target = `${cleanDigits}@g.us`;
   } else {
-    // É conversa privada com um contato individual! Mandar apenas o número de telefone
+    // É conversa privada com um contato individual! Mandar apenas o número de telefone (sem @c.us, sem @, apenas dígitos)
     const rawVal = phone || jid || "";
     target = rawVal.replace("@s.whatsapp.net", "").replace("@c.us", "").replace("-group", "").replace("@g.us", "").replace(/\D/g, "");
   }
 
-  console.log(`[whatsapp-client] Sending action ${action} to ${target} via provider ${provider}`);
+  console.log(`[whatsapp-client] Sending action ${action} to ${target} via provider ${provider} (isGroup: ${isGroup})`);
 
   // Z-API base URL:
   const baseUrl = `https://api.z-api.io/instances/${externalId}/token/${externalToken}`;
   let endpoint = "";
-  let body: Record<string, any> = { phone: target };
+  let body: Record<string, any> = { 
+    phone: target,
+    chatId: target,
+  };
 
   const config = node.config || {};
 
-  // Mention all group members (boolean in request body: true or false)
-  body.mention_all = Boolean(config.mention_all ?? config.mentionAll ?? false);
+  // Mention handling:
+  const mentionAll = Boolean(config.mention_all ?? config.mentionAll ?? false);
+  const mentionMember = Boolean(config.mentionMember ?? config.mention_member ?? false);
+
+  let mentions: string[] = [];
+  if (Array.isArray(config.mentions) && config.mentions.length > 0) {
+    mentions = config.mentions.map((m: any) => {
+      const str = String(m || "").trim();
+      if (str.toLowerCase() === "all") return "all";
+      const cleanDigits = str.replace("@c.us", "").replace("@s.whatsapp.net", "").replace(/\D/g, "");
+      return cleanDigits ? `${cleanDigits}@c.us` : str;
+    }).filter(Boolean);
+  } else if (mentionAll) {
+    mentions = ["all"];
+  } else if (mentionMember && isGroup) {
+    const memberPhone = config.memberPhone || config.phone || (phone && !isActualGroup(phone) ? phone : "") || (jid && !isActualGroup(jid) ? jid : "");
+    const cleanMember = String(memberPhone || "").replace("@c.us", "").replace("@s.whatsapp.net", "").replace(/\D/g, "");
+    if (cleanMember) {
+      mentions = [`${cleanMember}@c.us`];
+    }
+  }
+
+  body.mention_all = mentionAll;
+  if (isGroup && mentions.length > 0) {
+    body.mentions = mentions;
+  }
 
   switch (action) {
     case "message.send_text":

@@ -179,26 +179,36 @@ export function routeZApiRequest(endpoint: string, method: string, requestBody: 
   };
 }
 
-function normalizeGroupJids(obj: any): any {
+function normalizeGroupJids(obj: any, provider: string = "z_api"): any {
   if (obj === null || obj === undefined) return obj;
   if (typeof obj === "string") {
-    if (obj.includes("@g.us")) {
-      const clean = obj.replace("@g.us", "").replace(/\D/g, "");
-      // Grupos reais começam com 1203, têm mais de 15 dígitos ou contêm hífen de criação
-      if (clean.startsWith("1203") || clean.length > 15 || obj.split("@g.us")[0].includes("-")) {
-        return obj.replace("@g.us", "-group");
+    const isWaha = provider === "waha";
+    if (isWaha) {
+      // Para o WAHA: grupos NUNCA devem ter sufixo -group, sempre @g.us!
+      if (obj.includes("-group")) {
+        return obj.replace("-group", "@g.us");
       }
-      return clean;
+      return obj;
+    } else {
+      // Para Z-API legado:
+      if (obj.includes("@g.us")) {
+        const clean = obj.replace("@g.us", "").replace(/\D/g, "");
+        // Grupos reais começam com 1203, têm mais de 15 dígitos ou contêm hífen de criação
+        if (clean.startsWith("1203") || clean.length > 15 || obj.split("@g.us")[0].includes("-")) {
+          return obj.replace("@g.us", "-group");
+        }
+        return clean;
+      }
+      return obj;
     }
-    return obj;
   }
   if (Array.isArray(obj)) {
-    return obj.map(normalizeGroupJids);
+    return obj.map((item) => normalizeGroupJids(item, provider));
   }
   if (typeof obj === "object") {
     const copy: Record<string, any> = {};
     for (const key of Object.keys(obj)) {
-      copy[key] = normalizeGroupJids(obj[key]);
+      copy[key] = normalizeGroupJids(obj[key], provider);
     }
     return copy;
   }
@@ -299,9 +309,6 @@ export async function fetchZApi(
     if (parts[1]) content.groupId = parts[1];
   }
 
-  // Normalize group JIDs to -group format for n8n compatibility
-  content = normalizeGroupJids(content);
-
   // Route to the correct n8n endpoint
   const routed = routeZApiRequest(endpoint, method, content);
 
@@ -359,12 +366,59 @@ export async function fetchZApi(
     console.error("[n8n-router] Error fetching webhook config from DB:", dbErr.message);
   }
 
+  // Normalizar JIDs de grupo de acordo com o provedor (WAHA sempre @g.us, nunca -group)
+  content = normalizeGroupJids(content, actualProvider);
+
+  // Identificar se o alvo é um grupo real ou mensagem individual
+  const isActualGroup = (val: string) => {
+    if (!val) return false;
+    if (val.includes("@s.whatsapp.net") || val.includes("@c.us")) return false;
+    if (val.includes("@g.us") || val.includes("-group")) {
+      const clean = val.replace("-group", "").replace("@g.us", "").replace(/\D/g, "");
+      return clean.startsWith("1203") || clean.length > 15 || val.split(/[@-]/)[0].includes("-");
+    }
+    const clean = val.replace(/\D/g, "");
+    return clean.startsWith("1203") || clean.length > 15;
+  };
+
+  const rawTarget = String(content?.chatId || content?.phone || "");
+  const isGroup = isActualGroup(rawTarget);
+
+  let targetChatId = rawTarget;
+  if (isGroup) {
+    const cleanGroupDigits = rawTarget.replace("-group", "").replace("@g.us", "").replace(/\D/g, "");
+    targetChatId = actualProvider === "waha" ? `${cleanGroupDigits}@g.us` : (rawTarget.includes("@g.us") ? rawTarget : `${cleanGroupDigits}@g.us`);
+  } else if (rawTarget) {
+    // Para mensagem normal/individual: estritamente dígitos puros, NUNCA @c.us nem prefixo @
+    targetChatId = rawTarget.replace("@s.whatsapp.net", "").replace("@c.us", "").replace("-group", "").replace("@g.us", "").replace(/\D/g, "");
+  }
+
   const targetUrl = webhookUrl || routed.url;
   
   // Extract API key if available
   const apiKey = headers["Client-Token"] || headers["Authorization"] || Deno.env.get("CLIENT_TOKEN") || "";
 
   const mentionAllBool = Boolean(content?.mention_all ?? false);
+  let mentionsArr: string[] = [];
+  if (Array.isArray(content?.mentions) && content.mentions.length > 0) {
+    mentionsArr = content.mentions.map((m: any) => {
+      const str = String(m || "").trim();
+      if (str.toLowerCase() === "all") return "all";
+      const cleanDigits = str.replace("@c.us", "").replace("@s.whatsapp.net", "").replace(/\D/g, "");
+      return cleanDigits ? `${cleanDigits}@c.us` : str;
+    }).filter(Boolean);
+  } else if (mentionAllBool) {
+    mentionsArr = ["all"];
+  }
+
+  const updatedContent = (content && typeof content === "object") ? {
+    ...content,
+    chatId: targetChatId,
+    phone: targetChatId,
+    mention_all: mentionAllBool,
+    ...(isGroup && mentionsArr.length > 0 ? { mentions: mentionsArr } : {}),
+  } : content;
+
   const n8nPayload = {
     provider: actualProvider,
     instance_id: resolvedInstanceId || "",
@@ -373,11 +427,10 @@ export async function fetchZApi(
     instance_name: instanceName || "",
     api_key: apiKey,
     action: routed.action,
+    chatId: targetChatId,
     mention_all: mentionAllBool,
-    content: (content && typeof content === "object") ? {
-      ...content,
-      mention_all: mentionAllBool,
-    } : content,
+    mentions: isGroup ? mentionsArr : [],
+    content: updatedContent,
   };
 
 
@@ -463,12 +516,12 @@ function normalizeWahaGroups(wahaData: any): any[] {
   
   const normalized: any[] = [];
   const processGroupObj = (key: string, groupVal: any) => {
-    const phone = key.includes("@g.us") 
-      ? key.replace("@g.us", "-group") 
-      : key;
+    const cleanDigits = key.replace("-group", "").replace("@g.us", "").replace(/\D/g, "");
+    const groupJid = `${cleanDigits}@g.us`;
     
     normalized.push({
-      phone: phone,
+      phone: groupJid,
+      jid: groupJid,
       name: groupVal.subject || groupVal.name || "",
       isGroup: true,
       pinned: String(groupVal.pinned || false),
