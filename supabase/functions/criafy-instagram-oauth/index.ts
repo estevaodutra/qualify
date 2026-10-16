@@ -52,7 +52,7 @@ async function getInstagramCredentials(adminClient?: any) {
 
   // 2. Fallbacks: variáveis de ambiente ou App ID padrão do Criafy
   if (!appId) {
-    appId = Deno.env.get("META_APP_ID") || Deno.env.get("INSTAGRAM_APP_ID") || "160193948766835";
+    appId = Deno.env.get("META_APP_ID") || Deno.env.get("INSTAGRAM_APP_ID") || "1601939487668355";
   }
   if (!appSecret) {
     appSecret = Deno.env.get("META_APP_SECRET") || Deno.env.get("INSTAGRAM_APP_SECRET");

@@ -1,6 +1,6 @@
 {
-  "commit": "7a9a3816c16bf91d0947248e0e6d68d3fca65c95",
-  "shortCommit": "7a9a381",
-  "message": "feat(chat): adiciona identificador único por URL /chat/:conversationId, consolidação de histórico e badge de cópia de ID",
-  "builtAt": "2026-10-16T14:02:35.602Z"
+  "commit": "1bfaea2d85de59b33e114196bf6e8a895861a31a",
+  "shortCommit": "1bfaea2",
+  "message": "feat(criafy): migrar integracao para fluxo oficial Facebook Login for Business com BM, Paginas e Instagram",
+  "builtAt": "2026-10-16T14:36:56.814Z"
 }

@@ -136,13 +136,13 @@ const META_URLS: MetaUrlItem[] = [
 
 export default function AdminCriafy() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [appId, setAppId] = useState("160193948766835");
+  const [appId, setAppId] = useState("1601939487668355");
   const [appSecret, setAppSecret] = useState("");
   const [showSecret, setShowSecret] = useState(false);
   const [isSavingSecret, setIsSavingSecret] = useState(false);
   const [secretStatus, setSecretStatus] = useState<{ configured: boolean; masked?: string | null; appId?: string }>({
     configured: false,
-    appId: "160193948766835",
+    appId: "1601939487668355",
   });
 
   useEffect(() => {
@@ -158,7 +158,7 @@ export default function AdminCriafy() {
 
       let configured = false;
       let masked: string | null = null;
-      let currentAppId = "160193948766835";
+      let currentAppId = "1601939487668355";
 
       if (data && Array.isArray(data)) {
         for (const item of data) {
@@ -178,7 +178,7 @@ export default function AdminCriafy() {
 
       setSecretStatus({ configured, masked, appId: currentAppId });
     } catch (_) {
-      setSecretStatus({ configured: false, appId: "160193948766835" });
+      setSecretStatus({ configured: false, appId: "1601939487668355" });
     }
   };
 
@@ -302,12 +302,12 @@ export default function AdminCriafy() {
               <Key className="h-4 w-4 text-indigo-500" />
             </CardDescription>
             <div className="flex items-center justify-between pt-1">
-              <CardTitle className="text-lg font-mono font-bold">{secretStatus.appId || "160193948766835"}</CardTitle>
+              <CardTitle className="text-lg font-mono font-bold">{secretStatus.appId || "1601939487668355"}</CardTitle>
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => copyToClipboard(secretStatus.appId || "160193948766835", "app_id", "Meta App ID")}
+                onClick={() => copyToClipboard(secretStatus.appId || "1601939487668355", "app_id", "Meta App ID")}
               >
                 {copiedId === "app_id" ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
               </Button>
@@ -386,7 +386,7 @@ export default function AdminCriafy() {
                 <Input
                   id="meta_app_id"
                   type="text"
-                  placeholder="Ex: 160193948766835"
+                  placeholder="Ex: 1601939487668355"
                   value={appId}
                   onChange={(e) => setAppId(e.target.value)}
                   className="font-mono text-xs"
