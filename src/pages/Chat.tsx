@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useParams, useNavigate, useLocation } from "react-router-dom";
 import { MessageSquare, RefreshCw, Loader2, Info, ChevronLeft, Smartphone, Radio, Eye, Zap, Pin, Archive, UserPlus, Users } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -36,36 +36,42 @@ import { AdvancedChatFilters, DEFAULT_ADVANCED_CHAT_FILTERS } from "@/types/chat
 export default function Chat() {
   const { activeCompanyId } = useCompany();
   const [searchParams] = useSearchParams();
+  const { conversationId: routeConversationId } = useParams<{ conversationId?: string }>();
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const phoneParam = searchParams.get("phone");
   const leadIdParam = searchParams.get("leadId");
   const conversationIdParam = searchParams.get("conversationId");
 
-  const [selectedConvId, setSelectedConvId] = useState<string | null>(conversationIdParam || null);
+  const [selectedConvId, setSelectedConvId] = useState<string | null>(routeConversationId || conversationIdParam || null);
   const [sidebarMode, setSidebarMode] = useState<ChatSidebarMode>("quick_replies");
   const [selectedQuickReply, setSelectedQuickReply] = useState<QuickReply | null>(null);
+
+  // Sync selectedConvId whenever the route conversationId changes
+  useEffect(() => {
+    if (routeConversationId && routeConversationId !== selectedConvId) {
+      setSelectedConvId(routeConversationId);
+    }
+  }, [routeConversationId]);
 
   // Mobile Sheet states
   const [mobileQuickRepliesOpen, setMobileQuickRepliesOpen] = useState(false);
   const [mobileLeadDetailsOpen, setMobileLeadDetailsOpen] = useState(false);
 
-  // Handle mobile selection with browser history state integration
+  // Handle selection with URL sync and browser history integration
   const handleSelectConv = (id: string | null) => {
-    if (id && window.innerWidth < 768) {
-      window.history.pushState({ chatConversationId: id }, "");
-    }
     setSelectedConvId(id);
-  };
-
-  // Listen to popstate event (mobile back gesture / browser back)
-  useEffect(() => {
-    const handlePopState = () => {
-      if (selectedConvId && window.innerWidth < 768) {
-        setSelectedConvId(null);
+    if (id) {
+      if (routeConversationId !== id) {
+        navigate(`/chat/${id}`, { replace: false });
       }
-    };
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, [selectedConvId]);
+    } else {
+      if (location.pathname !== "/chat") {
+        navigate("/chat", { replace: false });
+      }
+    }
+  };
 
   // Reset sidebar to quick_replies when switching conversation
   useEffect(() => {
@@ -146,7 +152,53 @@ export default function Chat() {
     staleTime: 300000,
   });
 
-  const selectedConv = conversations.find((c) => c.id === selectedConvId);
+  // Query specific conversation by ID if navigated via /chat/:conversationId directly
+  const { data: directConv } = useQuery({
+    queryKey: ["chat-conversation-direct", selectedConvId, activeCompanyId],
+    queryFn: async () => {
+      if (!selectedConvId || !activeCompanyId) return null;
+      const { data, error } = await supabase
+        .from("chat_conversations")
+        .select(`
+          id,
+          company_id,
+          lead_id,
+          contact_phone,
+          contact_name,
+          instance_id,
+          status,
+          operator_id,
+          unread_count,
+          last_message_preview,
+          last_message_at,
+          tags,
+          waiting_since,
+          created_at,
+          updated_at,
+          is_archived,
+          archived_at,
+          archived_by,
+          lead:leads(id, name, phone, email, tags, custom_fields),
+          operator:profiles(id, full_name, email),
+          instance:instances(id, name, phone, provider, status)
+        `)
+        .eq("id", selectedConvId)
+        .eq("company_id", activeCompanyId)
+        .maybeSingle();
+
+      if (error) {
+        console.warn("[Chat] Direct conversation fetch error:", error);
+        return null;
+      }
+      return data as unknown as ChatConversation;
+    },
+    enabled: !!selectedConvId && !!activeCompanyId && !conversations.some(c => c.id === selectedConvId),
+    staleTime: 60000,
+  });
+
+  const selectedConv = useMemo(() => {
+    return conversations.find((c) => c.id === selectedConvId) || directConv || null;
+  }, [conversations, selectedConvId, directConv]);
 
   // Find all conversations belonging to the currently selected lead
   const leadConversations = useMemo(() => {
@@ -154,20 +206,10 @@ export default function Chat() {
     return conversations.filter((c) => c.lead_id === selectedConv.lead_id);
   }, [conversations, selectedConv?.lead_id]);
 
-  // Handle switching instance connection without database unique constraint errors
+  // Handle switching instance connection without splitting history into separate conversations
   const handleSwitchInstance = async (val: string) => {
     if (!selectedConv) return;
     const targetInstanceId = val === "none" ? null : val;
-
-    const existingConv = conversations.find(
-      (c) => c.lead_id === selectedConv.lead_id && (targetInstanceId === null ? c.instance_id === null : c.instance_id === targetInstanceId)
-    );
-
-    if (existingConv) {
-      handleSelectConv(existingConv.id);
-      toast.success(`Alternado para a conversa na conexão ${existingConv.instance?.name || "selecionada"}`);
-      return;
-    }
 
     try {
       const updated = await updateConversationInstance({
@@ -175,29 +217,11 @@ export default function Chat() {
         instanceId: targetInstanceId,
       });
       if (updated?.id) {
-        handleSelectConv(updated.id);
-        toast.success("Conexão atualizada com sucesso");
+        toast.success("Conexão atualizada com sucesso!");
+        refetchConversations();
       }
     } catch (err: any) {
-      if (err?.message?.includes("duplicate key value") || err?.code === "23505") {
-        const { data: dbConv } = await supabase
-          .from("chat_conversations")
-          .select("id")
-          .eq("company_id", activeCompanyId)
-          .eq("lead_id", selectedConv.lead_id)
-          .eq("instance_id", targetInstanceId)
-          .maybeSingle();
-
-        if (dbConv?.id) {
-          handleSelectConv(dbConv.id);
-          toast.success("Alternado para a conversa existente nesta conexão.");
-          refetchConversations();
-        } else {
-          toast.error("Erro ao alterar conexão.");
-        }
-      } else {
-        toast.error(`Erro ao trocar conexão: ${err.message}`);
-      }
+      toast.error(`Erro ao trocar conexão: ${err.message}`);
     }
   };
 
@@ -519,6 +543,21 @@ export default function Chat() {
                         </SelectContent>
                       </Select>
                     </div>
+
+                    {/* Unique Conversation ID Badge (Click to copy) */}
+                    <span className="text-muted-foreground/30 text-[10px] hidden sm:inline">•</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(selectedConv.id);
+                        toast.success("ID único da conversa copiado!");
+                      }}
+                      className="h-6 px-2 py-0.5 rounded-lg text-[10px] font-mono text-muted-foreground hover:text-foreground bg-muted/40 hover:bg-muted/80 border border-border/40 transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+                      title={`ID único da conversa: ${selectedConv.id} (Clique para copiar)`}
+                    >
+                      <span className="text-[9px] font-sans font-bold text-primary uppercase">ID:</span>
+                      <span className="truncate max-w-[70px] sm:max-w-[100px]">{selectedConv.id.slice(0, 8)}...</span>
+                    </button>
                   </div>
 
                   {/* Permanent Tags Row (Option 2) */}

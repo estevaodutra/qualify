@@ -113,6 +113,7 @@ const App = () => {
                     >
                       <Route path="/" element={<Dashboard />} />
                       <Route path="/chat" element={<Chat />} />
+                      <Route path="/chat/:conversationId" element={<Chat />} />
                       <Route path="/painel-ligacoes" element={<CallPanel />} />
                       <Route path="/leads" element={<Leads />} />
                       <Route path="/groups" element={<Groups />} />
