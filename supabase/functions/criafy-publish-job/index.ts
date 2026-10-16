@@ -13,8 +13,8 @@ const GRAPH_API_VERSION = "v21.0";
 async function waitForContainerReady(
   creationId: string,
   accessToken: string,
-  maxAttempts = 30,
-  intervalMs = 3000
+  maxAttempts = 22,
+  intervalMs = 2000
 ): Promise<void> {
   for (let i = 0; i < maxAttempts; i++) {
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
@@ -25,8 +25,8 @@ async function waitForContainerReady(
     const data = await res.json();
 
     if (data.status_code === "FINISHED") {
-      // Buffer para garantir propagação de mídia nas bordas CDN da Meta antes de chamar media_publish
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      // Buffer curto para propagação de mídia nas bordas CDN da Meta antes de chamar media_publish
+      await new Promise((resolve) => setTimeout(resolve, 1500));
       return;
     }
 
@@ -36,7 +36,7 @@ async function waitForContainerReady(
     }
   }
 
-  throw new Error("Timeout ao aguardar processamento do vídeo pela Meta Graph API (mais de 90s).");
+  throw new Error("Timeout ao aguardar processamento do vídeo pela Meta Graph API.");
 }
 
 Deno.serve(async (req) => {
@@ -212,7 +212,13 @@ Deno.serve(async (req) => {
       const err = publishData.error;
       const errorCode = err.error_subcode || err.code || null;
       const userMsg = err.error_user_msg || err.error_user_title || err.message;
-      const fullMsg = `Meta Publish Error: ${err.message}${errorCode ? ` (Código: ${errorCode})` : ""}${userMsg && userMsg !== err.message ? ` - ${userMsg}` : ""}`;
+
+      let diagnosticHint = "";
+      if (String(errorCode) === "2207085") {
+        diagnosticHint = " (Vídeo incompatível com pipeline da Meta: verifique se o arquivo tem proporção 9:16 e faststart/moov no início)";
+      }
+
+      const fullMsg = `Meta Publish Error: ${err.message}${errorCode ? ` (Código: ${errorCode})` : ""}${userMsg && userMsg !== err.message ? ` - ${userMsg}` : ""}${diagnosticHint}`;
 
       // Gravar log detalhado no banco
       await adminClient.from("criafy_publication_attempts").insert({
@@ -325,7 +331,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(JSON.stringify({ success: false, error: err.message }), {
-      status: 400,
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

@@ -190,6 +190,9 @@ export function PublicationsView({
             loadData(true);
           })
           .catch((publishErr: any) => {
+            setPublications((prev) =>
+              prev.map((p) => (p.id === pub.id ? { ...p, status: "FAILED" as const } : p))
+            );
             toast.error(`Falha ao publicar na Meta: ${publishErr.message}`, {
               id: `bg-${pub.id}`,
               duration: 10000,
@@ -235,6 +238,9 @@ export function PublicationsView({
         loadData(true);
       })
       .catch((err: any) => {
+        setPublications((prev) =>
+          prev.map((p) => (p.id === pubId ? { ...p, status: "FAILED" as const } : p))
+        );
         toast.error(`Falha ao publicar na Meta: ${err.message}`, {
           id: `retry-${pubId}`,
           duration: 10000,

@@ -18,15 +18,23 @@ async function functionErrorMessage(data: unknown, error: unknown, fallback: str
   const dataError = (data as { error?: unknown } | null)?.error;
   if (typeof dataError === "string") return dataError;
 
-  const response = (error as { context?: { clone?: () => Response } } | null)?.context;
-  if (response && typeof response.clone === "function") {
+  const ctx: any = (error as any)?.context;
+  if (ctx) {
     try {
-      const errorBody = (await response.clone().json()) as { error?: unknown };
-      if (typeof errorBody?.error === "string") return errorBody.error;
+      if (typeof ctx.clone === "function") {
+        const json = await ctx.clone().json();
+        if (json?.error) return typeof json.error === "string" ? json.error : JSON.stringify(json.error);
+        if (json?.msg) return typeof json.msg === "string" ? json.msg : JSON.stringify(json.msg);
+      } else if (typeof ctx.json === "function") {
+        const json = await ctx.json();
+        if (json?.error) return typeof json.error === "string" ? json.error : JSON.stringify(json.error);
+        if (json?.msg) return typeof json.msg === "string" ? json.msg : JSON.stringify(json.msg);
+      }
     } catch {
-      // Fall back to the SDK error below when the response is not JSON.
+      // Fall back below
     }
   }
+
   const sdkMessage = (error as { message?: unknown } | null)?.message;
   return typeof sdkMessage === "string" ? sdkMessage : fallback;
 }

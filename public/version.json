@@ -1,6 +1,6 @@
 {
-  "commit": "6c888958ec49b3cb2df0f94ec2898a2c6608ec38",
-  "shortCommit": "6c88895",
-  "message": "fix(criafy): extract exact Meta error in publishNow and fix failure logging",
-  "builtAt": "2026-10-16T20:20:03.079Z"
+  "commit": "5575b9ddf779659e16584bec04d0c1af68281d75",
+  "shortCommit": "5575b9d",
+  "message": "feat(criafy): add dedicated admin logs subpage for meta/instagram and async background publishing",
+  "builtAt": "2026-10-16T20:46:18.820Z"
 }
