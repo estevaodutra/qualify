@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
   Select,
   SelectContent,
@@ -373,9 +374,14 @@ export function MediaLibraryView({
                     }}
                   >
                     <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-full bg-pink-500/10 text-pink-500 flex items-center justify-center text-xs font-bold">
-                        @{acc.username.charAt(0).toUpperCase()}
-                      </div>
+                      <Avatar className="w-7 h-7 border border-border shadow-sm">
+                        {acc.profile_picture_url ? (
+                          <AvatarImage src={acc.profile_picture_url} alt={acc.username} className="object-cover" />
+                        ) : null}
+                        <AvatarFallback className="bg-pink-500/10 text-pink-500 text-[10px] font-bold">
+                          @{acc.username.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
                       <div>
                         <p className="text-xs font-semibold">@{acc.username}</p>
                         <p className="text-[10px] text-muted-foreground">{acc.name || "Conta Instagram"}</p>

@@ -46,6 +46,49 @@ export const criafyService = {
     return data || [];
   },
 
+  async syncAccountProfile(accountId: string): Promise<CriafyInstagramAccount> {
+    const { data: account, error: getErr } = await (supabase as any)
+      .from("criafy_instagram_accounts")
+      .select("*")
+      .eq("id", accountId)
+      .single();
+    if (getErr || !account) throw new Error("Conta não encontrada");
+
+    const token = account.access_token;
+    const igId = account.instagram_account_id;
+    if (!token || !igId) throw new Error("Conta sem token ou ID de acesso da Meta.");
+
+    const res = await fetch(
+      `https://graph.facebook.com/v22.0/${igId}?fields=id,username,name,biography,profile_picture_url,followers_count,follows_count,media_count,website&access_token=${token}`
+    );
+    const metaData = await res.json();
+    if (metaData.error) throw new Error(`Meta API: ${metaData.error.message}`);
+
+    const updatedMetadata = {
+      ...(account.metadata || {}),
+      followers_count: metaData.followers_count,
+      follows_count: metaData.follows_count,
+      media_count: metaData.media_count,
+      biography: metaData.biography,
+      website: metaData.website,
+    };
+
+    const { data: updated, error: updErr } = await (supabase as any)
+      .from("criafy_instagram_accounts")
+      .update({
+        name: metaData.name || account.name,
+        profile_picture_url: metaData.profile_picture_url || account.profile_picture_url,
+        metadata: updatedMetadata,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", accountId)
+      .select()
+      .single();
+
+    if (updErr) throw updErr;
+    return updated;
+  },
+
   async addAccount(accountData: Partial<CriafyInstagramAccount>): Promise<CriafyInstagramAccount> {
     const { data, error } = await (supabase as any)
       .from("criafy_instagram_accounts")
@@ -238,7 +281,7 @@ export const criafyService = {
     const fileExt = file.name.split(".").pop() || "bin";
     const fileName = `${companyId}/${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
 
-    const bucketName = "chat-media"; // Standard public bucket in Qualify
+    const bucketName = "media"; // Public bucket in Qualify
 
     const { error: uploadError } = await supabase.storage
       .from(bucketName)

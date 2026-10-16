@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
   Instagram,
   Sparkles,
@@ -17,6 +18,8 @@ import {
   CheckCircle2,
   RefreshCw,
   CalendarDays,
+  Users,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -48,6 +51,7 @@ export default function CriafyHub() {
   const [briefingModalOpen, setBriefingModalOpen] = useState(false);
   const [selectedBriefingAccount, setSelectedBriefingAccount] =
     useState<CriafyInstagramAccount | null>(null);
+  const [syncingAccountId, setSyncingAccountId] = useState<string | null>(null);
 
   function extractCompanyIdFromState(rawState: string | null): string | null {
     if (!rawState) return null;
@@ -234,6 +238,20 @@ export default function CriafyHub() {
     }
   };
 
+  const handleSyncProfile = async (accountId: string) => {
+    setSyncingAccountId(accountId);
+    try {
+      toast.loading("Sincronizando dados com o Instagram...", { id: "sync-profile" });
+      const updated = await criafyService.syncAccountProfile(accountId);
+      setAccounts((prev) => prev.map((a) => (a.id === accountId ? updated : a)));
+      toast.success("Perfil sincronizado com a Meta com sucesso!", { id: "sync-profile" });
+    } catch (err: any) {
+      toast.error(`Erro ao sincronizar perfil: ${err.message}`, { id: "sync-profile" });
+    } finally {
+      setSyncingAccountId(null);
+    }
+  };
+
   const renderConnectionBadge = (account: CriafyInstagramAccount) => {
     if (account.connection_status === "EXPIRED" || account.connection_status === "ERROR") {
       return (
@@ -350,39 +368,82 @@ export default function CriafyHub() {
                 }`}
               >
                 <CardContent className="p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 text-white flex items-center justify-center font-bold text-sm shadow-sm">
-                        @{account.username.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-xs leading-tight">@{account.username}</h4>
-                        <p className="text-[10px] text-muted-foreground">{account.name || "Instagram Account"}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Avatar className="w-11 h-11 border-2 border-pink-500/30 shadow-sm shrink-0">
+                        {account.profile_picture_url ? (
+                          <AvatarImage src={account.profile_picture_url} alt={account.username} className="object-cover" />
+                        ) : null}
+                        <AvatarFallback className="bg-gradient-to-tr from-purple-500 to-pink-500 text-white font-bold text-xs">
+                          @{account.username.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1">
+                          <h4 className="font-bold text-sm leading-tight truncate">@{account.username}</h4>
+                          <a
+                            href={`https://instagram.com/${account.username}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-muted-foreground hover:text-pink-500 transition-colors"
+                            title="Abrir no Instagram"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground truncate">{account.name || "Instagram Account"}</p>
+                        {account.metadata?.page_name && (
+                          <p className="text-[10px] text-blue-500 font-medium truncate">
+                            FB: {account.metadata.page_name}
+                          </p>
+                        )}
                       </div>
                     </div>
 
-                    {renderConnectionBadge(account)}
+                    <div className="shrink-0 flex flex-col items-end gap-1">
+                      {renderConnectionBadge(account)}
+                    </div>
                   </div>
 
+                  {/* Métricas do Perfil Meta */}
                   <div className="grid grid-cols-2 gap-2 pt-2 border-t border-muted text-[11px]">
                     <div className="bg-muted/30 p-2 rounded-lg">
-                      <span className="text-muted-foreground block text-[10px]">Agendados</span>
-                      <span className="font-bold text-xs">0 posts</span>
+                      <span className="text-muted-foreground block text-[10px]">Seguidores</span>
+                      <span className="font-bold text-xs">
+                        {typeof account.metadata?.followers_count === "number"
+                          ? account.metadata.followers_count.toLocaleString("pt-BR")
+                          : "—"}
+                      </span>
                     </div>
                     <div className="bg-muted/30 p-2 rounded-lg">
-                      <span className="text-muted-foreground block text-[10px]">Publicados Hoje</span>
-                      <span className="font-bold text-xs">0 posts</span>
+                      <span className="text-muted-foreground block text-[10px]">Posts no Instagram</span>
+                      <span className="font-bold text-xs">
+                        {typeof account.metadata?.media_count === "number"
+                          ? account.metadata.media_count.toLocaleString("pt-BR")
+                          : "—"}
+                      </span>
                     </div>
                   </div>
 
-                  <div className="pt-1 flex items-center gap-2">
+                  {/* Ações */}
+                  <div className="pt-1 flex items-center gap-1.5">
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => openBriefingModal(account)}
-                      className="w-full text-[11px] h-7 gap-1"
+                      className="flex-1 text-[11px] h-8 gap-1"
                     >
-                      <BookOpen className="w-3 h-3 text-amber-500" /> Briefing da Conta
+                      <BookOpen className="w-3 h-3 text-amber-500" /> Briefing
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleSyncProfile(account.id)}
+                      disabled={syncingAccountId === account.id}
+                      className="text-[11px] h-8 px-2 gap-1 text-muted-foreground hover:text-foreground"
+                      title="Sincronizar dados em tempo real com o Instagram"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${syncingAccountId === account.id ? "animate-spin text-pink-500" : ""}`} />
                     </Button>
                   </div>
                 </CardContent>
