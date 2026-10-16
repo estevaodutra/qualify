@@ -75,9 +75,9 @@ export function PublicationsView({
     }
   }, [activeCompanyId, selectedAccountId]);
 
-  const loadData = async () => {
+  const loadData = async (silent = false) => {
     if (!activeCompanyId) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const [pubs, media] = await Promise.all([
         criafyService.getPublications(activeCompanyId, selectedAccountId),
@@ -86,11 +86,23 @@ export function PublicationsView({
       setPublications(pubs);
       setContents(media);
     } catch (err: any) {
-      toast.error(`Erro ao carregar publicações: ${err.message}`);
+      if (!silent) toast.error(`Erro ao carregar publicações: ${err.message}`);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
+
+  // Auto-polling for active background publishing
+  useEffect(() => {
+    const hasPublishing = publications.some((p) => p.status === "PUBLISHING");
+    if (!hasPublishing) return;
+
+    const interval = setInterval(() => {
+      loadData(true);
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [publications, activeCompanyId, selectedAccountId]);
 
   const handleOpenNewModal = () => {
     if (accounts.length === 0) {
@@ -152,20 +164,44 @@ export function PublicationsView({
       });
 
       if (isPublishNow) {
-        toast.loading("Enviando para a Meta Instagram Graph API...", { id: "publish-direct" });
-        try {
-          await criafyService.publishNow(pub.id);
-          toast.success("Publicação realizada com sucesso no Instagram!", { id: "publish-direct" });
-        } catch (publishErr: any) {
-          toast.error(`Falha ao publicar na Meta: ${publishErr.message}`, { id: "publish-direct" });
-        }
-        loadData();
+        setModalOpen(false);
+        setSubmitting(false);
+
+        toast.info("Publicação iniciada em segundo plano! Avisaremos aqui assim que for concluída.", {
+          id: `bg-${pub.id}`,
+          duration: 4000,
+        });
+
+        loadData(true);
+
+        criafyService
+          .publishNow(pub.id)
+          .then((res) => {
+            toast.success("Publicação realizada com sucesso no Instagram!", {
+              id: `bg-${pub.id}`,
+              duration: 8000,
+              action: res?.igPermalink
+                ? {
+                    label: "Ver no Instagram",
+                    onClick: () => window.open(res.igPermalink, "_blank"),
+                  }
+                : undefined,
+            });
+            loadData(true);
+          })
+          .catch((publishErr: any) => {
+            toast.error(`Falha ao publicar na Meta: ${publishErr.message}`, {
+              id: `bg-${pub.id}`,
+              duration: 10000,
+            });
+            loadData(true);
+          });
+        return;
       } else {
         toast.success("Publicação agendada com sucesso!");
-        loadData();
+        loadData(true);
+        setModalOpen(false);
       }
-
-      setModalOpen(false);
     } catch (err: any) {
       toast.error(`Erro ao salvar publicação: ${err.message}`);
     } finally {
@@ -173,16 +209,38 @@ export function PublicationsView({
     }
   };
 
-  const handleRetryPublication = async (pubId: string) => {
-    toast.loading("Tentando publicar novamente na Meta...", { id: "retry-publish" });
-    try {
-      await criafyService.publishNow(pubId);
-      toast.success("Publicação realizada com sucesso!", { id: "retry-publish" });
-      loadData();
-    } catch (err: any) {
-      toast.error(`Erro na nova tentativa: ${err.message}`, { id: "retry-publish" });
-      loadData();
-    }
+  const handleRetryPublication = (pubId: string) => {
+    setPublications((prev) =>
+      prev.map((p) => (p.id === pubId ? { ...p, status: "PUBLISHING" as const } : p))
+    );
+
+    toast.info("Nova tentativa de publicação iniciada em segundo plano...", {
+      id: `retry-${pubId}`,
+      duration: 4000,
+    });
+
+    criafyService
+      .publishNow(pubId)
+      .then((res) => {
+        toast.success("Publicação realizada com sucesso no Instagram!", {
+          id: `retry-${pubId}`,
+          duration: 8000,
+          action: res?.igPermalink
+            ? {
+                label: "Ver no Instagram",
+                onClick: () => window.open(res.igPermalink, "_blank"),
+              }
+            : undefined,
+        });
+        loadData(true);
+      })
+      .catch((err: any) => {
+        toast.error(`Falha ao publicar na Meta: ${err.message}`, {
+          id: `retry-${pubId}`,
+          duration: 10000,
+        });
+        loadData(true);
+      });
   };
 
   const getStatusBadge = (status: string) => {

@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useLanguage } from "@/i18n";
+import { useSearchParams } from "react-router-dom";
 import { useSequenceLogs, SequenceLog } from "@/hooks/useSequenceLogs";
 import { useApiLogs, type ApiLog } from "@/hooks/useApiLogs";
 import { useGroupCampaigns } from "@/hooks/useGroupCampaigns";
@@ -15,9 +16,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CriafyLogsTab } from "@/components/admin/CriafyLogsTab";
 import { 
   RefreshCw, Download, Search, CheckCircle, XCircle, Clock, Activity, 
-  Loader2, Copy, Check, Eye, Code, ArrowDownLeft, ArrowUpRight
+  Loader2, Copy, Check, Eye, Code, ArrowDownLeft, ArrowUpRight, MessageSquare, Instagram
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -103,6 +106,13 @@ export default function Logs() {
   const { logs: apiLogs, isLoading: isLoadingApi, refetch: refetchApi } = useApiLogs();
   const { campaigns } = useGroupCampaigns();
   const { campaigns: dispatchCampaigns } = useDispatchCampaigns();
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") || "whatsapp";
+
+  const handleTabChange = (val: string) => {
+    setSearchParams({ tab: val });
+  };
 
   // Filters state
   const [searchTerm, setSearchTerm] = useState("");
@@ -433,31 +443,51 @@ export default function Logs() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={t("logs.title") || "Logs"}
-        description={t("logs.description") || "Monitore todos os eventos de entrada e saída do sistema (retenção de 72h)"}
+        title={t("logs.title") || "Logs do Sistema"}
+        description={
+          activeTab === "whatsapp"
+            ? "Monitore todos os eventos de entrada e saída do WhatsApp e Webhooks (retenção de 72h)"
+            : "Monitore publicações, requisições da Meta Instagram Graph API, códigos de erro e payloads"
+        }
         actions={
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
-              <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
-              Atualizar
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleExport} disabled={isExporting}>
-              {isExporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
-              Exportar
-            </Button>
-          </div>
+          activeTab === "whatsapp" ? (
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
+                <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
+                Atualizar
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleExport} disabled={isExporting}>
+                {isExporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+                Exportar
+              </Button>
+            </div>
+          ) : null
         }
       />
 
-      {/* Retention Info Banner */}
-      <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2 text-sm">
-        <Clock className="h-4 w-4 text-primary" />
-        <span className="text-muted-foreground">{t("logs.retentionInfo") || "Logs são mantidos por 72 horas"}</span>
-      </div>
+      {/* Subpage Tabs Switcher */}
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="whatsapp" className="gap-2 font-medium">
+            <MessageSquare className="h-4 w-4 text-emerald-600" />
+            WhatsApp / Disparos
+          </TabsTrigger>
+          <TabsTrigger value="criafy" className="gap-2 font-medium">
+            <Instagram className="h-4 w-4 text-purple-600" />
+            Qualify / Criafy (Meta)
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Metrics Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <MetricCard title="Total" value={stats.total} icon={Activity} />
+        <TabsContent value="whatsapp" className="space-y-6 m-0">
+          {/* Retention Info Banner */}
+          <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2 text-sm">
+            <Clock className="h-4 w-4 text-primary" />
+            <span className="text-muted-foreground">{t("logs.retentionInfo") || "Logs são mantidos por 72 horas"}</span>
+          </div>
+
+          {/* Metrics Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <MetricCard title="Total" value={stats.total} icon={Activity} />
         <MetricCard title="Inputs (Entradas)" value={stats.inputs} icon={ArrowDownLeft} />
         <MetricCard title="Outputs (Saídas)" value={stats.outputs} icon={ArrowUpRight} />
         <MetricCard title="Falhas" value={stats.failures} icon={XCircle} />
@@ -690,6 +720,12 @@ export default function Logs() {
           )}
         </DialogContent>
       </Dialog>
+        </TabsContent>
+
+        <TabsContent value="criafy" className="space-y-6 m-0">
+          <CriafyLogsTab />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

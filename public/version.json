@@ -1,6 +1,6 @@
 {
-  "commit": "1bfaea2d85de59b33e114196bf6e8a895861a31a",
-  "shortCommit": "1bfaea2",
-  "message": "feat(criafy): migrar integracao para fluxo oficial Facebook Login for Business com BM, Paginas e Instagram",
-  "builtAt": "2026-10-16T14:36:56.814Z"
+  "commit": "6c888958ec49b3cb2df0f94ec2898a2c6608ec38",
+  "shortCommit": "6c88895",
+  "message": "fix(criafy): extract exact Meta error in publishNow and fix failure logging",
+  "builtAt": "2026-10-16T20:20:03.079Z"
 }
