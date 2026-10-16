@@ -39,6 +39,9 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let publicationId: string | null = null;
+  let pubCompanyId: string | null = null;
+
   try {
     const authHeader = req.headers.get("Authorization");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -46,7 +49,7 @@ Deno.serve(async (req) => {
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = await req.json();
-    const { publicationId } = body;
+    publicationId = body.publicationId;
 
     if (!publicationId) {
       throw new Error("publicationId is required");
@@ -67,6 +70,7 @@ Deno.serve(async (req) => {
       throw new Error(`Publicação não encontrada: ${pubError?.message}`);
     }
 
+    pubCompanyId = pub.company_id;
     const account = pub.account;
     const content = pub.content;
 
@@ -231,23 +235,24 @@ Deno.serve(async (req) => {
       const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
       const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-      const body = await req.clone().json();
-      if (body.publicationId) {
+      if (publicationId) {
         await adminClient
           .from("criafy_publications")
           .update({ status: "FAILED", updated_at: new Date().toISOString() })
-          .eq("id", body.publicationId);
+          .eq("id", publicationId);
 
         await adminClient.from("criafy_publication_attempts").insert({
-          company_id: body.companyId || "00000000-0000-0000-0000-000000000000",
-          publication_id: body.publicationId,
+          company_id: pubCompanyId || "00000000-0000-0000-0000-000000000000",
+          publication_id: publicationId,
           attempt_number: 1,
           status: "FAILED",
           error_message: err.message,
           raw_response_sanitized: { error: err.message },
         });
       }
-    } catch (_) {}
+    } catch (logErr) {
+      console.error("[criafy-publish-job] Erro ao gravar tentativa com falha:", logErr);
+    }
 
     return new Response(JSON.stringify({ success: false, error: err.message }), {
       status: 400,

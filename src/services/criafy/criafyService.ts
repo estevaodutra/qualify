@@ -429,7 +429,7 @@ export const criafyService = {
     });
 
     if (error || !data?.success) {
-      throw new Error(data?.error || error?.message || "Erro ao publicar no Instagram.");
+      throw new Error(await functionErrorMessage(data, error, "Erro ao publicar no Instagram."));
     }
     return data;
   },
