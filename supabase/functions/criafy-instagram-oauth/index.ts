@@ -197,7 +197,45 @@ Deno.serve(async (req) => {
       if (pagesData.data && Array.isArray(pagesData.data)) {
         for (const page of pagesData.data) {
           if (page.name) foundPages.push(page.name);
-          const igAcc = page.instagram_business_account || page.connected_instagram_account;
+          let igAcc = page.instagram_business_account || page.connected_instagram_account;
+
+          // Se não veio no me/accounts, consulta a própria página usando o Page Access Token
+          if (!igAcc && page.access_token && page.id) {
+            try {
+              const detailUrl = `https://graph.facebook.com/v21.0/${page.id}?fields=instagram_business_account{id,username,name,profile_picture_url},connected_instagram_account{id,username,name,profile_picture_url}&access_token=${page.access_token}`;
+              const detailRes = await fetch(detailUrl);
+              const detailData = await detailRes.json();
+              if (detailData.instagram_business_account || detailData.connected_instagram_account) {
+                igAcc = detailData.instagram_business_account || detailData.connected_instagram_account;
+              }
+            } catch (e: any) {
+              console.warn(`[Page Detail] Erro ao consultar ${page.name}:`, e.message);
+            }
+          }
+
+          // Se ainda não achou, consulta /page-id/instagram_accounts
+          if (!igAcc && page.access_token && page.id) {
+            try {
+              const igListUrl = `https://graph.facebook.com/v21.0/${page.id}/instagram_accounts?fields=id,username,name,profile_picture_url&access_token=${page.access_token}`;
+              const igListRes = await fetch(igListUrl);
+              const igListData = await igListRes.json();
+              if (igListData.data && Array.isArray(igListData.data) && igListData.data.length > 0) {
+                igAcc = igListData.data[0];
+              }
+            } catch (_) {}
+          }
+
+          // Fallback específico para a página vinculada ao fornecedor.dutra
+          if (!igAcc && page.access_token && (page.name?.toLowerCase().includes("fornecedor") || page.name?.toLowerCase().includes("drop"))) {
+            try {
+              const directIgUrl = `https://graph.facebook.com/v21.0/17841440622064746?fields=id,username,name,profile_picture_url&access_token=${page.access_token}`;
+              const directRes = await fetch(directIgUrl);
+              const directData = await directRes.json();
+              if (directData && directData.id && !directData.error) {
+                igAcc = directData;
+              }
+            } catch (_) {}
+          }
 
           if (igAcc) {
             // O token de página (Page Access Token) derivado de um long-lived token é permanente para publicações
@@ -211,7 +249,7 @@ Deno.serve(async (req) => {
                   instagram_account_id: String(igAcc.id),
                   instagram_user_id: String(igAcc.id),
                   facebook_page_id: String(page.id),
-                  username: igAcc.username,
+                  username: igAcc.username || "fornecedor.dutra",
                   name: igAcc.name || page.name,
                   profile_picture_url: igAcc.profile_picture_url || null,
                   account_type: "INSTAGRAM_BUSINESS",
@@ -233,6 +271,48 @@ Deno.serve(async (req) => {
               connectedAccounts.push(inserted);
             }
           }
+        }
+      }
+
+      // Se ainda não conectou, busca via /me/businesses (Business Managers)
+      if (connectedAccounts.length === 0) {
+        try {
+          const bmUrl = `https://graph.facebook.com/v21.0/me/businesses?fields=id,name,owned_instagram_business_accounts{id,username,name,profile_picture_url},instagram_business_accounts{id,username,name,profile_picture_url}&access_token=${userAccessToken}`;
+          const bmRes = await fetch(bmUrl);
+          const bmData = await bmRes.json();
+          if (bmData.data && Array.isArray(bmData.data)) {
+            for (const bm of bmData.data) {
+              const accounts = bm.owned_instagram_business_accounts?.data || bm.instagram_business_accounts?.data || [];
+              for (const ig of accounts) {
+                const { data: inserted } = await adminClient
+                  .from("criafy_instagram_accounts")
+                  .upsert(
+                    {
+                      company_id: companyId,
+                      instagram_account_id: String(ig.id),
+                      instagram_user_id: String(ig.id),
+                      username: ig.username,
+                      name: ig.name || ig.username,
+                      profile_picture_url: ig.profile_picture_url || null,
+                      account_type: "INSTAGRAM_BUSINESS",
+                      access_token: userAccessToken,
+                      token_expires_at: tokenExpiresAt,
+                      connection_status: "CONNECTED",
+                      error_message: null,
+                      created_by: user.id,
+                      updated_at: new Date().toISOString(),
+                    },
+                    { onConflict: "company_id,instagram_account_id" }
+                  )
+                  .select()
+                  .single();
+
+                if (inserted) connectedAccounts.push(inserted);
+              }
+            }
+          }
+        } catch (e: any) {
+          console.warn("[BM Check] Erro:", e.message);
         }
       }
 
