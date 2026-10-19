@@ -1,6 +1,6 @@
 {
-  "commit": "5575b9ddf779659e16584bec04d0c1af68281d75",
-  "shortCommit": "5575b9d",
-  "message": "feat(criafy): add dedicated admin logs subpage for meta/instagram and async background publishing",
-  "builtAt": "2026-10-16T20:46:18.820Z"
+  "commit": "1aa69b18e8484d6e62698267c1feb443733e3955",
+  "shortCommit": "1aa69b1",
+  "message": "fix(criafy): optimize edge function polling to prevent 60s timeout and return clean error payloads",
+  "builtAt": "2026-10-19T13:19:32.182Z"
 }

@@ -603,6 +603,10 @@ export default function Chat() {
               fetchNextMessages={fetchNextMessages}
               hasNextMessages={hasNextMessages}
               isFetchingNextMessages={isFetchingNextMessages}
+              onSelectConversation={(targetId) => {
+                setFilters((prev) => ({ ...prev, conversationType: "all" }));
+                handleSelectConv(targetId);
+              }}
             />
 
             {/* Message composer */}

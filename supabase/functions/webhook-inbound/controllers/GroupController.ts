@@ -29,6 +29,24 @@ export async function processGroupEvent(
   
   if (!isGroupJoinOrLeave && !validGroupEvents.includes(classification.eventType)) return;
 
+function formatPhoneNumber(phone: string): string {
+  if (!phone) return phone;
+  const digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("55") && (digits.length === 12 || digits.length === 13)) {
+    const ddd = digits.slice(2, 4);
+    const rest = digits.slice(4);
+    if (rest.length === 9) {
+      return `+55 (${ddd}) ${rest.slice(0, 5)}-${rest.slice(5)}`;
+    } else {
+      return `+55 (${ddd}) ${rest.slice(0, 4)}-${rest.slice(4)}`;
+    }
+  }
+  if (digits.length >= 10 && digits.length <= 15) {
+    return `+${digits}`;
+  }
+  return phone;
+}
+
   // 0. ==========================================
   // INSERT SYSTEM MESSAGE INTO CHAT CONVERSATION
   // ==========================================
@@ -37,130 +55,153 @@ export async function processGroupEvent(
       if (isGroupJoinOrLeave) {
         // Resolve Company ID
         let companyId = null;
-        const { data: company } = await supabase.from("companies").select("id").eq("owner_id", instance.user_id).limit(1).maybeSingle();
+        const { data: company } = await supabase
+          .from("companies")
+          .select("id")
+          .eq("owner_id", instance.user_id)
+          .limit(1)
+          .maybeSingle();
+
         if (company?.id) {
           companyId = company.id;
         } else {
-          const { data: member } = await supabase.from("company_members").select("company_id").eq("user_id", instance.user_id).eq("is_active", true).limit(1).maybeSingle();
+          const { data: member } = await supabase
+            .from("company_members")
+            .select("company_id")
+            .eq("user_id", instance.user_id)
+            .eq("is_active", true)
+            .limit(1)
+            .maybeSingle();
           if (member?.company_id) companyId = member.company_id;
         }
 
         if (companyId) {
-          // The database automatically strips non-numeric characters from 'phone' using a trigger.
           const cleanGroupPhone = context.chatJid.replace(/\D/g, "");
 
-          // Upsert into dedicated whatsapp_groups table instead of leads table
-          let { data: whatsappGroup } = await supabase
-            .from("whatsapp_groups")
-            .select("id, name")
-            .eq("company_id", companyId)
-            .eq("group_jid", context.chatJid)
-            .maybeSingle();
-
-          if (!whatsappGroup) {
-            const { data: newGroup } = await supabase
-              .from("whatsapp_groups")
-              .insert({
-                company_id: companyId,
-                user_id: instance.user_id,
-                instance_id: instance.id,
-                group_jid: context.chatJid,
-                name: context.chatName || "Grupo WhatsApp",
-              })
-              .select("id, name")
+          // 1. Resolve Group Title
+          let groupTitle = context.chatName || null;
+          if (!groupTitle) {
+            const { data: gc } = await supabase
+              .from("group_campaigns")
+              .select("name")
+              .eq("group_jid", context.chatJid)
+              .limit(1)
               .maybeSingle();
-            whatsappGroup = newGroup;
+            if (gc?.name) groupTitle = gc.name;
+          }
+          if (!groupTitle) {
+            const { data: cg } = await supabase
+              .from("campaign_groups")
+              .select("group_name")
+              .eq("group_jid", context.chatJid)
+              .limit(1)
+              .maybeSingle();
+            if (cg?.group_name) groupTitle = cg.group_name;
+          }
+          if (!groupTitle) {
+            groupTitle = `Grupo ${cleanGroupPhone}`;
           }
 
-          // Find or create Conversation for the Group
-          let { data: conv, error: convFindErr } = await supabase.from("chat_conversations")
-            .select("id")
+          // 2. Find Conversation for the Group
+          let { data: conv } = await supabase
+            .from("chat_conversations")
+            .select("id, contact_name, contact_phone")
             .eq("company_id", companyId)
-            .eq("contact_name", context.chatJid)
-            .eq("instance_id", instance.id)
+            .or(`contact_phone.eq.${context.chatJid},contact_phone.ilike.%${cleanGroupPhone}%,contact_name.eq.${context.chatJid}`)
+            .order("updated_at", { ascending: false })
+            .limit(1)
             .maybeSingle();
-            
-          if (convFindErr) {
-            await supabase.from("alerts").insert({ user_id: instance.user_id, severity: "error", title: "Conv Find Error", message: JSON.stringify(convFindErr) });
-          }
 
           if (!conv) {
-            const { data: newConv, error: convInsertErr } = await supabase.from("chat_conversations").insert({
-              company_id: companyId,
-              instance_id: instance.id,
-              user_id: instance.user_id,
-              contact_name: context.chatJid,
-              status: 'open'
-            }).select("id").maybeSingle();
-            
+            const { data: newConv, error: convInsertErr } = await supabase
+              .from("chat_conversations")
+              .insert({
+                company_id: companyId,
+                instance_id: instance.id,
+                contact_name: groupTitle,
+                contact_phone: context.chatJid,
+                status: "open",
+                unread_count: 0,
+                last_message_at: new Date().toISOString(),
+              })
+              .select("id")
+              .maybeSingle();
+
             if (convInsertErr) {
-              await supabase.from("alerts").insert({ user_id: instance.user_id, severity: "error", title: "Conv Insert Error", message: JSON.stringify(convInsertErr) });
+              console.error("[GroupController] Conv Insert Error:", convInsertErr);
             }
             conv = newConv;
           }
 
-            if (conv?.id) {
-              let cleanSenderPhone = context.senderName || context.senderPhone || context.senderLid || rawEvent?.["@lid"] || rawEvent?.from_phone || rawEvent?.phone || "Um participante";
+          if (conv?.id) {
+            // Extract participant phone and LID
+            const rawPhone = context.senderPhone || rawEvent?.from_phone || rawEvent?.phone || "";
+            const phoneDigits = rawPhone.replace(/\D/g, "");
+            const lidVal = context.senderLid || rawEvent?.["@lid"] || rawEvent?.from_lid || rawEvent?.participant_lid;
 
-              // Tenta localizar se o participante já é um lead cadastrado pelo telefone ou @lid para exibir o nome dele
-              if (companyId) {
-                const phoneDigits = (context.senderPhone || rawEvent?.from_phone || rawEvent?.phone || "").replace(/\D/g, "");
-                const lidVal = context.senderLid || rawEvent?.["@lid"] || rawEvent?.from_lid || rawEvent?.participant_lid;
-                
-                const orClauses = [];
-                if (phoneDigits) orClauses.push(`phone.eq.${phoneDigits}`);
-                if (lidVal) orClauses.push(`lid.eq.${lidVal}`);
-                
-                if (orClauses.length > 0) {
-                  const { data: senderLead } = await supabase
-                    .from("leads")
-                    .select("name")
-                    .eq("company_id", companyId)
-                    .or(orClauses.join(","))
-                    .limit(1)
-                    .maybeSingle();
-                    
-                  if (senderLead?.name) {
-                    cleanSenderPhone = senderLead.name;
-                  }
+            let leadName: string | null = null;
+            if (companyId) {
+              const orClauses = [];
+              if (phoneDigits) orClauses.push(`phone.eq.${phoneDigits}`);
+              if (lidVal) orClauses.push(`lid.eq.${lidVal}`);
+
+              if (orClauses.length > 0) {
+                const { data: senderLead } = await supabase
+                  .from("leads")
+                  .select("name, phone")
+                  .eq("company_id", companyId)
+                  .or(orClauses.join(","))
+                  .limit(1)
+                  .maybeSingle();
+
+                if (senderLead?.name && senderLead.name !== senderLead.phone) {
+                  leadName = senderLead.name;
                 }
               }
+            }
 
-              const systemBody = classification.eventType === "group_join"
-                ? `${cleanSenderPhone} entrou no grupo.`
-                : `${cleanSenderPhone} saiu do grupo.`;
+            const formattedPhone = formatPhoneNumber(phoneDigits || rawPhone);
+            const displayLabel = leadName
+              ? `${leadName} (${formattedPhone || phoneDigits})`
+              : (formattedPhone || phoneDigits || context.senderName || "Um participante");
 
-              const { error: sysMsgErr } = await supabase.from("chat_messages").insert({
-                company_id: companyId,
-                conversation_id: conv.id,
-                sender_type: "system",
-                message_type: "system",
-                body: systemBody,
-                status: "read",
-                is_internal: false,
-                message_id: crypto.randomUUID()
-              });
-              
-              if (sysMsgErr) {
-                await supabase.from("alerts").insert({ user_id: instance.user_id, severity: "error", title: "Msg Insert Error", message: JSON.stringify(sysMsgErr) });
-              } else {
-                 await supabase.from("alerts").insert({ user_id: instance.user_id, severity: "info", title: "Group Msg Success", message: `Message inserted for ${context.chatJid}` });
-              }
-              
-              // Touch the conversation to bring it to the top of the inbox
-              await supabase.from("chat_conversations").update({
-                last_message_at: new Date().toISOString()
-              }).eq("id", conv.id);
-              
+            const systemBody = isJoin
+              ? `${displayLabel} entrou no grupo.`
+              : `${displayLabel} saiu do grupo.`;
+
+            const { error: sysMsgErr } = await supabase.from("chat_messages").insert({
+              company_id: companyId,
+              conversation_id: conv.id,
+              sender_type: "system",
+              message_type: "system",
+              body: systemBody,
+              status: "read",
+              is_internal: false,
+              message_id: crypto.randomUUID(),
+              error_message: phoneDigits || null, // Stores raw phone number for instant private chat action
+            });
+
+            if (sysMsgErr) {
+              console.error("[GroupController] Error inserting system message:", sysMsgErr);
+            } else {
               console.log(`[GroupController] System message inserted into GROUP conversation for ${classification.eventType}`);
             }
+
+            // Touch the conversation to bring it to top and update preview
+            await supabase
+              .from("chat_conversations")
+              .update({
+                last_message_at: new Date().toISOString(),
+                last_message_preview: systemBody,
+              })
+              .eq("id", conv.id);
           }
         }
-      } catch (sysMsgErr) {
-        await supabase.from("alerts").insert({ user_id: instance.user_id, severity: "error", title: "GroupController Exception", message: JSON.stringify(sysMsgErr, Object.getOwnPropertyNames(sysMsgErr)) });
-        console.error("[GroupController] Error inserting system message:", sysMsgErr);
       }
+    } catch (sysMsgErr) {
+      console.error("[GroupController] Error inserting system message:", sysMsgErr);
     }
+  }
 
   // 1. ==========================================
   // AUTO-PROCESS GROUP JOIN for Pirate Campaigns

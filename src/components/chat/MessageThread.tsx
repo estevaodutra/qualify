@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import {  Loader2, FileText, Lock, MapPin, Check, CheckCheck, User , Play, Pause, Clock, AlertCircle, Volume2, VolumeX } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Loader2, FileText, Lock, MapPin, Check, CheckCheck, User, Play, Pause, Clock, AlertCircle, Volume2, VolumeX, UserPlus, UserMinus, MessageCircle, Info } from "lucide-react";
 import { ChatMessage, ChatConversation } from "@/hooks/useChat";
+import { useCompany } from "@/contexts/CompanyContext";
+import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -12,6 +17,25 @@ interface MessageThreadProps {
   fetchNextMessages?: () => void;
   hasNextMessages?: boolean;
   isFetchingNextMessages?: boolean;
+  onSelectConversation?: (id: string) => void;
+}
+
+function formatPhoneNumber(phone: string): string {
+  if (!phone) return phone;
+  const digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("55") && (digits.length === 12 || digits.length === 13)) {
+    const ddd = digits.slice(2, 4);
+    const rest = digits.slice(4);
+    if (rest.length === 9) {
+      return `+55 (${ddd}) ${rest.slice(0, 5)}-${rest.slice(5)}`;
+    } else {
+      return `+55 (${ddd}) ${rest.slice(0, 4)}-${rest.slice(4)}`;
+    }
+  }
+  if (digits.length >= 10 && digits.length <= 15) {
+    return `+${digits}`;
+  }
+  return phone;
 }
 
 function parseInlineFormatting(text: string): React.ReactNode[] {
@@ -267,8 +291,117 @@ export default function MessageThread({
   isLoading,
   fetchNextMessages,
   hasNextMessages,
-  isFetchingNextMessages
+  isFetchingNextMessages,
+  onSelectConversation
 }: MessageThreadProps) {
+  const navigate = useNavigate();
+  const { activeCompanyId } = useCompany();
+  const queryClient = useQueryClient();
+  const [openingChatId, setOpeningChatId] = useState<string | null>(null);
+
+  const handleStartPrivateChat = async (rawPhone: string, messageId: string) => {
+    const cleanPhone = rawPhone.replace(/\D/g, "");
+    if (!cleanPhone) {
+      toast.error("Número de telefone inválido.");
+      return;
+    }
+    if (!activeCompanyId) {
+      toast.error("Nenhuma empresa selecionada.");
+      return;
+    }
+
+    try {
+      setOpeningChatId(messageId);
+
+      // 1. Tentar localizar o Lead existente
+      const suffix = cleanPhone.slice(-8);
+      let { data: lead } = await supabase
+        .from("leads")
+        .select("id, name, phone")
+        .eq("company_id", activeCompanyId)
+        .or(`phone.eq.${cleanPhone},phone.ilike.%${suffix}`)
+        .limit(1)
+        .maybeSingle();
+
+      // Se não existir, criar novo Lead
+      if (!lead) {
+        const formatted = formatPhoneNumber(cleanPhone);
+        const { data: newLead, error: leadErr } = await supabase
+          .from("leads")
+          .insert({
+            company_id: activeCompanyId,
+            name: formatted,
+            phone: cleanPhone,
+            status: "active",
+          })
+          .select("id, name, phone")
+          .single();
+
+        if (leadErr) throw leadErr;
+        lead = newLead;
+      }
+
+      if (!lead?.id) throw new Error("Não foi possível identificar ou criar o lead.");
+
+      // 2. Verificar se já existe conversa individual aberta para este Lead
+      let { data: existingConv } = await supabase
+        .from("chat_conversations")
+        .select("id")
+        .eq("company_id", activeCompanyId)
+        .eq("lead_id", lead.id)
+        .limit(1)
+        .maybeSingle();
+
+      if (!existingConv) {
+        const { data: convByPhone } = await supabase
+          .from("chat_conversations")
+          .select("id")
+          .eq("company_id", activeCompanyId)
+          .or(`contact_phone.eq.${cleanPhone},contact_phone.ilike.%${suffix}`)
+          .not("contact_phone", "ilike", "%@g.us%")
+          .not("contact_phone", "ilike", "%-group%")
+          .limit(1)
+          .maybeSingle();
+        if (convByPhone) existingConv = convByPhone;
+      }
+
+      let targetConvId = existingConv?.id;
+
+      if (!targetConvId) {
+        const { data: newConv, error: convErr } = await supabase
+          .from("chat_conversations")
+          .insert({
+            company_id: activeCompanyId,
+            lead_id: lead.id,
+            contact_name: lead.name || formatPhoneNumber(cleanPhone),
+            contact_phone: cleanPhone,
+            instance_id: conversation.instance_id || null,
+            status: "open",
+            unread_count: 0,
+            last_message_at: new Date().toISOString(),
+          })
+          .select("id")
+          .single();
+
+        if (convErr) throw convErr;
+        targetConvId = newConv.id;
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["chat-conversations", activeCompanyId] });
+
+      if (onSelectConversation) {
+        onSelectConversation(targetConvId);
+      }
+      navigate(`/chat/${targetConvId}`);
+      toast.success(`Conversa privada aberta com ${lead.name || formatPhoneNumber(cleanPhone)}`);
+    } catch (err: any) {
+      console.error("Erro ao abrir conversa privada:", err);
+      toast.error(err.message || "Erro ao abrir conversa privada.");
+    } finally {
+      setOpeningChatId(null);
+    }
+  };
+
   const bottomRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -388,13 +521,62 @@ export default function MessageThread({
             const isSystem = msg.sender_type === "system";
             const isInternal = msg.is_internal;
 
+            const phoneStr = conversation?.lead?.phone || conversation?.contact_phone || "";
+            const customFlds = (conversation?.lead?.custom_fields as Record<string, any>) || {};
+            const isGroupConv =
+              phoneStr.length > 15 ||
+              phoneStr.includes("@g.us") ||
+              phoneStr.includes("-group") ||
+              customFlds.is_group === true;
+
             if (isSystem) {
               if (!msg.body || !msg.body.trim()) return null;
+
+              const isJoin = msg.body.toLowerCase().includes("entrou");
+              const isLeave = msg.body.toLowerCase().includes("saiu");
+              const isGroupEvent = isJoin || isLeave;
+
+              const phoneMatch = msg.body.match(/(\+?\d[\d\s\(\)\-]{8,}\d)/);
+              const extractedPhone = msg.error_message || (phoneMatch ? phoneMatch[0].replace(/\D/g, "") : null);
+
               return (
-                <div key={msg.id} className="flex justify-center my-2">
-                  <span className="text-[11px] font-medium text-slate-200 bg-slate-800/80 px-3 py-1.5 rounded-xl text-center max-w-[85%] shadow-sm">
-                    {msg.body}
-                  </span>
+                <div key={msg.id} className="flex justify-center my-2.5 animate-in fade-in zoom-in-95 duration-200">
+                  <div className={cn(
+                    "flex flex-wrap items-center justify-center gap-2 px-3.5 py-1.5 rounded-2xl text-xs font-medium shadow-xs border max-w-[90%]",
+                    isJoin && "bg-emerald-500/10 border-emerald-500/25 text-emerald-800 dark:text-emerald-300",
+                    isLeave && "bg-rose-500/10 border-rose-500/25 text-rose-800 dark:text-rose-300",
+                    !isGroupEvent && "bg-slate-800/80 border-slate-700/60 text-slate-200"
+                  )}>
+                    <div className="flex items-center gap-1.5">
+                      {isJoin && <UserPlus className="h-3.5 w-3.5 text-emerald-500 shrink-0" />}
+                      {isLeave && <UserMinus className="h-3.5 w-3.5 text-rose-500 shrink-0" />}
+                      {!isGroupEvent && <Info className="h-3.5 w-3.5 text-slate-400 shrink-0" />}
+                      <span className="leading-snug">{msg.body}</span>
+                    </div>
+
+                    {isGroupConv && extractedPhone && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleStartPrivateChat(extractedPhone, msg.id);
+                        }}
+                        disabled={openingChatId === msg.id}
+                        className={cn(
+                          "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-all cursor-pointer shadow-xs",
+                          "bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95 disabled:opacity-60"
+                        )}
+                        title={`Chamar ${extractedPhone} no privado`}
+                      >
+                        {openingChatId === msg.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                        ) : (
+                          <MessageCircle className="h-3 w-3 shrink-0" />
+                        )}
+                        <span>Chamar no privado</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             }
@@ -403,14 +585,6 @@ export default function MessageThread({
             if (!msg.body?.trim() && !msg.media_url && msg.message_type !== "location" && msg.message_type !== "contact") {
               return null;
             }
-
-            const phoneStr = conversation?.lead?.phone || conversation?.contact_phone || "";
-            const customFlds = (conversation?.lead?.custom_fields as Record<string, any>) || {};
-            const isGroupConv =
-              phoneStr.length > 15 ||
-              phoneStr.includes("@g.us") ||
-              phoneStr.includes("-group") ||
-              customFlds.is_group === true;
 
             const msgMeta = (msg.metadata as Record<string, any>) || {};
             const rawSender = msgMeta.sender_name || msgMeta.from_name || msgMeta.sender_phone || msgMeta.from_phone || msgMeta.participant || "";
