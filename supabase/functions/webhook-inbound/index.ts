@@ -213,23 +213,27 @@ Deno.serve(async (req) => {
 
       const handleResult = await handleRes.json();
 
-      await supabase.from("webhook_events").insert({
-        user_id: null,
-        source: payload.provider || payload.source || "api",
-        external_instance_id: payload.instance_id,
-        event_type: "poll_vote",
-        event_subtype: "poll_response",
-        classification: "identified",
-        direction: "inbound",
-        confidence: "high",
-        matched_rule: "poll_vote_endpoint",
-        chat_jid: pollPayload.group_jid,
-        sender_phone: pollPayload.respondent.phone,
-        sender_name: pollPayload.respondent.name,
-        message_id: pollPayload.message_id,
-        raw_event: raw,
-        processing_status: "processed",
-      }).catch((err) => console.error("[webhook-inbound] Failed to log poll vote event:", err));
+      try {
+        await supabase.from("webhook_events").insert({
+          user_id: null,
+          source: payload.provider || payload.source || "api",
+          external_instance_id: payload.instance_id,
+          event_type: "poll_vote",
+          event_subtype: "poll_response",
+          classification: "identified",
+          direction: "inbound",
+          confidence: "high",
+          matched_rule: "poll_vote_endpoint",
+          chat_jid: pollPayload.group_jid,
+          sender_phone: pollPayload.respondent.phone,
+          sender_name: pollPayload.respondent.name,
+          message_id: pollPayload.message_id,
+          raw_event: raw,
+          processing_status: "processed",
+        });
+      } catch (err) {
+        console.error("[webhook-inbound] Failed to log poll vote event:", err);
+      }
 
       return new Response(JSON.stringify(handleResult), {
         status: handleRes.status,
@@ -407,7 +411,7 @@ Deno.serve(async (req) => {
       await processConnectionEvent(supabase, instance, classification, context, rawEvent);
     }
     else if (action.startsWith("group")) {
-      await supabase.from("alerts").insert({ user_id: instance?.user_id, severity: "info", title: "Webhook Route", description: `Routing action ${action} to GroupController` }).catch(() => {});
+      console.log(`[webhook-inbound] Routing action ${action} to GroupController`);
       await processGroupEvent(supabase, instance, classification, context, rawEvent, insertedEvent.id);
     }
     else if (action === "message_reaction" || action === "message_edited" || action === "message_revoked") {
@@ -419,14 +423,18 @@ Deno.serve(async (req) => {
       
       // Auto-Alert for unknown mapped events
       if (instance?.user_id && action === "unmapped_event") {
-        await supabase.from("alerts").insert({
-          user_id: instance.user_id,
-          severity: "warning",
-          title: "Evento não identificado no n8n",
-          description: `O n8n enviou um evento com action 'unmapped_event'. Payload: ${classification.eventSubtype}`,
-          entity: "webhook",
-          read: false
-        }).catch(err => console.error(err));
+        try {
+          await supabase.from("alerts").insert({
+            user_id: instance.user_id,
+            severity: "warning",
+            title: "Evento não identificado no n8n",
+            description: `O n8n enviou um evento com action 'unmapped_event'. Payload: ${classification.eventSubtype}`,
+            entity: "webhook",
+            read: false
+          });
+        } catch (err) {
+          console.error(err);
+        }
       }
     }
 
