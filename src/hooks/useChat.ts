@@ -1228,6 +1228,53 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
           });
         }
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "update",
+          schema: "public",
+          table: "chat_messages",
+          filter: `company_id=eq.${activeCompanyId}`,
+        },
+        (payload) => {
+          const updatedMsg = payload.new as ChatMessage;
+
+          // Atualiza status e dados da mensagem imediatamente no cache
+          queryClient.setQueryData(["chat-messages", updatedMsg.conversation_id], (oldData: any) => {
+            if (!oldData || !oldData.pages) return oldData;
+
+            const newPages = oldData.pages.map((page: any[]) =>
+              page.map((m) => {
+                if (m.id === updatedMsg.id || (updatedMsg.message_id && m.message_id === updatedMsg.message_id)) {
+                  return { ...m, ...updatedMsg };
+                }
+                return m;
+              })
+            );
+            return { ...oldData, pages: newPages };
+          });
+
+          // Atualiza preview da conversa caso a mensagem tenha falhado ou seja a última
+          queryClient.setQueriesData({ queryKey: ["chat-conversations", activeCompanyId] }, (oldData: any) => {
+            if (!oldData || !oldData.pages) return oldData;
+            const newPages = oldData.pages.map((page: any[]) => {
+              return page.map((conv) => {
+                if (conv.id === updatedMsg.conversation_id) {
+                  const preview = updatedMsg.status === 'failed'
+                    ? `⚠️ [Falha] ${updatedMsg.body || '[Mídia]'}`
+                    : (updatedMsg.is_internal ? `[Nota Interna] ${updatedMsg.body || '[Mídia]'}` : (updatedMsg.body || '[Mídia]'));
+                  return {
+                    ...conv,
+                    last_message_preview: preview,
+                  };
+                }
+                return conv;
+              });
+            });
+            return { ...oldData, pages: newPages };
+          });
+        }
+      )
       .subscribe();
 
     return () => {
@@ -1262,6 +1309,62 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
 
 export function useChatMessages(conversationId?: string) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  // Escuta Realtime dedicada e imediata para a conversa aberta
+  useEffect(() => {
+    if (!conversationId) return;
+
+    const channel = supabase
+      .channel(`chat-msg-thread-${conversationId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "chat_messages",
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            const newMsg = payload.new as ChatMessage;
+            queryClient.setQueryData(["chat-messages", conversationId], (oldData: any) => {
+              if (!oldData || !oldData.pages) return oldData;
+              const exists = oldData.pages.some((page: any[]) =>
+                page.some((m) => m.id === newMsg.id || (m.message_id && m.message_id === newMsg.message_id))
+              );
+              if (exists) return oldData;
+              const newPages = [...oldData.pages];
+              if (newPages.length > 0) {
+                newPages[0] = [newMsg, ...newPages[0]];
+              } else {
+                newPages.push([newMsg]);
+              }
+              return { ...oldData, pages: newPages };
+            });
+          } else if (payload.eventType === "UPDATE") {
+            const updatedMsg = payload.new as ChatMessage;
+            queryClient.setQueryData(["chat-messages", conversationId], (oldData: any) => {
+              if (!oldData || !oldData.pages) return oldData;
+              const newPages = oldData.pages.map((page: any[]) =>
+                page.map((m) => {
+                  if (m.id === updatedMsg.id || (updatedMsg.message_id && m.message_id === updatedMsg.message_id)) {
+                    return { ...m, ...updatedMsg };
+                  }
+                  return m;
+                })
+              );
+              return { ...oldData, pages: newPages };
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [conversationId, queryClient]);
 
   // Fetch Messages for Selected Thread
   const {
