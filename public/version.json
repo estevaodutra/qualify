@@ -1,6 +1,6 @@
 {
-  "commit": "1aa69b18e8484d6e62698267c1feb443733e3955",
-  "shortCommit": "1aa69b1",
-  "message": "fix(criafy): optimize edge function polling to prevent 60s timeout and return clean error payloads",
-  "builtAt": "2026-10-19T13:19:32.182Z"
+  "commit": "ddb1f68903c70f3f22ee8840d85913e617d590e3",
+  "shortCommit": "ddb1f68",
+  "message": "fix(chat): real-time message status lifecycle tracking and optimistic dispatch sync",
+  "builtAt": "2026-10-19T18:45:00.000Z"
 }
