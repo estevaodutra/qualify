@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Loader2, FileText, Lock, MapPin, Check, CheckCheck, User, Play, Pause, Clock, AlertCircle, Volume2, VolumeX, UserPlus, UserMinus, MessageCircle, Info } from "lucide-react";
 import { ChatMessage, ChatConversation } from "@/hooks/useChat";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -342,6 +343,7 @@ export default function MessageThread({
   isFetchingNextMessages,
   onSelectConversation
 }: MessageThreadProps) {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const { activeCompanyId } = useCompany();
   const queryClient = useQueryClient();
@@ -371,12 +373,22 @@ export default function MessageThread({
         .limit(1)
         .maybeSingle();
 
-      // Se não existir, criar novo Lead
+      // Se não existir, criar novo Lead garantindo o user_id
       if (!lead) {
+        let currentUserId = user?.id;
+        if (!currentUserId) {
+          const { data: authData } = await supabase.auth.getUser();
+          currentUserId = authData.user?.id;
+        }
+        if (!currentUserId && conversation.operator_id) {
+          currentUserId = conversation.operator_id;
+        }
+
         const formatted = formatPhoneNumber(cleanPhone);
         const { data: newLead, error: leadErr } = await supabase
           .from("leads")
           .insert({
+            user_id: currentUserId,
             company_id: activeCompanyId,
             name: formatted,
             phone: cleanPhone,
@@ -588,42 +600,93 @@ export default function MessageThread({
               const extractedPhone = msg.error_message || (phoneMatch ? phoneMatch[0].replace(/\D/g, "") : null);
 
               return (
-                <div key={msg.id} className="flex justify-center my-2.5 animate-in fade-in zoom-in-95 duration-200">
+                <div key={msg.id} className="flex justify-center my-2 animate-in fade-in zoom-in-95 duration-200">
                   <div className={cn(
-                    "flex flex-wrap items-center justify-center gap-2 px-3.5 py-1.5 rounded-2xl text-xs font-medium shadow-xs border max-w-[90%]",
+                    "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium shadow-xs border max-w-[90%] transition-colors",
                     isJoin && "bg-emerald-500/10 border-emerald-500/25 text-emerald-800 dark:text-emerald-300",
                     isLeave && "bg-rose-500/10 border-rose-500/25 text-rose-800 dark:text-rose-300",
                     !isGroupEvent && "bg-slate-800/80 border-slate-700/60 text-slate-200"
                   )}>
-                    <div className="flex items-center gap-1.5">
-                      {isJoin && <UserPlus className="h-3.5 w-3.5 text-emerald-500 shrink-0" />}
-                      {isLeave && <UserMinus className="h-3.5 w-3.5 text-rose-500 shrink-0" />}
-                      {!isGroupEvent && <Info className="h-3.5 w-3.5 text-slate-400 shrink-0" />}
-                      <span className="leading-snug">{msg.body}</span>
-                    </div>
+                    {isJoin && <UserPlus className="h-3.5 w-3.5 text-emerald-500 shrink-0" />}
+                    {isLeave && <UserMinus className="h-3.5 w-3.5 text-rose-500 shrink-0" />}
+                    {!isGroupEvent && <Info className="h-3.5 w-3.5 text-slate-400 shrink-0" />}
 
-                    {isGroupConv && extractedPhone && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleStartPrivateChat(extractedPhone, msg.id);
-                        }}
-                        disabled={openingChatId === msg.id}
-                        className={cn(
-                          "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-all cursor-pointer shadow-xs",
-                          "bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95 disabled:opacity-60"
-                        )}
-                        title={`Chamar ${extractedPhone} no privado`}
-                      >
-                        {openingChatId === msg.id ? (
-                          <Loader2 className="h-3 w-3 animate-spin shrink-0" />
-                        ) : (
-                          <MessageCircle className="h-3 w-3 shrink-0" />
-                        )}
-                        <span>Chamar no privado</span>
-                      </button>
-                    )}
+                    {(() => {
+                      if (!isGroupConv || !extractedPhone) {
+                        return <span className="leading-snug">{msg.body}</span>;
+                      }
+
+                      if (phoneMatch && phoneMatch.index !== undefined) {
+                        const prefix = msg.body.substring(0, phoneMatch.index);
+                        const phoneText = phoneMatch[0];
+                        const suffix = msg.body.substring(phoneMatch.index + phoneText.length);
+
+                        return (
+                          <span className="leading-snug flex items-center flex-wrap gap-1">
+                            {prefix && <span>{prefix}</span>}
+                            <TooltipProvider delayDuration={100}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleStartPrivateChat(extractedPhone, msg.id);
+                                    }}
+                                    disabled={openingChatId === msg.id}
+                                    className={cn(
+                                      "font-semibold underline decoration-dotted underline-offset-2 hover:decoration-solid hover:underline hover:text-primary transition-all cursor-pointer inline-flex items-center gap-1 bg-transparent border-none p-0 text-inherit",
+                                      openingChatId === msg.id && "opacity-60 cursor-wait"
+                                    )}
+                                  >
+                                    {openingChatId === msg.id && (
+                                      <Loader2 className="h-3 w-3 animate-spin inline-block text-primary" />
+                                    )}
+                                    <span>{phoneText}</span>
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="text-[11px] font-medium flex items-center gap-1.5 py-1 px-2.5 shadow-md">
+                                  <MessageCircle className="h-3 w-3 text-primary" />
+                                  <span>Chamar no privado</span>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            {suffix && <span>{suffix}</span>}
+                          </span>
+                        );
+                      }
+
+                      // Fallback: se regex não encontrou no body mas temos extractedPhone
+                      return (
+                        <TooltipProvider delayDuration={100}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleStartPrivateChat(extractedPhone, msg.id);
+                                }}
+                                disabled={openingChatId === msg.id}
+                                className={cn(
+                                  "font-semibold underline decoration-dotted underline-offset-2 hover:decoration-solid hover:underline hover:text-primary transition-all cursor-pointer inline-flex items-center gap-1 bg-transparent border-none p-0 text-inherit",
+                                  openingChatId === msg.id && "opacity-60 cursor-wait"
+                                )}
+                              >
+                                {openingChatId === msg.id && (
+                                  <Loader2 className="h-3 w-3 animate-spin inline-block text-primary" />
+                                )}
+                                <span>{msg.body}</span>
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-[11px] font-medium flex items-center gap-1.5 py-1 px-2.5 shadow-md">
+                              <MessageCircle className="h-3 w-3 text-primary" />
+                              <span>Chamar no privado</span>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      );
+                    })()}
                   </div>
                 </div>
               );
