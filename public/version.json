@@ -1,6 +1,6 @@
 {
-  "commit": "da03f8c094371fdf0b5b0fd81e6dd66c61797e40",
-  "shortCommit": "da03f8c",
-  "message": "fix(chat): corrigir criacao de lead com user_id e tornar numero clicavel no chat de grupo",
-  "builtAt": "2026-10-20T00:53:35.203Z"
+  "commit": "332138ae026bb5f378203f9d261635d6ef5e6ee6",
+  "shortCommit": "332138a",
+  "message": "fix(criafy): validate story video duration (< 60s) and add friendly guidance for Meta error 2207082",
+  "builtAt": "2026-10-20T01:03:37.609Z"
 }

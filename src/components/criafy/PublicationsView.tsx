@@ -110,11 +110,43 @@ export function PublicationsView({
       return;
     }
     setTargetAccountId(accounts[0].id);
-    setSelectedContentId(contents[0]?.id || "");
+    const firstContent = contents[0];
+    const firstContentId = firstContent?.id || "";
+    setSelectedContentId(firstContentId);
+
+    if (firstContent?.media_type === "VIDEO") {
+      setPublicationType("REEL");
+    } else {
+      setPublicationType("FEED");
+    }
+
     setCaption("");
     setScheduledAt("");
     setIsPublishNow(true);
     setModalOpen(true);
+  };
+
+  const handleContentSelect = (contentId: string) => {
+    setSelectedContentId(contentId);
+    const media = contents.find((c) => c.id === contentId);
+    if (!media) return;
+
+    if (media.media_type === "VIDEO") {
+      const isOver60s = media.duration_seconds && media.duration_seconds > 60;
+      if (isOver60s) {
+        if (publicationType === "STORY_VIDEO" || publicationType === "STORY_IMAGE") {
+          setPublicationType("REEL");
+          toast.info("Vídeo com mais de 60s: Stories desabilitado. Formato alterado automaticamente para Reel.");
+        }
+      } else if (publicationType === "STORY_IMAGE") {
+        setPublicationType("STORY_VIDEO");
+      }
+    } else if (media.media_type === "IMAGE") {
+      if (publicationType === "REEL" || publicationType === "STORY_VIDEO") {
+        setPublicationType("FEED");
+        toast.info("Imagem selecionada: formato ajustado para Feed.");
+      }
+    }
   };
 
   const handleGenerateAiCopy = async () => {
@@ -414,75 +446,133 @@ export function PublicationsView({
           </DialogHeader>
 
           <form onSubmit={handleCreatePublication} className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Conta do Instagram *</Label>
-                <Select value={targetAccountId} onValueChange={setTargetAccountId}>
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder="Selecione a conta" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {accounts.map((acc) => (
-                      <SelectItem key={acc.id} value={acc.id}>
-                        @{acc.username}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Tipo de Publicação *</Label>
-                <Select
-                  value={publicationType}
-                  onValueChange={(val) => setPublicationType(val as CriafyPublicationType)}
-                >
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="REEL">Reel</SelectItem>
-                    <SelectItem value="FEED">Feed (Imagem/Carrossel)</SelectItem>
-                    <SelectItem value="STORY_VIDEO">Story Vídeo</SelectItem>
-                    <SelectItem value="STORY_IMAGE">Story Imagem</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Mídia da Biblioteca *</Label>
-              <Select value={selectedContentId} onValueChange={setSelectedContentId}>
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="Selecione uma mídia" />
-                </SelectTrigger>
-                <SelectContent>
-                  {contents.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      [{c.media_type}] {c.title || c.media_url}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {selectedContentId && (() => {
+            {(() => {
               const selectedMedia = contents.find((c) => c.id === selectedContentId);
-              if (selectedMedia && publicationType === "STORY_VIDEO" && selectedMedia.duration_seconds && selectedMedia.duration_seconds > 60) {
-                return (
-                  <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
-                    <div>
-                      <strong>Vídeo muito longo para Story:</strong> este vídeo possui{" "}
-                      <strong>{Math.round(selectedMedia.duration_seconds)} segundos</strong>. A Meta/Instagram aceita vídeos de no máximo 60 segundos para Stories.
-                      <div className="mt-1 font-medium text-amber-700 dark:text-amber-200">
-                        👉 Dica: Mude o <em>Tipo de Publicação</em> para <strong>Reel</strong> (o Instagram aceita vídeos mais longos como Reel).
-                      </div>
+              const isLongVideo = selectedMedia?.media_type === "VIDEO" && !!selectedMedia?.duration_seconds && selectedMedia.duration_seconds > 60;
+              const isImageOnly = selectedMedia?.media_type === "IMAGE";
+              const isVideoOnly = selectedMedia?.media_type === "VIDEO";
+
+              return (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">Conta do Instagram *</Label>
+                      <Select value={targetAccountId} onValueChange={setTargetAccountId}>
+                        <SelectTrigger className="h-9 text-xs">
+                          <SelectValue placeholder="Selecione a conta" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {accounts.map((acc) => (
+                            <SelectItem key={acc.id} value={acc.id}>
+                              @{acc.username}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">Tipo de Publicação *</Label>
+                      <Select
+                        value={publicationType}
+                        onValueChange={(val) => setPublicationType(val as CriafyPublicationType)}
+                      >
+                        <SelectTrigger className="h-9 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem
+                            value="REEL"
+                            disabled={isImageOnly}
+                            className={isImageOnly ? "opacity-50 cursor-not-allowed" : ""}
+                          >
+                            Reel {isImageOnly ? "(Apenas para vídeos)" : ""}
+                          </SelectItem>
+                          <SelectItem value="FEED">Feed (Imagem/Vídeo)</SelectItem>
+                          <SelectItem
+                            value="STORY_VIDEO"
+                            disabled={isLongVideo || isImageOnly}
+                            className={isLongVideo || isImageOnly ? "opacity-50 cursor-not-allowed text-rose-500 font-medium" : ""}
+                          >
+                            Story Vídeo {isLongVideo ? "🚫 (Vídeo > 60s: Bloqueado)" : isImageOnly ? "(Apenas vídeos)" : "(Até 60s)"}
+                          </SelectItem>
+                          <SelectItem
+                            value="STORY_IMAGE"
+                            disabled={isVideoOnly}
+                            className={isVideoOnly ? "opacity-50 cursor-not-allowed" : ""}
+                          >
+                            Story Imagem {isVideoOnly ? "(Apenas para imagens)" : ""}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
-                );
-              }
-              return null;
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Mídia da Biblioteca *</Label>
+                    <Select value={selectedContentId} onValueChange={handleContentSelect}>
+                      <SelectTrigger className="h-9 text-xs">
+                        <SelectValue placeholder="Selecione uma mídia" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {contents.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            [{c.media_type}] {c.title || c.media_url} {c.duration_seconds ? `(${Math.round(c.duration_seconds)}s)` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    {selectedMedia && (
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <span className="text-[11px] text-muted-foreground">Formato detectado:</span>
+                        {selectedMedia.media_type === "VIDEO" ? (
+                          <>
+                            <Badge variant="outline" className="text-[10px] bg-muted/60 font-mono">
+                              ⏱️ {selectedMedia.duration_seconds ? `${Math.round(selectedMedia.duration_seconds)}s` : "Vídeo"}
+                            </Badge>
+                            {selectedMedia.aspect_ratio && (
+                              <Badge variant="outline" className="text-[10px] bg-muted/60 font-mono">
+                                📐 {selectedMedia.aspect_ratio}
+                              </Badge>
+                            )}
+                            {isLongVideo ? (
+                              <Badge variant="secondary" className="text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                                🚫 Vídeo &gt; 60s: Stories desabilitado (Compatível com Reel ou Feed)
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary" className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
+                                ✅ Compatível com Story, Reel e Feed
+                              </Badge>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <Badge variant="outline" className="text-[10px] bg-muted/60 font-mono">
+                              🖼️ Imagem
+                            </Badge>
+                            <Badge variant="secondary" className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
+                              ✅ Compatível com Feed e Story Imagem
+                            </Badge>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {isLongVideo && (
+                    <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                      <div>
+                        <strong>Vídeo de {Math.round(selectedMedia.duration_seconds!)}s detectado:</strong> A Meta/Instagram só aceita até 60 segundos nos Stories.
+                        <div className="mt-1 font-medium text-amber-700 dark:text-amber-200">
+                          A opção de Story Vídeo foi automaticamente desabilitada para evitar erros. Para este vídeo, use <strong>Reel</strong>.
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
             })()}
 
             <div className="space-y-1.5">
