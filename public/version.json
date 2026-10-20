@@ -1,6 +1,6 @@
 {
-  "commit": "9799d6e27f5f54e6761954ad6bfde0527a730a4a",
-  "shortCommit": "9799d6e",
-  "message": "fix(criafy): extend video processing polling to 3.5m to prevent premature timeout on long stories",
-  "builtAt": "2026-10-20T04:05:31.430Z"
+  "commit": "d91da73c2f091559f1aa9cb7b9ba7bfb755cff79",
+  "shortCommit": "d91da73",
+  "message": "feat(criafy): google calendar month/week views, story sequence scheduler and calendar as primary tab",
+  "builtAt": "2026-10-20T12:20:09.472Z"
 }
