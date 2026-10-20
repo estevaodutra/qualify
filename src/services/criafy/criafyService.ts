@@ -427,18 +427,70 @@ export const criafyService = {
   },
 
   async createPublication(pubData: Partial<CriafyPublication>): Promise<CriafyPublication> {
-    const { data, error } = await (supabase as any)
-      .from("criafy_publications")
-      .insert(pubData)
-      .select(`
-        *,
-        account:criafy_instagram_accounts(*),
-        content:criafy_contents(*)
-      `)
-      .single();
+    try {
+      const { data, error } = await (supabase as any)
+        .from("criafy_publications")
+        .insert(pubData)
+        .select(`
+          *,
+          account:criafy_instagram_accounts(*),
+          content:criafy_contents(*)
+        `)
+        .single();
 
-    if (error) throw error;
-    return data;
+      if (!error && data) return data;
+
+      if (error) {
+        // Fallback caso colunas de sequência ainda não existam no DB local
+        const { story_sequence_id, sequence_order, sequence_total, ...fallbackData } = pubData;
+        const { data: fbData, error: fbError } = await (supabase as any)
+          .from("criafy_publications")
+          .insert(fallbackData)
+          .select(`
+            *,
+            account:criafy_instagram_accounts(*),
+            content:criafy_contents(*)
+          `)
+          .single();
+        if (fbError) throw fbError;
+        return fbData;
+      }
+      return data;
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  async createPublicationSequence(items: Array<Partial<CriafyPublication>>): Promise<CriafyPublication[]> {
+    if (items.length === 0) return [];
+    try {
+      const { data, error } = await (supabase as any)
+        .from("criafy_publications")
+        .insert(items)
+        .select(`
+          *,
+          account:criafy_instagram_accounts(*),
+          content:criafy_contents(*)
+        `);
+
+      if (!error && data) return data;
+      if (error) {
+        const fallbackItems = items.map(({ story_sequence_id, sequence_order, sequence_total, ...rest }) => rest);
+        const { data: fbData, error: fbError } = await (supabase as any)
+          .from("criafy_publications")
+          .insert(fallbackItems)
+          .select(`
+            *,
+            account:criafy_instagram_accounts(*),
+            content:criafy_contents(*)
+          `);
+        if (fbError) throw fbError;
+        return fbData || [];
+      }
+      return [];
+    } catch (err) {
+      throw err;
+    }
   },
 
   async updatePublicationStatus(

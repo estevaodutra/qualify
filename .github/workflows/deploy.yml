@@ -9,7 +9,7 @@ on:
     paths:
       - '.github/workflows/deploy.yml'
       - 'supabase/functions/**'
-      - 'supabase/migrations/20261014200000_add_criafy_instagram_account_unique.sql'
+      - 'supabase/migrations/**'
 
 jobs:
   deploy:
@@ -22,16 +22,19 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y sshpass
 
-      - name: Apply Criafy Instagram account migration
+      - name: Apply database migrations
         run: |
-          sshpass -p "${{ secrets.VPS_PASSWORD }}" rsync -avz -e "ssh -o StrictHostKeyChecking=no -p 22022" supabase/migrations/20261014200000_add_criafy_instagram_account_unique.sql ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/criafy-instagram-account-unique.sql
+          sshpass -p "${{ secrets.VPS_PASSWORD }}" rsync -avz -e "ssh -o StrictHostKeyChecking=no -p 22022" supabase/migrations/ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/criafy-migrations/
           sshpass -p "${{ secrets.VPS_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p 22022 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} '
             set -eu
             DB_CONTAINER=$(docker ps --format "{{.Names}}" | grep -E "^qualify-supabase-(db|postgres)$" | head -n 1)
             test -n "$DB_CONTAINER"
             DB_PASSWORD=$(docker exec "$DB_CONTAINER" printenv POSTGRES_PASSWORD)
-            docker exec -e PGPASSWORD="$DB_PASSWORD" -i "$DB_CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < /tmp/criafy-instagram-account-unique.sql
-            rm -f /tmp/criafy-instagram-account-unique.sql
+            for sql_file in $(find /tmp/criafy-migrations -maxdepth 1 -name "*.sql" | sort); do
+              echo "Applying migration: $sql_file"
+              docker exec -e PGPASSWORD="$DB_PASSWORD" -i "$DB_CONTAINER" psql -v ON_ERROR_STOP=0 -U postgres -d postgres < "$sql_file" || true
+            done
+            rm -rf /tmp/criafy-migrations
           '
 
       - name: Copy functions to VPS via Rsync

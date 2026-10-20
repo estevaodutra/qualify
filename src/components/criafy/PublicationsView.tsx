@@ -31,6 +31,7 @@ import {
   Clock,
   ExternalLink,
   Repeat,
+  Layers,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -387,11 +388,20 @@ export function PublicationsView({
                 )}
 
                 <div className="space-y-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-bold text-xs">@{pub.account?.username}</span>
                     <Badge variant="outline" className="text-[10px] uppercase font-semibold">
                       {pub.publication_type}
                     </Badge>
+                    {pub.story_sequence_id && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] bg-gradient-to-r from-pink-500/10 to-amber-500/10 text-pink-600 border-pink-500/30 font-bold flex items-center gap-1"
+                      >
+                        <Layers className="w-2.5 h-2.5" />
+                        Story {pub.sequence_order || 1}/{pub.sequence_total || 1}
+                      </Badge>
+                    )}
                     {getStatusBadge(pub.status)}
                   </div>
 

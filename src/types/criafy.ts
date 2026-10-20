@@ -113,6 +113,9 @@ export interface CriafyPublication {
   ig_media_id?: string;
   ig_permalink?: string;
   is_auto_queued: boolean;
+  story_sequence_id?: string | null;
+  sequence_order?: number | null;
+  sequence_total?: number | null;
   created_by?: string;
   created_at: string;
   updated_at: string;

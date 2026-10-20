@@ -454,21 +454,29 @@ export default function CriafyHub() {
       </div>
 
       {/* Tabs Navigation for Criafy Modules */}
-      <Tabs defaultValue="conteudos" className="space-y-4 pt-4">
+      <Tabs defaultValue="calendario" className="space-y-4 pt-4">
         <TabsList className="bg-muted/60 p-1 h-10">
+          <TabsTrigger value="calendario" className="text-xs gap-1.5 h-8 font-semibold">
+            <CalendarDays className="w-3.5 h-3.5 text-pink-500" /> Calendário Editorial
+          </TabsTrigger>
           <TabsTrigger value="conteudos" className="text-xs gap-1.5 h-8">
             <Film className="w-3.5 h-3.5" /> Biblioteca de Conteúdos
           </TabsTrigger>
           <TabsTrigger value="publicacoes" className="text-xs gap-1.5 h-8">
-            <Send className="w-3.5 h-3.5" /> Publicações & Agendamento
+            <Send className="w-3.5 h-3.5" /> Publicações & Histórico
           </TabsTrigger>
           <TabsTrigger value="fila" className="text-xs gap-1.5 h-8">
             <Clock className="w-3.5 h-3.5" /> Fila Automática & Cadência
           </TabsTrigger>
-          <TabsTrigger value="calendario" className="text-xs gap-1.5 h-8">
-            <CalendarDays className="w-3.5 h-3.5" /> Calendário
-          </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="calendario">
+          <CriafyCalendarView
+            accounts={accounts}
+            selectedAccountId={selectedAccountId}
+            onSelectAccountFilter={setSelectedAccountId}
+          />
+        </TabsContent>
 
         <TabsContent value="conteudos">
           <MediaLibraryView
@@ -488,14 +496,6 @@ export default function CriafyHub() {
 
         <TabsContent value="fila">
           <QueueRulesView
-            accounts={accounts}
-            selectedAccountId={selectedAccountId}
-            onSelectAccountFilter={setSelectedAccountId}
-          />
-        </TabsContent>
-
-        <TabsContent value="calendario">
-          <CriafyCalendarView
             accounts={accounts}
             selectedAccountId={selectedAccountId}
             onSelectAccountFilter={setSelectedAccountId}
