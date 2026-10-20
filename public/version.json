@@ -1,6 +1,6 @@
 {
-  "commit": "ac3ab2db1191203b26d66d384a191c213957a0e9",
-  "shortCommit": "ac3ab2d",
-  "message": "feat(instances): add connection history logs, drop destructive disconnect trigger and prevent accidental WhatsApp disconnection",
-  "builtAt": "2026-10-20T17:04:06.867Z"
+  "commit": "8ead0ed3b32e94315ac6a36c4f3b7b38b1d3f3ac",
+  "shortCommit": "8ead0ed",
+  "message": "fix(workflows): resolve duplicate key error on save with upsert, duplicate id guard, and permission fix for company members/owners",
+  "builtAt": "2026-10-20T17:16:29.809Z"
 }

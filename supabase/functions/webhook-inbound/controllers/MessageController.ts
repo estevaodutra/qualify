@@ -63,6 +63,7 @@ export async function processMessageEvent(
   // 1.5. ==========================================
   // RESUME WORKFLOWS WAITING FOR USER INPUT (ENTRADA DO USUÁRIO)
   // ==========================================
+  let hasResumedUserInput = false;
   if (isInbound && !context.isFromMe) {
     try {
       const cleanPhone = (context.senderPhone || (context.chatType !== "group" ? context.chatJid : "") || "").replace(/\D/g, "");
@@ -109,6 +110,7 @@ export async function processMessageEvent(
       }
 
       if (pendingInput) {
+        hasResumedUserInput = true;
         console.log(`[MessageController] 🎯 Found waiting user_input session ${pendingInput.id} for phone/chat ${cleanPhone || chatJid}`);
         const rawMsgObj = rawEvent.body || rawEvent.payload || rawEvent;
 
@@ -380,6 +382,231 @@ export async function processMessageEvent(
       }
     } catch (userInputErr) {
       console.error("[MessageController] Error checking waiting user_input:", userInputErr);
+    }
+  }
+
+  // 1.8. ==========================================
+  // AUTO-TRIGGER WORKFLOWS (MESSAGE_SEQUENCES) FOR INBOUND MESSAGES (FIRST MESSAGE & KEYWORDS)
+  // ==========================================
+  if (isInbound && !context.isFromMe && !hasResumedUserInput) {
+    try {
+      const cleanPhone = (context.senderPhone || (context.chatType !== "group" ? context.chatJid : "") || "").replace(/\D/g, "");
+      const chatJid = context.chatJid || "";
+      const isGroup = context.chatType === "group" || chatJid.includes("@g.us") || chatJid.endsWith("-group");
+
+      const rawMsgObj = rawEvent.body || rawEvent.payload || rawEvent;
+      const bodyText = (
+        typeof rawMsgObj === "string"
+          ? rawMsgObj
+          : rawMsgObj?.text?.message ||
+            rawMsgObj?.text ||
+            rawMsgObj?.message?.conversation ||
+            rawMsgObj?.message?.extendedTextMessage?.text ||
+            rawMsgObj?.caption ||
+            rawMsgObj?.message?.imageMessage?.caption ||
+            rawMsgObj?.message?.videoMessage?.caption ||
+            rawMsgObj?.message?.documentMessage?.caption ||
+            rawMsgObj?.body ||
+            rawEvent?.body ||
+            ""
+      ) as string;
+
+      const normalize = (str: string) =>
+        str
+          .trim()
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/\s+/g, " ");
+
+      const normalizedBody = normalize(bodyText);
+
+      // Determine if this is the lead's first message ever
+      let isFirstMessage = false;
+      if (!isGroup && cleanPhone) {
+        try {
+          const suffix = cleanPhone.slice(-8);
+          const { count, error: countErr } = await supabase
+            .from("chat_messages")
+            .select("id", { count: "exact", head: true })
+            .eq("sender_type", "contact")
+            .or(`contact_phone.eq.${cleanPhone},contact_phone.ilike.%${suffix}%,chat_jid.ilike.%${cleanPhone}%`);
+
+          if (!countErr && (count === null || count === undefined || count <= 1)) {
+            isFirstMessage = true;
+          }
+
+          if (!isFirstMessage) {
+            const { data: conv } = await supabase
+              .from("chat_conversations")
+              .select("id, total_messages")
+              .or(`phone.eq.${cleanPhone},contact_phone.eq.${cleanPhone},jid.ilike.%${cleanPhone}%`)
+              .maybeSingle();
+
+            if (conv && (!conv.total_messages || conv.total_messages <= 1)) {
+              isFirstMessage = true;
+            }
+          }
+        } catch (firstMsgErr) {
+          console.warn("[MessageController] Error checking isFirstMessage:", firstMsgErr);
+        }
+      }
+
+      console.log(`[MessageController] Checking sequences for inbound message: phone=${cleanPhone}, isGroup=${isGroup}, isFirstMessage=${isFirstMessage}, text="${bodyText.substring(0, 40)}"`);
+
+      // Query active sequences for this instance's company / user
+      const companyId = instance?.company_id;
+      const userId = instance?.user_id;
+
+      let seqQuery = supabase
+        .from("message_sequences")
+        .select("id, name, active, company_id, user_id, trigger_type, trigger_config, sequence_nodes(id, node_type, config)")
+        .eq("active", true);
+
+      if (companyId) {
+        seqQuery = seqQuery.eq("company_id", companyId);
+      } else if (userId) {
+        seqQuery = seqQuery.eq("user_id", userId);
+      }
+
+      const { data: activeSequences, error: seqError } = await seqQuery;
+
+      if (!seqError && activeSequences && activeSequences.length > 0) {
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+        const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+        for (const seq of activeSequences) {
+          const rootCfg = (seq.trigger_config as any) || {};
+          const triggerNodes = seq.sequence_nodes?.filter((n: any) => n.node_type === "trigger") || [];
+
+          let allTriggers: any[] = rootCfg.triggers || [];
+          for (const node of triggerNodes) {
+            if (node.config?.triggers && Array.isArray(node.config.triggers)) {
+              allTriggers = [...allTriggers, ...node.config.triggers];
+            }
+          }
+
+          // Fallback if triggers array is empty
+          if (allTriggers.length === 0 && (seq.trigger_type || rootCfg.triggerType || rootCfg.keyword)) {
+            allTriggers.push({
+              id: "root",
+              type: seq.trigger_type || rootCfg.triggerType || (rootCfg.keyword ? "keyword" : "manual"),
+              config: rootCfg,
+            });
+          }
+
+          let matchedTrigger: any = null;
+          let matchedKeywordValue: string | null = null;
+
+          for (const trigger of allTriggers) {
+            const trigType = trigger.type;
+            const trigCfg = trigger.config || {};
+
+            // 1) KEYWORD TRIGGER
+            if (trigType === "keyword") {
+              const kw = (trigCfg.keyword || trigCfg.palavraChave || rootCfg.keyword || "") as string;
+              if (kw && normalizedBody) {
+                const normKw = normalize(kw);
+                const matchType = trigCfg.matchType || "contains";
+                let isMatch = false;
+
+                if (matchType === "exact") {
+                  isMatch = normalizedBody === normKw;
+                } else if (matchType === "starts_with") {
+                  isMatch = normalizedBody.startsWith(normKw);
+                } else {
+                  // contains (also handles exact match and startsWith naturally)
+                  isMatch = normalizedBody.includes(normKw);
+                }
+
+                if (isMatch) {
+                  matchedTrigger = trigger;
+                  matchedKeywordValue = kw;
+                  break;
+                }
+              }
+            }
+
+            // 2) FIRST MESSAGE TRIGGER
+            if (trigType === "first_message") {
+              if (isFirstMessage && !isGroup) {
+                matchedTrigger = trigger;
+                break;
+              }
+            }
+
+            // 3) MESSAGE RECEIVED TRIGGER
+            if (trigType === "message_received") {
+              if (!isGroup) {
+                matchedTrigger = trigger;
+                break;
+              }
+            }
+          }
+
+          if (matchedTrigger) {
+            // Check if sequence is already executing for this phone
+            if (cleanPhone) {
+              const { data: runningExec } = await supabase
+                .from("sequence_executions")
+                .select("id, status")
+                .eq("sequence_id", seq.id)
+                .or(`trigger_context->>respondentPhone.ilike.%${cleanPhone}%,trigger_context->>senderPhone.ilike.%${cleanPhone}%`)
+                .in("status", ["running", "processing", "waiting", "waiting_user_input"])
+                .limit(1)
+                .maybeSingle();
+
+              if (runningExec) {
+                console.log(`[MessageController] Workflow "${seq.name}" (${seq.id}) already active for phone ${cleanPhone} (status: ${runningExec.status}). Skipping.`);
+                continue;
+              }
+            }
+
+            console.log(`[MessageController] 🚀 Auto-triggering sequence "${seq.name}" (${seq.id}) via ${matchedTrigger.type} for phone/chat ${cleanPhone || chatJid}`);
+
+            const triggerPayload = {
+              sequenceId: seq.id,
+              triggerId: matchedTrigger.id !== "root" ? matchedTrigger.id : undefined,
+              phone: cleanPhone,
+              name: context.senderName || context.chatName || cleanPhone,
+              senderPhone: cleanPhone,
+              senderName: context.senderName || context.chatName,
+              instanceId: instance?.id,
+              companyId: seq.company_id || companyId,
+              source: matchedTrigger.type,
+              skipDedupe: true,
+              triggerContext: {
+                source: matchedTrigger.type,
+                triggerType: matchedTrigger.type,
+                matchedKeyword: matchedKeywordValue,
+                messageText: bodyText,
+                chatJid: context.chatJid,
+                senderPhone: cleanPhone,
+                instanceId: instance?.id,
+                companyId: seq.company_id || companyId,
+                sendPrivate: !isGroup,
+                destinationMode: isGroup ? "groups" : "individual",
+              }
+            };
+
+            fetch(`${supabaseUrl}/functions/v1/trigger-sequence`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${supabaseServiceKey}`,
+              },
+              body: JSON.stringify(triggerPayload),
+            }).then(async (res) => {
+              const txt = await res.text();
+              console.log(`[MessageController] trigger-sequence response (${res.status}) for seq ${seq.id}: ${txt}`);
+            }).catch((err) => {
+              console.error(`[MessageController] Failed to invoke trigger-sequence for seq ${seq.id}:`, err);
+            });
+          }
+        }
+      }
+    } catch (workflowErr) {
+      console.error("[MessageController] Error checking workflow triggers:", workflowErr);
     }
   }
 

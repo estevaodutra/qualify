@@ -321,7 +321,7 @@ Deno.serve(async (req) => {
     // Buscar a instância interna no banco
     const { data: instance } = await supabase
       .from("instances")
-      .select("id, user_id, name, phone, provider, status")
+      .select("id, user_id, company_id, name, phone, provider, status")
       .eq("external_instance_id", externalInstanceId)
       .maybeSingle();
 

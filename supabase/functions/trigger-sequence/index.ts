@@ -243,29 +243,36 @@ Deno.serve(async (req) => {
     if (!isChainedTrigger) {
       try {
         const dedupeWindow = new Date(Date.now() - 15000).toISOString();
-        const { data: recentExec } = await supabase
+        const rawTargetPhone = (payload.phone as string) || (payload.senderPhone as string) || (payload.from_phone as string) || (payload.triggerContext as any)?.respondentPhone;
+        const cleanTargetPhone = rawTargetPhone ? String(rawTargetPhone).replace(/\D/g, "") : null;
+
+        let dedupeQuery = supabase
           .from("sequence_executions")
           .select("id, created_at")
           .eq("sequence_id", typedSequence.id)
-          .gte("created_at", dedupeWindow)
-          .limit(1)
-          .maybeSingle();
+          .gte("created_at", dedupeWindow);
+
+        if (cleanTargetPhone) {
+          dedupeQuery = dedupeQuery.or(`trigger_context->>respondentPhone.ilike.%${cleanTargetPhone}%,trigger_context->>senderPhone.ilike.%${cleanTargetPhone}%`);
+        }
+
+        const { data: recentExec } = await dedupeQuery.limit(1).maybeSingle();
 
         if (recentExec) {
-          console.log(`[TriggerSequence] Deduplicated — sequence ${sequenceId} already triggered at ${recentExec.created_at}`);
+          console.log(`[TriggerSequence] Deduplicated — sequence ${sequenceId} already triggered at ${recentExec.created_at} for phone ${cleanTargetPhone || 'all'}`);
           return new Response(
             JSON.stringify({ success: true, deduplicated: true, message: "Sequence already triggered recently" }),
             { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
 
-        // Insert lock record so concurrent calls are blocked
+        // Insert lock record with phone so concurrent calls for different leads are not blocked
         await supabase.from("sequence_executions").insert({
           sequence_id: typedSequence.id,
           campaign_id: typedCampaign.id || typedSequence.id,
           user_id: typedSequence.user_id,
           status: "processing",
-          trigger_context: {},
+          trigger_context: cleanTargetPhone ? { respondentPhone: cleanTargetPhone } : {},
           destinations: [],
           nodes_data: [],
           nodes_processed: 0,

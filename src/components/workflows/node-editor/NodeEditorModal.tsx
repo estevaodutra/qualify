@@ -32,6 +32,13 @@ import { PipelineChangedTriggerConfig } from "@/components/sequences/triggers/co
 import { getTriggerDefinition } from "@/components/sequences/triggers/triggerDefinitions";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface NodeEditorModalProps {
   isOpen: boolean;
@@ -669,13 +676,42 @@ export function NodeEditorModal({
                               <div className="space-y-1.5">
                                 <label className="text-[11px] font-semibold text-slate-600">Palavra-chave</label>
                                 <Input
-                                  placeholder="Ex: #queroafiliar"
+                                  placeholder="Ex: Quero saber mais sobre a Parceria de Revenda"
                                   value={(triggerConfig.keyword as string) || ""}
                                   onChange={(e) => handleTriggerConfigChange({ ...triggerConfig, keyword: e.target.value })}
                                   className="rounded-xl h-9 bg-white"
                                 />
                               </div>
+                              <div className="space-y-1.5">
+                                <label className="text-[11px] font-semibold text-slate-600">Tipo de correspondência</label>
+                                <Select
+                                  value={(triggerConfig.matchType as string) || "contains"}
+                                  onValueChange={(val) => handleTriggerConfigChange({ ...triggerConfig, matchType: val })}
+                                >
+                                  <SelectTrigger className="bg-white rounded-xl h-9">
+                                    <SelectValue placeholder="Selecione o tipo" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="contains">Contém (Recomendado para links e mensagens livres)</SelectItem>
+                                    <SelectItem value="starts_with">Começa com</SelectItem>
+                                    <SelectItem value="exact">Exatamente igual</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
                             </div>
+                          </div>
+                        )}
+
+                        {(selectorValue === "first_message" || selectorValue === "message_received") && (
+                          <div className="p-4 rounded-xl border border-teal-200/80 bg-teal-50/40 space-y-2">
+                            <h3 className="text-xs font-bold text-teal-800 uppercase tracking-wider">
+                              {selectorValue === "first_message" ? "Primeira Mensagem do Lead" : "Mensagem Recebida"}
+                            </h3>
+                            <p className="text-xs text-teal-700/80 leading-relaxed">
+                              {selectorValue === "first_message"
+                                ? "Este fluxo iniciará automaticamente assim que um novo lead enviar sua primeira mensagem pelo WhatsApp."
+                                : "Este fluxo iniciará automaticamente quando o lead enviar uma mensagem pelo WhatsApp."}
+                            </p>
                           </div>
                         )}
 
