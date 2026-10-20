@@ -30,6 +30,7 @@ import {
   AlertCircle,
   Clock,
   ExternalLink,
+  Repeat,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -517,7 +518,7 @@ export function PublicationsView({
                       <SelectContent>
                         {contents.map((c) => (
                           <SelectItem key={c.id} value={c.id}>
-                            [{c.media_type}] {c.title || c.media_url} {c.duration_seconds ? `(${Math.round(c.duration_seconds)}s)` : ""}
+                            [{c.media_type}] {c.title || c.media_url} {c.duration_seconds ? `(${Math.round(c.duration_seconds)}s)` : ""} {c.is_published ? `• [✅ Já publicado ${c.publish_count}x]` : "• [✨ Inédito]"}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -556,9 +557,39 @@ export function PublicationsView({
                             </Badge>
                           </>
                         )}
+
+                        {selectedMedia.is_published ? (
+                          <Badge variant="outline" className="text-[10px] bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-semibold">
+                            ✅ Já publicado ({selectedMedia.publish_count}x)
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 border-amber-500/20 font-medium">
+                            ✨ Inédito
+                          </Badge>
+                        )}
                       </div>
                     )}
                   </div>
+
+                  {/* Aviso de Mídia Já Publicada (Prevenção de Repetição Acidental) */}
+                  {selectedMedia?.is_published && (
+                    <div className="p-3 rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-indigo-950 dark:text-indigo-200 text-xs flex items-start gap-2.5">
+                      <Repeat className="w-4 h-4 shrink-0 mt-0.5 text-indigo-600 dark:text-indigo-400" />
+                      <div className="space-y-1">
+                        <div className="font-semibold flex items-center gap-1.5 flex-wrap">
+                          <span>Atenção: Esta mídia já foi publicada no Instagram ({selectedMedia.publish_count}x)</span>
+                          {selectedMedia.last_published_at && (
+                            <span className="font-normal text-[11px] text-muted-foreground">
+                              (última vez em {new Date(selectedMedia.last_published_at).toLocaleDateString("pt-BR")})
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                          Você <strong>pode publicá-la novamente</strong> se desejar (ex: para outro formato ou repost). Este aviso é apenas para você ter certeza de que não está postando o mesmo conteúdo por engano.
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   {isLongVideo && (
                     <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2">

@@ -71,6 +71,19 @@ export interface CriafyContent {
   updated_at: string;
   // Account bindings (optional hydrated array)
   linked_account_ids?: string[];
+  // Publicações vinculadas e histórico de postagem
+  publications?: Array<{
+    id: string;
+    publication_type: CriafyPublicationType;
+    status: CriafyPublicationStatus;
+    published_at?: string | null;
+    scheduled_at?: string | null;
+    ig_permalink?: string | null;
+  }>;
+  is_published?: boolean;
+  is_scheduled?: boolean;
+  publish_count?: number;
+  last_published_at?: string | null;
 }
 
 export interface CriafyQueueRule {

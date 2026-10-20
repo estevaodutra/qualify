@@ -33,6 +33,10 @@ import {
   Plus,
   Trash2,
   Search,
+  Clock,
+  ExternalLink,
+  Repeat,
+  Filter,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -56,6 +60,7 @@ export function MediaLibraryView({
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "published" | "unpublished" | "scheduled">("all");
 
   // Account linkage modal state
   const [linkModalOpen, setLinkModalOpen] = useState(false);
@@ -178,63 +183,127 @@ export function MediaLibraryView({
     }
   };
 
-  const filteredContents = contents.filter((c) =>
-    (c.title || "").toLowerCase().includes(search.toLowerCase())
-  );
+  const publishedCount = contents.filter((c) => !!c.is_published).length;
+  const unpublishedCount = contents.filter((c) => !c.is_published && !c.is_scheduled).length;
+  const scheduledCount = contents.filter((c) => !!c.is_scheduled).length;
+
+  const filteredContents = contents.filter((c) => {
+    const matchesSearch = (c.title || "").toLowerCase().includes(search.toLowerCase());
+    if (!matchesSearch) return false;
+    if (statusFilter === "published") return !!c.is_published;
+    if (statusFilter === "unpublished") return !c.is_published && !c.is_scheduled;
+    if (statusFilter === "scheduled") return !!c.is_scheduled;
+    return true;
+  });
 
   return (
     <div className="space-y-4">
       {/* Header Actions */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-muted/30 p-4 rounded-xl border border-muted">
-        <div className="flex items-center gap-3">
-          <div className="relative w-64">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Buscar conteúdos..."
-              className="pl-9 bg-background h-9 text-xs"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+      <div className="flex flex-col gap-3 bg-muted/30 p-4 rounded-xl border border-muted">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative w-64">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Buscar conteúdos..."
+                className="pl-9 bg-background h-9 text-xs"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+
+            <div className="w-48">
+              <Select value={selectedAccountId} onValueChange={onSelectAccountFilter}>
+                <SelectTrigger className="h-9 text-xs bg-background">
+                  <SelectValue placeholder="Filtrar por Conta" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as contas</SelectItem>
+                  {accounts.map((acc) => (
+                    <SelectItem key={acc.id} value={acc.id}>
+                      @{acc.username}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          <div className="w-48">
-            <Select value={selectedAccountId} onValueChange={onSelectAccountFilter}>
-              <SelectTrigger className="h-9 text-xs bg-background">
-                <SelectValue placeholder="Filtrar por Conta" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas as contas</SelectItem>
-                {accounts.map((acc) => (
-                  <SelectItem key={acc.id} value={acc.id}>
-                    @{acc.username}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="flex items-center gap-2">
+            <Label
+              htmlFor="batch-upload"
+              className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium text-xs shadow-sm hover:opacity-90 transition-all"
+            >
+              {uploading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Upload className="w-4 h-4" />
+              )}
+              Upload em Lote (Imagens / Vídeos)
+            </Label>
+            <Input
+              id="batch-upload"
+              type="file"
+              multiple
+              accept="image/*,video/*"
+              className="hidden"
+              onChange={handleBatchUpload}
+              disabled={uploading}
+            />
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Label
-            htmlFor="batch-upload"
-            className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium text-xs shadow-sm hover:opacity-90 transition-all"
+        {/* Filter Pills: Todos, Inéditos, Publicados, Agendados */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-muted/50">
+          <span className="text-[11px] font-medium text-muted-foreground mr-1 flex items-center gap-1">
+            <Filter className="w-3 h-3" /> Filtrar:
+          </span>
+          <button
+            type="button"
+            onClick={() => setStatusFilter("all")}
+            className={`px-2.5 py-1 rounded-md text-xs transition-all font-medium ${
+              statusFilter === "all"
+                ? "bg-foreground text-background shadow-xs font-semibold"
+                : "bg-background/80 text-muted-foreground hover:text-foreground border border-muted"
+            }`}
           >
-            {uploading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Upload className="w-4 h-4" />
-            )}
-            Upload em Lote (Imagens / Vídeos)
-          </Label>
-          <Input
-            id="batch-upload"
-            type="file"
-            multiple
-            accept="image/*,video/*"
-            className="hidden"
-            onChange={handleBatchUpload}
-            disabled={uploading}
-          />
+            Todos ({contents.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter("unpublished")}
+            className={`px-2.5 py-1 rounded-md text-xs transition-all font-medium flex items-center gap-1 ${
+              statusFilter === "unpublished"
+                ? "bg-amber-500 text-white shadow-xs font-semibold"
+                : "bg-background/80 text-muted-foreground hover:text-amber-600 border border-muted"
+            }`}
+          >
+            <Sparkles className="w-3 h-3 text-amber-400" /> Inéditos ({unpublishedCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter("published")}
+            className={`px-2.5 py-1 rounded-md text-xs transition-all font-medium flex items-center gap-1 ${
+              statusFilter === "published"
+                ? "bg-emerald-600 text-white shadow-xs font-semibold"
+                : "bg-background/80 text-muted-foreground hover:text-emerald-600 border border-muted"
+            }`}
+          >
+            <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Já Publicados ({publishedCount})
+          </button>
+          {scheduledCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setStatusFilter("scheduled")}
+              className={`px-2.5 py-1 rounded-md text-xs transition-all font-medium flex items-center gap-1 ${
+                statusFilter === "scheduled"
+                  ? "bg-sky-600 text-white shadow-xs font-semibold"
+                  : "bg-background/80 text-muted-foreground hover:text-sky-600 border border-muted"
+              }`}
+            >
+              <Clock className="w-3 h-3 text-sky-400" /> Agendados ({scheduledCount})
+            </button>
+          )}
         </div>
       </div>
 
@@ -248,98 +317,151 @@ export function MediaLibraryView({
           <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto mb-3">
             <Upload className="w-6 h-6" />
           </div>
-          <h3 className="font-semibold text-base mb-1">Nenhum conteúdo na biblioteca</h3>
+          <h3 className="font-semibold text-base mb-1">Nenhum conteúdo encontrado</h3>
           <p className="text-xs text-muted-foreground max-w-md mx-auto mb-4">
-            Faça upload em lote de vídeos e imagens para começar a alimentar a biblioteca da sua empresa no Criafy.
+            {statusFilter !== "all"
+              ? "Nenhuma mídia corresponde ao filtro selecionado. Tente alterar o filtro acima."
+              : "Faça upload em lote de vídeos e imagens para começar a alimentar a biblioteca da sua empresa no Criafy."}
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {filteredContents.map((content) => (
-            <Card key={content.id} className="overflow-hidden group hover:shadow-md transition-all">
-              <div className="relative aspect-square bg-muted/50 flex items-center justify-center overflow-hidden">
-                {content.media_type === "VIDEO" ? (
-                  <video
-                    src={content.media_url}
-                    className="w-full h-full object-cover"
-                    controls={false}
-                  />
-                ) : (
-                  <img
-                    src={content.media_url}
-                    alt={content.title || "Mídia Criafy"}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-all duration-300"
-                  />
-                )}
+          {filteredContents.map((content) => {
+            const isPub = !!content.is_published;
+            const isSched = !!content.is_scheduled;
+            const lastPub = content.publications?.find((p) => p.status === "PUBLISHED");
 
-                <div className="absolute top-2 left-2 flex items-center gap-1">
-                  <Badge variant="secondary" className="bg-black/60 text-white text-[10px] backdrop-blur-sm border-0">
-                    {content.media_type === "VIDEO" ? (
-                      <Video className="w-3 h-3 mr-1 text-sky-400" />
-                    ) : (
-                      <ImageIcon className="w-3 h-3 mr-1 text-emerald-400" />
-                    )}
-                    {content.media_type}
-                    {content.duration_seconds ? ` • ${Math.round(content.duration_seconds)}s` : ""}
-                  </Badge>
-                </div>
-
-                <div className="absolute top-2 right-2">
-                  {content.meta_validation_status === "VALID" ? (
-                    <Badge
-                      variant="outline"
-                      className="bg-emerald-500/80 text-white border-0 text-[10px] backdrop-blur-sm font-semibold shadow-sm"
-                    >
-                      <CheckCircle2 className="w-2.5 h-2.5 mr-1" />
-                      {content.aspect_ratio?.includes("9:16") ? "Reel / Story" : "Feed"}
-                    </Badge>
-                  ) : content.meta_validation_status === "INVALID" ? (
-                    <Badge
-                      variant="destructive"
-                      className="text-[10px] backdrop-blur-sm font-semibold"
-                      title={content.meta_validation_errors?.join(" • ") || "Incompatível com Meta"}
-                    >
-                      <AlertTriangle className="w-2.5 h-2.5 mr-1" />
-                      Incompatível
-                    </Badge>
+            return (
+              <Card
+                key={content.id}
+                className={`overflow-hidden group hover:shadow-md transition-all border ${
+                  isPub
+                    ? "border-emerald-500/50 shadow-xs bg-emerald-500/[0.03]"
+                    : isSched
+                    ? "border-sky-500/50 shadow-xs bg-sky-500/[0.03]"
+                    : "border-border/60 hover:border-border"
+                }`}
+              >
+                <div className="relative aspect-square bg-muted/50 flex items-center justify-center overflow-hidden">
+                  {content.media_type === "VIDEO" ? (
+                    <video
+                      src={content.media_url}
+                      className="w-full h-full object-cover"
+                      controls={false}
+                    />
                   ) : (
-                    <Badge
-                      variant="outline"
-                      className="bg-black/40 text-muted-foreground text-[10px] backdrop-blur-sm"
-                    >
-                      Pendente
-                    </Badge>
+                    <img
+                      src={content.media_url}
+                      alt={content.title || "Mídia Criafy"}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-all duration-300"
+                    />
                   )}
-                </div>
-              </div>
 
-              <CardContent className="p-3 space-y-2">
-                <div className="truncate font-medium text-xs" title={content.title}>
-                  {content.title || "Conteúdo sem título"}
+                  {/* Top-left: Media Type Badge */}
+                  <div className="absolute top-2 left-2 flex items-center gap-1">
+                    <Badge variant="secondary" className="bg-black/70 text-white text-[10px] backdrop-blur-sm border-0 font-medium">
+                      {content.media_type === "VIDEO" ? (
+                        <Video className="w-3 h-3 mr-1 text-sky-400" />
+                      ) : (
+                        <ImageIcon className="w-3 h-3 mr-1 text-emerald-400" />
+                      )}
+                      {content.media_type}
+                      {content.duration_seconds ? ` • ${Math.round(content.duration_seconds)}s` : ""}
+                    </Badge>
+                  </div>
+
+                  {/* Top-right: Publication Status Highlight */}
+                  <div className="absolute top-2 right-2">
+                    {isPub ? (
+                      <Badge
+                        className="bg-emerald-600 text-white border-0 text-[10px] backdrop-blur-sm font-bold shadow-md flex items-center gap-1"
+                        title={`Publicado ${content.publish_count}x no Instagram`}
+                      >
+                        <CheckCircle2 className="w-3 h-3 text-white" />
+                        Publicado ({content.publish_count}x)
+                      </Badge>
+                    ) : isSched ? (
+                      <Badge
+                        className="bg-sky-600 text-white border-0 text-[10px] backdrop-blur-sm font-semibold shadow-md flex items-center gap-1"
+                      >
+                        <Clock className="w-3 h-3 text-white" />
+                        Agendado
+                      </Badge>
+                    ) : (
+                      <Badge
+                        variant="secondary"
+                        className="bg-black/60 text-amber-300 border-0 text-[10px] backdrop-blur-sm font-semibold shadow-sm flex items-center gap-1"
+                      >
+                        <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                        Inédito
+                      </Badge>
+                    )}
+                  </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-1 text-[11px] text-muted-foreground pt-1 border-t border-muted">
-                  <button
-                    type="button"
-                    onClick={() => openLinkModal(content)}
-                    className="flex items-center gap-1 text-primary hover:underline font-medium"
-                  >
-                    <Instagram className="w-3 h-3" />
-                    {content.linked_account_ids?.length || 0} conta(s)
-                  </button>
+                <CardContent className="p-3 space-y-2.5">
+                  <div className="truncate font-medium text-xs" title={content.title}>
+                    {content.title || "Conteúdo sem título"}
+                  </div>
 
-                  <button
-                    type="button"
-                    onClick={() => handleArchive(content.id)}
-                    className="text-muted-foreground hover:text-destructive p-1 rounded transition-colors"
-                    title="Arquivar conteúdo"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  {/* Status Banner */}
+                  {isPub ? (
+                    <div className="flex items-center justify-between text-[11px] bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 px-2.5 py-1.5 rounded-lg border border-emerald-500/20 font-medium">
+                      <span className="flex items-center gap-1.5 truncate">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <span className="truncate">Publicado ({content.publish_count}x)</span>
+                      </span>
+                      {lastPub?.ig_permalink ? (
+                        <a
+                          href={lastPub.ig_permalink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 hover:underline inline-flex items-center gap-0.5 text-[10px] shrink-0 font-semibold"
+                          title="Abrir no Instagram"
+                        >
+                          Ver <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      ) : content.last_published_at ? (
+                        <span className="text-[10px] text-muted-foreground shrink-0 font-normal">
+                          {new Date(content.last_published_at).toLocaleDateString("pt-BR")}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : isSched ? (
+                    <div className="flex items-center gap-1.5 text-[11px] bg-sky-500/10 text-sky-800 dark:text-sky-300 px-2.5 py-1.5 rounded-lg border border-sky-500/20 font-medium">
+                      <Clock className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
+                      <span>Agendado na fila do Instagram</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 text-[11px] bg-muted/60 text-muted-foreground px-2.5 py-1.5 rounded-lg border border-muted font-normal">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                      <span>Mídia inédita (nunca publicada)</span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between gap-1 text-[11px] text-muted-foreground pt-1 border-t border-muted">
+                    <button
+                      type="button"
+                      onClick={() => openLinkModal(content)}
+                      className="flex items-center gap-1 text-primary hover:underline font-medium"
+                    >
+                      <Instagram className="w-3 h-3" />
+                      {content.linked_account_ids?.length || 0} conta(s)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleArchive(content.id)}
+                      className="text-muted-foreground hover:text-destructive p-1 rounded transition-colors"
+                      title="Arquivar conteúdo"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 

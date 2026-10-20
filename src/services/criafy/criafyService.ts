@@ -255,7 +255,15 @@ export const criafyService = {
       .from("criafy_contents")
       .select(`
         *,
-        criafy_content_accounts ( account_id )
+        criafy_content_accounts ( account_id ),
+        criafy_publications (
+          id,
+          publication_type,
+          status,
+          published_at,
+          scheduled_at,
+          ig_permalink
+        )
       `)
       .eq("company_id", companyId)
       .eq("status", "ACTIVE")
@@ -264,12 +272,31 @@ export const criafyService = {
     const { data, error } = await query;
     if (error) throw error;
 
-    let items = (data || []).map((item: any) => ({
-      ...item,
-      linked_account_ids: item.criafy_content_accounts
-        ? item.criafy_content_accounts.map((ca: any) => ca.account_id)
-        : [],
-    }));
+    let items = (data || []).map((item: any) => {
+      const allPubs = item.criafy_publications || [];
+      const publishedList = allPubs.filter((p: any) => p.status === "PUBLISHED");
+      const scheduledList = allPubs.filter((p: any) => p.status === "SCHEDULED" || p.status === "PUBLISHING");
+      const isPublished = publishedList.length > 0;
+      const isScheduled = scheduledList.length > 0;
+      const publishCount = publishedList.length;
+
+      const sortedPublished = publishedList.slice().sort(
+        (a: any, b: any) => new Date(b.published_at || 0).getTime() - new Date(a.published_at || 0).getTime()
+      );
+      const lastPublishedAt = sortedPublished[0]?.published_at || null;
+
+      return {
+        ...item,
+        linked_account_ids: item.criafy_content_accounts
+          ? item.criafy_content_accounts.map((ca: any) => ca.account_id)
+          : [],
+        publications: allPubs,
+        is_published: isPublished,
+        is_scheduled: isScheduled,
+        publish_count: publishCount,
+        last_published_at: lastPublishedAt,
+      };
+    });
 
     if (accountIdFilter && accountIdFilter !== "all") {
       items = items.filter((item: CriafyContent) =>

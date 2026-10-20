@@ -1,6 +1,6 @@
 {
-  "commit": "332138ae026bb5f378203f9d261635d6ef5e6ee6",
-  "shortCommit": "332138a",
-  "message": "fix(criafy): validate story video duration (< 60s) and add friendly guidance for Meta error 2207082",
-  "builtAt": "2026-10-20T01:03:37.609Z"
+  "commit": "b841a172e71023c880250767e3273d2711959e37",
+  "shortCommit": "b841a17",
+  "message": "feat(criafy): auto-disable Story option for videos > 60s and add format badges",
+  "builtAt": "2026-10-20T01:49:35.909Z"
 }
