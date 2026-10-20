@@ -13,8 +13,8 @@ const GRAPH_API_VERSION = "v21.0";
 async function waitForContainerReady(
   creationId: string,
   accessToken: string,
-  maxAttempts = 22,
-  intervalMs = 2000
+  maxAttempts = 70,
+  intervalMs = 3000
 ): Promise<void> {
   for (let i = 0; i < maxAttempts; i++) {
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
@@ -23,6 +23,10 @@ async function waitForContainerReady(
       `https://graph.facebook.com/${GRAPH_API_VERSION}/${creationId}?fields=status_code,status&access_token=${accessToken}`
     );
     const data = await res.json();
+
+    if (data.error) {
+      throw new Error(`Erro ao verificar status do container na Meta: ${data.error.message}`);
+    }
 
     if (data.status_code === "FINISHED") {
       // Buffer curto para propagação de mídia nas bordas CDN da Meta antes de chamar media_publish
@@ -38,10 +42,16 @@ async function waitForContainerReady(
       }
       throw new Error(`Processamento de vídeo falhou na Meta: ${detail}${extraHint}`);
     }
+
+    // A cada 5 tentativas (~15s), logar no console da função para monitoramento
+    if ((i + 1) % 5 === 0) {
+      console.log(`[waitForContainerReady] Tentativa ${i + 1}/${maxAttempts} (${(i + 1) * 3}s) - status: ${data.status_code || 'IN_PROGRESS'}`);
+    }
   }
 
-  throw new Error("Timeout ao aguardar processamento do vídeo pela Meta Graph API.");
+  throw new Error("Timeout ao aguardar processamento do vídeo pela Meta Graph API (mais de 3.5 minutos decorridos).");
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
