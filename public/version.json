@@ -1,6 +1,6 @@
 {
-  "commit": "d91da73c2f091559f1aa9cb7b9ba7bfb755cff79",
-  "shortCommit": "d91da73",
-  "message": "feat(criafy): google calendar month/week views, story sequence scheduler and calendar as primary tab",
-  "builtAt": "2026-10-20T12:20:09.472Z"
+  "commit": "1145d314d100403d9230c07a73dd5fd63130dacb",
+  "shortCommit": "1145d31",
+  "message": "chore(version): sync version.json and trigger vercel deploy",
+  "builtAt": "2026-10-20T14:49:34.548Z"
 }

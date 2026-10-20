@@ -13,7 +13,7 @@ export async function processConnectionEvent(
     const eventBody = (rawEvent.body as Record<string, unknown>) || rawEvent;
     const payloadObj = eventBody?.payload as Record<string, unknown> | undefined;
     
-    let newStatus: "connected" | "disconnected" = "disconnected";
+    let newStatus: "connected" | "disconnected" | "waiting connection" = "disconnected";
     let statusResolved = false;
 
     if (eventBody?.connected !== undefined) {
@@ -26,8 +26,23 @@ export async function processConnectionEvent(
       const statusRaw = (eventBody?.status || payloadObj?.status || payloadObj?.state || (rawEvent as any).status) as string | undefined;
       if (statusRaw) {
         const s = statusRaw.toUpperCase();
-        newStatus = (s === "WORKING" || s === "CONNECTED" || s === "CONNECTED_TO_WHATSAPP") ? "connected" : "disconnected";
-        statusResolved = true;
+        if (s === "WORKING" || s === "CONNECTED" || s === "CONNECTED_TO_WHATSAPP") {
+          newStatus = "connected";
+          statusResolved = true;
+        } else if (s === "SCAN_QR_CODE" || s === "WAITING_FOR_QR" || s === "WAITING CONNECTION") {
+          newStatus = "waiting connection";
+          statusResolved = true;
+        } else if (s === "STOPPED" || s === "FAILED" || s === "DISCONNECTED" || s === "UNPAIRED") {
+          newStatus = "disconnected";
+          statusResolved = true;
+        } else if (s === "STARTING" || s === "INITIALIZING" || s === "CONNECTING" || s === "RESUMING") {
+          // Estados transitórios de inicialização/reconexão: NÃO desconectar a instância bruscamente
+          console.log(`[ConnectionController] Ignoring transient state ${s} for instance ${instance.id}`);
+          statusResolved = false;
+        } else {
+          // Status desconhecido: manter o status atual para evitar desconexões indevidas
+          statusResolved = false;
+        }
       } else {
         const typeStr = String(eventBody?.type || rawEvent.type || "").toUpperCase();
         if (typeStr === "CONNECTEDCALLBACK" || typeStr === "CONNECTED") {

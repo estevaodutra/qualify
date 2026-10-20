@@ -551,6 +551,10 @@ export async function getInstanceStatus(instance: any, triggerN8n: boolean = tru
   const data = await response.json();
   const item = Array.isArray(data) ? data[0] : data;
 
+  if (!item || (typeof item === "object" && Object.keys(item).length === 0)) {
+    throw new Error(`Empty or invalid response from provider for instance ${id}`);
+  }
+
   // Check for Z-API format
   if (item?.instance) {
     return {
@@ -565,12 +569,15 @@ export async function getInstanceStatus(instance: any, triggerN8n: boolean = tru
 
   // Check for WAHA format / generic n8n formats (including session_id, connected, phone, @lid)
   const statusStr = String(item?.status || item?.state || item?.session?.status || "").toUpperCase();
+  const isTransient = ["STARTING", "INITIALIZING", "CONNECTING", "RESUMING", "PAIRING"].includes(statusStr);
+  
   const isConnected =
     item?.connected === true ||
     String(item?.connected).toLowerCase() === "true" ||
     statusStr === "WORKING" ||
     statusStr === "CONNECTED" ||
-    statusStr === "CONNECTED_TO_WHATSAPP";
+    statusStr === "CONNECTED_TO_WHATSAPP" ||
+    (isTransient && instance?.status === "connected");
   
   let phone = null;
   if (item?.phone) {

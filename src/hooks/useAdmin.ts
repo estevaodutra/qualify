@@ -643,3 +643,56 @@ export function useAdminInstances() {
     },
   });
 }
+
+
+// ============================================================
+// Instance Connection History / Logs
+// ============================================================
+export interface InstanceConnectionLog {
+  id: string;
+  instance_id: string;
+  instance_name: string;
+  company_id: string | null;
+  company_name: string | null;
+  phone: string | null;
+  external_instance_id: string | null;
+  previous_status: string | null;
+  new_status: string;
+  event_type: "connected" | "disconnected" | "waiting connection" | string;
+  reason: string | null;
+  details: Record<string, any> | null;
+  created_at: string;
+}
+
+export interface InstanceConnectionLogsFilters {
+  instanceId?: string;
+  eventType?: string;
+  limit?: number;
+}
+
+export function useAdminInstanceConnectionLogs(filters: InstanceConnectionLogsFilters = {}) {
+  const { instanceId, eventType, limit = 100 } = filters;
+
+  return useQuery({
+    queryKey: ["admin", "instance_connection_logs", { instanceId, eventType, limit }],
+    queryFn: async () => {
+      const sb = supabase as any;
+      let q = sb
+        .from("instance_connection_logs")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(limit);
+
+      if (instanceId && instanceId !== "all") {
+        q = q.eq("instance_id", instanceId);
+      }
+      if (eventType && eventType !== "all") {
+        q = q.eq("event_type", eventType);
+      }
+
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data || []) as InstanceConnectionLog[];
+    },
+  });
+}

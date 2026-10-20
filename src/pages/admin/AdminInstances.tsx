@@ -25,7 +25,8 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { ProviderSyncModal } from "@/components/admin/ProviderSyncModal";
-import { Database } from "lucide-react";
+import { Database, History } from "lucide-react";
+import { InstanceConnectionHistoryModal } from "@/components/admin/InstanceConnectionHistoryModal";
 const statusConfig: Record<string, { label: string; className: string }> = {
   connected:            { label: "Conectada",    className: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" },
   "waiting connection": { label: "Aguardando",   className: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20" },
@@ -170,6 +171,8 @@ export default function AdminInstances() {
 
   // — Provider Sync —
   const [showProviderSync, setShowProviderSync] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [historyInstanceId, setHistoryInstanceId] = useState<string | null>(null);
 
   // QR countdown
   useEffect(() => {
@@ -434,6 +437,9 @@ export default function AdminInstances() {
           <Button variant="outline" size="sm" onClick={() => fetchPhoneNumbers()} disabled={isFetchingPhones || isLoading}>
             {isFetchingPhones ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Buscando...</> : <><Phone className="h-4 w-4 mr-2" /> Buscar Telefones</>}
           </Button>
+          <Button variant="outline" size="sm" onClick={() => { setHistoryInstanceId(null); setShowHistoryModal(true); }}>
+            <History className="h-4 w-4 mr-2 text-primary" /> Histórico de Conexões
+          </Button>
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} /> Atualizar
           </Button>
@@ -545,6 +551,9 @@ export default function AdminInstances() {
                                 <Plug className="h-4 w-4 mr-2" /> Conectar
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => { setHistoryInstanceId(inst.id); setShowHistoryModal(true); }}>
+                                <History className="h-4 w-4 mr-2" /> Histórico de Conexão
+                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => openRenameDialog(inst)}>
                                 <Pencil className="h-4 w-4 mr-2" /> Renomear
                               </DropdownMenuItem>
@@ -730,6 +739,12 @@ export default function AdminInstances() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <InstanceConnectionHistoryModal
+        isOpen={showHistoryModal}
+        onClose={() => setShowHistoryModal(false)}
+        defaultInstanceId={historyInstanceId}
+      />
 
       <ProviderSyncModal
         isOpen={showProviderSync}
