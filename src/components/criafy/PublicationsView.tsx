@@ -149,6 +149,14 @@ export function PublicationsView({
       return;
     }
 
+    const selectedContent = contents.find((c) => c.id === selectedContentId);
+    if (publicationType === "STORY_VIDEO" && selectedContent?.duration_seconds && selectedContent.duration_seconds > 60) {
+      toast.error(
+        `O Instagram permite no máximo 60s para Stories (este vídeo tem ${Math.round(selectedContent.duration_seconds)}s). Altere para "Reel" para publicar vídeos com mais de 60 segundos.`
+      );
+      return;
+    }
+
     setSubmitting(true);
     try {
       const pubStatus = isPublishNow ? "PUBLISHING" : "SCHEDULED";
@@ -457,6 +465,25 @@ export function PublicationsView({
                 </SelectContent>
               </Select>
             </div>
+
+            {selectedContentId && (() => {
+              const selectedMedia = contents.find((c) => c.id === selectedContentId);
+              if (selectedMedia && publicationType === "STORY_VIDEO" && selectedMedia.duration_seconds && selectedMedia.duration_seconds > 60) {
+                return (
+                  <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                    <div>
+                      <strong>Vídeo muito longo para Story:</strong> este vídeo possui{" "}
+                      <strong>{Math.round(selectedMedia.duration_seconds)} segundos</strong>. A Meta/Instagram aceita vídeos de no máximo 60 segundos para Stories.
+                      <div className="mt-1 font-medium text-amber-700 dark:text-amber-200">
+                        👉 Dica: Mude o <em>Tipo de Publicação</em> para <strong>Reel</strong> (o Instagram aceita vídeos mais longos como Reel).
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
 
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">

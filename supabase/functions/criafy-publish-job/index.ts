@@ -32,7 +32,11 @@ async function waitForContainerReady(
 
     if (data.status_code === "ERROR" || data.status_code === "EXPIRED") {
       const detail = data.status || `Status: ${data.status_code}`;
-      throw new Error(`Processamento de vídeo falhou na Meta: ${detail}`);
+      let extraHint = "";
+      if (String(detail).includes("2207082")) {
+        extraHint = " — Dica: Em Stories do Instagram, a Meta rejeita vídeos com mais de 60 segundos ou fora de 9:16 (use Reel para vídeos mais longos).";
+      }
+      throw new Error(`Processamento de vídeo falhou na Meta: ${detail}${extraHint}`);
     }
   }
 
@@ -167,6 +171,12 @@ Deno.serve(async (req) => {
         await waitForContainerReady(containerId!, accessToken);
       }
     } else if (pub.publication_type === "STORY_VIDEO") {
+      if (content.duration_seconds && Number(content.duration_seconds) > 60) {
+        throw new Error(
+          `O Instagram não aceita vídeos de Story com mais de 60 segundos (o vídeo atual possui ${Math.round(Number(content.duration_seconds))}s). Por favor, selecione o formato REEL ou corte o vídeo para até 60 segundos.`
+        );
+      }
+
       const containerUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/${igUserId}/media`;
       const params = new URLSearchParams({
         media_type: "STORIES",

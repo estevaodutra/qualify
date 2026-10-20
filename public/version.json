@@ -1,6 +1,6 @@
 {
-  "commit": "19387dcfa530a9daf7ca0f1a088988129f129269",
-  "shortCommit": "19387dc",
-  "message": "chore: bump version metadata",
-  "builtAt": "2026-10-20T00:34:40.656Z"
+  "commit": "da03f8c094371fdf0b5b0fd81e6dd66c61797e40",
+  "shortCommit": "da03f8c",
+  "message": "fix(chat): corrigir criacao de lead com user_id e tornar numero clicavel no chat de grupo",
+  "builtAt": "2026-10-20T00:53:35.203Z"
 }
