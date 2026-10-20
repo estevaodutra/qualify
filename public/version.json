@@ -1,6 +1,6 @@
 {
-  "commit": "1145d314d100403d9230c07a73dd5fd63130dacb",
-  "shortCommit": "1145d31",
-  "message": "chore(version): sync version.json and trigger vercel deploy",
-  "builtAt": "2026-10-20T14:49:34.548Z"
+  "commit": "ac3ab2db1191203b26d66d384a191c213957a0e9",
+  "shortCommit": "ac3ab2d",
+  "message": "feat(instances): add connection history logs, drop destructive disconnect trigger and prevent accidental WhatsApp disconnection",
+  "builtAt": "2026-10-20T17:04:06.867Z"
 }

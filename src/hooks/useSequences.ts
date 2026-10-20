@@ -409,18 +409,21 @@ export function useSequenceNodes(sequenceId: string | undefined) {
         .maybeSingle();
       const companyId = (parentSequence as any)?.company_id ?? null;
 
-      // Delete existing nodes
-      await supabase
-        .from("sequence_nodes")
-        .delete()
-        .eq("sequence_id", sequenceId);
-
       const isUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 
-      // Insert nodes preserving existing UUIDs or generating a stable UUID for new nodes
       if (nodesToSave.length > 0) {
-        const rowsToInsert = nodesToSave.map((node, index) => {
-          const nodeDbId = isUUID(node.localId) ? node.localId : crypto.randomUUID();
+        // Garantir unicidade absoluta de IDs dentro do payload
+        const seenIds = new Set<string>();
+        const idMapping: Record<string, string> = {};
+
+        const rowsToUpsert = nodesToSave.map((node, index) => {
+          let nodeDbId = isUUID(node.localId) ? node.localId : crypto.randomUUID();
+          if (seenIds.has(nodeDbId)) {
+            nodeDbId = crypto.randomUUID();
+          }
+          seenIds.add(nodeDbId);
+          idMapping[node.localId] = nodeDbId;
+
           return {
             id: nodeDbId,
             sequence_id: sequenceId!,
@@ -434,23 +437,46 @@ export function useSequenceNodes(sequenceId: string | undefined) {
           };
         });
 
-        const { data: insertedNodes, error } = await supabase
+        // 1. Upsert preservando nós existentes e inserindo novos sem erro de chave duplicada
+        const { error: upsertError } = await supabase
           .from("sequence_nodes")
-          .insert(rowsToInsert)
-          .select("id");
+          .upsert(rowsToUpsert, { onConflict: "id" });
 
-        if (error) throw error;
+        if (upsertError) throw upsertError;
 
-        // Create mapping: localId -> dbId
-        const idMapping: Record<string, string> = {};
-        nodesToSave.forEach((node, index) => {
-          idMapping[node.localId] = rowsToInsert[index].id;
-        });
+        // 2. Limpar apenas os nós que foram deletados da tela pelo usuário
+        const currentIds = rowsToUpsert.map(r => r.id);
+        const { data: existingNodes } = await supabase
+          .from("sequence_nodes")
+          .select("id")
+          .eq("sequence_id", sequenceId);
+
+        if (existingNodes && existingNodes.length > 0) {
+          const idsToDelete = existingNodes
+            .map(n => n.id)
+            .filter(id => !currentIds.includes(id));
+
+          if (idsToDelete.length > 0) {
+            const { error: delError } = await supabase
+              .from("sequence_nodes")
+              .delete()
+              .in("id", idsToDelete);
+
+            if (delError) {
+              console.warn("[saveNodes] Aviso ao remover nós deletados:", delError.message);
+            }
+          }
+        }
 
         return idMapping;
-      }
+      } else {
+        await supabase
+          .from("sequence_nodes")
+          .delete()
+          .eq("sequence_id", sequenceId);
 
-      return {};
+        return {};
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sequence_nodes", sequenceId] });
@@ -488,19 +514,28 @@ export function useSequenceNodes(sequenceId: string | undefined) {
         .delete()
         .eq("sequence_id", sequenceId);
 
-      // Only keep connections whose endpoints were actually persisted as real
-      // nodes (e.g. a connection from the decorative trigger node has no
-      // mapped id, since the trigger itself is never saved to sequence_nodes —
-      // silently drop it instead of inserting the raw local id into a UUID column).
+      // Only keep connections whose endpoints were actually persisted as real nodes
       const validConnections = connectionsToSave.filter(
         conn => idMapping[conn.sourceNodeId] !== undefined && idMapping[conn.targetNodeId] !== undefined
       );
 
+      // Desduplicar conexões para evitar duplicidades
+      const seenConns = new Set<string>();
+      const dedupedConnections = validConnections.filter(conn => {
+        const sourceId = idMapping[conn.sourceNodeId];
+        const targetId = idMapping[conn.targetNodeId];
+        const cond = conn.conditionPath || "";
+        const key = `${sourceId}_${targetId}_${cond}`;
+        if (seenConns.has(key)) return false;
+        seenConns.add(key);
+        return true;
+      });
+
       // Insert new connections with mapped IDs
-      if (validConnections.length > 0) {
+      if (dedupedConnections.length > 0) {
         const { error } = await supabase
           .from("sequence_connections")
-          .insert(validConnections.map(conn => ({
+          .insert(dedupedConnections.map(conn => ({
             sequence_id: sequenceId,
             user_id: user.id,
             company_id: companyId,
