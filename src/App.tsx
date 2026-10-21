@@ -60,6 +60,8 @@ import QuizFunnelsPage from "./pages/quiz/QuizFunnelsPage";
 import QuizEditorPage from "./pages/quiz/QuizEditorPage";
 import QuizPublicPage from "./pages/public/QuizPublicPage";
 import CriafyHub from "./pages/criafy/CriafyHub";
+import SprintOSPage from "./features/sprint-os/ui/SprintOSPage";
+import SprintOSSharedPage from "./features/sprint-os/ui/SprintOSSharedPage";
 import { AdminRoute } from "@/components/auth/AdminRoute";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -93,6 +95,7 @@ const App = () => {
                     <Route path="/auth" element={<Auth />} />
                     <Route path="/webhook-docs" element={<WebhookDocs />} />
                     <Route path="/q/:slug" element={<QuizPublicPage />} />
+                    <Route path="/sprint-os/shared/:token" element={<SprintOSSharedPage />} />
 
                     {/* Awaiting access — authenticated but no company */}
                     <Route
@@ -142,6 +145,7 @@ const App = () => {
                       <Route path="/configuracoes/membros" element={<Settings />} />
 
                       {/* Quiz / Funnel routes (inside AppLayout with sidebar support) */}
+                      <Route path="/sprint-os" element={<SprintOSPage />} />
                       <Route path="/criafy" element={<CriafyHub />} />
                       <Route path="/quiz" element={<QuizFunnelsPage />} />
                       <Route path="/quiz/:id" element={<QuizEditorPage />} />
