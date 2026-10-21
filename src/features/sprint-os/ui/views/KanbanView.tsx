@@ -21,7 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useSprintOSStore } from "../../state/sprintOsStore";
 import { sprintTasks, subtasksOf } from "../../domain/ops";
-import { PRIORITY_LABEL, type TaskStatus, type Task } from "../../domain/types";
+import { PRIORITY_LABEL, IMPACT_FLAG_CONFIG, type TaskStatus, type Task } from "../../domain/types";
 import { fmtDateTime, fmtMinutes } from "../../scheduler/time";
 
 const COLUMNS: { id: TaskStatus; title: string; color: string; bg: string; icon: string }[] = [
@@ -38,6 +38,7 @@ export const KanbanView: React.FC = () => {
     filterAssigneeId,
     filterPriority,
     filterStatus,
+    filterImpact,
     setSelectedTaskId,
     setIsTaskModalOpen,
     setTaskStatusAction,
@@ -59,6 +60,9 @@ export const KanbanView: React.FC = () => {
   }
   if (filterStatus) {
     tasks = tasks.filter((t) => t.status === filterStatus);
+  }
+  if (filterImpact) {
+    tasks = tasks.filter((t) => t.impactFlags?.includes(filterImpact));
   }
 
   const handleCardClick = (taskId: string) => {
@@ -132,6 +136,17 @@ export const KanbanView: React.FC = () => {
                           >
                             {task.priority}
                           </Badge>
+
+                          {/* Flags de Impacto (Seção 7) */}
+                          {task.impactFlags && task.impactFlags.length > 0 && (
+                            <div className="flex items-center gap-0.5">
+                              {task.impactFlags.slice(0, 3).map((f) => (
+                                <span key={f} className="text-xs" title={IMPACT_FLAG_CONFIG[f]?.label}>
+                                  {IMPACT_FLAG_CONFIG[f]?.icon}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
 

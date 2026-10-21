@@ -25,12 +25,17 @@ import { useSprintOSStore } from "../../state/sprintOsStore";
 import { sprintTasks } from "../../domain/ops";
 import { runSchedule } from "../../scheduler/planning";
 import { nowInSaoPaulo, fmtDateTime, fmtMinutes, dateOf } from "../../scheduler/time";
-import { PRIORITY_LABEL } from "../../domain/types";
+import { PRIORITY_LABEL, IMPACT_FLAG_CONFIG } from "../../domain/types";
 
 export const GanttView: React.FC = () => {
   const {
     workspace,
     activeSprintId,
+    searchQuery,
+    filterAssigneeId,
+    filterPriority,
+    filterStatus,
+    filterImpact,
     rescheduleTaskAction,
     setSelectedTaskId,
     setIsTaskModalOpen,
@@ -45,6 +50,13 @@ export const GanttView: React.FC = () => {
   const sprint = workspace.sprints[activeSprintId];
   const now = nowInSaoPaulo();
   const tasks = sprintTasks(workspace, activeSprintId);
+
+  let displayedTasks = tasks;
+  if (searchQuery) displayedTasks = displayedTasks.filter((t) => t.title.toLowerCase().includes(searchQuery.toLowerCase()));
+  if (filterAssigneeId) displayedTasks = displayedTasks.filter((t) => t.assigneeId === filterAssigneeId);
+  if (filterPriority) displayedTasks = displayedTasks.filter((t) => t.priority === filterPriority);
+  if (filterStatus) displayedTasks = displayedTasks.filter((t) => t.status === filterStatus);
+  if (filterImpact) displayedTasks = displayedTasks.filter((t) => t.impactFlags?.includes(filterImpact));
 
   // Executa o motor em modo leitura para obter caminho crítico e tarefas não agendadas
   const scheduleResult = runSchedule(workspace, activeSprintId, now);
@@ -108,7 +120,7 @@ export const GanttView: React.FC = () => {
         </div>
 
         <div className="divide-y divide-white/5">
-          {tasks.map((task) => {
+          {displayedTasks.map((task) => {
             const isCritical = criticalSet.has(task.id);
             const unscheduledReason = unschedulableMap.get(task.id);
             const assignee = task.assigneeId ? workspace.members[task.assigneeId] : null;
@@ -137,6 +149,17 @@ export const GanttView: React.FC = () => {
                   >
                     {task.priority}
                   </Badge>
+
+                  {/* Flags de Impacto (Seção 7) */}
+                  {task.impactFlags && task.impactFlags.length > 0 && (
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      {task.impactFlags.slice(0, 3).map((f) => (
+                        <span key={f} className="text-[11px]" title={IMPACT_FLAG_CONFIG[f]?.label}>
+                          {IMPACT_FLAG_CONFIG[f]?.icon}
+                        </span>
+                      ))}
+                    </div>
+                  )}
 
                   <span
                     onClick={() => {

@@ -7,7 +7,7 @@
  * - Ao selecionar um cronograma: exibe o Cockpit Operacional 80/20 focado nas 5 perguntas.
  */
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Layers,
   Kanban,
@@ -21,9 +21,14 @@ import {
   BarChart3,
   Target,
   Calculator,
+  Play,
+  Pause,
+  Square,
+  Clock,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -39,10 +44,8 @@ import { StructureView } from "./views/StructureView";
 import { KanbanView } from "./views/KanbanView";
 import { GanttView } from "./views/GanttView";
 import { IndicatorsView } from "./views/IndicatorsView";
-import { OKRsView } from "./views/OKRsView";
 import { CalculatorsView } from "./views/CalculatorsView";
 import { FunnelView } from "./views/FunnelView";
-import { FinancialView } from "./views/FinancialView";
 import { MilestonesView } from "./views/MilestonesView";
 
 import { DeadlineUpdateModal } from "./modals/DeadlineUpdateModal";
@@ -52,7 +55,102 @@ import { ReportsModal } from "./modals/ReportsModal";
 import { ShareLinkModal } from "./modals/ShareLinkModal";
 import { TemplatesModal } from "./modals/TemplatesModal";
 import { CreateScheduleModal } from "./modals/CreateScheduleModal";
+import { EditTemplateModal } from "./modals/EditTemplateModal";
 import { upsertMember } from "../domain/ops";
+
+const FloatingTimerBar: React.FC = () => {
+  const { user } = useAuth();
+  const { activeTimer, pauseTimer, resumeTimer, stopAndSaveTimer, openTaskModal } = useSprintOSStore();
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    if (!activeTimer || !activeTimer.isRunning) return;
+    const interval = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, [activeTimer?.isRunning]);
+
+  if (!activeTimer) return null;
+
+  const currentElapsed =
+    activeTimer.elapsedSeconds +
+    (activeTimer.isRunning && activeTimer.startedAt
+      ? Math.floor((Date.now() - activeTimer.startedAt) / 1000)
+      : 0);
+
+  const displaySeconds =
+    activeTimer.mode === "pomodoro"
+      ? Math.max(0, activeTimer.targetSeconds - currentElapsed)
+      : currentElapsed;
+
+  const m = Math.floor(displaySeconds / 60);
+  const s = displaySeconds % 60;
+  const timeFormatted = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+
+  return (
+    <div className="fixed bottom-5 right-5 z-50 flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-zinc-950/95 border border-primary/40 shadow-2xl backdrop-blur-xl animate-in slide-in-from-bottom duration-300">
+      <div
+        className="flex items-center gap-2.5 cursor-pointer group"
+        onClick={() => openTaskModal(activeTimer.taskId)}
+      >
+        <span className="relative flex h-2.5 w-2.5">
+          {activeTimer.isRunning && (
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+          )}
+          <span
+            className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+              activeTimer.isRunning ? "bg-primary" : "bg-yellow-400"
+            }`}
+          />
+        </span>
+        <div className="max-w-[180px]">
+          <div className="text-[11px] font-bold text-white truncate group-hover:text-primary transition-colors">
+            {activeTimer.taskTitle}
+          </div>
+          <div className="text-[10px] text-white/40">
+            {activeTimer.mode === "pomodoro" ? "🍅 Pomodoro" : "⏱️ Cronômetro"}
+          </div>
+        </div>
+      </div>
+
+      <div className="font-mono text-base font-black text-white px-2 py-0.5 rounded-lg bg-black/60 border border-white/10 tracking-wider">
+        {timeFormatted}
+      </div>
+
+      <div className="flex items-center gap-1">
+        {activeTimer.isRunning ? (
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={pauseTimer}
+            className="h-8 w-8 text-yellow-400 hover:bg-yellow-400/10 rounded-xl"
+            title="Pausar"
+          >
+            <Pause className="h-4 w-4" />
+          </Button>
+        ) : (
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={resumeTimer}
+            className="h-8 w-8 text-primary hover:bg-primary/10 rounded-xl"
+            title="Retomar"
+          >
+            <Play className="h-4 w-4 fill-current" />
+          </Button>
+        )}
+        <Button
+          size="sm"
+          onClick={() => stopAndSaveTimer(user?.email || "Operador")}
+          className="h-8 px-2.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold flex items-center gap-1 shadow-md shadow-emerald-900/30"
+          title="Concluir e Salvar Registro"
+        >
+          <Square className="h-3 w-3 fill-current" />
+          <span>Salvar</span>
+        </Button>
+      </div>
+    </div>
+  );
+};
 
 export const SprintOSPage: React.FC = () => {
   const { activeCompanyId } = useCompany();
@@ -73,6 +171,8 @@ export const SprintOSPage: React.FC = () => {
     setFilterPriority,
     filterStatus,
     setFilterStatus,
+    filterImpact,
+    setFilterImpact,
     initWorkspace,
     mutate,
   } = useSprintOSStore();
@@ -210,13 +310,28 @@ export const SprintOSPage: React.FC = () => {
               <option value="done">🟢 Feito</option>
             </select>
 
-            {(searchQuery || filterAssigneeId || filterPriority || filterStatus) && (
+            {/* Filtro por Impacto */}
+            <select
+              value={filterImpact || ""}
+              onChange={(e) => setFilterImpact((e.target.value as any) || null)}
+              className="h-8 rounded-xl bg-black border border-white/10 text-xs text-white/80 px-2.5"
+            >
+              <option value="">Todos os Impactos</option>
+              <option value="financial_light">💸 Fin. Leve</option>
+              <option value="financial_heavy">💰 Fin. Alto</option>
+              <option value="progress_blocker">⏳ No Andamento</option>
+              <option value="operational">⚙️ Operacional</option>
+              <option value="infrastructure">⚠️ Infraestrutura</option>
+            </select>
+
+            {(searchQuery || filterAssigneeId || filterPriority || filterStatus || filterImpact) && (
               <button
                 onClick={() => {
                   setSearchQuery("");
                   setFilterAssigneeId(null);
                   setFilterPriority(null);
                   setFilterStatus(null);
+                  setFilterImpact(null);
                 }}
                 className="text-[11px] text-primary hover:underline font-bold"
               >
@@ -247,10 +362,6 @@ export const SprintOSPage: React.FC = () => {
               <BarChart3 className="h-3.5 w-3.5" />
               <span>Indicadores</span>
             </TabsTrigger>
-            <TabsTrigger value="okrs" className="text-xs font-bold gap-2">
-              <Target className="h-3.5 w-3.5" />
-              <span>OKRs</span>
-            </TabsTrigger>
             <TabsTrigger value="calculators" className="text-xs font-bold gap-2">
               <Calculator className="h-3.5 w-3.5" />
               <span>Calculadoras</span>
@@ -258,10 +369,6 @@ export const SprintOSPage: React.FC = () => {
             <TabsTrigger value="funnel" className="text-xs font-bold gap-2">
               <Filter className="h-3.5 w-3.5" />
               <span>Funil X1</span>
-            </TabsTrigger>
-            <TabsTrigger value="financial" className="text-xs font-bold gap-2">
-              <DollarSign className="h-3.5 w-3.5" />
-              <span>Rentabilidade</span>
             </TabsTrigger>
             <TabsTrigger value="milestones" className="text-xs font-bold gap-2">
               <Flag className="h-3.5 w-3.5" />
@@ -285,10 +392,6 @@ export const SprintOSPage: React.FC = () => {
             <IndicatorsView />
           </TabsContent>
 
-          <TabsContent value="okrs">
-            <OKRsView />
-          </TabsContent>
-
           <TabsContent value="calculators">
             <CalculatorsView />
           </TabsContent>
@@ -297,18 +400,18 @@ export const SprintOSPage: React.FC = () => {
             <FunnelView />
           </TabsContent>
 
-          <TabsContent value="financial">
-            <FinancialView />
-          </TabsContent>
-
           <TabsContent value="milestones">
             <MilestonesView />
           </TabsContent>
         </Tabs>
       </main>
 
+      {/* Floating Pomodoro / Stopwatch Timer */}
+      <FloatingTimerBar />
+
       {/* Modais Globais */}
       <CreateScheduleModal />
+      <EditTemplateModal />
       <DeadlineUpdateModal />
       <ActivateSprintModal />
       <TaskDetailModal />

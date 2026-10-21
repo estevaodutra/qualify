@@ -1,10 +1,11 @@
 /**
  * Visão Estrutura em Blocos do Sprint OS (Cockpit 80/20).
- * Especificação: Master Prompt v9.0 — Seções 9, 10 e 11.
- * - Hierarquia: Cronograma -> Etapa -> Tarefa -> Subtarefa
- * - Drag & Drop real de etapas (recalcula numeração) e tarefas (mesma etapa e entre etapas)
- * - Atribuição direta inline de responsável com 1 clique (Seção 11)
- * - Divulgação progressiva: linha recolhida minimalista, expande para ver subtarefas e detalhes
+ * Especificação: Master Prompt v9.0 + Otimização — Seções 6, 7, 10, 11 e 12.
+ * - Drag & Drop funcional das etapas com renumeração dinâmica automática (sort_order)
+ * - Flags de impacto (até 3 flags simultâneas por tarefa)
+ * - Atribuição direta inline de responsável (1 clique)
+ * - Cronômetro / Pomodoro individual acionável diretamente na linha
+ * - Duração manual: exibe "Duração: Não definida" se não configurada
  */
 
 import React, { useState } from "react";
@@ -28,6 +29,8 @@ import {
   Search,
   UserCheck,
   UserX,
+  Play,
+  Pause,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -54,9 +57,13 @@ import {
   archiveTask,
   renameStage,
   updateTask,
-  ackState,
 } from "../../domain/ops";
-import { PRIORITY_LABEL, STATUS_ICON, type TaskStatus } from "../../domain/types";
+import {
+  PRIORITY_LABEL,
+  STATUS_ICON,
+  IMPACT_FLAG_CONFIG,
+  type TaskStatus,
+} from "../../domain/types";
 import { fmtMinutes } from "../../scheduler/time";
 
 export const StructureView: React.FC = () => {
@@ -68,15 +75,18 @@ export const StructureView: React.FC = () => {
     filterAssigneeId,
     filterPriority,
     filterStatus,
+    filterImpact,
     setSelectedTaskId,
     setIsTaskModalOpen,
     setTaskStatusAction,
     toggleSubtaskAction,
-    stepSubtaskCountAction,
-    acknowledgeAction,
     assignTaskMemberAction,
     reorderStagesAction,
     moveTaskAction,
+    activeTimer,
+    startTimer,
+    pauseTimer,
+    resumeTimer,
     mutate,
   } = useSprintOSStore();
 
@@ -84,9 +94,8 @@ export const StructureView: React.FC = () => {
   const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>({});
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
   const [editingTitleText, setEditingTitleText] = useState("");
-  const [assigneeSearch, setAssigneeSearch] = useState("");
 
-  // Estados de Drag & Drop
+  // Drag & Drop
   const [draggedStageId, setDraggedStageId] = useState<string | null>(null);
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
 
@@ -105,7 +114,7 @@ export const StructureView: React.FC = () => {
 
   const startEditTitle = (id: string, current: string) => {
     setEditingTitleId(id);
-    setEditingTitleText(current);
+    setEditingTitleText(current.replace(/^Etapa\s*\d+\s*[—–-]\s*/i, ""));
   };
 
   const commitEditTitle = (type: "stage" | "task", id: string) => {
@@ -113,9 +122,10 @@ export const StructureView: React.FC = () => {
       setEditingTitleId(null);
       return;
     }
+    const clean = editingTitleText.trim().replace(/^Etapa\s*\d+\s*[—–-]\s*/i, "");
     mutate((ws, ctx) => {
-      if (type === "stage") renameStage(ws, ctx, id, editingTitleText.trim());
-      else updateTask(ws, ctx, id, { title: editingTitleText.trim() });
+      if (type === "stage") renameStage(ws, ctx, id, clean);
+      else updateTask(ws, ctx, id, { title: clean });
     });
     setEditingTitleId(null);
   };
@@ -141,6 +151,19 @@ export const StructureView: React.FC = () => {
     setDraggedTaskId(null);
   };
 
+  const moveStageDirection = (stageId: string, direction: "up" | "down") => {
+    const stageIds = stages.map((s) => s.id);
+    const idx = stageIds.indexOf(stageId);
+    if (idx === -1) return;
+    const targetIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= stageIds.length) return;
+
+    const temp = stageIds[idx];
+    stageIds[idx] = stageIds[targetIdx];
+    stageIds[targetIdx] = temp;
+    reorderStagesAction(stageIds);
+  };
+
   return (
     <div className="space-y-4">
       {/* Estado Vazio para Cronogramas em Branco */}
@@ -156,7 +179,7 @@ export const StructureView: React.FC = () => {
           <Button
             onClick={() => {
               mutate((ws, ctx) => {
-                createStage(ws, ctx, activeSprintId, "Etapa 01 — Planejamento Inicial");
+                createStage(ws, ctx, activeSprintId, "Planejamento Inicial");
               });
             }}
             className="text-xs bg-primary hover:bg-primary/90 text-white font-medium px-4 py-2 rounded-xl flex items-center gap-1.5"
@@ -177,20 +200,23 @@ export const StructureView: React.FC = () => {
           if (filterAssigneeId) tasks = tasks.filter((t) => t.assigneeId === filterAssigneeId);
           if (filterPriority) tasks = tasks.filter((t) => t.priority === filterPriority);
           if (filterStatus) tasks = tasks.filter((t) => t.status === filterStatus);
+          if (filterImpact) tasks = tasks.filter((t) => t.impactFlags?.includes(filterImpact));
 
           const isStageExpanded = expandedStages[stage.id] ?? true;
+          // Numeração dinâmica da etapa (Seção 6)
           const stageNumber = (stageIdx + 1).toString().padStart(2, "0");
+          const cleanStageTitle = stage.title.replace(/^Etapa\s*\d+\s*[—–-]\s*/i, "");
 
           return (
             <div
               key={stage.id}
-              draggable={interactionMode === "organize"}
+              draggable
               onDragStart={() => setDraggedStageId(stage.id)}
               onDragOver={(e) => e.preventDefault()}
               onDrop={() => handleStageDrop(stage.id)}
               className="rounded-2xl border border-white/5 bg-zinc-900/40 overflow-hidden shadow-sm transition-all"
             >
-              {/* Cabeçalho da Etapa */}
+              {/* Cabeçalho da Etapa com Handle de Drag & Drop */}
               <div className="p-3 bg-zinc-950/70 border-b border-white/5 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 flex-1 min-w-0">
                   <button
@@ -204,9 +230,12 @@ export const StructureView: React.FC = () => {
                     )}
                   </button>
 
-                  {interactionMode === "organize" && (
-                    <GripVertical className="h-4 w-4 text-white/30 cursor-grab shrink-0" />
-                  )}
+                  <div
+                    title="Arraste para reordenar a etapa"
+                    className="cursor-grab active:cursor-grabbing p-1 rounded hover:bg-white/10 text-white/30 hover:text-white"
+                  >
+                    <GripVertical className="h-4 w-4" />
+                  </div>
 
                   {editingTitleId === stage.id ? (
                     <Input
@@ -219,11 +248,11 @@ export const StructureView: React.FC = () => {
                     />
                   ) : (
                     <span
-                      onDoubleClick={() => startEditTitle(stage.id, stage.title)}
+                      onDoubleClick={() => startEditTitle(stage.id, cleanStageTitle)}
                       className="text-xs font-bold uppercase tracking-wider text-white truncate cursor-pointer hover:text-primary transition-colors"
                       title="Clique duas vezes para renomear"
                     >
-                      Etapa {stageNumber} — {stage.title.replace(/^Etapa\s*\d+\s*[—–-]\s*/i, "")}
+                      ETAPA {stageNumber} — {cleanStageTitle}
                     </span>
                   )}
 
@@ -256,7 +285,24 @@ export const StructureView: React.FC = () => {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="bg-[#12161F] border-white/10 text-white text-xs w-44">
                       <DropdownMenuItem
-                        onClick={() => startEditTitle(stage.id, stage.title)}
+                        disabled={stageIdx === 0}
+                        onClick={() => moveStageDirection(stage.id, "up")}
+                        className="cursor-pointer"
+                      >
+                        <ArrowUp className="h-3.5 w-3.5 mr-2" />
+                        Mover para Cima
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={stageIdx === stages.length - 1}
+                        onClick={() => moveStageDirection(stage.id, "down")}
+                        className="cursor-pointer"
+                      >
+                        <ArrowDown className="h-3.5 w-3.5 mr-2" />
+                        Mover para Baixo
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator className="bg-white/10" />
+                      <DropdownMenuItem
+                        onClick={() => startEditTitle(stage.id, cleanStageTitle)}
                         className="cursor-pointer"
                       >
                         Renomear Etapa
@@ -265,7 +311,7 @@ export const StructureView: React.FC = () => {
                         onClick={() => mutate((ws, ctx) => duplicateStage(ws, ctx, stage.id))}
                         className="cursor-pointer"
                       >
-                        <Copy className="h-3 w-3 mr-2" />
+                        <Copy className="h-3.5 w-3.5 mr-2" />
                         Duplicar Etapa
                       </DropdownMenuItem>
                       <DropdownMenuSeparator className="bg-white/10" />
@@ -273,7 +319,7 @@ export const StructureView: React.FC = () => {
                         onClick={() => mutate((ws, ctx) => archiveStage(ws, ctx, stage.id))}
                         className="text-red-400 focus:text-red-300 focus:bg-red-500/10 cursor-pointer"
                       >
-                        <Trash2 className="h-3 w-3 mr-2" />
+                        <Trash2 className="h-3.5 w-3.5 mr-2" />
                         Excluir Etapa
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -297,11 +343,12 @@ export const StructureView: React.FC = () => {
                       const subtasks = subtasksOf(workspace, task.id);
                       const isTaskExpanded = expandedTasks[task.id] ?? false;
                       const assignee = task.assigneeId ? workspace.members[task.assigneeId] : null;
+                      const isTimerRunning = activeTimer && activeTimer.taskId === task.id && activeTimer.isRunning;
 
                       return (
                         <div
                           key={task.id}
-                          draggable={interactionMode === "organize"}
+                          draggable
                           onDragStart={() => setDraggedTaskId(task.id)}
                           onDragOver={(e) => e.preventDefault()}
                           onDrop={(e) => {
@@ -316,12 +363,15 @@ export const StructureView: React.FC = () => {
                               : "bg-black/30 border-white/5 hover:border-white/15 text-white"
                           }`}
                         >
-                          {/* Linha Principal da Tarefa (80/20: status, título, prioridade, responsável direto, duração, checklist) */}
+                          {/* Linha Principal da Tarefa (80/20) */}
                           <div className="p-2.5 flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                              {interactionMode === "organize" && (
-                                <GripVertical className="h-3.5 w-3.5 text-white/20 shrink-0 cursor-grab" />
-                              )}
+                              <div
+                                title="Arraste para mover tarefa"
+                                className="cursor-grab active:cursor-grabbing text-white/20 hover:text-white shrink-0"
+                              >
+                                <GripVertical className="h-3.5 w-3.5" />
+                              </div>
 
                               {/* Status Toggle Rápido */}
                               <button
@@ -379,6 +429,21 @@ export const StructureView: React.FC = () => {
                                 {task.priority}
                               </Badge>
 
+                              {/* SEÇÃO 7: FLAGS DE IMPACTO (Até 3 simultâneas) */}
+                              {task.impactFlags && task.impactFlags.length > 0 && (
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {task.impactFlags.slice(0, 3).map((f) => (
+                                    <span
+                                      key={f}
+                                      className="text-xs hover:scale-125 transition-transform cursor-help"
+                                      title={IMPACT_FLAG_CONFIG[f]?.label}
+                                    >
+                                      {IMPACT_FLAG_CONFIG[f]?.icon}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+
                               {/* SEÇÃO 11: ATRIBUIÇÃO DIRETA DE RESPONSÁVEL COM 1 CLIQUE */}
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -403,7 +468,6 @@ export const StructureView: React.FC = () => {
                                   </div>
                                   <DropdownMenuSeparator className="bg-white/10" />
 
-                                  {/* Opção Desatribuir */}
                                   <DropdownMenuItem
                                     onClick={() => assignTaskMemberAction(task.id, null)}
                                     className="cursor-pointer text-white/50 hover:text-white"
@@ -414,7 +478,6 @@ export const StructureView: React.FC = () => {
 
                                   <DropdownMenuSeparator className="bg-white/10" />
 
-                                  {/* Lista de Membros da Empresa */}
                                   {members.map((m) => (
                                     <DropdownMenuItem
                                       key={m.id}
@@ -433,17 +496,41 @@ export const StructureView: React.FC = () => {
                                 </DropdownMenuContent>
                               </DropdownMenu>
 
-                              {/* Duração Estimada */}
-                              {task.durationMinutes && (
-                                <span className="text-[10px] font-mono text-white/40 shrink-0 hidden sm:flex items-center gap-1">
-                                  <Clock className="h-2.5 w-2.5" />
-                                  {fmtMinutes(task.durationMinutes)}
-                                </span>
-                              )}
+                              {/* SEÇÃO 12: DURAÇÃO MANUAL (NÃO DEFINIDA se nulo) */}
+                              <span className="text-[10px] font-mono text-white/40 shrink-0 hidden sm:flex items-center gap-1">
+                                <Clock className="h-2.5 w-2.5" />
+                                {task.durationMinutes ? fmtMinutes(task.durationMinutes) : "Duração: Não definida"}
+                              </span>
                             </div>
 
                             {/* Ações da Tarefa */}
                             <div className="flex items-center gap-1.5 shrink-0">
+                              {/* SEÇÃO 11: CRONÔMETRO RÁPIDO / POMODORO */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (activeTimer && activeTimer.taskId === task.id) {
+                                    if (activeTimer.isRunning) pauseTimer();
+                                    else resumeTimer();
+                                  } else {
+                                    startTimer(task.id, "stopwatch");
+                                  }
+                                }}
+                                className={`h-6 w-6 rounded-lg flex items-center justify-center text-xs transition-colors shrink-0 ${
+                                  isTimerRunning
+                                    ? "bg-primary text-white shadow-sm shadow-primary/40 animate-pulse"
+                                    : "bg-white/5 hover:bg-white/10 text-white/40 hover:text-white"
+                                }`}
+                                title={
+                                  isTimerRunning
+                                    ? "Pausar cronômetro"
+                                    : "Iniciar cronômetro desta tarefa"
+                                }
+                              >
+                                {isTimerRunning ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
+                              </button>
+
                               {/* Subtarefas Checklist Concluído/Total */}
                               {subtasks.length > 0 && (
                                 <button
@@ -477,7 +564,7 @@ export const StructureView: React.FC = () => {
                                     }}
                                     className="cursor-pointer"
                                   >
-                                    Ver Detalhes
+                                    Ver Detalhes / Flags
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     onClick={() => startEditTitle(task.id, task.title)}
@@ -561,8 +648,7 @@ export const StructureView: React.FC = () => {
           <Button
             onClick={() => {
               mutate((ws, ctx) => {
-                const nextNum = (stages.length + 1).toString().padStart(2, "0");
-                createStage(ws, ctx, activeSprintId, `Etapa ${nextNum} — Nova Etapa`);
+                createStage(ws, ctx, activeSprintId, "Nova Etapa");
               });
             }}
             variant="outline"

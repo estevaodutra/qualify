@@ -1,16 +1,13 @@
 /**
- * Modal Completo de Detalhes da Tarefa (Camada A / Seções 17, 19, 20, 21, 30, 31, 35).
- * Estrutura Canônica:
- * - Identificação & Classificação (Prioridade P0-P3, Complexidade, Impacto Financeiro, Escopo)
- * - Responsável & Confirmação de Ciência com Alerta de Versão Desatualizada
- * - Checklist de Execução & Microcheckpoints com Contadores [-] 0/N [+]
- * - Registro de Tempo Real
- * - Anexos & Evidências
- * - ✨ Prompt Otimizado associado à tarefa
- * - 🧠 Aprendizados de Implementação (8 campos da Seção 35)
+ * Modal Completo de Detalhes da Tarefa (Cockpit 80/20).
+ * Especificação: Master Prompt v9.0 + Otimização — Seções 7, 11 e 12.
+ * - Flags de Impacto: até 3 flags simultâneas (💸, 💰, ⏳, ⚙️, ⚠️)
+ * - Cronômetro & Pomodoro individual com Play, Pause, Resume, Stop & Save
+ * - Duração estimada manual (começa Não definida se não configurada)
+ * - Microcheckpoints e evidências
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   X,
   User,
@@ -27,6 +24,10 @@ import {
   Brain,
   Minus,
   FileCheck,
+  Play,
+  Pause,
+  RotateCcw,
+  CheckSquare,
 } from "lucide-react";
 import {
   Dialog,
@@ -58,10 +59,12 @@ import {
   COMPLEXITY_LABEL,
   SCOPE_LABEL,
   STATUS_ICON,
+  IMPACT_FLAG_CONFIG,
   type Priority,
   type Complexity,
   type ScopeType,
   type TaskStatus,
+  type ImpactFlag,
 } from "../../domain/types";
 import { fmtDateTime, fmtMinutes } from "../../scheduler/time";
 
@@ -73,6 +76,13 @@ export const TaskDetailModal: React.FC = () => {
     setIsTaskModalOpen,
     toggleSubtaskAction,
     stepSubtaskCountAction,
+    setTaskImpactFlagsAction,
+    activeTimer,
+    startTimer,
+    pauseTimer,
+    resumeTimer,
+    stopAndSaveTimer,
+    resetTimer,
     mutate,
   } = useSprintOSStore();
 
@@ -83,6 +93,15 @@ export const TaskDetailModal: React.FC = () => {
   const [timeNote, setTimeNote] = useState("");
   const [evidenceName, setEvidenceName] = useState("");
   const [evidenceUrl, setEvidenceUrl] = useState("");
+  const [durationInput, setDurationInput] = useState("");
+
+  // Live timer tick for UI
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!activeTimer || !activeTimer.isRunning) return;
+    const interval = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, [activeTimer]);
 
   if (!workspace || !selectedTaskId) return null;
 
@@ -96,10 +115,41 @@ export const TaskDetailModal: React.FC = () => {
   const ack = ackState(workspace, task.id, task.assigneeId);
   const currentPrompt = workspace.prompts[task.id] || "";
 
+  const isCurrentTimer = activeTimer && activeTimer.taskId === task.id;
+  const timerElapsedMs = isCurrentTimer
+    ? activeTimer.accumulatedMs + (activeTimer.isRunning ? Date.now() - activeTimer.startedAt : 0)
+    : 0;
+  const timerMinutes = Math.floor(timerElapsedMs / 60000);
+  const timerSeconds = Math.floor((timerElapsedMs % 60000) / 1000);
+
   const handleUpdate = (patch: any) => {
     mutate((ws, ctx) => {
       updateTask(ws, ctx, task.id, patch);
     });
+  };
+
+  const handleToggleImpactFlag = async (flag: ImpactFlag) => {
+    const currentFlags = task.impactFlags || [];
+    let nextFlags: ImpactFlag[];
+    if (currentFlags.includes(flag)) {
+      nextFlags = currentFlags.filter((f) => f !== flag);
+    } else {
+      if (currentFlags.length >= 3) {
+        toast.warning("Máximo de 3 flags de impacto por tarefa.");
+        return;
+      }
+      nextFlags = [...currentFlags, flag];
+    }
+    await setTaskImpactFlagsAction(task.id, nextFlags);
+  };
+
+  const handleSetDuration = (minutes: number | null) => {
+    handleUpdate({
+      durationMinutes: minutes,
+      durationSource: minutes ? "confirmed" : "unset",
+    });
+    setDurationInput("");
+    toast.success(minutes ? `Duração definida para ${minutes}m.` : "Duração limpa (Não definida).");
   };
 
   const handleAddSubtask = () => {
@@ -141,92 +191,70 @@ export const TaskDetailModal: React.FC = () => {
     toast.success("Evidência anexada.");
   };
 
-  const handleCopyPrompt = () => {
-    if (currentPrompt) {
-      navigator.clipboard.writeText(currentPrompt);
-      toast.success("Prompt copiado para a área de transferência!");
-    }
-  };
-
   return (
     <Dialog open={isTaskModalOpen} onOpenChange={setIsTaskModalOpen}>
-      <DialogContent className="max-w-4xl bg-zinc-950 border-white/10 text-white max-h-[90vh] flex flex-col p-0 overflow-hidden">
-        {/* Topo do Inspector */}
-        <div className="p-6 border-b border-white/10 bg-white/[0.02]">
-          <div className="flex items-center justify-between gap-3 mb-2">
-            <span className="text-[11px] font-black uppercase tracking-wider text-white/40">
-              {stage?.title || "Etapa Operacional"}
-            </span>
-
+      <DialogContent className="bg-[#12161F] border border-white/10 text-white max-w-3xl w-full p-0 overflow-hidden rounded-3xl max-h-[90vh] flex flex-col">
+        {/* Cabeçalho */}
+        <div className="p-6 pb-4 border-b border-white/10 bg-zinc-950/80">
+          <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
-              {/* Status Selector */}
-              <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10">
-                {(["pending", "doing", "done"] as TaskStatus[]).map((st) => (
-                  <button
-                    key={st}
-                    onClick={() => {
-                      mutate((ws, ctx) => {
-                        setTaskStatus(ws, ctx, task.id, st);
-                      });
-                    }}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                      task.status === st
-                        ? "bg-primary text-primary-foreground shadow"
-                        : "text-white/60 hover:text-white"
-                    }`}
-                  >
-                    <span>{STATUS_ICON[st]}</span>
-                    <span className="capitalize">{st === "pending" ? "Pendente" : st === "doing" ? "Fazendo" : "Feito"}</span>
-                  </button>
-                ))}
-              </div>
+              <span className="text-sm">{STATUS_ICON[task.status]}</span>
+              <Badge variant="outline" className="text-[10px] uppercase font-mono border-white/10 text-white/50">
+                {stage?.title || "Etapa"}
+              </Badge>
+              <Badge className="text-[10px] font-black py-0 px-2 bg-primary/20 text-primary border-primary/30">
+                {PRIORITY_LABEL[task.priority]}
+              </Badge>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <Button
+                size="sm"
+                onClick={() => {
+                  const nextStatus: TaskStatus =
+                    task.status === "pending" ? "doing" : task.status === "doing" ? "done" : "pending";
+                  handleUpdate({ status: nextStatus });
+                }}
+                className="h-7 text-xs bg-white/10 hover:bg-white/20 text-white rounded-lg font-bold"
+              >
+                Mudar: {task.status === "pending" ? "Iniciar (Fazendo)" : task.status === "doing" ? "Concluir (Feito)" : "Reabrir"}
+              </Button>
             </div>
           </div>
 
-          {/* Título Editável */}
           <Input
             value={task.title}
             onChange={(e) => handleUpdate({ title: e.target.value })}
-            className="text-lg font-black bg-transparent border-transparent hover:border-white/10 focus:border-primary p-0 h-auto rounded-none text-white mb-2"
-          />
-
-          {/* Descrição */}
-          <Textarea
-            value={task.description}
-            onChange={(e) => handleUpdate({ description: e.target.value })}
-            placeholder="Adicione um detalhamento operacional desta tarefa..."
-            rows={2}
-            className="text-xs bg-black/30 border-white/5 text-white/80 resize-none"
+            className="text-base font-bold bg-transparent border-transparent hover:border-white/10 focus:border-primary p-0 h-auto rounded-none text-white tracking-tight"
           />
         </div>
 
         {/* Abas do Inspetor */}
         <div className="flex-1 overflow-y-auto p-6 pt-4">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="bg-white/5 border border-white/10 p-1 rounded-xl mb-4">
+            <TabsList className="bg-white/5 border border-white/10 p-1 rounded-xl mb-4 flex-wrap h-auto">
               <TabsTrigger value="execution" className="text-xs font-bold">
                 Execução & Checklist
               </TabsTrigger>
               <TabsTrigger value="classification" className="text-xs font-bold">
-                Classificação & Escopo
+                Classificação & Flags
+              </TabsTrigger>
+              <TabsTrigger value="time" className="text-xs font-bold flex items-center gap-1">
+                <Clock className="h-3 w-3 text-amber-400" />
+                <span>Tempo & Pomodoro</span>
               </TabsTrigger>
               <TabsTrigger value="evidence" className="text-xs font-bold">
-                Evidências & Tempo
+                Evidências
               </TabsTrigger>
               <TabsTrigger value="prompt" className="text-xs font-bold flex items-center gap-1">
                 <Sparkles className="h-3 w-3 text-amber-400" />
-                <span>Prompt Otimizado</span>
-              </TabsTrigger>
-              <TabsTrigger value="learnings" className="text-xs font-bold flex items-center gap-1">
-                <Brain className="h-3 w-3 text-indigo-400" />
-                <span>Aprendizados</span>
+                <span>Prompt IA</span>
               </TabsTrigger>
             </TabsList>
 
             {/* ABA 1: EXECUÇÃO & CHECKLIST */}
-            <TabsContent value="execution" className="space-y-5">
-              {/* Barra de Responsável & Ciência */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-white/5 border border-white/10">
+            <TabsContent value="execution" className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
                 <div>
                   <label className="text-xs font-bold text-white/50 block mb-1.5 flex items-center gap-1.5">
                     <User className="h-3.5 w-3.5" />
@@ -235,137 +263,79 @@ export const TaskDetailModal: React.FC = () => {
                   <select
                     value={task.assigneeId || ""}
                     onChange={(e) => handleUpdate({ assigneeId: e.target.value || null })}
-                    className="w-full h-9 rounded-lg bg-black border border-white/10 text-xs text-white px-2.5"
+                    className="w-full h-8 rounded-lg bg-black border border-white/10 text-xs text-white px-2.5"
                   >
                     <option value="">Sem atribuição</option>
                     {members.map((m) => (
                       <option key={m.id} value={m.id}>
-                        {m.name} ({m.role || "Operador"})
+                        {m.name}
                       </option>
                     ))}
                   </select>
                 </div>
 
-                {/* Confirmação de Ciência (Seção 21) */}
                 <div>
                   <label className="text-xs font-bold text-white/50 block mb-1.5 flex items-center gap-1.5">
                     <Eye className="h-3.5 w-3.5" />
-                    Confirmação de Ciência
+                    Ciência Operacional
                   </label>
                   {task.assigneeId ? (
-                    <div className="flex items-center justify-between p-2 rounded-lg bg-black/40 border border-white/10">
-                      <div className="text-xs">
-                        {ack === "current" ? (
-                          <span className="text-emerald-400 font-bold flex items-center gap-1">
-                            <CheckCircle2 className="h-3.5 w-3.5" /> Ciente na v{task.materialVersion}
-                          </span>
-                        ) : ack === "outdated" ? (
-                          <span className="text-amber-400 font-bold flex items-center gap-1">
-                            <AlertTriangle className="h-3.5 w-3.5" /> Ciência Desatualizada
-                          </span>
-                        ) : (
-                          <span className="text-white/40">Pendente de confirmação</span>
-                        )}
-                      </div>
+                    <div className="flex items-center justify-between p-1.5 rounded-lg bg-black/40 border border-white/10">
+                      <span className="text-xs text-white/70">
+                        {ack === "current" ? "🟢 Ciente" : ack === "outdated" ? "🟡 Desatualizada" : "⚪ Pendente"}
+                      </span>
                       <Button
                         size="sm"
                         onClick={() => {
                           mutate((ws, ctx) => acknowledge(ws, ctx, task.id, task.assigneeId!));
                           toast.success("Ciência confirmada!");
                         }}
-                        className="h-7 text-xs bg-white/10 hover:bg-white/20 text-white font-bold"
+                        className="h-6 text-[11px] bg-white/10 hover:bg-white/20 text-white font-bold rounded"
                       >
-                        Confirmar Ciência
+                        Confirmar
                       </Button>
                     </div>
                   ) : (
-                    <div className="text-xs text-white/30 italic p-2">
-                      Atribua um responsável para registrar ciência.
-                    </div>
+                    <span className="text-xs text-white/30 italic">Atribua um responsável.</span>
                   )}
                 </div>
               </div>
 
-              {/* Checklist de Execução */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-white">
-                    Checklist de Execução & Microcheckpoints ({subtasks.filter((s) => s.done).length}/{subtasks.length})
-                  </h4>
+              {/* Checklist */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold uppercase text-white/60">
+                  <span>Subtarefas ({subtasks.filter((s) => s.done).length}/{subtasks.length})</span>
                 </div>
-
-                <div className="space-y-2 mb-3">
-                  {subtasks.map((sub) => (
+                <div className="space-y-1.5">
+                  {subtasks.map((st) => (
                     <div
-                      key={sub.id}
-                      className="p-2.5 rounded-xl border border-white/5 bg-white/[0.02] flex items-center justify-between gap-3 text-xs"
+                      key={st.id}
+                      className="flex items-center justify-between p-2 rounded-xl bg-black/30 border border-white/5 text-xs"
                     >
-                      <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                        <button
-                          onClick={() => toggleSubtaskAction(sub.id, !sub.done)}
-                          className="shrink-0 text-white/40 hover:text-emerald-400"
-                        >
-                          {sub.done ? (
-                            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                          ) : (
-                            <div className="h-4 w-4 rounded-full border border-white/40" />
-                          )}
-                        </button>
-                        <span className={`truncate ${sub.done ? "line-through text-white/40" : "text-white"}`}>
-                          {sub.title}
-                        </span>
-                        {sub.required && (
-                          <span className="text-[10px] text-amber-400/80 font-bold shrink-0">*obrigatória</span>
-                        )}
-                      </div>
-
-                      {/* Contador Quantitativo [-] 0 / N [+] */}
-                      {sub.target != null && (
-                        <div className="flex items-center gap-1.5 bg-black px-2 py-0.5 rounded border border-white/10 shrink-0">
-                          <button
-                            onClick={() => stepSubtaskCountAction(sub.id, -1)}
-                            disabled={sub.count <= 0}
-                            className="text-white/40 hover:text-white disabled:opacity-20"
-                          >
-                            <Minus className="h-3 w-3" />
-                          </button>
-                          <span className="font-mono font-bold text-[11px] text-white">
-                            {sub.count}/{sub.target}
-                          </span>
-                          <button
-                            onClick={() => stepSubtaskCountAction(sub.id, 1)}
-                            disabled={sub.count >= sub.target}
-                            className="text-white/40 hover:text-white disabled:opacity-20"
-                          >
-                            <Plus className="h-3 w-3" />
-                          </button>
-                        </div>
-                      )}
-
                       <button
-                        onClick={() => mutate((ws, ctx) => deleteSubtask(ws, ctx, sub.id))}
-                        className="text-white/20 hover:text-rose-400 transition-colors shrink-0"
+                        type="button"
+                        onClick={() => toggleSubtaskAction(st.id, !st.done)}
+                        className="flex items-center gap-2 text-left flex-1"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        {st.done ? (
+                          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                        ) : (
+                          <Circle className="h-4 w-4 text-white/30" />
+                        )}
+                        <span className={st.done ? "line-through text-white/40" : "text-white"}>
+                          {st.title}
+                        </span>
                       </button>
                     </div>
                   ))}
                 </div>
 
-                {/* Adicionar Novo Item */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 pt-1">
                   <Input
                     value={newSubtaskTitle}
                     onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                    placeholder="Título da nova subtarefa..."
+                    placeholder="Nova subtarefa..."
                     className="h-8 text-xs bg-black border-white/10 text-white flex-1"
-                  />
-                  <Input
-                    type="number"
-                    value={newSubtaskTarget}
-                    onChange={(e) => setNewSubtaskTarget(e.target.value)}
-                    placeholder="Meta (ex: 2)"
-                    className="h-8 w-24 text-xs bg-black border-white/10 text-white"
                   />
                   <Button onClick={handleAddSubtask} size="sm" className="h-8 text-xs bg-primary font-bold">
                     Adicionar
@@ -374,104 +344,189 @@ export const TaskDetailModal: React.FC = () => {
               </div>
             </TabsContent>
 
-            {/* ABA 2: CLASSIFICAÇÃO & ESCOPO */}
-            <TabsContent value="classification" className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            {/* ABA 2: CLASSIFICAÇÃO & FLAGS (Seção 7 e 12) */}
+            <TabsContent value="classification" className="space-y-5">
+              {/* SEÇÃO 7: FLAGS DE IMPACTO (Até 3 simultâneas) */}
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-3">
                 <div>
-                  <label className="text-xs font-bold text-white/50 block mb-1">Prioridade</label>
-                  <select
-                    value={task.priority}
-                    onChange={(e) => handleUpdate({ priority: e.target.value as Priority })}
-                    className="w-full h-9 rounded-lg bg-black border border-white/10 text-xs text-white px-2.5"
-                  >
-                    <option value="P0">P0 — Crítica (Bloqueia receita/operação)</option>
-                    <option value="P1">P1 — Alta (Estabilidade e qualidade)</option>
-                    <option value="P2">P2 — Média (Planejamento e análise)</option>
-                    <option value="P3">P3 — Baixa (Refinamentos)</option>
-                  </select>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-white">
+                    Flags de Impacto ({task.impactFlags?.length || 0}/3)
+                  </h4>
+                  <p className="text-[11px] text-white/40">
+                    Selecione até três flags visuais para classificar a influência desta atividade.
+                  </p>
                 </div>
 
-                <div>
-                  <label className="text-xs font-bold text-white/50 block mb-1">Complexidade Técnica</label>
-                  <select
-                    value={task.complexity}
-                    onChange={(e) => handleUpdate({ complexity: e.target.value as Complexity })}
-                    className="w-full h-9 rounded-lg bg-black border border-white/10 text-xs text-white px-2.5"
-                  >
-                    <option value="low">Baixa</option>
-                    <option value="medium">Média</option>
-                    <option value="high">Alta</option>
-                  </select>
-                </div>
-              </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {(Object.keys(IMPACT_FLAG_CONFIG) as ImpactFlag[]).map((flagKey) => {
+                    const cfg = IMPACT_FLAG_CONFIG[flagKey];
+                    const isSelected = task.impactFlags?.includes(flagKey);
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-bold text-white/50 block mb-1">Tipo de Escopo</label>
-                  <select
-                    value={task.scope}
-                    onChange={(e) => handleUpdate({ scope: e.target.value as ScopeType })}
-                    className="w-full h-9 rounded-lg bg-black border border-white/10 text-xs text-white px-2.5"
-                  >
-                    <option value="original">Escopo Original (Contratado)</option>
-                    <option value="adjustment">Ajuste Operacional</option>
-                    <option value="additional">Solicitação Adicional (Extra)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-white/50 block mb-1">Duração Estimada (Minutos)</label>
-                  <Input
-                    type="number"
-                    value={task.durationMinutes ?? ""}
-                    onChange={(e) => handleUpdate({ durationMinutes: e.target.value ? Number(e.target.value) : null })}
-                    placeholder="Ex: 120"
-                    className="bg-black border-white/10 text-white h-9 text-xs font-mono"
-                  />
+                    return (
+                      <button
+                        key={flagKey}
+                        type="button"
+                        onClick={() => handleToggleImpactFlag(flagKey)}
+                        className={`p-2.5 rounded-xl border text-left flex items-start gap-2.5 transition-all ${
+                          isSelected
+                            ? "bg-primary/10 border-primary text-white shadow-sm"
+                            : "bg-black/30 border-white/5 text-white/60 hover:border-white/15"
+                        }`}
+                      >
+                        <span className="text-base shrink-0">{cfg.icon}</span>
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-white flex items-center justify-between">
+                            <span>{cfg.label}</span>
+                            {isSelected && <span className="text-primary text-[10px]">✓ Ativa</span>}
+                          </div>
+                          <span className="text-[10px] text-white/40 line-clamp-1 block mt-0.5">
+                            {cfg.description}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Flags de Impacto Financeiro e Bloqueio */}
-              <div className="space-y-3 pt-2">
-                <label className="flex items-center gap-2.5 cursor-pointer p-3 rounded-xl bg-white/5 border border-white/5">
-                  <input
-                    type="checkbox"
-                    checked={task.financialImpact}
-                    onChange={(e) => handleUpdate({ financialImpact: e.target.checked })}
-                    className="h-4 w-4 rounded border-white/20 bg-black text-primary"
-                  />
-                  <div className="text-xs">
-                    <span className="font-bold text-white flex items-center gap-1">
-                      <DollarSign className="h-3.5 w-3.5 text-emerald-400" />
-                      Impacto Financeiro Direto
-                    </span>
-                    <span className="text-white/40 block">
-                      Atividade ligada à geração de receita, tráfego ou conversão imediata.
+              {/* SEÇÃO 12: DURAÇÃO ESTIMADA MANUAL */}
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-white">
+                      Duração Estimada
+                    </h4>
+                    <span className="text-[11px] text-white/40">
+                      Atual: {task.durationMinutes ? `${task.durationMinutes} minutos (${fmtMinutes(task.durationMinutes)})` : "Duração: Não definida"}
                     </span>
                   </div>
-                </label>
 
-                {/* Bloqueio */}
-                <div>
-                  <label className="text-xs font-bold text-white/50 block mb-1">Motivo de Bloqueio (Se houver)</label>
-                  <Input
-                    value={task.blockedReason || ""}
-                    onChange={(e) => handleUpdate({ blockedReason: e.target.value || null })}
-                    placeholder="Deixe em branco se a tarefa não estiver travada..."
-                    className="bg-black border-white/10 text-white text-xs"
-                  />
+                  {task.durationMinutes && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleSetDuration(null)}
+                      className="text-xs text-white/50 hover:text-red-400 h-7"
+                    >
+                      Limpar Estimativa
+                    </Button>
+                  )}
                 </div>
+
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    value={durationInput}
+                    onChange={(e) => setDurationInput(e.target.value)}
+                    placeholder="Duração em minutos (ex: 60, 120)..."
+                    className="h-8 text-xs bg-black border-white/10 text-white flex-1"
+                  />
+                  <Button
+                    onClick={() => {
+                      const mins = Number(durationInput);
+                      if (mins > 0) handleSetDuration(mins);
+                    }}
+                    size="sm"
+                    className="h-8 text-xs bg-primary font-bold"
+                  >
+                    Salvar Duração
+                  </Button>
+                </div>
+              </div>
+
+              {/* Bloqueio */}
+              <div>
+                <label className="text-xs font-bold text-white/50 block mb-1">Motivo de Bloqueio</label>
+                <Input
+                  value={task.blockedReason || ""}
+                  onChange={(e) => handleUpdate({ blockedReason: e.target.value || null })}
+                  placeholder="Deixe em branco se a tarefa não estiver travada..."
+                  className="bg-black border-white/10 text-white text-xs h-8"
+                />
               </div>
             </TabsContent>
 
-            {/* ABA 3: EVIDÊNCIAS & TEMPO */}
-            <TabsContent value="evidence" className="space-y-5">
-              {/* Apontamento de Horas Reais */}
+            {/* ABA 3: TEMPO & POMODORO (Seção 11) */}
+            <TabsContent value="time" className="space-y-4">
+              {/* Cronômetro / Pomodoro Card */}
+              <div className="p-5 rounded-2xl bg-gradient-to-br from-zinc-900 to-black border border-amber-500/20 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-amber-400" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-white">
+                      Cronômetro de Foco / Pomodoro
+                    </span>
+                  </div>
+
+                  <Badge variant="outline" className="text-[10px] text-amber-400 border-amber-500/30 font-mono">
+                    {isCurrentTimer ? (activeTimer?.isRunning ? "▶️ Rodando" : "⏸️ Pausado") : "⏹️ Parado"}
+                  </Badge>
+                </div>
+
+                {/* Display Digital do Tempo */}
+                <div className="text-center py-2">
+                  <div className="text-4xl font-extrabold font-mono text-white tracking-widest drop-shadow-md">
+                    {String(timerMinutes).padStart(2, "0")}:{String(timerSeconds).padStart(2, "0")}
+                  </div>
+                  <span className="text-[11px] text-white/40 block mt-1">
+                    {isCurrentTimer ? "Tempo acumulado na sessão atual" : "Pronto para iniciar"}
+                  </span>
+                </div>
+
+                {/* Controles: Play / Pause / Retomar / Finalizar / Reiniciar */}
+                <div className="flex items-center justify-center gap-2 pt-1">
+                  {!isCurrentTimer ? (
+                    <Button
+                      onClick={() => startTimer(task.id, "stopwatch")}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 h-9 rounded-xl flex items-center gap-1.5"
+                    >
+                      <Play className="h-3.5 w-3.5" />
+                      <span>Iniciar Cronômetro</span>
+                    </Button>
+                  ) : (
+                    <>
+                      {activeTimer?.isRunning ? (
+                        <Button
+                          onClick={pauseTimer}
+                          className="bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold px-3 h-8 rounded-xl flex items-center gap-1"
+                        >
+                          <Pause className="h-3.5 w-3.5" />
+                          <span>Pausar</span>
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={resumeTimer}
+                          className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 h-8 rounded-xl flex items-center gap-1"
+                        >
+                          <Play className="h-3.5 w-3.5" />
+                          <span>Retomar</span>
+                        </Button>
+                      )}
+
+                      <Button
+                        onClick={() => stopAndSaveTimer(`Sessão de trabalho em ${task.title}`)}
+                        className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3 h-8 rounded-xl"
+                      >
+                        Finalizar e Salvar
+                      </Button>
+
+                      <Button
+                        variant="ghost"
+                        onClick={() => {
+                          if (confirm("Deseja zerar o cronômetro desta sessão?")) resetTimer();
+                        }}
+                        className="text-white/40 hover:text-red-400 text-xs h-8 px-2"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Apontamento Manual de Minutos */}
               <div className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-3">
-                <h4 className="text-xs font-black uppercase text-white flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5 text-amber-400" />
-                  Registrar Horas Reais Trabalhadas
-                </h4>
+                <span className="text-xs font-bold text-white/60 block">Ou apontar tempo manualmente:</span>
                 <div className="flex gap-2">
                   <Input
                     type="number"
@@ -483,7 +538,7 @@ export const TaskDetailModal: React.FC = () => {
                   <Input
                     value={timeNote}
                     onChange={(e) => setTimeNote(e.target.value)}
-                    placeholder="Descrição da atividade executada..."
+                    placeholder="Descrição da atividade..."
                     className="h-8 flex-1 bg-black border-white/10 text-white text-xs"
                   />
                   <Button onClick={handleAddTime} size="sm" className="h-8 text-xs bg-amber-600 font-bold">
@@ -491,8 +546,8 @@ export const TaskDetailModal: React.FC = () => {
                   </Button>
                 </div>
 
-                {/* Lista de Registros de Tempo */}
-                <div className="space-y-1.5 pt-2 max-h-32 overflow-y-auto">
+                {/* Histórico de Registros de Tempo */}
+                <div className="space-y-1.5 pt-2 max-h-36 overflow-y-auto">
                   {task.timeEntries.map((te) => (
                     <div key={te.id} className="text-[11px] flex justify-between text-white/60 bg-black/30 p-2 rounded-lg">
                       <span>{te.note || "Execução de tarefa"}</span>
@@ -501,149 +556,56 @@ export const TaskDetailModal: React.FC = () => {
                   ))}
                 </div>
               </div>
+            </TabsContent>
 
-              {/* Anexos de Evidências */}
+            {/* ABA 4: EVIDÊNCIAS */}
+            <TabsContent value="evidence" className="space-y-4">
               <div className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-3">
-                <h4 className="text-xs font-black uppercase text-white flex items-center gap-1.5">
-                  <Paperclip className="h-3.5 w-3.5 text-cyan-400" />
-                  Evidências de Conclusão / Links
-                </h4>
+                <h4 className="text-xs font-bold text-white">Anexar Evidência / Link de Aceite</h4>
                 <div className="flex gap-2">
                   <Input
                     value={evidenceName}
                     onChange={(e) => setEvidenceName(e.target.value)}
-                    placeholder="Nome da evidência (ex: Print CRM)"
+                    placeholder="Nome (ex: Print CRM)"
                     className="h-8 w-44 bg-black border-white/10 text-white text-xs"
                   />
                   <Input
                     value={evidenceUrl}
                     onChange={(e) => setEvidenceUrl(e.target.value)}
-                    placeholder="Link (ex: https://...)"
+                    placeholder="URL (https://...)"
                     className="h-8 flex-1 bg-black border-white/10 text-white text-xs"
                   />
-                  <Button onClick={handleAddEvidence} size="sm" className="h-8 text-xs bg-primary font-bold">
+                  <Button onClick={handleAddEvidence} size="sm" className="h-8 text-xs bg-cyan-600 font-bold">
                     Anexar
                   </Button>
                 </div>
 
                 <div className="space-y-1.5 pt-2">
                   {task.evidence.map((ev) => (
-                    <div key={ev.id} className="flex justify-between items-center text-xs p-2 rounded-lg bg-black/30">
-                      <a href={ev.url} target="_blank" rel="noreferrer" className="text-cyan-400 hover:underline font-bold truncate">
-                        {ev.name}
+                    <div key={ev.id} className="p-2 rounded-lg bg-black/40 border border-white/5 flex items-center justify-between text-xs">
+                      <span className="text-white font-medium">{ev.name}</span>
+                      <a href={ev.url} target="_blank" rel="noreferrer" className="text-primary hover:underline font-mono text-[11px]">
+                        Abrir link
                       </a>
-                      <span className="text-[10px] text-white/40">{ev.authorName}</span>
                     </div>
                   ))}
                 </div>
               </div>
             </TabsContent>
 
-            {/* ABA 4: PROMPT OTIMIZADO (Seção 31) */}
+            {/* ABA 5: PROMPT OTIMIZADO */}
             <TabsContent value="prompt" className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-bold text-white">✨ Prompt de Engenharia / Execução</h4>
-                  <span className="text-[11px] text-white/50">
-                    Instrução padronizada para delegar a execução a agentes ou terceiros
-                  </span>
-                </div>
-                <Button onClick={handleCopyPrompt} size="sm" variant="outline" className="h-7 text-xs border-white/10 text-white gap-1.5">
-                  <Copy className="h-3 w-3" />
-                  <span>Copiar</span>
-                </Button>
-              </div>
-
+              <p className="text-xs text-white/50">
+                Prompt de execução acelerada para operadores ou agentes de IA.
+              </p>
               <Textarea
                 value={currentPrompt}
                 onChange={(e) => {
                   mutate((ws, ctx) => setPrompt(ws, ctx, task.id, e.target.value));
                 }}
-                rows={8}
-                placeholder="Insira aqui o prompt completo e estruturado para executar esta entrega..."
-                className="font-mono text-xs bg-black border-white/10 text-white/90"
+                placeholder="Insira o prompt executável para esta tarefa..."
+                className="min-h-[140px] text-xs bg-black border-white/10 text-white rounded-xl"
               />
-            </TabsContent>
-
-            {/* ABA 5: APRENDIZADOS DE IMPLEMENTAÇÃO (Seção 35) */}
-            <TabsContent value="learnings" className="space-y-3">
-              <div className="text-xs text-white/50 mb-2">
-                Sistematização de aprendizado para transformar esta execução em playbook replicável:
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div>
-                  <label className="font-bold text-white/70 block mb-1">O que funcionou?</label>
-                  <Input
-                    value={task.learnings.worked}
-                    onChange={(e) => {
-                      const patch = { learnings: { ...task.learnings, worked: e.target.value } };
-                      handleUpdate(patch);
-                    }}
-                    className="bg-black border-white/10 text-white text-xs h-8"
-                  />
-                </div>
-
-                <div>
-                  <label className="font-bold text-white/70 block mb-1">O que não funcionou?</label>
-                  <Input
-                    value={task.learnings.didntWork}
-                    onChange={(e) => {
-                      const patch = { learnings: { ...task.learnings, didntWork: e.target.value } };
-                      handleUpdate(patch);
-                    }}
-                    className="bg-black border-white/10 text-white text-xs h-8"
-                  />
-                </div>
-
-                <div>
-                  <label className="font-bold text-white/70 block mb-1">Qual foi o impedimento?</label>
-                  <Input
-                    value={task.learnings.impediment}
-                    onChange={(e) => {
-                      const patch = { learnings: { ...task.learnings, impediment: e.target.value } };
-                      handleUpdate(patch);
-                    }}
-                    className="bg-black border-white/10 text-white text-xs h-8"
-                  />
-                </div>
-
-                <div>
-                  <label className="font-bold text-white/70 block mb-1">Como foi resolvido?</label>
-                  <Input
-                    value={task.learnings.resolution}
-                    onChange={(e) => {
-                      const patch = { learnings: { ...task.learnings, resolution: e.target.value } };
-                      handleUpdate(patch);
-                    }}
-                    className="bg-black border-white/10 text-white text-xs h-8"
-                  />
-                </div>
-
-                <div>
-                  <label className="font-bold text-white/70 block mb-1">O que poderia ser automatizado?</label>
-                  <Input
-                    value={task.learnings.automatable}
-                    onChange={(e) => {
-                      const patch = { learnings: { ...task.learnings, automatable: e.target.value } };
-                      handleUpdate(patch);
-                    }}
-                    className="bg-black border-white/10 text-white text-xs h-8"
-                  />
-                </div>
-
-                <div>
-                  <label className="font-bold text-white/70 block mb-1">Melhoria para a próxima sprint:</label>
-                  <Input
-                    value={task.learnings.nextImprovement}
-                    onChange={(e) => {
-                      const patch = { learnings: { ...task.learnings, nextImprovement: e.target.value } };
-                      handleUpdate(patch);
-                    }}
-                    className="bg-black border-white/10 text-white text-xs h-8"
-                  />
-                </div>
-              </div>
             </TabsContent>
           </Tabs>
         </div>

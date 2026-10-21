@@ -98,6 +98,49 @@ export interface Learnings {
   nextImprovement: string;
 }
 
+export type ImpactFlag =
+  | "financial_low"
+  | "financial_high"
+  | "schedule_impact"
+  | "operational"
+  | "infrastructure";
+
+export const IMPACT_FLAG_CONFIG: Record<
+  ImpactFlag,
+  { label: string; icon: string; description: string; badgeClass: string }
+> = {
+  financial_low: {
+    label: "Financeiro Leve",
+    icon: "💸",
+    description: "Atividades com influência financeira indireta",
+    badgeClass: "bg-emerald-500/10 text-emerald-300 border-emerald-500/20",
+  },
+  financial_high: {
+    label: "Financeiro Alto",
+    icon: "💰",
+    description: "Atividades diretamente relacionadas à receita ou desbloqueio comercial",
+    badgeClass: "bg-amber-500/10 text-amber-300 border-amber-500/20",
+  },
+  schedule_impact: {
+    label: "No Andamento",
+    icon: "⏳",
+    description: "Atividades que afetam o avanço do cronograma ou bloqueiam outras tarefas",
+    badgeClass: "bg-purple-500/10 text-purple-300 border-purple-500/20",
+  },
+  operational: {
+    label: "Operacional",
+    icon: "⚙️",
+    description: "Atividades necessárias para execução dos processos",
+    badgeClass: "bg-blue-500/10 text-blue-300 border-blue-500/20",
+  },
+  infrastructure: {
+    label: "Infraestrutura",
+    icon: "⚠️",
+    description: "Acessos, integrações, sistemas e componentes técnicos",
+    badgeClass: "bg-rose-500/10 text-rose-300 border-rose-500/20",
+  },
+};
+
 export interface Task extends Entity {
   stageId: ID;
   title: string;
@@ -106,6 +149,7 @@ export interface Task extends Entity {
   priority: Priority;
   complexity: Complexity;
   financialImpact: boolean;
+  impactFlags?: ImpactFlag[];
   scope: ScopeType;
   assigneeId: ID | null;
   validatorId: ID | null;
@@ -222,7 +266,37 @@ export interface FinancialRecord extends Entity {
   category: "expense" | "rework" | "client_media";
 }
 
-export interface FunnelStage { id: ID; label: string; color: string; count: number; position: number }
+export interface FunnelStage {
+  id: ID;
+  label: string;
+  color: string;
+  count: number;
+  position: number;
+  value?: number | null;
+}
+
+export type ContentType = "reels" | "stories" | "carousel" | "post" | "video" | "other";
+export type ContentPlatform = "instagram" | "facebook" | "tiktok" | "youtube" | "other";
+
+export interface ContentPublication {
+  id: ID;
+  title: string;
+  type: ContentType;
+  platform: ContentPlatform;
+  publishedAt: LocalDate;
+  url: string;
+  views: number;
+  reach: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  saves: number;
+  clicks: number;
+  groupEntries: number;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface ScheduleRevision {
   id: ID;
@@ -360,6 +434,7 @@ export interface Workspace {
   financialRecords: Record<ID, FinancialRecord>;
   changeRequests: Record<ID, ChangeRequest>;
   funnel: Record<ID, FunnelStage>;
+  publications?: Record<ID, ContentPublication>;
   indicators?: Record<ID, CustomIndicator>;
   okrs?: Record<ID, OKRGoal>;
   contentMetrics?: ContentDistributionMetrics;

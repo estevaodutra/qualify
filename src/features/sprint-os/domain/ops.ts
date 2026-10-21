@@ -7,6 +7,7 @@ import type {
   Acknowledgement, Dependency, Entity, ID, Member, Milestone, Priority, RoutineDefinition, Sprint, Stage,
   Subtask, Task, TaskStatus, WorkCalendar, Workspace, FinancialRecord, ChangeRequest, ScheduleRevision,
   CustomIndicator, OKRGoal, OKRKeyResult, ContentDistributionMetrics, HoursCalculatorData, AdsCalculatorData,
+  ImpactFlag, ContentPublication, FunnelStage,
 } from "./types";
 import { emptyLearnings } from "./types";
 import { wouldCreateCycle } from "../scheduler/engine";
@@ -51,7 +52,7 @@ function get<T>(rec: Record<ID, T>, id: ID, what: string): T {
 export function makeTask(ctx: Ctx, stageId: ID, title: string, position: number, extra: Partial<Task> = {}): Task {
   return {
     ...base(ctx), stageId, title, description: "", position, priority: "P2", complexity: "medium",
-    financialImpact: false, scope: "original", assigneeId: null, validatorId: null, participantIds: [],
+    financialImpact: false, impactFlags: [], scope: "original", assigneeId: null, validatorId: null, participantIds: [],
     durationMinutes: null, durationSource: "unset", plannedStart: null, plannedEnd: null, pinned: false,
     status: "pending", actualStart: null, actualEnd: null, timeEntries: [], blockedReason: null,
     awaitingApproval: false, acceptanceCriteria: "", acceptedAt: null, acceptedBy: null, notes: "",
@@ -493,10 +494,130 @@ export function upsertChangeRequest(ws: Workspace, ctx: Ctx, data: Partial<Chang
   return cr.id;
 }
 
-export function setFunnelCount(ws: Workspace, ctx: Ctx, stageId: ID, count: number) {
+export function setFunnelCount(ws: Workspace, ctx: Ctx, stageId: ID, count: number, value?: number | null) {
   const f = get(ws.funnel, stageId, "Etapa do funil");
   f.count = Math.max(0, Math.floor(count));
+  if (value !== undefined) f.value = value;
   log(ws, ctx, "count", "funnel", stageId, `Funil "${f.label}": ${f.count}`);
+}
+
+export function createFunnelStage(ws: Workspace, ctx: Ctx, label: string, color = "#6366F1", value?: number | null): ID {
+  ws.funnel ??= {};
+  const id = newId();
+  const position = Object.values(ws.funnel).length;
+  ws.funnel[id] = { id, label, color, count: 0, position, value: value || 0 };
+  log(ws, ctx, "create", "funnel", id, `Etapa do funil criada: ${label}`);
+  return id;
+}
+
+export function updateFunnelStage(ws: Workspace, ctx: Ctx, id: ID, patch: Partial<FunnelStage>) {
+  const f = get(ws.funnel, id, "Etapa do funil");
+  Object.assign(f, patch);
+  log(ws, ctx, "update", "funnel", id, `Etapa do funil atualizada: ${f.label}`);
+}
+
+export function deleteFunnelStage(ws: Workspace, ctx: Ctx, id: ID, targetStageId?: ID | null) {
+  const f = get(ws.funnel, id, "Etapa do funil");
+  if (targetStageId && ws.funnel[targetStageId]) {
+    ws.funnel[targetStageId].count += f.count;
+    if (f.value && ws.funnel[targetStageId].value !== undefined) {
+      ws.funnel[targetStageId].value = (ws.funnel[targetStageId].value || 0) + (f.value || 0);
+    }
+  }
+  delete ws.funnel[id];
+  // Reordena
+  Object.values(ws.funnel)
+    .sort((a, b) => a.position - b.position)
+    .forEach((s, idx) => { s.position = idx; });
+  log(ws, ctx, "delete", "funnel", id, `Etapa do funil removida: ${f.label}`);
+}
+
+export function reorderFunnelStages(ws: Workspace, ctx: Ctx, orderedIds: ID[]) {
+  orderedIds.forEach((id, idx) => {
+    if (ws.funnel[id]) ws.funnel[id].position = idx;
+  });
+  log(ws, ctx, "reorder", "funnel", null, "Etapas do funil reordenadas");
+}
+
+// ───────────── Publicações Individuais (Distribuição de Conteúdo) ─────────────
+
+export function upsertPublication(ws: Workspace, ctx: Ctx, data: Partial<ContentPublication> & { title: string }): ID {
+  ws.publications ??= {};
+  if (data.id && ws.publications[data.id]) {
+    const pub = ws.publications[data.id];
+    Object.assign(pub, data, { updatedAt: ctx.nowIso });
+    log(ws, ctx, "update", "publication", pub.id, `Publicação atualizada: ${pub.title}`);
+    return pub.id;
+  }
+  const id = newId();
+  const pub: ContentPublication = {
+    id,
+    title: data.title,
+    type: data.type || "post",
+    platform: data.platform || "instagram",
+    publishedAt: data.publishedAt || ctx.nowIso.slice(0, 10),
+    url: data.url || "",
+    views: data.views || 0,
+    reach: data.reach || 0,
+    likes: data.likes || 0,
+    comments: data.comments || 0,
+    shares: data.shares || 0,
+    saves: data.saves || 0,
+    clicks: data.clicks || 0,
+    groupEntries: data.groupEntries || 0,
+    notes: data.notes || "",
+    createdAt: ctx.nowIso,
+    updatedAt: ctx.nowIso,
+    ...data,
+  };
+  ws.publications[id] = pub;
+  log(ws, ctx, "create", "publication", id, `Publicação cadastrada: ${pub.title}`);
+  return id;
+}
+
+export function deletePublication(ws: Workspace, ctx: Ctx, id: ID) {
+  if (ws.publications && ws.publications[id]) {
+    const title = ws.publications[id].title;
+    delete ws.publications[id];
+    log(ws, ctx, "delete", "publication", id, `Publicação excluída: ${title}`);
+  }
+}
+
+export function duplicatePublication(ws: Workspace, ctx: Ctx, id: ID): ID {
+  const orig = get(ws.publications || {}, id, "Publicação");
+  const newIdVal = newId();
+  const pub: ContentPublication = {
+    ...orig,
+    id: newIdVal,
+    title: `${orig.title} (Cópia)`,
+    createdAt: ctx.nowIso,
+    updatedAt: ctx.nowIso,
+  };
+  ws.publications ??= {};
+  ws.publications[newIdVal] = pub;
+  log(ws, ctx, "duplicate", "publication", newIdVal, `Publicação duplicada: ${pub.title}`);
+  return newIdVal;
+}
+
+export function setTaskImpactFlags(ws: Workspace, ctx: Ctx, taskId: ID, flags: ImpactFlag[]) {
+  const t = get(ws.tasks, taskId, "Tarefa");
+  t.impactFlags = flags.slice(0, 3); // máximo de 3 flags
+  touch(t, ctx);
+  log(ws, ctx, "flags", "task", taskId, `Flags de impacto atualizadas: ${flags.join(", ")}`);
+}
+
+export function logPomodoroTime(ws: Workspace, ctx: Ctx, taskId: ID, minutes: number, note = "Sessão de Foco Pomodoro") {
+  const t = get(ws.tasks, taskId, "Tarefa");
+  const entry = {
+    id: newId(),
+    memberId: t.assigneeId,
+    minutes: Math.max(1, Math.round(minutes)),
+    at: ctx.nowIso,
+    note,
+  };
+  t.timeEntries.push(entry);
+  touch(t, ctx);
+  log(ws, ctx, "time", "task", taskId, `Tempo registrado: ${entry.minutes}m via cronômetro`);
 }
 
 export function setPrompt(ws: Workspace, ctx: Ctx, taskId: ID, prompt: string) {

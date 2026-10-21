@@ -405,20 +405,87 @@ export class SprintOSRepository {
   }
 
   /**
-   * Lista todos os templates disponíveis.
+   * Obtém a definição completa de um template para edição.
    */
-  static listTemplates(): TemplateListItem[] {
-    const list: TemplateListItem[] = [
-      {
+  static getTemplate(templateId: string): { meta: TemplateListItem; data: Workspace } | null {
+    try {
+      const raw = localStorage.getItem(`${TEMPLATE_STORAGE_KEY_PREFIX}${templateId}`);
+      if (raw) {
+        return JSON.parse(raw);
+      }
+    } catch {}
+
+    if (templateId === "seed_percurso_da_vida") {
+      const seed = createPercursoDaVidaSeed();
+      const meta: TemplateListItem = {
         id: "seed_percurso_da_vida",
         name: "SPRINT 10 DIAS — Colocar a Máquina para Rodar",
         description: "Template oficial de ativação comercial: CRM, SDR, Tráfego Pago, Scripts e Funil X1.",
-        stageCount: 8,
-        taskCount: 26,
+        stageCount: Object.values(seed.stages).length,
+        taskCount: Object.values(seed.tasks).length,
         createdAt: "2026-10-21T00:00:00Z",
         isDefault: true,
-      },
-    ];
+      };
+      return { meta, data: seed };
+    }
+
+    return null;
+  }
+
+  /**
+   * Atualiza os dados de um template existente (ou sobrescreve).
+   */
+  static updateTemplate(templateId: string, metaPatch: Partial<TemplateListItem>, dataPatch?: Workspace): void {
+    const existing = this.getTemplate(templateId);
+    const updatedMeta: TemplateListItem = {
+      ...(existing?.meta || {
+        id: templateId,
+        name: "Template",
+        description: "",
+        stageCount: 0,
+        taskCount: 0,
+        createdAt: new Date().toISOString(),
+      }),
+      ...metaPatch,
+    };
+    const updatedData = dataPatch || existing?.data || createPercursoDaVidaSeed();
+    updatedMeta.stageCount = Object.values(updatedData.stages || {}).filter((s) => !s.archivedAt).length;
+    updatedMeta.taskCount = Object.values(updatedData.tasks || {}).filter((t) => !t.archivedAt).length;
+
+    try {
+      localStorage.setItem(
+        `${TEMPLATE_STORAGE_KEY_PREFIX}${templateId}`,
+        JSON.stringify({ meta: updatedMeta, data: updatedData })
+      );
+    } catch (e) {
+      console.warn("[SprintOSRepository] Erro ao atualizar template:", e);
+    }
+  }
+
+  /**
+   * Remove um template customizado.
+   */
+  static deleteTemplate(templateId: string): void {
+    try {
+      localStorage.removeItem(`${TEMPLATE_STORAGE_KEY_PREFIX}${templateId}`);
+    } catch {}
+  }
+
+  /**
+   * Lista todos os templates disponíveis.
+   */
+  static listTemplates(): TemplateListItem[] {
+    let defaultSeedMeta: TemplateListItem = {
+      id: "seed_percurso_da_vida",
+      name: "SPRINT 10 DIAS — Colocar a Máquina para Rodar",
+      description: "Template oficial de ativação comercial: CRM, SDR, Tráfego Pago, Scripts e Funil X1.",
+      stageCount: 8,
+      taskCount: 26,
+      createdAt: "2026-10-21T00:00:00Z",
+      isDefault: true,
+    };
+
+    const customTemplates: TemplateListItem[] = [];
 
     try {
       for (let i = 0; i < localStorage.length; i++) {
@@ -427,19 +494,40 @@ export class SprintOSRepository {
           const raw = localStorage.getItem(key);
           if (raw) {
             const parsed = JSON.parse(raw);
-            if (parsed.meta) list.push(parsed.meta);
+            if (parsed?.meta) {
+              if (parsed.meta.id === "seed_percurso_da_vida") {
+                defaultSeedMeta = { ...defaultSeedMeta, ...parsed.meta, isDefault: true };
+              } else {
+                customTemplates.push(parsed.meta);
+              }
+            }
           }
         }
       }
     } catch {}
 
-    return list;
+    return [defaultSeedMeta, ...customTemplates];
   }
 
   /**
    * Cria um workspace a partir de um template.
    */
   static createFromTemplate(templateId: string, name: string, client = "Cliente"): Workspace {
+    try {
+      const raw = localStorage.getItem(`${TEMPLATE_STORAGE_KEY_PREFIX}${templateId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.data) {
+          const ws = JSON.parse(JSON.stringify(parsed.data)) as Workspace;
+          const newProjId = newId();
+          ws.project.id = newProjId;
+          ws.project.name = name;
+          ws.project.client = client;
+          return ws;
+        }
+      }
+    } catch {}
+
     if (templateId === "seed_percurso_da_vida") {
       const seed = createPercursoDaVidaSeed();
       const ws = JSON.parse(JSON.stringify(seed)) as Workspace;

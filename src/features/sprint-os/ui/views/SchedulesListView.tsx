@@ -43,6 +43,7 @@ import { useSprintOSStore } from "../../state/sprintOsStore";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { fmtDateTime } from "../../scheduler/time";
+import { EditTemplateModal } from "../modals/EditTemplateModal";
 
 export const SchedulesListView: React.FC = () => {
   const { activeCompanyId } = useCompany();
@@ -54,6 +55,8 @@ export const SchedulesListView: React.FC = () => {
     duplicateCurrentWorkspace,
     deleteWorkspaceAction,
     setIsCreateModalOpen,
+    setIsEditTemplateModalOpen,
+    setEditingTemplateId,
   } = useSprintOSStore();
 
   const [activeTab, setActiveTab] = useState<"schedules" | "templates">("schedules");
@@ -270,7 +273,20 @@ export const SchedulesListView: React.FC = () => {
                   </p>
                 </div>
 
-                <div className="pt-3 border-t border-white/5 flex items-center justify-end">
+                <div className="pt-3 border-t border-white/5 flex items-center justify-between">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setEditingTemplateId(tpl.id);
+                      setIsEditTemplateModalOpen(true);
+                    }}
+                    className="h-8 text-xs text-white/70 hover:text-white hover:bg-white/10 rounded-xl font-medium flex items-center gap-1.5"
+                  >
+                    <Edit2 className="h-3.5 w-3.5" />
+                    <span>Editar Template</span>
+                  </Button>
+
                   <Button
                     onClick={() => {
                       setIsCreateModalOpen(true);
@@ -287,6 +303,9 @@ export const SchedulesListView: React.FC = () => {
           </div>
         )}
       </main>
+
+      {/* Modal de Edição de Template */}
+      <EditTemplateModal />
 
       {/* Diálogo de Confirmação de Exclusão */}
       <Dialog open={!!deleteConfirmId} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
