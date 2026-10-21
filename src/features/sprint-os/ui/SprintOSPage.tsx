@@ -3,7 +3,7 @@
  * Localização: Módulo na aba de Apps do Qualify (/sprint-os).
  */
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   Layers,
   Kanban,
@@ -65,29 +65,42 @@ export const SprintOSPage: React.FC = () => {
     mutate,
   } = useSprintOSStore();
 
-  // Inicialização do workspace
-  useEffect(() => {
-    initWorkspace(activeCompanyId, null, user?.email || "Operador");
-  }, [activeCompanyId, initWorkspace, user]);
+  const lastInitCompanyIdRef = useRef<string | null | undefined>(undefined);
+  const syncedMembersRef = useRef<Set<string>>(new Set());
 
-  // Sincronização automática dos membros do Qualify no Sprint OS
+  // Inicialização do workspace (apenas uma vez por empresa ativa)
   useEffect(() => {
-    if (workspace && companyMembers && companyMembers.length > 0) {
-      companyMembers.forEach((cm) => {
-        if (!workspace.members[cm.id]) {
-          mutate((ws, ctx) => {
-            upsertMember(ws, ctx, {
-              id: cm.id,
-              userId: cm.user_id,
-              name: cm.full_name || cm.email || "Membro Qualify",
-              role: cm.role,
-              active: cm.is_active,
-            });
-          });
-        }
+    if (lastInitCompanyIdRef.current === activeCompanyId) return;
+    lastInitCompanyIdRef.current = activeCompanyId;
+    initWorkspace(activeCompanyId, null, user?.email || "Operador");
+  }, [activeCompanyId, initWorkspace, user?.email]);
+
+  // Sincronização automática dos membros do Qualify no Sprint OS em lote único
+  useEffect(() => {
+    if (!workspace || !companyMembers || companyMembers.length === 0) return;
+
+    const missing = companyMembers.filter(
+      (cm) => !workspace.members[cm.id] && !syncedMembersRef.current.has(cm.id)
+    );
+
+    if (missing.length === 0) return;
+
+    // Registra imediatamente para evitar re-execução em loop
+    missing.forEach((cm) => syncedMembersRef.current.add(cm.id));
+
+    // Executa uma única mutação em lote
+    mutate((ws, ctx) => {
+      missing.forEach((cm) => {
+        upsertMember(ws, ctx, {
+          id: cm.id,
+          userId: cm.user_id,
+          name: cm.full_name || cm.email || "Membro Qualify",
+          role: cm.role,
+          active: cm.is_active,
+        });
       });
-    }
-  }, [companyMembers, workspace, mutate]);
+    }, user?.email || "Sistema");
+  }, [workspace?.project?.id, companyMembers, mutate, user?.email]);
 
   if (isLoading || !workspace) {
     return (
