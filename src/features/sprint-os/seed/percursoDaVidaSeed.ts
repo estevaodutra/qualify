@@ -810,7 +810,7 @@ export function createPercursoDaVidaSeed(actorName = "Admin / Engenheiro"): Work
       archivedAt: null,
       rev: 1,
     },
-  ];
+  };
 
   // 8. Funil Comercial X1 da Seção 27
   const funnelStagesList = [
