@@ -33,7 +33,7 @@ import {
   type Priority,
   IMPACT_FLAG_CONFIG,
 } from "../../domain/types";
-import { newId } from "../../domain/ids";
+import { newId } from "../../domain/ops";
 
 export const EditTemplateModal: React.FC = () => {
   const {
