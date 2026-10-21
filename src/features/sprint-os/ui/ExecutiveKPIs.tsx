@@ -1,37 +1,46 @@
 /**
- * Cockpit Executivo de KPIs (Camada A / Seção 12).
- * Exibe no topo da dashboard:
- * - 3 Medidas distintas de progresso (Tarefas, Esforço, Marcos)
- * - Prazos e Dias Úteis (Original vs Nova Previsão)
- * - Horas Operacionais (Planejadas, Realizadas, Restantes)
- * - Risco Operacional (P0 Abertas, Bloqueios)
- * - Rentabilidade da Empreitada (Custo Final e Margem Bruta Projetada)
+ * Cockpit Executivo 80/20 — Progresso e Execução (Região 2).
+ * Especificação: Master Prompt v9.0 — Seção 6 (Região 2).
+ *
+ * Contém somente 4 cards limpos:
+ * - CARD A: Progresso Geral (percentual grande, barra horizontal única, X de Y tarefas concluídas)
+ * - CARD B: Missão Agora (próxima tarefa executável, prioridade, responsável, próxima subtarefa, botão Abrir)
+ * - CARD C: Situação (linha compacta: 🔴 Pendentes, 🟡 Fazendo, 🟢 Feitas, 🚧 Bloqueadas)
+ * - CARD D: Gasto com Anúncios (ou Próximo Marco se mídia não estiver configurada)
  */
 
 import React from "react";
 import {
-  CheckCircle2,
-  Clock,
-  Calendar,
-  AlertTriangle,
-  TrendingUp,
-  DollarSign,
-  Flag,
   Activity,
-  Layers,
+  Compass,
+  ArrowRight,
+  User,
+  Flag,
+  DollarSign,
+  Calendar,
+  CheckCircle2,
+  AlertTriangle,
+  Play,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useSprintOSStore } from "../state/sprintOsStore";
 import {
   computeProgressMetrics,
-  computeSprintFinancials,
+  computeMissionNow,
 } from "../metrics/calculations";
-import { fmtDateTime, fmtMinutes } from "../scheduler/time";
-import { currentForecast } from "../scheduler/planning";
 import { sprintTasks } from "../domain/ops";
+import { PRIORITY_LABEL } from "../domain/types";
 
 export const ExecutiveKPIs: React.FC = () => {
-  const { workspace, activeSprintId } = useSprintOSStore();
+  const {
+    workspace,
+    activeSprintId,
+    filterAssigneeId,
+    setSelectedTaskId,
+    setIsTaskModalOpen,
+  } = useSprintOSStore();
 
   if (!workspace || !activeSprintId) return null;
 
@@ -39,177 +48,194 @@ export const ExecutiveKPIs: React.FC = () => {
   if (!sprint) return null;
 
   const progress = computeProgressMetrics(workspace, activeSprintId);
-  const financials = computeSprintFinancials(workspace, activeSprintId);
+  const mission = computeMissionNow(workspace, activeSprintId, filterAssigneeId);
   const tasks = sprintTasks(workspace, activeSprintId);
-  const forecastEnd = currentForecast(tasks);
-  const originalEnd = sprint.baseline?.contractEnd || null;
 
-  const isOverdue = !!(originalEnd && forecastEnd && forecastEnd > originalEnd);
+  // Contagens para o CARD C (Situação)
+  const pendingCount = tasks.filter((t) => t.status === "pending").length;
+  const doingCount = tasks.filter((t) => t.status === "doing").length;
+  const doneCount = tasks.filter((t) => t.status === "done").length;
+  const blockedCount = tasks.filter((t) => !!t.blockedReason).length;
+
+  // Próximo Marco ou Gasto com Anúncios para o CARD D
+  const pinnedIndicator = Object.values(workspace.indicators || {}).find((i) => i.pinnedToCockpit);
+  const adSpend = workspace.contentMetrics?.adSpend ?? workspace.adsCalculator?.totalSpent ?? null;
+  const showAdSpend = adSpend !== null && adSpend > 0;
+
+  const nextMilestone = Object.values(workspace.milestones || {})
+    .filter((m) => !m.archivedAt && !m.validatedAt)
+    .sort((a, b) => (a.dueDate || "9999").localeCompare(b.dueDate || "9999"))[0];
 
   return (
-    <section className="px-6 pt-6 pb-2">
-      {/* Grid Principal de Indicadores */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mb-4">
-        {/* KPI 1: 3 Medidas de Progresso (Seção 12) */}
-        <div className="p-4 rounded-2xl bg-zinc-900/60 border border-white/5 backdrop-blur-md flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs uppercase tracking-wider text-white/50 font-bold flex items-center gap-1.5">
+    <section className="px-6 pt-5 pb-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-3.5">
+        {/* CARD A — PROGRESSO DO PROJETO (3 colunas) */}
+        <div className="lg:col-span-3 p-4 rounded-2xl bg-zinc-900/50 border border-white/5 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-xs text-white/50 mb-2 font-medium">
+              <span className="uppercase tracking-wider text-[11px] font-bold">Progresso Geral</span>
               <Activity className="h-3.5 w-3.5 text-primary" />
-              Progresso Operacional
-            </span>
-            <span className="text-xs font-black text-primary">
-              {progress.taskProgressPct}%
-            </span>
+            </div>
+
+            <div className="flex items-baseline gap-2 mb-2">
+              <span className="text-3xl font-extrabold text-white tracking-tight font-mono">
+                {progress.taskProgressPct}%
+              </span>
+            </div>
+
+            <Progress value={progress.taskProgressPct} className="h-2 bg-white/5" />
           </div>
 
-          <div className="space-y-2.5">
-            {/* 1. Tarefas */}
-            <div>
-              <div className="flex justify-between text-[11px] mb-1">
-                <span className="text-white/70">Por Tarefas ({progress.tasksDone}/{progress.tasksTotal})</span>
-                <span className="font-bold text-white">{progress.taskProgressPct}%</span>
-              </div>
-              <Progress value={progress.taskProgressPct} className="h-1.5 bg-white/10" />
-            </div>
-
-            {/* 2. Esforço */}
-            <div>
-              <div className="flex justify-between text-[11px] mb-1">
-                <span className="text-white/70">Por Esforço ({fmtMinutes(progress.effortDoneMinutes)}/{fmtMinutes(progress.effortTotalMinutes)})</span>
-                <span className="font-bold text-indigo-400">{progress.effortProgressPct}%</span>
-              </div>
-              <Progress value={progress.effortProgressPct} className="h-1.5 bg-white/10 [&>div]:bg-indigo-500" />
-            </div>
-
-            {/* 3. Marcos */}
-            <div>
-              <div className="flex justify-between text-[11px] mb-1">
-                <span className="text-white/70">Por Marcos ({progress.milestonesDone}/{progress.milestonesTotal})</span>
-                <span className="font-bold text-emerald-400">{progress.milestoneProgressPct}%</span>
-              </div>
-              <Progress value={progress.milestoneProgressPct} className="h-1.5 bg-white/10 [&>div]:bg-emerald-500" />
-            </div>
+          <div className="pt-2 text-[11px] text-white/50 font-medium">
+            {progress.tasksDone} de {progress.tasksTotal} tarefas concluídas
           </div>
         </div>
 
-        {/* KPI 2: Prazo & Dias Úteis */}
-        <div className="p-4 rounded-2xl bg-zinc-900/60 border border-white/5 backdrop-blur-md flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs uppercase tracking-wider text-white/50 font-bold flex items-center gap-1.5">
-              <Calendar className="h-3.5 w-3.5 text-cyan-400" />
-              Prazo Contratual
-            </span>
-            {isOverdue && (
-              <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30">
-                Risco de Atraso
-              </span>
+        {/* CARD B — MISSÃO AGORA (5 colunas - Destaque Visual) */}
+        <div className="lg:col-span-5 p-4 rounded-2xl bg-zinc-900/70 border border-primary/20 shadow-md relative overflow-hidden flex flex-col justify-between">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl pointer-events-none" />
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5 text-primary">
+                <Compass className="h-3.5 w-3.5 animate-pulse" />
+                <span className="text-[11px] font-black uppercase tracking-wider">Missão Agora</span>
+              </div>
+              {mission.task && (
+                <Badge
+                  variant="outline"
+                  className="text-[9px] px-1.5 py-0 border-white/10 text-white/60 bg-black/40 font-mono"
+                >
+                  {PRIORITY_LABEL[mission.task.priority]}
+                </Badge>
+              )}
+            </div>
+
+            {mission.task ? (
+              <div>
+                <h4 className="text-sm font-bold text-white line-clamp-1 mb-1">
+                  {mission.task.title}
+                </h4>
+
+                <div className="flex items-center gap-2 text-[11px] text-white/40 mb-2">
+                  <span className="flex items-center gap-1">
+                    <User className="h-3 w-3" />
+                    {mission.assigneeName || "Sem responsável"}
+                  </span>
+                  <span>•</span>
+                  <span className="truncate max-w-[180px]">{mission.stageTitle}</span>
+                </div>
+
+                {mission.nextSubtask && (
+                  <div className="text-[11px] text-white/60 bg-black/30 px-2.5 py-1.5 rounded-lg border border-white/5 line-clamp-1 flex items-center gap-1.5">
+                    <span className="text-primary font-bold">Próxima ação:</span>
+                    <span className="text-white/80">{mission.nextSubtask.title}</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="py-2 text-xs text-emerald-400 flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4" />
+                <span>Nenhuma tarefa pendente desbloqueada no momento!</span>
+              </div>
             )}
           </div>
 
-          <div className="space-y-1 my-auto">
-            <div className="flex items-baseline justify-between">
-              <span className="text-xs text-white/60">Original:</span>
-              <span className="text-xs font-semibold text-white/90">
-                {originalEnd ? fmtDateTime(originalEnd) : "Não ativada"}
-              </span>
-            </div>
-
-            <div className="flex items-baseline justify-between">
-              <span className="text-xs text-white/60">Nova Previsão:</span>
-              <span className={`text-sm font-black ${isOverdue ? "text-rose-400" : "text-emerald-400"}`}>
-                {forecastEnd ? fmtDateTime(forecastEnd) : "A calcular"}
-              </span>
-            </div>
-          </div>
-
-          <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs">
-            <span className="text-white/50">Dias Úteis:</span>
-            <span className="font-bold text-white">
-              Dia {progress.currentWorkDayIndex} de {progress.businessDaysTotal} ({progress.businessDaysRemaining} restantes)
-            </span>
+          <div className="pt-2 flex justify-end">
+            {mission.task && (
+              <Button
+                onClick={() => {
+                  setSelectedTaskId(mission.task!.id);
+                  setIsTaskModalOpen(true);
+                }}
+                size="sm"
+                className="h-7 text-[11px] bg-primary hover:bg-primary/90 text-white font-medium px-3 rounded-lg flex items-center gap-1 shadow-sm"
+              >
+                <span>Abrir</span>
+                <ArrowRight className="h-3 w-3" />
+              </Button>
+            )}
           </div>
         </div>
 
-        {/* KPI 3: Horas & Alocação */}
-        <div className="p-4 rounded-2xl bg-zinc-900/60 border border-white/5 backdrop-blur-md flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs uppercase tracking-wider text-white/50 font-bold flex items-center gap-1.5">
-              <Clock className="h-3.5 w-3.5 text-amber-400" />
-              Balanço de Horas
-            </span>
-            <span className="text-xs text-white/40 font-mono">
-              {progress.activeMembersCount} membro(s)
-            </span>
+        {/* CARD C — SITUAÇÃO (2 colunas - Compacto em Linha) */}
+        <div className="lg:col-span-2 p-4 rounded-2xl bg-zinc-900/50 border border-white/5 flex flex-col justify-between">
+          <div className="text-xs text-white/50 font-bold uppercase tracking-wider mb-2">
+            Situação
           </div>
 
-          <div className="grid grid-cols-3 gap-2 my-auto text-center py-1">
-            <div className="p-2 rounded-xl bg-white/5">
-              <div className="text-[10px] text-white/50 uppercase font-semibold">Planejadas</div>
-              <div className="text-sm font-black text-white">{fmtMinutes(progress.effortTotalMinutes)}</div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="p-1.5 rounded-xl bg-black/30 border border-white/5 flex flex-col">
+              <span className="text-[10px] text-white/40">🔴 Pendentes</span>
+              <span className="text-sm font-bold text-white font-mono">{pendingCount}</span>
             </div>
-            <div className="p-2 rounded-xl bg-white/5">
-              <div className="text-[10px] text-white/50 uppercase font-semibold">Realizadas</div>
-              <div className="text-sm font-black text-amber-400">{fmtMinutes(progress.effortLoggedMinutes)}</div>
+            <div className="p-1.5 rounded-xl bg-black/30 border border-white/5 flex flex-col">
+              <span className="text-[10px] text-white/40">🟡 Fazendo</span>
+              <span className="text-sm font-bold text-amber-400 font-mono">{doingCount}</span>
             </div>
-            <div className="p-2 rounded-xl bg-white/5">
-              <div className="text-[10px] text-white/50 uppercase font-semibold">Restantes</div>
-              <div className="text-sm font-black text-indigo-400">{fmtMinutes(progress.effortRemainingMinutes)}</div>
+            <div className="p-1.5 rounded-xl bg-black/30 border border-white/5 flex flex-col">
+              <span className="text-[10px] text-white/40">🟢 Feitas</span>
+              <span className="text-sm font-bold text-emerald-400 font-mono">{doneCount}</span>
             </div>
-          </div>
-
-          <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs">
-            <span className="text-white/50">Tarefas em Execução:</span>
-            <span className="font-bold text-amber-400">{progress.tasksDoing} ativas</span>
+            <div className="p-1.5 rounded-xl bg-black/30 border border-white/5 flex flex-col">
+              <span className="text-[10px] text-white/40">🚧 Bloqueadas</span>
+              <span className={`text-sm font-bold font-mono ${blockedCount > 0 ? "text-red-400" : "text-white/40"}`}>
+                {blockedCount}
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* KPI 4: Rentabilidade da Empreitada (Seção 33) */}
-        <div className="p-4 rounded-2xl bg-zinc-900/60 border border-white/5 backdrop-blur-md flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs uppercase tracking-wider text-white/50 font-bold flex items-center gap-1.5">
-              <DollarSign className="h-3.5 w-3.5 text-emerald-400" />
-              Rentabilidade Prevista
-            </span>
-            <span className="text-xs font-black text-emerald-400">
-              {financials.projectedGrossMarginPct}% Margem
-            </span>
-          </div>
-
-          <div className="space-y-1 my-auto">
-            <div className="flex justify-between items-baseline">
-              <span className="text-xs text-white/60">Contratado:</span>
-              <span className="text-sm font-bold text-white">
-                R$ {financials.contractValue.toLocaleString("pt-BR")}
-              </span>
-            </div>
-
-            <div className="flex justify-between items-baseline">
-              <span className="text-xs text-white/60">Custo Projetado:</span>
-              <span className="text-xs font-semibold text-rose-300">
-                R$ {financials.projectedFinalCost.toLocaleString("pt-BR")}
-              </span>
-            </div>
-
-            <div className="flex justify-between items-baseline">
-              <span className="text-xs text-white/60">Resultado Bruto:</span>
-              <span className="text-xs font-bold text-emerald-400">
-                R$ {financials.projectedGrossProfit.toLocaleString("pt-BR")}
-              </span>
-            </div>
-          </div>
-
-          <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[11px]">
-            <span className="text-white/50">P0 Abertas / Bloqueios:</span>
-            <span className="font-bold flex items-center gap-1.5">
-              <span className={progress.tasksP0Open > 0 ? "text-rose-400 font-black" : "text-white/60"}>
-                {progress.tasksP0Open} P0
-              </span>
-              <span className="text-white/20">·</span>
-              <span className={progress.blockedTasksCount > 0 ? "text-amber-400 font-black" : "text-white/60"}>
-                {progress.blockedTasksCount} travada(s)
-              </span>
-            </span>
-          </div>
+        {/* CARD D — GASTO COM ANÚNCIOS / PRÓXIMO MARCO / KPI FIXADO (2 colunas) */}
+        <div className="lg:col-span-2 p-4 rounded-2xl bg-zinc-900/50 border border-white/5 flex flex-col justify-between">
+          {pinnedIndicator ? (
+            <>
+              <div>
+                <div className="flex items-center justify-between text-xs text-white/50 mb-2 font-medium">
+                  <span className="uppercase tracking-wider text-[11px] font-bold truncate">
+                    {pinnedIndicator.name}
+                  </span>
+                  <Activity className="h-3.5 w-3.5 text-primary" />
+                </div>
+                <div className="text-2xl font-extrabold text-white font-mono">
+                  {pinnedIndicator.unit} {pinnedIndicator.currentValue}
+                </div>
+              </div>
+              <div className="text-[11px] text-white/40">
+                Meta: {pinnedIndicator.targetValue ? `${pinnedIndicator.unit} ${pinnedIndicator.targetValue}` : "N/A"}
+              </div>
+            </>
+          ) : showAdSpend ? (
+            <>
+              <div>
+                <div className="flex items-center justify-between text-xs text-white/50 mb-2 font-medium">
+                  <span className="uppercase tracking-wider text-[11px] font-bold">Gasto com Anúncios</span>
+                  <DollarSign className="h-3.5 w-3.5 text-amber-400" />
+                </div>
+                <div className="text-2xl font-extrabold text-white font-mono">
+                  R$ {Number(adSpend).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </div>
+              </div>
+              <div className="text-[11px] text-white/40">
+                Período da Sprint ativa
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <div className="flex items-center justify-between text-xs text-white/50 mb-2 font-medium">
+                  <span className="uppercase tracking-wider text-[11px] font-bold">Próximo Marco</span>
+                  <Calendar className="h-3.5 w-3.5 text-primary" />
+                </div>
+                <div className="text-sm font-bold text-white line-clamp-2">
+                  {nextMilestone ? nextMilestone.title : "Sem marcos pendentes"}
+                </div>
+              </div>
+              <div className="text-[11px] text-white/40">
+                {nextMilestone?.dueDate ? `Prazo: ${nextMilestone.dueDate}` : "Planejamento em dia"}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </section>

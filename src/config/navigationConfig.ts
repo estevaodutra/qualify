@@ -37,7 +37,7 @@ export const TOP_NAV_ITEMS: NavItem[] = [
 ];
 
 export const APP_SUB_ITEMS: NavItem[] = [
-  { id: "sprint-os", title: "Sprint OS", url: "/sprint-os", icon: Rocket },
+  { id: "sprint-os", title: "Cronogramas", url: "/sprint-os", icon: Rocket },
   { id: "criafy", title: "Criafy", url: "/criafy", icon: Sparkles },
   { id: "quiz", title: "Quiz", url: "/quiz", icon: Layers },
   { id: "prospeccao", title: "Prospecção", url: "/prospeccao", icon: Search },

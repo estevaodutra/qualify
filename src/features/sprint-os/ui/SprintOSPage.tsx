@@ -1,6 +1,10 @@
 /**
- * Página Principal do Sprint OS (Cockpit Operacional).
- * Localização: Módulo na aba de Apps do Qualify (/sprint-os).
+ * Página Principal do Módulo de Cronogramas / Sprint OS (Apps → Cronogramas).
+ * Especificação: Master Prompt v9.0 — Lean Operations Dashboard 80/20.
+ *
+ * Arquitetura Definitiva:
+ * - Se nenhum cronograma estiver aberto: exibe "Meus Cronogramas" (SchedulesListView).
+ * - Ao selecionar um cronograma: exibe o Cockpit Operacional 80/20 focado nas 5 perguntas.
  */
 
 import React, { useEffect, useRef } from "react";
@@ -14,6 +18,9 @@ import {
   Search,
   RotateCcw,
   Sparkles,
+  BarChart3,
+  Target,
+  Calculator,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -23,14 +30,17 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCompanyMembers } from "@/hooks/useCompanyMembers";
 
 import { useSprintOSStore, type ViewTab } from "../state/sprintOsStore";
+import { SchedulesListView } from "./views/SchedulesListView";
 import { ExecutiveHeader } from "./ExecutiveHeader";
 import { ExecutiveKPIs } from "./ExecutiveKPIs";
-import { MissionNowCard } from "./MissionNowCard";
 import { OperationalCompassCard } from "./OperationalCompassCard";
 import { DailyRoutineCard } from "./DailyRoutineCard";
 import { StructureView } from "./views/StructureView";
 import { KanbanView } from "./views/KanbanView";
 import { GanttView } from "./views/GanttView";
+import { IndicatorsView } from "./views/IndicatorsView";
+import { OKRsView } from "./views/OKRsView";
+import { CalculatorsView } from "./views/CalculatorsView";
 import { FunnelView } from "./views/FunnelView";
 import { FinancialView } from "./views/FinancialView";
 import { MilestonesView } from "./views/MilestonesView";
@@ -41,6 +51,7 @@ import { TaskDetailModal } from "./modals/TaskDetailModal";
 import { ReportsModal } from "./modals/ReportsModal";
 import { ShareLinkModal } from "./modals/ShareLinkModal";
 import { TemplatesModal } from "./modals/TemplatesModal";
+import { CreateScheduleModal } from "./modals/CreateScheduleModal";
 import { upsertMember } from "../domain/ops";
 
 export const SprintOSPage: React.FC = () => {
@@ -49,6 +60,7 @@ export const SprintOSPage: React.FC = () => {
   const { members: companyMembers } = useCompanyMembers();
 
   const {
+    activeWorkspaceId,
     workspace,
     isLoading,
     activeTab,
@@ -68,7 +80,7 @@ export const SprintOSPage: React.FC = () => {
   const lastInitCompanyIdRef = useRef<string | null | undefined>(undefined);
   const syncedMembersRef = useRef<Set<string>>(new Set());
 
-  // Inicialização do workspace (apenas uma vez por empresa ativa)
+  // Inicialização do workspace (uma única vez por empresa ativa)
   useEffect(() => {
     if (lastInitCompanyIdRef.current === activeCompanyId) return;
     lastInitCompanyIdRef.current = activeCompanyId;
@@ -85,10 +97,8 @@ export const SprintOSPage: React.FC = () => {
 
     if (missing.length === 0) return;
 
-    // Registra imediatamente para evitar re-execução em loop
     missing.forEach((cm) => syncedMembersRef.current.add(cm.id));
 
-    // Executa uma única mutação em lote
     mutate((ws, ctx) => {
       missing.forEach((cm) => {
         upsertMember(ws, ctx, {
@@ -102,49 +112,52 @@ export const SprintOSPage: React.FC = () => {
     }, user?.email || "Sistema");
   }, [workspace?.project?.id, companyMembers, mutate, user?.email]);
 
-  if (isLoading || !workspace) {
+  if (isLoading) {
     return (
       <div className="h-screen w-full flex items-center justify-center bg-[#0B0E14] text-white">
         <div className="flex flex-col items-center gap-3">
           <div className="h-10 w-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           <span className="text-xs font-black uppercase tracking-widest text-white/50">
-            Carregando Sprint OS...
+            Carregando Cronogramas...
           </span>
         </div>
       </div>
     );
   }
 
+  // 1. SE NENHUM CRONOGRAMA ESTIVER ABERTO -> EXIBE LISTAGEM MEUS CRONOGRAMAS (Seção 4)
+  if (!activeWorkspaceId || !workspace) {
+    return (
+      <>
+        <SchedulesListView />
+        <CreateScheduleModal />
+      </>
+    );
+  }
+
+  // 2. CRONOGRAMA ABERTO -> COCKPIT OPERACIONAL 80/20 (Seção 6)
   const membersList = Object.values(workspace.members).filter((m) => !m.archivedAt);
 
   return (
     <div className="min-h-screen bg-[#0B0E14] text-white flex flex-col font-sans pb-16 select-none">
-      {/* 1. Header Executivo Fixo */}
+      {/* Região 1: Cabeçalho Compacto (Linear Style) */}
       <ExecutiveHeader />
 
-      {/* 2. KPIs Executivos */}
+      {/* Região 2: Progresso e Execução (Foco nas 5 perguntas) */}
       <ExecutiveKPIs />
 
-      {/* 3. Bloco de Inteligência Operacional (Missão Agora, Bússola e Rotina Diária) */}
-      <section className="px-6 py-2 grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* Missão Agora: 6 colunas */}
-        <div className="lg:col-span-6 flex flex-col">
-          <MissionNowCard />
-        </div>
-
-        {/* Bússola Operacional: 3 colunas */}
-        <div className="lg:col-span-3 flex flex-col">
+      {/* Inteligência Operacional Compacta e Recolhível (Seções 7 e 8) */}
+      <section className="px-6 py-2 grid grid-cols-1 md:grid-cols-12 gap-3.5">
+        <div className="md:col-span-6">
           <OperationalCompassCard />
         </div>
-
-        {/* Rotina Diária: 3 colunas */}
-        <div className="lg:col-span-3 flex flex-col">
+        <div className="md:col-span-6">
           <DailyRoutineCard />
         </div>
       </section>
 
-      {/* 4. Barra de Filtros & Busca */}
-      <section className="px-6 pt-4 pb-2">
+      {/* Região 3: Filtros Compactos */}
+      <section className="px-6 pt-3 pb-2">
         <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-zinc-900/50 border border-white/5">
           <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-[280px]">
             {/* Campo de Busca */}
@@ -214,11 +227,11 @@ export const SprintOSPage: React.FC = () => {
         </div>
       </section>
 
-      {/* 5. Abas de Visualização Central */}
+      {/* Região 3: Visualizações Especializadas (Uma visualização principal por vez) */}
       <main className="px-6 pt-2 flex-1">
         <Tabs value={activeTab} onValueChange={(t) => setActiveTab(t as ViewTab)} className="w-full">
           <TabsList className="bg-white/5 border border-white/10 p-1 rounded-2xl mb-4 flex-wrap h-auto">
-            <TabsTrigger value="dashboard" className="text-xs font-bold gap-2">
+            <TabsTrigger value="structure" className="text-xs font-bold gap-2">
               <Layers className="h-3.5 w-3.5" />
               <span>Estrutura em Blocos</span>
             </TabsTrigger>
@@ -229,6 +242,18 @@ export const SprintOSPage: React.FC = () => {
             <TabsTrigger value="gantt" className="text-xs font-bold gap-2">
               <Calendar className="h-3.5 w-3.5" />
               <span>Gantt & Cronograma</span>
+            </TabsTrigger>
+            <TabsTrigger value="indicators" className="text-xs font-bold gap-2">
+              <BarChart3 className="h-3.5 w-3.5" />
+              <span>Indicadores</span>
+            </TabsTrigger>
+            <TabsTrigger value="okrs" className="text-xs font-bold gap-2">
+              <Target className="h-3.5 w-3.5" />
+              <span>OKRs</span>
+            </TabsTrigger>
+            <TabsTrigger value="calculators" className="text-xs font-bold gap-2">
+              <Calculator className="h-3.5 w-3.5" />
+              <span>Calculadoras</span>
             </TabsTrigger>
             <TabsTrigger value="funnel" className="text-xs font-bold gap-2">
               <Filter className="h-3.5 w-3.5" />
@@ -244,7 +269,7 @@ export const SprintOSPage: React.FC = () => {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="dashboard">
+          <TabsContent value="structure">
             <StructureView />
           </TabsContent>
 
@@ -254,6 +279,18 @@ export const SprintOSPage: React.FC = () => {
 
           <TabsContent value="gantt">
             <GanttView />
+          </TabsContent>
+
+          <TabsContent value="indicators">
+            <IndicatorsView />
+          </TabsContent>
+
+          <TabsContent value="okrs">
+            <OKRsView />
+          </TabsContent>
+
+          <TabsContent value="calculators">
+            <CalculatorsView />
           </TabsContent>
 
           <TabsContent value="funnel">
@@ -270,7 +307,8 @@ export const SprintOSPage: React.FC = () => {
         </Tabs>
       </main>
 
-      {/* 6. Modais Globais do Sistema */}
+      {/* Modais Globais */}
+      <CreateScheduleModal />
       <DeadlineUpdateModal />
       <ActivateSprintModal />
       <TaskDetailModal />

@@ -1,9 +1,10 @@
 /**
- * Visão Estrutura em Blocos do Sprint OS (Camada A / Seção 6 e 7).
- * - Hierarquia: Projeto -> Sprint -> Etapa -> Tarefa -> Subtarefa
- * - Suporta Modos: Organização (Drag&Drop, reordenar), Execução (Checklist, Status), Planejamento (Datas, Prazos)
- * - Controles alternativos acessíveis (↑ / ↓ / Mover etapa / Duplicar / Excluir)
- * - Edição rápida inline
+ * Visão Estrutura em Blocos do Sprint OS (Cockpit 80/20).
+ * Especificação: Master Prompt v9.0 — Seções 9, 10 e 11.
+ * - Hierarquia: Cronograma -> Etapa -> Tarefa -> Subtarefa
+ * - Drag & Drop real de etapas (recalcula numeração) e tarefas (mesma etapa e entre etapas)
+ * - Atribuição direta inline de responsável com 1 clique (Seção 11)
+ * - Divulgação progressiva: linha recolhida minimalista, expande para ver subtarefas e detalhes
  */
 
 import React, { useState } from "react";
@@ -23,11 +24,10 @@ import {
   User,
   AlertTriangle,
   DollarSign,
-  Eye,
   CheckSquare,
-  Minus,
-  Maximize2,
-  Calendar,
+  Search,
+  UserCheck,
+  UserX,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,15 +50,14 @@ import {
   reorderStages,
   moveTask,
   duplicateStage,
-  duplicateTask,
   archiveStage,
   archiveTask,
   renameStage,
   updateTask,
   ackState,
 } from "../../domain/ops";
-import { PRIORITY_LABEL, PRIORITY_RANK, STATUS_ICON, type TaskStatus, type Priority } from "../../domain/types";
-import { fmtDateTime, fmtMinutes } from "../../scheduler/time";
+import { PRIORITY_LABEL, STATUS_ICON, type TaskStatus } from "../../domain/types";
+import { fmtMinutes } from "../../scheduler/time";
 
 export const StructureView: React.FC = () => {
   const {
@@ -75,6 +74,9 @@ export const StructureView: React.FC = () => {
     toggleSubtaskAction,
     stepSubtaskCountAction,
     acknowledgeAction,
+    assignTaskMemberAction,
+    reorderStagesAction,
+    moveTaskAction,
     mutate,
   } = useSprintOSStore();
 
@@ -82,10 +84,16 @@ export const StructureView: React.FC = () => {
   const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>({});
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
   const [editingTitleText, setEditingTitleText] = useState("");
+  const [assigneeSearch, setAssigneeSearch] = useState("");
+
+  // Estados de Drag & Drop
+  const [draggedStageId, setDraggedStageId] = useState<string | null>(null);
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
 
   if (!workspace || !activeSprintId) return null;
 
   const stages = stagesOf(workspace, activeSprintId);
+  const members = Object.values(workspace.members || {}).filter((m) => !m.archivedAt);
 
   const toggleStage = (id: string) => {
     setExpandedStages((prev) => ({ ...prev, [id]: prev[id] === undefined ? false : !prev[id] }));
@@ -93,43 +101,6 @@ export const StructureView: React.FC = () => {
 
   const toggleTask = (id: string) => {
     setExpandedTasks((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  // Reordenação de Etapas
-  const moveStageOrder = (stageId: string, direction: "up" | "down") => {
-    const list = [...stages];
-    const idx = list.findIndex((s) => s.id === stageId);
-    if (idx < 0) return;
-    const targetIdx = direction === "up" ? idx - 1 : idx + 1;
-    if (targetIdx < 0 || targetIdx >= list.length) return;
-
-    const [moved] = list.splice(idx, 1);
-    list.splice(targetIdx, 0, moved);
-
-    mutate((ws, ctx) => {
-      reorderStages(ws, ctx, activeSprintId, list.map((s) => s.id));
-    });
-  };
-
-  // Reordenação de Tarefas
-  const moveTaskOrder = (taskId: string, stageId: string, direction: "up" | "down") => {
-    const stageTasks = tasksOf(workspace, stageId);
-    const idx = stageTasks.findIndex((t) => t.id === taskId);
-    if (idx < 0) return;
-    const targetIdx = direction === "up" ? idx - 1 : idx + 1;
-    if (targetIdx < 0 || targetIdx >= stageTasks.length) return;
-
-    mutate((ws, ctx) => {
-      moveTask(ws, ctx, taskId, stageId, targetIdx);
-    });
-  };
-
-  // Mover tarefa para outra etapa
-  const moveTaskToStage = (taskId: string, targetStageId: string) => {
-    mutate((ws, ctx) => {
-      const targetTasks = tasksOf(ws, targetStageId);
-      moveTask(ws, ctx, taskId, targetStageId, targetTasks.length);
-    });
   };
 
   const startEditTitle = (id: string, current: string) => {
@@ -143,474 +114,466 @@ export const StructureView: React.FC = () => {
       return;
     }
     mutate((ws, ctx) => {
-      if (type === "stage") {
-        renameStage(ws, ctx, id, editingTitleText.trim());
-      } else {
-        updateTask(ws, ctx, id, { title: editingTitleText.trim() });
-      }
+      if (type === "stage") renameStage(ws, ctx, id, editingTitleText.trim());
+      else updateTask(ws, ctx, id, { title: editingTitleText.trim() });
     });
     setEditingTitleId(null);
   };
 
+  // Reordenação de Etapas por Drag & Drop
+  const handleStageDrop = (targetStageId: string) => {
+    if (!draggedStageId || draggedStageId === targetStageId) return;
+    const stageIds = stages.map((s) => s.id);
+    const fromIndex = stageIds.indexOf(draggedStageId);
+    const toIndex = stageIds.indexOf(targetStageId);
+    if (fromIndex === -1 || toIndex === -1) return;
+
+    stageIds.splice(fromIndex, 1);
+    stageIds.splice(toIndex, 0, draggedStageId);
+    reorderStagesAction(stageIds);
+    setDraggedStageId(null);
+  };
+
+  // Reordenação de Tarefas por Drag & Drop
+  const handleTaskDrop = (toStageId: string, toIndex: number) => {
+    if (!draggedTaskId) return;
+    moveTaskAction(draggedTaskId, toStageId, toIndex);
+    setDraggedTaskId(null);
+  };
+
   return (
     <div className="space-y-4">
-      {/* Botão Superior para Adicionar Etapa */}
-      <div className="flex justify-between items-center bg-white/5 p-3 rounded-2xl border border-white/10">
-        <div className="text-xs text-white/60">
-          Modo Atual: <strong className="text-white uppercase">{interactionMode}</strong> · Gerencie a árvore de blocos
-        </div>
-
-        <Button
-          onClick={() => {
-            mutate((ws, ctx) => {
-              createStage(ws, ctx, activeSprintId, `NOVA ETAPA ${stages.length + 1}`);
-            });
-          }}
-          size="sm"
-          className="bg-white/10 hover:bg-white/15 text-white text-xs gap-1.5 font-bold"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          <span>Adicionar Etapa</span>
-        </Button>
-      </div>
-
-      {/* Lista de Etapas */}
-      {stages.map((stage, stageIdx) => {
-        const isStageExpanded = expandedStages[stage.id] ?? true;
-        let tasks = tasksOf(workspace, stage.id);
-
-        // Aplicação de filtros
-        if (searchQuery) {
-          tasks = tasks.filter((t) => t.title.toLowerCase().includes(searchQuery.toLowerCase()));
-        }
-        if (filterAssigneeId) {
-          tasks = tasks.filter((t) => t.assigneeId === filterAssigneeId);
-        }
-        if (filterPriority) {
-          tasks = tasks.filter((t) => t.priority === filterPriority);
-        }
-        if (filterStatus) {
-          tasks = tasks.filter((t) => t.status === filterStatus);
-        }
-
-        return (
-          <div
-            key={stage.id}
-            className="rounded-2xl border border-white/10 bg-zinc-900/40 backdrop-blur-md overflow-hidden transition-all"
+      {/* Estado Vazio para Cronogramas em Branco */}
+      {stages.length === 0 ? (
+        <div className="py-20 text-center flex flex-col items-center justify-center rounded-3xl border border-dashed border-white/10 bg-zinc-950/40">
+          <div className="h-10 w-10 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mb-3">
+            <Plus className="h-5 w-5" />
+          </div>
+          <h3 className="text-sm font-semibold text-white/90">Nenhuma etapa cadastrada</h3>
+          <p className="text-xs text-white/40 max-w-sm mt-1 mb-4">
+            Este cronograma está em branco. Comece adicionando a primeira etapa da sua implementação.
+          </p>
+          <Button
+            onClick={() => {
+              mutate((ws, ctx) => {
+                createStage(ws, ctx, activeSprintId, "Etapa 01 — Planejamento Inicial");
+              });
+            }}
+            className="text-xs bg-primary hover:bg-primary/90 text-white font-medium px-4 py-2 rounded-xl flex items-center gap-1.5"
           >
-            {/* Cabeçalho da Etapa */}
-            <div className="p-3.5 bg-white/5 border-b border-white/5 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                <button
-                  onClick={() => toggleStage(stage.id)}
-                  className="p-1 hover:bg-white/10 rounded-lg text-white/50 hover:text-white transition-colors"
-                >
-                  {isStageExpanded ? (
-                    <ChevronDown className="h-4 w-4" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4" />
-                  )}
-                </button>
+            <Plus className="h-4 w-4" />
+            <span>Adicionar Etapa</span>
+          </Button>
+        </div>
+      ) : (
+        stages.map((stage, stageIdx) => {
+          let tasks = tasksOf(workspace, stage.id);
 
-                {editingTitleId === stage.id ? (
-                  <Input
-                    value={editingTitleText}
-                    onChange={(e) => setEditingTitleText(e.target.value)}
-                    onBlur={() => commitEditTitle("stage", stage.id)}
-                    onKeyDown={(e) => e.key === "Enter" && commitEditTitle("stage", stage.id)}
-                    autoFocus
-                    className="h-7 text-xs font-black uppercase tracking-wider bg-black border-primary"
-                  />
-                ) : (
-                  <span
-                    onDoubleClick={() => startEditTitle(stage.id, stage.title)}
-                    className="text-xs font-black uppercase tracking-wider text-white truncate cursor-pointer hover:text-primary transition-colors"
-                    title="Clique duas vezes para renomear"
+          // Filtros
+          if (searchQuery.trim()) {
+            const q = searchQuery.toLowerCase();
+            tasks = tasks.filter((t) => t.title.toLowerCase().includes(q) || t.description.toLowerCase().includes(q));
+          }
+          if (filterAssigneeId) tasks = tasks.filter((t) => t.assigneeId === filterAssigneeId);
+          if (filterPriority) tasks = tasks.filter((t) => t.priority === filterPriority);
+          if (filterStatus) tasks = tasks.filter((t) => t.status === filterStatus);
+
+          const isStageExpanded = expandedStages[stage.id] ?? true;
+          const stageNumber = (stageIdx + 1).toString().padStart(2, "0");
+
+          return (
+            <div
+              key={stage.id}
+              draggable={interactionMode === "organize"}
+              onDragStart={() => setDraggedStageId(stage.id)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => handleStageDrop(stage.id)}
+              className="rounded-2xl border border-white/5 bg-zinc-900/40 overflow-hidden shadow-sm transition-all"
+            >
+              {/* Cabeçalho da Etapa */}
+              <div className="p-3 bg-zinc-950/70 border-b border-white/5 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                  <button
+                    onClick={() => toggleStage(stage.id)}
+                    className="p-1 hover:bg-white/10 rounded-lg text-white/50 hover:text-white transition-colors"
                   >
-                    {stage.title}
-                  </span>
-                )}
+                    {isStageExpanded ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                  </button>
 
-                <Badge variant="outline" className="text-[10px] text-white/40 border-white/10 py-0 shrink-0">
-                  {tasks.length} tarefa(s)
-                </Badge>
-              </div>
+                  {interactionMode === "organize" && (
+                    <GripVertical className="h-4 w-4 text-white/30 cursor-grab shrink-0" />
+                  )}
 
-              {/* Ações da Etapa */}
-              <div className="flex items-center gap-1 shrink-0">
-                <Button
-                  onClick={() => {
-                    mutate((ws, ctx) => {
-                      createTask(ws, ctx, stage.id, "Nova Tarefa Operacional");
-                    });
-                  }}
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 px-2 text-[11px] text-white/70 hover:text-white hover:bg-white/10 gap-1"
-                >
-                  <Plus className="h-3 w-3" />
-                  <span className="hidden sm:inline">Adicionar Tarefa</span>
-                </Button>
+                  {editingTitleId === stage.id ? (
+                    <Input
+                      value={editingTitleText}
+                      onChange={(e) => setEditingTitleText(e.target.value)}
+                      onBlur={() => commitEditTitle("stage", stage.id)}
+                      onKeyDown={(e) => e.key === "Enter" && commitEditTitle("stage", stage.id)}
+                      autoFocus
+                      className="h-7 text-xs font-bold uppercase tracking-wider bg-black border-primary text-white"
+                    />
+                  ) : (
+                    <span
+                      onDoubleClick={() => startEditTitle(stage.id, stage.title)}
+                      className="text-xs font-bold uppercase tracking-wider text-white truncate cursor-pointer hover:text-primary transition-colors"
+                      title="Clique duas vezes para renomear"
+                    >
+                      Etapa {stageNumber} — {stage.title.replace(/^Etapa\s*\d+\s*[—–-]\s*/i, "")}
+                    </span>
+                  )}
 
-                {/* Menu de Etapa (Acessibilidade) */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button className="h-7 w-7 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white">
-                      <MoreVertical className="h-3.5 w-3.5" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="bg-zinc-950 border-white/10 text-white text-xs">
-                    <DropdownMenuItem
-                      disabled={stageIdx === 0}
-                      onClick={() => moveStageOrder(stage.id, "up")}
-                      className="gap-2 cursor-pointer focus:bg-white/10"
-                    >
-                      <ArrowUp className="h-3.5 w-3.5" />
-                      <span>Mover para cima</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      disabled={stageIdx === stages.length - 1}
-                      onClick={() => moveStageOrder(stage.id, "down")}
-                      className="gap-2 cursor-pointer focus:bg-white/10"
-                    >
-                      <ArrowDown className="h-3.5 w-3.5" />
-                      <span>Mover para baixo</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => startEditTitle(stage.id, stage.title)}
-                      className="gap-2 cursor-pointer focus:bg-white/10"
-                    >
-                      <span>Renomear etapa</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => mutate((ws, ctx) => duplicateStage(ws, ctx, stage.id))}
-                      className="gap-2 cursor-pointer focus:bg-white/10"
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                      <span>Duplicar etapa</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator className="bg-white/10" />
-                    <DropdownMenuItem
-                      onClick={() => mutate((ws, ctx) => archiveStage(ws, ctx, stage.id))}
-                      className="gap-2 text-rose-400 cursor-pointer focus:bg-rose-500/10"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      <span>Excluir / Arquivar etapa</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </div>
+                  <Badge variant="outline" className="text-[10px] text-white/40 border-white/10 py-0 shrink-0 font-mono">
+                    {tasks.length} tarefa(s)
+                  </Badge>
+                </div>
 
-            {/* Lista de Tarefas da Etapa */}
-            {isStageExpanded && (
-              <div className="p-2 space-y-2">
-                {tasks.length === 0 ? (
-                  <div className="p-4 text-center text-xs text-white/30 border border-dashed border-white/5 rounded-xl">
-                    Nenhuma tarefa nesta etapa. Clique em "Adicionar Tarefa".
-                  </div>
-                ) : (
-                  tasks.map((task, taskIdx) => {
-                    const subtasks = subtasksOf(workspace, task.id);
-                    const isTaskExpanded = expandedTasks[task.id] ?? false;
-                    const assignee = task.assigneeId ? workspace.members[task.assigneeId] : null;
-                    const ack = ackState(workspace, task.id, task.assigneeId);
+                {/* Ações da Etapa */}
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    onClick={() => {
+                      mutate((ws, ctx) => {
+                        createTask(ws, ctx, stage.id, "Nova Tarefa");
+                      });
+                    }}
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-[11px] text-white/70 hover:text-white hover:bg-white/10 gap-1 rounded-lg"
+                  >
+                    <Plus className="h-3 w-3" />
+                    <span className="hidden sm:inline">Adicionar Tarefa</span>
+                  </Button>
 
-                    return (
-                      <div
-                        key={task.id}
-                        className={`rounded-xl border transition-all ${
-                          task.status === "done"
-                            ? "bg-white/[0.02] border-white/5 text-white/60"
-                            : task.status === "doing"
-                            ? "bg-amber-500/[0.04] border-amber-500/20 text-white"
-                            : "bg-white/5 border-white/5 hover:border-white/20 text-white"
-                        }`}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="h-7 w-7 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white">
+                        <MoreVertical className="h-3.5 w-3.5" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="bg-[#12161F] border-white/10 text-white text-xs w-44">
+                      <DropdownMenuItem
+                        onClick={() => startEditTitle(stage.id, stage.title)}
+                        className="cursor-pointer"
                       >
-                        {/* Linha Principal da Tarefa */}
-                        <div className="p-3 flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                            {/* Grip handle (Modo Organização) */}
-                            {interactionMode === "organize" && (
-                              <GripVertical className="h-4 w-4 text-white/20 shrink-0 cursor-grab" />
-                            )}
+                        Renomear Etapa
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => mutate((ws, ctx) => duplicateStage(ws, ctx, stage.id))}
+                        className="cursor-pointer"
+                      >
+                        <Copy className="h-3 w-3 mr-2" />
+                        Duplicar Etapa
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator className="bg-white/10" />
+                      <DropdownMenuItem
+                        onClick={() => mutate((ws, ctx) => archiveStage(ws, ctx, stage.id))}
+                        className="text-red-400 focus:text-red-300 focus:bg-red-500/10 cursor-pointer"
+                      >
+                        <Trash2 className="h-3 w-3 mr-2" />
+                        Excluir Etapa
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
 
-                            {/* Status Toggle Rápido */}
-                            <button
-                              onClick={() => {
-                                const nextStatus: TaskStatus =
-                                  task.status === "pending"
-                                    ? "doing"
-                                    : task.status === "doing"
-                                    ? "done"
-                                    : "pending";
-                                setTaskStatusAction(task.id, nextStatus);
-                              }}
-                              className="text-base shrink-0 hover:scale-110 transition-transform"
-                              title={`Status: ${task.status}. Clique para alternar.`}
-                            >
-                              {STATUS_ICON[task.status]}
-                            </button>
+              {/* Lista de Tarefas da Etapa */}
+              {isStageExpanded && (
+                <div
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => handleTaskDrop(stage.id, tasks.length)}
+                  className="p-2.5 space-y-1.5"
+                >
+                  {tasks.length === 0 ? (
+                    <div className="p-3 text-center text-xs text-white/30 border border-dashed border-white/5 rounded-xl">
+                      Nenhuma tarefa nesta etapa.
+                    </div>
+                  ) : (
+                    tasks.map((task, taskIdx) => {
+                      const subtasks = subtasksOf(workspace, task.id);
+                      const isTaskExpanded = expandedTasks[task.id] ?? false;
+                      const assignee = task.assigneeId ? workspace.members[task.assigneeId] : null;
 
-                            {/* Título da Tarefa com Inline Edit */}
-                            {editingTitleId === task.id ? (
-                              <Input
-                                value={editingTitleText}
-                                onChange={(e) => setEditingTitleText(e.target.value)}
-                                onBlur={() => commitEditTitle("task", task.id)}
-                                onKeyDown={(e) => e.key === "Enter" && commitEditTitle("task", task.id)}
-                                autoFocus
-                                className="h-7 text-xs font-bold bg-black border-primary"
-                              />
-                            ) : (
-                              <span
-                                onDoubleClick={() => startEditTitle(task.id, task.title)}
-                                onClick={() => {
-                                  setSelectedTaskId(task.id);
-                                  setIsTaskModalOpen(true);
-                                }}
-                                className={`text-xs font-bold truncate cursor-pointer hover:text-primary transition-colors ${
-                                  task.status === "done" ? "line-through text-white/50" : "text-white"
-                                }`}
-                              >
-                                {task.title}
-                              </span>
-                            )}
+                      return (
+                        <div
+                          key={task.id}
+                          draggable={interactionMode === "organize"}
+                          onDragStart={() => setDraggedTaskId(task.id)}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={(e) => {
+                            e.stopPropagation();
+                            handleTaskDrop(stage.id, taskIdx);
+                          }}
+                          className={`rounded-xl border transition-all ${
+                            task.status === "done"
+                              ? "bg-white/[0.02] border-white/5 text-white/50"
+                              : task.status === "doing"
+                              ? "bg-amber-500/[0.03] border-amber-500/20 text-white"
+                              : "bg-black/30 border-white/5 hover:border-white/15 text-white"
+                          }`}
+                        >
+                          {/* Linha Principal da Tarefa (80/20: status, título, prioridade, responsável direto, duração, checklist) */}
+                          <div className="p-2.5 flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                              {interactionMode === "organize" && (
+                                <GripVertical className="h-3.5 w-3.5 text-white/20 shrink-0 cursor-grab" />
+                              )}
 
-                            {/* Badges de Prioridade e Impacto */}
-                            <Badge
-                              className={`text-[9px] font-black py-0 px-1.5 shrink-0 ${
-                                task.priority === "P0"
-                                  ? "bg-rose-500/20 text-rose-300 border-rose-500/30"
-                                  : task.priority === "P1"
-                                  ? "bg-orange-500/20 text-orange-300 border-orange-500/30"
-                                  : "bg-blue-500/20 text-blue-300 border-blue-500/30"
-                              }`}
-                            >
-                              {task.priority}
-                            </Badge>
-
-                            {task.financialImpact && (
-                              <Badge className="bg-emerald-500/15 text-emerald-300 border-emerald-500/30 text-[9px] py-0 px-1.5 gap-0.5 shrink-0">
-                                <DollarSign className="h-2 w-2" />
-                                <span>$</span>
-                              </Badge>
-                            )}
-
-                            {/* Responsável */}
-                            <span className="text-[11px] text-white/50 shrink-0 hidden md:inline flex items-center gap-1">
-                              <User className="h-3 w-3 text-white/30" />
-                              {assignee?.name || "Sem atribuição"}
-                            </span>
-
-                            {/* Ciência (Seção 21) */}
-                            {task.assigneeId && (
-                              <span
-                                onClick={() => acknowledgeAction(task.id, task.assigneeId!)}
-                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded cursor-pointer shrink-0 ${
-                                  ack === "current"
-                                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
-                                    : ack === "outdated"
-                                    ? "bg-amber-500/10 text-amber-400 border border-amber-500/30"
-                                    : "bg-white/5 text-white/40 hover:text-white"
-                                }`}
-                                title={
-                                  ack === "current"
-                                    ? "Ciência confirmada na versão atual"
-                                    : ack === "outdated"
-                                    ? "Ciência desatualizada após alteração de escopo/prazo"
-                                    : "Clique para confirmar ciência"
-                                }
-                              >
-                                👁️ {ack === "current" ? "Ciente" : ack === "outdated" ? "Revisar Ciência" : "Ciente?"}
-                              </span>
-                            )}
-
-                            {/* Duração / Prazos */}
-                            {task.durationMinutes && (
-                              <span className="text-[10px] font-mono text-white/40 shrink-0 flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
-                                {fmtMinutes(task.durationMinutes)}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Ações da Tarefa */}
-                          <div className="flex items-center gap-1 shrink-0">
-                            {/* Contador de Subtarefas com Toggle de Expansão */}
-                            {subtasks.length > 0 && (
+                              {/* Status Toggle Rápido */}
                               <button
-                                onClick={() => toggleTask(task.id)}
-                                className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-white/5 hover:bg-white/10 text-white/60 hover:text-white"
+                                onClick={() => {
+                                  const next: TaskStatus =
+                                    task.status === "pending"
+                                      ? "doing"
+                                      : task.status === "doing"
+                                      ? "done"
+                                      : "pending";
+                                  setTaskStatusAction(task.id, next);
+                                }}
+                                className="text-sm shrink-0 hover:scale-110 transition-transform"
+                                title={`Status atual: ${task.status}. Clique para alternar.`}
                               >
-                                <CheckSquare className="h-3 w-3 text-primary" />
-                                <span>
-                                  {subtasks.filter((s) => s.done).length}/{subtasks.length}
-                                </span>
-                                {isTaskExpanded ? (
-                                  <ChevronDown className="h-3 w-3 ml-0.5" />
-                                ) : (
-                                  <ChevronRight className="h-3 w-3 ml-0.5" />
-                                )}
+                                {STATUS_ICON[task.status]}
                               </button>
-                            )}
 
-                            {/* Botão de Detalhes Completo */}
-                            <Button
-                              onClick={() => {
-                                setSelectedTaskId(task.id);
-                                setIsTaskModalOpen(true);
-                              }}
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0 text-white/40 hover:text-white"
-                              title="Abrir detalhes completos da tarefa"
-                            >
-                              <Maximize2 className="h-3.5 w-3.5" />
-                            </Button>
-
-                            {/* Menu de Acessibilidade da Tarefa */}
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button className="h-7 w-7 rounded hover:bg-white/10 flex items-center justify-center text-white/40 hover:text-white">
-                                  <MoreVertical className="h-3.5 w-3.5" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="bg-zinc-950 border-white/10 text-white text-xs">
-                                <DropdownMenuItem
-                                  disabled={taskIdx === 0}
-                                  onClick={() => moveTaskOrder(task.id, stage.id, "up")}
-                                  className="gap-2 cursor-pointer focus:bg-white/10"
+                              {/* Título com Edição Inline ou Clique para Abrir */}
+                              {editingTitleId === task.id ? (
+                                <Input
+                                  value={editingTitleText}
+                                  onChange={(e) => setEditingTitleText(e.target.value)}
+                                  onBlur={() => commitEditTitle("task", task.id)}
+                                  onKeyDown={(e) => e.key === "Enter" && commitEditTitle("task", task.id)}
+                                  autoFocus
+                                  className="h-7 text-xs font-medium bg-black border-primary text-white"
+                                />
+                              ) : (
+                                <span
+                                  onDoubleClick={() => startEditTitle(task.id, task.title)}
+                                  onClick={() => {
+                                    setSelectedTaskId(task.id);
+                                    setIsTaskModalOpen(true);
+                                  }}
+                                  className={`text-xs font-semibold truncate cursor-pointer hover:text-primary transition-colors ${
+                                    task.status === "done" ? "line-through text-white/40" : "text-white/90"
+                                  }`}
                                 >
-                                  <ArrowUp className="h-3.5 w-3.5" />
-                                  <span>Mover para cima</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  disabled={taskIdx === tasks.length - 1}
-                                  onClick={() => moveTaskOrder(task.id, stage.id, "down")}
-                                  className="gap-2 cursor-pointer focus:bg-white/10"
-                                >
-                                  <ArrowDown className="h-3.5 w-3.5" />
-                                  <span>Mover para baixo</span>
-                                </DropdownMenuItem>
+                                  {task.title}
+                                </span>
+                              )}
 
-                                {/* Mover para outra Etapa */}
-                                <DropdownMenuSeparator className="bg-white/10" />
-                                {stages
-                                  .filter((s) => s.id !== stage.id)
-                                  .map((targetSt) => (
+                              {/* Prioridade */}
+                              <Badge
+                                variant="outline"
+                                className={`text-[9px] font-black py-0 px-1.5 shrink-0 ${
+                                  task.priority === "P0"
+                                    ? "bg-rose-500/10 text-rose-300 border-rose-500/30"
+                                    : task.priority === "P1"
+                                    ? "bg-orange-500/10 text-orange-300 border-orange-500/30"
+                                    : "bg-blue-500/10 text-blue-300 border-blue-500/30"
+                                }`}
+                              >
+                                {task.priority}
+                              </Badge>
+
+                              {/* SEÇÃO 11: ATRIBUIÇÃO DIRETA DE RESPONSÁVEL COM 1 CLIQUE */}
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className={`text-[11px] px-2 py-0.5 rounded-lg flex items-center gap-1.5 transition-colors shrink-0 ${
+                                      assignee
+                                        ? "bg-white/5 hover:bg-white/10 text-white/80"
+                                        : "bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20"
+                                    }`}
+                                    title="Clique para atribuir ou trocar responsável"
+                                  >
+                                    <User className="h-3 w-3 shrink-0" />
+                                    <span className="truncate max-w-[120px]">
+                                      {assignee?.name || "Sem atribuição"}
+                                    </span>
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="start" className="bg-[#12161F] border-white/10 text-white text-xs w-56 p-1.5 rounded-xl shadow-xl">
+                                  <div className="px-2 py-1 text-[10px] uppercase font-bold text-white/40">
+                                    Atribuir Responsável
+                                  </div>
+                                  <DropdownMenuSeparator className="bg-white/10" />
+
+                                  {/* Opção Desatribuir */}
+                                  <DropdownMenuItem
+                                    onClick={() => assignTaskMemberAction(task.id, null)}
+                                    className="cursor-pointer text-white/50 hover:text-white"
+                                  >
+                                    <UserX className="h-3.5 w-3.5 mr-2 text-white/40" />
+                                    <span>Sem atribuição (Remover)</span>
+                                  </DropdownMenuItem>
+
+                                  <DropdownMenuSeparator className="bg-white/10" />
+
+                                  {/* Lista de Membros da Empresa */}
+                                  {members.map((m) => (
                                     <DropdownMenuItem
-                                      key={targetSt.id}
-                                      onClick={() => moveTaskToStage(task.id, targetSt.id)}
-                                      className="gap-2 cursor-pointer focus:bg-white/10 text-white/70"
+                                      key={m.id}
+                                      onClick={() => assignTaskMemberAction(task.id, m.id)}
+                                      className="cursor-pointer flex items-center justify-between"
                                     >
-                                      <span>Mover para: {targetSt.title}</span>
+                                      <div className="flex items-center gap-2 truncate">
+                                        <User className="h-3.5 w-3.5 text-primary shrink-0" />
+                                        <span className="truncate">{m.name}</span>
+                                      </div>
+                                      {task.assigneeId === m.id && (
+                                        <UserCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                                      )}
                                     </DropdownMenuItem>
                                   ))}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
 
-                                <DropdownMenuSeparator className="bg-white/10" />
-                                <DropdownMenuItem
-                                  onClick={() => mutate((ws, ctx) => duplicateTask(ws, ctx, task.id))}
-                                  className="gap-2 cursor-pointer focus:bg-white/10"
+                              {/* Duração Estimada */}
+                              {task.durationMinutes && (
+                                <span className="text-[10px] font-mono text-white/40 shrink-0 hidden sm:flex items-center gap-1">
+                                  <Clock className="h-2.5 w-2.5" />
+                                  {fmtMinutes(task.durationMinutes)}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Ações da Tarefa */}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {/* Subtarefas Checklist Concluído/Total */}
+                              {subtasks.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleTask(task.id)}
+                                  className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-mono bg-white/5 hover:bg-white/10 text-white/60 hover:text-white"
                                 >
-                                  <Copy className="h-3.5 w-3.5" />
-                                  <span>Duplicar tarefa</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => mutate((ws, ctx) => archiveTask(ws, ctx, task.id))}
-                                  className="gap-2 text-rose-400 cursor-pointer focus:bg-rose-500/10"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                  <span>Arquivar tarefa</span>
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </div>
-
-                        {/* Bloco Expandido: Subtarefas e Microcheckpoints (Seção 19) */}
-                        {isTaskExpanded && (
-                          <div className="pl-8 pr-4 pb-3 pt-1 border-t border-white/5 space-y-1.5 bg-black/20">
-                            {subtasks.map((sub) => (
-                              <div
-                                key={sub.id}
-                                className="flex items-center justify-between text-xs py-1 group/sub"
-                              >
-                                <div className="flex items-center gap-2 flex-1 min-w-0">
-                                  <button
-                                    onClick={() => toggleSubtaskAction(sub.id, !sub.done)}
-                                    className="shrink-0 text-white/40 hover:text-emerald-400 transition-colors"
-                                  >
-                                    {sub.done ? (
-                                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                                    ) : (
-                                      <Circle className="h-3.5 w-3.5" />
-                                    )}
-                                  </button>
-
-                                  <span className={`truncate ${sub.done ? "line-through text-white/40" : "text-white/80"}`}>
-                                    {sub.title}
+                                  <CheckSquare className="h-3 w-3 text-primary" />
+                                  <span>
+                                    {subtasks.filter((s) => s.done).length}/{subtasks.length}
                                   </span>
-
-                                  {sub.required && (
-                                    <span className="text-[10px] text-amber-400/80 font-semibold shrink-0">
-                                      *obrigatória
-                                    </span>
+                                  {isTaskExpanded ? (
+                                    <ChevronDown className="h-3 w-3 ml-0.5" />
+                                  ) : (
+                                    <ChevronRight className="h-3 w-3 ml-0.5" />
                                   )}
-                                </div>
+                                </button>
+                              )}
 
-                                {/* Contador Quantitativo [-] 0 / N [+] (Seção 19 e 29) */}
-                                {sub.target != null && (
-                                  <div className="flex items-center gap-1.5 bg-white/5 px-2 py-0.5 rounded border border-white/10 shrink-0">
-                                    <button
-                                      onClick={() => stepSubtaskCountAction(sub.id, -1)}
-                                      disabled={sub.count <= 0}
-                                      className="text-white/40 hover:text-white disabled:opacity-30"
-                                    >
-                                      <Minus className="h-2.5 w-2.5" />
-                                    </button>
-                                    <span className="font-mono font-bold text-[11px] text-white">
-                                      {sub.count}/{sub.target}
-                                    </span>
-                                    <button
-                                      onClick={() => stepSubtaskCountAction(sub.id, 1)}
-                                      disabled={sub.count >= sub.target}
-                                      className="text-white/40 hover:text-white disabled:opacity-30"
-                                    >
-                                      <Plus className="h-2.5 w-2.5" />
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-
-                            {/* Adicionar Subtarefa Rápida */}
-                            <div className="pt-1.5">
-                              <Button
-                                onClick={() => {
-                                  mutate((ws, ctx) => {
-                                    createSubtask(ws, ctx, task.id, "Nova subtarefa");
-                                  });
-                                }}
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 text-[11px] text-white/40 hover:text-white p-0 gap-1"
-                              >
-                                <Plus className="h-3 w-3" />
-                                <span>Adicionar item de checklist</span>
-                              </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button className="h-6 w-6 rounded hover:bg-white/10 flex items-center justify-center text-white/40 hover:text-white">
+                                    <MoreVertical className="h-3 w-3" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="bg-[#12161F] border-white/10 text-white text-xs w-40">
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      setSelectedTaskId(task.id);
+                                      setIsTaskModalOpen(true);
+                                    }}
+                                    className="cursor-pointer"
+                                  >
+                                    Ver Detalhes
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => startEditTitle(task.id, task.title)}
+                                    className="cursor-pointer"
+                                  >
+                                    Renomear
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      mutate((ws, ctx) => {
+                                        createSubtask(ws, ctx, task.id, "Nova Subtarefa");
+                                      });
+                                      setExpandedTasks((p) => ({ ...p, [task.id]: true }));
+                                    }}
+                                    className="cursor-pointer"
+                                  >
+                                    + Adicionar Subtarefa
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator className="bg-white/10" />
+                                  <DropdownMenuItem
+                                    onClick={() => mutate((ws, ctx) => archiveTask(ws, ctx, task.id))}
+                                    className="text-red-400 focus:text-red-300 focus:bg-red-500/10 cursor-pointer"
+                                  >
+                                    <Trash2 className="h-3 w-3 mr-2" />
+                                    Excluir Tarefa
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            )}
-          </div>
-        );
-      })}
+
+                          {/* Seção Expandida da Tarefa (Divulgação Progressiva) */}
+                          {isTaskExpanded && (
+                            <div className="p-3 bg-black/40 border-t border-white/5 space-y-2 text-xs">
+                              {task.description && (
+                                <p className="text-white/60 text-[11px] leading-relaxed">
+                                  {task.description}
+                                </p>
+                              )}
+
+                              {/* Subtarefas */}
+                              <div className="space-y-1.5 pt-1">
+                                {subtasks.map((st) => (
+                                  <div
+                                    key={st.id}
+                                    className="flex items-center justify-between p-1.5 rounded-lg bg-white/[0.02] hover:bg-white/[0.05] text-[11px]"
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleSubtaskAction(st.id, !st.done)}
+                                      className="flex items-center gap-2 text-left flex-1 min-w-0"
+                                    >
+                                      {st.done ? (
+                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                                      ) : (
+                                        <Circle className="h-3.5 w-3.5 text-white/30 shrink-0" />
+                                      )}
+                                      <span className={st.done ? "line-through text-white/40" : "text-white/80"}>
+                                        {st.title}
+                                      </span>
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })
+      )}
+
+      {/* Botão no Rodapé para Adicionar Nova Etapa */}
+      {stages.length > 0 && (
+        <div className="pt-2 flex justify-center">
+          <Button
+            onClick={() => {
+              mutate((ws, ctx) => {
+                const nextNum = (stages.length + 1).toString().padStart(2, "0");
+                createStage(ws, ctx, activeSprintId, `Etapa ${nextNum} — Nova Etapa`);
+              });
+            }}
+            variant="outline"
+            size="sm"
+            className="text-xs bg-zinc-900/60 border-dashed border-white/10 hover:border-white/30 text-white/60 hover:text-white rounded-xl flex items-center gap-1.5 px-4 h-8"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>Adicionar Nova Etapa</span>
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

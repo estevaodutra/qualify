@@ -1,10 +1,11 @@
 /**
  * Store Central do Sprint OS (Camada B).
  * Integração com Zustand, gerenciando:
- * - Estado reativo do Workspace e Sprint ativa
+ * - Lista de cronogramas e templates
+ * - Workspace ativo e Sprint ativa
  * - Modo de interação (Organização, Execução, Planejamento)
  * - Filtros operacionais (Responsável, Prioridade, Status, Busca)
- * - Modais e diálogos (Atualizar Prazos com Prévia, Ativação de Sprint, Detalhes da Tarefa)
+ * - Modais e diálogos (Atualizar Prazos, Ativação de Sprint, Detalhes da Tarefa, Criação)
  * - Despacho de mutações de domínio com persistência e log de auditoria
  */
 
@@ -17,7 +18,11 @@ import type {
   TaskStatus,
   Workspace,
   DeadlineProposal,
-  Task,
+  CustomIndicator,
+  OKRGoal,
+  ContentDistributionMetrics,
+  HoursCalculatorData,
+  AdsCalculatorData,
 } from "../domain/types";
 import {
   acknowledge,
@@ -54,6 +59,15 @@ import {
   archiveStage,
   archiveTask,
   restoreTask,
+  upsertIndicator,
+  deleteIndicator,
+  togglePinIndicator,
+  upsertOKRGoal,
+  deleteOKRGoal,
+  updateContentMetrics,
+  updateHoursCalculator,
+  updateAdsCalculator,
+  createBlankWorkspace,
 } from "../domain/ops";
 import {
   activateSprint,
@@ -64,21 +78,30 @@ import {
   type ActivationInput,
 } from "../scheduler/planning";
 import { nowInSaoPaulo } from "../scheduler/time";
-import { SprintOSRepository } from "../persistence/repository";
+import {
+  SprintOSRepository,
+  type WorkspaceListItem,
+  type TemplateListItem,
+} from "../persistence/repository";
 
 export type ViewTab =
-  | "dashboard"
   | "structure"
   | "kanban"
   | "gantt"
-  | "schedule"
+  | "indicators"
+  | "okrs"
+  | "calculators"
   | "funnel"
   | "financial"
   | "routines"
-  | "milestones"
-  | "reports";
+  | "milestones";
 
 interface SprintOSState {
+  // Lista de Cronogramas e Templates
+  workspacesList: WorkspaceListItem[];
+  templatesList: TemplateListItem[];
+  activeWorkspaceId: ID | null;
+
   workspace: Workspace | null;
   version: number;
   isLoading: boolean;
@@ -101,8 +124,19 @@ interface SprintOSState {
   isShareModalOpen: boolean;
   isTemplatesModalOpen: boolean;
   isReportModalOpen: boolean;
+  isCreateModalOpen: boolean;
 
-  // Ações de Carregamento & Persistência
+  // Ações de Carregamento & Gestão de Cronogramas
+  fetchWorkspacesList: (companyId?: string | null) => Promise<void>;
+  fetchTemplatesList: () => void;
+  openWorkspace: (id: ID, companyId?: string | null, actorName?: string) => Promise<void>;
+  closeWorkspace: () => void;
+  createBlank: (name: string, client: string, companyId?: string | null) => Promise<void>;
+  createFromTemplateAction: (templateId: string, name: string, client: string, companyId?: string | null) => Promise<void>;
+  duplicateCurrentWorkspace: (newName: string, companyId?: string | null) => Promise<void>;
+  deleteWorkspaceAction: (id: ID, companyId?: string | null) => Promise<void>;
+  saveCurrentAsTemplate: (templateName: string) => Promise<void>;
+
   initWorkspace: (companyId?: string | null, workspaceId?: string | null, actorName?: string) => Promise<void>;
   saveCurrentWorkspace: (companyId?: string | null, actorName?: string) => Promise<void>;
 
@@ -121,11 +155,24 @@ interface SprintOSState {
   setIsShareModalOpen: (open: boolean) => void;
   setIsTemplatesModalOpen: (open: boolean) => void;
   setIsReportModalOpen: (open: boolean) => void;
+  setIsCreateModalOpen: (open: boolean) => void;
 
   // Mutações de Domínio
   mutate: (fn: (ws: Workspace, ctx: { actorName: string; nowIso: string }) => void, actorName?: string) => Promise<void>;
 
   // Ações Operacionais Especializadas
+  assignTaskMemberAction: (taskId: ID, memberId: ID | null, actorName?: string) => Promise<void>;
+  reorderStagesAction: (orderedIds: ID[], actorName?: string) => Promise<void>;
+  moveTaskAction: (taskId: ID, toStageId: ID, toIndex: number, actorName?: string) => Promise<void>;
+  upsertIndicatorAction: (data: Partial<CustomIndicator> & { name: string; type: CustomIndicator["type"] }, actorName?: string) => Promise<void>;
+  deleteIndicatorAction: (id: ID, actorName?: string) => Promise<void>;
+  togglePinIndicatorAction: (id: ID, actorName?: string) => Promise<void>;
+  upsertOKRAction: (data: Partial<OKRGoal> & { title: string }, actorName?: string) => Promise<void>;
+  deleteOKRAction: (id: ID, actorName?: string) => Promise<void>;
+  updateContentMetricsAction: (patch: Partial<ContentDistributionMetrics>, actorName?: string) => Promise<void>;
+  updateHoursCalcAction: (patch: Partial<HoursCalculatorData>, actorName?: string) => Promise<void>;
+  updateAdsCalcAction: (patch: Partial<AdsCalculatorData>, actorName?: string) => Promise<void>;
+
   openDeadlineUpdatePreview: () => void;
   confirmDeadlineUpdate: (actorName?: string) => Promise<void>;
   undoLastRevision: (revId: ID, actorName?: string) => Promise<void>;
@@ -138,12 +185,16 @@ interface SprintOSState {
 }
 
 export const useSprintOSStore = create<SprintOSState>((set, get) => ({
+  workspacesList: [],
+  templatesList: [],
+  activeWorkspaceId: null,
+
   workspace: null,
   version: 1,
   isLoading: true,
   activeSprintId: null,
   interactionMode: "execute",
-  activeTab: "dashboard",
+  activeTab: "structure",
 
   searchQuery: "",
   filterAssigneeId: null,
@@ -158,22 +209,147 @@ export const useSprintOSStore = create<SprintOSState>((set, get) => ({
   isShareModalOpen: false,
   isTemplatesModalOpen: false,
   isReportModalOpen: false,
+  isCreateModalOpen: false,
+
+  fetchWorkspacesList: async (companyId) => {
+    try {
+      const list = await SprintOSRepository.listWorkspaces(companyId);
+      set({ workspacesList: list });
+    } catch (e: any) {
+      console.warn("Erro ao buscar lista de cronogramas:", e);
+    }
+  },
+
+  fetchTemplatesList: () => {
+    const list = SprintOSRepository.listTemplates();
+    set({ templatesList: list });
+  },
+
+  openWorkspace: async (id, companyId, actorName = "Operador") => {
+    set({ isLoading: true });
+    try {
+      const { workspace, version } = await SprintOSRepository.loadWorkspace(companyId, id);
+      const activeSprint =
+        Object.values(workspace.sprints || {}).find((s) => !s.archivedAt && s.status === "active") ||
+        Object.values(workspace.sprints || {})[0];
+
+      set({
+        activeWorkspaceId: id,
+        workspace,
+        version,
+        activeSprintId: activeSprint ? activeSprint.id : null,
+        isLoading: false,
+      });
+    } catch (e: any) {
+      toast.error(`Erro ao abrir cronograma: ${e.message}`);
+      set({ isLoading: false });
+    }
+  },
+
+  closeWorkspace: () => {
+    set({ activeWorkspaceId: null });
+    get().fetchWorkspacesList();
+  },
+
+  createBlank: async (name, client, companyId) => {
+    set({ isLoading: true });
+    try {
+      const blank = createBlankWorkspace(name, client);
+      await SprintOSRepository.saveWorkspace(blank, 1, companyId, "Operador");
+      await get().fetchWorkspacesList(companyId);
+      set({
+        workspace: blank,
+        version: 1,
+        activeWorkspaceId: blank.project.id,
+        activeSprintId: Object.keys(blank.sprints)[0] || null,
+        isCreateModalOpen: false,
+        isLoading: false,
+      });
+      toast.success(`Cronograma em branco "${name}" criado!`);
+    } catch (e: any) {
+      toast.error(`Erro ao criar cronograma: ${e.message}`);
+      set({ isLoading: false });
+    }
+  },
+
+  createFromTemplateAction: async (templateId, name, client, companyId) => {
+    set({ isLoading: true });
+    try {
+      const ws = SprintOSRepository.createFromTemplate(templateId, name, client);
+      await SprintOSRepository.saveWorkspace(ws, 1, companyId, "Operador");
+      await get().fetchWorkspacesList(companyId);
+      set({
+        workspace: ws,
+        version: 1,
+        activeWorkspaceId: ws.project.id,
+        activeSprintId: Object.keys(ws.sprints)[0] || null,
+        isCreateModalOpen: false,
+        isLoading: false,
+      });
+      toast.success(`Cronograma criado a partir do template!`);
+    } catch (e: any) {
+      toast.error(`Erro ao importar template: ${e.message}`);
+      set({ isLoading: false });
+    }
+  },
+
+  duplicateCurrentWorkspace: async (newName, companyId) => {
+    const { workspace } = get();
+    if (!workspace) return;
+    try {
+      const clone = SprintOSRepository.duplicateWorkspace(workspace, newName);
+      await SprintOSRepository.saveWorkspace(clone, 1, companyId, "Operador");
+      await get().fetchWorkspacesList(companyId);
+      set({
+        workspace: clone,
+        version: 1,
+        activeWorkspaceId: clone.project.id,
+        activeSprintId: Object.keys(clone.sprints)[0] || null,
+      });
+      toast.success(`Cronograma duplicado com sucesso!`);
+    } catch (e: any) {
+      toast.error(`Erro ao duplicar: ${e.message}`);
+    }
+  },
+
+  deleteWorkspaceAction: async (id, companyId) => {
+    try {
+      await SprintOSRepository.deleteWorkspace(id, companyId);
+      await get().fetchWorkspacesList(companyId);
+      if (get().activeWorkspaceId === id) {
+        set({ activeWorkspaceId: null, workspace: null });
+      }
+      toast.success("Cronograma excluído.");
+    } catch (e: any) {
+      toast.error(`Erro ao excluir: ${e.message}`);
+    }
+  },
+
+  saveCurrentAsTemplate: async (templateName) => {
+    const { workspace } = get();
+    if (!workspace) return;
+    try {
+      const tpl = SprintOSRepository.saveAsTemplate(workspace, templateName);
+      get().fetchTemplatesList();
+      toast.success(`Template "${tpl.name}" salvo com sucesso!`);
+    } catch (e: any) {
+      toast.error(`Erro ao salvar template: ${e.message}`);
+    }
+  },
 
   initWorkspace: async (companyId, workspaceId, actorName = "Engenheiro Operacional") => {
     set({ isLoading: true });
     try {
-      const { workspace, version } = await SprintOSRepository.loadWorkspace(companyId, workspaceId);
-      const sprintIds = Object.keys(workspace.sprints);
-      const activeSprintId = sprintIds.length > 0 ? sprintIds[0] : null;
-
-      set({
-        workspace,
-        version,
-        activeSprintId,
-        isLoading: false,
-      });
+      await get().fetchWorkspacesList(companyId);
+      get().fetchTemplatesList();
+      // Não abre direto o workspace se workspaceId for nulo (mostra a lista Meus Cronogramas)
+      if (workspaceId) {
+        await get().openWorkspace(workspaceId, companyId, actorName);
+      } else {
+        set({ activeWorkspaceId: null, isLoading: false });
+      }
     } catch (e: any) {
-      toast.error(`Erro ao carregar workspace: ${e.message}`);
+      toast.error(`Erro ao carregar cronogramas: ${e.message}`);
       set({ isLoading: false });
     }
   },
@@ -184,9 +360,8 @@ export const useSprintOSStore = create<SprintOSState>((set, get) => ({
 
     const res = await SprintOSRepository.saveWorkspace(workspace, version, companyId, actorName);
     if (res.conflict) {
-      toast.error(res.error || "Conflito de versão! Recarregando dados mais recentes...");
-      // Recarregar
-      get().initWorkspace(companyId, workspace.project.id);
+      toast.error(res.error || "Conflito de versão! Recarregando...");
+      get().openWorkspace(workspace.project.id, companyId);
     } else if (res.ok) {
       set({ version: res.version });
     }
@@ -206,19 +381,18 @@ export const useSprintOSStore = create<SprintOSState>((set, get) => ({
   setIsShareModalOpen: (open) => set({ isShareModalOpen: open }),
   setIsTemplatesModalOpen: (open) => set({ isTemplatesModalOpen: open }),
   setIsReportModalOpen: (open) => set({ isReportModalOpen: open }),
+  setIsCreateModalOpen: (open) => set({ isCreateModalOpen: open }),
 
   mutate: async (fn, actorName = "Engenheiro Operacional") => {
     const { workspace, version } = get();
     if (!workspace) return;
 
-    // Clonar rascunho de forma segura
     const draft: Workspace = JSON.parse(JSON.stringify(workspace));
     const ctx = { actorName, nowIso: new Date().toISOString() };
 
     try {
       fn(draft, ctx);
       set({ workspace: draft });
-      // Salvar imediatamente no repository
       const res = await SprintOSRepository.saveWorkspace(draft, version, null, actorName);
       if (res.ok) {
         set({ version: res.version });
@@ -229,9 +403,123 @@ export const useSprintOSStore = create<SprintOSState>((set, get) => ({
     }
   },
 
-  // ─────────────────────────────────────────────────────────────
-  // AÇÕES ESPECIAIS DO MOTOR DE CRONOGRAMA
-  // ─────────────────────────────────────────────────────────────
+  assignTaskMemberAction: async (taskId, memberId, actorName = "Operador") => {
+    try {
+      await get().mutate((ws, ctx) => {
+        updateTask(ws, ctx, taskId, { assigneeId: memberId });
+      }, actorName);
+      toast.success("Responsável atualizado!");
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  },
+
+  reorderStagesAction: async (orderedIds, actorName = "Operador") => {
+    const { workspace, activeSprintId } = get();
+    if (!workspace || !activeSprintId) return;
+    try {
+      await get().mutate((ws, ctx) => {
+        reorderStages(ws, ctx, activeSprintId, orderedIds);
+      }, actorName);
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  },
+
+  moveTaskAction: async (taskId, toStageId, toIndex, actorName = "Operador") => {
+    try {
+      await get().mutate((ws, ctx) => {
+        moveTask(ws, ctx, taskId, toStageId, toIndex);
+      }, actorName);
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  },
+
+  upsertIndicatorAction: async (data, actorName = "Operador") => {
+    try {
+      await get().mutate((ws, ctx) => {
+        upsertIndicator(ws, ctx, data);
+      }, actorName);
+      toast.success("Indicador salvo!");
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  },
+
+  deleteIndicatorAction: async (id, actorName = "Operador") => {
+    try {
+      await get().mutate((ws, ctx) => {
+        deleteIndicator(ws, ctx, id);
+      }, actorName);
+      toast.success("Indicador removido.");
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  },
+
+  togglePinIndicatorAction: async (id, actorName = "Operador") => {
+    try {
+      await get().mutate((ws, ctx) => {
+        togglePinIndicator(ws, ctx, id);
+      }, actorName);
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  },
+
+  upsertOKRAction: async (data, actorName = "Operador") => {
+    try {
+      await get().mutate((ws, ctx) => {
+        upsertOKRGoal(ws, ctx, data);
+      }, actorName);
+      toast.success("OKR salvo!");
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  },
+
+  deleteOKRAction: async (id, actorName = "Operador") => {
+    try {
+      await get().mutate((ws, ctx) => {
+        deleteOKRGoal(ws, ctx, id);
+      }, actorName);
+      toast.success("OKR removido.");
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  },
+
+  updateContentMetricsAction: async (patch, actorName = "Operador") => {
+    try {
+      await get().mutate((ws, ctx) => {
+        updateContentMetrics(ws, ctx, patch);
+      }, actorName);
+      toast.success("Métricas de conteúdo atualizadas!");
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  },
+
+  updateHoursCalcAction: async (patch, actorName = "Operador") => {
+    try {
+      await get().mutate((ws, ctx) => {
+        updateHoursCalculator(ws, ctx, patch);
+      }, actorName);
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  },
+
+  updateAdsCalcAction: async (patch, actorName = "Operador") => {
+    try {
+      await get().mutate((ws, ctx) => {
+        updateAdsCalculator(ws, ctx, patch);
+      }, actorName);
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  },
 
   openDeadlineUpdatePreview: () => {
     const { workspace, activeSprintId } = get();

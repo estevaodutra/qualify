@@ -6,6 +6,7 @@
 import type {
   Acknowledgement, Dependency, Entity, ID, Member, Milestone, Priority, RoutineDefinition, Sprint, Stage,
   Subtask, Task, TaskStatus, WorkCalendar, Workspace, FinancialRecord, ChangeRequest, ScheduleRevision,
+  CustomIndicator, OKRGoal, OKRKeyResult, ContentDistributionMetrics, HoursCalculatorData, AdsCalculatorData,
 } from "./types";
 import { emptyLearnings } from "./types";
 import { wouldCreateCycle } from "../scheduler/engine";
@@ -505,5 +506,277 @@ export function setPrompt(ws: Workspace, ctx: Ctx, taskId: ID, prompt: string) {
 }
 
 export function setPriority(ws: Workspace, ctx: Ctx, id: ID, p: Priority) { updateTask(ws, ctx, id, { priority: p }); }
+
+// ───────────── Indicadores Dinâmicos (KPI Builder) ─────────────
+
+export function upsertIndicator(
+  ws: Workspace,
+  ctx: Ctx,
+  data: Partial<CustomIndicator> & { name: string; type: CustomIndicator["type"] }
+): ID {
+  ws.indicators ??= {};
+  if (data.id && ws.indicators[data.id]) {
+    const ind = ws.indicators[data.id];
+    Object.assign(ind, data);
+    touch(ind, ctx);
+    log(ws, ctx, "update", "indicator", ind.id, `Indicador atualizado: ${ind.name}`);
+    return ind.id;
+  }
+  const pos = Object.values(ws.indicators).length;
+  const ind: CustomIndicator = {
+    ...base(ctx),
+    sprintId: null,
+    name: data.name,
+    description: data.description || "",
+    category: data.category || "geral",
+    type: data.type,
+    currentValue: data.currentValue ?? 0,
+    targetValue: data.targetValue ?? null,
+    unit: data.unit || "",
+    period: data.period || "sprint",
+    dataSource: data.dataSource || "manual",
+    pinnedToCockpit: data.pinnedToCockpit ?? false,
+    position: pos,
+    ...data,
+    id: newId(),
+  };
+  ws.indicators[ind.id] = ind;
+  log(ws, ctx, "create", "indicator", ind.id, `Indicador criado: ${ind.name}`);
+  return ind.id;
+}
+
+export function deleteIndicator(ws: Workspace, ctx: Ctx, id: ID) {
+  if (ws.indicators && ws.indicators[id]) {
+    const name = ws.indicators[id].name;
+    delete ws.indicators[id];
+    log(ws, ctx, "delete", "indicator", id, `Indicador removido: ${name}`);
+  }
+}
+
+export function togglePinIndicator(ws: Workspace, ctx: Ctx, id: ID) {
+  if (ws.indicators && ws.indicators[id]) {
+    const ind = ws.indicators[id];
+    ind.pinnedToCockpit = !ind.pinnedToCockpit;
+    touch(ind, ctx);
+    log(ws, ctx, "pin", "indicator", id, `Indicador ${ind.pinnedToCockpit ? "fixado no cockpit" : "desafixado"}: ${ind.name}`);
+  }
+}
+
+// ───────────── OKRs ─────────────
+
+export function upsertOKRGoal(
+  ws: Workspace,
+  ctx: Ctx,
+  data: Partial<OKRGoal> & { title: string }
+): ID {
+  ws.okrs ??= {};
+  if (data.id && ws.okrs[data.id]) {
+    const g = ws.okrs[data.id];
+    Object.assign(g, data);
+    touch(g, ctx);
+    log(ws, ctx, "update", "okr", g.id, `Objetivo OKR atualizado: ${g.title}`);
+    return g.id;
+  }
+  const g: OKRGoal = {
+    ...base(ctx),
+    sprintId: null,
+    title: data.title,
+    description: data.description || "",
+    ownerId: data.ownerId || null,
+    targetDate: data.targetDate || null,
+    weight: data.weight ?? 1,
+    keyResults: data.keyResults || [],
+    ...data,
+    id: newId(),
+  };
+  ws.okrs[g.id] = g;
+  log(ws, ctx, "create", "okr", g.id, `Objetivo OKR criado: ${g.title}`);
+  return g.id;
+}
+
+export function deleteOKRGoal(ws: Workspace, ctx: Ctx, id: ID) {
+  if (ws.okrs && ws.okrs[id]) {
+    const title = ws.okrs[id].title;
+    delete ws.okrs[id];
+    log(ws, ctx, "delete", "okr", id, `Objetivo OKR removido: ${title}`);
+  }
+}
+
+// ───────────── Calculadoras & Métricas de Conteúdo ─────────────
+
+export function updateContentMetrics(ws: Workspace, ctx: Ctx, patch: Partial<ContentDistributionMetrics>) {
+  ws.contentMetrics = {
+    postsPublished: 0,
+    postsPerDay: 0,
+    reels: 0,
+    stories: 0,
+    views: 0,
+    reach: 0,
+    clicks: 0,
+    groupEntries: 0,
+    leadsCaptured: 0,
+    adSpend: 0,
+    period: "sprint",
+    ...(ws.contentMetrics || {}),
+    ...patch,
+  };
+  log(ws, ctx, "update", "content_metrics", null, "Métricas de distribuição de conteúdo atualizadas");
+}
+
+export function updateHoursCalculator(ws: Workspace, ctx: Ctx, patch: Partial<HoursCalculatorData>) {
+  ws.hoursCalculator = {
+    taskCount: 0,
+    avgHoursPerTask: 2.5,
+    membersAvailable: 1,
+    hoursPerDay: 8,
+    businessDays: 10,
+    hourlyRate: 50,
+    ...(ws.hoursCalculator || {}),
+    ...patch,
+  };
+  log(ws, ctx, "update", "hours_calc", null, "Calculadora de horas atualizada");
+}
+
+export function updateAdsCalculator(ws: Workspace, ctx: Ctx, patch: Partial<AdsCalculatorData>) {
+  ws.adsCalculator = {
+    dailyBudget: 50,
+    campaignDays: 10,
+    totalSpent: 500,
+    cpl: 5,
+    conversionRate: 5,
+    avgTicket: 500,
+    attributedRevenue: 2500,
+    otherCosts: 0,
+    ...(ws.adsCalculator || {}),
+    ...patch,
+  };
+  log(ws, ctx, "update", "ads_calc", null, "Calculadora de anúncios atualizada");
+}
+
+// ───────────── Criar Workspace em Branco ─────────────
+
+export function createBlankWorkspace(name = "Novo Cronograma", client = "Cliente"): Workspace {
+  const now = new Date().toISOString();
+  const projectId = newId();
+  const sprintId = newId();
+  const calendarId = newId();
+
+  return {
+    schemaVersion: 1,
+    project: {
+      id: projectId,
+      createdAt: now,
+      updatedAt: now,
+      archivedAt: null,
+      rev: 1,
+      name,
+      client,
+      description: "Implementação operacional",
+      contractModel: "Empreitada",
+      timezone: "America/Sao_Paulo",
+    },
+    sprints: {
+      [sprintId]: {
+        id: sprintId,
+        createdAt: now,
+        updatedAt: now,
+        archivedAt: null,
+        rev: 1,
+        projectId,
+        name: "Sprint 01",
+        objective: "Execução operacional",
+        deliverables: [],
+        position: 0,
+        startDate: null,
+        startTime: null,
+        businessDays: null,
+        calendarId,
+        managerId: null,
+        contractValue: null,
+        revenueReceived: null,
+        schedulingMode: "hybrid",
+        activatedAt: null,
+        baseline: null,
+      },
+    },
+    stages: {},
+    tasks: {},
+    subtasks: {},
+    dependencies: {},
+    acknowledgements: {},
+    members: {},
+    calendars: {
+      [calendarId]: {
+        id: calendarId,
+        createdAt: now,
+        updatedAt: now,
+        archivedAt: null,
+        rev: 1,
+        name: "Jornada padrão (SP)",
+        workStart: "09:00",
+        workEnd: "18:00",
+        breaks: [{ start: "12:00", end: "13:00" }],
+        workDays: [1, 2, 3, 4, 5],
+        holidays: [],
+      },
+    },
+    milestones: {},
+    routines: {},
+    routineOccurrences: {},
+    financialRecords: {},
+    changeRequests: {},
+    funnel: {},
+    costs: {},
+    prompts: {},
+    revisions: {},
+    activity: [
+      {
+        id: newId(),
+        at: now,
+        actorName: "Sistema",
+        action: "create",
+        entity: "workspace",
+        entityId: projectId,
+        summary: `Cronograma em branco criado: "${name}"`,
+      },
+    ],
+    settings: {
+      dailyThresholds: { start: 40, rhythm: 70, strong: 90 },
+    },
+    indicators: {},
+    okrs: {},
+    contentMetrics: {
+      postsPublished: 0,
+      postsPerDay: 0,
+      reels: 0,
+      stories: 0,
+      views: 0,
+      reach: 0,
+      clicks: 0,
+      groupEntries: 0,
+      leadsCaptured: 0,
+      adSpend: 0,
+      period: "sprint",
+    },
+    hoursCalculator: {
+      taskCount: 0,
+      avgHoursPerTask: 2.5,
+      membersAvailable: 1,
+      hoursPerDay: 8,
+      businessDays: 10,
+      hourlyRate: 50,
+    },
+    adsCalculator: {
+      dailyBudget: 50,
+      campaignDays: 10,
+      totalSpent: 0,
+      cpl: 0,
+      conversionRate: 0,
+      avgTicket: 0,
+      attributedRevenue: 0,
+      otherCosts: 0,
+    },
+  };
+}
 
 export type { ScheduleRevision };

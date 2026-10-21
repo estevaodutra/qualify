@@ -247,6 +247,87 @@ export interface ChangeRequest extends Entity {
   decidedAt: string | null;
 }
 
+export type IndicatorType =
+  | "counter"
+  | "target"
+  | "percentage"
+  | "currency"
+  | "time"
+  | "average"
+  | "conversion_rate"
+  | "formula"
+  | "progress_bar";
+
+export type IndicatorCategory = "geral" | "midia" | "comercial" | "operacao" | "financeiro";
+
+export interface CustomIndicator extends Entity {
+  sprintId: ID | null;
+  name: string;
+  description: string;
+  category: IndicatorCategory;
+  type: IndicatorType;
+  currentValue: number;
+  targetValue: number | null;
+  unit: string;
+  period: "today" | "7d" | "30d" | "sprint" | "custom";
+  dataSource: string;
+  pinnedToCockpit: boolean;
+  position: number;
+}
+
+export interface ContentDistributionMetrics {
+  postsPublished: number;
+  postsPerDay: number;
+  reels: number;
+  stories: number;
+  views: number;
+  reach: number;
+  clicks: number;
+  groupEntries: number;
+  leadsCaptured: number;
+  adSpend: number;
+  period: "today" | "7d" | "30d" | "sprint";
+}
+
+export interface OKRKeyResult {
+  id: ID;
+  title: string;
+  current: number;
+  target: number;
+  unit: string;
+  weight: number;
+}
+
+export interface OKRGoal extends Entity {
+  sprintId: ID | null;
+  title: string;
+  description: string;
+  ownerId: ID | null;
+  targetDate: LocalDate | null;
+  weight: number;
+  keyResults: OKRKeyResult[];
+}
+
+export interface HoursCalculatorData {
+  taskCount: number;
+  avgHoursPerTask: number;
+  membersAvailable: number;
+  hoursPerDay: number;
+  businessDays: number;
+  hourlyRate: number;
+}
+
+export interface AdsCalculatorData {
+  dailyBudget: number;
+  campaignDays: number;
+  totalSpent: number;
+  cpl: number;
+  conversionRate: number;
+  avgTicket: number;
+  attributedRevenue: number;
+  otherCosts: number;
+}
+
 export interface ActivityLog {
   id: ID;
   at: string;
@@ -279,6 +360,11 @@ export interface Workspace {
   financialRecords: Record<ID, FinancialRecord>;
   changeRequests: Record<ID, ChangeRequest>;
   funnel: Record<ID, FunnelStage>;
+  indicators?: Record<ID, CustomIndicator>;
+  okrs?: Record<ID, OKRGoal>;
+  contentMetrics?: ContentDistributionMetrics;
+  hoursCalculator?: HoursCalculatorData;
+  adsCalculator?: AdsCalculatorData;
   /** Custo/hora por membro — separado para não ser exposto em links públicos. */
   costs: Record<ID, number | null>;
   /** Prompts otimizados por tarefa (chave = taskId). */
