@@ -375,35 +375,6 @@ export const SprintOSPage: React.FC = () => {
               <span>Marcos</span>
             </TabsTrigger>
           </TabsList>
-            <TabsTrigger value="structure" className="text-xs font-bold gap-2">
-              <Layers className="h-3.5 w-3.5" />
-              <span>Estrutura em Blocos</span>
-            </TabsTrigger>
-            <TabsTrigger value="kanban" className="text-xs font-bold gap-2">
-              <Kanban className="h-3.5 w-3.5" />
-              <span>Kanban</span>
-            </TabsTrigger>
-            <TabsTrigger value="gantt" className="text-xs font-bold gap-2">
-              <Calendar className="h-3.5 w-3.5" />
-              <span>Gantt & Cronograma</span>
-            </TabsTrigger>
-            <TabsTrigger value="indicators" className="text-xs font-bold gap-2">
-              <BarChart3 className="h-3.5 w-3.5" />
-              <span>Indicadores</span>
-            </TabsTrigger>
-            <TabsTrigger value="calculators" className="text-xs font-bold gap-2">
-              <Calculator className="h-3.5 w-3.5" />
-              <span>Calculadoras</span>
-            </TabsTrigger>
-            <TabsTrigger value="funnel" className="text-xs font-bold gap-2">
-              <Filter className="h-3.5 w-3.5" />
-              <span>Funil X1</span>
-            </TabsTrigger>
-            <TabsTrigger value="milestones" className="text-xs font-bold gap-2">
-              <Flag className="h-3.5 w-3.5" />
-              <span>Marcos</span>
-            </TabsTrigger>
-          </TabsList>
 
           <TabsContent value="structure">
             <StructureView />
