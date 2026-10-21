@@ -57,7 +57,7 @@ export const DeadlineUpdateModal: React.FC = () => {
 
   return (
     <Dialog open={isDeadlineModalOpen} onOpenChange={setIsDeadlineModalOpen}>
-      <DialogContent className="max-w-3xl bg-zinc-950 border-white/10 text-white max-h-[85vh] flex flex-col">
+      <DialogContent className="max-w-3xl bg-card border border-border text-card-foreground shadow-2xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <div className="flex items-center gap-2 text-indigo-400 mb-1">
             <RefreshCw className="h-4 w-4 animate-spin-hover" />
@@ -65,10 +65,10 @@ export const DeadlineUpdateModal: React.FC = () => {
               Motor de Cronograma · São Paulo
             </span>
           </div>
-          <DialogTitle className="text-lg font-black text-white">
+          <DialogTitle className="text-lg font-black text-foreground">
             Prévia de Atualização de Prazos
           </DialogTitle>
-          <DialogDescription className="text-xs text-white/50">
+          <DialogDescription className="text-xs text-muted-foreground">
             Simulação determinística baseada no estado real de execução, disponibilidade e dependências.
           </DialogDescription>
         </DialogHeader>
@@ -82,7 +82,7 @@ export const DeadlineUpdateModal: React.FC = () => {
                 <span className="font-bold text-rose-300">
                   Atenção: A nova previsão de entrega ultrapassa o prazo original contratado!
                 </span>
-                <p className="text-white/60">
+                <p className="text-muted-foreground">
                   Prazo original contratual: <strong>{contractEnd ? fmtDateTime(contractEnd) : "—"}</strong>.
                   Considere realocar responsáveis ou priorizar atividades críticas.
                 </p>
@@ -91,31 +91,31 @@ export const DeadlineUpdateModal: React.FC = () => {
           )}
 
           {/* Comparativo de Previsão */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-xl bg-white/5 border border-white/10">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-xl bg-muted/40 border border-border">
             <div>
-              <div className="text-[10px] uppercase font-bold text-white/40 mb-1">Previsão Anterior</div>
-              <div className="text-xs font-bold text-white/80">{forecastBefore ? fmtDateTime(forecastBefore) : "—"}</div>
+              <div className="text-[10px] uppercase font-bold text-muted-foreground mb-1">Previsão Anterior</div>
+              <div className="text-xs font-bold text-foreground">{forecastBefore ? fmtDateTime(forecastBefore) : "—"}</div>
             </div>
 
             <div>
-              <div className="text-[10px] uppercase font-bold text-white/40 mb-1">Nova Previsão</div>
+              <div className="text-[10px] uppercase font-bold text-muted-foreground mb-1">Nova Previsão</div>
               <div className={`text-xs font-black ${lateRisk ? "text-rose-400" : "text-emerald-400"}`}>
                 {forecastAfter ? fmtDateTime(forecastAfter) : "—"}
               </div>
             </div>
 
             <div>
-              <div className="text-[10px] uppercase font-bold text-white/40 mb-1">Variação em Horas</div>
-              <div className="text-xs font-bold text-white flex items-center gap-1">
-                <Clock className="h-3 w-3 text-white/40" />
+              <div className="text-[10px] uppercase font-bold text-muted-foreground mb-1">Variação em Horas</div>
+              <div className="text-xs font-bold text-foreground flex items-center gap-1">
+                <Clock className="h-3 w-3 text-muted-foreground" />
                 <span>{deltaWorkMinutes != null ? fmtMinutes(deltaWorkMinutes) : "0h"}</span>
               </div>
             </div>
 
             <div>
-              <div className="text-[10px] uppercase font-bold text-white/40 mb-1">Variação em Dias</div>
-              <div className="text-xs font-bold text-white flex items-center gap-1">
-                <Calendar className="h-3 w-3 text-white/40" />
+              <div className="text-[10px] uppercase font-bold text-muted-foreground mb-1">Variação em Dias</div>
+              <div className="text-xs font-bold text-foreground flex items-center gap-1">
+                <Calendar className="h-3 w-3 text-muted-foreground" />
                 <span>{deltaBusinessDays != null ? `${deltaBusinessDays > 0 ? "+" : ""}${deltaBusinessDays} dia(s)` : "0 dias"}</span>
               </div>
             </div>
@@ -128,7 +128,7 @@ export const DeadlineUpdateModal: React.FC = () => {
                 <AlertTriangle className="h-3.5 w-3.5" />
                 {result.unschedulable.length} tarefa(s) não puderam ser recalculadas:
               </span>
-              <ul className="list-disc pl-5 text-[11px] text-white/70 space-y-0.5">
+              <ul className="list-disc pl-5 text-[11px] text-muted-foreground space-y-0.5">
                 {result.unschedulable.map((u, i) => (
                   <li key={i}>
                     <strong>{workspace.tasks[u.taskId]?.title || u.taskId}:</strong> {u.reason}
@@ -140,26 +140,26 @@ export const DeadlineUpdateModal: React.FC = () => {
 
           {/* Lista de Tarefas Impactadas */}
           <div>
-            <div className="text-xs font-bold text-white mb-2 flex items-center justify-between">
+            <div className="text-xs font-bold text-foreground mb-2 flex items-center justify-between">
               <span>Tarefas Impactadas com Novo Horário ({changes.length})</span>
-              <span className="text-[11px] text-white/40">
+              <span className="text-[11px] text-muted-foreground">
                 Apenas plannedStart e plannedEnd serão atualizados
               </span>
             </div>
 
             {changes.length === 0 ? (
-              <div className="p-4 text-center text-xs text-white/30 border border-dashed border-white/5 rounded-xl">
+              <div className="p-4 text-center text-xs text-foreground/30 border border-dashed border-border rounded-xl">
                 Nenhuma alteração necessária no cronograma atual.
               </div>
             ) : (
-              <div className="rounded-xl border border-white/5 divide-y divide-white/5 max-h-48 overflow-y-auto">
+              <div className="rounded-xl border border-border divide-y divide-white/5 max-h-48 overflow-y-auto">
                 {changes.map((c) => {
                   const task = workspace.tasks[c.taskId];
                   return (
                     <div key={c.taskId} className="p-2.5 text-xs flex items-center justify-between gap-3">
-                      <span className="font-semibold text-white/90 truncate flex-1">{task?.title}</span>
+                      <span className="font-semibold text-foreground/90 truncate flex-1">{task?.title}</span>
                       <div className="flex items-center gap-2 text-[11px] font-mono shrink-0">
-                        <span className="text-white/40">{c.before.plannedStart ? fmtDateTime(c.before.plannedStart) : "—"}</span>
+                        <span className="text-muted-foreground">{c.before.plannedStart ? fmtDateTime(c.before.plannedStart) : "—"}</span>
                         <ArrowRight className="h-3 w-3 text-primary" />
                         <span className="text-emerald-400 font-bold">{fmtDateTime(c.after.plannedStart)}</span>
                       </div>
@@ -171,12 +171,12 @@ export const DeadlineUpdateModal: React.FC = () => {
           </div>
         </div>
 
-        <DialogFooter className="border-t border-white/5 pt-3 flex items-center justify-between">
+        <DialogFooter className="border-t border-border pt-3 flex items-center justify-between">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setIsDeadlineModalOpen(false)}
-            className="text-xs text-white/50 hover:text-white"
+            className="text-xs text-muted-foreground hover:text-foreground"
           >
             Cancelar
           </Button>

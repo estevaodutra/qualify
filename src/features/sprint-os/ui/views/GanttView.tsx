@@ -78,22 +78,22 @@ export const GanttView: React.FC = () => {
   return (
     <div className="space-y-4">
       {/* Barra Informativa do Motor */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
+      <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-2xl bg-card border border-border shadow-sm text-card-foreground">
         <div className="flex items-center gap-3">
-          <Calendar className="h-5 w-5 text-indigo-400" />
+          <Calendar className="h-5 w-5 text-primary" />
           <div>
-            <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+            <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
               Planejamento Temporal & Motor de Dependências
             </h4>
-            <span className="text-[11px] text-white/50">
-              Previsão final calculada: <strong className="text-emerald-400">{scheduleResult.forecastEnd ? fmtDateTime(scheduleResult.forecastEnd) : "—"}</strong>
+            <span className="text-[11px] text-muted-foreground">
+              Previsão final calculada: <strong className="text-emerald-600 dark:text-emerald-400">{scheduleResult.forecastEnd ? fmtDateTime(scheduleResult.forecastEnd) : "—"}</strong>
             </span>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
           {scheduleResult.unschedulable.length > 0 && (
-            <Badge className="bg-amber-500/10 text-amber-300 border-amber-500/30 text-xs gap-1.5">
+            <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 text-xs gap-1.5">
               <AlertTriangle className="h-3.5 w-3.5" />
               <span>{scheduleResult.unschedulable.length} com pendência de agendamento</span>
             </Badge>
@@ -102,7 +102,7 @@ export const GanttView: React.FC = () => {
           <Button
             onClick={openDeadlineUpdatePreview}
             size="sm"
-            className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs gap-1.5"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs gap-1.5 shadow-sm"
           >
             <Sparkles className="h-3.5 w-3.5" />
             <span>Recalcular Agendamento Automático</span>
@@ -111,15 +111,15 @@ export const GanttView: React.FC = () => {
       </div>
 
       {/* Tabela Gantt / Cronograma */}
-      <div className="rounded-2xl border border-white/10 bg-zinc-900/60 overflow-hidden backdrop-blur-md">
-        <div className="p-3 bg-white/5 border-b border-white/5 grid grid-cols-12 text-[11px] font-black uppercase tracking-wider text-white/40">
+      <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm text-card-foreground">
+        <div className="p-3 bg-muted/50 border-b border-border grid grid-cols-12 text-[11px] font-black uppercase tracking-wider text-muted-foreground">
           <div className="col-span-5">Tarefa / Atividade</div>
           <div className="col-span-2">Responsável</div>
           <div className="col-span-2">Duração</div>
           <div className="col-span-3 text-right">Início & Término Projetado</div>
         </div>
 
-        <div className="divide-y divide-white/5">
+        <div className="divide-y divide-border">
           {displayedTasks.map((task) => {
             const isCritical = criticalSet.has(task.id);
             const unscheduledReason = unschedulableMap.get(task.id);
@@ -128,23 +128,24 @@ export const GanttView: React.FC = () => {
             return (
               <div
                 key={task.id}
-                className={`p-3 grid grid-cols-12 items-center gap-2 text-xs transition-colors hover:bg-white/[0.02] ${
-                  isCritical ? "bg-amber-500/[0.02]" : ""
+                className={`p-3 grid grid-cols-12 items-center gap-2 text-xs transition-colors hover:bg-muted/30 ${
+                  isCritical ? "bg-amber-500/5" : ""
                 }`}
               >
                 {/* Coluna 1: Tarefa & Badges */}
                 <div className="col-span-5 flex items-center gap-2 min-w-0">
                   {isCritical && (
-                    <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 text-[9px] py-0 px-1 font-black shrink-0">
+                    <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[9px] py-0 px-1 font-black shrink-0">
                       CRÍTICO
                     </Badge>
                   )}
 
                   <Badge
+                    variant="outline"
                     className={`text-[9px] font-black py-0 px-1 shrink-0 ${
                       task.priority === "P0"
-                        ? "bg-rose-500/20 text-rose-300"
-                        : "bg-white/10 text-white/70"
+                        ? "bg-rose-500/10 text-rose-600 dark:text-rose-300 border-rose-500/30"
+                        : "bg-muted text-muted-foreground border-border"
                     }`}
                   >
                     {task.priority}
@@ -166,26 +167,26 @@ export const GanttView: React.FC = () => {
                       setSelectedTaskId(task.id);
                       setIsTaskModalOpen(true);
                     }}
-                    className="truncate font-semibold text-white cursor-pointer hover:text-primary transition-colors"
+                    className="truncate font-semibold text-foreground cursor-pointer hover:text-primary transition-colors"
                   >
                     {task.title}
                   </span>
 
                   {task.pinned && (
-                    <Pin className="h-3 w-3 text-cyan-400 shrink-0" title="Horário fixado manualmente" />
+                    <Pin className="h-3 w-3 text-cyan-600 dark:text-cyan-400 shrink-0" title="Horário fixado manualmente" />
                   )}
                 </div>
 
                 {/* Coluna 2: Responsável */}
-                <div className="col-span-2 flex items-center gap-1.5 text-white/60 truncate">
-                  <User className="h-3.5 w-3.5 text-white/30 shrink-0" />
+                <div className="col-span-2 flex items-center gap-1.5 text-muted-foreground truncate">
+                  <User className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
                   <span className="truncate">{assignee?.name || "Não atribuído"}</span>
                 </div>
 
                 {/* Coluna 3: Duração */}
-                <div className="col-span-2 text-white/60 font-mono text-[11px]">
+                <div className="col-span-2 text-muted-foreground font-mono text-[11px]">
                   {task.durationMinutes ? fmtMinutes(task.durationMinutes) : (
-                    <span className="text-amber-400/80 italic text-[10px]">Sem estimativa</span>
+                    <span className="text-amber-600 dark:text-amber-400 italic text-[10px]">Sem estimativa</span>
                   )}
                 </div>
 
@@ -197,12 +198,12 @@ export const GanttView: React.FC = () => {
                         type="datetime-local"
                         value={newDateInput}
                         onChange={(e) => setNewDateInput(e.target.value)}
-                        className="h-7 w-44 text-[11px] bg-black border-primary text-white"
+                        className="h-7 w-44 text-[11px] bg-background border-input text-foreground"
                       />
                       <Button
                         size="sm"
                         onClick={() => handleConfirmReschedule(task.id)}
-                        className="h-7 px-2 text-xs bg-primary font-bold"
+                        className="h-7 px-2 text-xs bg-primary text-primary-foreground font-bold"
                       >
                         Salvar
                       </Button>
@@ -210,7 +211,7 @@ export const GanttView: React.FC = () => {
                         size="sm"
                         variant="ghost"
                         onClick={() => setEditingTaskId(null)}
-                        className="h-7 px-2 text-xs text-white/50"
+                        className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
                       >
                         ✕
                       </Button>
@@ -221,14 +222,14 @@ export const GanttView: React.FC = () => {
                       className="cursor-pointer hover:text-primary transition-colors font-mono text-[11px]"
                       title="Clique duas vezes para reagendar manualmente"
                     >
-                      <span className="text-white/90">{fmtDateTime(task.plannedStart)}</span>
-                      <span className="text-white/40 mx-1">→</span>
-                      <span className="text-white/70">{fmtDateTime(task.plannedEnd)}</span>
+                      <span className="text-foreground">{fmtDateTime(task.plannedStart)}</span>
+                      <span className="text-muted-foreground/60 mx-1">→</span>
+                      <span className="text-muted-foreground">{fmtDateTime(task.plannedEnd)}</span>
                     </div>
                   ) : unscheduledReason ? (
                     <span
                       onClick={() => handleStartReschedule(task.id, null)}
-                      className="text-amber-400 text-[11px] italic cursor-pointer hover:underline"
+                      className="text-amber-600 dark:text-amber-400 text-[11px] italic cursor-pointer hover:underline"
                       title={unscheduledReason}
                     >
                       {unscheduledReason} (Definir)
@@ -238,7 +239,7 @@ export const GanttView: React.FC = () => {
                       size="sm"
                       variant="ghost"
                       onClick={() => handleStartReschedule(task.id, null)}
-                      className="h-6 text-[10px] text-white/40 hover:text-white"
+                      className="h-6 text-[10px] text-muted-foreground hover:text-foreground"
                     >
                       Agendar Data
                     </Button>

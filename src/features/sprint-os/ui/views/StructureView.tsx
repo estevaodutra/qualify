@@ -168,12 +168,12 @@ export const StructureView: React.FC = () => {
     <div className="space-y-4">
       {/* Estado Vazio para Cronogramas em Branco */}
       {stages.length === 0 ? (
-        <div className="py-20 text-center flex flex-col items-center justify-center rounded-3xl border border-dashed border-white/10 bg-zinc-950/40">
+        <div className="py-20 text-center flex flex-col items-center justify-center rounded-3xl border border-dashed border-border bg-card/40">
           <div className="h-10 w-10 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mb-3">
             <Plus className="h-5 w-5" />
           </div>
-          <h3 className="text-sm font-semibold text-white/90">Nenhuma etapa cadastrada</h3>
-          <p className="text-xs text-white/40 max-w-sm mt-1 mb-4">
+          <h3 className="text-sm font-semibold text-foreground">Nenhuma etapa cadastrada</h3>
+          <p className="text-xs text-muted-foreground max-w-sm mt-1 mb-4">
             Este cronograma está em branco. Comece adicionando a primeira etapa da sua implementação.
           </p>
           <Button
@@ -182,7 +182,7 @@ export const StructureView: React.FC = () => {
                 createStage(ws, ctx, activeSprintId, "Planejamento Inicial");
               });
             }}
-            className="text-xs bg-primary hover:bg-primary/90 text-white font-medium px-4 py-2 rounded-xl flex items-center gap-1.5"
+            className="text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-4 py-2 rounded-xl flex items-center gap-1.5"
           >
             <Plus className="h-4 w-4" />
             <span>Adicionar Etapa</span>
@@ -214,14 +214,14 @@ export const StructureView: React.FC = () => {
               onDragStart={() => setDraggedStageId(stage.id)}
               onDragOver={(e) => e.preventDefault()}
               onDrop={() => handleStageDrop(stage.id)}
-              className="rounded-2xl border border-white/5 bg-zinc-900/40 overflow-hidden shadow-sm transition-all"
+              className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm transition-all text-card-foreground"
             >
               {/* Cabeçalho da Etapa com Handle de Drag & Drop */}
-              <div className="p-3 bg-zinc-950/70 border-b border-white/5 flex items-center justify-between gap-3">
+              <div className="p-3 bg-muted/40 border-b border-border flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 flex-1 min-w-0">
                   <button
                     onClick={() => toggleStage(stage.id)}
-                    className="p-1 hover:bg-white/10 rounded-lg text-white/50 hover:text-white transition-colors"
+                    className="p-1 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-colors"
                   >
                     {isStageExpanded ? (
                       <ChevronDown className="h-4 w-4" />
@@ -232,7 +232,7 @@ export const StructureView: React.FC = () => {
 
                   <div
                     title="Arraste para reordenar a etapa"
-                    className="cursor-grab active:cursor-grabbing p-1 rounded hover:bg-white/10 text-white/30 hover:text-white"
+                    className="cursor-grab active:cursor-grabbing p-1 rounded hover:bg-muted text-muted-foreground/30 hover:text-foreground"
                   >
                     <GripVertical className="h-4 w-4" />
                   </div>
@@ -244,19 +244,19 @@ export const StructureView: React.FC = () => {
                       onBlur={() => commitEditTitle("stage", stage.id)}
                       onKeyDown={(e) => e.key === "Enter" && commitEditTitle("stage", stage.id)}
                       autoFocus
-                      className="h-7 text-xs font-bold uppercase tracking-wider bg-black border-primary text-white"
+                      className="h-7 text-xs font-bold uppercase tracking-wider bg-background border-primary text-foreground"
                     />
                   ) : (
                     <span
                       onDoubleClick={() => startEditTitle(stage.id, cleanStageTitle)}
-                      className="text-xs font-bold uppercase tracking-wider text-white truncate cursor-pointer hover:text-primary transition-colors"
+                      className="text-xs font-bold uppercase tracking-wider text-foreground truncate cursor-pointer hover:text-primary transition-colors"
                       title="Clique duas vezes para renomear"
                     >
                       ETAPA {stageNumber} — {cleanStageTitle}
                     </span>
                   )}
 
-                  <Badge variant="outline" className="text-[10px] text-white/40 border-white/10 py-0 shrink-0 font-mono">
+                  <Badge variant="outline" className="text-[10px] text-muted-foreground border-border bg-muted/40 py-0 shrink-0 font-mono">
                     {tasks.length} tarefa(s)
                   </Badge>
                 </div>
@@ -271,7 +271,7 @@ export const StructureView: React.FC = () => {
                     }}
                     variant="ghost"
                     size="sm"
-                    className="h-7 px-2 text-[11px] text-white/70 hover:text-white hover:bg-white/10 gap-1 rounded-lg"
+                    className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted gap-1 rounded-lg"
                   >
                     <Plus className="h-3 w-3" />
                     <span className="hidden sm:inline">Adicionar Tarefa</span>
@@ -279,11 +279,11 @@ export const StructureView: React.FC = () => {
 
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button className="h-7 w-7 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white">
+                      <button className="h-7 w-7 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground">
                         <MoreVertical className="h-3.5 w-3.5" />
                       </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="bg-[#12161F] border-white/10 text-white text-xs w-44">
+                    <DropdownMenuContent align="end" className="bg-popover border-border text-popover-foreground text-xs w-44 shadow-lg">
                       <DropdownMenuItem
                         disabled={stageIdx === 0}
                         onClick={() => moveStageDirection(stage.id, "up")}
@@ -300,7 +300,7 @@ export const StructureView: React.FC = () => {
                         <ArrowDown className="h-3.5 w-3.5 mr-2" />
                         Mover para Baixo
                       </DropdownMenuItem>
-                      <DropdownMenuSeparator className="bg-white/10" />
+                      <DropdownMenuSeparator />
                       <DropdownMenuItem
                         onClick={() => startEditTitle(stage.id, cleanStageTitle)}
                         className="cursor-pointer"
@@ -314,10 +314,10 @@ export const StructureView: React.FC = () => {
                         <Copy className="h-3.5 w-3.5 mr-2" />
                         Duplicar Etapa
                       </DropdownMenuItem>
-                      <DropdownMenuSeparator className="bg-white/10" />
+                      <DropdownMenuSeparator />
                       <DropdownMenuItem
                         onClick={() => mutate((ws, ctx) => archiveStage(ws, ctx, stage.id))}
-                        className="text-red-400 focus:text-red-300 focus:bg-red-500/10 cursor-pointer"
+                        className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
                       >
                         <Trash2 className="h-3.5 w-3.5 mr-2" />
                         Excluir Etapa
@@ -335,7 +335,7 @@ export const StructureView: React.FC = () => {
                   className="p-2.5 space-y-1.5"
                 >
                   {tasks.length === 0 ? (
-                    <div className="p-3 text-center text-xs text-white/30 border border-dashed border-white/5 rounded-xl">
+                    <div className="p-3 text-center text-xs text-muted-foreground/60 border border-dashed border-border rounded-xl">
                       Nenhuma tarefa nesta etapa.
                     </div>
                   ) : (
@@ -357,10 +357,10 @@ export const StructureView: React.FC = () => {
                           }}
                           className={`rounded-xl border transition-all ${
                             task.status === "done"
-                              ? "bg-white/[0.02] border-white/5 text-white/50"
+                              ? "bg-muted/20 border-border text-muted-foreground"
                               : task.status === "doing"
-                              ? "bg-amber-500/[0.03] border-amber-500/20 text-white"
-                              : "bg-black/30 border-white/5 hover:border-white/15 text-white"
+                              ? "bg-amber-500/5 border-amber-500/20 text-foreground"
+                              : "bg-card border-border hover:border-primary/30 text-foreground shadow-xs"
                           }`}
                         >
                           {/* Linha Principal da Tarefa (80/20) */}
@@ -368,7 +368,7 @@ export const StructureView: React.FC = () => {
                             <div className="flex items-center gap-2.5 flex-1 min-w-0">
                               <div
                                 title="Arraste para mover tarefa"
-                                className="cursor-grab active:cursor-grabbing text-white/20 hover:text-white shrink-0"
+                                className="cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-foreground shrink-0"
                               >
                                 <GripVertical className="h-3.5 w-3.5" />
                               </div>
@@ -398,7 +398,7 @@ export const StructureView: React.FC = () => {
                                   onBlur={() => commitEditTitle("task", task.id)}
                                   onKeyDown={(e) => e.key === "Enter" && commitEditTitle("task", task.id)}
                                   autoFocus
-                                  className="h-7 text-xs font-medium bg-black border-primary text-white"
+                                  className="h-7 text-xs font-medium bg-background border-primary text-foreground"
                                 />
                               ) : (
                                 <span
@@ -408,7 +408,7 @@ export const StructureView: React.FC = () => {
                                     setIsTaskModalOpen(true);
                                   }}
                                   className={`text-xs font-semibold truncate cursor-pointer hover:text-primary transition-colors ${
-                                    task.status === "done" ? "line-through text-white/40" : "text-white/90"
+                                    task.status === "done" ? "line-through text-muted-foreground" : "text-foreground"
                                   }`}
                                 >
                                   {task.title}
@@ -420,10 +420,10 @@ export const StructureView: React.FC = () => {
                                 variant="outline"
                                 className={`text-[9px] font-black py-0 px-1.5 shrink-0 ${
                                   task.priority === "P0"
-                                    ? "bg-rose-500/10 text-rose-300 border-rose-500/30"
+                                    ? "bg-rose-500/10 text-rose-600 dark:text-rose-300 border-rose-500/30"
                                     : task.priority === "P1"
-                                    ? "bg-orange-500/10 text-orange-300 border-orange-500/30"
-                                    : "bg-blue-500/10 text-blue-300 border-blue-500/30"
+                                    ? "bg-orange-500/10 text-orange-600 dark:text-orange-300 border-orange-500/30"
+                                    : "bg-blue-500/10 text-blue-600 dark:text-blue-300 border-blue-500/30"
                                 }`}
                               >
                                 {task.priority}
@@ -443,6 +443,11 @@ export const StructureView: React.FC = () => {
                                   ))}
                                 </div>
                               )}
+                                      {IMPACT_FLAG_CONFIG[f]?.icon}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
 
                               {/* SEÇÃO 11: ATRIBUIÇÃO DIRETA DE RESPONSÁVEL COM 1 CLIQUE */}
                               <DropdownMenu>
@@ -451,8 +456,8 @@ export const StructureView: React.FC = () => {
                                     type="button"
                                     className={`text-[11px] px-2 py-0.5 rounded-lg flex items-center gap-1.5 transition-colors shrink-0 ${
                                       assignee
-                                        ? "bg-white/5 hover:bg-white/10 text-white/80"
-                                        : "bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20"
+                                        ? "bg-muted hover:bg-muted/80 text-foreground"
+                                        : "bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/20"
                                     }`}
                                     title="Clique para atribuir ou trocar responsável"
                                   >
@@ -462,21 +467,21 @@ export const StructureView: React.FC = () => {
                                     </span>
                                   </button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="start" className="bg-[#12161F] border-white/10 text-white text-xs w-56 p-1.5 rounded-xl shadow-xl">
-                                  <div className="px-2 py-1 text-[10px] uppercase font-bold text-white/40">
+                                <DropdownMenuContent align="start" className="bg-popover border-border text-popover-foreground text-xs w-56 p-1.5 rounded-xl shadow-xl">
+                                  <div className="px-2 py-1 text-[10px] uppercase font-bold text-muted-foreground">
                                     Atribuir Responsável
                                   </div>
-                                  <DropdownMenuSeparator className="bg-white/10" />
+                                  <DropdownMenuSeparator />
 
                                   <DropdownMenuItem
                                     onClick={() => assignTaskMemberAction(task.id, null)}
-                                    className="cursor-pointer text-white/50 hover:text-white"
+                                    className="cursor-pointer text-muted-foreground hover:text-foreground"
                                   >
-                                    <UserX className="h-3.5 w-3.5 mr-2 text-white/40" />
+                                    <UserX className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
                                     <span>Sem atribuição (Remover)</span>
                                   </DropdownMenuItem>
 
-                                  <DropdownMenuSeparator className="bg-white/10" />
+                                  <DropdownMenuSeparator />
 
                                   {members.map((m) => (
                                     <DropdownMenuItem
@@ -489,7 +494,7 @@ export const StructureView: React.FC = () => {
                                         <span className="truncate">{m.name}</span>
                                       </div>
                                       {task.assigneeId === m.id && (
-                                        <UserCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                                        <UserCheck className="h-3 w-3 text-emerald-500 shrink-0" />
                                       )}
                                     </DropdownMenuItem>
                                   ))}
@@ -497,7 +502,7 @@ export const StructureView: React.FC = () => {
                               </DropdownMenu>
 
                               {/* SEÇÃO 12: DURAÇÃO MANUAL (NÃO DEFINIDA se nulo) */}
-                              <span className="text-[10px] font-mono text-white/40 shrink-0 hidden sm:flex items-center gap-1">
+                              <span className="text-[10px] font-mono text-muted-foreground shrink-0 hidden sm:flex items-center gap-1">
                                 <Clock className="h-2.5 w-2.5" />
                                 {task.durationMinutes ? fmtMinutes(task.durationMinutes) : "Duração: Não definida"}
                               </span>
@@ -519,8 +524,8 @@ export const StructureView: React.FC = () => {
                                 }}
                                 className={`h-6 w-6 rounded-lg flex items-center justify-center text-xs transition-colors shrink-0 ${
                                   isTimerRunning
-                                    ? "bg-primary text-white shadow-sm shadow-primary/40 animate-pulse"
-                                    : "bg-white/5 hover:bg-white/10 text-white/40 hover:text-white"
+                                    ? "bg-primary text-primary-foreground shadow-sm shadow-primary/40 animate-pulse"
+                                    : "bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground"
                                 }`}
                                 title={
                                   isTimerRunning
@@ -536,7 +541,7 @@ export const StructureView: React.FC = () => {
                                 <button
                                   type="button"
                                   onClick={() => toggleTask(task.id)}
-                                  className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-mono bg-white/5 hover:bg-white/10 text-white/60 hover:text-white"
+                                  className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-mono bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground"
                                 >
                                   <CheckSquare className="h-3 w-3 text-primary" />
                                   <span>
@@ -552,11 +557,11 @@ export const StructureView: React.FC = () => {
 
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <button className="h-6 w-6 rounded hover:bg-white/10 flex items-center justify-center text-white/40 hover:text-white">
+                                  <button className="h-6 w-6 rounded hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground">
                                     <MoreVertical className="h-3 w-3" />
                                   </button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="bg-[#12161F] border-white/10 text-white text-xs w-40">
+                                <DropdownMenuContent align="end" className="bg-popover border-border text-popover-foreground text-xs w-40 shadow-lg">
                                   <DropdownMenuItem
                                     onClick={() => {
                                       setSelectedTaskId(task.id);
@@ -583,10 +588,10 @@ export const StructureView: React.FC = () => {
                                   >
                                     + Adicionar Subtarefa
                                   </DropdownMenuItem>
-                                  <DropdownMenuSeparator className="bg-white/10" />
+                                  <DropdownMenuSeparator />
                                   <DropdownMenuItem
                                     onClick={() => mutate((ws, ctx) => archiveTask(ws, ctx, task.id))}
-                                    className="text-red-400 focus:text-red-300 focus:bg-red-500/10 cursor-pointer"
+                                    className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
                                   >
                                     <Trash2 className="h-3 w-3 mr-2" />
                                     Excluir Tarefa
@@ -598,9 +603,9 @@ export const StructureView: React.FC = () => {
 
                           {/* Seção Expandida da Tarefa (Divulgação Progressiva) */}
                           {isTaskExpanded && (
-                            <div className="p-3 bg-black/40 border-t border-white/5 space-y-2 text-xs">
+                            <div className="p-3 bg-muted/30 border-t border-border space-y-2 text-xs">
                               {task.description && (
-                                <p className="text-white/60 text-[11px] leading-relaxed">
+                                <p className="text-muted-foreground text-[11px] leading-relaxed">
                                   {task.description}
                                 </p>
                               )}
@@ -610,7 +615,7 @@ export const StructureView: React.FC = () => {
                                 {subtasks.map((st) => (
                                   <div
                                     key={st.id}
-                                    className="flex items-center justify-between p-1.5 rounded-lg bg-white/[0.02] hover:bg-white/[0.05] text-[11px]"
+                                    className="flex items-center justify-between p-1.5 rounded-lg bg-card/60 hover:bg-card border border-border/50 text-[11px]"
                                   >
                                     <button
                                       type="button"
@@ -618,11 +623,11 @@ export const StructureView: React.FC = () => {
                                       className="flex items-center gap-2 text-left flex-1 min-w-0"
                                     >
                                       {st.done ? (
-                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                                       ) : (
-                                        <Circle className="h-3.5 w-3.5 text-white/30 shrink-0" />
+                                        <Circle className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
                                       )}
-                                      <span className={st.done ? "line-through text-white/40" : "text-white/80"}>
+                                      <span className={st.done ? "line-through text-muted-foreground" : "text-foreground"}>
                                         {st.title}
                                       </span>
                                     </button>
@@ -653,7 +658,7 @@ export const StructureView: React.FC = () => {
             }}
             variant="outline"
             size="sm"
-            className="text-xs bg-zinc-900/60 border-dashed border-white/10 hover:border-white/30 text-white/60 hover:text-white rounded-xl flex items-center gap-1.5 px-4 h-8"
+            className="text-xs bg-card border-dashed border-border hover:border-primary/40 text-muted-foreground hover:text-foreground rounded-xl flex items-center gap-1.5 px-4 h-8 shadow-xs"
           >
             <Plus className="h-3.5 w-3.5" />
             <span>Adicionar Nova Etapa</span>

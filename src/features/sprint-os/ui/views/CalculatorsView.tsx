@@ -75,11 +75,11 @@ export const CalculatorsView: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Sub-Tabs Selector */}
-      <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-zinc-900/40 border border-white/5 w-fit">
+      <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-card border border-border shadow-sm w-fit">
         <button
           onClick={() => setActiveTab("hours")}
           className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-            activeTab === "hours" ? "bg-primary text-white shadow-sm" : "text-white/60 hover:text-white"
+            activeTab === "hours" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
           }`}
         >
           ⏱️ Calculadora de Horas & Capacidade
@@ -87,7 +87,7 @@ export const CalculatorsView: React.FC = () => {
         <button
           onClick={() => setActiveTab("ads")}
           className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-            activeTab === "ads" ? "bg-primary text-white shadow-sm" : "text-white/60 hover:text-white"
+            activeTab === "ads" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
           }`}
         >
           💰 Calculadora Ads, ROI & ROAS
@@ -98,99 +98,99 @@ export const CalculatorsView: React.FC = () => {
       {activeTab === "hours" && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Inputs */}
-          <div className="lg:col-span-6 p-5 rounded-2xl bg-zinc-900/50 border border-white/5 space-y-4">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-white/70">
+          <div className="lg:col-span-6 p-5 rounded-2xl bg-card border border-border shadow-sm space-y-4">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
               Parâmetros da Operação
             </h4>
 
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div>
-                <label className="text-white/50 block mb-1">Tarefas Totais</label>
+                <label className="text-muted-foreground block mb-1">Tarefas Totais</label>
                 <Input
                   type="number"
                   value={hoursData.taskCount}
                   onChange={(e) => updateHoursCalcAction({ taskCount: Number(e.target.value) || 0 })}
-                  className="h-8 text-xs bg-black border-white/10 text-white rounded-xl"
+                  className="h-8 text-xs bg-background border-input text-foreground rounded-xl"
                 />
               </div>
               <div>
-                <label className="text-white/50 block mb-1">Tempo Médio/Tarefa (h)</label>
+                <label className="text-muted-foreground block mb-1">Tempo Médio/Tarefa (h)</label>
                 <Input
                   type="number"
                   step="0.5"
                   value={hoursData.avgHoursPerTask}
                   onChange={(e) => updateHoursCalcAction({ avgHoursPerTask: Number(e.target.value) || 0 })}
-                  className="h-8 text-xs bg-black border-white/10 text-white rounded-xl"
+                  className="h-8 text-xs bg-background border-input text-foreground rounded-xl"
                 />
               </div>
               <div>
-                <label className="text-white/50 block mb-1">Membros Disponíveis</label>
+                <label className="text-muted-foreground block mb-1">Membros Disponíveis</label>
                 <Input
                   type="number"
                   value={hoursData.membersAvailable}
                   onChange={(e) => updateHoursCalcAction({ membersAvailable: Number(e.target.value) || 1 })}
-                  className="h-8 text-xs bg-black border-white/10 text-white rounded-xl"
+                  className="h-8 text-xs bg-background border-input text-foreground rounded-xl"
                 />
               </div>
               <div>
-                <label className="text-white/50 block mb-1">Horas Úteis/Dia</label>
+                <label className="text-muted-foreground block mb-1">Horas Úteis/Dia</label>
                 <Input
                   type="number"
                   value={hoursData.hoursPerDay}
                   onChange={(e) => updateHoursCalcAction({ hoursPerDay: Number(e.target.value) || 8 })}
-                  className="h-8 text-xs bg-black border-white/10 text-white rounded-xl"
+                  className="h-8 text-xs bg-background border-input text-foreground rounded-xl"
                 />
               </div>
               <div>
-                <label className="text-white/50 block mb-1">Dias Úteis da Sprint</label>
+                <label className="text-muted-foreground block mb-1">Dias Úteis da Sprint</label>
                 <Input
                   type="number"
                   value={hoursData.businessDays}
                   onChange={(e) => updateHoursCalcAction({ businessDays: Number(e.target.value) || 10 })}
-                  className="h-8 text-xs bg-black border-white/10 text-white rounded-xl"
+                  className="h-8 text-xs bg-background border-input text-foreground rounded-xl"
                 />
               </div>
               <div>
-                <label className="text-white/50 block mb-1">Custo Médio/Hora (R$)</label>
+                <label className="text-muted-foreground block mb-1">Custo Médio/Hora (R$)</label>
                 <Input
                   type="number"
                   value={hoursData.hourlyRate}
                   onChange={(e) => updateHoursCalcAction({ hourlyRate: Number(e.target.value) || 0 })}
-                  className="h-8 text-xs bg-black border-white/10 text-white rounded-xl"
+                  className="h-8 text-xs bg-background border-input text-foreground rounded-xl"
                 />
               </div>
             </div>
           </div>
 
           {/* Resultados */}
-          <div className="lg:col-span-6 p-5 rounded-2xl bg-zinc-900/70 border border-white/5 flex flex-col justify-between space-y-4">
+          <div className="lg:col-span-6 p-5 rounded-2xl bg-card border border-border shadow-sm flex flex-col justify-between space-y-4">
             <h4 className="text-xs font-bold uppercase tracking-wider text-primary">
               Balanço e Estimativa de Capacidade
             </h4>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 rounded-xl bg-black/40 border border-white/5">
-                <span className="text-[11px] text-white/40 block">Esforço Total Estimado</span>
-                <span className="text-xl font-bold text-white font-mono">{totalEffortHours.toFixed(1)}h</span>
+              <div className="p-3 rounded-xl bg-muted/40 border border-border">
+                <span className="text-[11px] text-muted-foreground block">Esforço Total Estimado</span>
+                <span className="text-xl font-bold text-foreground font-mono">{totalEffortHours.toFixed(1)}h</span>
               </div>
-              <div className="p-3 rounded-xl bg-black/40 border border-white/5">
-                <span className="text-[11px] text-white/40 block">Capacidade Total Disponível</span>
-                <span className="text-xl font-bold text-emerald-400 font-mono">{totalCapacityHours.toFixed(1)}h</span>
+              <div className="p-3 rounded-xl bg-muted/40 border border-border">
+                <span className="text-[11px] text-muted-foreground block">Capacidade Total Disponível</span>
+                <span className="text-xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">{totalCapacityHours.toFixed(1)}h</span>
               </div>
-              <div className="p-3 rounded-xl bg-black/40 border border-white/5">
-                <span className="text-[11px] text-white/40 block">Dias Estimados Necessários</span>
-                <span className="text-xl font-bold text-white font-mono">{estimatedDays.toFixed(1)} dias</span>
+              <div className="p-3 rounded-xl bg-muted/40 border border-border">
+                <span className="text-[11px] text-muted-foreground block">Dias Estimados Necessários</span>
+                <span className="text-xl font-bold text-foreground font-mono">{estimatedDays.toFixed(1)} dias</span>
               </div>
-              <div className="p-3 rounded-xl bg-black/40 border border-white/5">
-                <span className="text-[11px] text-white/40 block">Saldo de Horas</span>
-                <span className={`text-xl font-bold font-mono ${effortSurplus > 0 ? "text-rose-400" : "text-emerald-400"}`}>
+              <div className="p-3 rounded-xl bg-muted/40 border border-border">
+                <span className="text-[11px] text-muted-foreground block">Saldo de Horas</span>
+                <span className={`text-xl font-bold font-mono ${effortSurplus > 0 ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"}`}>
                   {effortSurplus > 0 ? `+${effortSurplus.toFixed(1)}h (Gargalo)` : `${effortSurplus.toFixed(1)}h (Folga)`}
                 </span>
               </div>
             </div>
 
             <div className="p-3 rounded-xl bg-primary/10 border border-primary/20 text-xs flex items-center justify-between">
-              <span className="text-white/70">Custo Total Projetado de Mão de Obra:</span>
+              <span className="text-foreground">Custo Total Projetado de Mão de Obra:</span>
               <span className="font-bold font-mono text-primary text-base">
                 R$ {estimatedCost.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
               </span>
@@ -203,101 +203,101 @@ export const CalculatorsView: React.FC = () => {
       {activeTab === "ads" && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Inputs */}
-          <div className="lg:col-span-6 p-5 rounded-2xl bg-zinc-900/50 border border-white/5 space-y-4">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-white/70">
+          <div className="lg:col-span-6 p-5 rounded-2xl bg-card border border-border shadow-sm space-y-4">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
               Métricas e Orçamento de Mídia
             </h4>
 
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div>
-                <label className="text-white/50 block mb-1">Orçamento Diário (R$)</label>
+                <label className="text-muted-foreground block mb-1">Orçamento Diário (R$)</label>
                 <Input
                   type="number"
                   value={adsData.dailyBudget}
                   onChange={(e) => updateAdsCalcAction({ dailyBudget: Number(e.target.value) || 0 })}
-                  className="h-8 text-xs bg-black border-white/10 text-white rounded-xl"
+                  className="h-8 text-xs bg-background border-input text-foreground rounded-xl"
                 />
               </div>
               <div>
-                <label className="text-white/50 block mb-1">Dias de Campanha</label>
+                <label className="text-muted-foreground block mb-1">Dias de Campanha</label>
                 <Input
                   type="number"
                   value={adsData.campaignDays}
                   onChange={(e) => updateAdsCalcAction({ campaignDays: Number(e.target.value) || 1 })}
-                  className="h-8 text-xs bg-black border-white/10 text-white rounded-xl"
+                  className="h-8 text-xs bg-background border-input text-foreground rounded-xl"
                 />
               </div>
               <div>
-                <label className="text-white/50 block mb-1">CPL Médio (R$)</label>
+                <label className="text-muted-foreground block mb-1">CPL Médio (R$)</label>
                 <Input
                   type="number"
                   step="0.5"
                   value={adsData.cpl}
                   onChange={(e) => updateAdsCalcAction({ cpl: Number(e.target.value) || 1 })}
-                  className="h-8 text-xs bg-black border-white/10 text-white rounded-xl"
+                  className="h-8 text-xs bg-background border-input text-foreground rounded-xl"
                 />
               </div>
               <div>
-                <label className="text-white/50 block mb-1">Taxa de Conversão (%)</label>
+                <label className="text-muted-foreground block mb-1">Taxa de Conversão (%)</label>
                 <Input
                   type="number"
                   step="0.5"
                   value={adsData.conversionRate}
                   onChange={(e) => updateAdsCalcAction({ conversionRate: Number(e.target.value) || 0 })}
-                  className="h-8 text-xs bg-black border-white/10 text-white rounded-xl"
+                  className="h-8 text-xs bg-background border-input text-foreground rounded-xl"
                 />
               </div>
               <div>
-                <label className="text-white/50 block mb-1">Ticket Médio (R$)</label>
+                <label className="text-muted-foreground block mb-1">Ticket Médio (R$)</label>
                 <Input
                   type="number"
                   value={adsData.avgTicket}
                   onChange={(e) => updateAdsCalcAction({ avgTicket: Number(e.target.value) || 0 })}
-                  className="h-8 text-xs bg-black border-white/10 text-white rounded-xl"
+                  className="h-8 text-xs bg-background border-input text-foreground rounded-xl"
                 />
               </div>
               <div>
-                <label className="text-white/50 block mb-1">Receita Atribuída (R$)</label>
+                <label className="text-muted-foreground block mb-1">Receita Atribuída (R$)</label>
                 <Input
                   type="number"
                   value={adsData.attributedRevenue}
                   onChange={(e) => updateAdsCalcAction({ attributedRevenue: Number(e.target.value) || 0 })}
-                  className="h-8 text-xs bg-black border-white/10 text-white rounded-xl"
+                  className="h-8 text-xs bg-background border-input text-foreground rounded-xl"
                 />
               </div>
             </div>
           </div>
 
           {/* Resultados Projeções vs Reais */}
-          <div className="lg:col-span-6 p-5 rounded-2xl bg-zinc-900/70 border border-white/5 flex flex-col justify-between space-y-4">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400">
+          <div className="lg:col-span-6 p-5 rounded-2xl bg-card border border-border shadow-sm flex flex-col justify-between space-y-4">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
               Projeções de Performance Comercial
             </h4>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 rounded-xl bg-black/40 border border-white/5">
-                <span className="text-[11px] text-white/40 block">Leads Projetados</span>
-                <span className="text-xl font-bold text-white font-mono">{projectedLeads}</span>
+              <div className="p-3 rounded-xl bg-muted/40 border border-border">
+                <span className="text-[11px] text-muted-foreground block">Leads Projetados</span>
+                <span className="text-xl font-bold text-foreground font-mono">{projectedLeads}</span>
               </div>
-              <div className="p-3 rounded-xl bg-black/40 border border-white/5">
-                <span className="text-[11px] text-white/40 block">Vendas Projetadas</span>
-                <span className="text-xl font-bold text-emerald-400 font-mono">{projectedSales}</span>
+              <div className="p-3 rounded-xl bg-muted/40 border border-border">
+                <span className="text-[11px] text-muted-foreground block">Vendas Projetadas</span>
+                <span className="text-xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">{projectedSales}</span>
               </div>
-              <div className="p-3 rounded-xl bg-black/40 border border-white/5">
-                <span className="text-[11px] text-white/40 block">CPA Médio</span>
-                <span className="text-xl font-bold text-white font-mono">
+              <div className="p-3 rounded-xl bg-muted/40 border border-border">
+                <span className="text-[11px] text-muted-foreground block">CPA Médio</span>
+                <span className="text-xl font-bold text-foreground font-mono">
                   R$ {cpa.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                 </span>
               </div>
-              <div className="p-3 rounded-xl bg-black/40 border border-white/5">
-                <span className="text-[11px] text-white/40 block">ROAS Calculado</span>
+              <div className="p-3 rounded-xl bg-muted/40 border border-border">
+                <span className="text-[11px] text-muted-foreground block">ROAS Calculado</span>
                 <span className="text-xl font-bold text-primary font-mono">{roas.toFixed(2)}x</span>
               </div>
             </div>
 
             <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs flex items-center justify-between">
-              <span className="text-white/80">Retorno sobre Investimento (ROI):</span>
-              <span className="font-bold font-mono text-emerald-400 text-lg">
+              <span className="text-foreground">Retorno sobre Investimento (ROI):</span>
+              <span className="font-bold font-mono text-emerald-600 dark:text-emerald-400 text-lg">
                 {roi > 0 ? `+${roi.toFixed(1)}%` : `${roi.toFixed(1)}%`}
               </span>
             </div>

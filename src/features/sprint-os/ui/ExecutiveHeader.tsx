@@ -99,21 +99,21 @@ export const ExecutiveHeader: React.FC = () => {
   };
 
   return (
-    <header className="border-b border-white/5 bg-[#0B0E14]/95 backdrop-blur-xl px-6 py-3.5 sticky top-0 z-30 flex items-center justify-between gap-4">
+    <header className="border-b border-border bg-card/80 backdrop-blur-xl px-6 py-3.5 sticky top-0 z-30 flex items-center justify-between gap-4 text-card-foreground">
       {/* Lado Esquerdo: Voltar + Títulos Editáveis */}
       <div className="flex items-center gap-3.5 min-w-0">
         <Button
           variant="ghost"
           size="sm"
           onClick={closeWorkspace}
-          className="h-8 px-2 text-white/50 hover:text-white hover:bg-white/10 rounded-xl flex items-center gap-1.5 shrink-0"
+          className="h-8 px-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl flex items-center gap-1.5 shrink-0"
           title="Voltar para a lista de cronogramas"
         >
           <ArrowLeft className="h-4 w-4" />
           <span className="text-xs font-medium hidden sm:inline">Cronogramas</span>
         </Button>
 
-        <div className="h-4 w-[1px] bg-white/10 shrink-0" />
+        <div className="h-4 w-[1px] bg-border shrink-0" />
 
         {isEditingTitle ? (
           <div className="flex items-center gap-2">
@@ -121,19 +121,19 @@ export const ExecutiveHeader: React.FC = () => {
               value={editedProjectName}
               onChange={(e) => setEditedProjectName(e.target.value)}
               placeholder="Projeto"
-              className="h-7 text-xs bg-black border-white/20 text-white rounded-lg w-36"
+              className="h-7 text-xs bg-background border-input text-foreground rounded-lg w-36"
             />
-            <span className="text-white/40 text-xs">/</span>
+            <span className="text-muted-foreground text-xs">/</span>
             <Input
               value={editedSprintName}
               onChange={(e) => setEditedSprintName(e.target.value)}
               placeholder="Nome do Cronograma"
-              className="h-7 text-xs bg-black border-white/20 text-white rounded-lg w-48 font-bold"
+              className="h-7 text-xs bg-background border-input text-foreground rounded-lg w-48 font-bold"
             />
             <Button
               size="icon"
               onClick={handleSaveTitle}
-              className="h-7 w-7 bg-primary text-white rounded-lg"
+              className="h-7 w-7 bg-primary text-primary-foreground rounded-lg"
             >
               <Check className="h-3.5 w-3.5" />
             </Button>
@@ -145,20 +145,20 @@ export const ExecutiveHeader: React.FC = () => {
             title="Clique para editar os nomes"
           >
             <div className="truncate">
-              <span className="text-xs text-white/40 font-medium mr-1.5 truncate">
-                {workspace.project.name} <span className="text-white/20">/</span>
+              <span className="text-xs text-muted-foreground font-medium mr-1.5 truncate">
+                {workspace.project.name} <span className="text-muted-foreground/40">/</span>
               </span>
-              <span className="text-sm font-bold text-white tracking-tight">
+              <span className="text-sm font-bold text-foreground tracking-tight">
                 {activeSprint?.name || "Cronograma"}
               </span>
             </div>
-            <Edit2 className="h-3 w-3 text-white/20 group-hover:text-primary transition-colors shrink-0" />
+            <Edit2 className="h-3 w-3 text-muted-foreground/40 group-hover:text-primary transition-colors shrink-0" />
             <Badge
               variant="outline"
               className={`text-[9px] font-semibold px-2 py-0 rounded-full shrink-0 ml-1 ${
                 isActivated
-                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                  : "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                  : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
               }`}
             >
               {isActivated ? "Ativa" : "Rascunho"}
@@ -170,15 +170,15 @@ export const ExecutiveHeader: React.FC = () => {
       {/* Lado Direito: Modos de Operação + Atualizar Prazos + Menu "••• Mais opções" */}
       <div className="flex items-center gap-2.5 shrink-0">
         {/* Alternador de Modos (Linear/Pill Style) */}
-        <div className="hidden md:flex items-center p-0.5 rounded-xl bg-zinc-900 border border-white/10 text-[11px]">
+        <div className="hidden md:flex items-center p-0.5 rounded-xl bg-muted border border-border text-[11px]">
           {(["organize", "execute", "plan"] as const).map((mode) => (
             <button
               key={mode}
               onClick={() => setInteractionMode(mode)}
               className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
                 interactionMode === mode
-                  ? "bg-white/10 text-white font-bold shadow-sm"
-                  : "text-white/40 hover:text-white"
+                  ? "bg-background text-foreground font-bold shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {mode === "organize" ? "Organização" : mode === "execute" ? "Execução" : "Planejamento"}
@@ -190,7 +190,7 @@ export const ExecutiveHeader: React.FC = () => {
         <Button
           onClick={openDeadlineUpdatePreview}
           size="sm"
-          className="h-8 text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-3 rounded-xl flex items-center gap-1.5 shadow-sm shadow-indigo-600/20"
+          className="h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-3 rounded-xl flex items-center gap-1.5 shadow-sm"
         >
           <RefreshCw className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">Atualizar Prazos</span>
@@ -202,12 +202,12 @@ export const ExecutiveHeader: React.FC = () => {
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-white/60 hover:text-white hover:bg-white/10 rounded-xl"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl"
             >
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="bg-[#12161F] border-white/10 text-white text-xs w-52 p-1.5 rounded-2xl shadow-xl">
+          <DropdownMenuContent align="end" className="bg-popover border-border text-popover-foreground text-xs w-52 p-1.5 rounded-2xl shadow-xl">
             {!isActivated && (
               <DropdownMenuItem
                 onClick={() => setIsActivateModalOpen(true)}
@@ -219,16 +219,16 @@ export const ExecutiveHeader: React.FC = () => {
             )}
 
             <DropdownMenuItem onClick={() => setIsReportModalOpen(true)} className="cursor-pointer">
-              <FileText className="h-3.5 w-3.5 mr-2 text-white/60" />
+              <FileText className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
               Relatórios Executivos
             </DropdownMenuItem>
 
             <DropdownMenuItem onClick={() => setIsShareModalOpen(true)} className="cursor-pointer">
-              <Share2 className="h-3.5 w-3.5 mr-2 text-white/60" />
+              <Share2 className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
               Compartilhar Link Público
             </DropdownMenuItem>
 
-            <DropdownMenuSeparator className="bg-white/10 my-1" />
+            <DropdownMenuSeparator />
 
             <DropdownMenuItem
               onClick={() => {
@@ -237,7 +237,7 @@ export const ExecutiveHeader: React.FC = () => {
               }}
               className="cursor-pointer"
             >
-              <FolderArchive className="h-3.5 w-3.5 mr-2 text-white/60" />
+              <FolderArchive className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
               Transformar em Template
             </DropdownMenuItem>
 
@@ -245,12 +245,12 @@ export const ExecutiveHeader: React.FC = () => {
               onClick={() => duplicateCurrentWorkspace(`Cópia de ${workspace.project.name}`, activeCompanyId)}
               className="cursor-pointer"
             >
-              <Copy className="h-3.5 w-3.5 mr-2 text-white/60" />
+              <Copy className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
               Duplicar Cronograma
             </DropdownMenuItem>
 
             <DropdownMenuItem onClick={handleExportJson} className="cursor-pointer">
-              <Download className="h-3.5 w-3.5 mr-2 text-white/60" />
+              <Download className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
               Exportar Backup JSON
             </DropdownMenuItem>
           </DropdownMenuContent>

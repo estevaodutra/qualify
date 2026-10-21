@@ -80,7 +80,7 @@ export const TemplatesModal: React.FC = () => {
 
   return (
     <Dialog open={isTemplatesModalOpen} onOpenChange={setIsTemplatesModalOpen}>
-      <DialogContent className="max-w-md bg-zinc-950 border-white/10 text-white">
+      <DialogContent className="max-w-md bg-card border border-border text-card-foreground shadow-2xl">
         <DialogHeader>
           <div className="flex items-center gap-2 text-violet-400 mb-1">
             <FolderArchive className="h-4 w-4" />
@@ -88,10 +88,10 @@ export const TemplatesModal: React.FC = () => {
               Templates & Portabilidade
             </span>
           </div>
-          <DialogTitle className="text-base font-black text-white">
+          <DialogTitle className="text-base font-black text-foreground">
             Gerenciamento de Templates e Dados
           </DialogTitle>
-          <DialogDescription className="text-xs text-white/50">
+          <DialogDescription className="text-xs text-muted-foreground">
             Exporte ou importe a estrutura completa da sua implementação em formato JSON aberto.
           </DialogDescription>
         </DialogHeader>
@@ -100,11 +100,11 @@ export const TemplatesModal: React.FC = () => {
           {/* Exportar JSON */}
           <div className="p-3.5 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between">
             <div>
-              <div className="text-xs font-bold text-white flex items-center gap-1.5">
+              <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
                 <Download className="h-3.5 w-3.5 text-primary" />
                 Exportar Workspace (JSON)
               </div>
-              <div className="text-[11px] text-white/40">Download do backup completo</div>
+              <div className="text-[11px] text-muted-foreground">Download do backup completo</div>
             </div>
             <Button onClick={handleExportJson} size="sm" className="h-8 text-xs bg-primary font-bold">
               Exportar
@@ -114,11 +114,11 @@ export const TemplatesModal: React.FC = () => {
           {/* Importar JSON */}
           <div className="p-3.5 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between">
             <div>
-              <div className="text-xs font-bold text-white flex items-center gap-1.5">
+              <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
                 <Upload className="h-3.5 w-3.5 text-indigo-400" />
                 Importar Workspace (JSON)
               </div>
-              <div className="text-[11px] text-white/40">Carregar arquivo existente</div>
+              <div className="text-[11px] text-muted-foreground">Carregar arquivo existente</div>
             </div>
             <div>
               <input
@@ -132,7 +132,7 @@ export const TemplatesModal: React.FC = () => {
                 onClick={() => fileInputRef.current?.click()}
                 size="sm"
                 variant="outline"
-                className="h-8 text-xs border-white/10 text-white font-bold"
+                className="h-8 text-xs border-white/10 text-foreground font-bold"
               >
                 Importar
               </Button>

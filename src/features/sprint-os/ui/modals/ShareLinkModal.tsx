@@ -49,7 +49,7 @@ export const ShareLinkModal: React.FC = () => {
 
   return (
     <Dialog open={isShareModalOpen} onOpenChange={setIsShareModalOpen}>
-      <DialogContent className="max-w-md bg-zinc-950 border-white/10 text-white">
+      <DialogContent className="max-w-md bg-card border border-border text-card-foreground shadow-2xl">
         <DialogHeader>
           <div className="flex items-center gap-2 text-cyan-400 mb-1">
             <Share2 className="h-4 w-4" />
@@ -57,10 +57,10 @@ export const ShareLinkModal: React.FC = () => {
               Acesso Externo
             </span>
           </div>
-          <DialogTitle className="text-base font-black text-white">
+          <DialogTitle className="text-base font-black text-foreground">
             Compartilhar Cronograma com Externos
           </DialogTitle>
-          <DialogDescription className="text-xs text-white/50">
+          <DialogDescription className="text-xs text-muted-foreground">
             Gera um link de visualização somente-leitura. Dados financeiros confidenciais são removidos automaticamente.
           </DialogDescription>
         </DialogHeader>
@@ -72,7 +72,7 @@ export const ShareLinkModal: React.FC = () => {
                 <Input
                   value={shareUrl}
                   readOnly
-                  className="bg-black border-white/10 text-xs text-white"
+                  className="bg-background border-input text-xs text-foreground"
                 />
                 <Button onClick={handleCopy} size="sm" className="bg-primary font-bold text-xs gap-1.5 shrink-0">
                   <Copy className="h-3.5 w-3.5" />
@@ -80,7 +80,7 @@ export const ShareLinkModal: React.FC = () => {
                 </Button>
               </div>
 
-              <div className="text-[11px] text-white/40 flex items-center gap-1">
+              <div className="text-[11px] text-muted-foreground flex items-center gap-1">
                 <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
                 <span>Link ativo e acessível sem necessidade de login.</span>
               </div>
@@ -89,7 +89,7 @@ export const ShareLinkModal: React.FC = () => {
             <Button
               onClick={handleGenerate}
               disabled={isGenerating}
-              className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs gap-1.5 shadow-lg"
+              className="w-full bg-cyan-600 hover:bg-cyan-500 text-foreground font-bold text-xs gap-1.5 shadow-lg"
             >
               <Share2 className="h-3.5 w-3.5" />
               <span>{isGenerating ? "Gerando link..." : "Gerar Link de Visualização"}</span>

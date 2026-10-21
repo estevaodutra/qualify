@@ -90,12 +90,12 @@ _Relatório emitido via Sprint OS — Cockpit de Implementação_`;
 
   return (
     <Dialog open={isReportModalOpen} onOpenChange={setIsReportModalOpen}>
-      <DialogContent className="max-w-3xl bg-zinc-950 border-white/10 text-white max-h-[85vh] flex flex-col">
+      <DialogContent className="max-w-3xl bg-card border border-border text-card-foreground shadow-2xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-amber-400">
               <FileText className="h-4 w-4" />
-              <DialogTitle className="text-base font-black text-white">
+              <DialogTitle className="text-base font-black text-foreground">
                 Relatórios Canônicos de Execução
               </DialogTitle>
             </div>
@@ -104,7 +104,7 @@ _Relatório emitido via Sprint OS — Cockpit de Implementação_`;
 
         <div className="flex-1 overflow-y-auto pt-2">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="bg-white/5 border border-white/10 p-1 rounded-xl mb-4">
+            <TabsList className="bg-muted border border-border p-1 rounded-xl mb-4">
               <TabsTrigger value="whatsapp" className="text-xs font-bold gap-1.5">
                 <Send className="h-3 w-3 text-emerald-400" />
                 <span>Resumo WhatsApp</span>
@@ -122,12 +122,12 @@ _Relatório emitido via Sprint OS — Cockpit de Implementação_`;
 
             {/* TAB: WHATSAPP */}
             <TabsContent value="whatsapp" className="space-y-3">
-              <div className="flex items-center justify-between text-xs text-white/50">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>Texto pré-formatado pronto para colar no grupo do cliente ou time:</span>
                 <Button
                   onClick={() => copyToClipboard(whatsappReport)}
                   size="sm"
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs gap-1.5 h-7"
+                  className="bg-emerald-600 hover:bg-emerald-500 text-foreground font-bold text-xs gap-1.5 h-7"
                 >
                   <Copy className="h-3 w-3" />
                   <span>Copiar Mensagem</span>
@@ -138,31 +138,31 @@ _Relatório emitido via Sprint OS — Cockpit de Implementação_`;
                 value={whatsappReport}
                 readOnly
                 rows={14}
-                className="bg-black/60 border-white/10 text-emerald-400 font-mono text-xs leading-relaxed"
+                className="bg-muted/40 border-border text-emerald-600 dark:text-emerald-400 font-mono text-xs leading-relaxed"
               />
             </TabsContent>
 
             {/* TAB: EXECUTIVO */}
-            <TabsContent value="executive" className="space-y-4 text-xs text-white/80">
-              <div className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-3">
-                <h3 className="text-sm font-bold text-white border-b border-white/10 pb-2">
+            <TabsContent value="executive" className="space-y-4 text-xs text-foreground/80">
+              <div className="p-4 rounded-xl bg-muted border border-border space-y-3">
+                <h3 className="text-sm font-bold text-foreground border-b border-border pb-2">
                   Relatório Executivo de Status
                 </h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <span className="text-white/40 block">Projeto / Cliente:</span>
-                    <strong className="text-white">{workspace.project.name} ({workspace.project.client})</strong>
+                    <span className="text-muted-foreground block">Projeto / Cliente:</span>
+                    <strong className="text-foreground">{workspace.project.name} ({workspace.project.client})</strong>
                   </div>
                   <div>
-                    <span className="text-white/40 block">Progresso Físico:</span>
+                    <span className="text-muted-foreground block">Progresso Físico:</span>
                     <strong className="text-primary">{progress.taskProgressPct}% concluído</strong>
                   </div>
                   <div>
-                    <span className="text-white/40 block">Entregas Finalizadas:</span>
+                    <span className="text-muted-foreground block">Entregas Finalizadas:</span>
                     <strong>{progress.tasksDone} de {progress.tasksTotal} tarefas</strong>
                   </div>
                   <div>
-                    <span className="text-white/40 block">Margem Bruta Estimada:</span>
+                    <span className="text-muted-foreground block">Margem Bruta Estimada:</span>
                     <strong className="text-emerald-400">{fin.projectedGrossMarginPct}%</strong>
                   </div>
                 </div>
@@ -172,17 +172,17 @@ _Relatório emitido via Sprint OS — Cockpit de Implementação_`;
             {/* TAB: OPERACIONAL */}
             <TabsContent value="operational" className="space-y-4 text-xs">
               <div className="space-y-3">
-                <div className="p-3 rounded-xl bg-white/5 border border-white/5">
-                  <h4 className="font-bold text-white mb-1">1. Entregas Concluídas</h4>
-                  <ul className="list-disc pl-5 text-white/70 space-y-0.5">
+                <div className="p-3 rounded-xl bg-white/5 border border-border">
+                  <h4 className="font-bold text-foreground mb-1">1. Entregas Concluídas</h4>
+                  <ul className="list-disc pl-5 text-foreground/70 space-y-0.5">
                     {doneTasks.map((t) => (
                       <li key={t.id}>{t.title}</li>
                     ))}
                   </ul>
                 </div>
 
-                <div className="p-3 rounded-xl bg-white/5 border border-white/5">
-                  <h4 className="font-bold text-white mb-1">2. Pendências e Bloqueios</h4>
+                <div className="p-3 rounded-xl bg-white/5 border border-border">
+                  <h4 className="font-bold text-foreground mb-1">2. Pendências e Bloqueios</h4>
                   {blockedTasks.length > 0 ? (
                     <ul className="list-disc pl-5 text-rose-300 space-y-0.5">
                       {blockedTasks.map((t) => (
@@ -190,7 +190,7 @@ _Relatório emitido via Sprint OS — Cockpit de Implementação_`;
                       ))}
                     </ul>
                   ) : (
-                    <span className="text-white/40">Nenhum bloqueio registrado.</span>
+                    <span className="text-muted-foreground">Nenhum bloqueio registrado.</span>
                   )}
                 </div>
               </div>
@@ -203,7 +203,7 @@ _Relatório emitido via Sprint OS — Cockpit de Implementação_`;
                   onClick={() => copyToClipboard(JSON.stringify({ progress, financials: fin, doneTasks, blockedTasks }, null, 2))}
                   size="sm"
                   variant="outline"
-                  className="h-7 text-xs border-white/10 text-white gap-1.5"
+                  className="h-7 text-xs border-border text-foreground gap-1.5"
                 >
                   <Copy className="h-3 w-3" />
                   <span>Copiar JSON</span>
@@ -213,7 +213,7 @@ _Relatório emitido via Sprint OS — Cockpit de Implementação_`;
                 value={JSON.stringify({ progress, financials: fin, doneTasks, blockedTasks }, null, 2)}
                 readOnly
                 rows={12}
-                className="bg-black border-white/10 text-white/70 font-mono text-[11px]"
+                className="bg-muted/20 border-border text-foreground/70 font-mono text-[11px]"
               />
             </TabsContent>
           </Tabs>

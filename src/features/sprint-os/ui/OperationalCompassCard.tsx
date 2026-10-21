@@ -47,22 +47,22 @@ export const OperationalCompassCard: React.FC = () => {
   const IconComponent = cfg.icon;
 
   return (
-    <div className="rounded-2xl p-4 bg-zinc-900/60 border border-white/5 backdrop-blur-xl transition-all">
+    <div className="rounded-2xl p-4 bg-card border border-border text-card-foreground shadow-sm transition-all">
       {/* Linha Compacta Principal */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
-          <div className="h-7 w-7 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+          <div className="h-7 w-7 rounded-lg bg-muted flex items-center justify-center shrink-0">
             <IconComponent className={`h-3.5 w-3.5 ${cfg.color}`} />
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 min-w-0">
-            <span className="text-[11px] font-bold text-white/50 uppercase tracking-wider shrink-0">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider shrink-0">
               Bússola:
             </span>
             <Badge variant="outline" className={`text-[10px] font-black tracking-wider ${cfg.bg} ${cfg.color} shrink-0`}>
               {cfg.label}
             </Badge>
-            <span className="text-xs text-white/70 truncate hidden md:inline">
+            <span className="text-xs text-foreground/80 truncate hidden md:inline">
               {compass.shortReason}
             </span>
           </div>
@@ -70,7 +70,7 @@ export const OperationalCompassCard: React.FC = () => {
 
         <div className="flex items-center gap-2 shrink-0">
           <div className="text-xs text-right hidden sm:block">
-            <span className="text-white/40 text-[11px] mr-1">Próxima ação:</span>
+            <span className="text-muted-foreground text-[11px] mr-1">Próxima ação:</span>
             <span className="text-primary font-bold text-xs">{compass.recommendedAction}</span>
           </div>
 
@@ -78,7 +78,7 @@ export const OperationalCompassCard: React.FC = () => {
             variant="ghost"
             size="icon"
             onClick={() => setIsExpanded(!isExpanded)}
-            className="h-7 w-7 text-white/40 hover:text-white rounded-lg"
+            className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg"
             title={isExpanded ? "Recolher Bússola" : "Expandir Detalhes"}
           >
             {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -88,11 +88,11 @@ export const OperationalCompassCard: React.FC = () => {
 
       {/* Conteúdo Expandido (Sob Demanda) */}
       {isExpanded && (
-        <div className="mt-3 pt-3 border-t border-white/5 space-y-2 text-xs text-white/70">
-          <p className="leading-relaxed text-white/80">{compass.shortReason}</p>
-          <div className="p-2.5 rounded-xl bg-black/40 border border-white/5 text-[11px] space-y-1">
-            <div className="text-white/40 font-mono">DADOS QUE SUSTENTAM O DIAGNÓSTICO:</div>
-            <div className="text-white/70">{compass.supportingData}</div>
+        <div className="mt-3 pt-3 border-t border-border space-y-2 text-xs text-muted-foreground">
+          <p className="leading-relaxed text-foreground/90">{compass.shortReason}</p>
+          <div className="p-2.5 rounded-xl bg-muted/40 border border-border text-[11px] space-y-1">
+            <div className="text-muted-foreground font-mono">DADOS QUE SUSTENTAM O DIAGNÓSTICO:</div>
+            <div className="text-foreground/80">{compass.supportingData}</div>
           </div>
         </div>
       )}

@@ -61,14 +61,14 @@ export const CreateScheduleModal: React.FC = () => {
 
   return (
     <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-      <DialogContent className="bg-[#12161F] border border-white/10 text-white max-w-lg p-6 rounded-3xl">
+      <DialogContent className="bg-card border border-border text-card-foreground shadow-2xl max-w-lg p-6 rounded-3xl">
         <DialogHeader>
           <div className="flex items-center gap-2 text-primary mb-1">
             <Rocket className="h-4 w-4" />
             <span className="text-[11px] font-bold uppercase tracking-wider">Sprint OS</span>
           </div>
-          <DialogTitle className="text-lg font-bold text-white">Criar Novo Cronograma</DialogTitle>
-          <p className="text-xs text-white/50">
+          <DialogTitle className="text-lg font-bold text-foreground">Criar Novo Cronograma</DialogTitle>
+          <p className="text-xs text-muted-foreground">
             Escolha se deseja começar uma estrutura do zero ou acelerar com um modelo pronto.
           </p>
         </DialogHeader>
@@ -80,16 +80,16 @@ export const CreateScheduleModal: React.FC = () => {
             onClick={() => setMode("blank")}
             className={`p-3.5 rounded-2xl border text-left transition-all ${
               mode === "blank"
-                ? "bg-primary/10 border-primary text-white ring-1 ring-primary/40 shadow-sm"
-                : "bg-zinc-900/60 border-white/5 text-white/60 hover:border-white/15"
+                ? "bg-primary/10 border-primary text-foreground ring-1 ring-primary/40 shadow-sm"
+                : "bg-muted/40 border-border text-muted-foreground hover:border-white/15"
             }`}
           >
             <div className="flex items-center justify-between mb-1.5">
-              <FilePlus className={`h-4 w-4 ${mode === "blank" ? "text-primary" : "text-white/40"}`} />
+              <FilePlus className={`h-4 w-4 ${mode === "blank" ? "text-primary" : "text-muted-foreground"}`} />
               {mode === "blank" && <CheckCircle2 className="h-3.5 w-3.5 text-primary" />}
             </div>
-            <div className="text-xs font-bold text-white">Em Branco</div>
-            <div className="text-[11px] text-white/40 mt-0.5 leading-tight">
+            <div className="text-xs font-bold text-foreground">Em Branco</div>
+            <div className="text-[11px] text-muted-foreground mt-0.5 leading-tight">
               100% limpo, sem tarefas ou etapas iniciais.
             </div>
           </button>
@@ -99,16 +99,16 @@ export const CreateScheduleModal: React.FC = () => {
             onClick={() => setMode("template")}
             className={`p-3.5 rounded-2xl border text-left transition-all ${
               mode === "template"
-                ? "bg-primary/10 border-primary text-white ring-1 ring-primary/40 shadow-sm"
-                : "bg-zinc-900/60 border-white/5 text-white/60 hover:border-white/15"
+                ? "bg-primary/10 border-primary text-foreground ring-1 ring-primary/40 shadow-sm"
+                : "bg-muted/40 border-border text-muted-foreground hover:border-white/15"
             }`}
           >
             <div className="flex items-center justify-between mb-1.5">
-              <Sparkles className={`h-4 w-4 ${mode === "template" ? "text-primary" : "text-white/40"}`} />
+              <Sparkles className={`h-4 w-4 ${mode === "template" ? "text-primary" : "text-muted-foreground"}`} />
               {mode === "template" && <CheckCircle2 className="h-3.5 w-3.5 text-primary" />}
             </div>
-            <div className="text-xs font-bold text-white">Utilizar Template</div>
-            <div className="text-[11px] text-white/40 mt-0.5 leading-tight">
+            <div className="text-xs font-bold text-foreground">Utilizar Template</div>
+            <div className="text-[11px] text-muted-foreground mt-0.5 leading-tight">
               Importa estrutura pronta (ex: Sprint 10 Dias).
             </div>
           </button>
@@ -117,11 +117,11 @@ export const CreateScheduleModal: React.FC = () => {
         <form onSubmit={handleSubmit} className="space-y-4">
           {mode === "template" && (
             <div className="space-y-1.5">
-              <Label className="text-xs text-white/70">Selecionar Modelo</Label>
+              <Label className="text-xs text-muted-foreground">Selecionar Modelo</Label>
               <select
                 value={selectedTemplateId}
                 onChange={(e) => setSelectedTemplateId(e.target.value)}
-                className="w-full h-9 px-3 rounded-xl bg-black border border-white/10 text-white text-xs focus:outline-none focus:border-primary"
+                className="w-full h-9 px-3 rounded-xl bg-background border-input text-foreground text-xs focus:outline-none focus:border-primary"
               >
                 {templatesList.map((tpl) => (
                   <option key={tpl.id} value={tpl.id}>
@@ -133,23 +133,23 @@ export const CreateScheduleModal: React.FC = () => {
           )}
 
           <div className="space-y-1.5">
-            <Label className="text-xs text-white/70">Nome do Cronograma / Sprint</Label>
+            <Label className="text-xs text-muted-foreground">Nome do Cronograma / Sprint</Label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ex: Colocar a Máquina para Rodar"
-              className="h-9 text-xs bg-black border-white/10 text-white rounded-xl"
+              className="h-9 text-xs bg-background border-input text-foreground rounded-xl"
               required
             />
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs text-white/70">Projeto / Cliente</Label>
+            <Label className="text-xs text-muted-foreground">Projeto / Cliente</Label>
             <Input
               value={client}
               onChange={(e) => setClient(e.target.value)}
               placeholder="Ex: Percurso da Vida — Pablo e Flávia"
-              className="h-9 text-xs bg-black border-white/10 text-white rounded-xl"
+              className="h-9 text-xs bg-background border-input text-foreground rounded-xl"
             />
           </div>
 
@@ -158,14 +158,14 @@ export const CreateScheduleModal: React.FC = () => {
               type="button"
               variant="ghost"
               onClick={() => setIsCreateModalOpen(false)}
-              className="text-xs text-white/50 hover:text-white"
+              className="text-xs text-muted-foreground hover:text-foreground"
             >
               Cancelar
             </Button>
             <Button
               type="submit"
               disabled={isSubmitting || !name.trim()}
-              className="text-xs bg-primary hover:bg-primary/90 text-white font-medium px-4 h-9 rounded-xl flex items-center gap-1.5"
+              className="text-xs bg-primary hover:bg-primary/90 text-foreground font-medium px-4 h-9 rounded-xl flex items-center gap-1.5"
             >
               <span>{mode === "blank" ? "Criar Cronograma em Branco" : "Criar a partir do Template"}</span>
               <ArrowRight className="h-3.5 w-3.5" />

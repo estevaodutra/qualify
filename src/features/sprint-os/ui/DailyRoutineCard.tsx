@@ -77,16 +77,16 @@ export const DailyRoutineCard: React.FC = () => {
   };
 
   return (
-    <div className="rounded-2xl p-4 bg-zinc-900/60 border border-white/5 backdrop-blur-xl transition-all">
+    <div className="rounded-2xl p-4 bg-card border border-border text-card-foreground shadow-sm transition-all">
       {/* Linha Compacta Principal */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
-          <div className="h-7 w-7 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+          <div className="h-7 w-7 rounded-lg bg-muted flex items-center justify-center shrink-0">
             <RotateCcw className="h-3.5 w-3.5 text-primary" />
           </div>
 
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-xs font-bold text-white uppercase tracking-wider">
+            <span className="text-xs font-bold text-foreground uppercase tracking-wider">
               Rotina Diária
             </span>
             <span className="text-xs font-mono font-bold text-primary">
@@ -96,18 +96,18 @@ export const DailyRoutineCard: React.FC = () => {
 
           {/* Barra de Progresso Simples */}
           <div className="w-24 hidden sm:block">
-            <Progress value={pct} className="h-1.5 bg-white/10" />
+            <Progress value={pct} className="h-1.5 bg-muted" />
           </div>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[11px] font-mono text-white/50">{pct}% hoje</span>
+          <span className="text-[11px] font-mono text-muted-foreground">{pct}% hoje</span>
 
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setIsExpanded(!isExpanded)}
-            className="h-7 w-7 text-white/40 hover:text-white rounded-lg"
+            className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-lg"
             title={isExpanded ? "Recolher Rotina" : "Expandir Rotina"}
           >
             {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -117,9 +117,9 @@ export const DailyRoutineCard: React.FC = () => {
 
       {/* Conteúdo Expandido (Sob Demanda) */}
       {isExpanded && (
-        <div className="mt-3 pt-3 border-t border-white/5 space-y-2.5">
+        <div className="mt-3 pt-3 border-t border-border space-y-2.5">
           {routines.length === 0 ? (
-            <div className="text-xs text-white/40 py-2 text-center">
+            <div className="text-xs text-muted-foreground py-2 text-center">
               Nenhuma ação de rotina diária configurada.
             </div>
           ) : (
@@ -129,7 +129,7 @@ export const DailyRoutineCard: React.FC = () => {
                 return (
                   <div
                     key={routine.id}
-                    className="group flex items-center justify-between p-2 rounded-xl bg-black/30 hover:bg-black/50 border border-white/5 text-xs transition-colors"
+                    className="group flex items-center justify-between p-2 rounded-xl bg-muted/40 hover:bg-muted/70 border border-border text-xs transition-colors"
                   >
                     <button
                       type="button"
@@ -137,24 +137,24 @@ export const DailyRoutineCard: React.FC = () => {
                       className="flex items-center gap-2 text-left flex-1 min-w-0"
                     >
                       {isDone ? (
-                        <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                       ) : (
-                        <Circle className="h-4 w-4 text-white/30 group-hover:text-white/60 shrink-0" />
+                        <Circle className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground shrink-0" />
                       )}
-                      <span className={`truncate ${isDone ? "line-through text-white/40" : "text-white/90"}`}>
+                      <span className={`truncate ${isDone ? "line-through text-muted-foreground" : "text-foreground"}`}>
                         {routine.title}
                       </span>
                     </button>
 
                     <div className="flex items-center gap-2 shrink-0">
                       {routine.time && (
-                        <span className="text-[10px] text-white/40 font-mono">
+                        <span className="text-[10px] text-muted-foreground font-mono">
                           {routine.time}
                         </span>
                       )}
                       <button
                         onClick={() => handleDelete(routine.id)}
-                        className="opacity-0 group-hover:opacity-100 text-white/30 hover:text-red-400 transition-opacity p-0.5"
+                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity p-0.5"
                       >
                         <Trash2 className="h-3 w-3" />
                       </button>
@@ -172,10 +172,10 @@ export const DailyRoutineCard: React.FC = () => {
                 value={newActionTitle}
                 onChange={(e) => setNewActionTitle(e.target.value)}
                 placeholder="Nome da rotina diária..."
-                className="h-7 text-xs bg-black border-white/10 text-white rounded-lg flex-1"
+                className="h-7 text-xs bg-background border-input text-foreground rounded-lg flex-1"
                 autoFocus
               />
-              <Button type="submit" size="sm" className="h-7 text-[11px] bg-primary text-white rounded-lg px-2.5">
+              <Button type="submit" size="sm" className="h-7 text-[11px] bg-primary text-primary-foreground rounded-lg px-2.5">
                 Salvar
               </Button>
               <Button
@@ -183,7 +183,7 @@ export const DailyRoutineCard: React.FC = () => {
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowAddForm(false)}
-                className="h-7 text-[11px] text-white/50"
+                className="h-7 text-[11px] text-muted-foreground"
               >
                 Cancelar
               </Button>
@@ -194,7 +194,7 @@ export const DailyRoutineCard: React.FC = () => {
               variant="ghost"
               size="sm"
               onClick={() => setShowAddForm(true)}
-              className="w-full h-7 text-[11px] text-white/50 hover:text-white hover:bg-white/5 rounded-lg flex items-center justify-center gap-1 border border-dashed border-white/10"
+              className="w-full h-7 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-lg flex items-center justify-center gap-1 border border-dashed border-border"
             >
               <Plus className="h-3 w-3" />
               <span>Adicionar Ação de Rotina</span>

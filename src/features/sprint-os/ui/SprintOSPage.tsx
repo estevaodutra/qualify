@@ -87,7 +87,7 @@ const FloatingTimerBar: React.FC = () => {
   const timeFormatted = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-zinc-950/95 border border-primary/40 shadow-2xl backdrop-blur-xl animate-in slide-in-from-bottom duration-300">
+    <div className="fixed bottom-5 right-5 z-50 flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-card border border-border shadow-2xl backdrop-blur-xl animate-in slide-in-from-bottom duration-300 text-card-foreground">
       <div
         className="flex items-center gap-2.5 cursor-pointer group"
         onClick={() => openTaskModal(activeTimer.taskId)}
@@ -98,21 +98,21 @@ const FloatingTimerBar: React.FC = () => {
           )}
           <span
             className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
-              activeTimer.isRunning ? "bg-primary" : "bg-yellow-400"
+              activeTimer.isRunning ? "bg-primary" : "bg-amber-500"
             }`}
           />
         </span>
         <div className="max-w-[180px]">
-          <div className="text-[11px] font-bold text-white truncate group-hover:text-primary transition-colors">
+          <div className="text-[11px] font-bold text-foreground truncate group-hover:text-primary transition-colors">
             {activeTimer.taskTitle}
           </div>
-          <div className="text-[10px] text-white/40">
+          <div className="text-[10px] text-muted-foreground">
             {activeTimer.mode === "pomodoro" ? "🍅 Pomodoro" : "⏱️ Cronômetro"}
           </div>
         </div>
       </div>
 
-      <div className="font-mono text-base font-black text-white px-2 py-0.5 rounded-lg bg-black/60 border border-white/10 tracking-wider">
+      <div className="font-mono text-base font-black text-foreground px-2 py-0.5 rounded-lg bg-muted border border-border tracking-wider">
         {timeFormatted}
       </div>
 
@@ -122,7 +122,7 @@ const FloatingTimerBar: React.FC = () => {
             size="icon"
             variant="ghost"
             onClick={pauseTimer}
-            className="h-8 w-8 text-yellow-400 hover:bg-yellow-400/10 rounded-xl"
+            className="h-8 w-8 text-amber-500 hover:bg-amber-500/10 rounded-xl"
             title="Pausar"
           >
             <Pause className="h-4 w-4" />
@@ -141,7 +141,7 @@ const FloatingTimerBar: React.FC = () => {
         <Button
           size="sm"
           onClick={() => stopAndSaveTimer(user?.email || "Operador")}
-          className="h-8 px-2.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold flex items-center gap-1 shadow-md shadow-emerald-900/30"
+          className="h-8 px-2.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold flex items-center gap-1 shadow-md shadow-emerald-900/20"
           title="Concluir e Salvar Registro"
         >
           <Square className="h-3 w-3 fill-current" />
@@ -214,10 +214,10 @@ export const SprintOSPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-[#0B0E14] text-white">
+      <div className="h-[60vh] w-full flex items-center justify-center bg-background text-foreground">
         <div className="flex flex-col items-center gap-3">
           <div className="h-10 w-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-xs font-black uppercase tracking-widest text-white/50">
+          <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">
             Carregando Cronogramas...
           </span>
         </div>
@@ -239,7 +239,7 @@ export const SprintOSPage: React.FC = () => {
   const membersList = Object.values(workspace.members).filter((m) => !m.archivedAt);
 
   return (
-    <div className="min-h-screen bg-[#0B0E14] text-white flex flex-col font-sans pb-16 select-none">
+    <div className="min-h-full bg-background text-foreground flex flex-col font-sans pb-16">
       {/* Região 1: Cabeçalho Compacto (Linear Style) */}
       <ExecutiveHeader />
 
@@ -258,16 +258,16 @@ export const SprintOSPage: React.FC = () => {
 
       {/* Região 3: Filtros Compactos */}
       <section className="px-6 pt-3 pb-2">
-        <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-zinc-900/50 border border-white/5">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-card border border-border shadow-sm">
           <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-[280px]">
             {/* Campo de Busca */}
             <div className="relative w-64">
-              <Search className="h-3.5 w-3.5 text-white/40 absolute left-3 top-2.5" />
+              <Search className="h-3.5 w-3.5 text-muted-foreground absolute left-3 top-2.5" />
               <Input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Buscar tarefa ou entrega..."
-                className="h-8 pl-8 text-xs bg-black border-white/10 text-white rounded-xl placeholder:text-white/30"
+                className="h-8 pl-8 text-xs bg-background border-input text-foreground rounded-xl placeholder:text-muted-foreground"
               />
             </div>
 
@@ -275,7 +275,7 @@ export const SprintOSPage: React.FC = () => {
             <select
               value={filterAssigneeId || ""}
               onChange={(e) => setFilterAssigneeId(e.target.value || null)}
-              className="h-8 rounded-xl bg-black border border-white/10 text-xs text-white/80 px-2.5"
+              className="h-8 rounded-xl bg-background border border-input text-xs text-foreground px-2.5"
             >
               <option value="">Todos os Responsáveis</option>
               {membersList.map((m) => (
@@ -289,7 +289,7 @@ export const SprintOSPage: React.FC = () => {
             <select
               value={filterPriority || ""}
               onChange={(e) => setFilterPriority((e.target.value as any) || null)}
-              className="h-8 rounded-xl bg-black border border-white/10 text-xs text-white/80 px-2.5"
+              className="h-8 rounded-xl bg-background border border-input text-xs text-foreground px-2.5"
             >
               <option value="">Todas as Prioridades</option>
               <option value="P0">P0 — Crítica</option>
@@ -302,7 +302,7 @@ export const SprintOSPage: React.FC = () => {
             <select
               value={filterStatus || ""}
               onChange={(e) => setFilterStatus((e.target.value as any) || null)}
-              className="h-8 rounded-xl bg-black border border-white/10 text-xs text-white/80 px-2.5"
+              className="h-8 rounded-xl bg-background border border-input text-xs text-foreground px-2.5"
             >
               <option value="">Todos os Status</option>
               <option value="pending">🔴 Pendente</option>
@@ -314,7 +314,7 @@ export const SprintOSPage: React.FC = () => {
             <select
               value={filterImpact || ""}
               onChange={(e) => setFilterImpact((e.target.value as any) || null)}
-              className="h-8 rounded-xl bg-black border border-white/10 text-xs text-white/80 px-2.5"
+              className="h-8 rounded-xl bg-background border border-input text-xs text-foreground px-2.5"
             >
               <option value="">Todos os Impactos</option>
               <option value="financial_light">💸 Fin. Leve</option>
@@ -345,7 +345,36 @@ export const SprintOSPage: React.FC = () => {
       {/* Região 3: Visualizações Especializadas (Uma visualização principal por vez) */}
       <main className="px-6 pt-2 flex-1">
         <Tabs value={activeTab} onValueChange={(t) => setActiveTab(t as ViewTab)} className="w-full">
-          <TabsList className="bg-white/5 border border-white/10 p-1 rounded-2xl mb-4 flex-wrap h-auto">
+          <TabsList className="bg-muted/60 border border-border p-1 rounded-2xl mb-4 flex-wrap h-auto">
+            <TabsTrigger value="structure" className="text-xs font-bold gap-2">
+              <Layers className="h-3.5 w-3.5" />
+              <span>Estrutura em Blocos</span>
+            </TabsTrigger>
+            <TabsTrigger value="kanban" className="text-xs font-bold gap-2">
+              <Kanban className="h-3.5 w-3.5" />
+              <span>Kanban</span>
+            </TabsTrigger>
+            <TabsTrigger value="gantt" className="text-xs font-bold gap-2">
+              <Calendar className="h-3.5 w-3.5" />
+              <span>Gantt & Cronograma</span>
+            </TabsTrigger>
+            <TabsTrigger value="indicators" className="text-xs font-bold gap-2">
+              <BarChart3 className="h-3.5 w-3.5" />
+              <span>Indicadores</span>
+            </TabsTrigger>
+            <TabsTrigger value="calculators" className="text-xs font-bold gap-2">
+              <Calculator className="h-3.5 w-3.5" />
+              <span>Calculadoras</span>
+            </TabsTrigger>
+            <TabsTrigger value="funnel" className="text-xs font-bold gap-2">
+              <Filter className="h-3.5 w-3.5" />
+              <span>Funil X1</span>
+            </TabsTrigger>
+            <TabsTrigger value="milestones" className="text-xs font-bold gap-2">
+              <Flag className="h-3.5 w-3.5" />
+              <span>Marcos</span>
+            </TabsTrigger>
+          </TabsList>
             <TabsTrigger value="structure" className="text-xs font-bold gap-2">
               <Layers className="h-3.5 w-3.5" />
               <span>Estrutura em Blocos</span>

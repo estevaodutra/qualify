@@ -63,7 +63,7 @@ export const ActivateSprintModal: React.FC = () => {
 
   return (
     <Dialog open={isActivateModalOpen} onOpenChange={setIsActivateModalOpen}>
-      <DialogContent className="max-w-md bg-zinc-950 border-white/10 text-white">
+      <DialogContent className="max-w-md bg-card border border-border text-card-foreground shadow-2xl">
         <DialogHeader>
           <div className="flex items-center gap-2 text-emerald-400 mb-1">
             <Rocket className="h-4 w-4" />
@@ -71,67 +71,67 @@ export const ActivateSprintModal: React.FC = () => {
               Ativação Operacional
             </span>
           </div>
-          <DialogTitle className="text-base font-black text-white">
+          <DialogTitle className="text-base font-black text-foreground">
             Ativar Sprint e Fixar Linha de Base
           </DialogTitle>
-          <DialogDescription className="text-xs text-white/50">
+          <DialogDescription className="text-xs text-muted-foreground">
             A ativação grava uma cópia imutável dos prazos e metas originais contratadas.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3.5 py-2 text-xs">
           <div>
-            <label className="font-bold text-white/70 block mb-1">Nome da Sprint</label>
+            <label className="font-bold text-muted-foreground block mb-1">Nome da Sprint</label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="bg-black border-white/10 text-white"
+              className="bg-background border-input text-foreground"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="font-bold text-white/70 block mb-1">Data Inicial</label>
+              <label className="font-bold text-muted-foreground block mb-1">Data Inicial</label>
               <Input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="bg-black border-white/10 text-white"
+                className="bg-background border-input text-foreground"
               />
             </div>
             <div>
-              <label className="font-bold text-white/70 block mb-1">Horário Inicial</label>
+              <label className="font-bold text-muted-foreground block mb-1">Horário Inicial</label>
               <Input
                 type="time"
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
-                className="bg-black border-white/10 text-white"
+                className="bg-background border-input text-foreground"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="font-bold text-white/70 block mb-1">Dias Úteis</label>
+              <label className="font-bold text-muted-foreground block mb-1">Dias Úteis</label>
               <Input
                 type="number"
                 value={businessDays}
                 onChange={(e) => setBusinessDays(Number(e.target.value))}
-                className="bg-black border-white/10 text-white"
+                className="bg-background border-input text-foreground"
               />
             </div>
             <div>
-              <label className="font-bold text-white/70 block mb-1">Valor Contratado (R$)</label>
+              <label className="font-bold text-muted-foreground block mb-1">Valor Contratado (R$)</label>
               <Input
                 type="number"
                 value={contractValue}
                 onChange={(e) => setContractValue(Number(e.target.value))}
-                className="bg-black border-white/10 text-white"
+                className="bg-background border-input text-foreground"
               />
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-white/70 text-[11px] flex items-start gap-2">
+          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-muted-foreground text-[11px] flex items-start gap-2">
             <Lock className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
             <span>
               Ao ativar, a linha de base original permanecerá gravada e servirá de comparativo para desvios em futuras revisões de cronograma.
@@ -144,7 +144,7 @@ export const ActivateSprintModal: React.FC = () => {
             variant="ghost"
             size="sm"
             onClick={() => setIsActivateModalOpen(false)}
-            className="text-xs text-white/50"
+            className="text-xs text-muted-foreground"
           >
             Cancelar
           </Button>
@@ -152,7 +152,7 @@ export const ActivateSprintModal: React.FC = () => {
           <Button
             onClick={handleActivate}
             size="sm"
-            className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs gap-1.5 shadow-lg shadow-emerald-900/40"
+            className="bg-emerald-600 hover:bg-emerald-500 text-foreground font-bold text-xs gap-1.5 shadow-lg shadow-emerald-900/40"
           >
             <Rocket className="h-3.5 w-3.5" />
             <span>Confirmar Ativação</span>
