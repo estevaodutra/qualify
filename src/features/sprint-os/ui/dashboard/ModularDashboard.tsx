@@ -12,7 +12,7 @@
  * - BLOCO 03 — FUNIL (Esteira visual progressiva conectada: EM ABERTO → PRÉ-QUALIFICAÇÃO → INTERESSADO → NEGOCIAÇÃO → FOLLOW-UP → VENDA)
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   GripVertical,
   MoreVertical,
@@ -92,11 +92,31 @@ export const ModularDashboard: React.FC = () => {
     youtube: "7d",
   });
 
-  // Estados de Drag & Drop
+  // Estados de Drag & Drop (Controlados exclusivamente pela alça GripVertical)
+  const [canDragBlockId, setCanDragBlockId] = useState<string | null>(null);
+  const [canDragCardId, setCanDragCardId] = useState<string | null>(null);
   const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
   const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
   const [dragOverBlockId, setDragOverBlockId] = useState<string | null>(null);
   const [dragOverCardId, setDragOverCardId] = useState<string | null>(null);
+
+  // Garantia absoluta contra travamento visual ("apagado"): qualquer soltura do mouse limpa os estados imediatamente
+  useEffect(() => {
+    const clearAllDragStates = () => {
+      setDraggedBlockId(null);
+      setDragOverBlockId(null);
+      setDraggedCardId(null);
+      setDragOverCardId(null);
+      setCanDragBlockId(null);
+      setCanDragCardId(null);
+    };
+    window.addEventListener("mouseup", clearAllDragStates);
+    window.addEventListener("dragend", clearAllDragStates);
+    return () => {
+      window.removeEventListener("mouseup", clearAllDragStates);
+      window.removeEventListener("dragend", clearAllDragStates);
+    };
+  }, []);
 
   // Estados do Modal de Edição de Elemento
   const [editingCard, setEditingCard] = useState<DashboardCardConfig | null>(null);
@@ -1274,14 +1294,10 @@ export const ModularDashboard: React.FC = () => {
           return (
             <div
               key={block.id}
-              draggable
+              draggable={canDragBlockId === block.id}
               onDragStart={(e) => {
-                const target = e.target as HTMLElement;
-                // Só permite iniciar arraste se for pela alça do bloco e não for input/botão
-                if (!target.closest("[data-block-handle]") || target.closest("input, button, textarea, select")) {
-                  e.preventDefault();
-                  return;
-                }
+                e.dataTransfer.setData("text/plain", block.id);
+                e.dataTransfer.effectAllowed = "move";
                 handleBlockDragStart(block.id);
               }}
               onDragOver={(e) => {
@@ -1293,9 +1309,10 @@ export const ModularDashboard: React.FC = () => {
               onDragEnd={() => {
                 setDraggedBlockId(null);
                 setDragOverBlockId(null);
+                setCanDragBlockId(null);
               }}
               className={`rounded-2xl border bg-card/60 backdrop-blur-xs p-3 transition-all duration-200 ${
-                isDraggingBlock ? "opacity-30 border-dashed border-primary" : ""
+                isDraggingBlock ? "border-primary/50 ring-1 ring-primary/20" : ""
               } ${isDragOverBlock ? "border-primary ring-2 ring-primary/20" : "border-border"}`}
             >
               {/* CABEÇALHO DO BLOCO */}
@@ -1303,6 +1320,8 @@ export const ModularDashboard: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <div
                     data-block-handle="true"
+                    onMouseDown={() => setCanDragBlockId(block.id)}
+                    onMouseUp={() => setCanDragBlockId(null)}
                     className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-foreground p-0.5 rounded"
                     title="Arraste pela alça para reordenar o bloco"
                   >
@@ -1438,14 +1457,10 @@ export const ModularDashboard: React.FC = () => {
                     return (
                       <div
                         key={card.id}
-                        draggable
+                        draggable={canDragCardId === card.id}
                         onDragStart={(e) => {
-                          const target = e.target as HTMLElement;
-                          // Só permite iniciar arraste se for pela alça do card e não for input/botão
-                          if (!target.closest("[data-card-handle]") || target.closest("input, button, textarea, select")) {
-                            e.preventDefault();
-                            return;
-                          }
+                          e.dataTransfer.setData("text/plain", card.id);
+                          e.dataTransfer.effectAllowed = "move";
                           handleCardDragStart(card.id);
                         }}
                         onDragOver={(e) => {
@@ -1462,9 +1477,10 @@ export const ModularDashboard: React.FC = () => {
                         onDragEnd={() => {
                           setDraggedCardId(null);
                           setDragOverCardId(null);
+                          setCanDragCardId(null);
                         }}
                         className={`rounded-xl border p-2.5 bg-card flex flex-col justify-between transition-all duration-150 relative group ${
-                          isDraggingCard ? "opacity-30 border-dashed border-primary" : ""
+                          isDraggingCard ? "border-primary/50 ring-1 ring-primary/20" : ""
                         } ${
                           isDragOverCard
                             ? "border-primary ring-2 ring-primary/20 scale-[0.99]"
@@ -1476,6 +1492,8 @@ export const ModularDashboard: React.FC = () => {
                           <div className="flex items-center gap-1 min-w-0">
                             <span
                               data-card-handle="true"
+                              onMouseDown={() => setCanDragCardId(card.id)}
+                              onMouseUp={() => setCanDragCardId(null)}
                               className="cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-foreground p-0.5 rounded"
                               title="Arraste pela alça para mover o card"
                             >
