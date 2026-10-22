@@ -11,16 +11,12 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   Layers,
   Kanban,
-  Calendar,
   Filter,
   DollarSign,
-  Flag,
   Search,
   RotateCcw,
   Sparkles,
-  BarChart3,
   Target,
-  Calculator,
   Play,
   Pause,
   Square,
@@ -37,16 +33,8 @@ import { useCompanyMembers } from "@/hooks/useCompanyMembers";
 import { useSprintOSStore, type ViewTab } from "../state/sprintOsStore";
 import { SchedulesListView } from "./views/SchedulesListView";
 import { ExecutiveHeader } from "./ExecutiveHeader";
-import { ExecutiveKPIs } from "./ExecutiveKPIs";
-import { OperationalCompassCard } from "./OperationalCompassCard";
-import { DailyRoutineCard } from "./DailyRoutineCard";
 import { StructureView } from "./views/StructureView";
 import { KanbanView } from "./views/KanbanView";
-import { GanttView } from "./views/GanttView";
-import { IndicatorsView } from "./views/IndicatorsView";
-import { CalculatorsView } from "./views/CalculatorsView";
-import { FunnelView } from "./views/FunnelView";
-import { MilestonesView } from "./views/MilestonesView";
 import { ModularDashboard } from "./dashboard/ModularDashboard";
 
 import { DeadlineUpdateModal } from "./modals/DeadlineUpdateModal";
@@ -367,66 +355,38 @@ export const SprintOSPage: React.FC = () => {
         </div>
       </section>
 
-      {/* Região 3: Visualizações Especializadas (Uma visualização principal por vez) */}
+      {/* Navegação Principal: ETAPAS | KANBAN (AJ-006) */}
       <main className="px-6 pt-2 flex-1">
-        <Tabs value={activeTab} onValueChange={(t) => setActiveTab(t as ViewTab)} className="w-full">
-          <TabsList className="bg-muted/60 border border-border p-1 rounded-2xl mb-4 flex-wrap h-auto">
-            <TabsTrigger value="structure" className="text-xs font-bold gap-2">
-              <Layers className="h-3.5 w-3.5" />
-              <span>Estrutura em Blocos</span>
-            </TabsTrigger>
-            <TabsTrigger value="kanban" className="text-xs font-bold gap-2">
-              <Kanban className="h-3.5 w-3.5" />
-              <span>Kanban</span>
-            </TabsTrigger>
-            <TabsTrigger value="gantt" className="text-xs font-bold gap-2">
-              <Calendar className="h-3.5 w-3.5" />
-              <span>Gantt & Cronograma</span>
-            </TabsTrigger>
-            <TabsTrigger value="indicators" className="text-xs font-bold gap-2">
-              <BarChart3 className="h-3.5 w-3.5" />
-              <span>Indicadores</span>
-            </TabsTrigger>
-            <TabsTrigger value="calculators" className="text-xs font-bold gap-2">
-              <Calculator className="h-3.5 w-3.5" />
-              <span>Calculadoras</span>
-            </TabsTrigger>
-            <TabsTrigger value="funnel" className="text-xs font-bold gap-2">
-              <Filter className="h-3.5 w-3.5" />
-              <span>Funil X1</span>
-            </TabsTrigger>
-            <TabsTrigger value="milestones" className="text-xs font-bold gap-2">
-              <Flag className="h-3.5 w-3.5" />
-              <span>Marcos</span>
-            </TabsTrigger>
-          </TabsList>
+        <Tabs
+          value={activeTab === "kanban" ? "kanban" : "structure"}
+          onValueChange={(t) => setActiveTab(t as ViewTab)}
+          className="w-full"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <TabsList className="bg-muted/50 border border-border/80 p-1 rounded-2xl h-auto inline-flex gap-1 shadow-2xs">
+              <TabsTrigger
+                value="structure"
+                className="text-xs font-bold gap-2 px-4 py-1.5 rounded-xl transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs"
+              >
+                <Layers className="h-3.5 w-3.5" />
+                <span>Etapas</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="kanban"
+                className="text-xs font-bold gap-2 px-4 py-1.5 rounded-xl transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs"
+              >
+                <Kanban className="h-3.5 w-3.5" />
+                <span>Kanban</span>
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-          <TabsContent value="structure">
+          <TabsContent value="structure" className="mt-0 outline-none">
             <StructureView />
           </TabsContent>
 
-          <TabsContent value="kanban">
+          <TabsContent value="kanban" className="mt-0 outline-none">
             <KanbanView />
-          </TabsContent>
-
-          <TabsContent value="gantt">
-            <GanttView />
-          </TabsContent>
-
-          <TabsContent value="indicators">
-            <IndicatorsView />
-          </TabsContent>
-
-          <TabsContent value="calculators">
-            <CalculatorsView />
-          </TabsContent>
-
-          <TabsContent value="funnel">
-            <FunnelView />
-          </TabsContent>
-
-          <TabsContent value="milestones">
-            <MilestonesView />
           </TabsContent>
         </Tabs>
       </main>
