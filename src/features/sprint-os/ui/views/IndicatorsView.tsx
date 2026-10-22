@@ -55,6 +55,8 @@ export const IndicatorsView: React.FC = () => {
     upsertIndicatorAction,
     deleteIndicatorAction,
     togglePinIndicatorAction,
+    importPreset7DIndicatorsAction,
+    updateContentDistributionConfigAction,
     upsertPublicationAction,
     deletePublicationAction,
     duplicatePublicationAction,
@@ -156,6 +158,14 @@ export const IndicatorsView: React.FC = () => {
       topGroup,
     };
   }, [publications]);
+
+  // Métricas 7D: Distribuição Diária de Reels (Seção 4)
+  const dailyReelsTarget = workspace.contentDistributionConfig?.dailyReelsTarget ?? 1000;
+  const reelsPosts = useMemo(() => publications.filter((p) => p.type === "reels"), [publications]);
+  const totalReelsViews = useMemo(() => reelsPosts.reduce((acc, p) => acc + p.views, 0), [reelsPosts]);
+  const distinctReelsDates = useMemo(() => new Set(reelsPosts.map((p) => p.publishedAt)).size || 1, [reelsPosts]);
+  const avgDailyReelsViews = Math.round(totalReelsViews / distinctReelsDates);
+  const reelsTargetPct = Math.min(100, Math.round((avgDailyReelsViews / dailyReelsTarget) * 100));
 
   const handleOpenPubModal = (pub?: ContentPublication) => {
     if (pub) {
@@ -267,14 +277,27 @@ export const IndicatorsView: React.FC = () => {
         </div>
 
         {activeSubTab === "kpis" ? (
-          <Button
-            onClick={() => setShowAddKPIModal(true)}
-            size="sm"
-            className="h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-xl flex items-center gap-1.5"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>+ Adicionar Indicador</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => importPreset7DIndicatorsAction()}
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs font-semibold rounded-xl flex items-center gap-1.5 border-primary/30 text-primary hover:bg-primary/10"
+              title="Importar 8 métricas canônicas 7D (Aquisição & Conversão) zeradas para preenchimento real"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
+              <span className="hidden sm:inline">Preset 7D</span>
+              <span className="sm:hidden">7D</span>
+            </Button>
+            <Button
+              onClick={() => setShowAddKPIModal(true)}
+              size="sm"
+              className="h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-xl flex items-center gap-1.5"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>+ Adicionar Indicador</span>
+            </Button>
+          </div>
         ) : (
           <Button
             onClick={() => handleOpenPubModal()}
@@ -295,15 +318,26 @@ export const IndicatorsView: React.FC = () => {
               <BarChart3 className="h-8 w-8 text-muted-foreground/40 mb-2" />
               <div className="text-xs font-semibold text-foreground">Nenhum indicador personalizado cadastrado</div>
               <p className="text-[11px] text-muted-foreground max-w-sm mt-0.5 mb-3">
-                Crie métricas customizadas para acompanhar no cockpit (ex: Reuniões Realizadas, CPL Médio, etc.).
+                Crie métricas customizadas para acompanhar no cockpit ou importe o Preset 7D com métricas zeradas de aquisição e conversão.
               </p>
-              <Button
-                onClick={() => setShowAddKPIModal(true)}
-                size="sm"
-                className="text-xs bg-primary text-primary-foreground rounded-xl"
-              >
-                + Criar Primeiro KPI
-              </Button>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Button
+                  onClick={() => setShowAddKPIModal(true)}
+                  size="sm"
+                  className="text-xs bg-primary text-primary-foreground rounded-xl"
+                >
+                  + Criar Primeiro KPI
+                </Button>
+                <Button
+                  onClick={() => importPreset7DIndicatorsAction()}
+                  size="sm"
+                  variant="outline"
+                  className="text-xs border-primary/30 text-primary hover:bg-primary/10 rounded-xl"
+                >
+                  <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                  Importar Preset 7D (8 Métricas)
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -366,6 +400,52 @@ export const IndicatorsView: React.FC = () => {
       {/* SUB-ABA 2: DISTRIBUIÇÃO DE CONTEÚDO INDIVIDUAL (Seção 4) */}
       {activeSubTab === "content" && (
         <div className="space-y-5">
+          {/* Meta Diária de Reels (Arquitetura 7D - Seção 4) */}
+          <div className="p-4 rounded-2xl bg-card border border-border shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-sm">🎯</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-foreground">
+                  Meta Diária de Reels (Arquitetura 7D)
+                </span>
+                <Badge variant="outline" className="text-[10px] font-mono border-primary/30 text-primary bg-primary/5">
+                  {dailyReelsTarget.toLocaleString("pt-BR")} views/dia
+                </Badge>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Acompanhamento de alcance do motor diário de atração (Reels de 1.000 a 10.000 views).
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              {reelsPosts.length > 0 && (
+                <div className="text-right hidden md:block">
+                  <div className="text-xs font-mono font-bold text-foreground">
+                    {avgDailyReelsViews.toLocaleString("pt-BR")} / {dailyReelsTarget.toLocaleString("pt-BR")} views
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {reelsTargetPct >= 100 ? "🟢 Meta Diária Atingida" : `${reelsTargetPct}% da meta diária`}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-1.5">
+                <label className="text-[11px] text-muted-foreground shrink-0 font-medium">Meta:</label>
+                <select
+                  value={dailyReelsTarget}
+                  onChange={(e) => updateContentDistributionConfigAction({ dailyReelsTarget: Number(e.target.value) })}
+                  className="h-8 rounded-xl bg-background border border-input text-xs text-foreground px-2.5 font-mono"
+                >
+                  <option value={1000}>1.000 views/dia (1k)</option>
+                  <option value={2000}>2.000 views/dia (2k)</option>
+                  <option value={3000}>3.000 views/dia (3k)</option>
+                  <option value={5000}>5.000 views/dia (5k)</option>
+                  <option value={7500}>7.500 views/dia (7.5k)</option>
+                  <option value={10000}>10.000 views/dia (10k)</option>
+                </select>
+              </div>
+            </div>
+          </div>
           {publications.length === 0 ? (
             <div className="py-20 text-center flex flex-col items-center justify-center rounded-3xl border border-dashed border-border bg-card/40">
               <Instagram className="h-10 w-10 text-muted-foreground/40 mb-3" />

@@ -10,6 +10,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Workspace } from "../domain/types";
 import { createPercursoDaVidaSeed } from "../seed/percursoDaVidaSeed";
+import { createArquitetura7DSeed } from "../seed/arquitetura7DSeed";
 import { createBlankWorkspace, newId } from "../domain/ops";
 
 const LOCAL_STORAGE_KEY_PREFIX = "sprint_os_ws_";
@@ -429,6 +430,20 @@ export class SprintOSRepository {
       return { meta, data: seed };
     }
 
+    if (templateId === "seed_arquitetura_7d") {
+      const seed7d = createArquitetura7DSeed();
+      const meta: TemplateListItem = {
+        id: "seed_arquitetura_7d",
+        name: "IMPLEMENTAÇÃO 7D — ARQUITETURA DE RECEITA",
+        description: "Estrutura operacional 7D: infraestrutura técnica, tráfego de aquisição, distribuição orgânica, funil comercial X1 e governança de entregáveis.",
+        stageCount: Object.values(seed7d.stages).length,
+        taskCount: Object.values(seed7d.tasks).length,
+        createdAt: "2026-10-21T00:00:00Z",
+        isDefault: true,
+      };
+      return { meta, data: seed7d };
+    }
+
     return null;
   }
 
@@ -485,6 +500,16 @@ export class SprintOSRepository {
       isDefault: true,
     };
 
+    let template7dMeta: TemplateListItem = {
+      id: "seed_arquitetura_7d",
+      name: "IMPLEMENTAÇÃO 7D — ARQUITETURA DE RECEITA",
+      description: "Estrutura operacional 7D: infraestrutura técnica, tráfego de aquisição, distribuição orgânica, funil comercial X1 e governança de entregáveis.",
+      stageCount: 5,
+      taskCount: 10,
+      createdAt: "2026-10-21T00:00:00Z",
+      isDefault: true,
+    };
+
     const customTemplates: TemplateListItem[] = [];
 
     try {
@@ -497,6 +522,8 @@ export class SprintOSRepository {
             if (parsed?.meta) {
               if (parsed.meta.id === "seed_percurso_da_vida") {
                 defaultSeedMeta = { ...defaultSeedMeta, ...parsed.meta, isDefault: true };
+              } else if (parsed.meta.id === "seed_arquitetura_7d") {
+                template7dMeta = { ...template7dMeta, ...parsed.meta, isDefault: true };
               } else {
                 customTemplates.push(parsed.meta);
               }
@@ -506,7 +533,7 @@ export class SprintOSRepository {
       }
     } catch {}
 
-    return [defaultSeedMeta, ...customTemplates];
+    return [defaultSeedMeta, template7dMeta, ...customTemplates];
   }
 
   /**
@@ -531,6 +558,16 @@ export class SprintOSRepository {
     if (templateId === "seed_percurso_da_vida") {
       const seed = createPercursoDaVidaSeed();
       const ws = JSON.parse(JSON.stringify(seed)) as Workspace;
+      const newProjId = newId();
+      ws.project.id = newProjId;
+      ws.project.name = name;
+      ws.project.client = client;
+      return ws;
+    }
+
+    if (templateId === "seed_arquitetura_7d") {
+      const seed7d = createArquitetura7DSeed();
+      const ws = JSON.parse(JSON.stringify(seed7d)) as Workspace;
       const newProjId = newId();
       ws.project.id = newProjId;
       ws.project.name = name;

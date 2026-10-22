@@ -151,6 +151,8 @@ export interface Task extends Entity {
   financialImpact: boolean;
   impactFlags?: ImpactFlag[];
   scope: ScopeType;
+  /** Classificação de origem 7D: DEFINIDO, DERIVADO ou PROPOSTO */
+  origin?: TaskOrigin;
   assigneeId: ID | null;
   validatorId: ID | null;
   participantIds: ID[];
@@ -165,6 +167,16 @@ export interface Task extends Entity {
   actualEnd: string | null;
   timeEntries: TimeEntry[];
   blockedReason: string | null;
+  /** Detalhes estruturados de bloqueio 7D */
+  blockInfo?: TaskBlockInfo;
+  /** Critérios verificáveis de conclusão 7D */
+  completionCriteria?: CompletionCriterion[];
+  /** Entregáveis, versionamento e aprovações 7D */
+  deliverableMaterials?: DeliverableMaterial[];
+  /** Registro estruturado de Backup Master 7D */
+  backupMaster?: BackupMasterInfo;
+  /** Demanda executiva do expert 7D */
+  expertDemand?: ExpertDemandInfo;
   awaitingApproval: boolean;
   acceptanceCriteria: string;
   acceptedAt: string | null;
@@ -174,6 +186,184 @@ export interface Task extends Entity {
   learnings: Learnings;
   /** Incrementa em alterações materiais (escopo, prazo, responsabilidade) — invalida ciência. */
   materialVersion: number;
+}
+
+// ==========================================
+// ARQUITETURA 7D — MODELO DE OPERAÇÃO
+// ==========================================
+
+export type TaskOrigin = "defined" | "derived" | "proposed";
+
+export const TASK_ORIGIN_CONFIG: Record<
+  TaskOrigin,
+  { label: string; description: string; badgeClass: string }
+> = {
+  defined: {
+    label: "DEFINIDO",
+    description: "Orientação expressamente estabelecida no planejamento",
+    badgeClass: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+  },
+  derived: {
+    label: "DERIVADO",
+    description: "Atividade necessária para cumprir uma premissa definida",
+    badgeClass: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20",
+  },
+  proposed: {
+    label: "PROPOSTO",
+    description: "Sugestão ainda não aprovada (fora do escopo aprovado até confirmação)",
+    badgeClass: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+  },
+};
+
+export type BlockType = "total" | "parcial" | "dependencia" | "financeiro" | "aprovacao";
+
+export const BLOCK_TYPE_LABEL: Record<BlockType, string> = {
+  total: "Bloqueio Total",
+  parcial: "Bloqueio Parcial",
+  dependencia: "Dependência Aguardando",
+  financeiro: "Bloqueio Financeiro",
+  aprovacao: "Bloqueio de Aprovação",
+};
+
+export interface TaskBlockInfo {
+  active: boolean;
+  type: BlockType;
+  reason: string;
+  resolverResponsible: string;
+  requestedAt: string | null;
+  agreedDeadline: string | null;
+  requiredDeliverable: string;
+  impactDescription: string;
+  unlockEvidenceUrl?: string;
+}
+
+export interface CompletionCriterion {
+  id: string;
+  text: string;
+  done: boolean;
+  required: boolean;
+}
+
+export type ReviewStatus = "nao_enviado" | "aguardando_revisao" | "ajustes_solicitados" | "aprovado";
+
+export const REVIEW_STATUS_CONFIG: Record<
+  ReviewStatus,
+  { label: string; badgeClass: string }
+> = {
+  nao_enviado: {
+    label: "Não enviado",
+    badgeClass: "bg-muted text-muted-foreground border-border",
+  },
+  aguardando_revisao: {
+    label: "Aguardando revisão",
+    badgeClass: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30",
+  },
+  ajustes_solicitados: {
+    label: "Ajustes solicitados",
+    badgeClass: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30",
+  },
+  aprovado: {
+    label: "Aprovado",
+    badgeClass: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
+  },
+};
+
+export interface DeliverableMaterial {
+  id: string;
+  name: string;
+  type: string;
+  version: string;
+  assigneeName?: string;
+  url: string;
+  reviewStatus: ReviewStatus;
+  updatedAt: string;
+}
+
+export interface BackupMasterInfo {
+  googleDriveUrl: string;
+  fileName: string;
+  version: string;
+  folderPath: string;
+  responsibleName: string;
+  updatedAt: string;
+  approvalStatus: ReviewStatus;
+  arquivoSalvo: boolean;
+  linkDisponivel: boolean;
+  permissoesVerificadas: boolean;
+  versaoCorreta: boolean;
+  aprovacaoRegistrada: boolean;
+}
+
+export type ExpertDemandCategory =
+  | "preencher"
+  | "revisar"
+  | "aprovar"
+  | "gravar"
+  | "editar"
+  | "entregar";
+
+export type ExpertDemandStatus =
+  | "nao_solicitado"
+  | "solicitado"
+  | "em_producao"
+  | "entregue_revisao"
+  | "ajustes_solicitados"
+  | "aprovado"
+  | "finalizado_disponivel";
+
+export const EXPERT_DEMAND_CATEGORIES: Record<ExpertDemandCategory, string> = {
+  preencher: "Preencher",
+  revisar: "Revisar",
+  aprovar: "Aprovar",
+  gravar: "Gravar",
+  editar: "Editar",
+  entregar: "Entregar",
+};
+
+export const EXPERT_DEMAND_STATUSES: Record<
+  ExpertDemandStatus,
+  { label: string; badgeClass: string }
+> = {
+  nao_solicitado: {
+    label: "Não solicitado",
+    badgeClass: "bg-muted text-muted-foreground border-border",
+  },
+  solicitado: {
+    label: "Solicitado",
+    badgeClass: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+  },
+  em_producao: {
+    label: "Em produção",
+    badgeClass: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20",
+  },
+  entregue_revisao: {
+    label: "Entregue para revisão",
+    badgeClass: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+  },
+  ajustes_solicitados: {
+    label: "Ajustes solicitados",
+    badgeClass: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20",
+  },
+  aprovado: {
+    label: "Aprovado",
+    badgeClass: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+  },
+  finalizado_disponivel: {
+    label: "Finalizado e disponível",
+    badgeClass: "bg-emerald-600 text-white font-bold",
+  },
+};
+
+export interface ExpertDemandInfo {
+  isExpertDemand: boolean;
+  category: ExpertDemandCategory;
+  status: ExpertDemandStatus;
+  requesterName?: string;
+  quantity?: number;
+  agreedDeadline?: string;
+  expectedMaterial?: string;
+  referenceLink?: string;
+  dependentTaskId?: string;
 }
 
 export interface Subtask extends Entity {
@@ -438,6 +628,7 @@ export interface Workspace {
   indicators?: Record<ID, CustomIndicator>;
   okrs?: Record<ID, OKRGoal>;
   contentMetrics?: ContentDistributionMetrics;
+  contentDistributionConfig?: { dailyReelsTarget?: number };
   hoursCalculator?: HoursCalculatorData;
   adsCalculator?: AdsCalculatorData;
   /** Custo/hora por membro — separado para não ser exposto em links públicos. */

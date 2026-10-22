@@ -39,6 +39,8 @@ export const KanbanView: React.FC = () => {
     filterPriority,
     filterStatus,
     filterImpact,
+    filterExpertDemands,
+    filterOrigin,
     setSelectedTaskId,
     setIsTaskModalOpen,
     setTaskStatusAction,
@@ -63,6 +65,12 @@ export const KanbanView: React.FC = () => {
   }
   if (filterImpact) {
     tasks = tasks.filter((t) => t.impactFlags?.includes(filterImpact));
+  }
+  if (filterExpertDemands) {
+    tasks = tasks.filter((t) => t.expertDemand?.isExpertDemand);
+  }
+  if (filterOrigin) {
+    tasks = tasks.filter((t) => (t.origin || "defined") === filterOrigin);
   }
 
   const handleCardClick = (taskId: string) => {
@@ -147,6 +155,18 @@ export const KanbanView: React.FC = () => {
                               ))}
                             </div>
                           )}
+
+                          {/* 7D Badges */}
+                          {task.expertDemand?.isExpertDemand && (
+                            <span className="text-xs cursor-help" title={`Demanda do Expert: ${task.expertDemand.category}`}>
+                              👔
+                            </span>
+                          )}
+                          {task.origin === "proposed" && (
+                            <Badge variant="outline" className="text-[8px] font-mono py-0 px-1 border-dashed border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/5">
+                              PROPOSTO
+                            </Badge>
+                          )}
                         </div>
                       </div>
 
@@ -156,10 +176,14 @@ export const KanbanView: React.FC = () => {
                       </h4>
 
                       {/* Bloqueio se houver */}
-                      {task.blockedReason && (
-                        <div className="mb-2 p-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-[10px] text-rose-600 dark:text-rose-300 flex items-center gap-1.5">
-                          <AlertTriangle className="h-3 w-3 shrink-0" />
-                          <span className="truncate">{task.blockedReason}</span>
+                      {(task.blockInfo?.active || task.blockedReason) && (
+                        <div className="mb-2 p-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-[10px] text-rose-600 dark:text-rose-300 flex items-center gap-1.5 font-medium">
+                          <span className="text-xs shrink-0">🚧</span>
+                          <span className="truncate">
+                            {task.blockInfo?.active
+                              ? `BLOQUEIO: ${task.blockInfo.reason || "Pendente"}`
+                              : task.blockedReason}
+                          </span>
                         </div>
                       )}
 

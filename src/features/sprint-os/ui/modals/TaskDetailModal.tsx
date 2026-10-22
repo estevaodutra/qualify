@@ -1,10 +1,13 @@
 /**
- * Modal Completo de Detalhes da Tarefa (Cockpit 80/20).
- * Especificação: Master Prompt v9.0 + Otimização — Seções 7, 11 e 12.
- * - Flags de Impacto: até 3 flags simultâneas (💸, 💰, ⏳, ⚙️, ⚠️)
- * - Cronômetro & Pomodoro individual com Play, Pause, Resume, Stop & Save
- * - Duração estimada manual (começa Não definida se não configurada)
- * - Microcheckpoints e evidências
+ * Modal Completo de Detalhes da Tarefa (Cockpit 80/20 + Arquitetura 7D V2.0).
+ * Especificação: Master Prompt v9.0 + PATCH 002 (Arquitetura 7D).
+ * - P1.1: Classificação de Origem (DEFINIDO, DERIVADO, PROPOSTO)
+ * - P1.2: Dependências e Bloqueios Operacionais (Banner 🚧, tipos e impacto)
+ * - P1.3: Demandas Executivas do Expert (Gravar, Aprovar, Revisar, etc.)
+ * - P1.4: Critérios Verificáveis de Conclusão (com validação obrigatória antes de Feito)
+ * - P1.5: Entregáveis, Versionamento e Status de Revisão/Aprovação
+ * - P1.6: Backup Master (Checklist de validação 7D e referências ao Drive)
+ * - P1.7: Flags de Impacto (até 3 por tarefa) e Pomodoro integrado
  */
 
 import React, { useState, useEffect } from "react";
@@ -28,6 +31,14 @@ import {
   Pause,
   RotateCcw,
   CheckSquare,
+  ShieldAlert,
+  FolderArchive,
+  Layers,
+  Video,
+  ExternalLink,
+  Lock,
+  Unlock,
+  Circle,
 } from "lucide-react";
 import {
   Dialog,
@@ -60,11 +71,25 @@ import {
   SCOPE_LABEL,
   STATUS_ICON,
   IMPACT_FLAG_CONFIG,
+  TASK_ORIGIN_CONFIG,
+  BLOCK_TYPE_LABEL,
+  REVIEW_STATUS_CONFIG,
+  EXPERT_DEMAND_CATEGORIES,
+  EXPERT_DEMAND_STATUSES,
   type Priority,
   type Complexity,
   type ScopeType,
   type TaskStatus,
   type ImpactFlag,
+  type TaskOrigin,
+  type BlockType,
+  type TaskBlockInfo,
+  type CompletionCriterion,
+  type DeliverableMaterial,
+  type ReviewStatus,
+  type BackupMasterInfo,
+  type ExpertDemandCategory,
+  type ExpertDemandStatus,
 } from "../../domain/types";
 import { fmtDateTime, fmtMinutes } from "../../scheduler/time";
 
@@ -95,6 +120,24 @@ export const TaskDetailModal: React.FC = () => {
   const [evidenceUrl, setEvidenceUrl] = useState("");
   const [durationInput, setDurationInput] = useState("");
 
+  // Estados 7D — Critérios de Conclusão
+  const [newCriterionText, setNewCriterionText] = useState("");
+  const [newCriterionRequired, setNewCriterionRequired] = useState(true);
+
+  // Estados 7D — Entregáveis & Versionamento
+  const [newDelivName, setNewDelivName] = useState("");
+  const [newDelivType, setNewDelivType] = useState("Documento");
+  const [newDelivVersion, setNewDelivVersion] = useState("v1.0");
+  const [newDelivUrl, setNewDelivUrl] = useState("");
+
+  // Estados 7D — Bloqueio Operacional Form
+  const [blockType, setBlockType] = useState<BlockType>("total");
+  const [blockReason, setBlockReason] = useState("");
+  const [blockResolver, setBlockResolver] = useState("");
+  const [blockImpact, setBlockImpact] = useState("");
+  const [blockDeadline, setBlockDeadline] = useState("");
+  const [blockEvidence, setBlockEvidence] = useState("");
+
   // Live timer tick for UI
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -122,10 +165,54 @@ export const TaskDetailModal: React.FC = () => {
   const timerMinutes = Math.floor(timerElapsedMs / 60000);
   const timerSeconds = Math.floor((timerElapsedMs % 60000) / 1000);
 
+  const isBlocked = !!(task.blockInfo?.active || task.blockedReason);
+  const originCfg = TASK_ORIGIN_CONFIG[task.origin || "defined"];
+
   const handleUpdate = (patch: any) => {
     mutate((ws, ctx) => {
       updateTask(ws, ctx, task.id, patch);
     });
+  };
+
+  // Transição de Status com Validação 7D de Critérios Obrigatórios
+  const handleStatusTransition = () => {
+    const nextStatus: TaskStatus =
+      task.status === "pending" ? "doing" : task.status === "doing" ? "done" : "pending";
+
+    if (nextStatus === "done") {
+      // 1. Validar bloqueio ativo
+      if (isBlocked) {
+        toast.error("Tarefa possui bloqueio ativo. Desbloqueie a tarefa antes de concluí-la.");
+        return;
+      }
+      // 2. Validar critérios de conclusão obrigatórios (P1.4)
+      if (task.completionCriteria && task.completionCriteria.length > 0) {
+        const pendingRequired = task.completionCriteria.filter((c) => c.required && !c.done);
+        if (pendingRequired.length > 0) {
+          toast.error(
+            `Critério de conclusão obrigatório pendente: "${pendingRequired[0].text}". Conclua todos os critérios obrigatórios antes de finalizar.`
+          );
+          return;
+        }
+      }
+      // 3. Validar subtarefas obrigatórias
+      const missingSubtasks = subtasks.filter((s) => s.required && !s.done);
+      if (missingSubtasks.length > 0) {
+        toast.error(`Existem ${missingSubtasks.length} subtarefa(s) obrigatória(s) pendente(s).`);
+        return;
+      }
+    }
+
+    try {
+      mutate((ws, ctx) => {
+        setTaskStatus(ws, ctx, task.id, nextStatus);
+      });
+      toast.success(
+        nextStatus === "done" ? "Tarefa concluída com sucesso!" : `Status alterado para ${nextStatus}`
+      );
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
   const handleToggleImpactFlag = async (flag: ImpactFlag) => {
@@ -152,6 +239,125 @@ export const TaskDetailModal: React.FC = () => {
     toast.success(minutes ? `Duração definida para ${minutes}m.` : "Duração limpa (Não definida).");
   };
 
+  // --- Handlers de Critérios de Conclusão 7D (P1.4) ---
+  const handleAddCriterion = () => {
+    if (!newCriterionText.trim()) return;
+    const currentList = task.completionCriteria || [];
+    const newCrit: CompletionCriterion = {
+      id: `crit-${Date.now()}`,
+      text: newCriterionText.trim(),
+      done: false,
+      required: newCriterionRequired,
+    };
+    handleUpdate({ completionCriteria: [...currentList, newCrit] });
+    setNewCriterionText("");
+    toast.success("Critério de conclusão adicionado.");
+  };
+
+  const handleToggleCriterion = (criterionId: string, currentDone: boolean) => {
+    const currentList = task.completionCriteria || [];
+    const updated = currentList.map((c) => (c.id === criterionId ? { ...c, done: !currentDone } : c));
+    handleUpdate({ completionCriteria: updated });
+  };
+
+  const handleDeleteCriterion = (criterionId: string) => {
+    const currentList = task.completionCriteria || [];
+    handleUpdate({ completionCriteria: currentList.filter((c) => c.id !== criterionId) });
+  };
+
+  // --- Handlers de Entregáveis e Versionamento 7D (P1.5) ---
+  const handleAddDeliverable = () => {
+    if (!newDelivName.trim()) return;
+    const currentList = task.deliverableMaterials || [];
+    const newDeliv: DeliverableMaterial = {
+      id: `deliv-${Date.now()}`,
+      name: newDelivName.trim(),
+      type: newDelivType,
+      version: newDelivVersion.trim() || "v1.0",
+      assigneeName: assignee?.name,
+      url: newDelivUrl.trim(),
+      reviewStatus: "nao_enviado",
+      updatedAt: new Date().toISOString(),
+    };
+    handleUpdate({ deliverableMaterials: [...currentList, newDeliv] });
+    setNewDelivName("");
+    setNewDelivUrl("");
+    toast.success("Entregável registrado com sucesso.");
+  };
+
+  const handleUpdateDeliverableStatus = (delivId: string, reviewStatus: ReviewStatus) => {
+    const currentList = task.deliverableMaterials || [];
+    const updated = currentList.map((d) =>
+      d.id === delivId ? { ...d, reviewStatus, updatedAt: new Date().toISOString() } : d
+    );
+    handleUpdate({ deliverableMaterials: updated });
+    toast.success(`Status de revisão alterado para: ${REVIEW_STATUS_CONFIG[reviewStatus].label}`);
+  };
+
+  const handleDeleteDeliverable = (delivId: string) => {
+    const currentList = task.deliverableMaterials || [];
+    handleUpdate({ deliverableMaterials: currentList.filter((d) => d.id !== delivId) });
+  };
+
+  // --- Handlers de Bloqueio 7D (P1.2) ---
+  const handleActivateBlock = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!blockReason.trim()) return;
+
+    const blockInfo: TaskBlockInfo = {
+      active: true,
+      type: blockType,
+      reason: blockReason.trim(),
+      resolverResponsible: blockResolver.trim() || (assignee?.name ?? "Responsável"),
+      requestedAt: new Date().toISOString().slice(0, 10),
+      agreedDeadline: blockDeadline || null,
+      requiredDeliverable: blockImpact.trim(),
+      impactDescription: blockImpact.trim(),
+      unlockEvidenceUrl: blockEvidence.trim() || undefined,
+    };
+
+    handleUpdate({
+      blockedReason: blockReason.trim(),
+      blockInfo,
+    });
+    toast.warning("Bloqueio operacional registrado!");
+  };
+
+  const handleClearBlock = () => {
+    handleUpdate({
+      blockedReason: null,
+      blockInfo: undefined,
+    });
+    toast.success("Tarefa desbloqueada com sucesso!");
+  };
+
+  // --- Handlers de Backup Master 7D (P1.6) ---
+  const handleUpdateBackupChecklist = (key: keyof BackupMasterInfo, val: boolean) => {
+    const current = task.backupMaster || {
+      googleDriveUrl: "",
+      fileName: "",
+      version: "v1.0",
+      folderPath: "",
+      responsibleName: assignee?.name || "",
+      updatedAt: new Date().toISOString(),
+      approvalStatus: "nao_enviado",
+      arquivoSalvo: false,
+      linkDisponivel: false,
+      permissoesVerificadas: false,
+      versaoCorreta: false,
+      aprovacaoRegistrada: false,
+    };
+
+    handleUpdate({
+      backupMaster: {
+        ...current,
+        [key]: val,
+        updatedAt: new Date().toISOString(),
+      },
+    });
+  };
+
+  // Subtarefas e Evidências
   const handleAddSubtask = () => {
     if (!newSubtaskTitle.trim()) return;
     const target = newSubtaskTarget ? Number(newSubtaskTarget) : null;
@@ -194,14 +400,63 @@ export const TaskDetailModal: React.FC = () => {
   return (
     <Dialog open={isTaskModalOpen} onOpenChange={setIsTaskModalOpen}>
       <DialogContent className="bg-card border border-border text-card-foreground max-w-3xl w-full p-0 overflow-hidden rounded-3xl max-h-[90vh] flex flex-col shadow-2xl">
+        {/* P1.2: BANNER DESTACADO DE BLOQUEIO ATIVO */}
+        {isBlocked && (
+          <div className="bg-rose-500/10 border-b border-rose-500/30 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-start gap-3">
+              <ShieldAlert className="h-5 w-5 text-rose-500 shrink-0 mt-0.5" />
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-extrabold uppercase text-rose-600 dark:text-rose-400 tracking-wider">
+                    🚧 BLOQUEIO ATIVO ({BLOCK_TYPE_LABEL[task.blockInfo?.type || "total"]})
+                  </span>
+                </div>
+                <div className="text-foreground mt-0.5 font-medium">
+                  <strong>Motivo:</strong> {task.blockInfo?.reason || task.blockedReason}
+                </div>
+                <div className="text-muted-foreground flex flex-wrap gap-x-4 mt-0.5 text-[11px]">
+                  <span>
+                    <strong>Responsável:</strong> {task.blockInfo?.resolverResponsible || "Aguardando definição"}
+                  </span>
+                  {task.blockInfo?.impactDescription && (
+                    <span>
+                      <strong>Impacto:</strong> {task.blockInfo.impactDescription}
+                    </span>
+                  )}
+                  {task.blockInfo?.agreedDeadline && (
+                    <span>
+                      <strong>Prazo acordado:</strong> {task.blockInfo.agreedDeadline}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <Button
+              onClick={handleClearBlock}
+              size="sm"
+              className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold h-7 text-xs rounded-xl flex items-center gap-1.5 shrink-0"
+            >
+              <Unlock className="h-3.5 w-3.5" />
+              <span>Desbloquear Tarefa</span>
+            </Button>
+          </div>
+        )}
+
         {/* Cabeçalho */}
         <div className="p-6 pb-4 border-b border-border bg-muted/40">
           <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm">{STATUS_ICON[task.status]}</span>
               <Badge variant="outline" className="text-[10px] uppercase font-mono border-border text-muted-foreground">
                 {stage?.title || "Etapa"}
               </Badge>
+
+              {/* P1.1: Badge Discreto de Origem 7D */}
+              <Badge variant="outline" className={`text-[10px] font-bold uppercase font-mono ${originCfg.badgeClass}`}>
+                {originCfg.label}
+              </Badge>
+
               <Badge className="text-[10px] font-black py-0 px-2 bg-primary/20 text-primary border-primary/30">
                 {PRIORITY_LABEL[task.priority]}
               </Badge>
@@ -210,11 +465,7 @@ export const TaskDetailModal: React.FC = () => {
             <div className="flex items-center gap-1.5">
               <Button
                 size="sm"
-                onClick={() => {
-                  const nextStatus: TaskStatus =
-                    task.status === "pending" ? "doing" : task.status === "doing" ? "done" : "pending";
-                  handleUpdate({ status: nextStatus });
-                }}
+                onClick={handleStatusTransition}
                 className="h-7 text-xs bg-muted hover:bg-muted/80 text-foreground border border-border rounded-lg font-bold"
               >
                 Mudar: {task.status === "pending" ? "Iniciar (Fazendo)" : task.status === "doing" ? "Concluir (Feito)" : "Reabrir"}
@@ -234,17 +485,20 @@ export const TaskDetailModal: React.FC = () => {
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="bg-muted border border-border p-1 rounded-xl mb-4 flex-wrap h-auto">
               <TabsTrigger value="execution" className="text-xs font-bold data-[state=active]:bg-card data-[state=active]:text-foreground">
-                Execução & Checklist
+                Execução & Critérios
+              </TabsTrigger>
+              <TabsTrigger value="deliverables" className="text-xs font-bold data-[state=active]:bg-card data-[state=active]:text-foreground">
+                Entregáveis & Backup
+              </TabsTrigger>
+              <TabsTrigger value="expert" className="text-xs font-bold data-[state=active]:bg-card data-[state=active]:text-foreground">
+                Demanda do Expert
               </TabsTrigger>
               <TabsTrigger value="classification" className="text-xs font-bold data-[state=active]:bg-card data-[state=active]:text-foreground">
-                Classificação & Flags
+                Classificação & Bloqueio
               </TabsTrigger>
               <TabsTrigger value="time" className="text-xs font-bold flex items-center gap-1 data-[state=active]:bg-card data-[state=active]:text-foreground">
                 <Clock className="h-3 w-3 text-amber-500" />
-                <span>Tempo & Pomodoro</span>
-              </TabsTrigger>
-              <TabsTrigger value="evidence" className="text-xs font-bold data-[state=active]:bg-card data-[state=active]:text-foreground">
-                Evidências
+                <span>Tempo & Foco</span>
               </TabsTrigger>
               <TabsTrigger value="prompt" className="text-xs font-bold flex items-center gap-1 data-[state=active]:bg-card data-[state=active]:text-foreground">
                 <Sparkles className="h-3 w-3 text-amber-500" />
@@ -252,7 +506,7 @@ export const TaskDetailModal: React.FC = () => {
               </TabsTrigger>
             </TabsList>
 
-            {/* ABA 1: EXECUÇÃO & CHECKLIST */}
+            {/* ABA 1: EXECUÇÃO, SUBTAREFAS & CRITÉRIOS DE CONCLUSÃO (P1.4) */}
             <TabsContent value="execution" className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-2xl bg-muted/30 border border-border">
                 <div>
@@ -301,7 +555,90 @@ export const TaskDetailModal: React.FC = () => {
                 </div>
               </div>
 
-              {/* Checklist */}
+              {/* P1.4: CRITÉRIOS VERIFICÁVEIS DE CONCLUSÃO */}
+              <div className="p-4 rounded-2xl bg-muted/30 border border-border space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileCheck className="h-4 w-4 text-primary" />
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                      Critérios Verificáveis de Conclusão ({task.completionCriteria?.filter((c) => c.done).length || 0}/
+                      {task.completionCriteria?.length || 0})
+                    </h4>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">
+                    Exige critérios obrigatórios antes de receber status Feito
+                  </span>
+                </div>
+
+                <div className="space-y-1.5">
+                  {(task.completionCriteria || []).length === 0 ? (
+                    <div className="text-xs text-muted-foreground/60 italic py-2 text-center border border-dashed border-border rounded-xl">
+                      Nenhum critério específico adicionado. A tarefa poderá ser concluída pelas subtarefas.
+                    </div>
+                  ) : (
+                    (task.completionCriteria || []).map((crit) => (
+                      <div
+                        key={crit.id}
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-card border border-border text-xs gap-2"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleToggleCriterion(crit.id, crit.done)}
+                          className="flex items-center gap-2 text-left flex-1 min-w-0"
+                        >
+                          {crit.done ? (
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          ) : (
+                            <Circle className="h-4 w-4 text-muted-foreground shrink-0" />
+                          )}
+                          <span className={`truncate ${crit.done ? "line-through text-muted-foreground" : "text-foreground font-medium"}`}>
+                            {crit.text}
+                          </span>
+                        </button>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          {crit.required && (
+                            <Badge variant="outline" className="text-[9px] uppercase border-rose-500/30 text-rose-600 dark:text-rose-400 font-mono">
+                              Obrigatório
+                            </Badge>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteCriterion(crit.id)}
+                            className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <Input
+                    value={newCriterionText}
+                    onChange={(e) => setNewCriterionText(e.target.value)}
+                    placeholder="Adicionar critério de aceite (ex: Arquivo disponibilizado, link testado)..."
+                    className="h-8 text-xs bg-background border-input text-foreground flex-1"
+                  />
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={newCriterionRequired}
+                      onChange={(e) => setNewCriterionRequired(e.target.checked)}
+                      className="rounded"
+                    />
+                    <span>Obrigatório</span>
+                  </label>
+                  <Button onClick={handleAddCriterion} size="sm" className="h-8 text-xs bg-primary text-primary-foreground font-bold">
+                    Adicionar
+                  </Button>
+                </div>
+              </div>
+
+              {/* Subtarefas */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs font-bold uppercase text-muted-foreground">
                   <span>Subtarefas ({subtasks.filter((s) => s.done).length}/{subtasks.length})</span>
@@ -344,8 +681,538 @@ export const TaskDetailModal: React.FC = () => {
               </div>
             </TabsContent>
 
-            {/* ABA 2: CLASSIFICAÇÃO & FLAGS (Seção 7 e 12) */}
+            {/* ABA 2: ENTREGÁVEIS, VERSIONAMENTO & BACKUP MASTER (P1.5 e P1.6) */}
+            <TabsContent value="deliverables" className="space-y-5">
+              {/* P1.5: ENTREGÁVEIS E VERSIONAMENTO */}
+              <div className="p-4 rounded-2xl bg-muted/30 border border-border space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileCheck className="h-4 w-4 text-primary" />
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                      Entregáveis Vinculados & Versionamento 7D
+                    </h4>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">
+                    Aprovação independente do status da tarefa
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  {(task.deliverableMaterials || []).length === 0 ? (
+                    <div className="text-xs text-muted-foreground/60 italic py-2 text-center border border-dashed border-border rounded-xl">
+                      Nenhum entregável formal vinculado a esta atividade.
+                    </div>
+                  ) : (
+                    (task.deliverableMaterials || []).map((deliv) => {
+                      const statusCfg = REVIEW_STATUS_CONFIG[deliv.reviewStatus || "nao_enviado"];
+                      return (
+                        <div
+                          key={deliv.id}
+                          className="p-3 rounded-xl bg-card border border-border shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                        >
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-foreground">{deliv.name}</span>
+                              <Badge variant="outline" className="text-[9px] uppercase font-mono border-border">
+                                {deliv.type} · {deliv.version}
+                              </Badge>
+                              <Badge className={`text-[9px] ${statusCfg.badgeClass}`}>
+                                {statusCfg.label}
+                              </Badge>
+                            </div>
+                            {deliv.url && (
+                              <a
+                                href={deliv.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-primary hover:underline text-[11px] flex items-center gap-1 mt-0.5"
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                                <span>Acessar material</span>
+                              </a>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <select
+                              value={deliv.reviewStatus}
+                              onChange={(e) => handleUpdateDeliverableStatus(deliv.id, e.target.value as ReviewStatus)}
+                              className="h-7 rounded-lg bg-background border border-input text-[11px] text-foreground px-2"
+                            >
+                              <option value="nao_enviado">Não enviado</option>
+                              <option value="aguardando_revisao">Aguardando revisão</option>
+                              <option value="ajustes_solicitados">Ajustes solicitados</option>
+                              <option value="aprovado">Aprovado</option>
+                            </select>
+
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeleteDeliverable(deliv.id)}
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Formulário para novo entregável */}
+                <div className="pt-2 border-t border-border space-y-2">
+                  <span className="text-[11px] font-bold text-muted-foreground uppercase block">
+                    + Adicionar Entregável Formal
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                    <Input
+                      value={newDelivName}
+                      onChange={(e) => setNewDelivName(e.target.value)}
+                      placeholder="Nome (ex: Script de Qualificação)"
+                      className="h-8 text-xs bg-background border-input text-foreground sm:col-span-2"
+                    />
+                    <select
+                      value={newDelivType}
+                      onChange={(e) => setNewDelivType(e.target.value)}
+                      className="h-8 rounded-xl bg-background border border-input text-xs text-foreground px-2"
+                    >
+                      <option value="Documento">Documento</option>
+                      <option value="Vídeo">Vídeo</option>
+                      <option value="Criativo">Criativo</option>
+                      <option value="Roteiro">Roteiro / Script</option>
+                      <option value="Planilha">Planilha</option>
+                      <option value="Outro">Outro</option>
+                    </select>
+                    <Input
+                      value={newDelivVersion}
+                      onChange={(e) => setNewDelivVersion(e.target.value)}
+                      placeholder="Versão (v1.0)"
+                      className="h-8 text-xs bg-background border-input text-foreground font-mono"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      value={newDelivUrl}
+                      onChange={(e) => setNewDelivUrl(e.target.value)}
+                      placeholder="Link do material (Drive, Figma, Docs)..."
+                      className="h-8 text-xs bg-background border-input text-foreground flex-1"
+                    />
+                    <Button onClick={handleAddDeliverable} size="sm" className="h-8 text-xs bg-primary text-primary-foreground font-bold">
+                      Registrar Entregável
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* P1.6: BACKUP MASTER */}
+              <div className="p-4 rounded-2xl bg-muted/30 border border-border space-y-3">
+                <div className="flex items-center gap-2">
+                  <FolderArchive className="h-4 w-4 text-amber-500" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                    📁 Backup Master & Repositório Oficial
+                  </h4>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="text-muted-foreground block mb-1">Link da Pasta no Google Drive</label>
+                    <Input
+                      value={task.backupMaster?.googleDriveUrl || ""}
+                      onChange={(e) =>
+                        handleUpdate({
+                          backupMaster: {
+                            ...(task.backupMaster || {
+                              fileName: "",
+                              version: "v1.0",
+                              folderPath: "",
+                              responsibleName: assignee?.name || "",
+                              updatedAt: new Date().toISOString(),
+                              approvalStatus: "nao_enviado",
+                              arquivoSalvo: false,
+                              linkDisponivel: false,
+                              permissoesVerificadas: false,
+                              versaoCorreta: false,
+                              aprovacaoRegistrada: false,
+                            }),
+                            googleDriveUrl: e.target.value,
+                          },
+                        })
+                      }
+                      placeholder="https://drive.google.com/drive/folders/..."
+                      className="h-8 bg-background border-input text-foreground text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-muted-foreground block mb-1">Nome do Arquivo / Pasta</label>
+                    <Input
+                      value={task.backupMaster?.fileName || ""}
+                      onChange={(e) =>
+                        handleUpdate({
+                          backupMaster: {
+                            ...(task.backupMaster || {
+                              googleDriveUrl: "",
+                              version: "v1.0",
+                              folderPath: "",
+                              responsibleName: assignee?.name || "",
+                              updatedAt: new Date().toISOString(),
+                              approvalStatus: "nao_enviado",
+                              arquivoSalvo: false,
+                              linkDisponivel: false,
+                              permissoesVerificadas: false,
+                              versaoCorreta: false,
+                              aprovacaoRegistrada: false,
+                            }),
+                            fileName: e.target.value,
+                          },
+                        })
+                      }
+                      placeholder="Ex: 01_FUNDACAO/Script_Comercial_v1.pdf"
+                      className="h-8 bg-background border-input text-foreground text-xs"
+                    />
+                  </div>
+                </div>
+
+                {/* Checklist de Validação 7D */}
+                <div className="pt-2 border-t border-border space-y-2">
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground block">
+                    Checklist de Verificação do Backup 7D:
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <label className="flex items-center gap-2 cursor-pointer text-muted-foreground hover:text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={!!task.backupMaster?.arquivoSalvo}
+                        onChange={(e) => handleUpdateBackupChecklist("arquivoSalvo", e.target.checked)}
+                        className="rounded"
+                      />
+                      <span>Arquivo salvo no repositório</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer text-muted-foreground hover:text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={!!task.backupMaster?.linkDisponivel}
+                        onChange={(e) => handleUpdateBackupChecklist("linkDisponivel", e.target.checked)}
+                        className="rounded"
+                      />
+                      <span>Link disponível e acessível</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer text-muted-foreground hover:text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={!!task.backupMaster?.permissoesVerificadas}
+                        onChange={(e) => handleUpdateBackupChecklist("permissoesVerificadas", e.target.checked)}
+                        className="rounded"
+                      />
+                      <span>Permissões de compartilhamento verificadas</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer text-muted-foreground hover:text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={!!task.backupMaster?.versaoCorreta}
+                        onChange={(e) => handleUpdateBackupChecklist("versaoCorreta", e.target.checked)}
+                        className="rounded"
+                      />
+                      <span>Versão correta e atualizada</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer text-muted-foreground hover:text-foreground sm:col-span-2">
+                      <input
+                        type="checkbox"
+                        checked={!!task.backupMaster?.aprovacaoRegistrada}
+                        onChange={(e) => handleUpdateBackupChecklist("aprovacaoRegistrada", e.target.checked)}
+                        className="rounded"
+                      />
+                      <span>Aprovação registrada para esta versão</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* ABA 3: DEMANDAS EXECUTIVAS DO EXPERT (P1.3) */}
+            <TabsContent value="expert" className="space-y-4">
+              <div className="p-4 rounded-2xl bg-muted/30 border border-border space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Video className="h-4 w-4 text-purple-500" />
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                      Demanda Executiva do Especialista
+                    </h4>
+                  </div>
+
+                  <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer font-medium">
+                    <input
+                      type="checkbox"
+                      checked={!!task.expertDemand?.isExpertDemand}
+                      onChange={(e) =>
+                        handleUpdate({
+                          expertDemand: {
+                            isExpertDemand: e.target.checked,
+                            category: task.expertDemand?.category || "gravar",
+                            status: task.expertDemand?.status || "solicitado",
+                            requesterName: task.expertDemand?.requesterName || "",
+                            quantity: task.expertDemand?.quantity || 1,
+                            agreedDeadline: task.expertDemand?.agreedDeadline || "",
+                            expectedMaterial: task.expertDemand?.expectedMaterial || "",
+                          },
+                        })
+                      }
+                      className="rounded"
+                    />
+                    <span>Ativar como Demanda do Expert</span>
+                  </label>
+                </div>
+
+                {task.expertDemand?.isExpertDemand ? (
+                  <div className="space-y-3 pt-2 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-muted-foreground block mb-1">Agrupamento da Ação</label>
+                        <select
+                          value={task.expertDemand.category}
+                          onChange={(e) =>
+                            handleUpdate({
+                              expertDemand: {
+                                ...task.expertDemand,
+                                category: e.target.value as ExpertDemandCategory,
+                              },
+                            })
+                          }
+                          className="w-full h-8 rounded-lg bg-background border border-input text-xs text-foreground px-2"
+                        >
+                          {(Object.keys(EXPERT_DEMAND_CATEGORIES) as ExpertDemandCategory[]).map((cat) => (
+                            <option key={cat} value={cat}>
+                              {EXPERT_DEMAND_CATEGORIES[cat]}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-muted-foreground block mb-1">Estado da Produção</label>
+                        <select
+                          value={task.expertDemand.status}
+                          onChange={(e) =>
+                            handleUpdate({
+                              expertDemand: {
+                                ...task.expertDemand,
+                                status: e.target.value as ExpertDemandStatus,
+                              },
+                            })
+                          }
+                          className="w-full h-8 rounded-lg bg-background border border-input text-xs text-foreground px-2"
+                        >
+                          {(Object.keys(EXPERT_DEMAND_STATUSES) as ExpertDemandStatus[]).map((st) => (
+                            <option key={st} value={st}>
+                              {EXPERT_DEMAND_STATUSES[st].label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-muted-foreground block mb-1">Solicitante</label>
+                        <Input
+                          value={task.expertDemand.requesterName || ""}
+                          onChange={(e) =>
+                            handleUpdate({
+                              expertDemand: { ...task.expertDemand, requesterName: e.target.value },
+                            })
+                          }
+                          placeholder="Ex: Gestor de Tráfego"
+                          className="h-8 text-xs bg-background border-input text-foreground"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-muted-foreground block mb-1">Quantidade de Itens</label>
+                        <Input
+                          type="number"
+                          value={task.expertDemand.quantity || 1}
+                          onChange={(e) =>
+                            handleUpdate({
+                              expertDemand: { ...task.expertDemand, quantity: Number(e.target.value) || 1 },
+                            })
+                          }
+                          className="h-8 text-xs bg-background border-input text-foreground"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-muted-foreground block mb-1">Prazo Acordado</label>
+                        <Input
+                          type="date"
+                          value={task.expertDemand.agreedDeadline || ""}
+                          onChange={(e) =>
+                            handleUpdate({
+                              expertDemand: { ...task.expertDemand, agreedDeadline: e.target.value },
+                            })
+                          }
+                          className="h-8 text-xs bg-background border-input text-foreground"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-muted-foreground block mb-1">Material Esperado e Orientações</label>
+                      <Textarea
+                        value={task.expertDemand.expectedMaterial || ""}
+                        onChange={(e) =>
+                          handleUpdate({
+                            expertDemand: { ...task.expertDemand, expectedMaterial: e.target.value },
+                          })
+                        }
+                        placeholder="Ex: 3 criativos de 45 segundos gravados em 9:16 com gancho direto para o grupo VIP..."
+                        className="text-xs bg-background border-input text-foreground min-h-[80px]"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic py-3 text-center border border-dashed border-border rounded-xl">
+                    Esta tarefa não está classificada como demanda direta do especialista.
+                  </p>
+                )}
+              </div>
+            </TabsContent>
+
+            {/* ABA 4: CLASSIFICAÇÃO, ORIGEM 7D & GERENCIADOR DE BLOQUEIOS (P1.1 e P1.2) */}
             <TabsContent value="classification" className="space-y-5">
+              {/* P1.1: ORIGEM DA TAREFA */}
+              <div className="p-4 rounded-2xl bg-muted/30 border border-border space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                    Origem da Tarefa (Arquitetura 7D)
+                  </h4>
+                  <Badge variant="outline" className={originCfg.badgeClass}>
+                    {originCfg.label}
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {(["defined", "derived", "proposed"] as TaskOrigin[]).map((org) => {
+                    const cfg = TASK_ORIGIN_CONFIG[org];
+                    const isSelected = (task.origin || "defined") === org;
+
+                    return (
+                      <button
+                        key={org}
+                        type="button"
+                        onClick={() => handleUpdate({ origin: org })}
+                        className={`p-3 rounded-xl border text-left transition-all ${
+                          isSelected
+                            ? "bg-primary/10 border-primary text-foreground shadow-sm ring-1 ring-primary/30"
+                            : "bg-card border-border text-muted-foreground hover:border-primary/40"
+                        }`}
+                      >
+                        <div className="text-xs font-bold text-foreground mb-1">{cfg.label}</div>
+                        <div className="text-[10px] text-muted-foreground leading-tight">{cfg.description}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* P1.2: GERENCIADOR E CONFIGURAÇÃO DE BLOQUEIOS OPERACIONAIS */}
+              <div className="p-4 rounded-2xl bg-muted/30 border border-border space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ShieldAlert className="h-4 w-4 text-rose-500" />
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                      Controle de Bloqueio Operacional
+                    </h4>
+                  </div>
+                  {isBlocked && (
+                    <Badge variant="destructive" className="text-[10px] font-mono">
+                      Bloqueio Ativo
+                    </Badge>
+                  )}
+                </div>
+
+                <form onSubmit={handleActivateBlock} className="space-y-3 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-muted-foreground block mb-1">Tipo de Bloqueio</label>
+                      <select
+                        value={blockType}
+                        onChange={(e) => setBlockType(e.target.value as BlockType)}
+                        className="w-full h-8 rounded-lg bg-background border border-input text-xs text-foreground px-2"
+                      >
+                        {(Object.keys(BLOCK_TYPE_LABEL) as BlockType[]).map((bt) => (
+                          <option key={bt} value={bt}>
+                            {BLOCK_TYPE_LABEL[bt]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-muted-foreground block mb-1">Responsável pelo Desbloqueio</label>
+                      <Input
+                        value={blockResolver}
+                        onChange={(e) => setBlockResolver(e.target.value)}
+                        placeholder="Ex: Expert / Cliente / Gestor de Tráfego"
+                        className="h-8 text-xs bg-background border-input text-foreground"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-muted-foreground block mb-1">Motivo do Bloqueio</label>
+                    <Input
+                      value={blockReason}
+                      onChange={(e) => setBlockReason(e.target.value)}
+                      placeholder="Ex: Aguardando gravação dos criativos pelo especialista..."
+                      className="h-8 text-xs bg-background border-input text-foreground"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-muted-foreground block mb-1">Impacto da Trava</label>
+                      <Input
+                        value={blockImpact}
+                        onChange={(e) => setBlockImpact(e.target.value)}
+                        placeholder="Ex: Impede publicação da campanha de aquisição"
+                        className="h-8 text-xs bg-background border-input text-foreground"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-muted-foreground block mb-1">Prazo Acordado p/ Solução</label>
+                      <Input
+                        type="date"
+                        value={blockDeadline}
+                        onChange={(e) => setBlockDeadline(e.target.value)}
+                        className="h-8 text-xs bg-background border-input text-foreground"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    {isBlocked && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleClearBlock}
+                        className="h-8 text-xs border-border"
+                      >
+                        Remover Bloqueio
+                      </Button>
+                    )}
+                    <Button type="submit" size="sm" className="h-8 text-xs bg-rose-600 hover:bg-rose-500 text-white font-bold">
+                      {isBlocked ? "Atualizar Dados do Bloqueio" : "Registrar Bloqueio Ativo"}
+                    </Button>
+                  </div>
+                </form>
+              </div>
+
               {/* SEÇÃO 7: FLAGS DE IMPACTO (Até 3 simultâneas) */}
               <div className="p-4 rounded-2xl bg-muted/30 border border-border space-y-3">
                 <div>
@@ -389,7 +1256,7 @@ export const TaskDetailModal: React.FC = () => {
                 </div>
               </div>
 
-              {/* SEÇÃO 12: DURAÇÃO ESTIMADA MANUAL */}
+              {/* DURAÇÃO ESTIMADA MANUAL */}
               <div className="p-4 rounded-2xl bg-muted/30 border border-border space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
@@ -406,7 +1273,7 @@ export const TaskDetailModal: React.FC = () => {
                       variant="ghost"
                       size="sm"
                       onClick={() => handleSetDuration(null)}
-                      className="text-xs text-muted-foreground hover:text-red-500 h-7"
+                      className="text-xs text-muted-foreground hover:text-destructive h-7"
                     >
                       Limpar Estimativa
                     </Button>
@@ -433,22 +1300,10 @@ export const TaskDetailModal: React.FC = () => {
                   </Button>
                 </div>
               </div>
-
-              {/* Bloqueio */}
-              <div>
-                <label className="text-xs font-bold text-muted-foreground block mb-1">Motivo de Bloqueio</label>
-                <Input
-                  value={task.blockedReason || ""}
-                  onChange={(e) => handleUpdate({ blockedReason: e.target.value || null })}
-                  placeholder="Deixe em branco se a tarefa não estiver travada..."
-                  className="bg-background border-input text-foreground text-xs h-8"
-                />
-              </div>
             </TabsContent>
 
-            {/* ABA 3: TEMPO & POMODORO (Seção 11) */}
+            {/* ABA 5: TEMPO & POMODORO */}
             <TabsContent value="time" className="space-y-4">
-              {/* Cronômetro / Pomodoro Card */}
               <div className="p-5 rounded-2xl bg-card border border-border shadow-sm space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -463,7 +1318,6 @@ export const TaskDetailModal: React.FC = () => {
                   </Badge>
                 </div>
 
-                {/* Display Digital do Tempo */}
                 <div className="text-center py-2">
                   <div className="text-4xl font-extrabold font-mono text-foreground tracking-widest drop-shadow-sm">
                     {String(timerMinutes).padStart(2, "0")}:{String(timerSeconds).padStart(2, "0")}
@@ -473,7 +1327,6 @@ export const TaskDetailModal: React.FC = () => {
                   </span>
                 </div>
 
-                {/* Controles: Play / Pause / Retomar / Finalizar / Reiniciar */}
                 <div className="flex items-center justify-center gap-2 pt-1">
                   {!isCurrentTimer ? (
                     <Button
@@ -515,7 +1368,7 @@ export const TaskDetailModal: React.FC = () => {
                         onClick={() => {
                           if (confirm("Deseja zerar o cronômetro desta sessão?")) resetTimer();
                         }}
-                        className="text-muted-foreground hover:text-red-500 text-xs h-8 px-2"
+                        className="text-muted-foreground hover:text-destructive text-xs h-8 px-2"
                       >
                         <RotateCcw className="h-3.5 w-3.5" />
                       </Button>
@@ -524,7 +1377,6 @@ export const TaskDetailModal: React.FC = () => {
                 </div>
               </div>
 
-              {/* Apontamento Manual de Minutos */}
               <div className="p-4 rounded-xl bg-muted/30 border border-border space-y-3">
                 <span className="text-xs font-bold text-muted-foreground block">Ou apontar tempo manualmente:</span>
                 <div className="flex gap-2">
@@ -546,7 +1398,6 @@ export const TaskDetailModal: React.FC = () => {
                   </Button>
                 </div>
 
-                {/* Histórico de Registros de Tempo */}
                 <div className="space-y-1.5 pt-2 max-h-36 overflow-y-auto">
                   {task.timeEntries.map((te) => (
                     <div key={te.id} className="text-[11px] flex justify-between text-muted-foreground bg-card border border-border p-2 rounded-lg">
@@ -558,42 +1409,7 @@ export const TaskDetailModal: React.FC = () => {
               </div>
             </TabsContent>
 
-            {/* ABA 4: EVIDÊNCIAS */}
-            <TabsContent value="evidence" className="space-y-4">
-              <div className="p-4 rounded-xl bg-muted/30 border border-border space-y-3">
-                <h4 className="text-xs font-bold text-foreground">Anexar Evidência / Link de Aceite</h4>
-                <div className="flex gap-2">
-                  <Input
-                    value={evidenceName}
-                    onChange={(e) => setEvidenceName(e.target.value)}
-                    placeholder="Nome (ex: Print CRM)"
-                    className="h-8 w-44 bg-background border-input text-foreground text-xs"
-                  />
-                  <Input
-                    value={evidenceUrl}
-                    onChange={(e) => setEvidenceUrl(e.target.value)}
-                    placeholder="URL (https://...)"
-                    className="h-8 flex-1 bg-background border-input text-foreground text-xs"
-                  />
-                  <Button onClick={handleAddEvidence} size="sm" className="h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-bold">
-                    Anexar
-                  </Button>
-                </div>
-
-                <div className="space-y-1.5 pt-2">
-                  {task.evidence.map((ev) => (
-                    <div key={ev.id} className="p-2 rounded-lg bg-card border border-border flex items-center justify-between text-xs">
-                      <span className="text-foreground font-medium">{ev.name}</span>
-                      <a href={ev.url} target="_blank" rel="noreferrer" className="text-primary hover:underline font-mono text-[11px]">
-                        Abrir link
-                      </a>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </TabsContent>
-
-            {/* ABA 5: PROMPT OTIMIZADO */}
+            {/* ABA 6: PROMPT IA */}
             <TabsContent value="prompt" className="space-y-3">
               <p className="text-xs text-muted-foreground">
                 Prompt de execução acelerada para operadores ou agentes de IA.

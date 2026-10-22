@@ -76,6 +76,8 @@ export const StructureView: React.FC = () => {
     filterPriority,
     filterStatus,
     filterImpact,
+    filterExpertDemands,
+    filterOrigin,
     setSelectedTaskId,
     setIsTaskModalOpen,
     setTaskStatusAction,
@@ -201,6 +203,8 @@ export const StructureView: React.FC = () => {
           if (filterPriority) tasks = tasks.filter((t) => t.priority === filterPriority);
           if (filterStatus) tasks = tasks.filter((t) => t.status === filterStatus);
           if (filterImpact) tasks = tasks.filter((t) => t.impactFlags?.includes(filterImpact));
+          if (filterExpertDemands) tasks = tasks.filter((t) => t.expertDemand?.isExpertDemand);
+          if (filterOrigin) tasks = tasks.filter((t) => (t.origin || "defined") === filterOrigin);
 
           const isStageExpanded = expandedStages[stage.id] ?? true;
           // Numeração dinâmica da etapa (Seção 6)
@@ -443,10 +447,31 @@ export const StructureView: React.FC = () => {
                                   ))}
                                 </div>
                               )}
-                                      {IMPACT_FLAG_CONFIG[f]?.icon}
-                                    </span>
-                                  ))}
-                                </div>
+
+                              {/* PATCH 002: Indicadores Discretos 7D */}
+                              {task.blockInfo?.active && (
+                                <span
+                                  className="text-xs shrink-0 cursor-help"
+                                  title={`Bloqueio Ativo: ${task.blockInfo.reason || "Pendente"}`}
+                                >
+                                  🚧
+                                </span>
+                              )}
+                              {task.expertDemand?.isExpertDemand && (
+                                <span
+                                  className="text-xs shrink-0 cursor-help"
+                                  title={`Demanda do Expert: ${task.expertDemand.category} (${task.expertDemand.status})`}
+                                >
+                                  👔
+                                </span>
+                              )}
+                              {task.origin === "proposed" && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[8px] font-mono py-0 px-1 border-dashed border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/5 shrink-0"
+                                >
+                                  PROPOSTO
+                                </Badge>
                               )}
 
                               {/* SEÇÃO 11: ATRIBUIÇÃO DIRETA DE RESPONSÁVEL COM 1 CLIQUE */}

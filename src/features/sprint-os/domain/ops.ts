@@ -256,7 +256,13 @@ export function setTaskStatus(ws: Workspace, ctx: Ctx, id: ID, to: TaskStatus) {
   if (to === "done") {
     const missing = subtasksOf(ws, id).filter((s) => s.required && !s.done);
     if (missing.length) throw new DomainError(`Conclua ${missing.length} subtarefa(s) obrigatória(s) antes de marcar como Feito`);
-    if (t.blockedReason) throw new DomainError("Tarefa possui bloqueio ativo");
+    if (t.blockedReason || t.blockInfo?.active) throw new DomainError("Tarefa possui bloqueio ativo");
+    if (t.completionCriteria && t.completionCriteria.length > 0) {
+      const pendingCriteria = t.completionCriteria.filter((c) => c.required && !c.done);
+      if (pendingCriteria.length > 0) {
+        throw new DomainError(`Critério de conclusão obrigatório pendente: "${pendingCriteria[0].text}"`);
+      }
+    }
     t.actualStart ??= ctx.nowIso;
     t.actualEnd = ctx.nowIso;
   } else if (to === "doing") {

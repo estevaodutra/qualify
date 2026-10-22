@@ -136,6 +136,8 @@ interface SprintOSState {
   filterPriority: Priority | null;
   filterStatus: TaskStatus | null;
   filterImpact: ImpactFlag | null;
+  filterExpertDemands: boolean;
+  filterOrigin: "defined" | "derived" | "proposed" | null;
 
   // Seleções & Modais
   selectedTaskId: ID | null;
@@ -182,6 +184,8 @@ interface SprintOSState {
   setFilterPriority: (priority: Priority | null) => void;
   setFilterStatus: (status: TaskStatus | null) => void;
   setFilterImpact: (flag: ImpactFlag | null) => void;
+  setFilterExpertDemands: (val: boolean) => void;
+  setFilterOrigin: (origin: "defined" | "derived" | "proposed" | null) => void;
   setSelectedTaskId: (id: ID | null) => void;
   setIsTaskModalOpen: (open: boolean) => void;
   setIsDeadlineModalOpen: (open: boolean) => void;
@@ -217,6 +221,10 @@ interface SprintOSState {
   upsertIndicatorAction: (data: Partial<CustomIndicator> & { name: string; type: CustomIndicator["type"] }, actorName?: string) => Promise<void>;
   deleteIndicatorAction: (id: ID, actorName?: string) => Promise<void>;
   togglePinIndicatorAction: (id: ID, actorName?: string) => Promise<void>;
+  importPreset7DIndicatorsAction: (actorName?: string) => Promise<void>;
+
+  // Configurações 7D
+  updateContentDistributionConfigAction: (patch: { dailyReelsTarget?: number }, actorName?: string) => Promise<void>;
 
   // Calculadoras
   updateContentMetricsAction: (patch: Partial<ContentDistributionMetrics>, actorName?: string) => Promise<void>;
@@ -252,6 +260,8 @@ export const useSprintOSStore = create<SprintOSState>((set, get) => ({
   filterPriority: null,
   filterStatus: null,
   filterImpact: null,
+  filterExpertDemands: false,
+  filterOrigin: null,
 
   selectedTaskId: null,
   isTaskModalOpen: false,
@@ -516,6 +526,8 @@ export const useSprintOSStore = create<SprintOSState>((set, get) => ({
   setFilterPriority: (priority) => set({ filterPriority: priority }),
   setFilterStatus: (status) => set({ filterStatus: status }),
   setFilterImpact: (flag) => set({ filterImpact: flag }),
+  setFilterExpertDemands: (val) => set({ filterExpertDemands: val }),
+  setFilterOrigin: (origin) => set({ filterOrigin: origin }),
   setSelectedTaskId: (id) => set({ selectedTaskId: id }),
   setIsTaskModalOpen: (open) => set({ isTaskModalOpen: open }),
   setIsDeadlineModalOpen: (open) => set({ isDeadlineModalOpen: open }),
@@ -697,6 +709,45 @@ export const useSprintOSStore = create<SprintOSState>((set, get) => ({
       await get().mutate((ws, ctx) => {
         togglePinIndicator(ws, ctx, id);
       }, actorName);
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  },
+
+  importPreset7DIndicatorsAction: async (actorName = "Operador") => {
+    try {
+      const presetList: (Partial<CustomIndicator> & { name: string; type: CustomIndicator["type"] })[] = [
+        { name: "Gasto com Anúncios", type: "currency", category: "midia", unit: "R$", currentValue: 0 },
+        { name: "Entradas no Grupo", type: "counter", category: "comercial", unit: "membros", currentValue: 0 },
+        { name: "Testes Concluídos", type: "counter", category: "operacao", unit: "testes", currentValue: 0 },
+        { name: "Checkouts Low Ticket Iniciados", type: "counter", category: "comercial", unit: "iniciados", currentValue: 0 },
+        { name: "Confirmações da Live", type: "counter", category: "comercial", unit: "inscritos", currentValue: 0 },
+        { name: "Presenças Efetivas na Live", type: "counter", category: "comercial", unit: "presentes", currentValue: 0 },
+        { name: "Números WhatsApp Capturados", type: "counter", category: "comercial", unit: "contatos", currentValue: 0 },
+        { name: "Vendas Confirmadas", type: "counter", category: "comercial", unit: "vendas", currentValue: 0 },
+      ];
+
+      await get().mutate((ws, ctx) => {
+        presetList.forEach((item) => {
+          upsertIndicator(ws, ctx, item);
+        });
+      }, actorName);
+
+      toast.success("Preset de 8 Indicadores 7D importado com sucesso!");
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  },
+
+  updateContentDistributionConfigAction: async (patch, actorName = "Operador") => {
+    try {
+      await get().mutate((ws, ctx) => {
+        ws.contentDistributionConfig = {
+          ...(ws.contentDistributionConfig || {}),
+          ...patch,
+        };
+      }, actorName);
+      toast.success("Configuração de distribuição atualizada!");
     } catch (e: any) {
       toast.error(e.message);
     }

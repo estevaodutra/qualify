@@ -173,6 +173,10 @@ export const SprintOSPage: React.FC = () => {
     setFilterStatus,
     filterImpact,
     setFilterImpact,
+    filterExpertDemands,
+    setFilterExpertDemands,
+    filterOrigin,
+    setFilterOrigin,
     initWorkspace,
     mutate,
   } = useSprintOSStore();
@@ -324,7 +328,35 @@ export const SprintOSPage: React.FC = () => {
               <option value="infrastructure">⚠️ Infraestrutura</option>
             </select>
 
-            {(searchQuery || filterAssigneeId || filterPriority || filterStatus || filterImpact) && (
+            {/* Filtro por Origem (PATCH 002) */}
+            <select
+              value={filterOrigin || ""}
+              onChange={(e) => setFilterOrigin((e.target.value as any) || null)}
+              className="h-8 rounded-xl bg-background border border-input text-xs text-foreground px-2.5"
+            >
+              <option value="">Todas as Origens</option>
+              <option value="defined">🎯 Definido</option>
+              <option value="derived">⚡ Derivado</option>
+              <option value="proposed">💡 Proposto</option>
+            </select>
+
+            {/* Filtro por Demandas do Expert (P1.3) */}
+            <button
+              type="button"
+              onClick={() => setFilterExpertDemands(!filterExpertDemands)}
+              className={`h-8 px-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all border ${
+                filterExpertDemands
+                  ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                  : "bg-background text-muted-foreground border-input hover:text-foreground hover:bg-muted"
+              }`}
+              title="Filtrar tarefas que representam demandas executivas do expert"
+            >
+              <span>👔</span>
+              <span>Demandas do Expert</span>
+              {filterExpertDemands && <span className="text-[10px] ml-0.5">✕</span>}
+            </button>
+
+            {(searchQuery || filterAssigneeId || filterPriority || filterStatus || filterImpact || filterExpertDemands || filterOrigin) && (
               <button
                 onClick={() => {
                   setSearchQuery("");
@@ -332,6 +364,8 @@ export const SprintOSPage: React.FC = () => {
                   setFilterPriority(null);
                   setFilterStatus(null);
                   setFilterImpact(null);
+                  setFilterExpertDemands(false);
+                  setFilterOrigin(null);
                 }}
                 className="text-[11px] text-primary hover:underline font-bold"
               >
