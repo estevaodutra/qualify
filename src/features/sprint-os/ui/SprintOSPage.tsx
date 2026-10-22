@@ -47,6 +47,7 @@ import { IndicatorsView } from "./views/IndicatorsView";
 import { CalculatorsView } from "./views/CalculatorsView";
 import { FunnelView } from "./views/FunnelView";
 import { MilestonesView } from "./views/MilestonesView";
+import { ModularDashboard } from "./dashboard/ModularDashboard";
 
 import { DeadlineUpdateModal } from "./modals/DeadlineUpdateModal";
 import { ActivateSprintModal } from "./modals/ActivateSprintModal";
@@ -249,6 +250,9 @@ export const SprintOSPage: React.FC = () => {
 
       {/* Região 2: Progresso e Execução (Foco nas 5 perguntas) */}
       <ExecutiveKPIs />
+
+      {/* Dashboard Modular e Funil Visual: INFRA | DISTRIBUIÇÃO | FUNIL (01 & 03) */}
+      <ModularDashboard />
 
       {/* Inteligência Operacional Compacta e Recolhível (Seções 7 e 8) */}
       <section className="px-6 py-2 grid grid-cols-1 md:grid-cols-12 gap-3.5">

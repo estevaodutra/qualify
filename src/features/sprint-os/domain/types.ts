@@ -463,6 +463,7 @@ export interface FunnelStage {
   count: number;
   position: number;
   value?: number | null;
+  archivedAt?: string | null;
 }
 
 export type ContentType = "reels" | "stories" | "carousel" | "post" | "video" | "other";
@@ -631,6 +632,8 @@ export interface Workspace {
   contentDistributionConfig?: { dailyReelsTarget?: number };
   hoursCalculator?: HoursCalculatorData;
   adsCalculator?: AdsCalculatorData;
+  /** Configuração modular personalizável da Dashboard (INFRA | DISTRIBUIÇÃO | FUNIL) */
+  dashboardLayoutConfig?: DashboardLayoutConfig;
   /** Custo/hora por membro — separado para não ser exposto em links públicos. */
   costs: Record<ID, number | null>;
   /** Prompts otimizados por tarefa (chave = taskId). */
@@ -651,3 +654,62 @@ export const SCOPE_LABEL: Record<ScopeType, string> = { original: "Escopo origin
 export const emptyLearnings = (): Learnings => ({
   worked: "", didntWork: "", impediment: "", resolution: "", timeSpent: "", rework: "", automatable: "", nextImprovement: "",
 });
+
+// ==========================================
+// DASHBOARD MODULAR E FUNIL VISUAL
+// ==========================================
+
+export interface DashboardCardConfig {
+  id: string;
+  blockId: string;
+  title: string;
+  order: number;
+  archived?: boolean;
+  removed?: boolean;
+}
+
+export interface DashboardBlockConfig {
+  id: string;
+  title: string;
+  order: number;
+  archived?: boolean;
+}
+
+export interface DashboardLayoutConfig {
+  blocks: DashboardBlockConfig[];
+  cards: DashboardCardConfig[];
+}
+
+export const DEFAULT_FUNNEL_STAGES: Omit<FunnelStage, "id">[] = [
+  { label: "EM ABERTO", color: "#64748B", count: 0, position: 0 },
+  { label: "PRÉ-QUALIFICAÇÃO", color: "#3B82F6", count: 0, position: 1 },
+  { label: "INTERESSADO", color: "#6366F1", count: 0, position: 2 },
+  { label: "NEGOCIAÇÃO", color: "#F59E0B", count: 0, position: 3 },
+  { label: "FOLLOW-UP", color: "#EC4899", count: 0, position: 4 },
+  { label: "VENDA", color: "#10B981", count: 0, position: 5, value: 0 },
+];
+
+export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayoutConfig = {
+  blocks: [
+    { id: "infra", title: "INFRAESTRUTURA & OPERAÇÃO", order: 0 },
+    { id: "distribuicao", title: "DISTRIBUIÇÃO DE CONTEÚDO", order: 1 },
+    { id: "funil", title: "FUNIL COMERCIAL X1", order: 2 },
+  ],
+  cards: [
+    // Bloco INFRA
+    { id: "infra_setup", blockId: "infra", title: "Setup Técnico & Acessos", order: 0 },
+    { id: "infra_blocks", blockId: "infra", title: "Travas & Bloqueios Ativos", order: 1 },
+    { id: "infra_deliverables", blockId: "infra", title: "Entregáveis Auditáveis", order: 2 },
+    { id: "infra_pace", blockId: "infra", title: "Ritmo de Entrega & Prazos", order: 3 },
+
+    // Bloco DISTRIBUIÇÃO
+    { id: "dist_reels", blockId: "distribuicao", title: "Meta Diária de Reels (7D)", order: 0 },
+    { id: "dist_posts", blockId: "distribuicao", title: "Publicações & Visualizações", order: 1 },
+    { id: "dist_clicks", blockId: "distribuicao", title: "Cliques no Link", order: 2 },
+    { id: "dist_groups", blockId: "distribuicao", title: "Entradas no Grupo", order: 3 },
+
+    // Bloco FUNIL
+    { id: "funnel_visual", blockId: "funil", title: "Pipeline Visual de Conversão", order: 0 },
+    { id: "funnel_kpis", blockId: "funil", title: "Métricas Globais do Funil", order: 1 },
+  ],
+};

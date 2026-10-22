@@ -8,8 +8,9 @@ import type {
   Subtask, Task, TaskStatus, WorkCalendar, Workspace, FinancialRecord, ChangeRequest, ScheduleRevision,
   CustomIndicator, OKRGoal, OKRKeyResult, ContentDistributionMetrics, HoursCalculatorData, AdsCalculatorData,
   ImpactFlag, ContentPublication, FunnelStage,
+  DashboardLayoutConfig, DashboardBlockConfig, DashboardCardConfig,
 } from "./types";
-import { emptyLearnings } from "./types";
+import { emptyLearnings, DEFAULT_DASHBOARD_LAYOUT, DEFAULT_FUNNEL_STAGES } from "./types";
 import { wouldCreateCycle } from "../scheduler/engine";
 
 export class DomainError extends Error {}
@@ -543,6 +544,74 @@ export function reorderFunnelStages(ws: Workspace, ctx: Ctx, orderedIds: ID[]) {
     if (ws.funnel[id]) ws.funnel[id].position = idx;
   });
   log(ws, ctx, "reorder", "funnel", null, "Etapas do funil reordenadas");
+}
+
+export function ensureDefaultFunnelStages(ws: Workspace, ctx: Ctx) {
+  ws.funnel ??= {};
+  if (Object.keys(ws.funnel).length === 0) {
+    DEFAULT_FUNNEL_STAGES.forEach((st, idx) => {
+      const id = `fn-${idx + 1}`;
+      ws.funnel[id] = { id, ...st, position: idx };
+    });
+    log(ws, ctx, "init", "funnel", null, "Etapas iniciais do funil configuradas");
+  }
+}
+
+// ───────────── Dashboard Modular Personalizável (INFRA | DISTRIBUIÇÃO | FUNIL) ─────────────
+
+export function getDashboardLayout(ws: Workspace): DashboardLayoutConfig {
+  if (!ws.dashboardLayoutConfig || !ws.dashboardLayoutConfig.blocks || ws.dashboardLayoutConfig.blocks.length === 0) {
+    return JSON.parse(JSON.stringify(DEFAULT_DASHBOARD_LAYOUT));
+  }
+  return ws.dashboardLayoutConfig;
+}
+
+export function saveDashboardLayout(ws: Workspace, ctx: Ctx, layout: DashboardLayoutConfig) {
+  ws.dashboardLayoutConfig = JSON.parse(JSON.stringify(layout));
+  log(ws, ctx, "update", "dashboard_layout", null, "Layout do dashboard atualizado");
+}
+
+export function reorderDashboardBlocks(ws: Workspace, ctx: Ctx, orderedBlockIds: string[]) {
+  const layout = getDashboardLayout(ws);
+  orderedBlockIds.forEach((id, idx) => {
+    const block = layout.blocks.find((b) => b.id === id);
+    if (block) block.order = idx;
+  });
+  saveDashboardLayout(ws, ctx, layout);
+}
+
+export function reorderDashboardCards(ws: Workspace, ctx: Ctx, orderedCardIds: string[], targetBlockId?: string) {
+  const layout = getDashboardLayout(ws);
+  orderedCardIds.forEach((id, idx) => {
+    const card = layout.cards.find((c) => c.id === id);
+    if (card) {
+      card.order = idx;
+      if (targetBlockId) card.blockId = targetBlockId;
+    }
+  });
+  saveDashboardLayout(ws, ctx, layout);
+}
+
+export function updateDashboardCard(ws: Workspace, ctx: Ctx, cardId: string, patch: Partial<DashboardCardConfig>) {
+  const layout = getDashboardLayout(ws);
+  const card = layout.cards.find((c) => c.id === cardId);
+  if (card) {
+    Object.assign(card, patch);
+    saveDashboardLayout(ws, ctx, layout);
+  }
+}
+
+export function updateDashboardBlock(ws: Workspace, ctx: Ctx, blockId: string, patch: Partial<DashboardBlockConfig>) {
+  const layout = getDashboardLayout(ws);
+  const block = layout.blocks.find((b) => b.id === blockId);
+  if (block) {
+    Object.assign(block, patch);
+    saveDashboardLayout(ws, ctx, layout);
+  }
+}
+
+export function resetDashboardLayout(ws: Workspace, ctx: Ctx) {
+  saveDashboardLayout(ws, ctx, JSON.parse(JSON.stringify(DEFAULT_DASHBOARD_LAYOUT)));
 }
 
 // ───────────── Publicações Individuais (Distribuição de Conteúdo) ─────────────
