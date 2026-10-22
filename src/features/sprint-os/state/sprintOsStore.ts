@@ -203,7 +203,10 @@ interface SprintOSState {
   setIsEditTemplateModalOpen: (open: boolean) => void;
   setEditingTemplateId: (id: string | null) => void;
 
-  // Mutações de Domínio
+  // Mutações de Domínio & Autosave Instantâneo (AJ-028)
+  autosaveStatus: "saved" | "saving";
+  lastSavedAt: Date | null;
+  saveAndPublishAction: (actorName?: string) => Promise<void>;
   mutate: (fn: (ws: Workspace, ctx: { actorName: string; nowIso: string }) => void, actorName?: string) => Promise<void>;
 
   // Ações Operacionais Especializadas
@@ -301,6 +304,10 @@ export const useSprintOSStore = create<SprintOSState>((set, get) => ({
   isCreateModalOpen: false,
   isEditTemplateModalOpen: false,
   editingTemplateId: null,
+
+  // Autosave Instantâneo (AJ-028)
+  autosaveStatus: "saved",
+  lastSavedAt: null,
 
   // Brand Manual Navigation Target (AJ-019)
   activeBrandManualModuleId: null,
@@ -589,19 +596,59 @@ export const useSprintOSStore = create<SprintOSState>((set, get) => ({
     const { workspace, version } = get();
     if (!workspace) return;
 
+    set({ autosaveStatus: "saving" });
+
     const draft: Workspace = JSON.parse(JSON.stringify(workspace));
     const ctx = { actorName, nowIso: new Date().toISOString() };
 
     try {
       fn(draft, ctx);
-      set({ workspace: draft });
+
+      // Autosave imediato e síncrono no LocalStorage (proteção total contra fechamento da aba)
+      const wsId = draft.project?.id;
+      if (wsId) {
+        try {
+          localStorage.setItem(`sprint_os_ws_${wsId}`, JSON.stringify(draft));
+          localStorage.setItem("sprint_os_active_workspace_id", wsId);
+        } catch (storageErr) {
+          console.warn("[Autosave] LocalStorage:", storageErr);
+        }
+      }
+
+      set({ workspace: draft, autosaveStatus: "saved", lastSavedAt: new Date() });
       const res = await SprintOSRepository.saveWorkspace(draft, version, null, actorName);
       if (res.ok) {
         set({ version: res.version });
       }
     } catch (e: any) {
+      set({ autosaveStatus: "saved" });
       toast.error(e.message || "Erro na operação");
       throw e;
+    }
+  },
+
+  saveAndPublishAction: async (actorName = "Operador") => {
+    const { workspace, activeSprintId } = get();
+    if (!workspace) return;
+
+    set({ autosaveStatus: "saving" });
+    try {
+      await get().mutate((ws, ctx) => {
+        const sprintId = activeSprintId || Object.keys(ws.sprints || {})[0];
+        if (sprintId && ws.sprints[sprintId]) {
+          const sprint = ws.sprints[sprintId];
+          sprint.status = "active";
+          sprint.activatedAt = ctx.nowIso;
+        }
+        touch(ws.project, ctx);
+        log(ws, ctx, "publish", "sprint", activeSprintId || "sprint", "Cronograma salvo e publicado com sucesso");
+      }, actorName);
+
+      set({ autosaveStatus: "saved", lastSavedAt: new Date() });
+      toast.success("✓ Cronograma salvo e publicado com sucesso!");
+    } catch (err: any) {
+      set({ autosaveStatus: "saved" });
+      toast.error(`Falha ao salvar e publicar: ${err.message || "Erro desconhecido"}`);
     }
   },
 

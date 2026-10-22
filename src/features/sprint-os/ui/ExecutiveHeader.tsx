@@ -23,6 +23,7 @@ import {
   Settings,
   Edit2,
   Check,
+  CheckCheck,
   ChevronDown,
   Sparkles,
   UserCheck,
@@ -67,6 +68,8 @@ export const ExecutiveHeader: React.FC = () => {
     duplicateCurrentWorkspace,
     saveCurrentAsTemplate,
     mutate,
+    autosaveStatus,
+    saveAndPublishAction,
   } = useSprintOSStore();
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -160,6 +163,7 @@ export const ExecutiveHeader: React.FC = () => {
             <Input
               value={editedProjectName}
               onChange={(e) => setEditedProjectName(e.target.value)}
+              onBlur={handleSaveTitle}
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleSaveTitle();
                 if (e.key === "Escape") setIsEditingTitle(false);
@@ -172,6 +176,7 @@ export const ExecutiveHeader: React.FC = () => {
             <Input
               value={editedSprintName}
               onChange={(e) => setEditedSprintName(e.target.value)}
+              onBlur={handleSaveTitle}
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleSaveTitle();
                 if (e.key === "Escape") setIsEditingTitle(false);
@@ -212,7 +217,7 @@ export const ExecutiveHeader: React.FC = () => {
                   : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
               }`}
             >
-              {isActivated ? "Ativa" : "Rascunho"}
+              {isActivated ? "Publicado" : "Rascunho"}
             </Badge>
           </div>
         )}
@@ -452,6 +457,39 @@ export const ExecutiveHeader: React.FC = () => {
             )}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* Indicador de Autosave Instantâneo (AJ-028) */}
+        <div
+          className="hidden md:flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-xl bg-muted/60 border border-border/60 transition-all select-none"
+          title={
+            autosaveStatus === "saving"
+              ? "Salvando alterações no banco e cache local..."
+              : "Todas as alterações estão salvas automaticamente"
+          }
+        >
+          {autosaveStatus === "saving" ? (
+            <>
+              <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping inline-block" />
+              <span className="text-amber-600 dark:text-amber-400 font-bold">Salvando...</span>
+            </>
+          ) : (
+            <>
+              <CheckCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+              <span className="text-emerald-600 dark:text-emerald-400 font-bold">Salvo</span>
+            </>
+          )}
+        </div>
+
+        {/* Botão de Destaque: Salvar e Publicar (AJ-028) */}
+        <Button
+          onClick={() => saveAndPublishAction(user?.email || "Operador")}
+          size="sm"
+          className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 rounded-xl flex items-center gap-1.5 shadow-sm hover:shadow transition-all cursor-pointer"
+          title="Salva todas as alterações e publica o cronograma operacional"
+        >
+          <Rocket className="h-3.5 w-3.5" />
+          <span>Salvar e Publicar</span>
+        </Button>
 
         {/* Botão de Destaque: Atualizar Prazos */}
         <Button

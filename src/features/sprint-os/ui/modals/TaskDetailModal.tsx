@@ -155,8 +155,45 @@ export const TaskDetailModal: React.FC = () => {
     return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
   };
 
-  // Handlers de Tarefa
+  // Handlers de Tarefa com Autosave Instantâneo (AJ-028)
+  const modalTitleDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const modalDescDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (modalTitleDebounceRef.current) clearTimeout(modalTitleDebounceRef.current);
+      if (modalDescDebounceRef.current) clearTimeout(modalDescDebounceRef.current);
+    };
+  }, []);
+
+  const handleTitleInputChange = (val: string) => {
+    setTitleInput(val);
+    if (modalTitleDebounceRef.current) clearTimeout(modalTitleDebounceRef.current);
+    const trimmed = val.trim();
+    if (trimmed && trimmed !== task.title) {
+      modalTitleDebounceRef.current = setTimeout(async () => {
+        await mutate((ws, ctx) => {
+          updateTask(ws, ctx, task.id, { title: trimmed });
+        }, user?.email || "Operador");
+      }, 400);
+    }
+  };
+
+  const handleDescInputChange = (val: string) => {
+    setDescInput(val);
+    if (modalDescDebounceRef.current) clearTimeout(modalDescDebounceRef.current);
+    modalDescDebounceRef.current = setTimeout(async () => {
+      await mutate((ws, ctx) => {
+        updateTask(ws, ctx, task.id, { description: val.trim() });
+      }, user?.email || "Operador");
+    }, 500);
+  };
+
   const handleSaveTitle = async () => {
+    if (modalTitleDebounceRef.current) {
+      clearTimeout(modalTitleDebounceRef.current);
+      modalTitleDebounceRef.current = null;
+    }
     if (titleInput.trim() && titleInput.trim() !== task.title) {
       await mutate((ws, ctx) => {
         updateTask(ws, ctx, task.id, { title: titleInput.trim() });
@@ -167,6 +204,10 @@ export const TaskDetailModal: React.FC = () => {
   };
 
   const handleSaveDescription = async () => {
+    if (modalDescDebounceRef.current) {
+      clearTimeout(modalDescDebounceRef.current);
+      modalDescDebounceRef.current = null;
+    }
     await mutate((ws, ctx) => {
       updateTask(ws, ctx, task.id, { description: descInput.trim() });
     }, user?.email || "Operador");
@@ -338,7 +379,8 @@ export const TaskDetailModal: React.FC = () => {
                 <div className="flex items-center gap-1.5">
                   <Input
                     value={titleInput}
-                    onChange={(e) => setTitleInput(e.target.value)}
+                    onChange={(e) => handleTitleInputChange(e.target.value)}
+                    onBlur={handleSaveTitle}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") handleSaveTitle();
                       if (e.key === "Escape") setIsEditingTitle(false);
@@ -505,7 +547,8 @@ export const TaskDetailModal: React.FC = () => {
                 <div className="space-y-2">
                   <Textarea
                     value={descInput}
-                    onChange={(e) => setDescInput(e.target.value)}
+                    onChange={(e) => handleDescInputChange(e.target.value)}
+                    onBlur={handleSaveDescription}
                     placeholder="Adicione uma descrição mais detalhada..."
                     className="text-xs bg-background border-input text-foreground min-h-[90px] rounded-xl leading-relaxed p-3 focus:ring-1 focus:ring-primary"
                     autoFocus

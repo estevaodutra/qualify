@@ -816,22 +816,64 @@ export const ModularDashboard: React.FC = () => {
     toast.success("Layout redefinido para o padrão!");
   };
 
+  const inlineCardDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const inlineBlockDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (inlineCardDebounceRef.current) clearTimeout(inlineCardDebounceRef.current);
+      if (inlineBlockDebounceRef.current) clearTimeout(inlineBlockDebounceRef.current);
+    };
+  }, []);
+
+  const handleInlineCardTitleChange = (cardId: string, val: string) => {
+    setInlineCardTitle(val);
+    if (inlineCardDebounceRef.current) clearTimeout(inlineCardDebounceRef.current);
+    const trimmed = val.trim();
+    if (trimmed) {
+      inlineCardDebounceRef.current = setTimeout(() => {
+        mutate((ws, ctx) => {
+          updateDashboardCard(ws, ctx, cardId, { title: trimmed });
+        });
+      }, 400);
+    }
+  };
+
+  const handleInlineBlockTitleChange = (blockId: string, val: string) => {
+    setInlineBlockTitle(val);
+    if (inlineBlockDebounceRef.current) clearTimeout(inlineBlockDebounceRef.current);
+    const trimmed = val.trim();
+    if (trimmed) {
+      inlineBlockDebounceRef.current = setTimeout(() => {
+        mutate((ws, ctx) => {
+          updateDashboardBlock(ws, ctx, blockId, { title: trimmed });
+        });
+      }, 400);
+    }
+  };
+
   const handleCommitInlineCardTitle = (cardId: string) => {
+    if (inlineCardDebounceRef.current) {
+      clearTimeout(inlineCardDebounceRef.current);
+      inlineCardDebounceRef.current = null;
+    }
     if (inlineCardTitle.trim()) {
       mutate((ws, ctx) => {
         updateDashboardCard(ws, ctx, cardId, { title: inlineCardTitle.trim() });
       });
-      toast.success("Título atualizado!");
     }
     setInlineEditingCardId(null);
   };
 
   const handleCommitInlineBlockTitle = (blockId: string) => {
+    if (inlineBlockDebounceRef.current) {
+      clearTimeout(inlineBlockDebounceRef.current);
+      inlineBlockDebounceRef.current = null;
+    }
     if (inlineBlockTitle.trim()) {
       mutate((ws, ctx) => {
         updateDashboardBlock(ws, ctx, blockId, { title: inlineBlockTitle.trim() });
       });
-      toast.success("Título da seção atualizado!");
     }
     setInlineEditingBlockId(null);
   };
@@ -1870,7 +1912,7 @@ export const ModularDashboard: React.FC = () => {
                   {inlineEditingBlockId === block.id ? (
                     <Input
                       value={inlineBlockTitle}
-                      onChange={(e) => setInlineBlockTitle(e.target.value)}
+                      onChange={(e) => handleInlineBlockTitleChange(block.id, e.target.value)}
                       onBlur={() => handleCommitInlineBlockTitle(block.id)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") handleCommitInlineBlockTitle(block.id);
@@ -2133,7 +2175,7 @@ export const ModularDashboard: React.FC = () => {
                             {inlineEditingCardId === card.id ? (
                               <Input
                                 value={inlineCardTitle}
-                                onChange={(e) => setInlineCardTitle(e.target.value)}
+                                onChange={(e) => handleInlineCardTitleChange(card.id, e.target.value)}
                                 onBlur={() => handleCommitInlineCardTitle(card.id)}
                                 onKeyDown={(e) => {
                                   if (e.key === "Enter") handleCommitInlineCardTitle(card.id);

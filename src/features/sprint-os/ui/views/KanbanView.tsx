@@ -14,6 +14,8 @@ import {
   Plus,
   Play,
   CheckCircle2,
+  CheckCheck,
+  Rocket,
   AlertCircle,
   Filter,
 } from "lucide-react";
@@ -87,6 +89,8 @@ export const KanbanView: React.FC = () => {
     setSelectedTaskId,
     setIsTaskModalOpen,
     mutate,
+    autosaveStatus,
+    saveAndPublishAction,
   } = useSprintOSStore();
 
   const { user } = useAuth();
@@ -254,16 +258,52 @@ export const KanbanView: React.FC = () => {
           </Badge>
         </div>
 
-        <Button
-          type="button"
-          onClick={() => handleCreateBlankCard("pending")}
-          size="sm"
-          className="h-8 px-3 text-xs font-bold bg-primary text-primary-foreground rounded-xl flex items-center gap-1.5 hover:brightness-110 shadow-xs cursor-pointer"
-          title="Criar um novo card em branco tipo Trello"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          <span>+ Criar Card em Branco</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Indicador de Autosave Instantâneo */}
+          <div
+            className="hidden sm:flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-xl bg-muted/60 border border-border/60 transition-all select-none"
+            title={
+              autosaveStatus === "saving"
+                ? "Salvando alterações no banco e cache local..."
+                : "Todas as alterações estão salvas automaticamente"
+            }
+          >
+            {autosaveStatus === "saving" ? (
+              <>
+                <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping inline-block" />
+                <span className="text-amber-600 dark:text-amber-400 font-bold">Salvando...</span>
+              </>
+            ) : (
+              <>
+                <CheckCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold">Salvo</span>
+              </>
+            )}
+          </div>
+
+          {/* Botão Salvar e Publicar */}
+          <Button
+            type="button"
+            onClick={() => saveAndPublishAction(user?.email || "Operador")}
+            size="sm"
+            className="h-8 px-3 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+            title="Salvar todas as alterações e publicar o cronograma"
+          >
+            <Rocket className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Salvar e Publicar</span>
+          </Button>
+
+          <Button
+            type="button"
+            onClick={() => handleCreateBlankCard("pending")}
+            size="sm"
+            className="h-8 px-3 text-xs font-bold bg-primary text-primary-foreground rounded-xl flex items-center gap-1.5 hover:brightness-110 shadow-xs cursor-pointer"
+            title="Criar um novo card em branco tipo Trello"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>+ Criar Card em Branco</span>
+          </Button>
+        </div>
       </div>
 
       {/* 3 Colunas Principais: Pendente, Fazendo, Concluída */}

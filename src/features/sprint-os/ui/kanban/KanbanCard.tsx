@@ -96,6 +96,19 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
   const [isEditingStageTitle, setIsEditingStageTitle] = useState(false);
   const [stageTitleText, setStageTitleText] = useState("");
 
+  // Refs de Autosave Instantâneo com Debounce (AJ-028)
+  const titleDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const stageDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const subtaskDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (titleDebounceRef.current) clearTimeout(titleDebounceRef.current);
+      if (stageDebounceRef.current) clearTimeout(stageDebounceRef.current);
+      if (subtaskDebounceRef.current) clearTimeout(subtaskDebounceRef.current);
+    };
+  }, []);
+
   // Refs para detecção robusta de duplo clique (evita interferência de drag e modal)
   const stageClickTimeRef = useRef<number>(0);
   const titleClickTimeRef = useRef<number>(0);
@@ -168,18 +181,57 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
     }
   }, [stage?.title]);
 
-  // ───────────── Ações de Título ─────────────
+  // ───────────── Ações de Título (com Autosave Instantâneo) ─────────────
+  const handleTitleChange = (val: string) => {
+    setTitleText(val);
+    if (titleDebounceRef.current) clearTimeout(titleDebounceRef.current);
+    const trimmed = val.trim();
+    if (trimmed && trimmed !== task.title) {
+      titleDebounceRef.current = setTimeout(async () => {
+        await mutate((ws, ctx) => {
+          updateTask(ws, ctx, task.id, { title: trimmed });
+        }, user?.email || "Operador");
+      }, 400);
+    }
+  };
+
   const handleCommitTitle = async () => {
-    if (titleText.trim() && titleText.trim() !== task.title) {
+    if (titleDebounceRef.current) {
+      clearTimeout(titleDebounceRef.current);
+      titleDebounceRef.current = null;
+    }
+    const trimmed = titleText.trim();
+    if (trimmed && trimmed !== task.title) {
       await mutate((ws, ctx) => {
-        updateTask(ws, ctx, task.id, { title: titleText.trim() });
+        updateTask(ws, ctx, task.id, { title: trimmed });
       }, user?.email || "Operador");
-      toast.success("Título da tarefa atualizado!");
     }
     setIsEditingTitle(false);
   };
 
+  const handleStageTitleChange = (val: string) => {
+    setStageTitleText(val);
+    if (!stage) return;
+    if (stageDebounceRef.current) clearTimeout(stageDebounceRef.current);
+    const trimmed = val.trim();
+    if (trimmed && trimmed !== stage.title) {
+      stageDebounceRef.current = setTimeout(async () => {
+        try {
+          await mutate((ws, ctx) => {
+            renameStage(ws, ctx, stage.id, trimmed);
+          }, user?.email || "Operador");
+        } catch {
+          // ignore transient
+        }
+      }, 500);
+    }
+  };
+
   const handleCommitStageTitle = async () => {
+    if (stageDebounceRef.current) {
+      clearTimeout(stageDebounceRef.current);
+      stageDebounceRef.current = null;
+    }
     if (!stage) return;
     const trimmed = stageTitleText.trim();
     if (trimmed && trimmed !== stage.title) {
@@ -187,7 +239,6 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
         await mutate((ws, ctx) => {
           renameStage(ws, ctx, stage.id, trimmed);
         }, user?.email || "Operador");
-        toast.success("Nome da etapa atualizado!");
       } catch (err: any) {
         toast.error(err.message || "Erro ao renomear etapa");
         setStageTitleText(stage.title);
@@ -247,7 +298,24 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
     setEditingSubtaskTitle(currentTitle);
   };
 
+  const handleSubtaskTitleChange = (subtaskId: string, val: string) => {
+    setEditingSubtaskTitle(val);
+    if (subtaskDebounceRef.current) clearTimeout(subtaskDebounceRef.current);
+    const trimmed = val.trim();
+    if (trimmed) {
+      subtaskDebounceRef.current = setTimeout(async () => {
+        await mutate((ws, ctx) => {
+          updateSubtask(ws, ctx, subtaskId, { title: trimmed });
+        }, user?.email || "Operador");
+      }, 400);
+    }
+  };
+
   const handleCommitEditSubtask = async (subtaskId: string) => {
+    if (subtaskDebounceRef.current) {
+      clearTimeout(subtaskDebounceRef.current);
+      subtaskDebounceRef.current = null;
+    }
     if (!editingSubtaskId) return;
     const trimmed = editingSubtaskTitle.trim();
     const existing = subtasks.find((s) => s.id === subtaskId);
@@ -256,7 +324,6 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
         await mutate((ws, ctx) => {
           updateSubtask(ws, ctx, subtaskId, { title: trimmed });
         }, user?.email || "Operador");
-        toast.success("Item do checklist atualizado!");
       } catch (err: any) {
         toast.error(err.message || "Erro ao atualizar item");
       }
@@ -337,7 +404,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
           >
             <Input
               value={stageTitleText}
-              onChange={(e) => setStageTitleText(e.target.value)}
+              onChange={(e) => handleStageTitleChange(e.target.value)}
               onBlur={handleCommitStageTitle}
               onFocus={(e) => e.target.select()}
               onKeyDown={(e) => {
@@ -659,7 +726,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
         >
           <Input
             value={titleText}
-            onChange={(e) => setTitleText(e.target.value)}
+            onChange={(e) => handleTitleChange(e.target.value)}
             onBlur={handleCommitTitle}
             onFocus={(e) => e.target.select()}
             onKeyDown={(e) => {
@@ -1047,7 +1114,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
                         >
                           <Input
                             value={editingSubtaskTitle}
-                            onChange={(e) => setEditingSubtaskTitle(e.target.value)}
+                            onChange={(e) => handleSubtaskTitleChange(st.id, e.target.value)}
                             onBlur={() => handleCommitEditSubtask(st.id)}
                             onFocus={(e) => e.target.select()}
                             onKeyDown={(e) => {
