@@ -53,6 +53,7 @@ import {
   getTaskAccumulatedSeconds,
   fmtStopwatch,
   fmtDurationSummary,
+  renameStage,
 } from "../../domain/ops";
 import type { Task, TaskStatus, Priority } from "../../domain/types";
 import { LabelsManagerPopover } from "./LabelsManagerPopover";
@@ -74,6 +75,10 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
   // Estados locais de edição inline do título
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleText, setTitleText] = useState(task.title);
+
+  // Estados locais de edição inline da etapa
+  const [isEditingStageTitle, setIsEditingStageTitle] = useState(false);
+  const [stageTitleText, setStageTitleText] = useState("");
 
   // Estados expansíveis do card
   const [showHistory, setShowHistory] = useState(false);
@@ -135,6 +140,13 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
   );
   const totalSessionsCount = (task.workSessions || []).length;
 
+  // Sincroniza título da etapa
+  useEffect(() => {
+    if (stage?.title) {
+      setStageTitleText(stage.title);
+    }
+  }, [stage?.title]);
+
   // ───────────── Ações de Título ─────────────
   const handleCommitTitle = async () => {
     if (titleText.trim() && titleText.trim() !== task.title) {
@@ -144,6 +156,25 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
       toast.success("Título da tarefa atualizado!");
     }
     setIsEditingTitle(false);
+  };
+
+  const handleCommitStageTitle = async () => {
+    if (!stage) return;
+    const trimmed = stageTitleText.trim();
+    if (trimmed && trimmed !== stage.title) {
+      try {
+        await mutate((ws, ctx) => {
+          renameStage(ws, ctx, stage.id, trimmed);
+        }, user?.email || "Operador");
+        toast.success("Nome da etapa atualizado!");
+      } catch (err: any) {
+        toast.error(err.message || "Erro ao renomear etapa");
+        setStageTitleText(stage.title);
+      }
+    } else {
+      setStageTitleText(stage.title);
+    }
+    setIsEditingStageTitle(false);
   };
 
   // ───────────── Ações do Cronômetro Real (AJ-022) ─────────────
@@ -277,9 +308,41 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
     >
       {/* 1. LINHA SUPERIOR: ETAPA, PRIORIDADE E MENU CONTEXTUAL */}
       <div className="flex items-center justify-between gap-2 mb-2">
-        <span className="text-[10px] text-muted-foreground uppercase font-black tracking-wider truncate">
-          {stage?.title || "Etapa Operacional"}
-        </span>
+        {isEditingStageTitle ? (
+          <div className="flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+            <Input
+              value={stageTitleText}
+              onChange={(e) => setStageTitleText(e.target.value)}
+              onBlur={handleCommitStageTitle}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleCommitStageTitle();
+                }
+                if (e.key === "Escape") {
+                  setStageTitleText(stage?.title || "");
+                  setIsEditingStageTitle(false);
+                }
+              }}
+              autoFocus
+              className="h-6 text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 bg-background border-primary text-foreground rounded-md w-full shadow-xs"
+            />
+          </div>
+        ) : (
+          <span
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              if (stage) {
+                setStageTitleText(stage.title);
+                setIsEditingStageTitle(true);
+              }
+            }}
+            className="text-[10px] text-muted-foreground uppercase font-black tracking-wider truncate cursor-pointer hover:text-primary transition-colors select-text"
+            title="Duplo clique para alterar o nome da etapa"
+          >
+            {stage?.title || "Etapa Operacional"}
+          </span>
+        )}
 
         <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
           {/* Seletor Rápido e Interativo de Prioridade no Card (AJ-022) */}
@@ -378,6 +441,19 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
               >
                 <Edit2 className="h-3.5 w-3.5 text-muted-foreground" />
                 <span>Editar Título</span>
+              </DropdownMenuItem>
+
+              <DropdownMenuItem
+                onClick={() => {
+                  if (stage) {
+                    setStageTitleText(stage.title);
+                    setIsEditingStageTitle(true);
+                  }
+                }}
+                className="cursor-pointer gap-2"
+              >
+                <Edit2 className="h-3.5 w-3.5 text-muted-foreground" />
+                <span>Editar Nome da Etapa</span>
               </DropdownMenuItem>
 
               <DropdownMenuItem
