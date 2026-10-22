@@ -777,6 +777,7 @@ export interface DashboardCardConfig {
   blockId: string;
   title: string;
   order: number;
+  description?: string;
   archived?: boolean;
   removed?: boolean;
 }

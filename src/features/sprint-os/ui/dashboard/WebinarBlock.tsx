@@ -8,6 +8,7 @@
  * 05 — COMPROU (Compraram)
  *
  * Taxas de conversão automáticas, seleção por edição do evento, consistência e rastreabilidade.
+ * Totalmente modular: arrastar cards, editar títulos, editar descrições, arquivar e restaurar.
  */
 
 import React, { useState } from "react";
@@ -24,10 +25,21 @@ import {
   Edit2,
   Check,
   Calendar,
+  GripVertical,
+  MoreVertical,
+  Archive,
+  FileText,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -43,6 +55,8 @@ import {
   updateWebinarMetric,
   selectWebinarEdition,
   createWebinarEdition,
+  updateDashboardCard,
+  reorderDashboardCards,
 } from "../../domain/ops";
 import type {
   DashboardBlockConfig,
@@ -137,6 +151,19 @@ export const WebinarBlock: React.FC<WebinarBlockProps> = ({
   // Edição direta de número inline
   const [editingMetricKey, setEditingMetricKey] = useState<string | null>(null);
   const [editingValueInput, setEditingValueInput] = useState("");
+
+  // Edição inline de título de card
+  const [inlineEditingCardId, setInlineEditingCardId] = useState<string | null>(null);
+  const [inlineCardTitle, setInlineCardTitle] = useState("");
+
+  // Modal para editar descrição do card
+  const [editingDescCard, setEditingDescCard] = useState<DashboardCardConfig | null>(null);
+  const [cardDescInput, setCardDescInput] = useState("");
+
+  // Drag & Drop interno dos cards do webinário
+  const [canDragCardId, setCanDragCardId] = useState<string | null>(null);
+  const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
+  const [dragOverCardId, setDragOverCardId] = useState<string | null>(null);
 
   if (!workspace) return null;
 
@@ -253,7 +280,51 @@ export const WebinarBlock: React.FC<WebinarBlockProps> = ({
     toast.success("Nova edição de webinário criada!");
   };
 
-  // Configuração dos 5 Cards Obrigatórios
+  const handleCommitInlineCardTitle = (cardId: string) => {
+    if (inlineCardTitle.trim()) {
+      mutate((ws, ctx) => {
+        updateDashboardCard(ws, ctx, cardId, { title: inlineCardTitle.trim() });
+      }, user?.email || "Operador");
+      toast.success("Título atualizado!");
+    }
+    setInlineEditingCardId(null);
+  };
+
+  const handleSaveCardDescription = () => {
+    if (!editingDescCard) return;
+    mutate((ws, ctx) => {
+      updateDashboardCard(ws, ctx, editingDescCard.id, { description: cardDescInput.trim() });
+    }, user?.email || "Operador");
+    setEditingDescCard(null);
+    toast.success("Descrição atualizada!");
+  };
+
+  const handleArchiveCard = (cardId: string) => {
+    mutate((ws, ctx) => {
+      updateDashboardCard(ws, ctx, cardId, { archived: true });
+    }, user?.email || "Operador");
+    toast.info("Indicador arquivado. Você pode restaurá-lo em 'Restaurar Elementos'.");
+  };
+
+  // Drag and Drop interno dos cards
+  const handleCardDrop = (targetCardId: string) => {
+    if (!draggedCardId || draggedCardId === targetCardId) return;
+    const currentIds = displayCards.map((c) => c.id);
+    const fromIndex = currentIds.indexOf(draggedCardId);
+    const toIndex = currentIds.indexOf(targetCardId);
+    if (fromIndex === -1 || toIndex === -1) return;
+    const updated = [...currentIds];
+    const [moved] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, moved);
+    mutate((ws, ctx) => {
+      reorderDashboardCards(ws, ctx, updated, "webinario");
+    }, user?.email || "Operador");
+    setDraggedCardId(null);
+    setDragOverCardId(null);
+    setCanDragCardId(null);
+  };
+
+  // Configuração dos 5 Cards Obrigatórios com IDs semânticos estáveis
   const CARDS_CONFIG: Record<
     string,
     {
@@ -403,30 +474,136 @@ export const WebinarBlock: React.FC<WebinarBlockProps> = ({
           const metricData = activeEdition.metrics[cfg.metricKey];
           const val = metricData?.value ?? 0;
           const isInline = editingMetricKey === cfg.metricKey;
+          const isDragging = draggedCardId === card.id;
+          const isDragOver = dragOverCardId === card.id;
+          const cardDescription = card.description || cfg.desc;
 
           return (
             <div
               key={card.id}
-              className="rounded-xl border border-border/80 bg-card p-2.5 flex flex-col justify-between hover:border-primary/40 hover:shadow-xs transition-all relative group"
+              draggable={canDragCardId === card.id}
+              onDragStart={(e) => {
+                e.dataTransfer.setData("text/plain", card.id);
+                e.dataTransfer.effectAllowed = "move";
+                setDraggedCardId(card.id);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setDragOverCardId(card.id);
+              }}
+              onDragLeave={() => setDragOverCardId(null)}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleCardDrop(card.id);
+              }}
+              onDragEnd={() => {
+                setDraggedCardId(null);
+                setDragOverCardId(null);
+                setCanDragCardId(null);
+              }}
+              className={`rounded-xl border p-2.5 bg-card flex flex-col justify-between transition-all duration-150 relative group ${
+                isDragging ? "border-primary/50 ring-1 ring-primary/20" : ""
+              } ${
+                isDragOver
+                  ? "border-primary ring-2 ring-primary/20 scale-[0.99]"
+                  : "border-border/80 hover:border-primary/40 hover:shadow-xs"
+              }`}
             >
-              {/* Linha Superior: Ícone, Título e Badge de Origem */}
+              {/* Linha Superior: Alça, Ícone, Título e Menu */}
               <div className="flex items-center justify-between gap-1 mb-1.5">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  {cfg.icon}
-                  <h4
-                    className="text-[11px] font-bold text-foreground truncate"
-                    title={card.title || cfg.defaultTitle}
+                <div className="flex items-center gap-1 min-w-0 flex-1">
+                  {/* Alça GripVertical para Reordenar Cards */}
+                  <span
+                    onMouseDown={() => setCanDragCardId(card.id)}
+                    onMouseUp={() => setCanDragCardId(null)}
+                    className="cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-foreground p-0.5 rounded shrink-0"
+                    title="Arraste para reordenar"
                   >
-                    {card.title || cfg.defaultTitle}
-                  </h4>
+                    <GripVertical className="h-3 w-3 pointer-events-none" />
+                  </span>
+
+                  <span className="shrink-0">{cfg.icon}</span>
+
+                  {inlineEditingCardId === card.id ? (
+                    <Input
+                      value={inlineCardTitle}
+                      onChange={(e) => setInlineCardTitle(e.target.value)}
+                      onBlur={() => handleCommitInlineCardTitle(card.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleCommitInlineCardTitle(card.id);
+                        if (e.key === "Escape") setInlineEditingCardId(null);
+                      }}
+                      autoFocus
+                      className="h-5 text-[11px] font-bold bg-background border-primary text-foreground w-full"
+                    />
+                  ) : (
+                    <h4
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        setInlineEditingCardId(card.id);
+                        setInlineCardTitle(card.title || cfg.defaultTitle);
+                      }}
+                      className="text-[11px] font-bold text-foreground truncate cursor-pointer hover:text-primary transition-colors"
+                      title="Dois cliques para editar título"
+                    >
+                      {card.title || cfg.defaultTitle}
+                    </h4>
+                  )}
                 </div>
 
-                <Badge
-                  variant="outline"
-                  className="text-[8px] font-mono uppercase px-1 py-0 border-border text-muted-foreground"
-                >
-                  {metricData?.source === "api" ? "API" : "Manual"}
-                </Badge>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Badge
+                    variant="outline"
+                    className="text-[8px] font-mono uppercase px-1 py-0 border-border text-muted-foreground"
+                  >
+                    {metricData?.source === "api" ? "API" : "Manual"}
+                  </Badge>
+
+                  {/* Menu do Card */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="h-5 w-5 rounded-md hover:bg-muted flex items-center justify-center text-muted-foreground/60 hover:text-foreground transition-colors cursor-pointer"
+                        title="Opções do Indicador"
+                      >
+                        <MoreVertical className="h-3 w-3" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-40 p-1 rounded-xl text-xs">
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setInlineEditingCardId(card.id);
+                          setInlineCardTitle(card.title || cfg.defaultTitle);
+                        }}
+                        className="cursor-pointer gap-2"
+                      >
+                        <Edit2 className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span>Editar Título</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setEditingDescCard(card);
+                          setCardDescInput(card.description || cfg.desc);
+                        }}
+                        className="cursor-pointer gap-2"
+                      >
+                        <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span>Editar Descrição</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => handleArchiveCard(card.id)}
+                        className="cursor-pointer gap-2 text-amber-600 focus:text-amber-600"
+                      >
+                        <Archive className="h-3.5 w-3.5" />
+                        <span>Arquivar Card</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
 
               {/* Valor Numérico em Destaque + Controles +/- */}
@@ -496,8 +673,8 @@ export const WebinarBlock: React.FC<WebinarBlockProps> = ({
                 </div>
 
                 {/* Descrição Curta */}
-                <p className="text-[10px] text-muted-foreground line-clamp-1" title={cfg.desc}>
-                  {cfg.desc}
+                <p className="text-[10px] text-muted-foreground line-clamp-1" title={cardDescription}>
+                  {cardDescription}
                 </p>
 
                 {/* Rastreabilidade: Data e Responsável da última alteração */}
@@ -567,6 +744,65 @@ export const WebinarBlock: React.FC<WebinarBlockProps> = ({
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* 4. MODAL: EDITAR DESCRIÇÃO DO INDICADOR */}
+      <Dialog
+        open={!!editingDescCard}
+        onOpenChange={(open) => !open && setEditingDescCard(null)}
+      >
+        <DialogContent className="sm:max-w-md p-6 rounded-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <FileText className="h-4 w-4 text-primary" />
+              <span>Editar Descrição do Indicador</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Personalize a descrição ou o critério operacional deste card do webinário.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs">
+            <div className="space-y-1">
+              <label className="font-bold text-foreground">Card</label>
+              <div className="font-bold text-muted-foreground">{editingDescCard?.title}</div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-bold text-foreground">Descrição</label>
+              <Input
+                value={cardDescInput}
+                onChange={(e) => setCardDescInput(e.target.value)}
+                placeholder="Descrição personalizada..."
+                className="h-8 text-xs bg-background border-input rounded-xl"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSaveCardDescription();
+                }}
+              />
+            </div>
+
+            <DialogFooter className="pt-2 gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setEditingDescCard(null)}
+                className="text-xs rounded-xl cursor-pointer"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleSaveCardDescription}
+                className="text-xs bg-primary text-primary-foreground font-bold rounded-xl cursor-pointer"
+              >
+                Salvar Descrição
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
