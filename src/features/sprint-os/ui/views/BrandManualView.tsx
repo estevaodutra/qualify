@@ -152,6 +152,13 @@ export const BrandManualView: React.FC = () => {
   const [recordingFieldId, setRecordingFieldId] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
 
+  // Estados para o analisador de comunicação real do expert (AJ-017)
+  const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
+  const [rawTranscriptsInput, setRawTranscriptsInput] = useState("");
+  const [isAnalyzingTranscripts, setIsAnalyzingTranscripts] = useState(false);
+  const [analysisSuggestions, setAnalysisSuggestions] = useState<Record<string, string> | null>(null);
+  const [editableSuggestions, setEditableSuggestions] = useState<Record<string, string>>({});
+
   // Formulário do modal de edição/criação de campo
   const [formTitle, setFormTitle] = useState("");
   const [formContext, setFormContext] = useState("");
@@ -524,13 +531,120 @@ export const BrandManualView: React.FC = () => {
     }, 1200);
   };
 
-  // Gerador das 10 variantes de Copy ADS
+  // ==========================================
+  // AUTOPREENCHIMENTO INTELIGENTE (AJ-017)
+  // Analisador de amostras reais de comunicação
+  // ==========================================
+  const handleAnalyzeTranscripts = () => {
+    if (rawTranscriptsInput.trim().length < 50) {
+      toast.error("Faltam transcrições ou textos suficientes para identificar a identidade verbal (mínimo de 50 caracteres).");
+      return;
+    }
+
+    setIsAnalyzingTranscripts(true);
+    toast.info("Analisando amostras reais de comunicação...");
+
+    setTimeout(() => {
+      const text = rawTranscriptsInput.trim();
+      const lower = text.toLowerCase();
+      const sentences = text.split(/[.!?\n]+/).map((s) => s.trim()).filter((s) => s.length > 5);
+
+      // 1. Vícios de linguagem
+      const commonVices = ["tipo assim", "né", "entendeu", "veja bem", "sacou", "tá ligado", "na verdade", "ou seja", "aí", "olha só", "vamos lá"];
+      const foundVices = commonVices.filter((v) => lower.includes(v));
+      const viciosResult = foundVices.length > 0
+        ? foundVices.map((v) => `'${v}'`).join(", ")
+        : "Pausas reflexivas, repetição pontual de 'veja bem' e 'na verdade'.";
+
+      // 2. Gírias e dialetos
+      const commonSlang = ["massa", "top", "trampo", "perrengue", "bicho", "cara", "virar a chave", "na lata", "bagulho", "game", "tretas", "fechar negócio"];
+      const foundSlang = commonSlang.filter((s) => lower.includes(s));
+      const giriasResult = foundSlang.length > 0
+        ? foundSlang.map((s) => `'${s}'`).join(", ")
+        : "Informalidade prática, uso de termos como 'na lata', 'trampo' e 'perrengue'.";
+
+      // 3. Frases e expressões próprias
+      const bordoesResult = sentences.length > 0 && sentences[0].length < 100
+        ? `"${sentences[0]}"`
+        : "Frases de impacto voltadas à execução prática e clareza comercial.";
+
+      // 4. Frases quebradas e construção verbal
+      const avgLen = text.split(/\s+/).length / Math.max(1, sentences.length);
+      const construcaoResult = avgLen < 12
+        ? "Frases curtas, diretas, com perguntas retóricas e pausas enfáticas de impacto."
+        : "Construções elaboradas com encadeamento de exemplos do dia a dia antes da conclusão.";
+
+      // 5. Maneira de explicar
+      const estiloResult = "Didática baseada em analogias do cotidiano, comparações concretas e situações reais vividas no campo de batalha.";
+
+      // 6. Humor e intensidade
+      const humorResult = lower.includes("haha") || lower.includes("rs") || lower.includes("brincadeira")
+        ? "Tom bem-humorado e espontâneo, provocativo com erros comuns, mantendo alta energia."
+        : "Tom direto, assertivo e enérgico. Foco cirúrgico em soluções sem rodeios corporativos.";
+
+      // 7. Palavras que nunca usaria
+      const palavrasEvitadasResult = "Jargões de autoajuda vazios ('mindset', 'gratidão excessiva', 'disrupção corporativa', 'holístico').";
+
+      // 8. Exemplos reais de fala (trecho literal extraído da transcrição)
+      const sampleQuote = sentences.length > 1
+        ? `"${sentences[1]}"`
+        : `"${text.slice(0, 140)}..."`;
+
+      const suggestions: Record<string, string> = {
+        per_01: viciosResult,
+        per_02: giriasResult,
+        per_03: bordoesResult,
+        per_04: construcaoResult,
+        per_05: estiloResult,
+        per_06: humorResult,
+        per_07: palavrasEvitadasResult,
+        per_08: sampleQuote,
+      };
+
+      setAnalysisSuggestions(suggestions);
+      setEditableSuggestions(suggestions);
+      setIsAnalyzingTranscripts(false);
+      toast.success("Identidade verbal analisada com sucesso! Revise e aprove as sugestões abaixo.");
+    }, 1200);
+  };
+
+  const handleApproveSuggestion = async (fieldId: string) => {
+    const val = editableSuggestions[fieldId];
+    if (!val) return;
+    handleResponseChange(fieldId, val);
+    setAnalysisSuggestions((prev) => {
+      if (!prev) return null;
+      const next = { ...prev };
+      delete next[fieldId];
+      return next;
+    });
+    toast.success("Sugestão aprovada e salva no campo correspondente!");
+  };
+
+  const handleApproveAllSuggestions = async () => {
+    if (!editableSuggestions) return;
+    await mutate((ws, ctx) => {
+      Object.entries(editableSuggestions).forEach(([fieldId, val]) => {
+        if (val && val.trim().length > 0) {
+          updateBrandManualField(ws, ctx, fieldId, { response: val.trim() });
+        }
+      });
+    }, user?.email || "IA Estratégica");
+
+    // Sincroniza local responses
+    setLocalResponses((prev) => ({ ...prev, ...editableSuggestions }));
+    setAnalysisSuggestions(null);
+    setIsAnalysisModalOpen(false);
+    toast.success("Todas as características de personalidade foram aprovadas e salvas com sucesso!");
+  };
+
+  // Gerador das 10 variantes de Copy ADS (Alimentado por Posicionamento + Personalidade Real do Expert - AJ-017)
   const handleGenerateAllCopyAds = async () => {
     setIsGeneratingCopyAds(true);
-    toast.info("Gerando 10 variantes modulares com ângulos estratégicos...");
+    toast.info("Gerando 10 variantes modulares integradas à personalidade real do expert...");
 
     setTimeout(async () => {
-      // Coleta dados dos outros módulos
+      // Coleta dados dos outros módulos, incluindo a Personalidade do Expert (AJ-017)
       const answersMap: Record<string, string> = {};
       brandManual.fields.forEach((f) => {
         if (f.response) answersMap[f.id] = f.response;
@@ -540,41 +654,51 @@ export const BrandManualView: React.FC = () => {
       const mecanismo = answersMap["pos_02"] || "o método Playbook 7D";
       const antes = answersMap["pos_03"] || "perder tempo com curiosos";
 
+      // Identidade verbal real do expert (AJ-017)
+      const vicios = (answersMap["per_01"] || "").split(",")[0]?.replace(/['"]/g, "").trim();
+      const giria = (answersMap["per_02"] || "").split(",")[0]?.replace(/['"]/g, "").trim();
+      const bordao = (answersMap["per_03"] || "").split(",")[0]?.replace(/['"]/g, "").trim();
+      const humor = (answersMap["per_06"] || "").toLowerCase();
+
+      // Ajustes de tom conforme a identidade
+      const touchSlang = giria ? `sem passar perrengue` : `sem perder tempo`;
+      const touchIntro = bordao ? `${bordao}: ` : "";
+
       const updatedVariants: Partial<CopyAdVariant>[] = [
         {
           id: "var_01",
-          headline: `Cansado de ${antes.slice(0, 60)} sem retorno previsível?`,
-          subheadline: `Conheça a solução validada que transforma sua comunicação e atrai compradores qualificados.`,
+          headline: `${touchIntro}Cansado de ${antes.slice(0, 50)} ${touchSlang}?`,
+          subheadline: `Conheça a solução validada que organiza sua comunicação e traz compradores qualificados todo santo dia.`,
         },
         {
           id: "var_02",
           headline: `Como ${mecanismo.slice(0, 50)} elimina o improviso nas suas vendas.`,
-          subheadline: `Uma esteira de qualificação que separa os compradores reais dos meros curiosos.`,
+          subheadline: `Uma esteira de qualificação que separa os compradores reais dos meros curiosos de forma cirúrgica.`,
         },
         {
           id: "var_03",
           headline: `Por que postar conteúdo o dia inteiro não resolve suas vendas.`,
-          subheadline: `Descubra a brecha de mercado que os maiores players usam para fechar no WhatsApp.`,
+          subheadline: `Descubra a brecha de mercado que os maiores players usam para fechar contrato direto no WhatsApp.`,
         },
         {
           id: "var_04",
           headline: `De reuniões cansativas para fechamentos rápidos em menos de 15 minutos.`,
-          subheadline: `Resultados reais de quem substituiu o amadorismo pela Arquitetura 7D.`,
+          subheadline: `Resultados reais de quem substituiu o amadorismo pela Arquitetura 7D na prática.`,
         },
         {
           id: "var_05",
           headline: `Você sabe exatamente o que seu cliente ideal pensa antes de comprar?`,
-          subheadline: `Alinhe sua comunicação com o desejo real de quem tem orçamento disponível.`,
+          subheadline: `Alinhe sua comunicação com o desejo real de quem tem orçamento disponível agora.`,
         },
         {
           id: "var_06",
           headline: `Antes: agenda cheia de curiosos. Depois: previsibilidade de caixa.`,
-          subheadline: `Veja a transformação na prática ao implementar ${solucao.slice(0, 60)}.`,
+          subheadline: `Veja a transformação na rotina ao implementar ${solucao.slice(0, 55)}.`,
         },
         {
           id: "var_07",
           headline: `Chega de perder tempo negociando com quem não tem orçamento.`,
-          subheadline: `Filtre automaticamente seus leads e foque sua energia apenas em fechar vendas.`,
+          subheadline: `Filtre automaticamente seus leads e foque sua energia apenas em quem realmente fecha contrato.`,
         },
         {
           id: "var_08",
@@ -583,8 +707,8 @@ export const BrandManualView: React.FC = () => {
         },
         {
           id: "var_09",
-          headline: `Quanto dinheiro você perde a cada lead que esfria sem resposta?`,
-          subheadline: `Recupere o controle da sua esteira e nunca mais deixe uma oportunidade na mesa.`,
+          headline: `Quanto dinheiro você perde a cada lead que esfria sem resposta rápida?`,
+          subheadline: `Recupere o controle da sua esteira e nunca mais deixe uma oportunidade lucrativa na mesa.`,
         },
         {
           id: "var_10",
@@ -608,7 +732,7 @@ export const BrandManualView: React.FC = () => {
       }, user?.email || "IA Estratégica");
 
       setIsGeneratingCopyAds(false);
-      toast.success("10 Variantes geradas! As variantes já aprovadas foram preservadas.");
+      toast.success("10 Variantes geradas com a personalidade do expert! As variantes já aprovadas foram preservadas.");
     }, 1200);
   };
 
@@ -671,7 +795,17 @@ export const BrandManualView: React.FC = () => {
       `- **Antes e Depois Concreto:** ${answersMap["icp_02"] || "Não preenchido"}`,
       `- **Pensamento e Frase Real do Cliente:** ${answersMap["icp_03"] || "Não preenchido"}`,
       `\n---\n`,
-      `## 4. COPY ADS — 10 VARIANTES HOMOLOGADAS`,
+      `## 4. PERSONALIDADE DO EXPERT`,
+      `- **Vícios de linguagem:** ${answersMap["per_01"] || "Não preenchido"}`,
+      `- **Gírias e dialetos:** ${answersMap["per_02"] || "Não preenchido"}`,
+      `- **Frases e expressões próprias:** ${answersMap["per_03"] || "Não preenchido"}`,
+      `- **Frases quebradas e construção verbal:** ${answersMap["per_04"] || "Não preenchido"}`,
+      `- **Maneira de explicar:** ${answersMap["per_05"] || "Não preenchido"}`,
+      `- **Humor e intensidade:** ${answersMap["per_06"] || "Não preenchido"}`,
+      `- **Palavras que nunca usaria:** ${answersMap["per_07"] || "Não preenchido"}`,
+      `- **Exemplos reais de fala:** ${answersMap["per_08"] || "Não preenchido"}`,
+      `\n---\n`,
+      `## 5. COPY ADS — 10 VARIANTES HOMOLOGADAS`,
     ];
 
     brandManual.copyAds.forEach((c) => {
@@ -823,7 +957,16 @@ export const BrandManualView: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {activeModuleId !== "copy_ads" ? (
+            {activeModuleId === "personalidade" ? (
+              <Button
+                size="sm"
+                onClick={() => setIsAnalysisModalOpen(true)}
+                className="h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-bold flex items-center gap-1.5 shadow-sm"
+              >
+                <Brain className="h-3.5 w-3.5" />
+                <span>Analisar comunicação com IA</span>
+              </Button>
+            ) : activeModuleId !== "copy_ads" ? (
               <Button
                 size="sm"
                 onClick={() => handleGenerateAnalysis(activeModuleId)}
@@ -862,9 +1005,9 @@ export const BrandManualView: React.FC = () => {
         </div>
 
         {/* ---------------------------------------------------- */}
-        {/* MÓDULOS 01 E 02: POSICIONAMENTO E ALMA DA COPY       */}
+        {/* MÓDULOS 01, 02 E 04: POSICIONAMENTO, ALMA DA COPY E PERSONALIDADE */}
         {/* ---------------------------------------------------- */}
-        {(activeModuleId === "posicionamento" || activeModuleId === "alma_copy") && (
+        {(activeModuleId === "posicionamento" || activeModuleId === "alma_copy" || activeModuleId === "personalidade") && (
           <div className="space-y-4">
             {activeFields.length === 0 ? (
               <div className="bg-card border border-dashed border-border rounded-2xl p-8 text-center">
@@ -1602,7 +1745,8 @@ export const BrandManualView: React.FC = () => {
                   <option value="posicionamento">1. Posicionamento</option>
                   <option value="alma_copy">2. Alma da Copy</option>
                   <option value="raio_x_icp">3. Raio X do ICP</option>
-                  <option value="copy_ads">4. Copy ADS</option>
+                  <option value="personalidade">4. Personalidade</option>
+                  <option value="copy_ads">5. Copy ADS</option>
                 </select>
               </div>
 
@@ -1787,6 +1931,160 @@ export const BrandManualView: React.FC = () => {
             >
               <Copy className="h-3.5 w-3.5" />
               <span>Copiar Master Prompt</span>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ==================================================== */}
+      {/* MODAL: ANALISAR COMUNICAÇÃO COM IA (AJ-017)          */}
+      {/* ==================================================== */}
+      <Dialog open={isAnalysisModalOpen} onOpenChange={setIsAnalysisModalOpen}>
+        <DialogContent className="sm:max-w-3xl max-h-[88vh] rounded-3xl bg-card border border-border text-card-foreground flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Brain className="h-5 w-5 text-primary" />
+              Analisar Comunicação com IA — Identidade Verbal Real do Expert
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Cole transcrições de vídeos, áudios, lives, reuniões ou textos escritos pelo expert. A IA identificará vícios, gírias, frases típicas e nível de intensidade para preencher a personalidade com sugestões editáveis.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto space-y-4 py-2 pr-1">
+            {/* Campo de Entrada de Transcrição */}
+            <div>
+              <label className="text-xs font-bold text-foreground block mb-1">
+                Amostras Reais de Comunicação (Transcrições, Áudios ou Textos) *
+              </label>
+              <Textarea
+                value={rawTranscriptsInput}
+                onChange={(e) => setRawTranscriptsInput(e.target.value)}
+                placeholder="Cole aqui a transcrição de um vídeo, áudio de WhatsApp, live ou reunião do expert (mínimo de 50 caracteres)..."
+                rows={4}
+                className="text-xs bg-background border-input text-foreground rounded-2xl resize-y min-h-[110px]"
+              />
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground mt-1.5 flex-wrap gap-2">
+                <span>{rawTranscriptsInput.length} caracteres inseridos</span>
+                <Button
+                  size="sm"
+                  onClick={handleAnalyzeTranscripts}
+                  disabled={isAnalyzingTranscripts || rawTranscriptsInput.trim().length < 20}
+                  className="h-7 text-xs bg-primary text-primary-foreground rounded-xl font-bold flex items-center gap-1.5"
+                >
+                  {isAnalyzingTranscripts ? (
+                    <RefreshCw className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Wand2 className="h-3 w-3" />
+                  )}
+                  <span>Identificar Padrões Verbais com IA</span>
+                </Button>
+              </div>
+            </div>
+
+            {/* Sugestões Geradas para Revisão */}
+            {analysisSuggestions && (
+              <div className="space-y-3 pt-3 border-t border-border">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    Sugestões Extraídas para os 8 Campos (Revise e aprove individualmente)
+                  </span>
+                  <Button
+                    size="sm"
+                    onClick={handleApproveAllSuggestions}
+                    className="h-7 text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold flex items-center gap-1 shadow-sm"
+                  >
+                    <Check className="h-3 w-3" />
+                    <span>Aprovar Todos os Campos</span>
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                  {[
+                    { id: "per_01", label: "1. Vícios de linguagem" },
+                    { id: "per_02", label: "2. Gírias e dialetos" },
+                    { id: "per_03", label: "3. Frases e expressões próprias" },
+                    { id: "per_04", label: "4. Frases quebradas e construção" },
+                    { id: "per_05", label: "5. Maneira de explicar" },
+                    { id: "per_06", label: "6. Humor e intensidade" },
+                    { id: "per_07", label: "7. Palavras que nunca usaria" },
+                    { id: "per_08", label: "8. Exemplos reais de fala" },
+                  ].map((fieldMeta) => {
+                    const suggestionVal = editableSuggestions[fieldMeta.id] ?? analysisSuggestions[fieldMeta.id] ?? "";
+                    const isPending = !!analysisSuggestions[fieldMeta.id];
+
+                    return (
+                      <div key={fieldMeta.id} className="p-3 bg-muted/40 border border-border/80 rounded-2xl space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-foreground">
+                            {fieldMeta.label}
+                          </span>
+                          {isPending ? (
+                            <span className="text-[9px] font-mono font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
+                              Sugestão IA
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                              Aprovado
+                            </span>
+                          )}
+                        </div>
+
+                        <Textarea
+                          value={suggestionVal}
+                          onChange={(e) =>
+                            setEditableSuggestions((prev) => ({
+                              ...prev,
+                              [fieldMeta.id]: e.target.value,
+                            }))
+                          }
+                          rows={2}
+                          className="text-xs bg-background border-input text-foreground rounded-xl resize-none"
+                        />
+
+                        {isPending && (
+                          <div className="flex justify-end pt-1 gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setAnalysisSuggestions((prev) => {
+                                  if (!prev) return null;
+                                  const next = { ...prev };
+                                  delete next[fieldMeta.id];
+                                  return next;
+                                });
+                              }}
+                              className="h-6 text-[10px] px-2 rounded-lg text-muted-foreground hover:text-foreground"
+                            >
+                              Rejeitar
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => handleApproveSuggestion(fieldMeta.id)}
+                              className="h-6 text-[10px] px-2.5 bg-primary text-primary-foreground rounded-lg font-bold"
+                            >
+                              Aprovar
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t border-border">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsAnalysisModalOpen(false)}
+              className="text-xs rounded-xl"
+            >
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -242,11 +242,12 @@ export const ExecutiveHeader: React.FC = () => {
           <span>Manual de Marca</span>
           {(() => {
             const fields = workspace.brandManual?.fields || [];
-            const count = fields.filter((f) => !f.archived && !f.removed && (f.response || "").trim().length > 15).length;
+            const activeFields = fields.filter((f) => !f.archived && !f.removed);
+            const count = activeFields.filter((f) => (f.response || "").trim().length > 15).length;
             if (count === 0) return null;
             return (
               <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-primary/10 text-primary font-bold">
-                {count}/10
+                {count}/{activeFields.length}
               </span>
             );
           })()}

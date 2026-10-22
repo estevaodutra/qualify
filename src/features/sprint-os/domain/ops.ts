@@ -1042,10 +1042,41 @@ export function getBrandManualData(ws: Workspace): BrandManualData {
   } else {
     if (!ws.brandManual.modules || ws.brandManual.modules.length === 0) {
       ws.brandManual.modules = JSON.parse(JSON.stringify(DEFAULT_BRAND_MANUAL_MODULES));
+    } else {
+      // Garante presença do módulo de Personalidade (AJ-017)
+      if (!ws.brandManual.modules.some((m) => m.id === "personalidade")) {
+        const copyAdsMod = ws.brandManual.modules.find((m) => m.id === "copy_ads");
+        if (copyAdsMod) {
+          copyAdsMod.title = "5. COPY ADS";
+          copyAdsMod.order = 4;
+        }
+        ws.brandManual.modules.push({
+          id: "personalidade",
+          title: "4. PERSONALIDADE",
+          description: "Captura da identidade verbal real do expert: vícios de linguagem, gírias, expressões, humor e intensidade.",
+          order: 3,
+        });
+        ws.brandManual.modules.sort((a, b) => a.order - b.order);
+      } else {
+        const copyAdsMod = ws.brandManual.modules.find((m) => m.id === "copy_ads");
+        if (copyAdsMod && copyAdsMod.title.startsWith("4.")) {
+          copyAdsMod.title = "5. COPY ADS";
+          copyAdsMod.order = 4;
+        }
+      }
     }
+
     if (!ws.brandManual.fields || ws.brandManual.fields.length === 0) {
       ws.brandManual.fields = JSON.parse(JSON.stringify(DEFAULT_BRAND_MANUAL_FIELDS));
+    } else {
+      // Garante presença de todos os campos obrigatórios da etapa Personalidade (per_01 a per_08)
+      DEFAULT_BRAND_MANUAL_FIELDS.forEach((df) => {
+        if (!ws.brandManual!.fields.some((f) => f.id === df.id)) {
+          ws.brandManual!.fields.push(JSON.parse(JSON.stringify(df)));
+        }
+      });
     }
+
     if (!ws.brandManual.copyAds || ws.brandManual.copyAds.length === 0) {
       ws.brandManual.copyAds = JSON.parse(JSON.stringify(DEFAULT_COPY_ADS_VARIANTS));
     }
