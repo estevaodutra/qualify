@@ -26,6 +26,7 @@ import {
   sprintTasks,
   updateTask,
   reconcileWorkspaceWithAJ019,
+  reconcileWorkspaceWithAJ024,
   startTaskSession,
   pauseTaskSession,
   concludeTaskWithSession,
@@ -93,16 +94,22 @@ export const KanbanView: React.FC = () => {
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dragOverColId, setDragOverColId] = useState<TaskStatus | null>(null);
 
-  // Auto-reconciliação do workspace se faltar IM-01, fluxos ou etiquetas padrão
+  // Auto-reconciliação do workspace com o Checklist Master AJ-024 se faltar itens
   useEffect(() => {
     if (workspace && activeSprintId) {
       const live = Object.values(workspace.tasks || {}).filter((t) => !t.archivedAt);
-      const hasIM01 = live.some((t) => t.title.includes("IM-01"));
-      const hasGRP01 = live.some((t) => t.title.includes("GRP-01") || t.title.includes("AUTO-01"));
+      const hasIM01 = live.some((t) => t.title.includes("01.01") || t.title.includes("IM-01"));
+      const hasSubtasksOnIM01 = live.some(
+        (t) =>
+          (t.title.includes("01.01") || t.title.includes("IM-01")) &&
+          Object.values(workspace.subtasks || {}).some((st) => !st.archivedAt && st.taskId === t.id)
+      );
+      const hasEtapa13 = live.some((t) => t.title.includes("13.01") || t.title.includes("OPORTUNIDADES"));
       const hasLabels = workspace.labels && Object.keys(workspace.labels).length > 0;
 
-      if (!hasIM01 || !hasGRP01 || !hasLabels) {
+      if (!hasIM01 || !hasSubtasksOnIM01 || !hasEtapa13 || !hasLabels) {
         mutate((ws, ctx) => {
+          reconcileWorkspaceWithAJ024(ws, ctx);
           reconcileWorkspaceWithAJ019(ws, ctx);
         }, user?.email || "Operador");
       }

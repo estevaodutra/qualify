@@ -20,6 +20,7 @@ import {
   DEFAULT_AUDIO_REQUESTS, DEFAULT_WORKSPACE_LABELS, DEFAULT_WEBINAR_DATA,
 } from "./types";
 import { wouldCreateCycle } from "../scheduler/engine";
+import { reconcileWorkspaceWithAJ024 } from "./masterChecklistPVD";
 
 export class DomainError extends Error {}
 
@@ -1873,12 +1874,20 @@ export function reconcileWorkspaceWithAJ019(ws: Workspace, ctx: Ctx): boolean {
     changed = true;
   }
 
+  // 7. Reconciliação do Checklist Master Completo do PVD (AJ-024)
+  const masterChecklistChanged = reconcileWorkspaceWithAJ024(ws, ctx);
+  if (masterChecklistChanged) {
+    changed = true;
+  }
+
   if (changed) {
     touch(ws.project, ctx);
   }
 
   return changed;
 }
+
+export { reconcileWorkspaceWithAJ024 };
 
 // ==========================================
 // OPERAÇÕES DE SCRIPTS E ÁUDIOS (AJ-021)
