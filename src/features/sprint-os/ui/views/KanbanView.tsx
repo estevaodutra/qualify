@@ -1,34 +1,74 @@
 /**
- * Visão Kanban do Sprint OS (Camada A / Seção 16 e 23).
+ * Visão Kanban do Sprint OS com Cards Otimizados e Cronômetro Real (AJ-022).
  * Três colunas canônicas principais:
- * - 🔴 PENDENTE (Não iniciada)
- * - 🟡 FAZENDO (Em execução)
- * - 🟢 FEITO (Concluída)
- * Aplica regras estritas de transição (ex: impede conclusão com subtarefas obrigatórias pendentes).
+ * - 🔴 PENDENTE
+ * - 🟡 FAZENDO
+ * - 🟢 CONCLUÍDA
+ * Controle real do tempo de execução:
+ * PLAY → FAZENDO → CONTAGEM REAL → PAUSA → REGISTRO → RETOMADA → CONCLUSÃO → TEMPO TOTAL.
  */
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Clock,
-  User,
-  AlertTriangle,
-  DollarSign,
-  CheckCircle2,
   Plus,
-  ArrowRight,
+  Play,
+  CheckCircle2,
+  AlertCircle,
+  Filter,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSprintOSStore } from "../../state/sprintOsStore";
-import { sprintTasks, subtasksOf, updateTask, reconcileWorkspaceWithAJ019 } from "../../domain/ops";
-import { PRIORITY_LABEL, IMPACT_FLAG_CONFIG, type TaskStatus, type Task } from "../../domain/types";
-import { fmtDateTime, fmtMinutes } from "../../scheduler/time";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  sprintTasks,
+  updateTask,
+  reconcileWorkspaceWithAJ019,
+  startTaskSession,
+  pauseTaskSession,
+  concludeTaskWithSession,
+  setTaskStatus,
+  createTask,
+  stagesOf,
+} from "../../domain/ops";
+import type { TaskStatus, Task } from "../../domain/types";
+import { KanbanCard } from "../kanban/KanbanCard";
+import { toast } from "sonner";
 
-const COLUMNS: { id: TaskStatus; title: string; color: string; bg: string; icon: string }[] = [
-  { id: "pending", title: "Pendente", color: "text-rose-600 dark:text-rose-400", bg: "border-rose-500/20 bg-rose-500/5", icon: "🔴" },
-  { id: "doing", title: "Fazendo", color: "text-amber-600 dark:text-amber-400", bg: "border-amber-500/20 bg-amber-500/5", icon: "🟡" },
-  { id: "done", title: "Feito", color: "text-emerald-600 dark:text-emerald-400", bg: "border-emerald-500/20 bg-emerald-500/5", icon: "🟢" },
+const COLUMNS: {
+  id: TaskStatus;
+  title: string;
+  color: string;
+  bg: string;
+  icon: string;
+  dropBorder: string;
+}[] = [
+  {
+    id: "pending",
+    title: "Pendente",
+    color: "text-rose-600 dark:text-rose-400",
+    bg: "border-rose-500/20 bg-rose-500/5",
+    icon: "🔴",
+    dropBorder: "border-rose-500 ring-2 ring-rose-500/30",
+  },
+  {
+    id: "doing",
+    title: "Fazendo",
+    color: "text-amber-600 dark:text-amber-400",
+    bg: "border-amber-500/20 bg-amber-500/5",
+    icon: "🟡",
+    dropBorder: "border-amber-500 ring-2 ring-amber-500/30",
+  },
+  {
+    id: "done",
+    title: "Concluída",
+    color: "text-emerald-600 dark:text-emerald-400",
+    bg: "border-emerald-500/20 bg-emerald-500/5",
+    icon: "🟢",
+    dropBorder: "border-emerald-500 ring-2 ring-emerald-500/30",
+  },
 ];
 
 export const KanbanView: React.FC = () => {
@@ -44,13 +84,30 @@ export const KanbanView: React.FC = () => {
     filterOrigin,
     setSelectedTaskId,
     setIsTaskModalOpen,
-    setTaskStatusAction,
     mutate,
   } = useSprintOSStore();
 
-  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-  const [editingTitleText, setEditingTitleText] = useState("");
-  const clickTimeoutRef = useRef<any>(null);
+  const { user } = useAuth();
+
+  // Drag and drop state
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [dragOverColId, setDragOverColId] = useState<TaskStatus | null>(null);
+
+  // Auto-reconciliação do workspace se faltar IM-01, fluxos ou etiquetas padrão
+  useEffect(() => {
+    if (workspace && activeSprintId) {
+      const live = Object.values(workspace.tasks || {}).filter((t) => !t.archivedAt);
+      const hasIM01 = live.some((t) => t.title.includes("IM-01"));
+      const hasGRP01 = live.some((t) => t.title.includes("GRP-01") || t.title.includes("AUTO-01"));
+      const hasLabels = workspace.labels && Object.keys(workspace.labels).length > 0;
+
+      if (!hasIM01 || !hasGRP01 || !hasLabels) {
+        mutate((ws, ctx) => {
+          reconcileWorkspaceWithAJ019(ws, ctx);
+        }, user?.email || "Operador");
+      }
+    }
+  }, [workspace?.project?.id, activeSprintId]);
 
   if (!workspace || !activeSprintId) return null;
 
@@ -79,351 +136,131 @@ export const KanbanView: React.FC = () => {
     tasks = tasks.filter((t) => (t.origin || "defined") === filterOrigin);
   }
 
-  const handleCardClick = (taskId: string) => {
-    if (editingTaskId === taskId) return;
-    if (clickTimeoutRef.current) {
-      clearTimeout(clickTimeoutRef.current);
-      clickTimeoutRef.current = null;
-      return;
-    }
-    clickTimeoutRef.current = setTimeout(() => {
-      setSelectedTaskId(taskId);
-      setIsTaskModalOpen(true);
-      clickTimeoutRef.current = null;
-    }, 240);
+  const handleOpenTaskDetails = (taskId: string) => {
+    setSelectedTaskId(taskId);
+    setIsTaskModalOpen(true);
   };
 
-  const handleTitleDoubleClick = (taskId: string, title: string) => {
-    if (clickTimeoutRef.current) {
-      clearTimeout(clickTimeoutRef.current);
-      clickTimeoutRef.current = null;
-    }
-    setIsTaskModalOpen(false);
-    setEditingTaskId(taskId);
-    setEditingTitleText(title);
+  // ───────────── Drag and Drop Handlers (AJ-022) ─────────────
+  const handleDragStart = (e: React.DragEvent, taskId: string) => {
+    e.dataTransfer.setData("text/plain", taskId);
+    e.dataTransfer.effectAllowed = "move";
+    setDraggedTaskId(taskId);
   };
 
-  const handleCommitTitle = (taskId: string) => {
-    if (editingTitleText.trim()) {
-      mutate((ws, ctx) => {
-        updateTask(ws, ctx, taskId, { title: editingTitleText.trim() });
-      });
+  const handleDragOver = (e: React.DragEvent, colId: TaskStatus) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverColId !== colId) {
+      setDragOverColId(colId);
     }
-    setEditingTaskId(null);
   };
 
-  // AJ-019: Auto-reconciliação do workspace se faltar IM-01 ou fluxos do Grupo de Captação
-  useEffect(() => {
-    if (workspace && activeSprintId) {
-      const live = Object.values(workspace.tasks || {}).filter((t) => !t.archivedAt);
-      const hasIM01 = live.some((t) => t.title.includes("IM-01"));
-      const hasGRP01 = live.some((t) => t.title.includes("GRP-01") || t.title.includes("AUTO-01"));
-      if (!hasIM01 || !hasGRP01) {
-        mutate((ws, ctx) => {
-          reconcileWorkspaceWithAJ019(ws, ctx);
-        });
-      }
+  const handleDragLeave = (e: React.DragEvent) => {
+    setDragOverColId(null);
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetStatus: TaskStatus) => {
+    e.preventDefault();
+    setDragOverColId(null);
+    const taskId = e.dataTransfer.getData("text/plain") || draggedTaskId;
+    setDraggedTaskId(null);
+
+    if (!taskId) return;
+    const task = workspace.tasks[taskId];
+    if (!task || task.status === targetStatus) return;
+
+    try {
+      await mutate((ws, ctx) => {
+        if (targetStatus === "done") {
+          // Conclusão segura de sessão e consolidação de tempo
+          concludeTaskWithSession(ws, ctx, taskId);
+        } else if (targetStatus === "doing") {
+          // Transição para Fazendo
+          if (task.status === "pending") {
+            // Mover para Fazendo preserva estado para iniciar sessão ao clicar Play
+            setTaskStatus(ws, ctx, taskId, "doing");
+          } else {
+            setTaskStatus(ws, ctx, taskId, "doing");
+          }
+        } else if (targetStatus === "pending") {
+          // Devolver para Pendente encerra sessão ativa se houver
+          if (task.workSessions?.some((s) => s.status === "active")) {
+            pauseTaskSession(ws, ctx, taskId);
+          }
+          setTaskStatus(ws, ctx, taskId, "pending");
+        }
+      }, user?.email || "Operador");
+
+      toast.success(`Tarefa movida para ${targetStatus === "done" ? "Concluída" : targetStatus === "doing" ? "Fazendo" : "Pendente"}`);
+    } catch (err: any) {
+      toast.error(err.message || "Não foi possível mover a tarefa");
     }
-  }, [workspace?.project?.id, activeSprintId]);
+  };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 min-h-[600px]">
-      {COLUMNS.map((col) => {
-        const colTasks = tasks.filter((t) => t.status === col.id);
+    <div className="space-y-4">
+      {/* 3 Colunas Principais: Pendente, Fazendo, Concluída */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 min-h-[640px]">
+        {COLUMNS.map((col) => {
+          const colTasks = tasks.filter((t) => t.status === col.id);
+          const isOver = dragOverColId === col.id;
 
-        return (
-          <div
-            key={col.id}
-            className={`rounded-2xl border ${col.bg} p-4 flex flex-col backdrop-blur-md shadow-xs`}
-          >
-            {/* Cabeçalho da Coluna */}
-            <div className="flex items-center justify-between pb-3 mb-3 border-b border-border">
-              <div className="flex items-center gap-2">
-                <span>{col.icon}</span>
-                <span className={`text-sm font-black uppercase tracking-wider ${col.color}`}>
-                  {col.title}
-                </span>
-              </div>
-              <Badge variant="outline" className="text-xs font-bold border-border text-muted-foreground bg-muted">
-                {colTasks.length}
-              </Badge>
-            </div>
-
-            {/* Lista de Cards */}
-            <div className="space-y-3 flex-1 overflow-y-auto pr-1">
-              {colTasks.length === 0 ? (
-                <div className="h-32 flex items-center justify-center text-xs text-muted-foreground/40 border border-dashed border-border rounded-xl">
-                  Nenhuma tarefa nesta coluna
+          return (
+            <div
+              key={col.id}
+              onDragOver={(e) => handleDragOver(e, col.id)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, col.id)}
+              className={`rounded-3xl border ${col.bg} p-4 flex flex-col backdrop-blur-md shadow-xs transition-all ${
+                isOver ? col.dropBorder : ""
+              }`}
+            >
+              {/* Cabeçalho da Coluna */}
+              <div className="flex items-center justify-between pb-3 mb-3 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">{col.icon}</span>
+                  <span className={`text-sm font-black uppercase tracking-wider ${col.color}`}>
+                    {col.title}
+                  </span>
                 </div>
-              ) : (
-                colTasks.map((task) => {
-                  const subtasks = subtasksOf(workspace, task.id);
-                  const assignee = task.assigneeId ? workspace.members[task.assigneeId] : null;
-                  const stage = workspace.stages[task.stageId];
+                <Badge
+                  variant="outline"
+                  className="text-xs font-bold border-border text-muted-foreground bg-muted rounded-xl px-2 py-0.5"
+                >
+                  {colTasks.length}
+                </Badge>
+              </div>
 
-                  return (
+              {/* Lista de Cards da Coluna */}
+              <div className="space-y-3 flex-1 overflow-y-auto pr-1">
+                {colTasks.length === 0 ? (
+                  <div className="h-40 flex flex-col items-center justify-center text-xs text-muted-foreground/50 border border-dashed border-border/80 rounded-2xl p-4 text-center">
+                    <span>Nenhuma tarefa em {col.title}</span>
+                    <span className="text-[10px] text-muted-foreground/40 mt-1">
+                      Arraste um card para cá ou inicie pelo botão Play
+                    </span>
+                  </div>
+                ) : (
+                  colTasks.map((task) => (
                     <div
                       key={task.id}
-                      onClick={() => handleCardClick(task.id)}
-                      className={`p-3.5 rounded-xl border transition-all cursor-pointer shadow-sm group relative text-card-foreground ${
-                        filterAssigneeId && task.assigneeId === filterAssigneeId
-                          ? "ring-2 ring-primary/60 border-primary bg-primary/[0.04] shadow-md"
-                          : "border-border bg-card hover:border-primary/40 hover:shadow-md"
-                      }`}
+                      draggable={true}
+                      onDragStart={(e) => handleDragStart(e, task.id)}
+                      className="cursor-grab active:cursor-grabbing"
                     >
-                      {/* Topo do Card: Etapa & Prioridade */}
-                      <div className="flex items-center justify-between gap-2 mb-2">
-                        <span className="text-[10px] text-muted-foreground uppercase font-black truncate">
-                          {stage?.title || "Etapa"}
-                        </span>
-
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {task.financialImpact && (
-                            <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30 text-[9px] py-0 px-1 gap-0.5">
-                              <DollarSign className="h-2 w-2" />
-                              <span>$</span>
-                            </Badge>
-                          )}
-
-                          <Badge
-                            className={`text-[9px] font-black py-0 px-1.5 ${
-                              task.priority === "P0"
-                                ? "bg-rose-500/15 text-rose-600 dark:text-rose-300 border-rose-500/30"
-                                : task.priority === "P1"
-                                ? "bg-orange-500/15 text-orange-600 dark:text-orange-300 border-orange-500/30"
-                                : "bg-blue-500/15 text-blue-600 dark:text-blue-300 border-blue-500/30"
-                            }`}
-                          >
-                            {task.priority}
-                          </Badge>
-
-                          {/* Flags de Impacto (Seção 7) */}
-                          {task.impactFlags && task.impactFlags.length > 0 && (
-                            <div className="flex items-center gap-0.5">
-                              {task.impactFlags.slice(0, 3).map((f) => (
-                                <span key={f} className="text-xs" title={IMPACT_FLAG_CONFIG[f]?.label}>
-                                  {IMPACT_FLAG_CONFIG[f]?.icon}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* 7D Badges */}
-                          {task.expertDemand?.isExpertDemand && (
-                            <span className="text-xs cursor-help" title={`Demanda do Expert: ${task.expertDemand.category}`}>
-                              👔
-                            </span>
-                          )}
-                          {task.origin === "proposed" && (
-                            <Badge variant="outline" className="text-[8px] font-mono py-0 px-1 border-dashed border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/5">
-                              PROPOSTO
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Título da Tarefa com Edição Inline no Duplo Clique */}
-                      {editingTaskId === task.id ? (
-                        <div onClick={(e) => e.stopPropagation()} className="mb-2.5">
-                          <Input
-                            value={editingTitleText}
-                            onChange={(e) => setEditingTitleText(e.target.value)}
-                            onBlur={() => handleCommitTitle(task.id)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") handleCommitTitle(task.id);
-                              if (e.key === "Escape") setEditingTaskId(null);
-                            }}
-                            autoFocus
-                            className="h-7 text-xs font-bold bg-background border-primary text-foreground"
-                          />
-                        </div>
-                      ) : (
-                        <h4
-                          onDoubleClick={(e) => {
-                            e.stopPropagation();
-                            handleTitleDoubleClick(task.id, task.title);
-                          }}
-                          className="text-xs font-bold text-foreground group-hover:text-primary transition-colors line-clamp-2 mb-2.5 cursor-pointer"
-                          title="Clique duas vezes para renomear"
-                        >
-                          {task.title}
-                        </h4>
-                      )}
-
-                      {/* Bloqueio se houver */}
-                      {(task.blockInfo?.active || task.blockedReason) && (
-                        <div className="mb-2 p-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-[10px] text-rose-600 dark:text-rose-300 flex items-center gap-1.5 font-medium">
-                          <span className="text-xs shrink-0">🚧</span>
-                          <span className="truncate">
-                            {task.blockInfo?.active
-                              ? `BLOQUEIO: ${task.blockInfo.reason || "Pendente"}`
-                              : task.blockedReason}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* AJ-019: Badges de Horários, Gatilhos e Sincronização do Manual de Marca */}
-                      {(() => {
-                        const titleUpper = task.title.toUpperCase();
-                        const bmFields = workspace.brandManual?.fields || [];
-                        const badges: React.ReactNode[] = [];
-
-                        // 1. Horários & Gatilhos Operacionais
-                        if (titleUpper.includes("08H00") || titleUpper.includes("08:00")) {
-                          badges.push(
-                            <Badge key="time-08" className="bg-sky-500/15 text-sky-600 dark:text-sky-300 border-sky-500/30 text-[9px] font-mono py-0 px-1.5 gap-1">
-                              🕒 08h00
-                            </Badge>
-                          );
-                        } else if (titleUpper.includes("A CONFIRMAR") || (titleUpper.includes("HORÁRIO") && titleUpper.includes("CONFIRMAR"))) {
-                          badges.push(
-                            <Badge key="time-pending" className="bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30 text-[9px] font-mono py-0 px-1.5 gap-1">
-                              ⏳ Horário a confirmar
-                            </Badge>
-                          );
-                        }
-
-                        if (titleUpper.includes("EVENTO: ENTRADA") || titleUpper.includes("ENTRADA NO GRUPO") || titleUpper.includes("AUTO-01")) {
-                          badges.push(
-                            <Badge key="trig-entry" className="bg-purple-500/15 text-purple-600 dark:text-purple-300 border-purple-500/30 text-[9px] py-0 px-1.5 gap-1">
-                              ⚡ Evento: Entrada
-                            </Badge>
-                          );
-                        } else if (titleUpper.includes("PALAVRA-CHAVE") || titleUpper.includes("AUTO-05")) {
-                          badges.push(
-                            <Badge key="trig-kw" className="bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 border-indigo-500/30 text-[9px] py-0 px-1.5 gap-1">
-                              ⚡ Gatilho: Palavra-chave
-                            </Badge>
-                          );
-                        } else if (titleUpper.includes("SAÍDA DO GRUPO") || titleUpper.includes("AUTO-06")) {
-                          badges.push(
-                            <Badge key="trig-exit" className="bg-rose-500/15 text-rose-600 dark:text-rose-300 border-rose-500/30 text-[9px] py-0 px-1.5 gap-1">
-                              ⚡ Gatilho: Saída
-                            </Badge>
-                          );
-                        }
-
-                        // 2. Sincronização em Tempo Real com Manual de Marca 7D
-                        if (titleUpper.includes("IM-01") || titleUpper.includes("POSICIONAMENTO")) {
-                          const posFields = bmFields.filter((f) => f.moduleId === "posicionamento" && !f.archived && !f.removed);
-                          const answered = posFields.filter((f) => (f.response || "").trim().length > 0).length;
-                          const total = posFields.length || 4;
-                          badges.push(
-                            <Badge key="bm-pos" className={`text-[9px] font-bold py-0 px-1.5 gap-1 ${answered >= total ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30" : "bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30"}`}>
-                              {answered >= total ? "✓" : "⏳"} {answered}/{total} respostas
-                            </Badge>
-                          );
-                        } else if (titleUpper.includes("IM-02") || titleUpper.includes("ALMA DA COPY")) {
-                          const almFields = bmFields.filter((f) => f.moduleId === "alma_copy" && !f.archived && !f.removed);
-                          const answered = almFields.filter((f) => (f.response || "").trim().length > 0).length;
-                          const total = almFields.length || 3;
-                          badges.push(
-                            <Badge key="bm-alm" className={`text-[9px] font-bold py-0 px-1.5 gap-1 ${answered >= total ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30" : "bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30"}`}>
-                              {answered >= total ? "✓" : "⏳"} {answered}/{total} respostas
-                            </Badge>
-                          );
-                        } else if (titleUpper.includes("IM-03") || titleUpper.includes("RAIO X DO ICP")) {
-                          const icpFields = bmFields.filter((f) => f.moduleId === "raio_x_icp" && !f.archived && !f.removed);
-                          const answered = icpFields.filter((f) => (f.response || "").trim().length > 0).length;
-                          const total = icpFields.length || 3;
-                          badges.push(
-                            <Badge key="bm-icp" className={`text-[9px] font-bold py-0 px-1.5 gap-1 ${answered >= total ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30" : "bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30"}`}>
-                              {answered >= total ? "✓" : "⏳"} {answered}/{total} respostas
-                            </Badge>
-                          );
-                        } else if (titleUpper.includes("IM-04") || titleUpper.includes("COPY ADS")) {
-                          const approved = (workspace.brandManual?.copyAds || []).filter((c) => c.status === "approved").length;
-                          badges.push(
-                            <Badge key="bm-ads" className={`text-[9px] font-bold py-0 px-1.5 gap-1 ${approved >= 10 ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30" : "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 border-indigo-500/30"}`}>
-                              📢 {approved}/10 aprovadas
-                            </Badge>
-                          );
-                        } else if (titleUpper.includes("IM-05") || titleUpper.includes("MASTER PROMPT")) {
-                          const hasMaster = Boolean(workspace.brandManual?.masterPrompt?.trim());
-                          badges.push(
-                            <Badge key="bm-prompt" className={`text-[9px] font-bold py-0 px-1.5 gap-1 ${hasMaster ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30" : "bg-muted text-muted-foreground border-border"}`}>
-                              📑 Master Prompt {hasMaster ? "Consolidado" : "Pendente"}
-                            </Badge>
-                          );
-                        }
-
-                        if (badges.length === 0) return null;
-                        return (
-                          <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
-                            {badges}
-                          </div>
-                        );
-                      })()}
-
-                      {/* Rodapé do Card: Responsável, Horas e Checklists */}
-                      <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-2 border-t border-border">
-                        <span className="flex items-center gap-1 truncate max-w-[120px]">
-                          <User className="h-3 w-3 text-muted-foreground/60 shrink-0" />
-                          <span className="truncate text-foreground/80">{assignee?.name || "Sem atribuição"}</span>
-                        </span>
-
-                        <div className="flex items-center gap-2 shrink-0">
-                          {subtasks.length > 0 && (
-                            <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                              <CheckCircle2 className="h-3 w-3 text-primary" />
-                              <span>
-                                {subtasks.filter((s) => s.done).length}/{subtasks.length}
-                              </span>
-                            </span>
-                          )}
-
-                          {task.durationMinutes && (
-                            <span className="text-[10px] font-mono text-muted-foreground">
-                              {fmtMinutes(task.durationMinutes)}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Botões rápidos de transição no hover */}
-                      <div
-                        onClick={(e) => e.stopPropagation()}
-                        className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-popover text-popover-foreground p-1 rounded-lg border border-border shadow-md"
-                      >
-                        {col.id !== "pending" && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setTaskStatusAction(task.id, "pending")}
-                            className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
-                          >
-                            Pendente
-                          </Button>
-                        )}
-                        {col.id !== "doing" && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setTaskStatusAction(task.id, "doing")}
-                            className="h-5 px-1.5 text-[10px] text-amber-600 dark:text-amber-400 hover:text-amber-500"
-                          >
-                            Fazendo
-                          </Button>
-                        )}
-                        {col.id !== "done" && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setTaskStatusAction(task.id, "done")}
-                            className="h-5 px-1.5 text-[10px] text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 font-bold"
-                          >
-                            Concluir
-                          </Button>
-                        )}
-                      </div>
+                      <KanbanCard
+                        task={task}
+                        onOpenDetails={handleOpenTaskDetails}
+                      />
                     </div>
-                  );
-                })
-              )}
+                  ))
+                )}
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 };

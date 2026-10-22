@@ -55,6 +55,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useSprintOSStore } from "../../state/sprintOsStore";
+import { LabelsManagerPopover } from "../kanban/LabelsManagerPopover";
 import {
   subtasksOf,
   stagesOf,
@@ -553,6 +554,32 @@ export const TaskDetailModal: React.FC = () => {
               className="text-base font-bold bg-background border-input text-foreground h-9 rounded-xl tracking-tight"
               placeholder="Título da tarefa..."
             />
+
+            {/* Etiquetas Trello da Tarefa (AJ-022) */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              {(task.labelIds || []).map((id) => {
+                const lbl = workspace.labels?.[id];
+                if (!lbl) return null;
+                return (
+                  <div
+                    key={lbl.id}
+                    className="px-2 py-0.5 rounded-md border text-xs font-semibold flex items-center gap-1.5"
+                    style={{
+                      backgroundColor: `${lbl.color}15`,
+                      borderColor: `${lbl.color}40`,
+                      color: lbl.color,
+                    }}
+                  >
+                    <span
+                      className="h-1.5 w-1.5 rounded-full shrink-0"
+                      style={{ backgroundColor: lbl.color }}
+                    />
+                    <span>{lbl.name}</span>
+                  </div>
+                );
+              })}
+              <LabelsManagerPopover taskId={task.id} />
+            </div>
           </div>
         </div>
 

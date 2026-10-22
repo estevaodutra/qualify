@@ -11,11 +11,12 @@ import type {
   DashboardLayoutConfig, DashboardBlockConfig, DashboardCardConfig,
   BrandManualData, BrandManualModule, BrandManualField, CopyAdVariant,
   AudioRequest, AudioRecording, AudioRequestStatus, AudioRecordingTranscription,
+  WorkSession, WorkspaceLabel,
 } from "./types";
 import {
   emptyLearnings, DEFAULT_DASHBOARD_LAYOUT, DEFAULT_FUNNEL_STAGES,
   DEFAULT_BRAND_MANUAL_MODULES, DEFAULT_BRAND_MANUAL_FIELDS, DEFAULT_COPY_ADS_VARIANTS,
-  DEFAULT_AUDIO_REQUESTS,
+  DEFAULT_AUDIO_REQUESTS, DEFAULT_WORKSPACE_LABELS,
 } from "./types";
 import { wouldCreateCycle } from "../scheduler/engine";
 
@@ -380,7 +381,34 @@ export function deleteSubtask(ws: Workspace, ctx: Ctx, id: ID) {
   const s = get(ws.subtasks, id, "Subtarefa");
   s.archivedAt = ctx.nowIso; touch(s, ctx);
   renumber(subtasksOf(ws, s.taskId));
-  log(ws, ctx, "archive", "subtask", id, `Subtarefa removida: ${s.title}`);
+  log(ws, ctx, "archive", "subtask", id, `Subtarefa arquivada: ${s.title}`);
+}
+
+export function restoreSubtask(ws: Workspace, ctx: Ctx, id: ID) {
+  const s = get(ws.subtasks, id, "Subtarefa");
+  s.archivedAt = null; touch(s, ctx);
+  renumber(subtasksOf(ws, s.taskId));
+  log(ws, ctx, "restore", "subtask", id, `Subtarefa restaurada: ${s.title}`);
+}
+
+export function deleteSubtaskPermanently(ws: Workspace, ctx: Ctx, id: ID) {
+  const s = get(ws.subtasks, id, "Subtarefa");
+  const taskId = s.taskId;
+  delete ws.subtasks[id];
+  renumber(subtasksOf(ws, taskId));
+  touch(ws.project, ctx);
+  log(ws, ctx, "delete", "subtask", id, `Subtarefa excluída definitivamente: ${s.title}`);
+}
+
+export function reorderSubtasks(ws: Workspace, ctx: Ctx, taskId: ID, orderedIds: ID[]) {
+  get(ws.tasks, taskId, "Tarefa");
+  orderedIds.forEach((id, idx) => {
+    if (ws.subtasks[id]) {
+      ws.subtasks[id].position = idx;
+      touch(ws.subtasks[id], ctx);
+    }
+  });
+  log(ws, ctx, "reorder", "subtask", taskId, `Itens do checklist reordenados`);
 }
 
 // ───────────── Dependencies ─────────────
@@ -1800,6 +1828,12 @@ export function reconcileWorkspaceWithAJ019(ws: Workspace, ctx: Ctx): boolean {
     changed = true;
   }
 
+  // 5. Inicializar etiquetas compartilhadas do projeto se não existirem (AJ-022)
+  const labelsChanged = reconcileWorkspaceLabels(ws, ctx);
+  if (labelsChanged) {
+    changed = true;
+  }
+
   if (changed) {
     touch(ws.project, ctx);
   }
@@ -2010,6 +2044,249 @@ export function reconcileAudioRequests(ws: Workspace, ctx: Ctx): boolean {
   touch(ws.project, ctx);
   log(ws, ctx, "reconcile", "AudioRequest", null, "Solicitações padrão de áudio PVD inicializadas");
   return true;
+}
+
+// ==========================================
+// SESSOES REAIS DE TRABALHO & CRONÔMETRO (AJ-022)
+// ==========================================
+
+export function startTaskSession(
+  ws: Workspace,
+  ctx: Ctx,
+  taskId: ID,
+  userId?: ID | null,
+  userName?: string
+): WorkSession {
+  const task = get(ws.tasks, taskId, "Tarefa");
+  if (!task.workSessions) task.workSessions = [];
+
+  // Proteção contra concorrência e cliques múltiplos: se já houver sessão ativa, retoma ela
+  const existingActive = task.workSessions.find((s) => s.status === "active");
+  if (existingActive) {
+    if (task.status === "pending") task.status = "doing";
+    task.isPaused = false;
+    touch(task, ctx);
+    return existingActive;
+  }
+
+  // Se tarefa estiver em Pendente, move automaticamente para Fazendo
+  if (task.status === "pending") {
+    task.status = "doing";
+    task.actualStart ??= ctx.nowIso;
+  }
+  task.isPaused = false;
+
+  const session: WorkSession = {
+    id: newId(),
+    taskId,
+    userId: userId ?? null,
+    userName: userName ?? "Operador",
+    startedAt: ctx.nowIso,
+    endedAt: null,
+    durationSeconds: 0,
+    status: "active",
+    origin: "kanban",
+  };
+
+  task.workSessions.push(session);
+  touch(task, ctx);
+  touch(ws.project, ctx);
+  log(ws, ctx, "status", "task", taskId, `Sessão iniciada na tarefa "${task.title}"`);
+  return session;
+}
+
+export function pauseTaskSession(ws: Workspace, ctx: Ctx, taskId: ID) {
+  const task = get(ws.tasks, taskId, "Tarefa");
+  if (!task.workSessions) task.workSessions = [];
+
+  const active = task.workSessions.find((s) => s.status === "active");
+  if (active) {
+    active.endedAt = ctx.nowIso;
+    const diffSec = Math.max(
+      1,
+      Math.round((new Date(active.endedAt).getTime() - new Date(active.startedAt).getTime()) / 1000)
+    );
+    active.durationSeconds = diffSec;
+    active.status = "completed";
+  }
+
+  task.isPaused = true;
+  // Mantém a tarefa em "Fazendo", com estado secundário Pausada
+  if (task.status !== "doing") {
+    task.status = "doing";
+  }
+
+  task.totalTimeSeconds = task.workSessions
+    .filter((s) => s.status === "completed")
+    .reduce((sum, s) => sum + s.durationSeconds, 0);
+
+  touch(task, ctx);
+  touch(ws.project, ctx);
+  log(ws, ctx, "status", "task", taskId, `Tarefa pausada (${fmtStopwatch(task.totalTimeSeconds || 0)} acumulados): "${task.title}"`);
+}
+
+export function concludeTaskWithSession(ws: Workspace, ctx: Ctx, taskId: ID) {
+  const task = get(ws.tasks, taskId, "Tarefa");
+  if (!task.workSessions) task.workSessions = [];
+
+  // Se houver sessão ativa, encerra
+  const active = task.workSessions.find((s) => s.status === "active");
+  if (active) {
+    active.endedAt = ctx.nowIso;
+    const diffSec = Math.max(
+      1,
+      Math.round((new Date(active.endedAt).getTime() - new Date(active.startedAt).getTime()) / 1000)
+    );
+    active.durationSeconds = diffSec;
+    active.status = "completed";
+  }
+
+  task.isPaused = false;
+  task.totalTimeSeconds = task.workSessions
+    .filter((s) => s.status === "completed")
+    .reduce((sum, s) => sum + s.durationSeconds, 0);
+
+  // Validação e transição de status usando a regra de domínio
+  setTaskStatus(ws, ctx, taskId, "done");
+  task.actualEnd = ctx.nowIso;
+
+  touch(task, ctx);
+  touch(ws.project, ctx);
+  log(ws, ctx, "status", "task", taskId, `Tarefa concluída com ${fmtStopwatch(task.totalTimeSeconds || 0)}: "${task.title}"`);
+}
+
+export function getTaskActiveSession(task: Task): WorkSession | undefined {
+  return (task.workSessions || []).find((s) => s.status === "active");
+}
+
+export function getTaskAccumulatedSeconds(task: Task, nowMs: number = Date.now()): number {
+  const sessions = task.workSessions || [];
+  let total = 0;
+  for (const s of sessions) {
+    if (s.status === "completed") {
+      total += s.durationSeconds;
+    } else if (s.status === "active") {
+      const elapsed = Math.max(0, Math.floor((nowMs - new Date(s.startedAt).getTime()) / 1000));
+      total += elapsed;
+    }
+  }
+  return total;
+}
+
+export function fmtStopwatch(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(s / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  const secs = s % 60;
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  if (hours > 0) {
+    return `${pad(hours)}:${pad(mins)}:${pad(secs)}`;
+  }
+  return `00:${pad(mins)}:${pad(secs)}`;
+}
+
+export function fmtDurationSummary(totalSeconds: number, sessionCount: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(s / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  const secs = s % 60;
+  const sessText = sessionCount === 1 ? "1 sessão" : `${sessionCount} sessões`;
+
+  if (hours > 0) {
+    return `${hours.toString().padStart(2, "0")}h ${mins.toString().padStart(2, "0")}min ${secs.toString().padStart(2, "0")}s · ${sessText}`;
+  }
+  if (mins > 0) {
+    return `${mins}min${secs.toString().padStart(2, "0")}s · ${sessText}`;
+  }
+  return `${secs}s · ${sessText}`;
+}
+
+// ==========================================
+// GERENCIAMENTO DE ETIQUETAS DO PROJETO (AJ-022)
+// ==========================================
+
+export function createWorkspaceLabel(
+  ws: Workspace,
+  ctx: Ctx,
+  name: string,
+  color: string
+): WorkspaceLabel {
+  if (!ws.labels) ws.labels = {};
+  const id = `lbl_${newId()}`;
+  const label: WorkspaceLabel = {
+    id,
+    name: name.trim() || "Nova Etiqueta",
+    color: color || "#6366f1",
+    createdAt: ctx.nowIso,
+  };
+  ws.labels[id] = label;
+  touch(ws.project, ctx);
+  log(ws, ctx, "create", "label", id, `Etiqueta criada: ${label.name}`);
+  return label;
+}
+
+export function updateWorkspaceLabel(
+  ws: Workspace,
+  ctx: Ctx,
+  id: string,
+  patch: Partial<Pick<WorkspaceLabel, "name" | "color" | "archived">>
+) {
+  if (!ws.labels || !ws.labels[id]) return;
+  const lbl = ws.labels[id];
+  Object.assign(lbl, patch);
+  touch(ws.project, ctx);
+  log(ws, ctx, "update", "label", id, `Etiqueta atualizada: ${lbl.name}`);
+}
+
+export function archiveWorkspaceLabel(
+  ws: Workspace,
+  ctx: Ctx,
+  id: string,
+  archived: boolean = true
+) {
+  if (!ws.labels || !ws.labels[id]) return;
+  ws.labels[id].archived = archived;
+  touch(ws.project, ctx);
+  log(ws, ctx, "archive", "label", id, `Etiqueta ${archived ? "arquivada" : "restaurada"}: ${ws.labels[id].name}`);
+}
+
+export function toggleTaskLabel(
+  ws: Workspace,
+  ctx: Ctx,
+  taskId: ID,
+  labelId: string
+) {
+  const task = get(ws.tasks, taskId, "Tarefa");
+  if (!task.labelIds) task.labelIds = [];
+  const exists = task.labelIds.includes(labelId);
+  if (exists) {
+    task.labelIds = task.labelIds.filter((id) => id !== labelId);
+  } else {
+    task.labelIds.push(labelId);
+  }
+  touch(task, ctx);
+  touch(ws.project, ctx);
+  log(ws, ctx, exists ? "remove_tag" : "add_tag", "task", taskId, `Etiqueta alterada na tarefa "${task.title}"`);
+}
+
+export function reconcileWorkspaceLabels(ws: Workspace, ctx: Ctx): boolean {
+  if (!ws.labels) ws.labels = {};
+  let changed = false;
+  const existingNames = new Set(Object.values(ws.labels).map((l) => l.name.toLowerCase()));
+
+  for (const def of DEFAULT_WORKSPACE_LABELS) {
+    if (!existingNames.has(def.name.toLowerCase())) {
+      const id = `lbl_${newId()}`;
+      ws.labels[id] = {
+        id,
+        name: def.name,
+        color: def.color,
+        createdAt: ctx.nowIso,
+      };
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 export type { ScheduleRevision };

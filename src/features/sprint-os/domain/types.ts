@@ -186,7 +186,52 @@ export interface Task extends Entity {
   learnings: Learnings;
   /** Incrementa em alterações materiais (escopo, prazo, responsabilidade) — invalida ciência. */
   materialVersion: number;
+  /** Sessões reais de execução cronometrada (AJ-022) */
+  workSessions?: WorkSession[];
+  /** Indica se a tarefa está com execução pausada em "Fazendo" (AJ-022) */
+  isPaused?: boolean;
+  /** Tempo acumulado total em segundos de todas as sessões finalizadas (AJ-022) */
+  totalTimeSeconds?: number;
+  /** IDs das etiquetas vinculadas à tarefa (AJ-022) */
+  labelIds?: string[];
 }
+
+// ==========================================
+// SESSOES REAIS DE TRABALHO & CRONOMETRO (AJ-022)
+// ==========================================
+
+export interface WorkSession {
+  id: ID;
+  taskId: ID;
+  userId?: ID | null;
+  userName?: string | null;
+  startedAt: string; // ISO 8601
+  endedAt?: string | null; // ISO 8601
+  durationSeconds: number; // Segundos calculados entre startedAt e endedAt
+  status: "active" | "completed" | "cancelled";
+  origin?: "kanban" | "modal" | "manual";
+}
+
+// ==========================================
+// ETIQUETAS PERSONALIZAVEIS TIPO TRELLO (AJ-022)
+// ==========================================
+
+export interface WorkspaceLabel {
+  id: string;
+  name: string;
+  color: string; // HEX ou RGB (#6366f1, #10b981, etc.)
+  archived?: boolean;
+  createdAt: string;
+}
+
+export const DEFAULT_WORKSPACE_LABELS: Omit<WorkspaceLabel, "id" | "createdAt">[] = [
+  { name: "Estratégia & Posicionamento", color: "#6366f1" },
+  { name: "Grupo de Captação", color: "#10b981" },
+  { name: "Copy & Conteúdo", color: "#ec4899" },
+  { name: "Tráfego & Anúncios", color: "#f59e0b" },
+  { name: "Automação & CRM", color: "#06b6d4" },
+  { name: "Validação do Expert", color: "#8b5cf6" },
+];
 
 // ==========================================
 // ARQUITETURA 7D — MODELO DE OPERAÇÃO
@@ -378,6 +423,11 @@ export interface Subtask extends Entity {
   target: number | null;
   count: number;
   evidenceUrl: string;
+  /** Diferenciação visual entre simples checklist e subtarefa estruturada (AJ-022) */
+  isChecklistItem?: boolean;
+  /** Vinculação de preenchimento ou arquivo (AJ-022) */
+  linkedFieldId?: string;
+  fileUrl?: string;
 }
 
 export interface Dependency {
@@ -688,6 +738,8 @@ export interface Workspace {
   brandManual?: BrandManualData;
   /** Scripts e Áudios com Gravação Integrada (AJ-021) */
   audioRequests?: Record<ID, AudioRequest>;
+  /** Etiquetas personalizáveis compartilhadas no projeto (AJ-022) */
+  labels?: Record<string, WorkspaceLabel>;
   /** Custo/hora por membro — separado para não ser exposto em links públicos. */
   costs: Record<ID, number | null>;
   /** Prompts otimizados por tarefa (chave = taskId). */
