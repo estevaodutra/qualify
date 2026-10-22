@@ -27,8 +27,6 @@ import {
   HelpCircle,
   Brain,
   FileText,
-  Sliders,
-  Eye,
   ShieldCheck,
   CheckCircle2,
   RefreshCw,
@@ -129,9 +127,6 @@ const ICP_22_OUTPUT_KEYS = [
 export const BrandManualView: React.FC = () => {
   const { workspace, mutate } = useSprintOSStore();
   const { user } = useAuth();
-
-  // Papel: "expert" (foco em preenchimento sem poluição) vs "strategist" (editor modular completo)
-  const [userRole, setUserRole] = useState<"expert" | "strategist">("expert");
 
   // Módulo ativo: posicionamento | alma_copy | raio_x_icp | copy_ads
   const [activeModuleId, setActiveModuleId] = useState<string>("posicionamento");
@@ -734,34 +729,6 @@ export const BrandManualView: React.FC = () => {
             <Progress value={progressPercent} className="h-1.5 bg-muted" />
           </div>
 
-          {/* Seletor de Papel: Expert vs Estrategista */}
-          <div className="flex items-center bg-muted/80 p-0.5 rounded-xl border border-border text-xs">
-            <button
-              onClick={() => setUserRole("expert")}
-              className={`px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1.5 transition-all ${
-                userRole === "expert"
-                  ? "bg-background text-foreground shadow-xs"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-              title="Modo focado apenas no preenchimento das perguntas, sem poluição administrativa"
-            >
-              <Eye className="h-3 w-3" />
-              <span>Expert</span>
-            </button>
-            <button
-              onClick={() => setUserRole("strategist")}
-              className={`px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1.5 transition-all ${
-                userRole === "strategist"
-                  ? "bg-background text-primary shadow-xs font-bold"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-              title="Modo de edição da estrutura, campos, presets e mapeamento estratégico"
-            >
-              <Sliders className="h-3 w-3" />
-              <span>Estrategista</span>
-            </button>
-          </div>
-
           {/* Botão Master Prompt Consolidado */}
           <Button
             size="sm"
@@ -775,34 +742,30 @@ export const BrandManualView: React.FC = () => {
           </Button>
 
           {/* Botão Arquivados (Acesso discreto) */}
-          {userRole === "strategist" && (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setIsArchivedSheetOpen(true)}
-              className="h-8 px-2 text-xs rounded-xl text-muted-foreground hover:text-foreground relative"
-              title="Ver campos arquivados"
-            >
-              <FolderArchive className="h-3.5 w-3.5" />
-              {archivedFields.length > 0 && (
-                <span className="absolute -top-1 -right-1 h-4 w-4 bg-primary text-primary-foreground text-[9px] font-bold rounded-full flex items-center justify-center">
-                  {archivedFields.length}
-                </span>
-              )}
-            </Button>
-          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setIsArchivedSheetOpen(true)}
+            className="h-8 px-2 text-xs rounded-xl text-muted-foreground hover:text-foreground relative"
+            title="Ver campos arquivados"
+          >
+            <FolderArchive className="h-3.5 w-3.5" />
+            {archivedFields.length > 0 && (
+              <span className="absolute -top-1 -right-1 h-4 w-4 bg-primary text-primary-foreground text-[9px] font-bold rounded-full flex items-center justify-center">
+                {archivedFields.length}
+              </span>
+            )}
+          </Button>
 
-          {/* Adicionar Pergunta (Disponível no modo Estrategista) */}
-          {userRole === "strategist" && (
-            <Button
-              size="sm"
-              onClick={() => handleOpenCreateField(activeModuleId)}
-              className="h-8 px-3 text-xs bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-bold flex items-center gap-1.5 shadow-sm"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              <span>Nova Pergunta</span>
-            </Button>
-          )}
+          {/* Adicionar Pergunta */}
+          <Button
+            size="sm"
+            onClick={() => handleOpenCreateField(activeModuleId)}
+            className="h-8 px-3 text-xs bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-bold flex items-center gap-1.5 shadow-sm"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>Nova Pergunta</span>
+          </Button>
         </div>
       </div>
 
@@ -906,16 +869,14 @@ export const BrandManualView: React.FC = () => {
             {activeFields.length === 0 ? (
               <div className="bg-card border border-dashed border-border rounded-2xl p-8 text-center">
                 <p className="text-xs text-muted-foreground">Nenhuma pergunta ativa neste módulo.</p>
-                {userRole === "strategist" && (
-                  <Button
-                    size="sm"
-                    onClick={() => handleOpenCreateField(activeModuleId)}
-                    className="mt-3 text-xs"
-                  >
-                    <Plus className="h-3.5 w-3.5 mr-1" />
-                    Adicionar Primeira Pergunta
-                  </Button>
-                )}
+                <Button
+                  size="sm"
+                  onClick={() => handleOpenCreateField(activeModuleId)}
+                  className="mt-3 text-xs"
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                  Adicionar Primeira Pergunta
+                </Button>
               </div>
             ) : (
               activeFields.map((field, index) => {
@@ -928,7 +889,7 @@ export const BrandManualView: React.FC = () => {
                 return (
                   <div
                     key={field.id}
-                    draggable={userRole === "strategist"}
+                    draggable={true}
                     onDragStart={() => setDraggedFieldId(field.id)}
                     onDragOver={(e) => {
                       e.preventDefault();
@@ -957,14 +918,12 @@ export const BrandManualView: React.FC = () => {
                     {/* Linha Superior do Card: Numeração, Título, Drag Handle e Menu */}
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-2.5 flex-1 min-w-0">
-                        {userRole === "strategist" && (
-                          <span
-                            className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground mt-1"
-                            title="Arraste para reordenar"
-                          >
-                            <GripVertical className="h-4 w-4" />
-                          </span>
-                        )}
+                        <span
+                          className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground mt-1"
+                          title="Arraste para reordenar"
+                        >
+                          <GripVertical className="h-4 w-4" />
+                        </span>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap mb-1">
                             <span className="text-[11px] font-mono font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">
@@ -1004,68 +963,66 @@ export const BrandManualView: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Menu de Três Pontos (Apenas no Modo Estrategista) */}
-                      {userRole === "strategist" && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-xl shrink-0"
-                            >
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48 p-1.5 rounded-2xl shadow-xl">
-                            <DropdownMenuItem
-                              onClick={() => handleOpenEditField(field)}
-                              className="cursor-pointer text-xs"
-                            >
-                              <Edit2 className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
-                              Editar Pergunta
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleDuplicateField(field.id)}
-                              className="cursor-pointer text-xs"
-                            >
-                              <Copy className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
-                              Duplicar Pergunta
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => handleMoveField(field.id, "up")}
-                              disabled={index === 0}
-                              className="cursor-pointer text-xs"
-                            >
-                              <ChevronUp className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
-                              Mover para Cima
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleMoveField(field.id, "down")}
-                              disabled={index === activeFields.length - 1}
-                              className="cursor-pointer text-xs"
-                            >
-                              <ChevronDown className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
-                              Mover para Baixo
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => handleArchiveField(field.id)}
-                              className="cursor-pointer text-xs text-amber-600 dark:text-amber-400"
-                            >
-                              <Archive className="h-3.5 w-3.5 mr-2" />
-                              Arquivar Pergunta
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => setFieldToDelete(field)}
-                              className="cursor-pointer text-xs text-rose-600 dark:text-rose-400"
-                            >
-                              <Trash2 className="h-3.5 w-3.5 mr-2" />
-                              Remover Pergunta
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
+                      {/* Menu de Três Pontos */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-xl shrink-0"
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48 p-1.5 rounded-2xl shadow-xl">
+                          <DropdownMenuItem
+                            onClick={() => handleOpenEditField(field)}
+                            className="cursor-pointer text-xs"
+                          >
+                            <Edit2 className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                            Editar Pergunta
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDuplicateField(field.id)}
+                            className="cursor-pointer text-xs"
+                          >
+                            <Copy className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                            Duplicar Pergunta
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => handleMoveField(field.id, "up")}
+                            disabled={index === 0}
+                            className="cursor-pointer text-xs"
+                          >
+                            <ChevronUp className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                            Mover para Cima
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleMoveField(field.id, "down")}
+                            disabled={index === activeFields.length - 1}
+                            className="cursor-pointer text-xs"
+                          >
+                            <ChevronDown className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                            Mover para Baixo
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => handleArchiveField(field.id)}
+                            className="cursor-pointer text-xs text-amber-600 dark:text-amber-400"
+                          >
+                            <Archive className="h-3.5 w-3.5 mr-2" />
+                            Arquivar Pergunta
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setFieldToDelete(field)}
+                            className="cursor-pointer text-xs text-rose-600 dark:text-rose-400"
+                          >
+                            <Trash2 className="h-3.5 w-3.5 mr-2" />
+                            Remover Pergunta
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
 
                     {/* 3. CAMPO DE RESPOSTA + BOTÃO DE MICROFONE */}
