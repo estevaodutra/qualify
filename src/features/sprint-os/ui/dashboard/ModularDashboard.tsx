@@ -92,6 +92,32 @@ export const ModularDashboard: React.FC = () => {
   const [editingBlock, setEditingBlock] = useState<DashboardBlockConfig | null>(null);
   const [editBlockTitleInput, setEditBlockTitleInput] = useState("");
 
+  // Estados de Edição Inline por Duplo Clique (Auto-edição)
+  const [inlineEditingCardId, setInlineEditingCardId] = useState<string | null>(null);
+  const [inlineCardTitle, setInlineCardTitle] = useState("");
+  const [inlineEditingBlockId, setInlineEditingBlockId] = useState<string | null>(null);
+  const [inlineBlockTitle, setInlineBlockTitle] = useState("");
+
+  const handleCommitInlineCardTitle = (cardId: string) => {
+    if (inlineCardTitle.trim()) {
+      mutate((ws, ctx) => {
+        updateDashboardCard(ws, ctx, cardId, { title: inlineCardTitle.trim() });
+      });
+      toast.success("Título atualizado!");
+    }
+    setInlineEditingCardId(null);
+  };
+
+  const handleCommitInlineBlockTitle = (blockId: string) => {
+    if (inlineBlockTitle.trim()) {
+      mutate((ws, ctx) => {
+        updateDashboardBlock(ws, ctx, blockId, { title: inlineBlockTitle.trim() });
+      });
+      toast.success("Título da seção atualizado!");
+    }
+    setInlineEditingBlockId(null);
+  };
+
   // Modal para ajuste de Gasto Ads
   const [isEditingAdSpend, setIsEditingAdSpend] = useState(false);
   const [adSpendInput, setAdSpendInput] = useState("");
@@ -753,9 +779,31 @@ export const ModularDashboard: React.FC = () => {
                   >
                     <GripVertical className="h-3.5 w-3.5" />
                   </div>
-                  <h3 className="text-xs font-black uppercase tracking-wider text-foreground">
-                    {block.title}
-                  </h3>
+                  {inlineEditingBlockId === block.id ? (
+                    <Input
+                      value={inlineBlockTitle}
+                      onChange={(e) => setInlineBlockTitle(e.target.value)}
+                      onBlur={() => handleCommitInlineBlockTitle(block.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleCommitInlineBlockTitle(block.id);
+                        if (e.key === "Escape") setInlineEditingBlockId(null);
+                      }}
+                      autoFocus
+                      className="h-6 text-xs font-black uppercase tracking-wider bg-background border-primary text-foreground w-64"
+                    />
+                  ) : (
+                    <h3
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        setInlineEditingBlockId(block.id);
+                        setInlineBlockTitle(block.title);
+                      }}
+                      className="text-xs font-black uppercase tracking-wider text-foreground cursor-pointer hover:text-primary transition-colors"
+                      title="Dois cliques para renomear"
+                    >
+                      {block.title}
+                    </h3>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -859,9 +907,31 @@ export const ModularDashboard: React.FC = () => {
                             >
                               <GripVertical className="h-3 w-3" />
                             </span>
-                            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight truncate">
-                              {card.title}
-                            </span>
+                            {inlineEditingCardId === card.id ? (
+                              <Input
+                                value={inlineCardTitle}
+                                onChange={(e) => setInlineCardTitle(e.target.value)}
+                                onBlur={() => handleCommitInlineCardTitle(card.id)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") handleCommitInlineCardTitle(card.id);
+                                  if (e.key === "Escape") setInlineEditingCardId(null);
+                                }}
+                                autoFocus
+                                className="h-5 text-[11px] font-bold uppercase tracking-tight bg-background border-primary text-foreground w-full"
+                              />
+                            ) : (
+                              <span
+                                onDoubleClick={(e) => {
+                                  e.stopPropagation();
+                                  setInlineEditingCardId(card.id);
+                                  setInlineCardTitle(card.title);
+                                }}
+                                className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight truncate cursor-pointer hover:text-primary transition-colors"
+                                title="Dois cliques para renomear"
+                              >
+                                {card.title}
+                              </span>
+                            )}
                           </div>
 
                           <DropdownMenu>

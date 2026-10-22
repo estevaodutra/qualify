@@ -99,6 +99,29 @@ export const StructureView: React.FC = () => {
   const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>({});
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
   const [editingTitleText, setEditingTitleText] = useState("");
+  const clickTimeoutRef = useRef<any>(null);
+
+  const handleTaskClick = (taskId: string) => {
+    if (clickTimeoutRef.current) {
+      clearTimeout(clickTimeoutRef.current);
+      clickTimeoutRef.current = null;
+      return;
+    }
+    clickTimeoutRef.current = setTimeout(() => {
+      setSelectedTaskId(taskId);
+      setIsTaskModalOpen(true);
+      clickTimeoutRef.current = null;
+    }, 240);
+  };
+
+  const handleTaskDoubleClick = (taskId: string, title: string) => {
+    if (clickTimeoutRef.current) {
+      clearTimeout(clickTimeoutRef.current);
+      clickTimeoutRef.current = null;
+    }
+    setIsTaskModalOpen(false);
+    startEditTitle(taskId, title);
+  };
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editingSubtaskTitle, setEditingSubtaskTitle] = useState("");
   const [newSubtaskInputs, setNewSubtaskInputs] = useState<Record<string, string>>({});
@@ -416,14 +439,19 @@ export const StructureView: React.FC = () => {
                                 />
                               ) : (
                                 <span
-                                  onDoubleClick={() => startEditTitle(task.id, task.title)}
-                                  onClick={() => {
-                                    setSelectedTaskId(task.id);
-                                    setIsTaskModalOpen(true);
+                                  onDoubleClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    handleTaskDoubleClick(task.id, task.title);
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleTaskClick(task.id);
                                   }}
                                   className={`text-xs font-semibold truncate cursor-pointer hover:text-primary transition-colors ${
                                     task.status === "done" ? "line-through text-muted-foreground" : "text-foreground"
                                   }`}
+                                  title="Clique para abrir ou dois cliques para renomear"
                                 >
                                   {task.title}
                                 </span>

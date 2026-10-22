@@ -7,7 +7,7 @@
  * Aplica regras estritas de transição (ex: impede conclusão com subtarefas obrigatórias pendentes).
  */
 
-import React from "react";
+import React, { useState, useRef } from "react";
 import {
   Clock,
   User,
@@ -19,8 +19,9 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useSprintOSStore } from "../../state/sprintOsStore";
-import { sprintTasks, subtasksOf } from "../../domain/ops";
+import { sprintTasks, subtasksOf, updateTask } from "../../domain/ops";
 import { PRIORITY_LABEL, IMPACT_FLAG_CONFIG, type TaskStatus, type Task } from "../../domain/types";
 import { fmtDateTime, fmtMinutes } from "../../scheduler/time";
 
@@ -44,7 +45,12 @@ export const KanbanView: React.FC = () => {
     setSelectedTaskId,
     setIsTaskModalOpen,
     setTaskStatusAction,
+    mutate,
   } = useSprintOSStore();
+
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editingTitleText, setEditingTitleText] = useState("");
+  const clickTimeoutRef = useRef<any>(null);
 
   if (!workspace || !activeSprintId) return null;
 
@@ -74,8 +80,36 @@ export const KanbanView: React.FC = () => {
   }
 
   const handleCardClick = (taskId: string) => {
-    setSelectedTaskId(taskId);
-    setIsTaskModalOpen(true);
+    if (editingTaskId === taskId) return;
+    if (clickTimeoutRef.current) {
+      clearTimeout(clickTimeoutRef.current);
+      clickTimeoutRef.current = null;
+      return;
+    }
+    clickTimeoutRef.current = setTimeout(() => {
+      setSelectedTaskId(taskId);
+      setIsTaskModalOpen(true);
+      clickTimeoutRef.current = null;
+    }, 240);
+  };
+
+  const handleTitleDoubleClick = (taskId: string, title: string) => {
+    if (clickTimeoutRef.current) {
+      clearTimeout(clickTimeoutRef.current);
+      clickTimeoutRef.current = null;
+    }
+    setIsTaskModalOpen(false);
+    setEditingTaskId(taskId);
+    setEditingTitleText(title);
+  };
+
+  const handleCommitTitle = (taskId: string) => {
+    if (editingTitleText.trim()) {
+      mutate((ws, ctx) => {
+        updateTask(ws, ctx, taskId, { title: editingTitleText.trim() });
+      });
+    }
+    setEditingTaskId(null);
   };
 
   return (
@@ -174,10 +208,33 @@ export const KanbanView: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Título da Tarefa */}
-                      <h4 className="text-xs font-bold text-foreground group-hover:text-primary transition-colors line-clamp-2 mb-2.5">
-                        {task.title}
-                      </h4>
+                      {/* Título da Tarefa com Edição Inline no Duplo Clique */}
+                      {editingTaskId === task.id ? (
+                        <div onClick={(e) => e.stopPropagation()} className="mb-2.5">
+                          <Input
+                            value={editingTitleText}
+                            onChange={(e) => setEditingTitleText(e.target.value)}
+                            onBlur={() => handleCommitTitle(task.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleCommitTitle(task.id);
+                              if (e.key === "Escape") setEditingTaskId(null);
+                            }}
+                            autoFocus
+                            className="h-7 text-xs font-bold bg-background border-primary text-foreground"
+                          />
+                        </div>
+                      ) : (
+                        <h4
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            handleTitleDoubleClick(task.id, task.title);
+                          }}
+                          className="text-xs font-bold text-foreground group-hover:text-primary transition-colors line-clamp-2 mb-2.5 cursor-pointer"
+                          title="Clique duas vezes para renomear"
+                        >
+                          {task.title}
+                        </h4>
+                      )}
 
                       {/* Bloqueio se houver */}
                       {(task.blockInfo?.active || task.blockedReason) && (

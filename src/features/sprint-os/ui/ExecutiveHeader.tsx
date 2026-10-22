@@ -154,29 +154,40 @@ export const ExecutiveHeader: React.FC = () => {
             <Input
               value={editedProjectName}
               onChange={(e) => setEditedProjectName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSaveTitle();
+                if (e.key === "Escape") setIsEditingTitle(false);
+              }}
               placeholder="Projeto"
               className="h-7 text-xs bg-background border-input text-foreground rounded-lg w-36"
+              autoFocus
             />
             <span className="text-muted-foreground text-xs">/</span>
             <Input
               value={editedSprintName}
               onChange={(e) => setEditedSprintName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSaveTitle();
+                if (e.key === "Escape") setIsEditingTitle(false);
+              }}
               placeholder="Nome do Cronograma"
               className="h-7 text-xs bg-background border-input text-foreground rounded-lg w-48 font-bold"
             />
             <Button
               size="icon"
               onClick={handleSaveTitle}
-              className="h-7 w-7 bg-primary text-primary-foreground rounded-lg"
+              className="h-7 w-7 bg-primary text-primary-foreground rounded-lg shrink-0"
+              title="Salvar alterações"
             >
               <Check className="h-3.5 w-3.5" />
             </Button>
           </div>
         ) : (
           <div
+            onDoubleClick={handleStartEdit}
             onClick={handleStartEdit}
             className="group flex items-center gap-2 cursor-pointer hover:opacity-90 transition-opacity truncate"
-            title="Clique para editar os nomes"
+            title="Dois cliques para renomear"
           >
             <div className="truncate">
               <span className="text-xs text-muted-foreground font-medium mr-1.5 truncate">
