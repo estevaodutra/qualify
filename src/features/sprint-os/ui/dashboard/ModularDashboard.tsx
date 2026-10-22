@@ -12,7 +12,7 @@
  * - BLOCO 03 — FUNIL (Esteira visual progressiva conectada: EM ABERTO → PRÉ-QUALIFICAÇÃO → INTERESSADO → NEGOCIAÇÃO → FOLLOW-UP → VENDA)
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   GripVertical,
   MoreVertical,
