@@ -877,9 +877,36 @@ export const TaskDetailModal: React.FC = () => {
               {/* Subtarefas / Checklist */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs font-bold uppercase text-muted-foreground">
-                  <span>Subtarefas / Checklist ({subtasks.filter((s) => s.done).length}/{subtasks.length})</span>
+                  <div className="flex items-center gap-1.5">
+                    <span>Subtarefas / Checklist ({subtasks.filter((s) => s.done).length}/{subtasks.length})</span>
+                    {subtasks.length > 0 && (
+                      <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded ${
+                        Math.round((subtasks.filter((s) => s.done).length / subtasks.length) * 100) === 100
+                          ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                          : "bg-muted text-muted-foreground"
+                      }`}>
+                        {Math.round((subtasks.filter((s) => s.done).length / subtasks.length) * 100)}%
+                      </span>
+                    )}
+                  </div>
                   <span className="text-[10px] font-normal lowercase">duplo-clique para renomear</span>
                 </div>
+
+                {/* Barra de Progresso do Checklist no Modal */}
+                {subtasks.length > 0 && (
+                  <div className="w-full bg-muted/70 dark:bg-muted/50 rounded-full h-1.5 overflow-hidden border border-border/30">
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 ease-out ${
+                        Math.round((subtasks.filter((s) => s.done).length / subtasks.length) * 100) === 100
+                          ? "bg-emerald-500 shadow-xs shadow-emerald-500/50"
+                          : "bg-primary"
+                      }`}
+                      style={{
+                        width: `${Math.round((subtasks.filter((s) => s.done).length / subtasks.length) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                )}
                 <div className="space-y-1.5">
                   {subtasks.length === 0 ? (
                     <div className="text-xs text-muted-foreground/60 italic py-2 text-center border border-dashed border-border rounded-xl">

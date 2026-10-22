@@ -117,6 +117,12 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
 
   const stage = workspace.stages[task.stageId];
   const subtasks = subtasksOf(workspace, task.id);
+  const completedSubtasksCount = subtasks.filter((s) => s.done).length;
+  const totalSubtasksCount = subtasks.length;
+  const checklistPercent =
+    totalSubtasksCount > 0
+      ? Math.round((completedSubtasksCount / totalSubtasksCount) * 100)
+      : 0;
   const assignee = task.assigneeId ? workspace.members[task.assigneeId] : null;
   const taskLabels = (task.labelIds || [])
     .map((id) => workspace.labels?.[id])
@@ -762,10 +768,25 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
               onClick={() => setShowChecklist(!showChecklist)}
               className="flex items-center justify-between text-[10px] text-muted-foreground hover:text-foreground py-0.5 cursor-pointer"
             >
-              <div className="flex items-center gap-1 font-semibold">
-                <CheckCircle2 className="h-3 w-3 text-primary" />
+              <div className="flex items-center gap-1.5 font-semibold">
+                <CheckCircle2
+                  className={`h-3 w-3 ${
+                    checklistPercent === 100
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-primary"
+                  }`}
+                />
                 <span>
-                  Checklist ({subtasks.filter((s) => s.done).length}/{subtasks.length})
+                  Checklist ({completedSubtasksCount}/{totalSubtasksCount})
+                </span>
+                <span
+                  className={`text-[9px] font-mono font-bold px-1 rounded ${
+                    checklistPercent === 100
+                      ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                      : "text-muted-foreground bg-muted/60"
+                  }`}
+                >
+                  {checklistPercent}%
                 </span>
               </div>
               <div className="flex items-center gap-1.5">
@@ -788,6 +809,22 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
                   <ChevronDown className="h-3 w-3" />
                 )}
               </div>
+            </div>
+
+            {/* Barra de Progresso Visual Representativa do Checklist */}
+            <div
+              className="my-1.5 w-full bg-muted/70 dark:bg-muted/50 rounded-full h-1.5 overflow-hidden border border-border/30 cursor-pointer"
+              onClick={() => setShowChecklist(!showChecklist)}
+              title={`Progresso do checklist: ${checklistPercent}% (${completedSubtasksCount} de ${totalSubtasksCount} concluídos)`}
+            >
+              <div
+                className={`h-full rounded-full transition-all duration-300 ease-out ${
+                  checklistPercent === 100
+                    ? "bg-emerald-500 shadow-xs shadow-emerald-500/50"
+                    : "bg-primary"
+                }`}
+                style={{ width: `${checklistPercent}%` }}
+              />
             </div>
 
             {/* Lista Compacta de Subtarefas com Toggle Direto */}
