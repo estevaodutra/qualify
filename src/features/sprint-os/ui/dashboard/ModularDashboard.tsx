@@ -1275,13 +1275,25 @@ export const ModularDashboard: React.FC = () => {
             <div
               key={block.id}
               draggable
-              onDragStart={() => handleBlockDragStart(block.id)}
+              onDragStart={(e) => {
+                const target = e.target as HTMLElement;
+                // Só permite iniciar arraste se for pela alça do bloco e não for input/botão
+                if (!target.closest("[data-block-handle]") || target.closest("input, button, textarea, select")) {
+                  e.preventDefault();
+                  return;
+                }
+                handleBlockDragStart(block.id);
+              }}
               onDragOver={(e) => {
                 e.preventDefault();
                 setDragOverBlockId(block.id);
               }}
               onDragLeave={() => setDragOverBlockId(null)}
               onDrop={() => handleBlockDrop(block.id)}
+              onDragEnd={() => {
+                setDraggedBlockId(null);
+                setDragOverBlockId(null);
+              }}
               className={`rounded-2xl border bg-card/60 backdrop-blur-xs p-3 transition-all duration-200 ${
                 isDraggingBlock ? "opacity-30 border-dashed border-primary" : ""
               } ${isDragOverBlock ? "border-primary ring-2 ring-primary/20" : "border-border"}`}
@@ -1290,10 +1302,11 @@ export const ModularDashboard: React.FC = () => {
               <div className="flex flex-wrap items-center justify-between gap-2 pb-2 mb-2 border-b border-border/60">
                 <div className="flex items-center gap-2">
                   <div
+                    data-block-handle="true"
                     className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-foreground p-0.5 rounded"
-                    title="Arraste para reordenar o bloco"
+                    title="Arraste pela alça para reordenar o bloco"
                   >
-                    <GripVertical className="h-3.5 w-3.5" />
+                    <GripVertical className="h-3.5 w-3.5 pointer-events-none" />
                   </div>
 
                   {/* Ícone específico do canal de mídia */}
@@ -1426,7 +1439,15 @@ export const ModularDashboard: React.FC = () => {
                       <div
                         key={card.id}
                         draggable
-                        onDragStart={() => handleCardDragStart(card.id)}
+                        onDragStart={(e) => {
+                          const target = e.target as HTMLElement;
+                          // Só permite iniciar arraste se for pela alça do card e não for input/botão
+                          if (!target.closest("[data-card-handle]") || target.closest("input, button, textarea, select")) {
+                            e.preventDefault();
+                            return;
+                          }
+                          handleCardDragStart(card.id);
+                        }}
                         onDragOver={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -1437,6 +1458,10 @@ export const ModularDashboard: React.FC = () => {
                           e.preventDefault();
                           e.stopPropagation();
                           handleCardDrop(card.id, block.id);
+                        }}
+                        onDragEnd={() => {
+                          setDraggedCardId(null);
+                          setDragOverCardId(null);
                         }}
                         className={`rounded-xl border p-2.5 bg-card flex flex-col justify-between transition-all duration-150 relative group ${
                           isDraggingCard ? "opacity-30 border-dashed border-primary" : ""
@@ -1450,10 +1475,11 @@ export const ModularDashboard: React.FC = () => {
                         <div className="flex items-center justify-between gap-1 mb-1">
                           <div className="flex items-center gap-1 min-w-0">
                             <span
-                              className="cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-foreground"
-                              title="Arraste para mover o card"
+                              data-card-handle="true"
+                              className="cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-foreground p-0.5 rounded"
+                              title="Arraste pela alça para mover o card"
                             >
-                              <GripVertical className="h-3 w-3" />
+                              <GripVertical className="h-3 w-3 pointer-events-none" />
                             </span>
 
                             {inlineEditingCardId === card.id ? (
