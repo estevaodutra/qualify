@@ -742,6 +742,8 @@ export interface Workspace {
   labels?: Record<string, WorkspaceLabel>;
   /** Bloco Exclusivo de Webinário no Cockpit Operacional (AJ-023) */
   webinarData?: WebinarData;
+  /** Configuração das Redes Sociais com Formatos e Arquivamento (AJ-018) */
+  socialNetworks?: Record<string, SocialNetworkConfig>;
   /** Custo/hora por membro — separado para não ser exposto em links públicos. */
   costs: Record<ID, number | null>;
   /** Prompts otimizados por tarefa (chave = taskId). */
@@ -807,7 +809,7 @@ export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayoutConfig = {
   blocks: [
     { id: "infra", title: "BLOCO 01 — INFRA", order: 0 },
     { id: "webinario", title: "BLOCO 02 — WEBINÁRIO", order: 1 },
-    { id: "dist_midia", title: "DISTRIBUIÇÃO DE MÍDIA", order: 2 },
+    { id: "dist_midia", title: "REDES SOCIAIS", order: 2 },
     { id: "funil", title: "BLOCO 03 — FUNIL", order: 3 },
   ],
   cards: [
@@ -826,15 +828,76 @@ export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayoutConfig = {
     { id: "webinar_retention", blockId: "webinario", title: "Até o final", order: 3 },
     { id: "webinar_buyers", blockId: "webinario", title: "Compraram", order: 4 },
 
-    // Bloco Distribuição de Mídia (4 formatos dinâmicos editáveis)
-    { id: "dist_reels", blockId: "dist_midia", title: "▶️ Reels", order: 0 },
-    { id: "dist_carrossel", blockId: "dist_midia", title: "🎠 Carrossel", order: 1 },
-    { id: "dist_stories", blockId: "dist_midia", title: "👁️ Visualizações Stories", order: 2 },
-    { id: "dist_posts", blockId: "dist_midia", title: "📸 Post", order: 3 },
-
     // Bloco 03 — FUNIL (Esteira visual progressiva conectada)
     { id: "funnel_pipeline", blockId: "funil", title: "Funil Comercial de Conversão", order: 0 },
   ],
+};
+
+// ==========================================
+// REDES SOCIAIS — MÓDULO OTIMIZADO (AJ-018)
+// ==========================================
+
+export interface SocialNetworkFormat {
+  id: string;
+  label: string;
+  icon?: string;
+  enabled: boolean;
+}
+
+export interface SocialNetworkConfig {
+  id: string; // "instagram" | "tiktok" | "youtube" | custom id
+  name: string;
+  handle?: string;
+  url?: string;
+  color?: string;
+  icon?: "instagram" | "tiktok" | "youtube" | "other";
+  archived?: boolean;
+  formats: SocialNetworkFormat[];
+}
+
+export const DEFAULT_SOCIAL_NETWORKS: Record<string, SocialNetworkConfig> = {
+  instagram: {
+    id: "instagram",
+    name: "Instagram",
+    handle: "@percursodavida",
+    color: "#E1306C",
+    icon: "instagram",
+    archived: false,
+    formats: [
+      { id: "reels", label: "Reels", icon: "▶️", enabled: true },
+      { id: "carrossel", label: "Carrossel", icon: "🎠", enabled: true },
+      { id: "stories", label: "Stories", icon: "👁️", enabled: true },
+      { id: "posts", label: "Posts", icon: "📸", enabled: true },
+    ],
+  },
+  tiktok: {
+    id: "tiktok",
+    name: "TikTok",
+    handle: "@percursodavida",
+    color: "#00F2FE",
+    icon: "tiktok",
+    archived: false,
+    formats: [
+      { id: "videos", label: "Vídeos", icon: "▶️", enabled: true },
+      { id: "carrossel", label: "Carrossel", icon: "🎠", enabled: true },
+      { id: "stories", label: "Stories", icon: "👁️", enabled: true },
+      { id: "posts", label: "Posts", icon: "📸", enabled: false },
+    ],
+  },
+  youtube: {
+    id: "youtube",
+    name: "YouTube",
+    handle: "@percursodavida",
+    color: "#FF0000",
+    icon: "youtube",
+    archived: false,
+    formats: [
+      { id: "shorts", label: "Shorts", icon: "▶️", enabled: true },
+      { id: "videos", label: "Vídeos", icon: "▶️", enabled: true },
+      { id: "carrossel", label: "Carrossel", icon: "🎠", enabled: true },
+      { id: "posts", label: "Posts", icon: "📸", enabled: true },
+    ],
+  },
 };
 
 // ==========================================

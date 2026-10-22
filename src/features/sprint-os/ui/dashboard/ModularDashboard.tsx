@@ -77,6 +77,7 @@ import {
 } from "../../domain/ops";
 import { ConnectedProgressiveFunnel } from "../funnel/ConnectedProgressiveFunnel";
 import { WebinarBlock, WebinarEditionSelector } from "./WebinarBlock";
+import { SocialNetworksBlock } from "./SocialNetworksBlock";
 import { computeProgressMetrics } from "../../metrics/calculations";
 import { toast } from "sonner";
 import type { DashboardCardConfig, DashboardBlockConfig, MediaUnitMarker } from "../../domain/types";
@@ -1818,7 +1819,27 @@ export const ModularDashboard: React.FC = () => {
                 isDraggingBlock ? "border-primary/50 ring-1 ring-primary/20" : ""
               } ${isDragOverBlock ? "border-primary ring-2 ring-primary/20" : "border-border"}`}
             >
-              {/* CABEÇALHO DO BLOCO */}
+              {isMediaBlock ? (
+                <SocialNetworksBlock
+                  workspace={workspace}
+                  mutate={mutate}
+                  onOpenApiModal={(ch) =>
+                    handleOpenApiModal((ch === "tiktok" || ch === "youtube" ? ch : "instagram") as any)
+                  }
+                  onOpenUnitMarkerModal={(ch) =>
+                    handleOpenUnitMarker(
+                      (ch === "tiktok" || ch === "youtube" ? ch : "instagram") as any,
+                      "reels",
+                      "Reels",
+                      "Reels"
+                    )
+                  }
+                  onMouseDownDragHandle={() => setCanDragBlockId(block.id)}
+                  onMouseUpDragHandle={() => setCanDragBlockId(null)}
+                />
+              ) : (
+                <>
+                  {/* CABEÇALHO DO BLOCO */}
               <div className="flex flex-wrap items-center justify-between gap-2 pb-2 mb-2 border-b border-border/60">
                 <div className="flex items-center gap-2">
                   <div
@@ -2198,97 +2219,7 @@ export const ModularDashboard: React.FC = () => {
                   })}
                 </div>
               )}
-
-              {/* Se for o bloco de distribuição e o filtro for 'Todas', exibe o resumo comparativo com atalho para cada rede */}
-              {isMediaBlock && mediaFilter === "all" && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2.5 mt-2.5 border-t border-border/60">
-                  <button
-                    type="button"
-                    onClick={() => setMediaFilter("instagram")}
-                    className="p-2.5 rounded-xl bg-pink-500/5 hover:bg-pink-500/10 border border-pink-500/20 text-left flex items-center justify-between transition-colors group cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Instagram className="h-4 w-4 text-pink-600 dark:text-pink-400 shrink-0" />
-                      <div className="min-w-0">
-                        <div className="text-[11px] font-bold text-foreground flex items-center gap-1.5">
-                          <span>Instagram</span>
-                          {workspace.mediaApiConfigs?.instagram?.connected ? (
-                            <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-0.5">
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block" />
-                              API Conectada
-                            </span>
-                          ) : (
-                            <span className="text-[9px] text-muted-foreground">API Desconectada</span>
-                          )}
-                        </div>
-                        <div className="text-[10px] text-muted-foreground truncate">
-                          ▶️ {getChannelMetrics("instagram").reels} reels • 🎠 {getChannelMetrics("instagram").carrossel} carrossel • 👁️ {getChannelMetrics("instagram").stories.toLocaleString("pt-BR")} stories • 📸 {getChannelMetrics("instagram").posts} posts
-                        </div>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-bold text-pink-600 opacity-70 group-hover:opacity-100 flex items-center shrink-0">
-                      Ver <ChevronRight className="h-3 w-3" />
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setMediaFilter("tiktok")}
-                    className="p-2.5 rounded-xl bg-cyan-500/5 hover:bg-cyan-500/10 border border-cyan-500/20 text-left flex items-center justify-between transition-colors group cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Music className="h-4 w-4 text-cyan-600 dark:text-cyan-400 shrink-0" />
-                      <div className="min-w-0">
-                        <div className="text-[11px] font-bold text-foreground flex items-center gap-1.5">
-                          <span>TikTok</span>
-                          {workspace.mediaApiConfigs?.tiktok?.connected ? (
-                            <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-0.5">
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block" />
-                              API Conectada
-                            </span>
-                          ) : (
-                            <span className="text-[9px] text-muted-foreground">API Desconectada</span>
-                          )}
-                        </div>
-                        <div className="text-[10px] text-muted-foreground truncate">
-                          ▶️ {getChannelMetrics("tiktok").reels} vídeos • 🎠 {getChannelMetrics("tiktok").carrossel} carrossel • 👁️ {getChannelMetrics("tiktok").stories.toLocaleString("pt-BR")} stories • 📸 {getChannelMetrics("tiktok").posts} posts
-                        </div>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-bold text-cyan-600 opacity-70 group-hover:opacity-100 flex items-center shrink-0">
-                      Ver <ChevronRight className="h-3 w-3" />
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setMediaFilter("youtube")}
-                    className="p-2.5 rounded-xl bg-red-500/5 hover:bg-red-500/10 border border-red-500/20 text-left flex items-center justify-between transition-colors group cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Youtube className="h-4 w-4 text-red-600 dark:text-red-400 shrink-0" />
-                      <div className="min-w-0">
-                        <div className="text-[11px] font-bold text-foreground flex items-center gap-1.5">
-                          <span>YouTube</span>
-                          {workspace.mediaApiConfigs?.youtube?.connected ? (
-                            <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-0.5">
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block" />
-                              API Conectada
-                            </span>
-                          ) : (
-                            <span className="text-[9px] text-muted-foreground">API Desconectada</span>
-                          )}
-                        </div>
-                        <div className="text-[10px] text-muted-foreground truncate">
-                          ▶️ {getChannelMetrics("youtube").reels} shorts • 🎠 {getChannelMetrics("youtube").carrossel} posts • 👁️ {getChannelMetrics("youtube").stories.toLocaleString("pt-BR")} stories • 📸 {getChannelMetrics("youtube").posts} vídeos
-                        </div>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-bold text-red-600 opacity-70 group-hover:opacity-100 flex items-center shrink-0">
-                      Ver <ChevronRight className="h-3 w-3" />
-                    </span>
-                  </button>
-                </div>
+                </>
               )}
             </div>
           );

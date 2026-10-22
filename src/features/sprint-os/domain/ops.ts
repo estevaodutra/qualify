@@ -13,11 +13,13 @@ import type {
   AudioRequest, AudioRecording, AudioRequestStatus, AudioRecordingTranscription,
   WorkSession, WorkspaceLabel,
   WebinarData, WebinarEdition, WebinarMetric,
+  SocialNetworkConfig, SocialNetworkFormat,
 } from "./types";
 import {
   emptyLearnings, DEFAULT_DASHBOARD_LAYOUT, DEFAULT_FUNNEL_STAGES,
   DEFAULT_BRAND_MANUAL_MODULES, DEFAULT_BRAND_MANUAL_FIELDS, DEFAULT_COPY_ADS_VARIANTS,
   DEFAULT_AUDIO_REQUESTS, DEFAULT_WORKSPACE_LABELS, DEFAULT_WEBINAR_DATA,
+  DEFAULT_SOCIAL_NETWORKS,
 } from "./types";
 import { wouldCreateCycle } from "../scheduler/engine";
 import { reconcileWorkspaceWithAJ024 } from "./masterChecklistPVD";
@@ -614,39 +616,17 @@ export function getDashboardLayout(ws: Workspace): DashboardLayoutConfig {
     return JSON.parse(JSON.stringify(DEFAULT_DASHBOARD_LAYOUT));
   }
   const layout = ws.dashboardLayoutConfig;
+
+  // Atualiza título de dist_midia para "REDES SOCIAIS" caso ainda esteja com o nome antigo (AJ-018)
+  const distBlock = layout.blocks.find((b) => b.id === "dist_midia");
+  if (distBlock && (distBlock.title === "DISTRIBUIÇÃO DE MÍDIA" || distBlock.title.includes("DISTRIBUIÇÃO"))) {
+    distBlock.title = "REDES SOCIAIS";
+  }
+
   // Migra blocos antigos separados para o bloco unificado com filtro integrado 'dist_midia'
   const oldDistBlocks = ["dist_instagram", "dist_tiktok", "dist_youtube", "distribuicao"];
   if (layout.blocks.some((b) => oldDistBlocks.includes(b.id))) {
     layout.blocks = layout.blocks.filter((b) => !oldDistBlocks.includes(b.id));
-  }
-
-  // Migra cards de dist_midia para os 4 formatos editáveis solicitados (Reels, Carrossel, Stories, Post)
-  const hasFormatCards = layout.cards.some((c) =>
-    ["dist_reels", "dist_carrossel", "dist_stories"].includes(c.id)
-  );
-  if (!hasFormatCards) {
-    // Remove seguidores e views antigos de dist_midia
-    layout.cards = layout.cards.filter(
-      (c) => c.blockId !== "dist_midia" || (c.id !== "dist_followers" && c.id !== "dist_views")
-    );
-    const targetCards = [
-      { id: "dist_reels", blockId: "dist_midia", title: "▶️ Reels", order: 0 },
-      { id: "dist_carrossel", blockId: "dist_midia", title: "🎠 Carrossel", order: 1 },
-      { id: "dist_stories", blockId: "dist_midia", title: "👁️ Visualizações Stories", order: 2 },
-      { id: "dist_posts", blockId: "dist_midia", title: "📸 Post", order: 3 },
-    ];
-    targetCards.forEach((tc) => {
-      const existing = layout.cards.find((c) => c.id === tc.id);
-      if (existing) {
-        existing.blockId = "dist_midia";
-        existing.order = tc.order;
-        if (tc.id === "dist_posts" && (!existing.title || existing.title === "Posts Realizados")) {
-          existing.title = "📸 Post";
-        }
-      } else {
-        layout.cards.push(tc);
-      }
-    });
   }
 
   // Garante que os novos blocos e cards padrão existam na configuração sem perder os customizados
@@ -661,6 +641,96 @@ export function getDashboardLayout(ws: Workspace): DashboardLayoutConfig {
     }
   });
   return layout;
+}
+
+// ==========================================
+// REDES SOCIAIS — MÓDULO OTIMIZADO (AJ-018)
+// ==========================================
+
+export function getSocialNetworks(ws: Workspace): Record<string, SocialNetworkConfig> {
+  if (!ws.socialNetworks || Object.keys(ws.socialNetworks).length === 0) {
+    ws.socialNetworks = JSON.parse(JSON.stringify(DEFAULT_SOCIAL_NETWORKS));
+  }
+  return ws.socialNetworks;
+}
+
+export function updateSocialNetwork(
+  ws: Workspace,
+  ctx: Ctx,
+  networkId: string,
+  patch: Partial<SocialNetworkConfig>
+) {
+  const networks = getSocialNetworks(ws);
+  if (!networks[networkId]) throw new DomainError("Rede social não encontrada");
+  Object.assign(networks[networkId], patch);
+  log(ws, ctx, "update", "social_network", networkId, `Rede social atualizada: ${networks[networkId].name}`);
+}
+
+export function archiveSocialNetwork(
+  ws: Workspace,
+  ctx: Ctx,
+  networkId: string,
+  archive: boolean
+) {
+  const networks = getSocialNetworks(ws);
+  if (!networks[networkId]) throw new DomainError("Rede social não encontrada");
+  networks[networkId].archived = archive;
+  log(
+    ws,
+    ctx,
+    archive ? "archive" : "restore",
+    "social_network",
+    networkId,
+    `Rede social ${archive ? "arquivada" : "restaurada"}: ${networks[networkId].name}`
+  );
+}
+
+export function deleteSocialNetwork(
+  ws: Workspace,
+  ctx: Ctx,
+  networkId: string
+) {
+  const networks = getSocialNetworks(ws);
+  if (!networks[networkId]) throw new DomainError("Rede social não encontrada");
+  const name = networks[networkId].name;
+  delete networks[networkId];
+  log(ws, ctx, "delete", "social_network", networkId, `Rede social excluída: ${name}`);
+}
+
+export function createSocialNetwork(
+  ws: Workspace,
+  ctx: Ctx,
+  network: SocialNetworkConfig
+) {
+  const networks = getSocialNetworks(ws);
+  const id = network.id.toLowerCase().replace(/\s+/g, "_") || newId();
+  networks[id] = { ...network, id };
+  log(ws, ctx, "create", "social_network", id, `Nova rede social cadastrada: ${network.name}`);
+  return id;
+}
+
+export function toggleNetworkFormat(
+  ws: Workspace,
+  ctx: Ctx,
+  networkId: string,
+  formatId: string,
+  forceEnabled?: boolean
+) {
+  const networks = getSocialNetworks(ws);
+  const net = networks[networkId];
+  if (!net) throw new DomainError("Rede social não encontrada");
+  const fmt = net.formats.find((f) => f.id === formatId);
+  if (fmt) {
+    fmt.enabled = forceEnabled !== undefined ? forceEnabled : !fmt.enabled;
+    log(
+      ws,
+      ctx,
+      "format_toggle",
+      "social_network",
+      networkId,
+      `${net.name}: formato "${fmt.label}" ${fmt.enabled ? "ativado" : "desativado"}`
+    );
+  }
 }
 
 export function saveDashboardLayout(ws: Workspace, ctx: Ctx, layout: DashboardLayoutConfig) {
