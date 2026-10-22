@@ -564,10 +564,10 @@ export function getDashboardLayout(ws: Workspace): DashboardLayoutConfig {
     return JSON.parse(JSON.stringify(DEFAULT_DASHBOARD_LAYOUT));
   }
   const layout = ws.dashboardLayoutConfig;
-  // Se houver bloco genérico antigo 'distribuicao', remove para abrir espaço aos blocos específicos por mídia
-  const hasGenericDist = layout.blocks.some((b) => b.id === "distribuicao");
-  if (hasGenericDist) {
-    layout.blocks = layout.blocks.filter((b) => b.id !== "distribuicao");
+  // Migra blocos antigos separados para o bloco unificado com filtro integrado 'dist_midia'
+  const oldDistBlocks = ["dist_instagram", "dist_tiktok", "dist_youtube", "distribuicao"];
+  if (layout.blocks.some((b) => oldDistBlocks.includes(b.id))) {
+    layout.blocks = layout.blocks.filter((b) => !oldDistBlocks.includes(b.id));
   }
   // Garante que os novos blocos e cards padrão existam na configuração sem perder os customizados
   DEFAULT_DASHBOARD_LAYOUT.blocks.forEach((db) => {

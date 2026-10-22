@@ -733,10 +733,8 @@ export const DEFAULT_FUNNEL_STAGES: Omit<FunnelStage, "id">[] = [
 export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayoutConfig = {
   blocks: [
     { id: "infra", title: "BLOCO 01 — INFRA", order: 0 },
-    { id: "dist_instagram", title: "DISTRIBUIÇÃO — INSTAGRAM", order: 1 },
-    { id: "dist_tiktok", title: "DISTRIBUIÇÃO — TIKTOK", order: 2 },
-    { id: "dist_youtube", title: "DISTRIBUIÇÃO — YOUTUBE", order: 3 },
-    { id: "funil", title: "BLOCO 03 — FUNIL", order: 4 },
+    { id: "dist_midia", title: "DISTRIBUIÇÃO DE MÍDIA", order: 1 },
+    { id: "funil", title: "BLOCO 03 — FUNIL", order: 2 },
   ],
   cards: [
     // Bloco 01 — INFRA (6 indicadores)
@@ -747,20 +745,10 @@ export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayoutConfig = {
     { id: "infra_group_exits", blockId: "infra", title: "Saídas do Grupo", order: 4 },
     { id: "infra_tests", blockId: "infra", title: "Testes Realizados", order: 5 },
 
-    // Bloco Distribuição — Instagram (3 indicadores)
-    { id: "dist_insta_followers", blockId: "dist_instagram", title: "Novos Seguidores", order: 0 },
-    { id: "dist_insta_posts", blockId: "dist_instagram", title: "Posts Realizados", order: 1 },
-    { id: "dist_insta_views", blockId: "dist_instagram", title: "Views", order: 2 },
-
-    // Bloco Distribuição — TikTok (3 indicadores)
-    { id: "dist_tiktok_followers", blockId: "dist_tiktok", title: "Novos Seguidores", order: 0 },
-    { id: "dist_tiktok_posts", blockId: "dist_tiktok", title: "Vídeos Publicados", order: 1 },
-    { id: "dist_tiktok_views", blockId: "dist_tiktok", title: "Views", order: 2 },
-
-    // Bloco Distribuição — YouTube (3 indicadores)
-    { id: "dist_yt_followers", blockId: "dist_youtube", title: "Novos Inscritos", order: 0 },
-    { id: "dist_yt_posts", blockId: "dist_youtube", title: "Vídeos / Shorts", order: 1 },
-    { id: "dist_yt_views", blockId: "dist_youtube", title: "Views", order: 2 },
+    // Bloco Distribuição de Mídia (Filtro por rede social ou visão geral)
+    { id: "dist_followers", blockId: "dist_midia", title: "Novos Seguidores", order: 0 },
+    { id: "dist_posts", blockId: "dist_midia", title: "Posts Realizados", order: 1 },
+    { id: "dist_views", blockId: "dist_midia", title: "Views", order: 2 },
 
     // Bloco 03 — FUNIL (Esteira visual progressiva conectada)
     { id: "funnel_pipeline", blockId: "funil", title: "Funil Comercial de Conversão", order: 0 },

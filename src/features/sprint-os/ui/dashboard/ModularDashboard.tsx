@@ -421,6 +421,25 @@ export const ModularDashboard: React.FC = () => {
     setApiConnectedInput(config?.connected || false);
   };
 
+  const handleSwitchApiModalChannel = (channel: "instagram" | "tiktok" | "youtube") => {
+    if (apiModalChannel && apiModalChannel !== channel) {
+      mutate((ws) => {
+        ws.mediaApiConfigs ??= {};
+        ws.mediaApiConfigs[apiModalChannel] = {
+          apiKey: apiKeyInput.trim(),
+          pageIdOrHandle: apiPageIdInput.trim(),
+          connected: apiConnectedInput,
+          lastSyncedAt: ws.mediaApiConfigs[apiModalChannel]?.lastSyncedAt || null,
+        };
+      });
+    }
+    const config = workspace.mediaApiConfigs?.[channel];
+    setApiModalChannel(channel);
+    setApiKeyInput(config?.apiKey || "");
+    setApiPageIdInput(config?.pageIdOrHandle || "");
+    setApiConnectedInput(config?.connected || false);
+  };
+
   const handleSaveApiConfig = () => {
     if (!apiModalChannel) return;
     mutate((ws) => {
@@ -433,7 +452,7 @@ export const ModularDashboard: React.FC = () => {
       };
     });
     setApiModalChannel(null);
-    toast.success("Credenciais de API salvas com sucesso!");
+    toast.success(`Credenciais de API de ${apiModalChannel.toUpperCase()} salvas com sucesso!`);
   };
 
   const handleSyncApi = async (channel: "instagram" | "tiktok" | "youtube") => {
@@ -905,15 +924,17 @@ export const ModularDashboard: React.FC = () => {
       );
     }
 
-    // 2. CARDS DE DISTRIBUIÇÃO (POR MÍDIA ESPECÍFICA)
-    const channel: "instagram" | "tiktok" | "youtube" =
-      blockId === "dist_tiktok"
-        ? "tiktok"
-        : blockId === "dist_youtube"
-        ? "youtube"
-        : "instagram";
+    // 2. CARDS DE DISTRIBUIÇÃO DE MÍDIA (DINÂMICO PELO FILTRO NO BLOCO OU VISÃO GERAL)
+    const activeMediaChannel: "instagram" | "tiktok" | "youtube" =
+      mediaFilter === "all" ? "instagram" : mediaFilter;
 
-    const metrics = getChannelMetrics(channel);
+    const metrics = getChannelMetrics(activeMediaChannel);
+    const ig = getChannelMetrics("instagram");
+    const tt = getChannelMetrics("tiktok");
+    const yt = getChannelMetrics("youtube");
+    const allFollowers = ig.followers + tt.followers + yt.followers;
+    const allPosts = ig.posts + tt.posts + yt.posts;
+    const allViews = ig.views + tt.views + yt.views;
 
     // Seguidores / Inscritos
     if (
@@ -923,13 +944,43 @@ export const ModularDashboard: React.FC = () => {
       card.id === "dist_tiktok_followers" ||
       card.id === "dist_yt_followers"
     ) {
-      const key = `${channel}_followers`;
+      if (mediaFilter === "all") {
+        return (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-1 flex-wrap">
+              <div className="flex flex-col">
+                <span className="text-2xl font-black font-mono tracking-tight text-primary leading-none">
+                  +{allFollowers}
+                </span>
+                <span className="text-[8px] uppercase tracking-wider text-muted-foreground font-bold leading-tight mt-0.5 whitespace-nowrap">
+                  Total Geral (Todas as Redes)
+                </span>
+              </div>
+              <div className="flex items-center gap-1 flex-wrap">
+                <Badge variant="outline" className="text-[9px] font-bold text-pink-600 border-pink-500/30">
+                  📸 +{ig.followers}
+                </Badge>
+                <Badge variant="outline" className="text-[9px] font-bold text-cyan-600 border-cyan-500/30">
+                  🎵 +{tt.followers}
+                </Badge>
+                <Badge variant="outline" className="text-[9px] font-bold text-red-600 border-red-500/30">
+                  ▶️ +{yt.followers}
+                </Badge>
+              </div>
+            </div>
+            <div className="text-[11px] text-muted-foreground truncate">
+              Novos seguidores e inscritos somados
+            </div>
+          </div>
+        );
+      }
+
+      const key = `${activeMediaChannel}_followers`;
       return (
         <div className="space-y-1.5">
           <div className="flex items-center justify-between gap-1 flex-wrap">
             {/* Bloco: (campo variavel) - (valor fixo registrado 00) */}
             <div className="flex items-center gap-1.5">
-              {/* Campo Variável */}
               <div className="relative flex items-center">
                 <span className="absolute left-1.5 text-[10px] font-bold text-muted-foreground select-none pointer-events-none">+</span>
                 <input
@@ -940,7 +991,7 @@ export const ModularDashboard: React.FC = () => {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
-                      handleAddVariable(channel, "followers");
+                      handleAddVariable(activeMediaChannel, "followers");
                     }
                   }}
                   className="w-13 h-7 pl-4 pr-1 text-xs font-mono font-bold bg-background border border-input rounded-lg focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
@@ -948,7 +999,7 @@ export const ModularDashboard: React.FC = () => {
                 />
                 <button
                   type="button"
-                  onClick={() => handleAddVariable(channel, "followers")}
+                  onClick={() => handleAddVariable(activeMediaChannel, "followers")}
                   disabled={!varInputs[key]}
                   className="ml-1 h-7 px-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-xs font-bold transition-all disabled:opacity-20 disabled:pointer-events-none"
                   title="Somar ao registro fixo (ou dê Enter)"
@@ -959,19 +1010,18 @@ export const ModularDashboard: React.FC = () => {
 
               <span className="text-muted-foreground/60 font-black text-xs select-none">—</span>
 
-              {/* Valor Fixo Registrado */}
-              <div className="flex flex-col">
+              <div className="flex flex-col shrink-0">
                 <span className="text-xl font-black font-mono tracking-tight text-primary leading-none">
                   {formatFixoRegistrado(metrics.followers, true)}
                 </span>
-                <span className="text-[8px] uppercase tracking-wider text-muted-foreground font-bold leading-tight mt-0.5">
+                <span className="text-[8px] uppercase tracking-wider text-muted-foreground font-bold leading-tight mt-0.5 whitespace-nowrap">
                   Fixo Registrado
                 </span>
               </div>
             </div>
           </div>
           <div className="text-[11px] text-muted-foreground truncate">
-            {channel === "youtube" ? "Inscritos conquistados" : "Ganhos de perfil"} ({metrics.period === "today" ? "Hoje" : metrics.period === "7d" ? "7 dias" : "30 dias"})
+            {activeMediaChannel === "youtube" ? "Inscritos conquistados" : "Ganhos de perfil"} ({metrics.period === "today" ? "Hoje" : metrics.period === "7d" ? "7 dias" : "30 dias"})
           </div>
         </div>
       );
@@ -985,8 +1035,39 @@ export const ModularDashboard: React.FC = () => {
       card.id === "dist_tiktok_posts" ||
       card.id === "dist_yt_posts"
     ) {
-      const key = `${channel}_posts`;
-      const lastPostMarker = [...(workspace.mediaDistribution?.[channel]?.unitMarkers || [])]
+      if (mediaFilter === "all") {
+        return (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-1 flex-wrap">
+              <div className="flex flex-col">
+                <span className="text-2xl font-black font-mono tracking-tight text-foreground leading-none">
+                  {allPosts}
+                </span>
+                <span className="text-[8px] uppercase tracking-wider text-muted-foreground font-bold leading-tight mt-0.5 whitespace-nowrap">
+                  Total Publicações
+                </span>
+              </div>
+              <div className="flex items-center gap-1 flex-wrap">
+                <Badge variant="outline" className="text-[9px] font-bold text-pink-600 border-pink-500/30">
+                  📸 {ig.posts} posts
+                </Badge>
+                <Badge variant="outline" className="text-[9px] font-bold text-cyan-600 border-cyan-500/30">
+                  🎵 {tt.posts} vídeos
+                </Badge>
+                <Badge variant="outline" className="text-[9px] font-bold text-red-600 border-red-500/30">
+                  ▶️ {yt.posts} vídeos
+                </Badge>
+              </div>
+            </div>
+            <div className="text-[11px] text-muted-foreground truncate">
+              Volume omnicanal publicado no período
+            </div>
+          </div>
+        );
+      }
+
+      const key = `${activeMediaChannel}_posts`;
+      const lastPostMarker = [...(workspace.mediaDistribution?.[activeMediaChannel]?.unitMarkers || [])]
         .reverse()
         .find((m) => m.metric === "posts" && (m.hook || m.formato || m.cta));
 
@@ -995,7 +1076,6 @@ export const ModularDashboard: React.FC = () => {
           <div className="flex items-center justify-between gap-1 flex-wrap">
             {/* Bloco: (campo variavel) - (valor fixo registrado 00) */}
             <div className="flex items-center gap-1.5">
-              {/* Campo Variável */}
               <div className="relative flex items-center">
                 <span className="absolute left-1.5 text-[10px] font-bold text-muted-foreground select-none pointer-events-none">+</span>
                 <input
@@ -1006,7 +1086,7 @@ export const ModularDashboard: React.FC = () => {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
-                      handleAddVariable(channel, "posts");
+                      handleAddVariable(activeMediaChannel, "posts");
                     }
                   }}
                   className="w-13 h-7 pl-4 pr-1 text-xs font-mono font-bold bg-background border border-input rounded-lg focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
@@ -1014,7 +1094,7 @@ export const ModularDashboard: React.FC = () => {
                 />
                 <button
                   type="button"
-                  onClick={() => handleAddVariable(channel, "posts")}
+                  onClick={() => handleAddVariable(activeMediaChannel, "posts")}
                   disabled={!varInputs[key]}
                   className="ml-1 h-7 px-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-xs font-bold transition-all disabled:opacity-20 disabled:pointer-events-none"
                   title="Somar ao registro fixo (ou dê Enter)"
@@ -1025,12 +1105,11 @@ export const ModularDashboard: React.FC = () => {
 
               <span className="text-muted-foreground/60 font-black text-xs select-none">—</span>
 
-              {/* Valor Fixo Registrado */}
-              <div className="flex flex-col">
+              <div className="flex flex-col shrink-0">
                 <span className="text-xl font-black font-mono tracking-tight text-foreground leading-none">
                   {formatFixoRegistrado(metrics.posts)}
                 </span>
-                <span className="text-[8px] uppercase tracking-wider text-muted-foreground font-bold leading-tight mt-0.5">
+                <span className="text-[8px] uppercase tracking-wider text-muted-foreground font-bold leading-tight mt-0.5 whitespace-nowrap">
                   Fixo Registrado
                 </span>
               </div>
@@ -1038,7 +1117,7 @@ export const ModularDashboard: React.FC = () => {
 
             {/* Botão de Marcar Hook - Corpo - CTA - Formato */}
             <button
-              onClick={() => handleOpenUnitMarker(channel, "posts", channel === "youtube" ? "Vídeos / Shorts" : "Posts / Conteúdo")}
+              onClick={() => handleOpenUnitMarker(activeMediaChannel, "posts", activeMediaChannel === "youtube" ? "Vídeos / Shorts" : "Posts / Conteúdo")}
               className="text-[9px] bg-primary/10 hover:bg-primary/20 text-primary px-1.5 py-0.5 rounded-lg font-bold flex items-center gap-0.5 ml-auto"
               title="Marcar Hook - Corpo - CTA - Formato"
             >
@@ -1069,7 +1148,7 @@ export const ModularDashboard: React.FC = () => {
           )}
 
           <div className="text-[11px] text-muted-foreground truncate">
-            {channel === "youtube" || channel === "tiktok" ? "Vídeos publicados" : "Posts realizados"} no período
+            {activeMediaChannel === "youtube" || activeMediaChannel === "tiktok" ? "Vídeos publicados" : "Posts realizados"} no período
           </div>
         </div>
       );
@@ -1083,13 +1162,42 @@ export const ModularDashboard: React.FC = () => {
       card.id === "dist_tiktok_views" ||
       card.id === "dist_yt_views"
     ) {
-      const key = `${channel}_views`;
+      if (mediaFilter === "all") {
+        return (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-1 flex-wrap">
+              <div className="flex flex-col">
+                <span className="text-2xl font-black font-mono tracking-tight text-foreground leading-none">
+                  {allViews.toLocaleString("pt-BR")}
+                </span>
+                <span className="text-[8px] uppercase tracking-wider text-muted-foreground font-bold leading-tight mt-0.5 whitespace-nowrap">
+                  Total Visualizações
+                </span>
+              </div>
+              <div className="flex items-center gap-1 flex-wrap">
+                <Badge variant="outline" className="text-[9px] font-bold text-pink-600 border-pink-500/30">
+                  📸 {ig.views.toLocaleString("pt-BR")}
+                </Badge>
+                <Badge variant="outline" className="text-[9px] font-bold text-cyan-600 border-cyan-500/30">
+                  🎵 {tt.views.toLocaleString("pt-BR")}
+                </Badge>
+                <Badge variant="outline" className="text-[9px] font-bold text-red-600 border-red-500/30">
+                  ▶️ {yt.views.toLocaleString("pt-BR")}
+                </Badge>
+              </div>
+            </div>
+            <div className="text-[11px] text-muted-foreground truncate">
+              Visualizações consolidadas em todas as plataformas
+            </div>
+          </div>
+        );
+      }
+
+      const key = `${activeMediaChannel}_views`;
       return (
         <div className="space-y-1.5">
           <div className="flex items-center justify-between gap-1 flex-wrap">
-            {/* Bloco: (campo variavel) - (valor fixo registrado 00) */}
             <div className="flex items-center gap-1.5">
-              {/* Campo Variável */}
               <div className="relative flex items-center">
                 <span className="absolute left-1.5 text-[10px] font-bold text-muted-foreground select-none pointer-events-none">+</span>
                 <input
@@ -1100,7 +1208,7 @@ export const ModularDashboard: React.FC = () => {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
-                      handleAddVariable(channel, "views");
+                      handleAddVariable(activeMediaChannel, "views");
                     }
                   }}
                   className="w-16 h-7 pl-4 pr-1 text-xs font-mono font-bold bg-background border border-input rounded-lg focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
@@ -1108,7 +1216,7 @@ export const ModularDashboard: React.FC = () => {
                 />
                 <button
                   type="button"
-                  onClick={() => handleAddVariable(channel, "views")}
+                  onClick={() => handleAddVariable(activeMediaChannel, "views")}
                   disabled={!varInputs[key]}
                   className="ml-1 h-7 px-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-xs font-bold transition-all disabled:opacity-20 disabled:pointer-events-none"
                   title="Somar ao registro fixo (ou dê Enter)"
@@ -1119,16 +1227,32 @@ export const ModularDashboard: React.FC = () => {
 
               <span className="text-muted-foreground/60 font-black text-xs select-none">—</span>
 
-              {/* Valor Fixo Registrado */}
-              <div className="flex flex-col">
+              <div className="flex flex-col shrink-0">
                 <span className="text-xl font-black font-mono tracking-tight text-foreground leading-none">
                   {formatFixoRegistrado(metrics.views)}
                 </span>
-                <span className="text-[8px] uppercase tracking-wider text-muted-foreground font-bold leading-tight mt-0.5">
+                <span className="text-[8px] uppercase tracking-wider text-muted-foreground font-bold leading-tight mt-0.5 whitespace-nowrap">
                   Fixo Registrado
                 </span>
               </div>
             </div>
+
+            {/* Ação de detalhes */}
+            <button
+              onClick={() => handleOpenUnitMarker(activeMediaChannel, "views", "Visualizações")}
+              className="text-[9px] bg-primary/10 hover:bg-primary/20 text-primary px-1.5 py-0.5 rounded-lg font-bold flex items-center gap-0.5 ml-auto"
+              title="Registrar marcação completa de views"
+            >
+              <Eye className="h-2.5 w-2.5" />
+              <span>Marcar</span>
+            </button>
+          </div>
+          <div className="text-[11px] text-muted-foreground truncate">
+            Visualizações acumuladas
+          </div>
+        </div>
+      );
+    }
 
             {/* Ação de detalhes */}
             <button
@@ -1163,21 +1287,8 @@ export const ModularDashboard: React.FC = () => {
     );
   };
 
-  // Filtragem dos blocos de acordo com o Filtro de Mídia
-  const visibleBlocks = activeBlocks.filter((block) => {
-    if (block.id === "infra" || block.id === "funil") return true;
-
-    // Se for bloco de distribuição
-    if (block.id.startsWith("dist_")) {
-      if (mediaFilter === "all") return true;
-      if (mediaFilter === "instagram" && block.id === "dist_instagram") return true;
-      if (mediaFilter === "tiktok" && block.id === "dist_tiktok") return true;
-      if (mediaFilter === "youtube" && block.id === "dist_youtube") return true;
-      return false;
-    }
-
-    return true;
-  });
+  // Blocos ativos a exibir (INFRA | DISTRIBUIÇÃO DE MÍDIA | FUNIL)
+  const visibleBlocks = activeBlocks;
 
   return (
     <section className="px-6 py-2 space-y-3">
@@ -1189,58 +1300,8 @@ export const ModularDashboard: React.FC = () => {
             Cockpit Operacional
           </h2>
           <span className="text-[11px] text-muted-foreground hidden sm:inline">
-            • Modular por Canais de Mídia
+            • Gestão Modular 80/20
           </span>
-        </div>
-
-        {/* SELETOR / FILTRO DE MÍDIA RÁPIDO */}
-        <div className="flex items-center p-0.5 rounded-xl bg-muted/60 border border-border text-[11px] gap-0.5">
-          <span className="text-[10px] font-bold text-muted-foreground px-2 uppercase tracking-wider hidden md:inline">
-            Filtro de Mídia:
-          </span>
-          <button
-            onClick={() => setMediaFilter("all")}
-            className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
-              mediaFilter === "all"
-                ? "bg-background text-foreground shadow-xs"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            🌐 Todas
-          </button>
-          <button
-            onClick={() => setMediaFilter("instagram")}
-            className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 transition-all ${
-              mediaFilter === "instagram"
-                ? "bg-background text-pink-600 dark:text-pink-400 shadow-xs"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Instagram className="h-3 w-3" />
-            <span>Instagram</span>
-          </button>
-          <button
-            onClick={() => setMediaFilter("tiktok")}
-            className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 transition-all ${
-              mediaFilter === "tiktok"
-                ? "bg-background text-cyan-600 dark:text-cyan-400 shadow-xs"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Music className="h-3 w-3" />
-            <span>TikTok</span>
-          </button>
-          <button
-            onClick={() => setMediaFilter("youtube")}
-            className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 transition-all ${
-              mediaFilter === "youtube"
-                ? "bg-background text-red-600 dark:text-red-400 shadow-xs"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Youtube className="h-3 w-3" />
-            <span>YouTube</span>
-          </button>
         </div>
 
         <div className="flex items-center gap-1.5">
@@ -1274,22 +1335,23 @@ export const ModularDashboard: React.FC = () => {
           const isDraggingBlock = draggedBlockId === block.id;
           const isDragOverBlock = dragOverBlockId === block.id;
 
-          // Canal de mídia correspondente ao bloco
-          const isMediaBlock = block.id.startsWith("dist_");
+          // Identifica se é o bloco de distribuição
+          const isMediaBlock = block.id === "dist_midia" || block.id.startsWith("dist_");
           const blockChannel: "instagram" | "tiktok" | "youtube" =
-            block.id === "dist_tiktok"
-              ? "tiktok"
-              : block.id === "dist_youtube"
-              ? "youtube"
-              : "instagram";
+            mediaFilter === "all" ? "instagram" : mediaFilter;
 
-          const currentDistPeriod = distPeriods[blockChannel] || "7d";
-          const apiConfig = workspace.mediaApiConfigs?.[blockChannel];
+          const currentDistPeriod = distPeriods[mediaFilter] || distPeriods["instagram"] || "7d";
 
           // Cards do bloco
-          const blockCards = (layout.cards || [])
-            .filter((c) => c.blockId === block.id && !c.archived && !c.removed)
-            .sort((a, b) => a.order - b.order);
+          const blockCards = isMediaBlock
+            ? [
+                { id: "dist_followers", blockId: block.id, title: mediaFilter === "youtube" ? "Novos Inscritos" : "Novos Seguidores", order: 0 },
+                { id: "dist_posts", blockId: block.id, title: mediaFilter === "youtube" || mediaFilter === "tiktok" ? "Vídeos Publicados" : "Posts Realizados", order: 1 },
+                { id: "dist_views", blockId: block.id, title: "Views", order: 2 },
+              ]
+            : (layout.cards || [])
+                .filter((c) => c.blockId === block.id && !c.archived && !c.removed)
+                .sort((a, b) => a.order - b.order);
 
           return (
             <div
@@ -1328,10 +1390,18 @@ export const ModularDashboard: React.FC = () => {
                     <GripVertical className="h-3.5 w-3.5 pointer-events-none" />
                   </div>
 
-                  {/* Ícone específico do canal de mídia */}
-                  {block.id === "dist_instagram" && <Instagram className="h-3.5 w-3.5 text-pink-600 dark:text-pink-400" />}
-                  {block.id === "dist_tiktok" && <Music className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" />}
-                  {block.id === "dist_youtube" && <Youtube className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />}
+                  {/* Ícone específico do canal ou mídia geral */}
+                  {isMediaBlock ? (
+                    mediaFilter === "instagram" ? (
+                      <Instagram className="h-3.5 w-3.5 text-pink-600 dark:text-pink-400" />
+                    ) : mediaFilter === "tiktok" ? (
+                      <Music className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" />
+                    ) : mediaFilter === "youtube" ? (
+                      <Youtube className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
+                    ) : (
+                      <Share2 className="h-3.5 w-3.5 text-primary" />
+                    )
+                  ) : null}
 
                   {inlineEditingBlockId === block.id ? (
                     <Input
@@ -1355,36 +1425,115 @@ export const ModularDashboard: React.FC = () => {
                       className="text-xs font-black uppercase tracking-wider text-foreground cursor-pointer hover:text-primary transition-colors"
                       title="Dois cliques para renomear"
                     >
-                      {block.title}
+                      {isMediaBlock ? (block.title.includes("INSTAGRAM") || block.title.includes("TIKTOK") || block.title.includes("YOUTUBE") ? "DISTRIBUIÇÃO DE MÍDIA" : block.title) : block.title}
                     </h3>
                   )}
                 </div>
 
-                <div className="flex items-center gap-2">
-                  {/* Se for bloco de distribuição: Filtro de período e Botão de API */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* FILTRO DE MÍDIA INTEGRADO NO CABEÇALHO DO BLOCO */}
+                  {isMediaBlock && (
+                    <div className="flex items-center p-0.5 rounded-xl bg-muted/80 border border-border text-[11px] gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setMediaFilter("all")}
+                        className={`px-2 py-0.5 rounded-lg font-bold flex items-center gap-1 transition-all ${
+                          mediaFilter === "all"
+                            ? "bg-background text-foreground shadow-xs"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <Globe className="h-3 w-3 text-primary" />
+                        <span>Todas</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMediaFilter("instagram")}
+                        className={`px-2 py-0.5 rounded-lg font-bold flex items-center gap-1 transition-all ${
+                          mediaFilter === "instagram"
+                            ? "bg-background text-pink-600 dark:text-pink-400 shadow-xs"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <Instagram className="h-3 w-3" />
+                        <span>Instagram</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMediaFilter("tiktok")}
+                        className={`px-2 py-0.5 rounded-lg font-bold flex items-center gap-1 transition-all ${
+                          mediaFilter === "tiktok"
+                            ? "bg-background text-cyan-600 dark:text-cyan-400 shadow-xs"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <Music className="h-3 w-3" />
+                        <span>TikTok</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMediaFilter("youtube")}
+                        className={`px-2 py-0.5 rounded-lg font-bold flex items-center gap-1 transition-all ${
+                          mediaFilter === "youtube"
+                            ? "bg-background text-red-600 dark:text-red-400 shadow-xs"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <Youtube className="h-3 w-3" />
+                        <span>YouTube</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Se for bloco de distribuição: Conexão via API individual por rede & Filtro de período */}
                   {isMediaBlock && (
                     <>
-                      {/* Botão de Integração API Face / Insta / TikTok / YouTube */}
-                      <button
-                        onClick={() => handleOpenApiModal(blockChannel)}
-                        className={`h-6 px-2 rounded-lg text-[10px] font-bold flex items-center gap-1 border transition-all ${
-                          apiConfig?.connected
-                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
-                            : "bg-muted/80 text-muted-foreground border-border hover:text-foreground"
-                        }`}
-                        title="Configurar integração de API para puxar métricas automaticamente"
-                      >
-                        <Radio className={`h-2.5 w-2.5 ${apiConfig?.connected ? "text-emerald-500 animate-pulse" : ""}`} />
-                        <span>{apiConfig?.connected ? "API Conectada" : "Conectar API"}</span>
-                      </button>
+                      {/* Botão de Conexão de API */}
+                      {mediaFilter !== "all" ? (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenApiModal(mediaFilter)}
+                          className={`h-6 px-2 rounded-lg text-[10px] font-bold flex items-center gap-1 border transition-all ${
+                            workspace.mediaApiConfigs?.[mediaFilter]?.connected
+                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+                              : "bg-muted/80 text-muted-foreground border-border hover:text-foreground"
+                          }`}
+                          title={`Configurar conexão de API de ${mediaFilter.toUpperCase()}`}
+                        >
+                          <Radio className={`h-2.5 w-2.5 ${workspace.mediaApiConfigs?.[mediaFilter]?.connected ? "text-emerald-500 animate-pulse" : ""}`} />
+                          <span>
+                            {workspace.mediaApiConfigs?.[mediaFilter]?.connected
+                              ? `API ${mediaFilter === "instagram" ? "Meta" : mediaFilter.toUpperCase()} Conectada`
+                              : `Conectar API ${mediaFilter === "instagram" ? "Meta" : mediaFilter.toUpperCase()}`}
+                          </span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenApiModal("instagram")}
+                          className="h-6 px-2 rounded-lg text-[10px] font-bold flex items-center gap-1 border bg-muted/80 hover:bg-muted text-muted-foreground border-border hover:text-foreground transition-all"
+                          title="Gerenciar conexão das APIs de todas as redes"
+                        >
+                          <Radio className="h-2.5 w-2.5 text-primary" />
+                          <span>Conectar APIs</span>
+                        </button>
+                      )}
 
                       {/* Seletor de período */}
                       <div className="flex items-center p-0.5 rounded-lg bg-muted border border-border text-[10px]">
                         {(["today", "7d", "30d"] as const).map((p) => (
                           <button
                             key={p}
+                            type="button"
                             onClick={() =>
-                              setDistPeriods((prev) => ({ ...prev, [blockChannel]: p }))
+                              setDistPeriods((prev) => ({
+                                ...prev,
+                                [blockChannel]: p,
+                                [mediaFilter]: p,
+                                instagram: p,
+                                tiktok: p,
+                                youtube: p,
+                              }))
                             }
                             className={`px-2 py-0.5 rounded-md font-bold transition-all ${
                               currentDistPeriod === p
@@ -1587,6 +1736,98 @@ export const ModularDashboard: React.FC = () => {
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {/* Se for o bloco de distribuição e o filtro for 'Todas', exibe o resumo comparativo com atalho para cada rede */}
+              {isMediaBlock && mediaFilter === "all" && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2.5 mt-2.5 border-t border-border/60">
+                  <button
+                    type="button"
+                    onClick={() => setMediaFilter("instagram")}
+                    className="p-2.5 rounded-xl bg-pink-500/5 hover:bg-pink-500/10 border border-pink-500/20 text-left flex items-center justify-between transition-colors group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Instagram className="h-4 w-4 text-pink-600 dark:text-pink-400 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-[11px] font-bold text-foreground flex items-center gap-1.5">
+                          <span>Instagram</span>
+                          {workspace.mediaApiConfigs?.instagram?.connected ? (
+                            <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-0.5">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block" />
+                              API Conectada
+                            </span>
+                          ) : (
+                            <span className="text-[9px] text-muted-foreground">API Desconectada</span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground truncate">
+                          +{getChannelMetrics("instagram").followers} seg • {getChannelMetrics("instagram").posts} posts • {getChannelMetrics("instagram").views.toLocaleString("pt-BR")} views
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold text-pink-600 opacity-70 group-hover:opacity-100 flex items-center shrink-0">
+                      Ver <ChevronRight className="h-3 w-3" />
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setMediaFilter("tiktok")}
+                    className="p-2.5 rounded-xl bg-cyan-500/5 hover:bg-cyan-500/10 border border-cyan-500/20 text-left flex items-center justify-between transition-colors group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Music className="h-4 w-4 text-cyan-600 dark:text-cyan-400 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-[11px] font-bold text-foreground flex items-center gap-1.5">
+                          <span>TikTok</span>
+                          {workspace.mediaApiConfigs?.tiktok?.connected ? (
+                            <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-0.5">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block" />
+                              API Conectada
+                            </span>
+                          ) : (
+                            <span className="text-[9px] text-muted-foreground">API Desconectada</span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground truncate">
+                          +{getChannelMetrics("tiktok").followers} seg • {getChannelMetrics("tiktok").posts} vídeos • {getChannelMetrics("tiktok").views.toLocaleString("pt-BR")} views
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold text-cyan-600 opacity-70 group-hover:opacity-100 flex items-center shrink-0">
+                      Ver <ChevronRight className="h-3 w-3" />
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setMediaFilter("youtube")}
+                    className="p-2.5 rounded-xl bg-red-500/5 hover:bg-red-500/10 border border-red-500/20 text-left flex items-center justify-between transition-colors group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Youtube className="h-4 w-4 text-red-600 dark:text-red-400 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-[11px] font-bold text-foreground flex items-center gap-1.5">
+                          <span>YouTube</span>
+                          {workspace.mediaApiConfigs?.youtube?.connected ? (
+                            <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-0.5">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block" />
+                              API Conectada
+                            </span>
+                          ) : (
+                            <span className="text-[9px] text-muted-foreground">API Desconectada</span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground truncate">
+                          +{getChannelMetrics("youtube").followers} insc • {getChannelMetrics("youtube").posts} vídeos • {getChannelMetrics("youtube").views.toLocaleString("pt-BR")} views
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold text-red-600 opacity-70 group-hover:opacity-100 flex items-center shrink-0">
+                      Ver <ChevronRight className="h-3 w-3" />
+                    </span>
+                  </button>
                 </div>
               )}
             </div>
@@ -1855,6 +2096,55 @@ export const ModularDashboard: React.FC = () => {
           </DialogHeader>
 
           <div className="py-2 space-y-3 text-xs">
+            {/* Seletor de Rede Social na API */}
+            <div className="flex items-center gap-1 bg-muted p-1 rounded-xl border border-border">
+              <button
+                type="button"
+                onClick={() => handleSwitchApiModalChannel("instagram")}
+                className={`flex-1 py-1 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all ${
+                  apiModalChannel === "instagram"
+                    ? "bg-background text-pink-600 dark:text-pink-400 shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Instagram className="h-3.5 w-3.5" />
+                <span>Instagram</span>
+                {workspace.mediaApiConfigs?.instagram?.connected && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 ml-0.5" />
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSwitchApiModalChannel("tiktok")}
+                className={`flex-1 py-1 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all ${
+                  apiModalChannel === "tiktok"
+                    ? "bg-background text-cyan-600 dark:text-cyan-400 shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Music className="h-3.5 w-3.5" />
+                <span>TikTok</span>
+                {workspace.mediaApiConfigs?.tiktok?.connected && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 ml-0.5" />
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSwitchApiModalChannel("youtube")}
+                className={`flex-1 py-1 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all ${
+                  apiModalChannel === "youtube"
+                    ? "bg-background text-red-600 dark:text-red-400 shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Youtube className="h-3.5 w-3.5" />
+                <span>YouTube</span>
+                {workspace.mediaApiConfigs?.youtube?.connected && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 ml-0.5" />
+                )}
+              </button>
+            </div>
+
             <p className="text-[11px] text-muted-foreground leading-relaxed">
               Conecte sua conta via API do Facebook / Instagram Graph API (Meta), TikTok for Developers ou YouTube Data API para puxar métricas de seguidores, alcance e publicações de forma integrada.
             </p>
