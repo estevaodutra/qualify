@@ -988,10 +988,6 @@ export const TaskDetailModal: React.FC = () => {
                       );
                     })
                   )}
-                        </div>
-                      </div>
-                    ))
-                  )}
                 </div>
 
                 <div className="flex items-center gap-2 pt-1">
