@@ -619,6 +619,10 @@ export interface MediaUnitMarker {
   amount: number;
   date: string;
   note?: string;
+  hook?: string;
+  corpo?: string;
+  cta?: string;
+  formato?: string;
   createdAt: string;
 }
 

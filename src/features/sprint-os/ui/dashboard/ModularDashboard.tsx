@@ -117,7 +117,7 @@ export const ModularDashboard: React.FC = () => {
   // Modal de Restauração de Elementos
   const [showRestoreModal, setShowRestoreModal] = useState(false);
 
-  // Modal para Registro de Marcação em Unidade
+  // Modal para Registro de Marcação em Unidade (Hook, Corpo, CTA, Formato)
   const [unitMarkerModal, setUnitMarkerModal] = useState<{
     open: boolean;
     channel: "instagram" | "tiktok" | "youtube";
@@ -127,6 +127,13 @@ export const ModularDashboard: React.FC = () => {
   const [markerAmountInput, setMarkerAmountInput] = useState("");
   const [markerDateInput, setMarkerDateInput] = useState(new Date().toISOString().slice(0, 10));
   const [markerNoteInput, setMarkerNoteInput] = useState("");
+  const [markerHookInput, setMarkerHookInput] = useState("");
+  const [markerCorpoInput, setMarkerCorpoInput] = useState("");
+  const [markerCtaInput, setMarkerCtaInput] = useState("");
+  const [markerFormatoInput, setMarkerFormatoInput] = useState("Reels");
+
+  // Inputs inline de campo variável (ao digitar o valor e dar Enter, soma ao valor fixo registrado)
+  const [varInputs, setVarInputs] = useState<Record<string, string>>({});
 
   // Modal para Integração de API
   const [apiModalChannel, setApiModalChannel] = useState<"instagram" | "tiktok" | "youtube" | null>(null);
@@ -277,9 +284,13 @@ export const ModularDashboard: React.FC = () => {
     metricLabel: string
   ) => {
     setUnitMarkerModal({ open: true, channel, metric, metricLabel });
-    setMarkerAmountInput("");
+    setMarkerAmountInput(metric === "posts" ? "1" : "");
     setMarkerDateInput(new Date().toISOString().slice(0, 10));
     setMarkerNoteInput("");
+    setMarkerHookInput("");
+    setMarkerCorpoInput("");
+    setMarkerCtaInput("");
+    setMarkerFormatoInput(channel === "youtube" ? "Shorts" : "Reels");
   };
 
   const handleConfirmUnitMarker = () => {
@@ -292,11 +303,15 @@ export const ModularDashboard: React.FC = () => {
 
     const { channel, metric } = unitMarkerModal;
     const newMarker: MediaUnitMarker = {
-      id: `um-${Date.now()}`,
+      id: `um-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       metric,
       amount,
       date: markerDateInput,
       note: markerNoteInput.trim() || undefined,
+      hook: markerHookInput.trim() || undefined,
+      corpo: markerCorpoInput.trim() || undefined,
+      cta: markerCtaInput.trim() || undefined,
+      formato: markerFormatoInput || undefined,
       createdAt: new Date().toISOString(),
     };
 
@@ -310,7 +325,64 @@ export const ModularDashboard: React.FC = () => {
     setUnitMarkerModal(null);
     setMarkerAmountInput("");
     setMarkerNoteInput("");
+    setMarkerHookInput("");
+    setMarkerCorpoInput("");
+    setMarkerCtaInput("");
     toast.success(`Marcação de ${amount > 0 ? `+${amount}` : amount} unidades adicionada ao marcador de registro!`);
+  };
+
+  const handleDeleteUnitMarker = (channel: "instagram" | "tiktok" | "youtube", markerId: string) => {
+    mutate((ws) => {
+      if (!ws.mediaDistribution?.[channel]?.unitMarkers) return;
+      ws.mediaDistribution[channel].unitMarkers = ws.mediaDistribution[channel].unitMarkers!.filter(
+        (m) => m.id !== markerId
+      );
+    });
+    toast.success("Marcação removida com sucesso.");
+  };
+
+  // Campo variável inline: digita o número e ao dar Enter, soma instantaneamente ao valor fixo registrado
+  const handleAddVariable = (
+    channel: "instagram" | "tiktok" | "youtube",
+    metric: "followers" | "posts" | "views"
+  ) => {
+    const key = `${channel}_${metric}`;
+    const raw = varInputs[key]?.trim();
+    const amount = parseInt(raw || "", 10);
+    if (isNaN(amount) || amount === 0) {
+      toast.error("Digite um número válido para somar.");
+      return;
+    }
+
+    const newMarker: MediaUnitMarker = {
+      id: `um-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      metric,
+      amount,
+      date: new Date().toISOString().slice(0, 10),
+      note: "Marcação via campo variável (Enter)",
+      createdAt: new Date().toISOString(),
+    };
+
+    mutate((ws) => {
+      ws.mediaDistribution ??= {};
+      ws.mediaDistribution[channel] ??= {};
+      ws.mediaDistribution[channel].unitMarkers ??= [];
+      ws.mediaDistribution[channel].unitMarkers!.push(newMarker);
+    });
+
+    setVarInputs((prev) => ({ ...prev, [key]: "" }));
+    toast.success(`+${amount} somado ao valor fixo registrado de ${channel.toUpperCase()}!`);
+  };
+
+  const formatFixoRegistrado = (val: number, isFollowers = false) => {
+    if (!val || val === 0) return "00";
+    if (isFollowers) {
+      if (val > 0 && val < 10) return `+0${val}`;
+      if (val > 0) return `+${val.toLocaleString("pt-BR")}`;
+      return `${val.toLocaleString("pt-BR")}`;
+    }
+    if (val > 0 && val < 10) return `0${val}`;
+    return val.toLocaleString("pt-BR");
   };
 
   const handleOpenApiModal = (channel: "instagram" | "tiktok" | "youtube") => {
@@ -815,7 +887,7 @@ export const ModularDashboard: React.FC = () => {
 
     const metrics = getChannelMetrics(channel);
 
-    // Seguidores
+    // Seguidores / Inscritos
     if (
       card.id.includes("followers") ||
       card.id === "dist_followers" ||
@@ -823,35 +895,62 @@ export const ModularDashboard: React.FC = () => {
       card.id === "dist_tiktok_followers" ||
       card.id === "dist_yt_followers"
     ) {
+      const key = `${channel}_followers`;
       return (
-        <div className="space-y-1">
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-black font-mono tracking-tight text-primary">
-              +{metrics.followers}
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => handleOpenUnitMarker(channel, "followers", "Seguidores")}
-                className="text-[9px] bg-primary/10 hover:bg-primary/20 text-primary px-1.5 py-0.5 rounded font-bold"
-                title="Registrar marcação em unidade"
-              >
-                + Marcação
-              </button>
-              <div className="flex items-center gap-0.5 bg-muted/60 rounded-lg p-0.5 border border-border">
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-1 flex-wrap">
+            {/* Bloco: (campo variavel) - (valor fixo registrado 00) */}
+            <div className="flex items-center gap-1.5">
+              {/* Campo Variável */}
+              <div className="relative flex items-center">
+                <span className="absolute left-1.5 text-[10px] font-bold text-muted-foreground select-none pointer-events-none">+</span>
+                <input
+                  type="number"
+                  placeholder="0"
+                  value={varInputs[key] || ""}
+                  onChange={(e) => setVarInputs((prev) => ({ ...prev, [key]: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddVariable(channel, "followers");
+                    }
+                  }}
+                  className="w-13 h-7 pl-4 pr-1 text-xs font-mono font-bold bg-background border border-input rounded-lg focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                  title="Digite a quantidade e dê Enter para somar ao fixo registrado"
+                />
                 <button
-                  onClick={() => handleQuickStepChannel(channel, "followers", -10)}
-                  className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                  type="button"
+                  onClick={() => handleAddVariable(channel, "followers")}
+                  disabled={!varInputs[key]}
+                  className="ml-1 h-7 px-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-xs font-bold transition-all disabled:opacity-20 disabled:pointer-events-none"
+                  title="Somar ao registro fixo (ou dê Enter)"
                 >
-                  <Minus className="h-2.5 w-2.5" />
-                </button>
-                <button
-                  onClick={() => handleQuickStepChannel(channel, "followers", 10)}
-                  className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground"
-                >
-                  <Plus className="h-2.5 w-2.5" />
+                  ↵
                 </button>
               </div>
+
+              <span className="text-muted-foreground/60 font-black text-xs select-none">—</span>
+
+              {/* Valor Fixo Registrado */}
+              <div className="flex flex-col">
+                <span className="text-xl font-black font-mono tracking-tight text-primary leading-none">
+                  {formatFixoRegistrado(metrics.followers, true)}
+                </span>
+                <span className="text-[8px] uppercase tracking-wider text-muted-foreground font-bold leading-tight mt-0.5">
+                  Fixo Registrado
+                </span>
+              </div>
             </div>
+
+            {/* Ação de detalhes completos */}
+            <button
+              onClick={() => handleOpenUnitMarker(channel, "followers", channel === "youtube" ? "Inscritos" : "Seguidores")}
+              className="text-[9px] bg-primary/10 hover:bg-primary/20 text-primary px-1.5 py-0.5 rounded-lg font-bold flex items-center gap-0.5 ml-auto"
+              title="Registrar marcação completa com detalhes"
+            >
+              <Tag className="h-2.5 w-2.5" />
+              <span>Marcar</span>
+            </button>
           </div>
           <div className="text-[11px] text-muted-foreground truncate">
             {channel === "youtube" ? "Inscritos conquistados" : "Ganhos de perfil"} ({metrics.period === "today" ? "Hoje" : metrics.period === "7d" ? "7 dias" : "30 dias"})
@@ -860,7 +959,7 @@ export const ModularDashboard: React.FC = () => {
       );
     }
 
-    // Posts / Vídeos
+    // Posts / Vídeos (com Marcar Hook - Corpo - CTA - Formato)
     if (
       card.id.includes("posts") ||
       card.id === "dist_posts" ||
@@ -868,36 +967,89 @@ export const ModularDashboard: React.FC = () => {
       card.id === "dist_tiktok_posts" ||
       card.id === "dist_yt_posts"
     ) {
+      const key = `${channel}_posts`;
+      const lastPostMarker = [...(workspace.mediaDistribution?.[channel]?.unitMarkers || [])]
+        .reverse()
+        .find((m) => m.metric === "posts" && (m.hook || m.formato || m.cta));
+
       return (
-        <div className="space-y-1">
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-black font-mono tracking-tight text-foreground">
-              {metrics.posts}
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => handleOpenUnitMarker(channel, "posts", "Posts / Vídeos")}
-                className="text-[9px] bg-primary/10 hover:bg-primary/20 text-primary px-1.5 py-0.5 rounded font-bold"
-                title="Registrar marcação em unidade"
-              >
-                + Marcação
-              </button>
-              <div className="flex items-center gap-0.5 bg-muted/60 rounded-lg p-0.5 border border-border">
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-1 flex-wrap">
+            {/* Bloco: (campo variavel) - (valor fixo registrado 00) */}
+            <div className="flex items-center gap-1.5">
+              {/* Campo Variável */}
+              <div className="relative flex items-center">
+                <span className="absolute left-1.5 text-[10px] font-bold text-muted-foreground select-none pointer-events-none">+</span>
+                <input
+                  type="number"
+                  placeholder="0"
+                  value={varInputs[key] || ""}
+                  onChange={(e) => setVarInputs((prev) => ({ ...prev, [key]: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddVariable(channel, "posts");
+                    }
+                  }}
+                  className="w-13 h-7 pl-4 pr-1 text-xs font-mono font-bold bg-background border border-input rounded-lg focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                  title="Digite a quantidade e dê Enter para somar ao fixo registrado"
+                />
                 <button
-                  onClick={() => handleQuickStepChannel(channel, "posts", -1)}
-                  className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                  type="button"
+                  onClick={() => handleAddVariable(channel, "posts")}
+                  disabled={!varInputs[key]}
+                  className="ml-1 h-7 px-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-xs font-bold transition-all disabled:opacity-20 disabled:pointer-events-none"
+                  title="Somar ao registro fixo (ou dê Enter)"
                 >
-                  <Minus className="h-2.5 w-2.5" />
-                </button>
-                <button
-                  onClick={() => handleQuickStepChannel(channel, "posts", 1)}
-                  className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground"
-                >
-                  <Plus className="h-2.5 w-2.5" />
+                  ↵
                 </button>
               </div>
+
+              <span className="text-muted-foreground/60 font-black text-xs select-none">—</span>
+
+              {/* Valor Fixo Registrado */}
+              <div className="flex flex-col">
+                <span className="text-xl font-black font-mono tracking-tight text-foreground leading-none">
+                  {formatFixoRegistrado(metrics.posts)}
+                </span>
+                <span className="text-[8px] uppercase tracking-wider text-muted-foreground font-bold leading-tight mt-0.5">
+                  Fixo Registrado
+                </span>
+              </div>
             </div>
+
+            {/* Botão de Marcar Hook - Corpo - CTA - Formato */}
+            <button
+              onClick={() => handleOpenUnitMarker(channel, "posts", channel === "youtube" ? "Vídeos / Shorts" : "Posts / Conteúdo")}
+              className="text-[9px] bg-primary/10 hover:bg-primary/20 text-primary px-1.5 py-0.5 rounded-lg font-bold flex items-center gap-0.5 ml-auto"
+              title="Marcar Hook - Corpo - CTA - Formato"
+            >
+              <Sparkles className="h-2.5 w-2.5" />
+              <span>Hook/CTA</span>
+            </button>
           </div>
+
+          {/* Destaque do Último Hook e CTA registrado */}
+          {lastPostMarker && (lastPostMarker.hook || lastPostMarker.cta) && (
+            <div className="p-1 px-1.5 rounded-md bg-muted/60 border border-border/80 text-[10px] space-y-0.5 truncate">
+              {lastPostMarker.formato && (
+                <span className="font-bold text-[9px] px-1 py-0.2 bg-primary/10 text-primary rounded mr-1 uppercase">
+                  {lastPostMarker.formato}
+                </span>
+              )}
+              {lastPostMarker.hook && (
+                <span className="text-foreground font-medium">
+                  <strong>Hook:</strong> "{lastPostMarker.hook}"
+                </span>
+              )}
+              {lastPostMarker.cta && (
+                <span className="text-muted-foreground ml-1">
+                  • <strong>CTA:</strong> {lastPostMarker.cta}
+                </span>
+              )}
+            </div>
+          )}
+
           <div className="text-[11px] text-muted-foreground truncate">
             {channel === "youtube" || channel === "tiktok" ? "Vídeos publicados" : "Posts realizados"} no período
           </div>
@@ -913,22 +1065,62 @@ export const ModularDashboard: React.FC = () => {
       card.id === "dist_tiktok_views" ||
       card.id === "dist_yt_views"
     ) {
+      const key = `${channel}_views`;
       return (
-        <div className="space-y-1">
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-black font-mono tracking-tight text-foreground">
-              {metrics.views.toLocaleString("pt-BR")}
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => handleOpenUnitMarker(channel, "views", "Visualizações")}
-                className="text-[9px] bg-primary/10 hover:bg-primary/20 text-primary px-1.5 py-0.5 rounded font-bold"
-                title="Registrar marcação em unidade"
-              >
-                + Marcação
-              </button>
-              <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-1 flex-wrap">
+            {/* Bloco: (campo variavel) - (valor fixo registrado 00) */}
+            <div className="flex items-center gap-1.5">
+              {/* Campo Variável */}
+              <div className="relative flex items-center">
+                <span className="absolute left-1.5 text-[10px] font-bold text-muted-foreground select-none pointer-events-none">+</span>
+                <input
+                  type="number"
+                  placeholder="0"
+                  value={varInputs[key] || ""}
+                  onChange={(e) => setVarInputs((prev) => ({ ...prev, [key]: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddVariable(channel, "views");
+                    }
+                  }}
+                  className="w-16 h-7 pl-4 pr-1 text-xs font-mono font-bold bg-background border border-input rounded-lg focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                  title="Digite a quantidade e dê Enter para somar ao fixo registrado"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleAddVariable(channel, "views")}
+                  disabled={!varInputs[key]}
+                  className="ml-1 h-7 px-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-xs font-bold transition-all disabled:opacity-20 disabled:pointer-events-none"
+                  title="Somar ao registro fixo (ou dê Enter)"
+                >
+                  ↵
+                </button>
+              </div>
+
+              <span className="text-muted-foreground/60 font-black text-xs select-none">—</span>
+
+              {/* Valor Fixo Registrado */}
+              <div className="flex flex-col">
+                <span className="text-xl font-black font-mono tracking-tight text-foreground leading-none">
+                  {formatFixoRegistrado(metrics.views)}
+                </span>
+                <span className="text-[8px] uppercase tracking-wider text-muted-foreground font-bold leading-tight mt-0.5">
+                  Fixo Registrado
+                </span>
+              </div>
             </div>
+
+            {/* Ação de detalhes */}
+            <button
+              onClick={() => handleOpenUnitMarker(channel, "views", "Visualizações")}
+              className="text-[9px] bg-primary/10 hover:bg-primary/20 text-primary px-1.5 py-0.5 rounded-lg font-bold flex items-center gap-0.5 ml-auto"
+              title="Registrar marcação completa de views"
+            >
+              <Eye className="h-2.5 w-2.5" />
+              <span>Marcar</span>
+            </button>
           </div>
           <div className="text-[11px] text-muted-foreground truncate">
             Visualizações acumuladas
@@ -1360,56 +1552,146 @@ export const ModularDashboard: React.FC = () => {
         })}
       </div>
 
-      {/* MODAL: REGISTRAR MARCAÇÃO EM UNIDADE (CONFORME SOLICITADO) */}
+      {/* MODAL: MARCAR HOOK - CORPO - CTA - FORMATO & UNIDADES */}
       <Dialog
         open={!!unitMarkerModal?.open}
         onOpenChange={(open) => !open && setUnitMarkerModal(null)}
       >
-        <DialogContent className="max-w-xs p-5 rounded-2xl bg-card border border-border text-card-foreground">
+        <DialogContent className="max-w-md p-5 rounded-2xl bg-card border border-border text-card-foreground">
           <DialogHeader>
-            <DialogTitle className="text-sm font-bold text-foreground flex items-center gap-1.5">
-              <Tag className="h-4 w-4 text-primary" />
-              <span>Registrar Marcação em Unidade</span>
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="py-2 space-y-3 text-xs">
-            <div className="p-2 rounded-xl bg-muted/50 border border-border flex items-center justify-between">
-              <span className="text-muted-foreground uppercase text-[10px] font-bold">Mídia:</span>
+            <DialogTitle className="text-sm font-bold text-foreground flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Tag className="h-4 w-4 text-primary" />
+                <span>Marcar Conteúdo & Unidade</span>
+              </div>
               <Badge variant="outline" className="font-bold text-[10px] uppercase">
                 {unitMarkerModal?.channel}
               </Badge>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="py-2 space-y-3 text-xs max-h-[72vh] overflow-y-auto pr-1">
+            {/* Formato: Seleção rápida */}
+            <div>
+              <label className="text-[11px] font-bold text-muted-foreground block mb-1">
+                Formato da Publicação
+              </label>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {["Reels", "Carrossel", "Shorts / Vídeo", "Stories", "Post Estático"].map((fmt) => {
+                  const isSelected = markerFormatoInput === fmt;
+                  return (
+                    <button
+                      key={fmt}
+                      type="button"
+                      onClick={() => setMarkerFormatoInput(fmt)}
+                      className={`text-[11px] px-2.5 py-1 rounded-lg font-bold border transition-all ${
+                        isSelected
+                          ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                          : "bg-muted/50 text-muted-foreground border-border hover:bg-muted"
+                      }`}
+                    >
+                      {fmt}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
+            {/* Hook */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[11px] font-bold text-foreground">Hook (Gancho)</label>
+                <span className="text-[10px] text-muted-foreground">Primeiros 3 segundos / Headline</span>
+              </div>
+              <Input
+                value={markerHookInput}
+                onChange={(e) => setMarkerHookInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleConfirmUnitMarker();
+                  }
+                }}
+                placeholder="Ex: 3 erros que você comete todo dia no WhatsApp..."
+                className="h-8 text-xs bg-background border-input text-foreground rounded-xl"
+              />
+            </div>
+
+            {/* Corpo */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[11px] font-bold text-foreground">Corpo (Conteúdo / Roteiro)</label>
+                <span className="text-[10px] text-muted-foreground">Desenvolvimento</span>
+              </div>
+              <textarea
+                value={markerCorpoInput}
+                onChange={(e) => setMarkerCorpoInput(e.target.value)}
+                rows={2}
+                placeholder="Ex: Explicar o gargalo no funil de vendas e como o método 7D qualifica o lead antes da ligação..."
+                className="w-full text-xs bg-background border border-input rounded-xl p-2 text-foreground focus:ring-1 focus:ring-primary outline-hidden resize-none"
+              />
+            </div>
+
+            {/* CTA */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[11px] font-bold text-foreground">CTA (Chamada para Ação)</label>
+                <span className="text-[10px] text-muted-foreground">Chamada final</span>
+              </div>
+              <Input
+                value={markerCtaInput}
+                onChange={(e) => setMarkerCtaInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleConfirmUnitMarker();
+                  }
+                }}
+                placeholder="Ex: Digite QUALIFY nos comentários para receber o script completo"
+                className="h-8 text-xs bg-background border-input text-foreground rounded-xl"
+              />
+            </div>
+
+            {/* Quantidade e Data */}
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <div>
+                <label className="text-[11px] font-bold text-muted-foreground block mb-1">
+                  Quantidade ({unitMarkerModal?.metricLabel})
+                </label>
+                <Input
+                  type="number"
+                  value={markerAmountInput}
+                  onChange={(e) => setMarkerAmountInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleConfirmUnitMarker();
+                    }
+                  }}
+                  placeholder="Ex: 1 ou 50"
+                  className="h-8 text-xs bg-background border-input text-foreground rounded-xl font-mono font-bold"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-muted-foreground block mb-1">
+                  Data da Marcação
+                </label>
+                <Input
+                  type="date"
+                  value={markerDateInput}
+                  onChange={(e) => setMarkerDateInput(e.target.value)}
+                  className="h-8 text-xs bg-background border-input text-foreground rounded-xl font-mono"
+                />
+              </div>
+            </div>
+
+            {/* Nota / Campanha */}
             <div>
               <label className="text-[11px] text-muted-foreground block mb-1">
-                Quantidade a Adicionar ({unitMarkerModal?.metricLabel})
+                Nota / Campanha (Opcional)
               </label>
-              <Input
-                type="number"
-                value={markerAmountInput}
-                onChange={(e) => setMarkerAmountInput(e.target.value)}
-                placeholder="Ex: 50"
-                className="h-8 text-xs bg-background border-input text-foreground rounded-xl font-mono"
-                autoFocus
-              />
-              <span className="text-[10px] text-muted-foreground mt-0.5 block">
-                Ao confirmar, este valor será somado diretamente ao marcador de registro.
-              </span>
-            </div>
-
-            <div>
-              <label className="text-[11px] text-muted-foreground block mb-1">Data da Marcação</label>
-              <Input
-                type="date"
-                value={markerDateInput}
-                onChange={(e) => setMarkerDateInput(e.target.value)}
-                className="h-8 text-xs bg-background border-input text-foreground rounded-xl font-mono"
-              />
-            </div>
-
-            <div>
-              <label className="text-[11px] text-muted-foreground block mb-1">Nota / Campanha (Opcional)</label>
               <Input
                 value={markerNoteInput}
                 onChange={(e) => setMarkerNoteInput(e.target.value)}
@@ -1417,9 +1699,72 @@ export const ModularDashboard: React.FC = () => {
                 className="h-8 text-xs bg-background border-input text-foreground rounded-xl"
               />
             </div>
+
+            {/* Histórico das marcações registradas */}
+            {unitMarkerModal && (
+              <div className="pt-2 border-t border-border/80">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center justify-between">
+                  <span>Marcações Registradas ({workspace.mediaDistribution?.[unitMarkerModal.channel]?.unitMarkers?.length || 0})</span>
+                </div>
+                <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                  {(!workspace.mediaDistribution?.[unitMarkerModal.channel]?.unitMarkers ||
+                    workspace.mediaDistribution[unitMarkerModal.channel]?.unitMarkers!.length === 0) ? (
+                    <div className="text-[11px] text-muted-foreground italic py-1">
+                      Nenhuma marcação gravada ainda.
+                    </div>
+                  ) : (
+                    workspace.mediaDistribution[unitMarkerModal.channel]!.unitMarkers!.map((m) => (
+                      <div
+                        key={m.id}
+                        className="p-2 rounded-xl bg-muted/40 border border-border/60 flex items-start justify-between gap-2 text-[11px]"
+                      >
+                        <div className="space-y-0.5 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-mono font-bold text-primary">
+                              {m.amount > 0 ? `+${m.amount}` : m.amount} {m.metric}
+                            </span>
+                            {m.formato && (
+                              <Badge variant="outline" className="text-[9px] px-1 py-0 font-bold uppercase">
+                                {m.formato}
+                              </Badge>
+                            )}
+                            <span className="text-[10px] text-muted-foreground">
+                              {m.date}
+                            </span>
+                          </div>
+                          {m.hook && (
+                            <div className="text-foreground font-medium truncate">
+                              <strong>Hook:</strong> {m.hook}
+                            </div>
+                          )}
+                          {m.cta && (
+                            <div className="text-muted-foreground truncate">
+                              <strong>CTA:</strong> {m.cta}
+                            </div>
+                          )}
+                          {m.corpo && (
+                            <div className="text-muted-foreground text-[10px] line-clamp-1">
+                              <strong>Corpo:</strong> {m.corpo}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteUnitMarker(unitMarkerModal.channel, m.id)}
+                          className="text-muted-foreground hover:text-destructive p-1 rounded-md hover:bg-destructive/10 transition-colors shrink-0"
+                          title="Excluir marcação"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
-          <DialogFooter className="gap-2">
+          <DialogFooter className="gap-2 pt-2 border-t border-border">
             <Button
               variant="ghost"
               size="sm"
@@ -1431,9 +1776,10 @@ export const ModularDashboard: React.FC = () => {
             <Button
               size="sm"
               onClick={handleConfirmUnitMarker}
-              className="text-xs bg-primary text-primary-foreground rounded-xl font-bold"
+              className="text-xs bg-primary text-primary-foreground rounded-xl font-bold gap-1"
             >
-              Confirmar Registro
+              <Check className="h-3.5 w-3.5" />
+              <span>Confirmar Registro</span>
             </Button>
           </DialogFooter>
         </DialogContent>
