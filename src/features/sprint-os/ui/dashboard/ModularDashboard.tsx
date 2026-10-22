@@ -284,24 +284,31 @@ export const ModularDashboard: React.FC = () => {
     metricLabel: string
   ) => {
     setUnitMarkerModal({ open: true, channel, metric, metricLabel });
-    setMarkerAmountInput(metric === "posts" ? "1" : "");
+    setMarkerAmountInput(metric === "views" ? "" : "1");
     setMarkerDateInput(new Date().toISOString().slice(0, 10));
     setMarkerNoteInput("");
     setMarkerHookInput("");
     setMarkerCorpoInput("");
     setMarkerCtaInput("");
-    setMarkerFormatoInput(channel === "youtube" ? "Shorts" : "Reels");
+    setMarkerFormatoInput("");
   };
 
   const handleConfirmUnitMarker = () => {
     if (!unitMarkerModal) return;
-    const amount = parseInt(markerAmountInput, 10);
-    if (isNaN(amount) || amount === 0) {
-      toast.error("Informe uma quantidade válida para a marcação.");
-      return;
+    const { channel, metric } = unitMarkerModal;
+
+    let amount = 1;
+    if (metric === "views") {
+      amount = parseInt(markerAmountInput, 10);
+      if (isNaN(amount) || amount === 0) {
+        toast.error("Informe a quantidade de visualizações.");
+        return;
+      }
+    } else if (markerAmountInput) {
+      const parsed = parseInt(markerAmountInput, 10);
+      if (!isNaN(parsed) && parsed !== 0) amount = parsed;
     }
 
-    const { channel, metric } = unitMarkerModal;
     const newMarker: MediaUnitMarker = {
       id: `um-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       metric,
@@ -311,7 +318,7 @@ export const ModularDashboard: React.FC = () => {
       hook: markerHookInput.trim() || undefined,
       corpo: markerCorpoInput.trim() || undefined,
       cta: markerCtaInput.trim() || undefined,
-      formato: markerFormatoInput || undefined,
+      formato: markerFormatoInput.trim() || undefined,
       createdAt: new Date().toISOString(),
     };
 
@@ -328,7 +335,8 @@ export const ModularDashboard: React.FC = () => {
     setMarkerHookInput("");
     setMarkerCorpoInput("");
     setMarkerCtaInput("");
-    toast.success(`Marcação de ${amount > 0 ? `+${amount}` : amount} unidades adicionada ao marcador de registro!`);
+    setMarkerFormatoInput("");
+    toast.success("Publicação e conteúdo registrados com sucesso!");
   };
 
   const handleDeleteUnitMarker = (channel: "instagram" | "tiktok" | "youtube", markerId: string) => {
@@ -941,16 +949,6 @@ export const ModularDashboard: React.FC = () => {
                 </span>
               </div>
             </div>
-
-            {/* Ação de detalhes completos */}
-            <button
-              onClick={() => handleOpenUnitMarker(channel, "followers", channel === "youtube" ? "Inscritos" : "Seguidores")}
-              className="text-[9px] bg-primary/10 hover:bg-primary/20 text-primary px-1.5 py-0.5 rounded-lg font-bold flex items-center gap-0.5 ml-auto"
-              title="Registrar marcação completa com detalhes"
-            >
-              <Tag className="h-2.5 w-2.5" />
-              <span>Marcar</span>
-            </button>
           </div>
           <div className="text-[11px] text-muted-foreground truncate">
             {channel === "youtube" ? "Inscritos conquistados" : "Ganhos de perfil"} ({metrics.period === "today" ? "Hoje" : metrics.period === "7d" ? "7 dias" : "30 dias"})
@@ -1571,29 +1569,31 @@ export const ModularDashboard: React.FC = () => {
           </DialogHeader>
 
           <div className="py-2 space-y-3 text-xs max-h-[72vh] overflow-y-auto pr-1">
-            {/* Formato: Seleção rápida */}
+            {/* Formato: Campo em aberto para preencher livremente */}
             <div>
-              <label className="text-[11px] font-bold text-muted-foreground block mb-1">
-                Formato da Publicação
-              </label>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {["Reels", "Carrossel", "Shorts / Vídeo", "Stories", "Post Estático"].map((fmt) => {
-                  const isSelected = markerFormatoInput === fmt;
-                  return (
-                    <button
-                      key={fmt}
-                      type="button"
-                      onClick={() => setMarkerFormatoInput(fmt)}
-                      className={`text-[11px] px-2.5 py-1 rounded-lg font-bold border transition-all ${
-                        isSelected
-                          ? "bg-primary text-primary-foreground border-primary shadow-xs"
-                          : "bg-muted/50 text-muted-foreground border-border hover:bg-muted"
-                      }`}
-                    >
-                      {fmt}
-                    </button>
-                  );
-                })}
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[11px] font-bold text-foreground">Formato da Publicação</label>
+                <span className="text-[10px] text-muted-foreground">Em aberto</span>
+              </div>
+              <Input
+                value={markerFormatoInput}
+                onChange={(e) => setMarkerFormatoInput(e.target.value)}
+                placeholder="Ex: Reels, Carrossel, Shorts, Vídeo longo, Stories, Live, etc."
+                className="h-8 text-xs bg-background border-input text-foreground rounded-xl"
+                autoFocus
+              />
+              <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                <span className="text-[9px] text-muted-foreground uppercase font-bold">Sugestões:</span>
+                {["Reels", "Carrossel", "Shorts", "Vídeo", "Stories", "Post Estático"].map((sug) => (
+                  <button
+                    key={sug}
+                    type="button"
+                    onClick={() => setMarkerFormatoInput(sug)}
+                    className="text-[10px] px-2 py-0.5 rounded-md bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60 transition-colors"
+                  >
+                    {sug}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -1652,31 +1652,43 @@ export const ModularDashboard: React.FC = () => {
               />
             </div>
 
-            {/* Quantidade e Data */}
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <div>
-                <label className="text-[11px] font-bold text-muted-foreground block mb-1">
-                  Quantidade ({unitMarkerModal?.metricLabel})
-                </label>
-                <Input
-                  type="number"
-                  value={markerAmountInput}
-                  onChange={(e) => setMarkerAmountInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleConfirmUnitMarker();
-                    }
-                  }}
-                  placeholder="Ex: 1 ou 50"
-                  className="h-8 text-xs bg-background border-input text-foreground rounded-xl font-mono font-bold"
-                  autoFocus
-                />
+            {/* Quantidade (apenas se for Views). Para posts e publicações, 'quantidade seguidor' é REMOVIDA conforme solicitado */}
+            {unitMarkerModal?.metric === "views" ? (
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <div>
+                  <label className="text-[11px] font-bold text-muted-foreground block mb-1">
+                    Quantidade de Visualizações
+                  </label>
+                  <Input
+                    type="number"
+                    value={markerAmountInput}
+                    onChange={(e) => setMarkerAmountInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleConfirmUnitMarker();
+                      }
+                    }}
+                    placeholder="Ex: 1000"
+                    className="h-8 text-xs bg-background border-input text-foreground rounded-xl font-mono font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-muted-foreground block mb-1">
+                    Data da Marcação
+                  </label>
+                  <Input
+                    type="date"
+                    value={markerDateInput}
+                    onChange={(e) => setMarkerDateInput(e.target.value)}
+                    className="h-8 text-xs bg-background border-input text-foreground rounded-xl font-mono"
+                  />
+                </div>
               </div>
-
+            ) : (
               <div>
                 <label className="text-[11px] font-bold text-muted-foreground block mb-1">
-                  Data da Marcação
+                  Data da Publicação
                 </label>
                 <Input
                   type="date"
@@ -1685,7 +1697,7 @@ export const ModularDashboard: React.FC = () => {
                   className="h-8 text-xs bg-background border-input text-foreground rounded-xl font-mono"
                 />
               </div>
-            </div>
+            )}
 
             {/* Nota / Campanha */}
             <div>
