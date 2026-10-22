@@ -117,6 +117,7 @@ export const TaskDetailModal: React.FC = () => {
     stopAndSaveTimer,
     resetTimer,
     mutate,
+    setActiveBrandManualTarget,
   } = useSprintOSStore();
 
   const [activeTab, setActiveTab] = useState("execution");
@@ -858,81 +859,135 @@ export const TaskDetailModal: React.FC = () => {
                       Nenhuma subtarefa adicionada.
                     </div>
                   ) : (
-                    subtasks.map((st) => (
-                      <div
-                        key={st.id}
-                        className="flex items-center justify-between p-2 rounded-xl bg-card border border-border text-xs gap-2"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => toggleSubtaskAction(st.id, !st.done)}
-                          className="shrink-0"
-                          title={st.done ? "Marcar pendente" : "Marcar concluída"}
-                        >
-                          {st.done ? (
-                            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                          ) : (
-                            <Circle className="h-4 w-4 text-muted-foreground" />
-                          )}
-                        </button>
+                    subtasks.map((st) => {
+                      const match = st.title.match(/(POS|ALM|ICP)-0(\d)/i);
+                      let bmLink: { moduleId: string; fieldId: string; label: string; isAnswered: boolean } | null = null;
+                      if (match) {
+                        const code = match[1].toUpperCase();
+                        const num = match[2];
+                        const fieldId = `${code.toLowerCase()}_0${num}`;
+                        const moduleId = code === "POS" ? "posicionamento" : code === "ALM" ? "alma_copy" : "raio_x_icp";
+                        const field = (workspace?.brandManual?.fields || []).find((f) => f.id === fieldId);
+                        const isAnswered = Boolean(field && (field.response || "").trim().length > 0);
+                        bmLink = { moduleId, fieldId, label: `${code}-0${num}`, isAnswered };
+                      }
 
-                        {editingSubtaskId === st.id ? (
-                          <Input
-                            value={editingSubtaskTitle}
-                            onChange={(e) => setEditingSubtaskTitle(e.target.value)}
-                            onBlur={() => {
-                              if (editingSubtaskTitle.trim() && editingSubtaskTitle !== st.title) {
-                                updateSubtaskAction(st.id, { title: editingSubtaskTitle.trim() });
-                              }
-                              setEditingSubtaskId(null);
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
+                      return (
+                        <div
+                          key={st.id}
+                          className="flex items-center justify-between p-2 rounded-xl bg-card border border-border text-xs gap-2"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => toggleSubtaskAction(st.id, !st.done)}
+                            className="shrink-0"
+                            title={st.done ? "Marcar pendente" : "Marcar concluída"}
+                          >
+                            {st.done || bmLink?.isAnswered ? (
+                              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                            ) : (
+                              <Circle className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </button>
+
+                          {editingSubtaskId === st.id ? (
+                            <Input
+                              value={editingSubtaskTitle}
+                              onChange={(e) => setEditingSubtaskTitle(e.target.value)}
+                              onBlur={() => {
                                 if (editingSubtaskTitle.trim() && editingSubtaskTitle !== st.title) {
                                   updateSubtaskAction(st.id, { title: editingSubtaskTitle.trim() });
                                 }
                                 setEditingSubtaskId(null);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  if (editingSubtaskTitle.trim() && editingSubtaskTitle !== st.title) {
+                                    updateSubtaskAction(st.id, { title: editingSubtaskTitle.trim() });
+                                  }
+                                  setEditingSubtaskId(null);
+                                }
+                              }}
+                              autoFocus
+                              className="h-6 text-xs bg-background border-primary text-foreground flex-1"
+                            />
+                          ) : (
+                            <span
+                              onDoubleClick={() => {
+                                setEditingSubtaskId(st.id);
+                                setEditingSubtaskTitle(st.title);
+                              }}
+                              onClick={() => {
+                                if (bmLink) {
+                                  setActiveBrandManualTarget(bmLink.moduleId, bmLink.fieldId);
+                                } else {
+                                  toggleSubtaskAction(st.id, !st.done);
+                                }
+                              }}
+                              className={`flex-1 cursor-pointer truncate ${
+                                st.done && !bmLink ? "line-through text-muted-foreground" : "text-foreground font-medium"
+                              } hover:text-primary transition-colors`}
+                              title={
+                                bmLink
+                                  ? `Clique para abrir ${bmLink.label} no Manual de Marca ou duplo-clique para editar título`
+                                  : "Clique para alternar ou duplo-clique para editar o título"
                               }
-                            }}
-                            autoFocus
-                            className="h-6 text-xs bg-background border-primary text-foreground flex-1"
-                          />
-                        ) : (
-                          <span
-                            onDoubleClick={() => {
-                              setEditingSubtaskId(st.id);
-                              setEditingSubtaskTitle(st.title);
-                            }}
-                            onClick={() => toggleSubtaskAction(st.id, !st.done)}
-                            className={`flex-1 cursor-pointer truncate ${st.done ? "line-through text-muted-foreground" : "text-foreground font-medium"}`}
-                            title="Clique para alternar ou duplo-clique para editar o título"
-                          >
-                            {st.title}
-                          </span>
-                        )}
+                            >
+                              {st.title}
+                            </span>
+                          )}
 
-                        <div className="flex items-center gap-1 shrink-0">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setEditingSubtaskId(st.id);
-                              setEditingSubtaskTitle(st.title);
-                            }}
-                            className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                            title="Editar título da subtarefa"
-                          >
-                            <Edit2 className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => deleteSubtaskAction(st.id)}
-                            className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                            title="Excluir subtarefa"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
+                          {/* Badge de resposta do Manual de Marca */}
+                          {bmLink?.isAnswered && (
+                            <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[9px] font-bold py-0 px-1.5 shrink-0">
+                              ✓ Respondido
+                            </Badge>
+                          )}
+
+                          {/* Ação direta: Abrir no Manual de Marca */}
+                          {bmLink && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveBrandManualTarget(bmLink!.moduleId, bmLink!.fieldId);
+                              }}
+                              className="h-6 px-2 text-[10px] text-primary border-primary/30 hover:bg-primary/10 rounded-lg gap-1 shrink-0 font-medium"
+                              title={`Abrir ${bmLink.label} diretamente no Manual de Marca`}
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              <span>Manual ↗</span>
+                            </Button>
+                          )}
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setEditingSubtaskId(st.id);
+                                setEditingSubtaskTitle(st.title);
+                              }}
+                              className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                              title="Editar título da subtarefa"
+                            >
+                              <Edit2 className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => deleteSubtaskAction(st.id)}
+                              className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                              title="Excluir subtarefa"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                         </div>
                       </div>
                     ))

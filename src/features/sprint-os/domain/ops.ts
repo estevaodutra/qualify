@@ -1300,4 +1300,503 @@ export function saveMasterPrompt(ws: Workspace, ctx: Ctx, promptText: string) {
   log(ws, ctx, "update", "MasterPrompt", null, "Master Prompt Consolidado salvo");
 }
 
+/**
+ * AJ-019: Sincronização e Reconciliação do Kanban com o Manual de Marca 7D e Automações Operacionais
+ * Preserva o histórico, tempos acumulados e tarefas existentes, injetando as frentes reais do PVD:
+ * 1. ETAPA 01 — INTELIGÊNCIA DO EXPERT (IM-01 a IM-05 com subtasks individuais POS/ALM/ICP)
+ * 2. GRUPO DE CAPTAÇÃO & AUTOMAÇÕES (GRP-01 a GRP-04, AUTO-01 a AUTO-06, TEST-01)
+ * 3. Sincronização dinâmica entre respostas do Manual de Marca e subtarefas operacionais
+ */
+export function reconcileWorkspaceWithAJ019(ws: Workspace, ctx: Ctx): boolean {
+  if (!ws || !ws.stages || !ws.tasks) return false;
+
+  const liveTasks = Object.values(ws.tasks).filter((t) => !t.archivedAt);
+  const hasIM01 = liveTasks.some(
+    (t) => t.title.includes("IM-01") || t.title.includes("PREENCHER POSICIONAMENTO")
+  );
+  const hasGRP01 = liveTasks.some(
+    (t) => t.title.includes("GRP-01") || t.title.includes("AUTO-01")
+  );
+
+  const sprintId = ws.activeSprintId || Object.keys(ws.sprints || {})[0];
+  if (!sprintId) return false;
+
+  let changed = false;
+
+  // 1. Inserir ETAPA 01 — INTELIGÊNCIA DO EXPERT se não existir IM-01
+  if (!hasIM01) {
+    // Deslocar posições dos estágios existentes
+    const existingStages = Object.values(ws.stages).filter(
+      (s) => !s.archivedAt && s.sprintId === sprintId
+    );
+    existingStages.forEach((st) => {
+      st.position += 1;
+    });
+
+    const intelStageId = newId();
+    const intelStage: Stage = {
+      ...base(ctx),
+      id: intelStageId,
+      sprintId,
+      title: "ETAPA 01 — INTELIGÊNCIA DO EXPERT",
+      position: 0,
+    };
+    ws.stages[intelStageId] = intelStage;
+
+    const intelTasks = [
+      {
+        code: "IM-01",
+        title: "TAREFA IM-01 — ⏳ PREENCHER POSICIONAMENTO",
+        priority: "P1" as const,
+        complexity: "medium" as const,
+        financialImpact: true,
+        durationMinutes: 120,
+        subtasks: [
+          "⏳ POS-01 — Responder: O que você vende e como isso melhora, na prática, a vida de quem compra?",
+          "⏳ POS-02 — Responder: O que você faz de diferente para produzir esse resultado?",
+          "⏳ POS-03 — Responder: O que muda no dia a dia do cliente depois que ele utiliza sua solução?",
+          "⏳ POS-04 — Responder: O que as pessoas costumam fazer para resolver esse problema que você considera errado ou insuficiente?",
+          "Revisar respostas e transcrições.",
+          "Executar análise estratégica de Posicionamento.",
+          "Verificar lacunas relevantes.",
+          "⏳ Solicitar complementações, quando necessárias.",
+          "Revisar posicionamento extraído.",
+          "⏳ Aprovar versão.",
+          "Registrar versão final.",
+        ],
+      },
+      {
+        code: "IM-02",
+        title: "TAREFA IM-02 — ⏳ PREENCHER ALMA DA COPY",
+        priority: "P1" as const,
+        complexity: "medium" as const,
+        financialImpact: true,
+        durationMinutes: 120,
+        subtasks: [
+          "⏳ ALM-01 — Responder: Que situação fez você perceber que essa solução precisava existir?",
+          "⏳ ALM-02 — Responder: O que seu cliente deixa de fazer ou passa a fazer depois de comprar?",
+          "⏳ ALM-03 — Responder: Além do resultado principal, o que essa mudança permite que o cliente faça ou viva?",
+          "Revisar respostas.",
+          "Confirmar transcrições.",
+          "Executar análise da Alma do Produto.",
+          "Verificar dor-mãe e desejo-mãe.",
+          "Verificar inimigo e brecha.",
+          "Verificar mecanismo e transformação.",
+          "Validar coerência da narrativa.",
+          "⏳ Solicitar complementações, quando necessárias.",
+          "Aprovar a análise.",
+          "Salvar versão.",
+        ],
+      },
+      {
+        code: "IM-03",
+        title: "TAREFA IM-03 — ⏳ PREENCHER RAIO X DO ICP",
+        priority: "P1" as const,
+        complexity: "medium" as const,
+        financialImpact: true,
+        durationMinutes: 120,
+        subtasks: [
+          "⏳ ICP-01 — Responder: Por que seu cliente precisa do seu produto?",
+          "⏳ ICP-02 — Responder: O que muda na prática depois que ele utiliza seu produto?",
+          "⏳ ICP-03 — Responder: Quando o problema acontece, o que seu cliente faz, pensa ou fala?",
+          "Confirmar respostas e transcrições.",
+          "Executar motor de Raio X do ICP.",
+          "Gerar perfil comportamental.",
+          "Identificar dor visível e oculta.",
+          "Extrair pensamentos e falas.",
+          "Organizar fragmentos da rotina.",
+          "Gerar hooks e headlines.",
+          "Gerar cenas para criativos.",
+          "Revisar hipóteses não confirmadas.",
+          "Aprovar análise.",
+          "Salvar versão.",
+        ],
+      },
+      {
+        code: "IM-04",
+        title: "TAREFA IM-04 — GERAR DEZ VARIANTES DE COPY ADS",
+        priority: "P1" as const,
+        complexity: "high" as const,
+        financialImpact: true,
+        durationMinutes: 180,
+        subtasks: [
+          "Verificar dados disponíveis nos três módulos.",
+          "Verificar promessa, mecanismo e evidências.",
+          "Confirmar o CTA da campanha.",
+          "Gerar Copy ADS 01 — Rotina do ICP.",
+          "Gerar Copy ADS 02 — Dor concreta.",
+          "Gerar Copy ADS 03 — Pensamento oculto.",
+          "Gerar Copy ADS 04 — Desejo e transformação.",
+          "Gerar Copy ADS 05 — Contraste antes/depois.",
+          "Gerar Copy ADS 06 — Erro ou crença antiga.",
+          "Gerar Copy ADS 07 — Mecanismo da solução.",
+          "Gerar Copy ADS 08 — Prova e autoridade.",
+          "Gerar Copy ADS 09 — Objeção principal.",
+          "Gerar Copy ADS 10 — Convite e oportunidade.",
+          "Revisar as dez headlines.",
+          "Revisar as dez subheadlines.",
+          "Corrigir repetições e afirmações sem comprovação.",
+          "⏳ Obter aprovação das variantes selecionadas.",
+          "Registrar versões aprovadas.",
+          "Vincular à produção de criativos.",
+        ],
+      },
+      {
+        code: "IM-05",
+        title: "TAREFA IM-05 — CONSOLIDAR MASTER PROMPT",
+        priority: "P1" as const,
+        complexity: "medium" as const,
+        financialImpact: true,
+        durationMinutes: 90,
+        subtasks: [
+          "Recuperar Posicionamento.",
+          "Recuperar Alma da Copy.",
+          "Recuperar Raio X do ICP.",
+          "Recuperar Copy ADS.",
+          "Verificar versões aprovadas.",
+          "Separar fatos de hipóteses.",
+          "Consolidar identidade do Expert.",
+          "Consolidar narrativa.",
+          "Consolidar mecanismo.",
+          "Consolidar persona.",
+          "Consolidar tom de voz.",
+          "Consolidar regras de copy.",
+          "Gerar arquivo Markdown.",
+          "⏳ Revisar e aprovar.",
+          "Salvar e vincular ao Backup Master.",
+        ],
+      },
+    ];
+
+    intelTasks.forEach((it, taskIdx) => {
+      const taskId = newId();
+      const task = makeTask(ctx, intelStageId, it.title, taskIdx, {
+        priority: it.priority,
+        complexity: it.complexity,
+        financialImpact: it.financialImpact,
+        durationMinutes: it.durationMinutes,
+        durationSource: "fixed",
+        status: "pending",
+      });
+      ws.tasks[taskId] = task;
+
+      it.subtasks.forEach((stTitle, stIdx) => {
+        const subtaskId = newId();
+        ws.subtasks[subtaskId] = makeSubtask(ctx, taskId, stTitle, stIdx);
+      });
+    });
+
+    log(ws, ctx, "reconcile", "stage", intelStageId, "Etapa 01 — Inteligência do Expert reconciliada");
+    changed = true;
+  }
+
+  // 2. Inserir entregáveis do Grupo de Captação e fluxos de Automação (GRP-01 a GRP-04, AUTO-01 a AUTO-06, TEST-01)
+  if (!hasGRP01) {
+    let autoStage = Object.values(ws.stages).find(
+      (s) =>
+        !s.archivedAt &&
+        s.sprintId === sprintId &&
+        (s.title.toUpperCase().includes("AUTOMAÇÕES") ||
+          s.title.toUpperCase().includes("CAPTAÇÃO"))
+    );
+
+    if (!autoStage) {
+      const autoStageId = newId();
+      const maxPos = Math.max(
+        0,
+        ...Object.values(ws.stages)
+          .filter((s) => !s.archivedAt && s.sprintId === sprintId)
+          .map((s) => s.position)
+      );
+      autoStage = {
+        ...base(ctx),
+        id: autoStageId,
+        sprintId,
+        title: "ETAPA 04 — GRUPO DE CAPTAÇÃO & AUTOMAÇÕES",
+        position: maxPos + 1,
+      };
+      ws.stages[autoStageId] = autoStage;
+    } else {
+      if (!autoStage.title.includes("GRUPO DE CAPTAÇÃO")) {
+        autoStage.title = autoStage.title.replace(
+          "AUTOMAÇÕES",
+          "GRUPO DE CAPTAÇÃO & AUTOMAÇÕES"
+        );
+      }
+    }
+
+    const startTaskPos = Object.values(ws.tasks).filter(
+      (t) => !t.archivedAt && t.stageId === autoStage.id
+    ).length;
+
+    const groupAndAutoTasks = [
+      {
+        title: "GRP-01 — CAPA DO GRUPO",
+        priority: "P1" as const,
+        complexity: "low" as const,
+        financialImpact: false,
+        durationMinutes: 90,
+        subtasks: [
+          "Definir briefing da capa.",
+          "⏳ Atribuir produção.",
+          "⏳ Receber arte.",
+          "Conferir legibilidade.",
+          "Revisar identidade.",
+          "⏳ Aprovar capa.",
+          "Aplicar imagem no grupo.",
+        ],
+      },
+      {
+        title: "GRP-02 — DESCRIÇÃO DO GRUPO",
+        priority: "P1" as const,
+        complexity: "low" as const,
+        financialImpact: false,
+        durationMinutes: 60,
+        subtasks: [
+          "Definir objetivo do grupo.",
+          "Criar descrição.",
+          "Criar orientação inicial.",
+          "Revisar CTA.",
+          "⏳ Aprovar descrição.",
+          "Inserir descrição.",
+          "Conferir exibição.",
+        ],
+      },
+      {
+        title: "GRP-03 — SEQUÊNCIA DE COPIES",
+        priority: "P0" as const,
+        complexity: "high" as const,
+        financialImpact: true,
+        durationMinutes: 240,
+        subtasks: [
+          "Criar copy de boas-vindas.",
+          "Criar copy de contextualização.",
+          "Criar copy da manhã — 08h00.",
+          "Criar levantada de mão da manhã.",
+          "Criar copy de prova do meio do dia.",
+          "Criar levantada de mão do meio do dia.",
+          "Criar copy do final do dia.",
+          "Criar levantada de mão do final do dia.",
+          "Revisar sequência.",
+          "⏳ Aprovar copies.",
+          "Salvar textos.",
+        ],
+      },
+      {
+        title: "GRP-04 — SEQUÊNCIA DE VÍDEOS",
+        priority: "P0" as const,
+        complexity: "high" as const,
+        financialImpact: true,
+        durationMinutes: 300,
+        subtasks: [
+          "Criar script GRP-VID-01 — destaque da manhã.",
+          "Criar script GRP-VID-02 — prova/conteúdo do meio do dia.",
+          "Criar script GRP-VID-03 — conteúdo do final do dia.",
+          "Criar hook, corpo e CTA de cada vídeo.",
+          "⏳ Aprovar os três scripts.",
+          "⏳ Gravar vídeo 01.",
+          "⏳ Gravar vídeo 02.",
+          "⏳ Gravar vídeo 03.",
+          "⏳ Providenciar edição.",
+          "Conferir materiais.",
+          "⏳ Aprovar os arquivos.",
+          "Salvar links.",
+        ],
+      },
+      {
+        title: "AUTO-01 — ENTRADA NO GRUPO",
+        priority: "P0" as const,
+        complexity: "medium" as const,
+        financialImpact: true,
+        durationMinutes: 120,
+        subtasks: [
+          "Selecionar grupo.",
+          "Vincular copy de boas-vindas.",
+          "Configurar gatilho de entrada, quando suportado.",
+          "Vincular mensagem inicial.",
+          "Testar entrada.",
+          "Verificar recebimento.",
+          "Registrar resultado.",
+        ],
+      },
+      {
+        title: "AUTO-02 — MANHÃ: 08h00",
+        priority: "P0" as const,
+        complexity: "medium" as const,
+        financialImpact: true,
+        durationMinutes: 150,
+        subtasks: [
+          "Vincular copy da manhã.",
+          "Vincular vídeo de destaque GRP-VID-01.",
+          "Vincular CTA de interação.",
+          "Programar início para 08h00.",
+          "Configurar ordem dos três materiais conforme sequência aprovada.",
+          "Confirmar intervalos entre mensagens.",
+          "Testar recebimento da copy.",
+          "Testar recebimento do vídeo.",
+          "Testar reprodução.",
+          "Testar CTA.",
+          "Registrar aprovação do fluxo.",
+        ],
+      },
+      {
+        title: "AUTO-03 — MEIO DO DIA",
+        priority: "P1" as const,
+        complexity: "medium" as const,
+        financialImpact: true,
+        durationMinutes: 120,
+        subtasks: [
+          "⏳ Confirmar horário.",
+          "Registrar horário na tarefa.",
+          "Vincular copy de prova.",
+          "Vincular GRP-VID-02.",
+          "Vincular levantada de mão.",
+          "Configurar sequência aprovada.",
+          "Confirmar intervalos.",
+          "Programar envio.",
+          "Testar mensagem.",
+          "Testar vídeo.",
+          "Testar CTA.",
+          "Aprovar fluxo.",
+        ],
+      },
+      {
+        title: "AUTO-04 — FINAL DO DIA",
+        priority: "P1" as const,
+        complexity: "medium" as const,
+        financialImpact: true,
+        durationMinutes: 120,
+        subtasks: [
+          "⏳ Confirmar horário.",
+          "Registrar horário na tarefa.",
+          "Vincular copy final.",
+          "Vincular GRP-VID-03.",
+          "Vincular levantada de mão.",
+          "Configurar sequência aprovada.",
+          "Confirmar intervalos.",
+          "Programar envio.",
+          "Testar mensagem.",
+          "Testar vídeo.",
+          "Testar CTA.",
+          "Aprovar fluxo.",
+        ],
+      },
+      {
+        title: "AUTO-05 — PALAVRAS-CHAVE E INTERAÇÕES",
+        priority: "P1" as const,
+        complexity: "medium" as const,
+        financialImpact: true,
+        durationMinutes: 150,
+        subtasks: [
+          "Cadastrar palavra-chave.",
+          "Vincular resposta correspondente.",
+          "Definir condição de acionamento.",
+          "Configurar próximo passo comercial.",
+          "Configurar destino.",
+          "Testar gatilho.",
+          "Testar resposta.",
+          "Testar encaminhamento.",
+          "Aprovar fluxo.",
+        ],
+      },
+      {
+        title: "AUTO-06 — SAÍDA DO GRUPO",
+        priority: "P2" as const,
+        complexity: "low" as const,
+        financialImpact: false,
+        durationMinutes: 60,
+        subtasks: [
+          "Verificar suporte ao evento.",
+          "Configurar atualização de estado.",
+          "Vincular tratamento correspondente.",
+          "Evitar disparos indevidos.",
+          "Testar saída.",
+          "Validar estado final.",
+        ],
+      },
+      {
+        title: "TEST-01 — VALIDAR A OPERAÇÃO DO GRUPO",
+        priority: "P0" as const,
+        complexity: "high" as const,
+        financialImpact: true,
+        durationMinutes: 240,
+        subtasks: [
+          "Testar entrada.",
+          "Testar capa e descrição.",
+          "Testar copy de boas-vindas.",
+          "Testar fluxo 08h00.",
+          "Testar fluxo do meio do dia.",
+          "Testar fluxo do final do dia.",
+          "Testar os três vídeos.",
+          "Testar os três levantamentos de mão.",
+          "Testar palavras-chave.",
+          "Testar saída, quando suportada.",
+          "Registrar falhas.",
+          "Corrigir falhas.",
+          "Reexecutar testes afetados.",
+          "⏳ Obter aprovação final.",
+          "Liberar operação.",
+        ],
+      },
+    ];
+
+    groupAndAutoTasks.forEach((gt, idx) => {
+      const taskId = newId();
+      const task = makeTask(ctx, autoStage!.id, gt.title, startTaskPos + idx, {
+        priority: gt.priority,
+        complexity: gt.complexity,
+        financialImpact: gt.financialImpact,
+        durationMinutes: gt.durationMinutes,
+        durationSource: "fixed",
+        status: "pending",
+      });
+      ws.tasks[taskId] = task;
+
+      gt.subtasks.forEach((stTitle, stIdx) => {
+        const subtaskId = newId();
+        ws.subtasks[subtaskId] = makeSubtask(ctx, taskId, stTitle, stIdx);
+      });
+    });
+
+    log(
+      ws,
+      ctx,
+      "reconcile",
+      "stage",
+      autoStage.id,
+      "Entregáveis GRP-01..04 e fluxos AUTO-01..06 reconciliados"
+    );
+    changed = true;
+  }
+
+  // 3. Sincronizar status de preenchimento das subtarefas do Manual de Marca
+  if (ws.brandManual && ws.brandManual.fields) {
+    const fields = ws.brandManual.fields;
+    const subtasks = Object.values(ws.subtasks).filter((s) => !s.archivedAt);
+
+    subtasks.forEach((st) => {
+      const match = st.title.match(/(POS|ALM|ICP)-0(\d)/i);
+      if (match) {
+        const prefix = match[1].toLowerCase();
+        const num = match[2];
+        const fieldId = `${prefix}_0${num}`;
+        const field = fields.find((f) => f.id === fieldId);
+        if (field && (field.response || "").trim().length > 0) {
+          if (!st.done) {
+            st.done = true;
+            st.doneAt = ctx.nowIso;
+            changed = true;
+          }
+        }
+      }
+    });
+  }
+
+  if (changed) {
+    touch(ws.project, ctx);
+  }
+
+  return changed;
+}
+
 export type { ScheduleRevision };

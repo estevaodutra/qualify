@@ -125,7 +125,7 @@ const ICP_22_OUTPUT_KEYS = [
 ];
 
 export const BrandManualView: React.FC = () => {
-  const { workspace, mutate } = useSprintOSStore();
+  const { workspace, mutate, activeBrandManualModuleId, focusedBrandManualFieldId } = useSprintOSStore();
   const { user } = useAuth();
 
   // Módulo ativo: posicionamento | alma_copy | raio_x_icp | copy_ads
@@ -134,6 +134,30 @@ export const BrandManualView: React.FC = () => {
   // Módulo 03 - Navegação guiada do Raio X do ICP
   const [icpStepIndex, setIcpStepIndex] = useState<number>(0);
   const [icpMode, setIcpMode] = useState<"guided" | "all">("guided");
+
+  // Sincronização e rolagem direta para a pergunta selecionada (AJ-019)
+  useEffect(() => {
+    if (activeBrandManualModuleId) {
+      setActiveModuleId(activeBrandManualModuleId);
+    }
+    if (focusedBrandManualFieldId) {
+      if (activeBrandManualModuleId === "raio_x_icp") {
+        if (focusedBrandManualFieldId === "icp_01") setIcpStepIndex(0);
+        else if (focusedBrandManualFieldId === "icp_02") setIcpStepIndex(1);
+        else if (focusedBrandManualFieldId === "icp_03") setIcpStepIndex(2);
+      }
+      setTimeout(() => {
+        const el = document.getElementById(`brand-field-${focusedBrandManualFieldId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          el.classList.add("ring-2", "ring-primary", "ring-offset-2");
+          setTimeout(() => {
+            el.classList.remove("ring-2", "ring-primary", "ring-offset-2");
+          }, 3000);
+        }
+      }, 250);
+    }
+  }, [activeBrandManualModuleId, focusedBrandManualFieldId]);
 
   // Estados dos modais
   const [isFieldModalOpen, setIsFieldModalOpen] = useState(false);
@@ -1054,6 +1078,7 @@ export const BrandManualView: React.FC = () => {
                       setDraggedFieldId(null);
                       setDragOverFieldId(null);
                     }}
+                    id={`brand-field-${field.id}`}
                     className={`bg-card border rounded-2xl p-5 shadow-xs transition-all ${
                       dragOverFieldId === field.id ? "border-primary ring-2 ring-primary/20" : "border-border"
                     } hover:border-border/80`}
@@ -1360,7 +1385,7 @@ export const BrandManualView: React.FC = () => {
                   const isRecording = recordingFieldId === currentField.id;
 
                   return (
-                    <div className="space-y-4">
+                    <div id={`brand-field-${currentField.id}`} className="space-y-4">
                       <div>
                         <h3 className="text-base font-bold text-foreground leading-snug">
                           {currentField.title}
@@ -1458,7 +1483,11 @@ export const BrandManualView: React.FC = () => {
                   const isRecording = recordingFieldId === field.id;
 
                   return (
-                    <div key={field.id} className="bg-card border border-border rounded-2xl p-5 shadow-xs space-y-3">
+                    <div
+                      id={`brand-field-${field.id}`}
+                      key={field.id}
+                      className="bg-card border border-border rounded-2xl p-5 shadow-xs space-y-3"
+                    >
                       <div className="flex items-start justify-between">
                         <div>
                           <span className="text-[10px] font-mono font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">

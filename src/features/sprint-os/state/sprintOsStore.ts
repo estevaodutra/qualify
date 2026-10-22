@@ -80,6 +80,7 @@ import {
   updateHoursCalculator,
   updateAdsCalculator,
   createBlankWorkspace,
+  reconcileWorkspaceWithAJ019,
 } from "../domain/ops";
 import {
   activateSprint,
@@ -259,6 +260,11 @@ interface SprintOSState {
   toggleSubtaskAction: (subtaskId: ID, done: boolean, actorName?: string) => Promise<void>;
   stepSubtaskCountAction: (subtaskId: ID, delta: 1 | -1, actorName?: string) => Promise<void>;
   acknowledgeAction: (taskId: ID, memberId: ID, actorName?: string) => Promise<void>;
+
+  // Brand Manual Sync & Navigation (AJ-019)
+  activeBrandManualModuleId: string | null;
+  focusedBrandManualFieldId: string | null;
+  setActiveBrandManualTarget: (moduleId: string, fieldId?: string | null) => void;
 }
 
 export const useSprintOSStore = create<SprintOSState>((set, get) => ({
@@ -292,6 +298,18 @@ export const useSprintOSStore = create<SprintOSState>((set, get) => ({
   isCreateModalOpen: false,
   isEditTemplateModalOpen: false,
   editingTemplateId: null,
+
+  // Brand Manual Navigation Target (AJ-019)
+  activeBrandManualModuleId: null,
+  focusedBrandManualFieldId: null,
+  setActiveBrandManualTarget: (moduleId, fieldId = null) => {
+    set({
+      activeTab: "brand_manual",
+      isTaskModalOpen: false,
+      activeBrandManualModuleId: moduleId,
+      focusedBrandManualFieldId: fieldId,
+    });
+  },
 
   // Cronômetro / Pomodoro
   activeTimer: null,
@@ -389,6 +407,13 @@ export const useSprintOSStore = create<SprintOSState>((set, get) => ({
     set({ isLoading: true });
     try {
       const { workspace, version } = await SprintOSRepository.loadWorkspace(companyId, id);
+
+      // Reconciliar workspace com os entregáveis e tarefas do AJ-019 se necessário
+      const changed = reconcileWorkspaceWithAJ019(workspace, { actorName, nowIso: new Date().toISOString() });
+      if (changed) {
+        SprintOSRepository.saveWorkspace(workspace, version, companyId, actorName).catch(console.warn);
+      }
+
       const activeSprint =
         Object.values(workspace.sprints || {}).find((s) => !s.archivedAt && s.status === "active") ||
         Object.values(workspace.sprints || {})[0];
@@ -396,7 +421,7 @@ export const useSprintOSStore = create<SprintOSState>((set, get) => ({
       set({
         activeWorkspaceId: id,
         workspace,
-        version,
+        version: changed ? version + 1 : version,
         activeSprintId: activeSprint ? activeSprint.id : null,
         isLoading: false,
       });

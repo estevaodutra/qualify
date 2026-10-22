@@ -7,7 +7,7 @@
  * Aplica regras estritas de transição (ex: impede conclusão com subtarefas obrigatórias pendentes).
  */
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Clock,
   User,
@@ -21,7 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSprintOSStore } from "../../state/sprintOsStore";
-import { sprintTasks, subtasksOf, updateTask } from "../../domain/ops";
+import { sprintTasks, subtasksOf, updateTask, reconcileWorkspaceWithAJ019 } from "../../domain/ops";
 import { PRIORITY_LABEL, IMPACT_FLAG_CONFIG, type TaskStatus, type Task } from "../../domain/types";
 import { fmtDateTime, fmtMinutes } from "../../scheduler/time";
 
@@ -111,6 +111,20 @@ export const KanbanView: React.FC = () => {
     }
     setEditingTaskId(null);
   };
+
+  // AJ-019: Auto-reconciliação do workspace se faltar IM-01 ou fluxos do Grupo de Captação
+  useEffect(() => {
+    if (workspace && activeSprintId) {
+      const live = Object.values(workspace.tasks || {}).filter((t) => !t.archivedAt);
+      const hasIM01 = live.some((t) => t.title.includes("IM-01"));
+      const hasGRP01 = live.some((t) => t.title.includes("GRP-01") || t.title.includes("AUTO-01"));
+      if (!hasIM01 || !hasGRP01) {
+        mutate((ws, ctx) => {
+          reconcileWorkspaceWithAJ019(ws, ctx);
+        });
+      }
+    }
+  }, [workspace?.project?.id, activeSprintId]);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 min-h-[600px]">
@@ -247,6 +261,99 @@ export const KanbanView: React.FC = () => {
                           </span>
                         </div>
                       )}
+
+                      {/* AJ-019: Badges de Horários, Gatilhos e Sincronização do Manual de Marca */}
+                      {(() => {
+                        const titleUpper = task.title.toUpperCase();
+                        const bmFields = workspace.brandManual?.fields || [];
+                        const badges: React.ReactNode[] = [];
+
+                        // 1. Horários & Gatilhos Operacionais
+                        if (titleUpper.includes("08H00") || titleUpper.includes("08:00")) {
+                          badges.push(
+                            <Badge key="time-08" className="bg-sky-500/15 text-sky-600 dark:text-sky-300 border-sky-500/30 text-[9px] font-mono py-0 px-1.5 gap-1">
+                              🕒 08h00
+                            </Badge>
+                          );
+                        } else if (titleUpper.includes("A CONFIRMAR") || (titleUpper.includes("HORÁRIO") && titleUpper.includes("CONFIRMAR"))) {
+                          badges.push(
+                            <Badge key="time-pending" className="bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30 text-[9px] font-mono py-0 px-1.5 gap-1">
+                              ⏳ Horário a confirmar
+                            </Badge>
+                          );
+                        }
+
+                        if (titleUpper.includes("EVENTO: ENTRADA") || titleUpper.includes("ENTRADA NO GRUPO") || titleUpper.includes("AUTO-01")) {
+                          badges.push(
+                            <Badge key="trig-entry" className="bg-purple-500/15 text-purple-600 dark:text-purple-300 border-purple-500/30 text-[9px] py-0 px-1.5 gap-1">
+                              ⚡ Evento: Entrada
+                            </Badge>
+                          );
+                        } else if (titleUpper.includes("PALAVRA-CHAVE") || titleUpper.includes("AUTO-05")) {
+                          badges.push(
+                            <Badge key="trig-kw" className="bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 border-indigo-500/30 text-[9px] py-0 px-1.5 gap-1">
+                              ⚡ Gatilho: Palavra-chave
+                            </Badge>
+                          );
+                        } else if (titleUpper.includes("SAÍDA DO GRUPO") || titleUpper.includes("AUTO-06")) {
+                          badges.push(
+                            <Badge key="trig-exit" className="bg-rose-500/15 text-rose-600 dark:text-rose-300 border-rose-500/30 text-[9px] py-0 px-1.5 gap-1">
+                              ⚡ Gatilho: Saída
+                            </Badge>
+                          );
+                        }
+
+                        // 2. Sincronização em Tempo Real com Manual de Marca 7D
+                        if (titleUpper.includes("IM-01") || titleUpper.includes("POSICIONAMENTO")) {
+                          const posFields = bmFields.filter((f) => f.moduleId === "posicionamento" && !f.archived && !f.removed);
+                          const answered = posFields.filter((f) => (f.response || "").trim().length > 0).length;
+                          const total = posFields.length || 4;
+                          badges.push(
+                            <Badge key="bm-pos" className={`text-[9px] font-bold py-0 px-1.5 gap-1 ${answered >= total ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30" : "bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30"}`}>
+                              {answered >= total ? "✓" : "⏳"} {answered}/{total} respostas
+                            </Badge>
+                          );
+                        } else if (titleUpper.includes("IM-02") || titleUpper.includes("ALMA DA COPY")) {
+                          const almFields = bmFields.filter((f) => f.moduleId === "alma_copy" && !f.archived && !f.removed);
+                          const answered = almFields.filter((f) => (f.response || "").trim().length > 0).length;
+                          const total = almFields.length || 3;
+                          badges.push(
+                            <Badge key="bm-alm" className={`text-[9px] font-bold py-0 px-1.5 gap-1 ${answered >= total ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30" : "bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30"}`}>
+                              {answered >= total ? "✓" : "⏳"} {answered}/{total} respostas
+                            </Badge>
+                          );
+                        } else if (titleUpper.includes("IM-03") || titleUpper.includes("RAIO X DO ICP")) {
+                          const icpFields = bmFields.filter((f) => f.moduleId === "raio_x_icp" && !f.archived && !f.removed);
+                          const answered = icpFields.filter((f) => (f.response || "").trim().length > 0).length;
+                          const total = icpFields.length || 3;
+                          badges.push(
+                            <Badge key="bm-icp" className={`text-[9px] font-bold py-0 px-1.5 gap-1 ${answered >= total ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30" : "bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30"}`}>
+                              {answered >= total ? "✓" : "⏳"} {answered}/{total} respostas
+                            </Badge>
+                          );
+                        } else if (titleUpper.includes("IM-04") || titleUpper.includes("COPY ADS")) {
+                          const approved = (workspace.brandManual?.copyAds || []).filter((c) => c.status === "approved").length;
+                          badges.push(
+                            <Badge key="bm-ads" className={`text-[9px] font-bold py-0 px-1.5 gap-1 ${approved >= 10 ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30" : "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 border-indigo-500/30"}`}>
+                              📢 {approved}/10 aprovadas
+                            </Badge>
+                          );
+                        } else if (titleUpper.includes("IM-05") || titleUpper.includes("MASTER PROMPT")) {
+                          const hasMaster = Boolean(workspace.brandManual?.masterPrompt?.trim());
+                          badges.push(
+                            <Badge key="bm-prompt" className={`text-[9px] font-bold py-0 px-1.5 gap-1 ${hasMaster ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30" : "bg-muted text-muted-foreground border-border"}`}>
+                              📑 Master Prompt {hasMaster ? "Consolidado" : "Pendente"}
+                            </Badge>
+                          );
+                        }
+
+                        if (badges.length === 0) return null;
+                        return (
+                          <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
+                            {badges}
+                          </div>
+                        );
+                      })()}
 
                       {/* Rodapé do Card: Responsável, Horas e Checklists */}
                       <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-2 border-t border-border">
