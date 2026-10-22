@@ -246,7 +246,72 @@ export const ModularDashboard: React.FC = () => {
 
     const storedMetrics = workspace.mediaDistribution?.[channel] || {};
 
-    // Seguidores
+    // 1. Reels
+    const pubReels = filteredPubs.filter((p) => p.type === "reels").length;
+    const unitReels = (storedMetrics.unitMarkers || [])
+      .filter((m) => m.metric === "reels" || (m.metric === "posts" && m.formato?.toLowerCase().includes("reel")))
+      .reduce((sum, m) => sum + m.amount, 0);
+    const baseReels =
+      period === "today"
+        ? (storedMetrics.reelsToday ?? 0)
+        : period === "7d"
+        ? (storedMetrics.reels7d ?? 0)
+        : (storedMetrics.reels30d ?? 0);
+    const reels = baseReels + pubReels + unitReels;
+
+    // 2. Carrossel
+    const pubCarrossel = filteredPubs.filter((p) => p.type === "carousel").length;
+    const unitCarrossel = (storedMetrics.unitMarkers || [])
+      .filter((m) => m.metric === "carrossel" || (m.metric === "posts" && m.formato?.toLowerCase().includes("carrossel")))
+      .reduce((sum, m) => sum + m.amount, 0);
+    const baseCarrossel =
+      period === "today"
+        ? (storedMetrics.carrosselToday ?? 0)
+        : period === "7d"
+        ? (storedMetrics.carrossel7d ?? 0)
+        : (storedMetrics.carrossel30d ?? 0);
+    const carrossel = baseCarrossel + pubCarrossel + unitCarrossel;
+
+    // 3. Visualizações Stories
+    const pubStories = filteredPubs.filter((p) => p.type === "stories").reduce((acc, p) => acc + (p.views || 0), 0);
+    const unitStories = (storedMetrics.unitMarkers || [])
+      .filter(
+        (m) =>
+          m.metric === "stories" ||
+          (m.metric === "views" &&
+            (m.formato?.toLowerCase().includes("stori") || m.formato?.toLowerCase().includes("story")))
+      )
+      .reduce((sum, m) => sum + m.amount, 0);
+    const baseStories =
+      period === "today"
+        ? (storedMetrics.storiesToday ?? 0)
+        : period === "7d"
+        ? (storedMetrics.stories7d ?? 0)
+        : (storedMetrics.stories30d ?? 0);
+    const stories = baseStories + pubStories + unitStories;
+
+    // 4. Post Estático / Posts
+    const pubPosts = filteredPubs.filter(
+      (p) => p.type === "post" || (!p.type && channel === "instagram")
+    ).length;
+    const unitPosts = (storedMetrics.unitMarkers || [])
+      .filter(
+        (m) =>
+          m.metric === "posts" &&
+          (!m.formato ||
+            m.formato.toLowerCase().includes("post") ||
+            m.formato.toLowerCase().includes("estát"))
+      )
+      .reduce((sum, m) => sum + m.amount, 0);
+    const basePosts =
+      period === "today"
+        ? (storedMetrics.postsToday ?? 0)
+        : period === "7d"
+        ? (storedMetrics.posts7d ?? (channel === "instagram" ? workspace.contentMetrics?.postsPublished : 0) ?? 0)
+        : (storedMetrics.posts30d ?? (channel === "instagram" ? workspace.contentMetrics?.postsPublished : 0) ?? 0);
+    const posts = basePosts + pubPosts + unitPosts;
+
+    // Seguidores (compatibilidade)
     const baseFollowers =
       period === "today"
         ? (storedMetrics.followersToday ?? (channel === "instagram" ? workspace.contentMetrics?.followersGainToday : 0) ?? 0)
@@ -260,18 +325,7 @@ export const ModularDashboard: React.FC = () => {
 
     const followers = baseFollowers + unitFollowers;
 
-    // Posts
-    const pubPosts = filteredPubs.length;
-    const unitPosts = (storedMetrics.unitMarkers || [])
-      .filter((m) => m.metric === "posts")
-      .reduce((sum, m) => sum + m.amount, 0);
-
-    const posts =
-      channel === "instagram" && pubPosts === 0 && period === "30d"
-        ? (workspace.contentMetrics?.postsPublished || 0) + unitPosts
-        : pubPosts + unitPosts;
-
-    // Views
+    // Views gerais
     const pubViews = filteredPubs.reduce((acc, p) => acc + (p.views || 0), 0);
     const unitViews = (storedMetrics.unitMarkers || [])
       .filter((m) => m.metric === "views")
@@ -286,8 +340,11 @@ export const ModularDashboard: React.FC = () => {
 
     return {
       period,
-      followers,
+      reels,
+      carrossel,
+      stories,
       posts,
+      followers,
       views,
       totalPubsCount: channelPubs.length,
       markersCount: (storedMetrics.unitMarkers || []).length,
@@ -300,17 +357,18 @@ export const ModularDashboard: React.FC = () => {
   // -------------------------------------------------------------
   const handleOpenUnitMarker = (
     channel: "instagram" | "tiktok" | "youtube",
-    metric: "followers" | "posts" | "views",
-    metricLabel: string
+    metric: string,
+    metricLabel: string,
+    defaultFormato?: string
   ) => {
-    setUnitMarkerModal({ open: true, channel, metric, metricLabel });
-    setMarkerAmountInput(metric === "views" ? "" : "1");
+    setUnitMarkerModal({ open: true, channel, metric: metric as any, metricLabel });
+    setMarkerAmountInput(metric === "views" || metric === "stories" ? "" : "1");
     setMarkerDateInput(new Date().toISOString().slice(0, 10));
     setMarkerNoteInput("");
     setMarkerHookInput("");
     setMarkerCorpoInput("");
     setMarkerCtaInput("");
-    setMarkerFormatoInput("");
+    setMarkerFormatoInput(defaultFormato || "");
   };
 
   const handleConfirmUnitMarker = () => {
@@ -318,9 +376,11 @@ export const ModularDashboard: React.FC = () => {
     const { channel, metric } = unitMarkerModal;
 
     let amount = 1;
-    if (metric === "views") {
-      amount = parseInt(markerAmountInput, 10);
-      if (isNaN(amount) || amount === 0) {
+    if (metric === "views" || metric === "stories") {
+      const parsed = parseInt(markerAmountInput, 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        amount = parsed;
+      } else if (metric === "views") {
         toast.error("Informe a quantidade de visualizações.");
         return;
       }
@@ -331,7 +391,7 @@ export const ModularDashboard: React.FC = () => {
 
     const newMarker: MediaUnitMarker = {
       id: `um-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      metric,
+      metric: metric as any,
       amount,
       date: markerDateInput,
       note: markerNoteInput.trim() || undefined,
@@ -372,7 +432,8 @@ export const ModularDashboard: React.FC = () => {
   // Campo variável inline: digita o número e ao dar Enter, soma instantaneamente ao valor fixo registrado
   const handleAddVariable = (
     channel: "instagram" | "tiktok" | "youtube",
-    metric: "followers" | "posts" | "views"
+    metric: string,
+    formatoDefault?: string
   ) => {
     const key = `${channel}_${metric}`;
     const raw = varInputs[key]?.trim();
@@ -382,12 +443,23 @@ export const ModularDashboard: React.FC = () => {
       return;
     }
 
+    const defaultFormatName =
+      formatoDefault ||
+      (metric === "reels"
+        ? "Reels"
+        : metric === "carrossel"
+        ? "Carrossel"
+        : metric === "stories"
+        ? "Stories"
+        : "Post");
+
     const newMarker: MediaUnitMarker = {
       id: `um-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      metric,
+      metric: metric as any,
       amount,
       date: new Date().toISOString().slice(0, 10),
       note: "Marcação via campo variável (Enter)",
+      formato: defaultFormatName,
       createdAt: new Date().toISOString(),
     };
 
@@ -399,7 +471,7 @@ export const ModularDashboard: React.FC = () => {
     });
 
     setVarInputs((prev) => ({ ...prev, [key]: "" }));
-    toast.success(`+${amount} somado ao valor fixo registrado de ${channel.toUpperCase()}!`);
+    toast.success(`+${amount} somado ao registro fixo de ${channel.toUpperCase()}!`);
   };
 
   const formatFixoRegistrado = (val: number, isFollowers = false) => {
@@ -932,11 +1004,505 @@ export const ModularDashboard: React.FC = () => {
     const ig = getChannelMetrics("instagram");
     const tt = getChannelMetrics("tiktok");
     const yt = getChannelMetrics("youtube");
-    const allFollowers = ig.followers + tt.followers + yt.followers;
+
+    const allReels = ig.reels + tt.reels + yt.reels;
+    const allCarrossel = ig.carrossel + tt.carrossel + yt.carrossel;
+    const allStories = ig.stories + tt.stories + yt.stories;
     const allPosts = ig.posts + tt.posts + yt.posts;
+    const allFollowers = ig.followers + tt.followers + yt.followers;
     const allViews = ig.views + tt.views + yt.views;
 
-    // Seguidores / Inscritos
+    // 1. REELS (▶️ Reels)
+    if (card.id === "dist_reels" || /reel/i.test(card.title || card.id)) {
+      if (mediaFilter === "all") {
+        return (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-1 flex-wrap">
+              <div className="flex flex-col">
+                <span className="text-2xl font-black font-mono tracking-tight text-foreground leading-none">
+                  {allReels}
+                </span>
+                <span className="text-[8px] uppercase tracking-wider text-muted-foreground font-bold leading-tight mt-0.5 whitespace-nowrap">
+                  Total Geral (Todas as Redes)
+                </span>
+              </div>
+              <div className="flex items-center gap-1 flex-wrap">
+                <Badge variant="outline" className="text-[9px] font-bold text-pink-600 border-pink-500/30">
+                  📸 +{ig.reels}
+                </Badge>
+                <Badge variant="outline" className="text-[9px] font-bold text-cyan-600 border-cyan-500/30">
+                  🎵 +{tt.reels}
+                </Badge>
+                <Badge variant="outline" className="text-[9px] font-bold text-red-600 border-red-500/30">
+                  ▶️ +{yt.reels}
+                </Badge>
+              </div>
+            </div>
+            <div className="text-[11px] text-muted-foreground truncate">
+              Reels e vídeos verticais somados
+            </div>
+          </div>
+        );
+      }
+
+      const key = `${activeMediaChannel}_reels`;
+      const lastMarker = [...(workspace.mediaDistribution?.[activeMediaChannel]?.unitMarkers || [])]
+        .reverse()
+        .find((m) => m.metric === "reels" || (m.formato?.toLowerCase().includes("reel")));
+
+      return (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-1 flex-wrap">
+            {/* Bloco: (campo variavel) - (valor fixo registrado 00) */}
+            <div className="flex items-center gap-1.5">
+              <div className="relative flex items-center">
+                <span className="absolute left-1.5 text-[10px] font-bold text-muted-foreground select-none pointer-events-none">+</span>
+                <input
+                  type="number"
+                  placeholder="0"
+                  value={varInputs[key] || ""}
+                  onChange={(e) => setVarInputs((prev) => ({ ...prev, [key]: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddVariable(activeMediaChannel, "reels", "Reels");
+                    }
+                  }}
+                  className="w-13 h-7 pl-4 pr-1 text-xs font-mono font-bold bg-background border border-input rounded-lg focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                  title="Digite a quantidade e dê Enter para somar ao fixo registrado"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleAddVariable(activeMediaChannel, "reels", "Reels")}
+                  disabled={!varInputs[key]}
+                  className="ml-1 h-7 px-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-xs font-bold transition-all disabled:opacity-20 disabled:pointer-events-none"
+                  title="Somar ao registro fixo (ou dê Enter)"
+                >
+                  ↵
+                </button>
+              </div>
+
+              <span className="text-muted-foreground/60 font-black text-xs select-none">—</span>
+
+              <div className="flex flex-col shrink-0">
+                <span className="text-xl font-black font-mono tracking-tight text-foreground leading-none">
+                  {formatFixoRegistrado(metrics.reels)}
+                </span>
+                <span className="text-[8px] uppercase tracking-wider text-muted-foreground font-bold leading-tight mt-0.5 whitespace-nowrap">
+                  Fixo Registrado
+                </span>
+              </div>
+            </div>
+
+            {/* Botão de Marcar Hook - Corpo - CTA - Formato */}
+            <button
+              onClick={() => handleOpenUnitMarker(activeMediaChannel, "reels", "Reels", "Reels")}
+              className="text-[9px] bg-primary/10 hover:bg-primary/20 text-primary px-1.5 py-0.5 rounded-lg font-bold flex items-center gap-0.5 ml-auto"
+              title="Marcar Hook - Corpo - CTA - Formato"
+            >
+              <Sparkles className="h-2.5 w-2.5" />
+              <span>Hook/CTA</span>
+            </button>
+          </div>
+
+          {/* Destaque do Último Hook e CTA registrado */}
+          {lastMarker && (lastMarker.hook || lastMarker.cta) && (
+            <div className="p-1 px-1.5 rounded-md bg-muted/60 border border-border/80 text-[10px] space-y-0.5 truncate">
+              {lastMarker.formato && (
+                <span className="font-bold text-[9px] px-1 py-0.2 bg-primary/10 text-primary rounded mr-1 uppercase">
+                  {lastMarker.formato}
+                </span>
+              )}
+              {lastMarker.hook && (
+                <span className="text-foreground font-medium">
+                  <strong>Hook:</strong> "{lastMarker.hook}"
+                </span>
+              )}
+              {lastMarker.cta && (
+                <span className="text-muted-foreground ml-1">
+                  • <strong>CTA:</strong> {lastMarker.cta}
+                </span>
+              )}
+            </div>
+          )}
+
+          <div className="text-[11px] text-muted-foreground truncate">
+            Reels publicados no período ({metrics.period === "today" ? "Hoje" : metrics.period === "7d" ? "7 dias" : "30 dias"})
+          </div>
+        </div>
+      );
+    }
+
+    // 2. CARROSSEL (🎠 Carrossel)
+    if (card.id === "dist_carrossel" || /carrossel|carousel/i.test(card.title || card.id)) {
+      if (mediaFilter === "all") {
+        return (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-1 flex-wrap">
+              <div className="flex flex-col">
+                <span className="text-2xl font-black font-mono tracking-tight text-foreground leading-none">
+                  {allCarrossel}
+                </span>
+                <span className="text-[8px] uppercase tracking-wider text-muted-foreground font-bold leading-tight mt-0.5 whitespace-nowrap">
+                  Total Geral (Todas as Redes)
+                </span>
+              </div>
+              <div className="flex items-center gap-1 flex-wrap">
+                <Badge variant="outline" className="text-[9px] font-bold text-pink-600 border-pink-500/30">
+                  📸 +{ig.carrossel}
+                </Badge>
+                <Badge variant="outline" className="text-[9px] font-bold text-cyan-600 border-cyan-500/30">
+                  🎵 +{tt.carrossel}
+                </Badge>
+                <Badge variant="outline" className="text-[9px] font-bold text-red-600 border-red-500/30">
+                  ▶️ +{yt.carrossel}
+                </Badge>
+              </div>
+            </div>
+            <div className="text-[11px] text-muted-foreground truncate">
+              Carrosséis e sequências publicadas
+            </div>
+          </div>
+        );
+      }
+
+      const key = `${activeMediaChannel}_carrossel`;
+      const lastMarker = [...(workspace.mediaDistribution?.[activeMediaChannel]?.unitMarkers || [])]
+        .reverse()
+        .find((m) => m.metric === "carrossel" || (m.formato?.toLowerCase().includes("carrossel")));
+
+      return (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-1 flex-wrap">
+            {/* Bloco: (campo variavel) - (valor fixo registrado 00) */}
+            <div className="flex items-center gap-1.5">
+              <div className="relative flex items-center">
+                <span className="absolute left-1.5 text-[10px] font-bold text-muted-foreground select-none pointer-events-none">+</span>
+                <input
+                  type="number"
+                  placeholder="0"
+                  value={varInputs[key] || ""}
+                  onChange={(e) => setVarInputs((prev) => ({ ...prev, [key]: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddVariable(activeMediaChannel, "carrossel", "Carrossel");
+                    }
+                  }}
+                  className="w-13 h-7 pl-4 pr-1 text-xs font-mono font-bold bg-background border border-input rounded-lg focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                  title="Digite a quantidade e dê Enter para somar ao fixo registrado"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleAddVariable(activeMediaChannel, "carrossel", "Carrossel")}
+                  disabled={!varInputs[key]}
+                  className="ml-1 h-7 px-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-xs font-bold transition-all disabled:opacity-20 disabled:pointer-events-none"
+                  title="Somar ao registro fixo (ou dê Enter)"
+                >
+                  ↵
+                </button>
+              </div>
+
+              <span className="text-muted-foreground/60 font-black text-xs select-none">—</span>
+
+              <div className="flex flex-col shrink-0">
+                <span className="text-xl font-black font-mono tracking-tight text-foreground leading-none">
+                  {formatFixoRegistrado(metrics.carrossel)}
+                </span>
+                <span className="text-[8px] uppercase tracking-wider text-muted-foreground font-bold leading-tight mt-0.5 whitespace-nowrap">
+                  Fixo Registrado
+                </span>
+              </div>
+            </div>
+
+            {/* Botão de Marcar Hook - Corpo - CTA - Formato */}
+            <button
+              onClick={() => handleOpenUnitMarker(activeMediaChannel, "carrossel", "Carrossel", "Carrossel")}
+              className="text-[9px] bg-primary/10 hover:bg-primary/20 text-primary px-1.5 py-0.5 rounded-lg font-bold flex items-center gap-0.5 ml-auto"
+              title="Marcar Hook - Corpo - CTA - Formato"
+            >
+              <Sparkles className="h-2.5 w-2.5" />
+              <span>Hook/CTA</span>
+            </button>
+          </div>
+
+          {/* Destaque do Último Hook e CTA registrado */}
+          {lastMarker && (lastMarker.hook || lastMarker.cta) && (
+            <div className="p-1 px-1.5 rounded-md bg-muted/60 border border-border/80 text-[10px] space-y-0.5 truncate">
+              {lastMarker.formato && (
+                <span className="font-bold text-[9px] px-1 py-0.2 bg-primary/10 text-primary rounded mr-1 uppercase">
+                  {lastMarker.formato}
+                </span>
+              )}
+              {lastMarker.hook && (
+                <span className="text-foreground font-medium">
+                  <strong>Hook:</strong> "{lastMarker.hook}"
+                </span>
+              )}
+              {lastMarker.cta && (
+                <span className="text-muted-foreground ml-1">
+                  • <strong>CTA:</strong> {lastMarker.cta}
+                </span>
+              )}
+            </div>
+          )}
+
+          <div className="text-[11px] text-muted-foreground truncate">
+            Carrosséis publicados no período ({metrics.period === "today" ? "Hoje" : metrics.period === "7d" ? "7 dias" : "30 dias"})
+          </div>
+        </div>
+      );
+    }
+
+    // 3. VISUALIZAÇÕES STORIES (👁️ Visualizações Stories)
+    if (card.id === "dist_stories" || /stori/i.test(card.title || card.id)) {
+      if (mediaFilter === "all") {
+        return (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-1 flex-wrap">
+              <div className="flex flex-col">
+                <span className="text-2xl font-black font-mono tracking-tight text-foreground leading-none">
+                  {allStories.toLocaleString("pt-BR")}
+                </span>
+                <span className="text-[8px] uppercase tracking-wider text-muted-foreground font-bold leading-tight mt-0.5 whitespace-nowrap">
+                  Total Geral (Todas as Redes)
+                </span>
+              </div>
+              <div className="flex items-center gap-1 flex-wrap">
+                <Badge variant="outline" className="text-[9px] font-bold text-pink-600 border-pink-500/30">
+                  📸 +{ig.stories.toLocaleString("pt-BR")}
+                </Badge>
+                <Badge variant="outline" className="text-[9px] font-bold text-cyan-600 border-cyan-500/30">
+                  🎵 +{tt.stories.toLocaleString("pt-BR")}
+                </Badge>
+                <Badge variant="outline" className="text-[9px] font-bold text-red-600 border-red-500/30">
+                  ▶️ +{yt.stories.toLocaleString("pt-BR")}
+                </Badge>
+              </div>
+            </div>
+            <div className="text-[11px] text-muted-foreground truncate">
+              Visualizações de stories e efêmeros somadas
+            </div>
+          </div>
+        );
+      }
+
+      const key = `${activeMediaChannel}_stories`;
+      const lastMarker = [...(workspace.mediaDistribution?.[activeMediaChannel]?.unitMarkers || [])]
+        .reverse()
+        .find((m) => m.metric === "stories" || (m.formato?.toLowerCase().includes("stori")));
+
+      return (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-1 flex-wrap">
+            {/* Bloco: (campo variavel) - (valor fixo registrado 00) */}
+            <div className="flex items-center gap-1.5">
+              <div className="relative flex items-center">
+                <span className="absolute left-1.5 text-[10px] font-bold text-muted-foreground select-none pointer-events-none">+</span>
+                <input
+                  type="number"
+                  placeholder="0"
+                  value={varInputs[key] || ""}
+                  onChange={(e) => setVarInputs((prev) => ({ ...prev, [key]: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddVariable(activeMediaChannel, "stories", "Stories");
+                    }
+                  }}
+                  className="w-16 h-7 pl-4 pr-1 text-xs font-mono font-bold bg-background border border-input rounded-lg focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                  title="Digite a quantidade e dê Enter para somar ao fixo registrado"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleAddVariable(activeMediaChannel, "stories", "Stories")}
+                  disabled={!varInputs[key]}
+                  className="ml-1 h-7 px-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-xs font-bold transition-all disabled:opacity-20 disabled:pointer-events-none"
+                  title="Somar ao registro fixo (ou dê Enter)"
+                >
+                  ↵
+                </button>
+              </div>
+
+              <span className="text-muted-foreground/60 font-black text-xs select-none">—</span>
+
+              <div className="flex flex-col shrink-0">
+                <span className="text-xl font-black font-mono tracking-tight text-foreground leading-none">
+                  {formatFixoRegistrado(metrics.stories)}
+                </span>
+                <span className="text-[8px] uppercase tracking-wider text-muted-foreground font-bold leading-tight mt-0.5 whitespace-nowrap">
+                  Fixo Registrado
+                </span>
+              </div>
+            </div>
+
+            {/* Botão de Marcar Hook - Corpo - CTA - Formato */}
+            <button
+              onClick={() => handleOpenUnitMarker(activeMediaChannel, "stories", "Visualizações Stories", "Stories")}
+              className="text-[9px] bg-primary/10 hover:bg-primary/20 text-primary px-1.5 py-0.5 rounded-lg font-bold flex items-center gap-0.5 ml-auto"
+              title="Marcar Hook - Corpo - CTA - Formato"
+            >
+              <Sparkles className="h-2.5 w-2.5" />
+              <span>Hook/CTA</span>
+            </button>
+          </div>
+
+          {/* Destaque do Último Hook e CTA registrado */}
+          {lastMarker && (lastMarker.hook || lastMarker.cta) && (
+            <div className="p-1 px-1.5 rounded-md bg-muted/60 border border-border/80 text-[10px] space-y-0.5 truncate">
+              {lastMarker.formato && (
+                <span className="font-bold text-[9px] px-1 py-0.2 bg-primary/10 text-primary rounded mr-1 uppercase">
+                  {lastMarker.formato}
+                </span>
+              )}
+              {lastMarker.hook && (
+                <span className="text-foreground font-medium">
+                  <strong>Hook:</strong> "{lastMarker.hook}"
+                </span>
+              )}
+              {lastMarker.cta && (
+                <span className="text-muted-foreground ml-1">
+                  • <strong>CTA:</strong> {lastMarker.cta}
+                </span>
+              )}
+            </div>
+          )}
+
+          <div className="text-[11px] text-muted-foreground truncate">
+            Visualizações de stories no período ({metrics.period === "today" ? "Hoje" : metrics.period === "7d" ? "7 dias" : "30 dias"})
+          </div>
+        </div>
+      );
+    }
+
+    // 4. POST ESTÁTICO / POSTS (📸 Post)
+    if (
+      card.id === "dist_posts" ||
+      card.id === "dist_insta_posts" ||
+      card.id === "dist_tiktok_posts" ||
+      card.id === "dist_yt_posts" ||
+      /post/i.test(card.title || card.id)
+    ) {
+      if (mediaFilter === "all") {
+        return (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-1 flex-wrap">
+              <div className="flex flex-col">
+                <span className="text-2xl font-black font-mono tracking-tight text-foreground leading-none">
+                  {allPosts}
+                </span>
+                <span className="text-[8px] uppercase tracking-wider text-muted-foreground font-bold leading-tight mt-0.5 whitespace-nowrap">
+                  Total Geral (Todas as Redes)
+                </span>
+              </div>
+              <div className="flex items-center gap-1 flex-wrap">
+                <Badge variant="outline" className="text-[9px] font-bold text-pink-600 border-pink-500/30">
+                  📸 +{ig.posts}
+                </Badge>
+                <Badge variant="outline" className="text-[9px] font-bold text-cyan-600 border-cyan-500/30">
+                  🎵 +{tt.posts}
+                </Badge>
+                <Badge variant="outline" className="text-[9px] font-bold text-red-600 border-red-500/30">
+                  ▶️ +{yt.posts}
+                </Badge>
+              </div>
+            </div>
+            <div className="text-[11px] text-muted-foreground truncate">
+              Posts estáticos e fotos publicadas
+            </div>
+          </div>
+        );
+      }
+
+      const key = `${activeMediaChannel}_posts`;
+      const lastPostMarker = [...(workspace.mediaDistribution?.[activeMediaChannel]?.unitMarkers || [])]
+        .reverse()
+        .find((m) => m.metric === "posts" && (m.hook || m.formato || m.cta));
+
+      return (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-1 flex-wrap">
+            {/* Bloco: (campo variavel) - (valor fixo registrado 00) */}
+            <div className="flex items-center gap-1.5">
+              <div className="relative flex items-center">
+                <span className="absolute left-1.5 text-[10px] font-bold text-muted-foreground select-none pointer-events-none">+</span>
+                <input
+                  type="number"
+                  placeholder="0"
+                  value={varInputs[key] || ""}
+                  onChange={(e) => setVarInputs((prev) => ({ ...prev, [key]: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddVariable(activeMediaChannel, "posts", "Post Estático");
+                    }
+                  }}
+                  className="w-13 h-7 pl-4 pr-1 text-xs font-mono font-bold bg-background border border-input rounded-lg focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                  title="Digite a quantidade e dê Enter para somar ao fixo registrado"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleAddVariable(activeMediaChannel, "posts", "Post Estático")}
+                  disabled={!varInputs[key]}
+                  className="ml-1 h-7 px-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-xs font-bold transition-all disabled:opacity-20 disabled:pointer-events-none"
+                  title="Somar ao registro fixo (ou dê Enter)"
+                >
+                  ↵
+                </button>
+              </div>
+
+              <span className="text-muted-foreground/60 font-black text-xs select-none">—</span>
+
+              <div className="flex flex-col shrink-0">
+                <span className="text-xl font-black font-mono tracking-tight text-foreground leading-none">
+                  {formatFixoRegistrado(metrics.posts)}
+                </span>
+                <span className="text-[8px] uppercase tracking-wider text-muted-foreground font-bold leading-tight mt-0.5 whitespace-nowrap">
+                  Fixo Registrado
+                </span>
+              </div>
+            </div>
+
+            {/* Botão de Marcar Hook - Corpo - CTA - Formato */}
+            <button
+              onClick={() => handleOpenUnitMarker(activeMediaChannel, "posts", "Post Estático", "Post Estático")}
+              className="text-[9px] bg-primary/10 hover:bg-primary/20 text-primary px-1.5 py-0.5 rounded-lg font-bold flex items-center gap-0.5 ml-auto"
+              title="Marcar Hook - Corpo - CTA - Formato"
+            >
+              <Sparkles className="h-2.5 w-2.5" />
+              <span>Hook/CTA</span>
+            </button>
+          </div>
+
+          {/* Destaque do Último Hook e CTA registrado */}
+          {lastPostMarker && (lastPostMarker.hook || lastPostMarker.cta) && (
+            <div className="p-1 px-1.5 rounded-md bg-muted/60 border border-border/80 text-[10px] space-y-0.5 truncate">
+              {lastPostMarker.formato && (
+                <span className="font-bold text-[9px] px-1 py-0.2 bg-primary/10 text-primary rounded mr-1 uppercase">
+                  {lastPostMarker.formato}
+                </span>
+              )}
+              {lastPostMarker.hook && (
+                <span className="text-foreground font-medium">
+                  <strong>Hook:</strong> "{lastPostMarker.hook}"
+                </span>
+              )}
+              {lastPostMarker.cta && (
+                <span className="text-muted-foreground ml-1">
+                  • <strong>CTA:</strong> {lastPostMarker.cta}
+                </span>
+              )}
+            </div>
+          )}
+
+          <div className="text-[11px] text-muted-foreground truncate">
+            {activeMediaChannel === "youtube" || activeMediaChannel === "tiktok" ? "Vídeos publicados" : "Posts realizados"} no período
+          </div>
+        </div>
+      );
+    }
+
+    // Compatibilidade / Fallback para Seguidores
     if (
       card.id.includes("followers") ||
       card.id === "dist_followers" ||
@@ -979,7 +1545,6 @@ export const ModularDashboard: React.FC = () => {
       return (
         <div className="space-y-1.5">
           <div className="flex items-center justify-between gap-1 flex-wrap">
-            {/* Bloco: (campo variavel) - (valor fixo registrado 00) */}
             <div className="flex items-center gap-1.5">
               <div className="relative flex items-center">
                 <span className="absolute left-1.5 text-[10px] font-bold text-muted-foreground select-none pointer-events-none">+</span>
@@ -1022,133 +1587,6 @@ export const ModularDashboard: React.FC = () => {
           </div>
           <div className="text-[11px] text-muted-foreground truncate">
             {activeMediaChannel === "youtube" ? "Inscritos conquistados" : "Ganhos de perfil"} ({metrics.period === "today" ? "Hoje" : metrics.period === "7d" ? "7 dias" : "30 dias"})
-          </div>
-        </div>
-      );
-    }
-
-    // Posts / Vídeos (com Marcar Hook - Corpo - CTA - Formato)
-    if (
-      card.id.includes("posts") ||
-      card.id === "dist_posts" ||
-      card.id === "dist_insta_posts" ||
-      card.id === "dist_tiktok_posts" ||
-      card.id === "dist_yt_posts"
-    ) {
-      if (mediaFilter === "all") {
-        return (
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between gap-1 flex-wrap">
-              <div className="flex flex-col">
-                <span className="text-2xl font-black font-mono tracking-tight text-foreground leading-none">
-                  {allPosts}
-                </span>
-                <span className="text-[8px] uppercase tracking-wider text-muted-foreground font-bold leading-tight mt-0.5 whitespace-nowrap">
-                  Total Publicações
-                </span>
-              </div>
-              <div className="flex items-center gap-1 flex-wrap">
-                <Badge variant="outline" className="text-[9px] font-bold text-pink-600 border-pink-500/30">
-                  📸 {ig.posts} posts
-                </Badge>
-                <Badge variant="outline" className="text-[9px] font-bold text-cyan-600 border-cyan-500/30">
-                  🎵 {tt.posts} vídeos
-                </Badge>
-                <Badge variant="outline" className="text-[9px] font-bold text-red-600 border-red-500/30">
-                  ▶️ {yt.posts} vídeos
-                </Badge>
-              </div>
-            </div>
-            <div className="text-[11px] text-muted-foreground truncate">
-              Volume omnicanal publicado no período
-            </div>
-          </div>
-        );
-      }
-
-      const key = `${activeMediaChannel}_posts`;
-      const lastPostMarker = [...(workspace.mediaDistribution?.[activeMediaChannel]?.unitMarkers || [])]
-        .reverse()
-        .find((m) => m.metric === "posts" && (m.hook || m.formato || m.cta));
-
-      return (
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between gap-1 flex-wrap">
-            {/* Bloco: (campo variavel) - (valor fixo registrado 00) */}
-            <div className="flex items-center gap-1.5">
-              <div className="relative flex items-center">
-                <span className="absolute left-1.5 text-[10px] font-bold text-muted-foreground select-none pointer-events-none">+</span>
-                <input
-                  type="number"
-                  placeholder="0"
-                  value={varInputs[key] || ""}
-                  onChange={(e) => setVarInputs((prev) => ({ ...prev, [key]: e.target.value }))}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleAddVariable(activeMediaChannel, "posts");
-                    }
-                  }}
-                  className="w-13 h-7 pl-4 pr-1 text-xs font-mono font-bold bg-background border border-input rounded-lg focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
-                  title="Digite a quantidade e dê Enter para somar ao fixo registrado"
-                />
-                <button
-                  type="button"
-                  onClick={() => handleAddVariable(activeMediaChannel, "posts")}
-                  disabled={!varInputs[key]}
-                  className="ml-1 h-7 px-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-xs font-bold transition-all disabled:opacity-20 disabled:pointer-events-none"
-                  title="Somar ao registro fixo (ou dê Enter)"
-                >
-                  ↵
-                </button>
-              </div>
-
-              <span className="text-muted-foreground/60 font-black text-xs select-none">—</span>
-
-              <div className="flex flex-col shrink-0">
-                <span className="text-xl font-black font-mono tracking-tight text-foreground leading-none">
-                  {formatFixoRegistrado(metrics.posts)}
-                </span>
-                <span className="text-[8px] uppercase tracking-wider text-muted-foreground font-bold leading-tight mt-0.5 whitespace-nowrap">
-                  Fixo Registrado
-                </span>
-              </div>
-            </div>
-
-            {/* Botão de Marcar Hook - Corpo - CTA - Formato */}
-            <button
-              onClick={() => handleOpenUnitMarker(activeMediaChannel, "posts", activeMediaChannel === "youtube" ? "Vídeos / Shorts" : "Posts / Conteúdo")}
-              className="text-[9px] bg-primary/10 hover:bg-primary/20 text-primary px-1.5 py-0.5 rounded-lg font-bold flex items-center gap-0.5 ml-auto"
-              title="Marcar Hook - Corpo - CTA - Formato"
-            >
-              <Sparkles className="h-2.5 w-2.5" />
-              <span>Hook/CTA</span>
-            </button>
-          </div>
-
-          {/* Destaque do Último Hook e CTA registrado */}
-          {lastPostMarker && (lastPostMarker.hook || lastPostMarker.cta) && (
-            <div className="p-1 px-1.5 rounded-md bg-muted/60 border border-border/80 text-[10px] space-y-0.5 truncate">
-              {lastPostMarker.formato && (
-                <span className="font-bold text-[9px] px-1 py-0.2 bg-primary/10 text-primary rounded mr-1 uppercase">
-                  {lastPostMarker.formato}
-                </span>
-              )}
-              {lastPostMarker.hook && (
-                <span className="text-foreground font-medium">
-                  <strong>Hook:</strong> "{lastPostMarker.hook}"
-                </span>
-              )}
-              {lastPostMarker.cta && (
-                <span className="text-muted-foreground ml-1">
-                  • <strong>CTA:</strong> {lastPostMarker.cta}
-                </span>
-              )}
-            </div>
-          )}
-
-          <div className="text-[11px] text-muted-foreground truncate">
-            {activeMediaChannel === "youtube" || activeMediaChannel === "tiktok" ? "Vídeos publicados" : "Posts realizados"} no período
           </div>
         </div>
       );
@@ -1325,16 +1763,22 @@ export const ModularDashboard: React.FC = () => {
 
           const currentDistPeriod = distPeriods[mediaFilter] || distPeriods["instagram"] || "7d";
 
-          // Cards do bloco
-          const blockCards = isMediaBlock
-            ? [
-                { id: "dist_followers", blockId: block.id, title: mediaFilter === "youtube" ? "Novos Inscritos" : "Novos Seguidores", order: 0 },
-                { id: "dist_posts", blockId: block.id, title: mediaFilter === "youtube" || mediaFilter === "tiktok" ? "Vídeos Publicados" : "Posts Realizados", order: 1 },
-                { id: "dist_views", blockId: block.id, title: "Views", order: 2 },
-              ]
-            : (layout.cards || [])
-                .filter((c) => c.blockId === block.id && !c.archived && !c.removed)
-                .sort((a, b) => a.order - b.order);
+          // Cards do bloco (lidos diretamente do layout para permitir edição e persistência completa)
+          const blockCards = (layout.cards || [])
+            .filter((c) => c.blockId === block.id && !c.archived && !c.removed)
+            .sort((a, b) => a.order - b.order);
+
+          const finalBlockCards =
+            blockCards.length > 0
+              ? blockCards
+              : isMediaBlock
+              ? [
+                  { id: "dist_reels", blockId: block.id, title: "▶️ Reels", order: 0 },
+                  { id: "dist_carrossel", blockId: block.id, title: "🎠 Carrossel", order: 1 },
+                  { id: "dist_stories", blockId: block.id, title: "👁️ Visualizações Stories", order: 2 },
+                  { id: "dist_posts", blockId: block.id, title: "📸 Post", order: 3 },
+                ]
+              : [];
 
           return (
             <div
@@ -1579,10 +2023,12 @@ export const ModularDashboard: React.FC = () => {
                   className={`grid gap-2.5 ${
                     block.id === "infra"
                       ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6"
+                      : isMediaBlock
+                      ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
                       : "grid-cols-1 sm:grid-cols-3"
                   }`}
                 >
-                  {blockCards.map((card) => {
+                  {finalBlockCards.map((card) => {
                     const isDraggingCard = draggedCardId === card.id;
                     const isDragOverCard = dragOverCardId === card.id;
 
@@ -1745,7 +2191,7 @@ export const ModularDashboard: React.FC = () => {
                           )}
                         </div>
                         <div className="text-[10px] text-muted-foreground truncate">
-                          +{getChannelMetrics("instagram").followers} seg • {getChannelMetrics("instagram").posts} posts • {getChannelMetrics("instagram").views.toLocaleString("pt-BR")} views
+                          ▶️ {getChannelMetrics("instagram").reels} reels • 🎠 {getChannelMetrics("instagram").carrossel} carrossel • 👁️ {getChannelMetrics("instagram").stories.toLocaleString("pt-BR")} stories • 📸 {getChannelMetrics("instagram").posts} posts
                         </div>
                       </div>
                     </div>
@@ -1774,7 +2220,7 @@ export const ModularDashboard: React.FC = () => {
                           )}
                         </div>
                         <div className="text-[10px] text-muted-foreground truncate">
-                          +{getChannelMetrics("tiktok").followers} seg • {getChannelMetrics("tiktok").posts} vídeos • {getChannelMetrics("tiktok").views.toLocaleString("pt-BR")} views
+                          ▶️ {getChannelMetrics("tiktok").reels} vídeos • 🎠 {getChannelMetrics("tiktok").carrossel} carrossel • 👁️ {getChannelMetrics("tiktok").stories.toLocaleString("pt-BR")} stories • 📸 {getChannelMetrics("tiktok").posts} posts
                         </div>
                       </div>
                     </div>
@@ -1803,7 +2249,7 @@ export const ModularDashboard: React.FC = () => {
                           )}
                         </div>
                         <div className="text-[10px] text-muted-foreground truncate">
-                          +{getChannelMetrics("youtube").followers} insc • {getChannelMetrics("youtube").posts} vídeos • {getChannelMetrics("youtube").views.toLocaleString("pt-BR")} views
+                          ▶️ {getChannelMetrics("youtube").reels} shorts • 🎠 {getChannelMetrics("youtube").carrossel} posts • 👁️ {getChannelMetrics("youtube").stories.toLocaleString("pt-BR")} stories • 📸 {getChannelMetrics("youtube").posts} vídeos
                         </div>
                       </div>
                     </div>
@@ -1920,12 +2366,12 @@ export const ModularDashboard: React.FC = () => {
               />
             </div>
 
-            {/* Quantidade (apenas se for Views). Para posts e publicações, 'quantidade seguidor' é REMOVIDA conforme solicitado */}
-            {unitMarkerModal?.metric === "views" ? (
+            {/* Quantidade (apenas se for Views ou Stories). Para posts e publicações, 'quantidade seguidor' é REMOVIDA conforme solicitado */}
+            {unitMarkerModal?.metric === "views" || unitMarkerModal?.metric === "stories" ? (
               <div className="grid grid-cols-2 gap-2 pt-1">
                 <div>
                   <label className="text-[11px] font-bold text-muted-foreground block mb-1">
-                    Quantidade de Visualizações
+                    {unitMarkerModal?.metric === "stories" ? "Visualizações / Quantidade" : "Quantidade de Visualizações"}
                   </label>
                   <Input
                     type="number"

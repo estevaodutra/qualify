@@ -615,7 +615,7 @@ export interface WorkspaceSettings {
 
 export interface MediaUnitMarker {
   id: string;
-  metric: "followers" | "posts" | "views";
+  metric: "followers" | "posts" | "views" | "reels" | "carrossel" | "stories" | string;
   amount: number;
   date: string;
   note?: string;
@@ -636,6 +636,15 @@ export interface MediaChannelMetrics {
   viewsToday?: number;
   views7d?: number;
   views30d?: number;
+  reelsToday?: number;
+  reels7d?: number;
+  reels30d?: number;
+  carrosselToday?: number;
+  carrossel7d?: number;
+  carrossel30d?: number;
+  storiesToday?: number;
+  stories7d?: number;
+  stories30d?: number;
   unitMarkers?: MediaUnitMarker[];
 }
 
@@ -745,10 +754,11 @@ export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayoutConfig = {
     { id: "infra_group_exits", blockId: "infra", title: "Saídas do Grupo", order: 4 },
     { id: "infra_tests", blockId: "infra", title: "Testes Realizados", order: 5 },
 
-    // Bloco Distribuição de Mídia (Filtro por rede social ou visão geral)
-    { id: "dist_followers", blockId: "dist_midia", title: "Novos Seguidores", order: 0 },
-    { id: "dist_posts", blockId: "dist_midia", title: "Posts Realizados", order: 1 },
-    { id: "dist_views", blockId: "dist_midia", title: "Views", order: 2 },
+    // Bloco Distribuição de Mídia (4 formatos dinâmicos editáveis)
+    { id: "dist_reels", blockId: "dist_midia", title: "▶️ Reels", order: 0 },
+    { id: "dist_carrossel", blockId: "dist_midia", title: "🎠 Carrossel", order: 1 },
+    { id: "dist_stories", blockId: "dist_midia", title: "👁️ Visualizações Stories", order: 2 },
+    { id: "dist_posts", blockId: "dist_midia", title: "📸 Post", order: 3 },
 
     // Bloco 03 — FUNIL (Esteira visual progressiva conectada)
     { id: "funnel_pipeline", blockId: "funil", title: "Funil Comercial de Conversão", order: 0 },

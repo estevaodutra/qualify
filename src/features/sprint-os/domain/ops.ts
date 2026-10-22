@@ -569,6 +569,36 @@ export function getDashboardLayout(ws: Workspace): DashboardLayoutConfig {
   if (layout.blocks.some((b) => oldDistBlocks.includes(b.id))) {
     layout.blocks = layout.blocks.filter((b) => !oldDistBlocks.includes(b.id));
   }
+
+  // Migra cards de dist_midia para os 4 formatos editáveis solicitados (Reels, Carrossel, Stories, Post)
+  const hasFormatCards = layout.cards.some((c) =>
+    ["dist_reels", "dist_carrossel", "dist_stories"].includes(c.id)
+  );
+  if (!hasFormatCards) {
+    // Remove seguidores e views antigos de dist_midia
+    layout.cards = layout.cards.filter(
+      (c) => c.blockId !== "dist_midia" || (c.id !== "dist_followers" && c.id !== "dist_views")
+    );
+    const targetCards = [
+      { id: "dist_reels", blockId: "dist_midia", title: "▶️ Reels", order: 0 },
+      { id: "dist_carrossel", blockId: "dist_midia", title: "🎠 Carrossel", order: 1 },
+      { id: "dist_stories", blockId: "dist_midia", title: "👁️ Visualizações Stories", order: 2 },
+      { id: "dist_posts", blockId: "dist_midia", title: "📸 Post", order: 3 },
+    ];
+    targetCards.forEach((tc) => {
+      const existing = layout.cards.find((c) => c.id === tc.id);
+      if (existing) {
+        existing.blockId = "dist_midia";
+        existing.order = tc.order;
+        if (tc.id === "dist_posts" && (!existing.title || existing.title === "Posts Realizados")) {
+          existing.title = "📸 Post";
+        }
+      } else {
+        layout.cards.push(tc);
+      }
+    });
+  }
+
   // Garante que os novos blocos e cards padrão existam na configuração sem perder os customizados
   DEFAULT_DASHBOARD_LAYOUT.blocks.forEach((db) => {
     if (!layout.blocks.some((b) => b.id === db.id)) {
