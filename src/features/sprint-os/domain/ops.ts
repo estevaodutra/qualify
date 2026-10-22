@@ -29,13 +29,13 @@ export interface Ctx { actorName: string; nowIso: string }
 export const newId = (): ID =>
   (globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`);
 
-const base = (ctx: Ctx): Entity => ({ id: newId(), createdAt: ctx.nowIso, updatedAt: ctx.nowIso, archivedAt: null, rev: 1 });
+export const base = (ctx: Ctx): Entity => ({ id: newId(), createdAt: ctx.nowIso, updatedAt: ctx.nowIso, archivedAt: null, rev: 1 });
 
 export function log(ws: Workspace, ctx: Ctx, action: string, entity: string, entityId: ID | null, summary: string) {
   ws.activity.push({ id: newId(), at: ctx.nowIso, actorName: ctx.actorName, action, entity, entityId, summary });
 }
 
-const touch = (e: Entity, ctx: Ctx) => { e.updatedAt = ctx.nowIso; e.rev += 1; };
+export const touch = (e: Entity, ctx: Ctx) => { e.updatedAt = ctx.nowIso; e.rev += 1; };
 
 const live = <T extends Entity>(rec: Record<ID, T>) => Object.values(rec).filter((e) => !e.archivedAt);
 
