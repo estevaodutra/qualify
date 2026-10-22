@@ -10,10 +10,12 @@ import type {
   ImpactFlag, ContentPublication, FunnelStage,
   DashboardLayoutConfig, DashboardBlockConfig, DashboardCardConfig,
   BrandManualData, BrandManualModule, BrandManualField, CopyAdVariant,
+  AudioRequest, AudioRecording, AudioRequestStatus, AudioRecordingTranscription,
 } from "./types";
 import {
   emptyLearnings, DEFAULT_DASHBOARD_LAYOUT, DEFAULT_FUNNEL_STAGES,
   DEFAULT_BRAND_MANUAL_MODULES, DEFAULT_BRAND_MANUAL_FIELDS, DEFAULT_COPY_ADS_VARIANTS,
+  DEFAULT_AUDIO_REQUESTS,
 } from "./types";
 import { wouldCreateCycle } from "../scheduler/engine";
 
@@ -1792,11 +1794,222 @@ export function reconcileWorkspaceWithAJ019(ws: Workspace, ctx: Ctx): boolean {
     });
   }
 
+  // 4. Inicializar solicitações de áudio se não existirem
+  const audioChanged = reconcileAudioRequests(ws, ctx);
+  if (audioChanged) {
+    changed = true;
+  }
+
   if (changed) {
     touch(ws.project, ctx);
   }
 
   return changed;
+}
+
+// ==========================================
+// OPERAÇÕES DE SCRIPTS E ÁUDIOS (AJ-021)
+// ==========================================
+
+export function getAudioRequests(ws: Workspace): AudioRequest[] {
+  if (!ws.audioRequests) {
+    ws.audioRequests = {};
+  }
+  return Object.values(ws.audioRequests)
+    .filter((r) => !r.archivedAt && !r.archived)
+    .sort((a, b) => a.order - b.order);
+}
+
+export function createAudioRequest(
+  ws: Workspace,
+  ctx: Ctx,
+  data: Partial<AudioRequest>
+): AudioRequest {
+  if (!ws.audioRequests) ws.audioRequests = {};
+  const id = newId();
+  const existingCount = Object.keys(ws.audioRequests).length;
+  const code = data.code || `AUD-${String(existingCount + 1).padStart(3, "0")}`;
+
+  const req: AudioRequest = {
+    ...base(ctx),
+    id,
+    projectId: ws.project.id,
+    code,
+    title: data.title || "Nova Solicitação de Áudio",
+    category: data.category || "geral",
+    objective: data.objective || "",
+    context: data.context || "",
+    script: data.script || "",
+    preset: data.preset || "",
+    assigneeId: data.assigneeId || null,
+    assigneeName: data.assigneeName || "",
+    status: data.status || "pending",
+    deadline: data.deadline || null,
+    taskId: data.taskId || null,
+    creativeId: data.creativeId || null,
+    brandManualFieldId: data.brandManualFieldId || null,
+    recordings: data.recordings || [],
+    order: data.order ?? existingCount,
+  };
+
+  ws.audioRequests[id] = req;
+  touch(ws.project, ctx);
+  log(ws, ctx, "create", "AudioRequest", id, `Solicitação de áudio criada: ${req.code} — ${req.title}`);
+  return req;
+}
+
+export function updateAudioRequest(
+  ws: Workspace,
+  ctx: Ctx,
+  requestId: string,
+  patch: Partial<AudioRequest>
+): void {
+  if (!ws.audioRequests || !ws.audioRequests[requestId]) return;
+  const req = ws.audioRequests[requestId];
+  Object.assign(req, patch);
+  touch(req, ctx);
+  touch(ws.project, ctx);
+  log(ws, ctx, "update", "AudioRequest", requestId, `Solicitação de áudio atualizada: ${req.code}`);
+}
+
+export function deleteAudioRequest(
+  ws: Workspace,
+  ctx: Ctx,
+  requestId: string
+): void {
+  if (!ws.audioRequests || !ws.audioRequests[requestId]) return;
+  const req = ws.audioRequests[requestId];
+  req.archivedAt = ctx.nowIso;
+  req.archived = true;
+  touch(ws.project, ctx);
+  log(ws, ctx, "delete", "AudioRequest", requestId, `Solicitação de áudio arquivada: ${req.code}`);
+}
+
+export function duplicateAudioRequest(
+  ws: Workspace,
+  ctx: Ctx,
+  requestId: string
+): AudioRequest {
+  if (!ws.audioRequests || !ws.audioRequests[requestId]) throw new Error("Solicitação não encontrada");
+  const orig = ws.audioRequests[requestId];
+  return createAudioRequest(ws, ctx, {
+    ...orig,
+    id: undefined,
+    code: `${orig.code}-COPIA`,
+    title: `${orig.title} (Cópia)`,
+    recordings: [],
+    status: "pending",
+  });
+}
+
+export function addAudioRecording(
+  ws: Workspace,
+  ctx: Ctx,
+  requestId: string,
+  recordingData: Omit<AudioRecording, "id" | "createdAt" | "updatedAt">
+): AudioRecording {
+  if (!ws.audioRequests || !ws.audioRequests[requestId]) throw new Error("Solicitação não encontrada");
+  const req = ws.audioRequests[requestId];
+  const recId = newId();
+  const recording: AudioRecording = {
+    ...recordingData,
+    id: recId,
+    createdAt: ctx.nowIso,
+    updatedAt: ctx.nowIso,
+  };
+
+  req.recordings = [...(req.recordings || []), recording];
+  if (req.status === "pending") {
+    req.status = "recorded";
+  }
+  touch(req, ctx);
+  touch(ws.project, ctx);
+  log(ws, ctx, "create", "AudioRecording", recId, `Gravação adicionada à solicitação ${req.code}`);
+  return recording;
+}
+
+export function deleteAudioRecording(
+  ws: Workspace,
+  ctx: Ctx,
+  requestId: string,
+  recordingId: string
+): void {
+  if (!ws.audioRequests || !ws.audioRequests[requestId]) return;
+  const req = ws.audioRequests[requestId];
+  req.recordings = (req.recordings || []).filter((r) => r.id !== recordingId);
+  if (req.recordings.length === 0 && req.status === "recorded") {
+    req.status = "pending";
+  }
+  touch(req, ctx);
+  touch(ws.project, ctx);
+  log(ws, ctx, "delete", "AudioRecording", recordingId, `Gravação removida da solicitação ${req.code}`);
+}
+
+export function setPrimaryAudioRecording(
+  ws: Workspace,
+  ctx: Ctx,
+  requestId: string,
+  recordingId: string
+): void {
+  if (!ws.audioRequests || !ws.audioRequests[requestId]) return;
+  const req = ws.audioRequests[requestId];
+  req.recordings = (req.recordings || []).map((r) => ({
+    ...r,
+    isPrimary: r.id === recordingId,
+  }));
+  touch(req, ctx);
+  touch(ws.project, ctx);
+}
+
+export function updateAudioRecordingTranscription(
+  ws: Workspace,
+  ctx: Ctx,
+  requestId: string,
+  recordingId: string,
+  text: string,
+  status: AudioRecordingTranscription["status"] = "completed"
+): void {
+  if (!ws.audioRequests || !ws.audioRequests[requestId]) return;
+  const req = ws.audioRequests[requestId];
+  req.recordings = (req.recordings || []).map((r) => {
+    if (r.id === recordingId) {
+      return {
+        ...r,
+        updatedAt: ctx.nowIso,
+        transcription: {
+          text,
+          status,
+          completedAt: ctx.nowIso,
+        },
+      };
+    }
+    return r;
+  });
+  touch(req, ctx);
+  touch(ws.project, ctx);
+}
+
+export function reconcileAudioRequests(ws: Workspace, ctx: Ctx): boolean {
+  if (!ws) return false;
+  if (!ws.audioRequests) ws.audioRequests = {};
+
+  const currentCount = Object.keys(ws.audioRequests).length;
+  if (currentCount > 0) return false;
+
+  DEFAULT_AUDIO_REQUESTS.forEach((def, idx) => {
+    const id = newId();
+    ws.audioRequests![id] = {
+      ...base(ctx),
+      id,
+      projectId: ws.project.id,
+      ...def,
+      order: idx,
+    };
+  });
+
+  touch(ws.project, ctx);
+  log(ws, ctx, "reconcile", "AudioRequest", null, "Solicitações padrão de áudio PVD inicializadas");
+  return true;
 }
 
 export type { ScheduleRevision };

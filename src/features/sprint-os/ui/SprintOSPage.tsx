@@ -26,6 +26,8 @@ import { ExecutiveHeader } from "./ExecutiveHeader";
 import { KanbanView } from "./views/KanbanView";
 import { ModularDashboard } from "./dashboard/ModularDashboard";
 import { BrandManualView } from "./views/BrandManualView";
+import { CreativesView } from "./views/CreativesView";
+import { ScriptsAndAudiosView } from "./views/ScriptsAndAudiosView";
 
 import { DeadlineUpdateModal } from "./modals/DeadlineUpdateModal";
 import { ActivateSprintModal } from "./modals/ActivateSprintModal";
@@ -149,12 +151,16 @@ export const SprintOSPage: React.FC = () => {
   const lastInitCompanyIdRef = useRef<string | null | undefined>(undefined);
   const syncedMembersRef = useRef<Set<string>>(new Set());
 
-  // Detecção de parâmetro ?tab=brand_manual na URL
+  // Detecção de parâmetro ?tab= na URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get("tab");
     if (tabParam === "brand_manual" || tabParam === "manual_marca" || tabParam === "manual") {
       setActiveTab("brand_manual");
+    } else if (tabParam === "scripts_and_audios" || tabParam === "audios" || tabParam === "scripts") {
+      setActiveTab("scripts_and_audios");
+    } else if (tabParam === "creatives" || tabParam === "criativos") {
+      setActiveTab("creatives");
     }
   }, [setActiveTab]);
 
@@ -219,10 +225,18 @@ export const SprintOSPage: React.FC = () => {
       {/* Região 1: Cabeçalho Compacto (Linear Style) */}
       <ExecutiveHeader />
 
-      {/* Alternância de Visualização Principal: Operação/Kanban vs Manual de Marca 7D */}
+      {/* Alternância de Visualização Principal: 4 Abas Principais (AJ-021) */}
       {activeTab === "brand_manual" ? (
         <main className="px-6 pt-4 flex-1">
           <BrandManualView />
+        </main>
+      ) : activeTab === "creatives" ? (
+        <main className="px-6 pt-4 flex-1">
+          <CreativesView />
+        </main>
+      ) : activeTab === "scripts_and_audios" ? (
+        <main className="px-6 pt-4 flex-1">
+          <ScriptsAndAudiosView />
         </main>
       ) : (
         <>

@@ -686,6 +686,8 @@ export interface Workspace {
   dashboardLayoutConfig?: DashboardLayoutConfig;
   /** Manual de Marca 7D (AJ-014) — Briefing Inteligente, Modular e Editável */
   brandManual?: BrandManualData;
+  /** Scripts e Áudios com Gravação Integrada (AJ-021) */
+  audioRequests?: Record<ID, AudioRequest>;
   /** Custo/hora por membro — separado para não ser exposto em links públicos. */
   costs: Record<ID, number | null>;
   /** Prompts otimizados por tarefa (chave = taskId). */
@@ -1184,5 +1186,142 @@ export const DEFAULT_COPY_ADS_VARIANTS: CopyAdVariant[] = [
     subheadline: "Clique agora para agendar uma sessão de diagnóstico estratégico e desbloquear seu próximo nível.",
     status: "draft",
     version: 1.0,
+  },
+];
+
+// ==========================================
+// SCRIPTS E ÁUDIOS COM GRAVAÇÃO INTEGRADA (AJ-021)
+// ==========================================
+
+export type AudioRequestStatus =
+  | "pending" // Aguardando gravação
+  | "recorded" // Áudio recebido / gravado
+  | "reviewing" // Em revisão
+  | "changes_requested" // Ajustes solicitados
+  | "approved" // Aprovado
+  | "archived"; // Arquivado
+
+export interface AudioRecordingTranscription {
+  text: string;
+  status: "none" | "transcribing" | "completed" | "edited" | "error";
+  editedText?: string;
+  completedAt?: string;
+}
+
+export interface AudioRecording {
+  id: ID;
+  requestId: ID;
+  projectId: ID;
+  authorId?: ID | null;
+  authorName: string;
+  audioUrl: string; // URL pública ou permanente do arquivo
+  storageKey?: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  durationSeconds: number;
+  waveform?: number[]; // Lista de 20-50 amplitudes normalizadas (0.1 a 1.0)
+  version: number;
+  isApproved?: boolean;
+  isPrimary?: boolean;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  transcription?: AudioRecordingTranscription;
+}
+
+export interface AudioRequest extends Entity {
+  code: string; // Ex: AUD-001, AUD-GRP-01, etc.
+  title: string;
+  category: "grupo_captacao" | "manual_marca" | "criativos_ads" | "webinario" | "geral";
+  objective?: string;
+  context: string;
+  script: string;
+  preset?: string;
+  assigneeId?: ID | null;
+  assigneeName?: string;
+  status: AudioRequestStatus;
+  deadline?: string | null;
+  taskId?: ID | null;
+  creativeId?: string | null;
+  brandManualFieldId?: string | null;
+  recordings: AudioRecording[];
+  order: number;
+}
+
+export const DEFAULT_AUDIO_REQUESTS: Omit<AudioRequest, "id" | "createdAt" | "updatedAt" | "rev" | "archivedAt">[] = [
+  {
+    code: "AUD-GRP-01",
+    title: "Áudio sobre conteúdo da manhã",
+    category: "grupo_captacao",
+    objective: "Produção de vídeo de destaque da manhã (08h00) para o Grupo VIP",
+    context: "Explique, com suas palavras, a principal ideia que deseja transmitir ao grupo logo pela manhã. Traga uma situação real e finalize com uma pergunta ou convite à interação.",
+    script: "Bom dia pessoal! Hoje quero falar sobre um ponto fundamental que vejo quase todo mundo errando... [situação real]. E você, como tem lidado com isso?",
+    preset: "Comece dizendo: 'Bom dia pessoal! Hoje quero trazer uma reflexão prática...'",
+    status: "pending",
+    order: 0,
+    recordings: [],
+  },
+  {
+    code: "AUD-GRP-02",
+    title: "Áudio de prova ou história",
+    category: "grupo_captacao",
+    objective: "Produção de conteúdo de prova e autoridade do meio do dia",
+    context: "Conte uma experiência ou situação real que ajude as pessoas do grupo a entender seu método. Explique o que aconteceu e por que isso importa.",
+    script: "Lembro de um caso recente onde o cliente tentava resolver sozinho há meses... A virada de chave aconteceu quando aplicamos [mecanismo]. O resultado prático foi...",
+    preset: "Comece dizendo: 'Quero compartilhar uma história real que ilustra perfeitamente isso...'",
+    status: "pending",
+    order: 1,
+    recordings: [],
+  },
+  {
+    code: "AUD-GRP-03",
+    title: "Áudio do conteúdo final do dia",
+    category: "grupo_captacao",
+    objective: "Produção de copy e vídeo de fechamento e levantada de mão",
+    context: "Explique uma ideia importante que seu público deveria considerar antes de encerrar o dia. Fale naturalmente e termine com um convite à interação.",
+    script: "Para encerrar o dia com foco: se você pudesse mudar apenas uma coisa na sua operação amanhã, qual seria? Responda aqui para alinharmos.",
+    preset: "Comece dizendo: 'Antes de encerrarmos o dia, fica essa reflexão importante...'",
+    status: "pending",
+    order: 2,
+    recordings: [],
+  },
+  {
+    code: "AUD-MAR-01",
+    title: "Explicar solução na prática",
+    category: "manual_marca",
+    objective: "Matéria-prima estratégica para a aba Manual de Marca (Posicionamento)",
+    context: "Conte o que você vende, qual problema resolve e como isso muda a vida de quem compra.",
+    script: "O que eu vendo não é apenas uma consultoria, é um sistema prático que resolve a ineficiência de... Na prática, quem compra deixa de perder tempo e passa a...",
+    preset: "Meu método consiste em... O que o cliente ganha é...",
+    brandManualFieldId: "pos_01",
+    status: "pending",
+    order: 3,
+    recordings: [],
+  },
+  {
+    code: "AUD-MAR-02",
+    title: "Explicar mecanismo único",
+    category: "manual_marca",
+    objective: "Matéria-prima estratégica para o Mecanismo da Solução",
+    context: "Explique o passo a passo do seu método como se estivesse conversando com alguém interessado.",
+    script: "O processo acontece em etapas claras: primeiro nós analisamos... depois estruturamos a esteira... e por fim ativamos o fluxo com acompanhamento contínuo.",
+    preset: "Primeiro nós fazemos... Em seguida... E a grande diferença é que...",
+    brandManualFieldId: "pos_02",
+    status: "pending",
+    order: 4,
+    recordings: [],
+  },
+  {
+    code: "AUD-MAR-03",
+    title: "Exemplos de fala natural e dialeto",
+    category: "manual_marca",
+    objective: "Captura da identidade verbal espontânea para o módulo Personalidade",
+    context: "Explique um assunto do seu trabalho sem seguir roteiro. Use as expressões que costuma usar em uma conversa.",
+    script: "Sem filtro: fala como se estivesse batendo um papo com um amigo de profissão tomando um café, explicando o que mais te irrita no mercado ou o que você mais valoriza.",
+    preset: "Fala solta e natural, com as suas gírias e expressões habituais...",
+    brandManualFieldId: "per_08",
+    status: "pending",
+    order: 5,
+    recordings: [],
   },
 ];

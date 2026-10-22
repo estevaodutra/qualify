@@ -29,6 +29,9 @@ import {
   Users,
   X,
   Kanban,
+  Palette,
+  Mic,
+  LayoutGrid,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -215,23 +218,26 @@ export const ExecutiveHeader: React.FC = () => {
         )}
       </div>
 
-      {/* Centro: Switcher de Visão (Operação Kanban vs Manual de Marca 7D) */}
-      <div className="flex items-center p-0.5 bg-muted/60 border border-border/80 rounded-2xl gap-1 shrink-0">
+      {/* Centro: Switcher de 4 Abas Principais (AJ-021) */}
+      <div className="flex items-center p-0.5 bg-muted/60 border border-border/80 rounded-2xl gap-1 shrink-0 overflow-x-auto">
+        {/* Aba 1: Operação */}
         <button
           onClick={() => setActiveTab("kanban")}
-          className={`h-7 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
-            activeTab !== "brand_manual"
+          className={`h-7 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap ${
+            activeTab === "kanban" || activeTab === "structure"
               ? "bg-background text-foreground shadow-xs font-bold"
               : "text-muted-foreground hover:text-foreground"
           }`}
           title="Visão Operacional Kanban & Cockpit 80/20"
         >
           <Kanban className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Operação</span>
+          <span className="inline">Operação</span>
         </button>
+
+        {/* Aba 2: Manual de Marca */}
         <button
           onClick={() => setActiveTab("brand_manual")}
-          className={`h-7 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+          className={`h-7 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap ${
             activeTab === "brand_manual"
               ? "bg-background text-primary shadow-xs font-bold"
               : "text-muted-foreground hover:text-foreground"
@@ -248,6 +254,44 @@ export const ExecutiveHeader: React.FC = () => {
             return (
               <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-primary/10 text-primary font-bold">
                 {count}/{activeFields.length}
+              </span>
+            );
+          })()}
+        </button>
+
+        {/* Aba 3: Criativos */}
+        <button
+          onClick={() => setActiveTab("creatives")}
+          className={`h-7 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap ${
+            activeTab === "creatives"
+              ? "bg-background text-primary shadow-xs font-bold"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+          title="Criativos — Biblioteca de Anúncios e Conteúdo"
+        >
+          <Palette className="h-3.5 w-3.5 text-primary" />
+          <span>Criativos</span>
+        </button>
+
+        {/* Aba 4: Scripts e Áudios (AJ-021) */}
+        <button
+          onClick={() => setActiveTab("scripts_and_audios")}
+          className={`h-7 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap ${
+            activeTab === "scripts_and_audios"
+              ? "bg-background text-primary shadow-xs font-bold"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+          title="Scripts e Áudios — Solicitações e Gravações de Voz"
+        >
+          <Mic className="h-3.5 w-3.5 text-primary" />
+          <span>Scripts e Áudios</span>
+          {(() => {
+            const reqs = Object.values(workspace.audioRequests || {}).filter((r) => !r.archivedAt && !r.archived);
+            const recordedCount = reqs.filter((r) => r.recordings && r.recordings.length > 0).length;
+            if (reqs.length === 0) return null;
+            return (
+              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-primary/10 text-primary font-bold">
+                {recordedCount}/{reqs.length}
               </span>
             );
           })()}

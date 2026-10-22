@@ -88,6 +88,7 @@ import {
   updateCopyAdVariant,
   saveBrandManualAnalysis,
   saveMasterPrompt,
+  createAudioRequest,
 } from "../../domain/ops";
 import type {
   BrandManualField,
@@ -125,7 +126,13 @@ const ICP_22_OUTPUT_KEYS = [
 ];
 
 export const BrandManualView: React.FC = () => {
-  const { workspace, mutate, activeBrandManualModuleId, focusedBrandManualFieldId } = useSprintOSStore();
+  const {
+    workspace,
+    mutate,
+    activeBrandManualModuleId,
+    focusedBrandManualFieldId,
+    setActiveTab,
+  } = useSprintOSStore();
   const { user } = useAuth();
 
   // Módulo ativo: posicionamento | alma_copy | raio_x_icp | copy_ads
@@ -1156,6 +1163,31 @@ export const BrandManualView: React.FC = () => {
                           >
                             <Copy className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
                             Duplicar Pergunta
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              mutate((ws) => {
+                                const req = createAudioRequest(ws, {
+                                  code: `AUD-BM-${field.id.slice(0, 4).toUpperCase()}`,
+                                  title: `Gravação: ${field.title || "Pergunta do Manual de Marca"}`,
+                                  target: field.title,
+                                  context: `Pergunta do Manual de Marca (${activeModule?.title || "Manual de Marca"}). ${field.context || ""}`,
+                                  outline: `Responda detalhadamente à pergunta:\n"${field.title}"\nUse exemplos reais e linguagem natural do expert.`,
+                                  responsible: "Expert PVD",
+                                  category: "brand_manual",
+                                  originTab: "brand_manual",
+                                  originId: field.id,
+                                  durationExpectedSec: 90,
+                                  preset: field.preset || "Resumo Estratégico",
+                                });
+                                toast.success(`🎙️ Solicitação criada (${req.code}). Redirecionando...`);
+                              });
+                              setActiveTab("scripts_and_audios");
+                            }}
+                            className="cursor-pointer text-xs text-primary font-medium"
+                          >
+                            <Mic className="h-3.5 w-3.5 mr-2" />
+                            Solicitar por Áudio
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem

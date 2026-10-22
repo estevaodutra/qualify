@@ -106,7 +106,9 @@ export type ViewTab =
   | "funnel"
   | "routines"
   | "milestones"
-  | "brand_manual";
+  | "brand_manual"
+  | "creatives"
+  | "scripts_and_audios";
 
 export interface ActiveTaskTimer {
   taskId: ID;
