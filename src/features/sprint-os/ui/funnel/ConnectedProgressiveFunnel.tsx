@@ -84,6 +84,9 @@ export const ConnectedProgressiveFunnel: React.FC<ConnectedProgressiveFunnelProp
   const [inlineEditingId, setInlineEditingId] = useState<string | null>(null);
   const [inlineTitle, setInlineTitle] = useState("");
 
+  // Modo de visualização do funil: 'leads' (tamanho da barra proporcional aos leads) ou 'geometric' (afunilamento fixo)
+  const [funnelViewMode, setFunnelViewMode] = useState<"leads" | "geometric">("leads");
+
   // Drag and drop vertical
   const [draggedStageId, setDraggedStageId] = useState<string | null>(null);
   const [dragOverStageId, setDragOverStageId] = useState<string | null>(null);
@@ -119,14 +122,17 @@ export const ConnectedProgressiveFunnel: React.FC<ConnectedProgressiveFunnelProp
   // Classificação visual de desfechos / encerramento
   const getOutcomeType = (label: string): "win" | "lost" | "cold" | null => {
     const l = label.toLowerCase();
-    if (l.includes("venda") || l.includes("ganh") || l.includes("fechad") || l.includes("cliente")) {
-      return "win";
-    }
-    if (l.includes("perd") || l.includes("descarte") || l.includes("cancelad")) {
+    // 1. Checa perda antes de venda para não classificar 'venda perdida' como ganho
+    if (l.includes("perd") || l.includes("descarte") || l.includes("cancelad") || l.includes("rejeit")) {
       return "lost";
     }
-    if (l.includes("frio") || l.includes("inativ") || l.includes("standby") || l.includes("nutri")) {
+    // 2. Frio / Standby
+    if (l.includes("frio") || l.includes("inativ") || l.includes("standby") || l.includes("nutri") || l.includes("gelad")) {
       return "cold";
+    }
+    // 3. Vendas / Ganhos
+    if (l.includes("venda") || l.includes("ganh") || l.includes("fechad") || l.includes("cliente") || l.includes("sucesso")) {
+      return "win";
     }
     return null;
   };
@@ -275,8 +281,9 @@ export const ConnectedProgressiveFunnel: React.FC<ConnectedProgressiveFunnelProp
     toast.success("Etapa excluída.");
   };
 
-  // Cálculo da geometria proporcional decrescente do funil (Funnel Tapering)
+  // Cálculo da geometria proporcional decrescente do funil (Funnel Tapering) e Volume de Leads
   const totalStages = funnelStages.length;
+  const maxStageCount = Math.max(...funnelStages.map((s) => s.count), 0);
   const minWidthPct = totalStages > 1 ? 62 : 100;
   const widthStep = totalStages > 1 ? (100 - minWidthPct) / (totalStages - 1) : 0;
 
@@ -298,7 +305,37 @@ export const ConnectedProgressiveFunnel: React.FC<ConnectedProgressiveFunnelProp
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Seletor do Modo de Visualização: Por Leads (proporcional à quantidade de leads) vs Afunilado */}
+          <div className="flex items-center p-0.5 rounded-lg bg-muted/80 border border-border text-[10px]">
+            <button
+              type="button"
+              onClick={() => setFunnelViewMode("leads")}
+              className={`px-2 py-0.5 rounded-md font-bold transition-all flex items-center gap-1 ${
+                funnelViewMode === "leads"
+                  ? "bg-background text-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              title="O tamanho da barra corresponde diretamente à quantidade de leads em cada etapa"
+            >
+              <TrendingUp className="h-2.5 w-2.5 text-primary" />
+              <span>Por Leads</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFunnelViewMode("geometric")}
+              className={`px-2 py-0.5 rounded-md font-bold transition-all flex items-center gap-1 ${
+                funnelViewMode === "geometric"
+                  ? "bg-background text-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              title="Afunilamento geométrico tradicional"
+            >
+              <Filter className="h-2.5 w-2.5" />
+              <span>Afunilado</span>
+            </button>
+          </div>
+
           {/* Métricas Rápidas Compactas */}
           <div className="flex items-center gap-1.5 text-xs font-mono">
             <div
@@ -350,7 +387,7 @@ export const ConnectedProgressiveFunnel: React.FC<ConnectedProgressiveFunnelProp
         </div>
       </div>
 
-      {/* REPRESENTAÇÃO GRÁFICA VERTICAL: FAIXAS PROGRESSIVAMENTE AFUNILADAS (SEM ROLAGEM LATERAL) */}
+      {/* REPRESENTAÇÃO GRÁFICA VERTICAL: TAMANHO DA BARRA CORRESPONDE À QUANTIDADE DE LEADS */}
       <div className="w-full max-w-3xl mx-auto py-1 space-y-1">
         {funnelStages.map((stage, idx) => {
           const nextStage = funnelStages[idx + 1];
@@ -366,9 +403,36 @@ export const ConnectedProgressiveFunnel: React.FC<ConnectedProgressiveFunnelProp
           const retentionFromTop =
             firstStageCount > 0 ? Math.round((stage.count / firstStageCount) * 100) : null;
 
-          // Afunilamento geométrico proporcional
-          const stageWidthPct = Math.round(100 - idx * widthStep);
-          const nextStageWidthPct = nextStage ? Math.round(100 - (idx + 1) * widthStep) : stageWidthPct;
+          // Largura da barra correspondente à quantidade de leads seguindo efeito de funil
+          let stageWidthPct: number;
+          if (funnelViewMode === "leads") {
+            if (maxStageCount === 0) {
+              // Se nenhuma etapa tiver contatos, mantém afunilamento suave uniforme
+              stageWidthPct = Math.round(100 - idx * widthStep);
+            } else {
+              // Proporcional aos leads: etapa com maior número de leads tem 100% de largura;
+              // Etapa com 0 leads fica com 38% de largura (mínimo funcional para exibir nome, contador e botões).
+              const ratio = stage.count / maxStageCount;
+              stageWidthPct = Math.round(38 + ratio * 62);
+            }
+          } else {
+            // Modo geométrico tradicional
+            stageWidthPct = Math.round(100 - idx * widthStep);
+          }
+
+          let nextStageWidthPct = stageWidthPct;
+          if (nextStage) {
+            if (funnelViewMode === "leads") {
+              if (maxStageCount === 0) {
+                nextStageWidthPct = Math.round(100 - (idx + 1) * widthStep);
+              } else {
+                const nextRatio = nextStage.count / maxStageCount;
+                nextStageWidthPct = Math.round(38 + nextRatio * 62);
+              }
+            } else {
+              nextStageWidthPct = Math.round(100 - (idx + 1) * widthStep);
+            }
+          }
 
           const isDragging = draggedStageId === stage.id;
           const isDragOver = dragOverStageId === stage.id;
@@ -392,7 +456,7 @@ export const ConnectedProgressiveFunnel: React.FC<ConnectedProgressiveFunnelProp
                   setDragOverStageId(null);
                 }}
                 onClick={() => handleOpenStageDetails(stage)}
-                className={`group relative flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl border transition-all duration-200 cursor-pointer mx-auto shadow-2xs ${
+                className={`group relative flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl border transition-all duration-300 cursor-pointer mx-auto shadow-2xs overflow-hidden ${
                   isDragging
                     ? "opacity-30 border-dashed border-primary scale-[0.98]"
                     : isDragOver
@@ -406,13 +470,24 @@ export const ConnectedProgressiveFunnel: React.FC<ConnectedProgressiveFunnelProp
                     : "bg-card/90 hover:bg-card border-border hover:border-primary/50 hover:shadow-xs"
                 }`}
                 style={{
-                  width: `clamp(86%, ${stageWidthPct}%, 100%)`,
+                  width: `clamp(270px, ${stageWidthPct}%, 100%)`,
                   borderLeftWidth: "4px",
                   borderLeftColor: stage.color || "#6366F1",
                 }}
               >
+                {/* Barra interna de preenchimento proporcional ao volume de leads */}
+                {maxStageCount > 0 && stage.count > 0 && (
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-xl pointer-events-none transition-all duration-300 opacity-12"
+                    style={{
+                      width: `${Math.round((stage.count / maxStageCount) * 100)}%`,
+                      backgroundColor: stage.color || "#6366F1",
+                    }}
+                  />
+                )}
+
                 {/* LADO ESQUERDO: Alça de arraste, Numeração, Título e Tag de Desfecho */}
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="flex items-center gap-2 min-w-0 relative z-1">
                   <span
                     data-stage-handle="true"
                     onClick={(e) => e.stopPropagation()}
@@ -488,16 +563,16 @@ export const ConnectedProgressiveFunnel: React.FC<ConnectedProgressiveFunnelProp
 
                 {/* LADO DIREITO: Quantidade de contatos, Ajustes rápidos (+/-), Valor e Menu de Ações */}
                 <div
-                  className="flex items-center gap-2 shrink-0"
+                  className="flex items-center gap-2 shrink-0 relative z-1"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {/* Taxa acumulada desde o topo */}
-                  {retentionFromTop !== null && idx > 0 && (
+                  {/* % do total de contatos no funil */}
+                  {totalContacts > 0 && stage.count > 0 && (
                     <span
-                      className="text-[10px] font-mono text-muted-foreground hidden lg:inline"
-                      title={`Percentual de contatos retidos em relação ao topo (#1): ${retentionFromTop}%`}
+                      className="text-[9px] font-mono font-bold text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded-md hidden lg:inline"
+                      title={`${stage.count} de ${totalContacts} leads (${Math.round((stage.count / totalContacts) * 100)}% do funil)`}
                     >
-                      {retentionFromTop}% do topo
+                      {Math.round((stage.count / totalContacts) * 100)}% do total
                     </span>
                   )}
 
@@ -606,9 +681,9 @@ export const ConnectedProgressiveFunnel: React.FC<ConnectedProgressiveFunnelProp
               {/* CONECTOR VISUAL COM INDICADOR DE CONVERSÃO INTER-ETAPAS */}
               {nextStage && (
                 <div
-                  className="flex items-center justify-center my-0.5 mx-auto"
+                  className="flex items-center justify-center my-0.5 mx-auto transition-all duration-300"
                   style={{
-                    width: `clamp(86%, ${Math.round((stageWidthPct + nextStageWidthPct) / 2)}%, 100%)`,
+                    width: `clamp(270px, ${Math.round((stageWidthPct + nextStageWidthPct) / 2)}%, 100%)`,
                   }}
                 >
                   <div className="flex items-center gap-1.5 text-[9px] font-mono text-muted-foreground/80 py-0.5">
