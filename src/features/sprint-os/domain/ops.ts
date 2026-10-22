@@ -12,11 +12,12 @@ import type {
   BrandManualData, BrandManualModule, BrandManualField, CopyAdVariant,
   AudioRequest, AudioRecording, AudioRequestStatus, AudioRecordingTranscription,
   WorkSession, WorkspaceLabel,
+  WebinarData, WebinarEdition, WebinarMetric,
 } from "./types";
 import {
   emptyLearnings, DEFAULT_DASHBOARD_LAYOUT, DEFAULT_FUNNEL_STAGES,
   DEFAULT_BRAND_MANUAL_MODULES, DEFAULT_BRAND_MANUAL_FIELDS, DEFAULT_COPY_ADS_VARIANTS,
-  DEFAULT_AUDIO_REQUESTS, DEFAULT_WORKSPACE_LABELS,
+  DEFAULT_AUDIO_REQUESTS, DEFAULT_WORKSPACE_LABELS, DEFAULT_WEBINAR_DATA,
 } from "./types";
 import { wouldCreateCycle } from "../scheduler/engine";
 
@@ -1866,6 +1867,12 @@ export function reconcileWorkspaceWithAJ019(ws: Workspace, ctx: Ctx): boolean {
     changed = true;
   }
 
+  // 6. Inicializar dados do Webinário se não existirem (AJ-023)
+  const webinarChanged = reconcileWebinarData(ws, ctx);
+  if (webinarChanged) {
+    changed = true;
+  }
+
   if (changed) {
     touch(ws.project, ctx);
   }
@@ -2319,6 +2326,103 @@ export function reconcileWorkspaceLabels(ws: Workspace, ctx: Ctx): boolean {
     }
   }
   return changed;
+}
+
+// ==========================================
+// BLOCO 02 — WEBINÁRIO (AJ-023)
+// ==========================================
+
+export function getWebinarData(ws: Workspace): WebinarData {
+  if (!ws.webinarData || !ws.webinarData.editions || Object.keys(ws.webinarData.editions).length === 0) {
+    ws.webinarData = JSON.parse(JSON.stringify(DEFAULT_WEBINAR_DATA));
+  }
+  return ws.webinarData;
+}
+
+export function updateWebinarMetric(
+  ws: Workspace,
+  ctx: Ctx,
+  editionId: string,
+  metricKey: keyof WebinarEdition["metrics"],
+  value: number,
+  source: WebinarMetric["source"] = "manual"
+) {
+  const data = getWebinarData(ws);
+  if (!data.editions[editionId]) {
+    data.editions[editionId] = {
+      id: editionId,
+      projectId: ws.project.id,
+      title: "Webinário PVD #1 — Ao Vivo",
+      eventDate: new Date().toISOString().slice(0, 10),
+      period: "all",
+      metrics: {
+        invites: { value: 0, source: "manual", updatedAt: ctx.nowIso, updatedBy: ctx.actorName },
+        confirmed: { value: 0, source: "manual", updatedAt: ctx.nowIso, updatedBy: ctx.actorName },
+        liveAttendance: { value: 0, source: "manual", updatedAt: ctx.nowIso, updatedBy: ctx.actorName },
+        retention: { value: 0, source: "manual", updatedAt: ctx.nowIso, updatedBy: ctx.actorName },
+        buyers: { value: 0, source: "manual", updatedAt: ctx.nowIso, updatedBy: ctx.actorName },
+      },
+      createdAt: ctx.nowIso,
+      updatedAt: ctx.nowIso,
+    };
+  }
+  const edition = data.editions[editionId];
+  const safeVal = Math.max(0, Math.round(Number(value) || 0));
+  edition.metrics[metricKey] = {
+    value: safeVal,
+    source,
+    updatedAt: ctx.nowIso,
+    updatedBy: ctx.actorName,
+  };
+  edition.updatedAt = ctx.nowIso;
+  touch(ws.project, ctx);
+  log(ws, ctx, "update", "webinar_metric", editionId, `Métrica de webinário (${metricKey}) atualizada para ${safeVal}`);
+}
+
+export function selectWebinarEdition(ws: Workspace, ctx: Ctx, editionId: string) {
+  const data = getWebinarData(ws);
+  data.selectedEditionId = editionId;
+  touch(ws.project, ctx);
+  log(ws, ctx, "select", "webinar_edition", editionId, `Edição de webinário selecionada: ${editionId}`);
+}
+
+export function createWebinarEdition(
+  ws: Workspace,
+  ctx: Ctx,
+  title: string,
+  eventDate: string
+): WebinarEdition {
+  const data = getWebinarData(ws);
+  const id = `webinar_${newId().slice(0, 8)}`;
+  const edition: WebinarEdition = {
+    id,
+    projectId: ws.project.id,
+    title: title.trim() || `Webinário PVD #${Object.keys(data.editions).length + 1}`,
+    eventDate: eventDate || new Date().toISOString().slice(0, 10),
+    period: "all",
+    metrics: {
+      invites: { value: 0, source: "manual", updatedAt: ctx.nowIso, updatedBy: ctx.actorName },
+      confirmed: { value: 0, source: "manual", updatedAt: ctx.nowIso, updatedBy: ctx.actorName },
+      liveAttendance: { value: 0, source: "manual", updatedAt: ctx.nowIso, updatedBy: ctx.actorName },
+      retention: { value: 0, source: "manual", updatedAt: ctx.nowIso, updatedBy: ctx.actorName },
+      buyers: { value: 0, source: "manual", updatedAt: ctx.nowIso, updatedBy: ctx.actorName },
+    },
+    createdAt: ctx.nowIso,
+    updatedAt: ctx.nowIso,
+  };
+  data.editions[id] = edition;
+  data.selectedEditionId = id;
+  touch(ws.project, ctx);
+  log(ws, ctx, "create", "webinar_edition", id, `Nova edição de webinário criada: ${edition.title}`);
+  return edition;
+}
+
+export function reconcileWebinarData(ws: Workspace, ctx: Ctx): boolean {
+  if (!ws.webinarData || !ws.webinarData.editions || Object.keys(ws.webinarData.editions).length === 0) {
+    ws.webinarData = JSON.parse(JSON.stringify(DEFAULT_WEBINAR_DATA));
+    return true;
+  }
+  return false;
 }
 
 export type { ScheduleRevision };

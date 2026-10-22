@@ -740,6 +740,8 @@ export interface Workspace {
   audioRequests?: Record<ID, AudioRequest>;
   /** Etiquetas personalizáveis compartilhadas no projeto (AJ-022) */
   labels?: Record<string, WorkspaceLabel>;
+  /** Bloco Exclusivo de Webinário no Cockpit Operacional (AJ-023) */
+  webinarData?: WebinarData;
   /** Custo/hora por membro — separado para não ser exposto em links públicos. */
   costs: Record<ID, number | null>;
   /** Prompts otimizados por tarefa (chave = taskId). */
@@ -803,8 +805,9 @@ export const DEFAULT_FUNNEL_STAGES: Omit<FunnelStage, "id">[] = [
 export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayoutConfig = {
   blocks: [
     { id: "infra", title: "BLOCO 01 — INFRA", order: 0 },
-    { id: "dist_midia", title: "DISTRIBUIÇÃO DE MÍDIA", order: 1 },
-    { id: "funil", title: "BLOCO 03 — FUNIL", order: 2 },
+    { id: "webinario", title: "BLOCO 02 — WEBINÁRIO", order: 1 },
+    { id: "dist_midia", title: "DISTRIBUIÇÃO DE MÍDIA", order: 2 },
+    { id: "funil", title: "BLOCO 03 — FUNIL", order: 3 },
   ],
   cards: [
     // Bloco 01 — INFRA (6 indicadores)
@@ -815,6 +818,13 @@ export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayoutConfig = {
     { id: "infra_group_exits", blockId: "infra", title: "Saídas do Grupo", order: 4 },
     { id: "infra_tests", blockId: "infra", title: "Testes Realizados", order: 5 },
 
+    // Bloco 02 — WEBINÁRIO (5 indicadores obrigatórios AJ-023)
+    { id: "webinar_invites", blockId: "webinario", title: "Convites recebidos", order: 0 },
+    { id: "webinar_confirmed", blockId: "webinario", title: "Confirmaram presença", order: 1 },
+    { id: "webinar_live", blockId: "webinario", title: "Entraram ao vivo", order: 2 },
+    { id: "webinar_retention", blockId: "webinario", title: "Até o final", order: 3 },
+    { id: "webinar_buyers", blockId: "webinario", title: "Compraram", order: 4 },
+
     // Bloco Distribuição de Mídia (4 formatos dinâmicos editáveis)
     { id: "dist_reels", blockId: "dist_midia", title: "▶️ Reels", order: 0 },
     { id: "dist_carrossel", blockId: "dist_midia", title: "🎠 Carrossel", order: 1 },
@@ -824,6 +834,62 @@ export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayoutConfig = {
     // Bloco 03 — FUNIL (Esteira visual progressiva conectada)
     { id: "funnel_pipeline", blockId: "funil", title: "Funil Comercial de Conversão", order: 0 },
   ],
+};
+
+// ==========================================
+// BLOCO 02 — WEBINÁRIO (AJ-023)
+// ==========================================
+
+export interface WebinarMetric {
+  value: number;
+  source: "manual" | "api" | "webhook" | "import";
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export interface WebinarEdition {
+  id: string;
+  projectId: string;
+  title: string; // Ex: "Webinário PVD #1 — Ao Vivo"
+  eventDate: string; // "YYYY-MM-DD"
+  period: "live" | "pre" | "post" | "all";
+  metrics: {
+    invites: WebinarMetric;        // 01 — RECEBEU CONVITE
+    confirmed: WebinarMetric;      // 02 — CONFIRMOU PARTICIPAÇÃO
+    liveAttendance: WebinarMetric; // 03 — ENTROU AO VIVO
+    retention: WebinarMetric;       // 04 — FICOU ATÉ O FINAL
+    buyers: WebinarMetric;          // 05 — COMPROU
+  };
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WebinarData {
+  selectedEditionId: string;
+  editions: Record<string, WebinarEdition>;
+}
+
+export const DEFAULT_WEBINAR_DATA: WebinarData = {
+  selectedEditionId: "webinar_pvd_01",
+  editions: {
+    webinar_pvd_01: {
+      id: "webinar_pvd_01",
+      projectId: "pvd",
+      title: "Webinário PVD #1 — O Ponto de Ruptura",
+      eventDate: "2026-10-28",
+      period: "all",
+      metrics: {
+        invites: { value: 0, source: "manual", updatedAt: new Date().toISOString(), updatedBy: "Operador" },
+        confirmed: { value: 0, source: "manual", updatedAt: new Date().toISOString(), updatedBy: "Operador" },
+        liveAttendance: { value: 0, source: "manual", updatedAt: new Date().toISOString(), updatedBy: "Operador" },
+        retention: { value: 0, source: "manual", updatedAt: new Date().toISOString(), updatedBy: "Operador" },
+        buyers: { value: 0, source: "manual", updatedAt: new Date().toISOString(), updatedBy: "Operador" },
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+  },
 };
 
 // ==========================================

@@ -44,6 +44,7 @@ import {
   RefreshCw,
   Tag,
   Key,
+  Video,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -75,6 +76,7 @@ import {
   updateFunnelStage,
 } from "../../domain/ops";
 import { ConnectedProgressiveFunnel } from "../funnel/ConnectedProgressiveFunnel";
+import { WebinarBlock, WebinarEditionSelector } from "./WebinarBlock";
 import { computeProgressMetrics } from "../../metrics/calculations";
 import { toast } from "sonner";
 import type { DashboardCardConfig, DashboardBlockConfig, MediaUnitMarker } from "../../domain/types";
@@ -136,6 +138,9 @@ export const ModularDashboard: React.FC = () => {
 
   // Modal de Restauração de Elementos
   const [showRestoreModal, setShowRestoreModal] = useState(false);
+
+  // Modal de Nova Edição de Webinário (AJ-023)
+  const [isNewWebinarEditionOpen, setIsNewWebinarEditionOpen] = useState(false);
 
   // Modal para Registro de Marcação em Unidade (Hook, Corpo, CTA, Formato)
   const [unitMarkerModal, setUnitMarkerModal] = useState<{
@@ -1758,6 +1763,7 @@ export const ModularDashboard: React.FC = () => {
 
           // Identifica se é o bloco de distribuição
           const isMediaBlock = block.id === "dist_midia" || block.id.startsWith("dist_");
+          const isWebinarBlock = block.id === "webinario";
           const blockChannel: "instagram" | "tiktok" | "youtube" =
             mediaFilter === "all" ? "instagram" : mediaFilter;
 
@@ -1777,6 +1783,14 @@ export const ModularDashboard: React.FC = () => {
                   { id: "dist_carrossel", blockId: block.id, title: "🎠 Carrossel", order: 1 },
                   { id: "dist_stories", blockId: block.id, title: "👁️ Visualizações Stories", order: 2 },
                   { id: "dist_posts", blockId: block.id, title: "📸 Post", order: 3 },
+                ]
+              : isWebinarBlock
+              ? [
+                  { id: "webinar_invites", blockId: block.id, title: "Convites recebidos", order: 0 },
+                  { id: "webinar_confirmed", blockId: block.id, title: "Confirmaram presença", order: 1 },
+                  { id: "webinar_live", blockId: block.id, title: "Entraram ao vivo", order: 2 },
+                  { id: "webinar_retention", blockId: block.id, title: "Até o final", order: 3 },
+                  { id: "webinar_buyers", blockId: block.id, title: "Compraram", order: 4 },
                 ]
               : [];
 
@@ -1828,6 +1842,8 @@ export const ModularDashboard: React.FC = () => {
                     ) : (
                       <Share2 className="h-3.5 w-3.5 text-primary" />
                     )
+                  ) : isWebinarBlock ? (
+                    <Video className="h-3.5 w-3.5 text-primary" />
                   ) : null}
 
                   {inlineEditingBlockId === block.id ? (
@@ -1858,6 +1874,11 @@ export const ModularDashboard: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
+                  {/* SELETOR DE EDIÇÃO DO WEBINÁRIO (AJ-023) */}
+                  {isWebinarBlock && (
+                    <WebinarEditionSelector onOpenNewEdition={() => setIsNewWebinarEditionOpen(true)} />
+                  )}
+
                   {/* FILTRO DE MÍDIA INTEGRADO NO CABEÇALHO DO BLOCO */}
                   {isMediaBlock && (
                     <div className="flex items-center p-0.5 rounded-xl bg-muted/80 border border-border text-[11px] gap-0.5">
@@ -2017,6 +2038,16 @@ export const ModularDashboard: React.FC = () => {
               {block.id === "funil" ? (
                 <div className="w-full">
                   <ConnectedProgressiveFunnel compact={true} />
+                </div>
+              ) : isWebinarBlock ? (
+                <div className="w-full">
+                  <WebinarBlock
+                    block={block}
+                    cards={finalBlockCards}
+                    isNewEditionModalOpen={isNewWebinarEditionOpen}
+                    onCloseNewEditionModal={() => setIsNewWebinarEditionOpen(false)}
+                    onOpenNewEditionModal={() => setIsNewWebinarEditionOpen(true)}
+                  />
                 </div>
               ) : (
                 <div
