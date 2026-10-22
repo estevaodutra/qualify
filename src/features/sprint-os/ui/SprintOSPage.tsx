@@ -248,21 +248,8 @@ export const SprintOSPage: React.FC = () => {
       {/* Região 1: Cabeçalho Compacto (Linear Style) */}
       <ExecutiveHeader />
 
-      {/* Região 2: Progresso e Execução (Foco nas 5 perguntas) */}
-      <ExecutiveKPIs />
-
-      {/* Dashboard Modular e Funil Visual: INFRA | DISTRIBUIÇÃO | FUNIL (01 & 03) */}
+      {/* Cockpit Operacional Minimalista 80/20: INFRA | DISTRIBUIÇÃO | FUNIL */}
       <ModularDashboard />
-
-      {/* Inteligência Operacional Compacta e Recolhível (Seções 7 e 8) */}
-      <section className="px-6 py-2 grid grid-cols-1 md:grid-cols-12 gap-3.5">
-        <div className="md:col-span-6">
-          <OperationalCompassCard />
-        </div>
-        <div className="md:col-span-6">
-          <DailyRoutineCard />
-        </div>
-      </section>
 
       {/* Região 3: Filtros Compactos */}
       <section className="px-6 pt-3 pb-2">

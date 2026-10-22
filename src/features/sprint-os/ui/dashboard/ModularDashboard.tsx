@@ -1,13 +1,19 @@
 /**
- * Dashboard Totalmente Personalizável e Modular.
- * Especificação: Master Prompt — Seções 01, 03 e 04.
- * - Três blocos operacionais: INFRA | DISTRIBUIÇÃO | FUNIL
- * - Drag-and-drop para reordenar cards dentro de um bloco e entre blocos
- * - Drag-and-drop para reordenar blocos principais
- * - Edição de títulos sem alterar a identificação técnica nem as fontes de dados
+ * Dashboard Minimalista e Totalmente Personalizável (Cockpit 80/20).
+ * Especificação: Master Prompt — Seção 01, 02, 03 e Redesign do Painel Superior.
+ *
+ * Estrutura:
+ * - BLOCO 01 — INFRA (6 indicadores compactos: Progresso, Gasto Ads, Vendas, Entradas Grupo, Saídas Grupo, Testes)
+ * - BLOCO 02 — DISTRIBUIÇÃO (Filtro Hoje | 7 dias | 30 dias + 3 indicadores: Novos Seguidores, Posts, Views)
+ * - BLOCO 03 — FUNIL (Esteira visual progressiva conectada: EM ABERTO → PRÉ-QUALIFICAÇÃO → INTERESSADO → NEGOCIAÇÃO → FOLLOW-UP → VENDA)
+ *
+ * Recursos:
+ * - Drag-and-drop para reordenar cards e blocos
+ * - Edição de títulos sem alterar a identificação técnica nem fonte de dados
  * - Menu contextual compacto: Editar, Mover, Arquivar, Remover
- * - Área discreta para consultar e restaurar elementos arquivados / removidos
+ * - Restauração de elementos arquivados / removidos
  * - Persistência automática separando a configuração visual dos dados operacionais
+ * - Design minimalista com números em destaque e cards de baixa altura
  */
 
 import React, { useState } from "react";
@@ -19,21 +25,20 @@ import {
   Archive,
   RotateCcw,
   Plus,
-  ArrowUp,
-  ArrowDown,
+  Minus,
   CheckCircle2,
-  AlertTriangle,
-  FileCheck,
-  FolderArchive,
-  Calendar,
-  Instagram,
-  Eye,
-  MousePointerClick,
+  TrendingUp,
   Users,
   DollarSign,
-  TrendingUp,
+  Eye,
+  Instagram,
   Sparkles,
-  LayoutGrid,
+  SlidersHorizontal,
+  ChevronRight,
+  UserMinus,
+  FlaskConical,
+  Activity,
+  Layers,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -56,13 +61,13 @@ import {
 import { useSprintOSStore } from "../../state/sprintOsStore";
 import {
   getDashboardLayout,
-  saveDashboardLayout,
   reorderDashboardBlocks,
   reorderDashboardCards,
   updateDashboardCard,
   updateDashboardBlock,
   resetDashboardLayout,
   sprintTasks,
+  updateFunnelStage,
 } from "../../domain/ops";
 import { ConnectedProgressiveFunnel } from "../funnel/ConnectedProgressiveFunnel";
 import { computeProgressMetrics } from "../../metrics/calculations";
@@ -70,8 +75,10 @@ import { toast } from "sonner";
 import type { DashboardCardConfig, DashboardBlockConfig } from "../../domain/types";
 
 export const ModularDashboard: React.FC = () => {
-  const { workspace, activeSprintId, mutate, setSelectedTaskId, setIsTaskModalOpen } =
-    useSprintOSStore();
+  const { workspace, activeSprintId, mutate } = useSprintOSStore();
+
+  // Filtro de período para o Bloco de Distribuição (Hoje | 7 dias | 30 dias)
+  const [distPeriod, setDistPeriod] = useState<"today" | "7d" | "30d">("7d");
 
   // Estados de Drag & Drop
   const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
@@ -84,6 +91,10 @@ export const ModularDashboard: React.FC = () => {
   const [editTitleInput, setEditTitleInput] = useState("");
   const [editingBlock, setEditingBlock] = useState<DashboardBlockConfig | null>(null);
   const [editBlockTitleInput, setEditBlockTitleInput] = useState("");
+
+  // Modal para ajuste de Gasto Ads
+  const [isEditingAdSpend, setIsEditingAdSpend] = useState(false);
+  const [adSpendInput, setAdSpendInput] = useState("");
 
   // Modal de Restauração de Elementos
   const [showRestoreModal, setShowRestoreModal] = useState(false);
@@ -102,43 +113,203 @@ export const ModularDashboard: React.FC = () => {
   const archivedBlocks = (layout.blocks || []).filter((b) => b.archived);
   const totalRestoreItems = archivedOrRemovedCards.length + archivedBlocks.length;
 
-  // Cálculos Reais de Dados Operacionais
+  // -------------------------------------------------------------
+  // DADOS OPERACIONAIS 100% REAIS (SEM VALORES INVENTADOS)
+  // -------------------------------------------------------------
   const tasks = sprintTasks(workspace, activeSprintId);
   const progressMetrics = computeProgressMetrics(workspace, activeSprintId);
 
-  // Dados INFRA
-  const infraTasks = tasks.filter(
-    (t) => t.impactFlags?.includes("infrastructure") || t.stageId === Object.keys(workspace.stages)[0]
-  );
-  const infraDoneTasks = infraTasks.filter((t) => t.status === "done");
-  const activeBlocksList = tasks.filter((t) => !!(t.blockInfo?.active || t.blockedReason));
-  const deliverables = tasks.flatMap((t) => t.deliverableMaterials || []);
-  const deliverablesApproved = deliverables.filter((d) => d.reviewStatus === "aprovado");
+  // 1. INFRA — Indicador 1: Progresso Atual
+  const pendingTasksCount = tasks.filter((t) => t.status === "pending").length;
+  const doingTasksCount = tasks.filter((t) => t.status === "doing").length;
+  const doneTasksCount = tasks.filter((t) => t.status === "done").length;
 
-  const nextMilestone = Object.values(workspace.milestones || {})
-    .filter((m) => !m.archivedAt && !m.validatedAt)
-    .sort((a, b) => (a.dueDate || "9999").localeCompare(b.dueDate || "9999"))[0];
+  // 1. INFRA — Indicador 2: Gasto Ads
+  const adSpend =
+    workspace.contentMetrics?.adSpend ??
+    workspace.adsCalculator?.totalSpent ??
+    0;
 
-  // Dados DISTRIBUIÇÃO
-  const publications = Object.values(workspace.publications || {});
-  const reelsPosts = publications.filter((p) => p.type === "reels");
-  const totalReelsViews = reelsPosts.reduce((acc, p) => acc + p.views, 0);
-  const distinctReelsDates = new Set(reelsPosts.map((p) => p.publishedAt)).size || 1;
-  const avgDailyReelsViews = Math.round(totalReelsViews / distinctReelsDates);
-  const dailyReelsTarget = workspace.contentDistributionConfig?.dailyReelsTarget ?? 1000;
-  const totalViews = publications.reduce((acc, p) => acc + p.views, 0);
-  const avgViewsPerPost = publications.length ? Math.round(totalViews / publications.length) : 0;
-  const totalClicks = publications.reduce((acc, p) => acc + p.clicks, 0);
-  const totalGroupEntries = publications.reduce((acc, p) => acc + p.groupEntries, 0);
-
-  // Dados FUNIL
+  // 1. INFRA — Indicador 3: Vendas
   const funnelStages = Object.values(workspace.funnel || {})
     .filter((s) => !s.archivedAt)
     .sort((a, b) => a.position - b.position);
-  const totalFunnelLeads = funnelStages.reduce((acc, s) => acc + s.count, 0);
-  const totalRevenue = funnelStages.reduce((acc, s) => acc + (s.value || 0), 0);
 
-  // --- Handlers de Drag & Drop de Blocos ---
+  const salesStage = funnelStages.find(
+    (s) =>
+      s.label.toLowerCase().includes("venda") ||
+      s.label.toLowerCase().includes("fechamento") ||
+      s.position === funnelStages.length - 1
+  );
+  const salesCount = salesStage ? salesStage.count : 0;
+  const salesRevenue = salesStage?.value || 0;
+
+  // 1. INFRA — Indicador 4 & 5: Entradas e Saídas no Grupo
+  const groupEntries =
+    workspace.contentMetrics?.groupEntries ??
+    Object.values(workspace.publications || {}).reduce((acc, p) => acc + (p.groupEntries || 0), 0);
+
+  const groupExits = workspace.contentMetrics?.groupExits ?? 0;
+
+  // 1. INFRA — Indicador 6: Testes Realizados
+  const completedTestsCount =
+    workspace.contentMetrics?.testsCompleted ??
+    tasks.filter(
+      (t) =>
+        t.status === "done" &&
+        (t.title.toLowerCase().includes("teste") ||
+          t.description?.toLowerCase().includes("teste") ||
+          t.impactFlags?.includes("operational"))
+    ).length;
+
+  // 2. DISTRIBUIÇÃO — Indicadores com Filtro de Período (Hoje | 7 dias | 30 dias)
+  const publications = Object.values(workspace.publications || {});
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+  const sevenDaysAgoStr = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const thirtyDaysAgoStr = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  const filteredPublications = publications.filter((p) => {
+    if (!p.publishedAt) return true;
+    if (distPeriod === "today") return p.publishedAt === todayStr;
+    if (distPeriod === "7d") return p.publishedAt >= sevenDaysAgoStr;
+    if (distPeriod === "30d") return p.publishedAt >= thirtyDaysAgoStr;
+    return true;
+  });
+
+  const followersCount =
+    distPeriod === "today"
+      ? (workspace.contentMetrics?.followersGainToday ?? 0)
+      : distPeriod === "7d"
+      ? (workspace.contentMetrics?.followersGain7d ?? workspace.contentMetrics?.newFollowers ?? 0)
+      : (workspace.contentMetrics?.followersGain30d ?? workspace.contentMetrics?.newFollowers ?? 0);
+
+  const postsCount = filteredPublications.length || (distPeriod === "30d" ? publications.length : 0);
+  const viewsCount =
+    filteredPublications.reduce((acc, p) => acc + (p.views || 0), 0) ||
+    (distPeriod === "30d" ? publications.reduce((acc, p) => acc + (p.views || 0), 0) : 0);
+
+  // -------------------------------------------------------------
+  // AÇÕES OPERACIONAIS RÁPIDAS (AJUSTES DE DADOS)
+  // -------------------------------------------------------------
+  const handleUpdateGroupEntries = (delta: number) => {
+    mutate((ws) => {
+      ws.contentMetrics ??= {
+        postsPublished: 0,
+        postsPerDay: 0,
+        reels: 0,
+        stories: 0,
+        views: 0,
+        reach: 0,
+        clicks: 0,
+        groupEntries: 0,
+        leadsCaptured: 0,
+        adSpend: 0,
+        period: "7d",
+      };
+      ws.contentMetrics.groupEntries = Math.max(0, (ws.contentMetrics.groupEntries || 0) + delta);
+    });
+  };
+
+  const handleUpdateGroupExits = (delta: number) => {
+    mutate((ws) => {
+      ws.contentMetrics ??= {
+        postsPublished: 0,
+        postsPerDay: 0,
+        reels: 0,
+        stories: 0,
+        views: 0,
+        reach: 0,
+        clicks: 0,
+        groupEntries: 0,
+        leadsCaptured: 0,
+        adSpend: 0,
+        period: "7d",
+      };
+      ws.contentMetrics.groupExits = Math.max(0, (ws.contentMetrics.groupExits || 0) + delta);
+    });
+  };
+
+  const handleUpdateTests = (delta: number) => {
+    mutate((ws) => {
+      ws.contentMetrics ??= {
+        postsPublished: 0,
+        postsPerDay: 0,
+        reels: 0,
+        stories: 0,
+        views: 0,
+        reach: 0,
+        clicks: 0,
+        groupEntries: 0,
+        leadsCaptured: 0,
+        adSpend: 0,
+        period: "7d",
+      };
+      ws.contentMetrics.testsCompleted = Math.max(0, (ws.contentMetrics.testsCompleted || 0) + delta);
+    });
+  };
+
+  const handleUpdateFollowers = (delta: number) => {
+    mutate((ws) => {
+      ws.contentMetrics ??= {
+        postsPublished: 0,
+        postsPerDay: 0,
+        reels: 0,
+        stories: 0,
+        views: 0,
+        reach: 0,
+        clicks: 0,
+        groupEntries: 0,
+        leadsCaptured: 0,
+        adSpend: 0,
+        period: "7d",
+      };
+      if (distPeriod === "today") {
+        ws.contentMetrics.followersGainToday = Math.max(0, (ws.contentMetrics.followersGainToday || 0) + delta);
+      } else if (distPeriod === "7d") {
+        ws.contentMetrics.followersGain7d = Math.max(0, (ws.contentMetrics.followersGain7d || 0) + delta);
+        ws.contentMetrics.newFollowers = ws.contentMetrics.followersGain7d;
+      } else {
+        ws.contentMetrics.followersGain30d = Math.max(0, (ws.contentMetrics.followersGain30d || 0) + delta);
+      }
+    });
+  };
+
+  const handleSaveAdSpend = () => {
+    const val = parseFloat(adSpendInput.replace(",", "."));
+    if (isNaN(val)) return;
+    mutate((ws) => {
+      ws.contentMetrics ??= {
+        postsPublished: 0,
+        postsPerDay: 0,
+        reels: 0,
+        stories: 0,
+        views: 0,
+        reach: 0,
+        clicks: 0,
+        groupEntries: 0,
+        leadsCaptured: 0,
+        adSpend: 0,
+        period: "7d",
+      };
+      ws.contentMetrics.adSpend = Math.max(0, val);
+    });
+    setIsEditingAdSpend(false);
+    toast.success("Gasto Ads atualizado!");
+  };
+
+  const handleUpdateSales = (delta: number) => {
+    if (!salesStage) return;
+    mutate((ws, ctx) => {
+      updateFunnelStage(ws, ctx, salesStage.id, {
+        count: Math.max(0, salesStage.count + delta),
+      });
+    });
+  };
+
+  // -------------------------------------------------------------
+  // HANDLERS DE DRAG & DROP E PERSONALIZAÇÃO
+  // -------------------------------------------------------------
   const handleBlockDragStart = (blockId: string) => {
     setDraggedBlockId(blockId);
   };
@@ -163,7 +334,6 @@ export const ModularDashboard: React.FC = () => {
     setDragOverBlockId(null);
   };
 
-  // --- Handlers de Drag & Drop de Cards ---
   const handleCardDragStart = (cardId: string) => {
     setDraggedCardId(cardId);
   };
@@ -193,7 +363,6 @@ export const ModularDashboard: React.FC = () => {
     toast.success("Card reposicionado!");
   };
 
-  // Mover Card para outro Bloco via Menu
   const handleMoveCardToBlock = (cardId: string, toBlockId: string) => {
     const targetBlockCards = (layout.cards || [])
       .filter((c) => c.blockId === toBlockId && !c.archived && !c.removed)
@@ -207,14 +376,13 @@ export const ModularDashboard: React.FC = () => {
     toast.success("Card movido de bloco!");
   };
 
-  // Edição de Título
   const handleSaveCardTitle = () => {
     if (!editingCard || !editTitleInput.trim()) return;
     mutate((ws, ctx) => {
       updateDashboardCard(ws, ctx, editingCard.id, { title: editTitleInput.trim() });
     });
     setEditingCard(null);
-    toast.success("Título do card atualizado!");
+    toast.success("Título atualizado!");
   };
 
   const handleSaveBlockTitle = () => {
@@ -226,301 +394,340 @@ export const ModularDashboard: React.FC = () => {
     toast.success("Título do bloco atualizado!");
   };
 
-  // Arquivar / Remover Card
   const handleArchiveCard = (cardId: string) => {
     mutate((ws, ctx) => {
       updateDashboardCard(ws, ctx, cardId, { archived: true });
     });
-    toast.success("Card arquivado.");
+    toast.info("Card arquivado.");
   };
 
   const handleRemoveCard = (cardId: string) => {
     mutate((ws, ctx) => {
       updateDashboardCard(ws, ctx, cardId, { removed: true });
     });
-    toast.success("Card removido da exibição.");
+    toast.info("Card removido da exibição.");
   };
 
-  // Restaurar Card
   const handleRestoreCard = (cardId: string) => {
     mutate((ws, ctx) => {
       updateDashboardCard(ws, ctx, cardId, { archived: false, removed: false });
     });
-    toast.success("Card restaurado ao dashboard!");
+    toast.success("Card restaurado com sucesso!");
   };
 
-  // Restaurar Bloco
+  const handleArchiveBlock = (blockId: string) => {
+    mutate((ws, ctx) => {
+      updateDashboardBlock(ws, ctx, blockId, { archived: true });
+    });
+    toast.info("Bloco arquivado.");
+  };
+
   const handleRestoreBlock = (blockId: string) => {
     mutate((ws, ctx) => {
       updateDashboardBlock(ws, ctx, blockId, { archived: false });
     });
-    toast.success("Bloco restaurado ao dashboard!");
+    toast.success("Bloco restaurado!");
   };
 
-  // Resetar Layout
   const handleResetLayout = () => {
     mutate((ws, ctx) => {
       resetDashboardLayout(ws, ctx);
     });
-    setShowRestoreModal(false);
-    toast.success("Layout padrão do dashboard restaurado!");
+    toast.success("Layout redefinido para o padrão!");
   };
 
-  // RENDERIZADOR DOS CARDS POR ID ESTÁVEL
+  // -------------------------------------------------------------
+  // RENDERIZADOR DOS CARDS COMPACTOS MINIMALISTAS
+  // -------------------------------------------------------------
   const renderCardContent = (card: DashboardCardConfig) => {
     switch (card.id) {
+      // 1. BLOCO INFRA
+      case "infra_progress":
+      case "infra_pace":
       case "infra_setup":
         return (
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             <div className="flex items-baseline justify-between">
-              <span className="text-2xl font-black font-mono text-foreground">
-                {infraDoneTasks.length}/{infraTasks.length || tasks.length}
-              </span>
-              <span className="text-[10px] text-muted-foreground font-mono">
-                {infraTasks.length
-                  ? `${Math.round((infraDoneTasks.length / infraTasks.length) * 100)}%`
-                  : "0%"}
-              </span>
-            </div>
-            <Progress
-              value={infraTasks.length ? (infraDoneTasks.length / infraTasks.length) * 100 : 0}
-              className="h-1.5 bg-muted [&>div]:bg-blue-500"
-            />
-            <span className="text-[11px] text-muted-foreground block truncate">
-              {infraTasks.length - infraDoneTasks.length} tarefa(s) pendente(s)
-            </span>
-          </div>
-        );
-
-      case "infra_blocks":
-        return (
-          <div className="space-y-1.5">
-            <div className="flex items-baseline justify-between">
-              <span
-                className={`text-2xl font-black font-mono ${
-                  activeBlocksList.length > 0 ? "text-rose-600 dark:text-rose-400" : "text-emerald-500"
-                }`}
-              >
-                {activeBlocksList.length}
-              </span>
-              <Badge
-                variant="outline"
-                className={`text-[9px] font-mono ${
-                  activeBlocksList.length > 0
-                    ? "border-rose-500/30 text-rose-600 dark:text-rose-400 bg-rose-500/10"
-                    : "border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10"
-                }`}
-              >
-                {activeBlocksList.length > 0 ? "Trava Ativa" : "Fluxo Livre"}
-              </Badge>
-            </div>
-            <span className="text-[11px] text-muted-foreground block truncate">
-              {activeBlocksList.length > 0
-                ? `${activeBlocksList[0].title}: ${activeBlocksList[0].blockInfo?.reason || "Aguardando"}`
-                : "Nenhum bloqueio operacional no momento."}
-            </span>
-          </div>
-        );
-
-      case "infra_deliverables":
-        return (
-          <div className="space-y-1.5">
-            <div className="flex items-baseline justify-between">
-              <span className="text-2xl font-black font-mono text-foreground">
-                {deliverablesApproved.length}/{deliverables.length}
-              </span>
-              <span className="text-[10px] text-muted-foreground font-mono">
-                {deliverables.length
-                  ? `${Math.round((deliverablesApproved.length / deliverables.length) * 100)}%`
-                  : "—"}
-              </span>
-            </div>
-            <Progress
-              value={deliverables.length ? (deliverablesApproved.length / deliverables.length) * 100 : 0}
-              className="h-1.5 bg-muted [&>div]:bg-purple-500"
-            />
-            <span className="text-[11px] text-muted-foreground block truncate">
-              {deliverables.length - deliverablesApproved.length} entregável(is) aguardando revisão
-            </span>
-          </div>
-        );
-
-      case "infra_pace":
-        return (
-          <div className="space-y-1.5">
-            <div className="flex items-baseline justify-between">
-              <span className="text-2xl font-black font-mono text-primary">
+              <span className="text-2xl font-black font-mono tracking-tight text-foreground">
                 {progressMetrics.taskProgressPct}%
               </span>
-              <Badge variant="outline" className="text-[9px] font-mono border-primary/30 text-primary">
-                Sprint Geral
-              </Badge>
+              <span className="text-[10px] text-muted-foreground font-mono">
+                {progressMetrics.tasksDone}/{progressMetrics.tasksTotal} tarefas
+              </span>
             </div>
-            <span className="text-[11px] text-muted-foreground block truncate">
-              {nextMilestone
-                ? `Próx. Marco: ${nextMilestone.title} (${nextMilestone.dueDate?.split("-").reverse().join("/") || "sem data"})`
-                : "Nenhum marco pendente."}
-            </span>
+            <Progress value={progressMetrics.taskProgressPct} className="h-1.5 bg-muted" />
+            <div className="text-[11px] text-muted-foreground truncate pt-0.5">
+              {pendingTasksCount} pendentes • {doingTasksCount} fazendo • {doneTasksCount} concluídas
+            </div>
           </div>
         );
 
-      case "dist_reels":
-        const reelsPct = Math.min(100, Math.round((avgDailyReelsViews / dailyReelsTarget) * 100));
+      case "infra_ad_spend":
         return (
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             <div className="flex items-baseline justify-between">
-              <span className="text-2xl font-black font-mono text-amber-600 dark:text-amber-400">
-                {avgDailyReelsViews.toLocaleString("pt-BR")}
+              <span className="text-xl font-black font-mono tracking-tight text-foreground">
+                R$ {adSpend.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
               </span>
-              <span className="text-[10px] text-muted-foreground font-mono">
-                Meta: {dailyReelsTarget.toLocaleString("pt-BR")}/dia
-              </span>
+              <button
+                onClick={() => {
+                  setAdSpendInput(adSpend.toString());
+                  setIsEditingAdSpend(true);
+                }}
+                className="text-[10px] text-primary hover:underline font-medium"
+              >
+                Ajustar
+              </button>
             </div>
-            <Progress value={reelsPct} className="h-1.5 bg-muted [&>div]:bg-amber-500" />
-            <span className="text-[11px] text-muted-foreground block truncate">
-              {reelsPct >= 100 ? "🟢 Meta diária atingida" : `${reelsPct}% da meta diária de atração`}
-            </span>
+            <div className="text-[11px] text-muted-foreground truncate">
+              Valor investido em tráfego pago
+            </div>
+          </div>
+        );
+
+      case "infra_sales":
+        return (
+          <div className="space-y-1">
+            <div className="flex items-baseline justify-between">
+              <span className="text-2xl font-black font-mono tracking-tight text-emerald-600 dark:text-emerald-400">
+                {salesCount}
+              </span>
+              <div className="flex items-center gap-0.5 bg-muted/60 rounded-lg p-0.5 border border-border">
+                <button
+                  onClick={() => handleUpdateSales(-1)}
+                  className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                >
+                  <Minus className="h-2.5 w-2.5" />
+                </button>
+                <button
+                  onClick={() => handleUpdateSales(1)}
+                  className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                >
+                  <Plus className="h-2.5 w-2.5" />
+                </button>
+              </div>
+            </div>
+            <div className="text-[11px] text-muted-foreground truncate">
+              {salesRevenue > 0
+                ? `R$ ${salesRevenue.toLocaleString("pt-BR")} acumulado`
+                : "Vendas confirmadas"}
+            </div>
+          </div>
+        );
+
+      case "infra_group_entries":
+      case "dist_groups":
+        return (
+          <div className="space-y-1">
+            <div className="flex items-baseline justify-between">
+              <span className="text-2xl font-black font-mono tracking-tight text-foreground">
+                {groupEntries}
+              </span>
+              <div className="flex items-center gap-0.5 bg-muted/60 rounded-lg p-0.5 border border-border">
+                <button
+                  onClick={() => handleUpdateGroupEntries(-1)}
+                  className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                >
+                  <Minus className="h-2.5 w-2.5" />
+                </button>
+                <button
+                  onClick={() => handleUpdateGroupEntries(1)}
+                  className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                >
+                  <Plus className="h-2.5 w-2.5" />
+                </button>
+              </div>
+            </div>
+            <div className="text-[11px] text-muted-foreground truncate">
+              Membros adicionados ao grupo
+            </div>
+          </div>
+        );
+
+      case "infra_group_exits":
+        return (
+          <div className="space-y-1">
+            <div className="flex items-baseline justify-between">
+              <span className="text-2xl font-black font-mono tracking-tight text-amber-600 dark:text-amber-400">
+                {groupExits}
+              </span>
+              <div className="flex items-center gap-0.5 bg-muted/60 rounded-lg p-0.5 border border-border">
+                <button
+                  onClick={() => handleUpdateGroupExits(-1)}
+                  className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                >
+                  <Minus className="h-2.5 w-2.5" />
+                </button>
+                <button
+                  onClick={() => handleUpdateGroupExits(1)}
+                  className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                >
+                  <Plus className="h-2.5 w-2.5" />
+                </button>
+              </div>
+            </div>
+            <div className="text-[11px] text-muted-foreground truncate">
+              Participantes que saíram
+            </div>
+          </div>
+        );
+
+      case "infra_tests":
+        return (
+          <div className="space-y-1">
+            <div className="flex items-baseline justify-between">
+              <span className="text-2xl font-black font-mono tracking-tight text-foreground">
+                {completedTestsCount}
+              </span>
+              <div className="flex items-center gap-0.5 bg-muted/60 rounded-lg p-0.5 border border-border">
+                <button
+                  onClick={() => handleUpdateTests(-1)}
+                  className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                >
+                  <Minus className="h-2.5 w-2.5" />
+                </button>
+                <button
+                  onClick={() => handleUpdateTests(1)}
+                  className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                >
+                  <Plus className="h-2.5 w-2.5" />
+                </button>
+              </div>
+            </div>
+            <div className="text-[11px] text-muted-foreground truncate">
+              Hipóteses e testes validados
+            </div>
+          </div>
+        );
+
+      // 2. BLOCO DISTRIBUIÇÃO (Instagram)
+      case "dist_followers":
+        return (
+          <div className="space-y-1">
+            <div className="flex items-baseline justify-between">
+              <span className="text-2xl font-black font-mono tracking-tight text-primary">
+                +{followersCount}
+              </span>
+              <div className="flex items-center gap-0.5 bg-muted/60 rounded-lg p-0.5 border border-border">
+                <button
+                  onClick={() => handleUpdateFollowers(-10)}
+                  className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                >
+                  <Minus className="h-2.5 w-2.5" />
+                </button>
+                <button
+                  onClick={() => handleUpdateFollowers(10)}
+                  className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                >
+                  <Plus className="h-2.5 w-2.5" />
+                </button>
+              </div>
+            </div>
+            <div className="text-[11px] text-muted-foreground truncate">
+              Ganhos de perfil ({distPeriod === "today" ? "Hoje" : distPeriod === "7d" ? "Últimos 7 dias" : "Últimos 30 dias"})
+            </div>
           </div>
         );
 
       case "dist_posts":
         return (
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             <div className="flex items-baseline justify-between">
-              <span className="text-2xl font-black font-mono text-foreground">
-                {publications.length}
+              <span className="text-2xl font-black font-mono tracking-tight text-foreground">
+                {postsCount}
               </span>
               <span className="text-[10px] text-muted-foreground font-mono">
-                {totalViews.toLocaleString("pt-BR")} views
+                {publications.length} no total
               </span>
             </div>
-            <span className="text-[11px] text-muted-foreground block truncate">
-              Média: {avgViewsPerPost.toLocaleString("pt-BR")} visualizações por post
-            </span>
+            <div className="text-[11px] text-muted-foreground truncate">
+              Publicações no período
+            </div>
           </div>
         );
 
-      case "dist_clicks":
+      case "dist_views":
         return (
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             <div className="flex items-baseline justify-between">
-              <span className="text-2xl font-black font-mono text-blue-600 dark:text-blue-400">
-                {totalClicks.toLocaleString("pt-BR")}
+              <span className="text-2xl font-black font-mono tracking-tight text-foreground">
+                {viewsCount.toLocaleString("pt-BR")}
               </span>
-              <MousePointerClick className="h-4 w-4 text-blue-500/70" />
+              <Eye className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
-            <span className="text-[11px] text-muted-foreground block truncate">
-              Cliques diretos em links de conversão e bio
-            </span>
+            <div className="text-[11px] text-muted-foreground truncate">
+              Visualizações acumuladas
+            </div>
           </div>
         );
 
-      case "dist_groups":
-        return (
-          <div className="space-y-1.5">
-            <div className="flex items-baseline justify-between">
-              <span className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400">
-                {totalGroupEntries.toLocaleString("pt-BR")}
-              </span>
-              <Users className="h-4 w-4 text-emerald-500/70" />
-            </div>
-            <span className="text-[11px] text-muted-foreground block truncate">
-              Leads reais que entraram no grupo VIP
-            </span>
-          </div>
-        );
-
+      // 3. BLOCO FUNIL
+      case "funnel_pipeline":
       case "funnel_visual":
         return (
-          <div className="pt-1">
-            <ConnectedProgressiveFunnel compact />
-          </div>
-        );
-
-      case "funnel_kpis":
-        return (
-          <div className="grid grid-cols-3 gap-2 text-center pt-1">
-            <div className="p-2 rounded-xl bg-muted/40 border border-border">
-              <span className="text-[10px] text-muted-foreground uppercase font-bold block">Leads</span>
-              <span className="text-lg font-black font-mono text-foreground">{totalFunnelLeads}</span>
-            </div>
-            <div className="p-2 rounded-xl bg-muted/40 border border-border">
-              <span className="text-[10px] text-muted-foreground uppercase font-bold block">Conv. Final</span>
-              <span className="text-lg font-black font-mono text-emerald-600 dark:text-emerald-400">
-                {funnelStages[0]?.count > 0 && funnelStages[funnelStages.length - 1]?.count
-                  ? `${Math.round((funnelStages[funnelStages.length - 1].count / funnelStages[0].count) * 100)}%`
-                  : "0%"}
-              </span>
-            </div>
-            <div className="p-2 rounded-xl bg-muted/40 border border-border">
-              <span className="text-[10px] text-muted-foreground uppercase font-bold block">Receita</span>
-              <span className="text-xs font-black font-mono text-primary truncate block mt-1">
-                R$ {totalRevenue.toLocaleString("pt-BR")}
-              </span>
-            </div>
+          <div className="w-full">
+            <ConnectedProgressiveFunnel compact={true} />
           </div>
         );
 
       default:
         return (
-          <div className="p-3 text-xs text-muted-foreground italic">
-            Elemento configurável do dashboard.
+          <div className="text-xs text-muted-foreground">
+            Métrica operacional ativa.
           </div>
         );
     }
   };
 
   return (
-    <section className="px-6 pt-4 pb-2 space-y-4">
-      {/* Topo do Cockpit: Barra de Personalização Discreta */}
-      <div className="flex items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <LayoutGrid className="h-3.5 w-3.5 text-primary" />
-          <span className="font-bold uppercase tracking-wider text-[11px] text-foreground">
-            Cockpit Modular de Operação
-          </span>
-          <span className="text-[10px] text-muted-foreground hidden sm:inline">
-            (Arraste blocos ou cards para reorganizar seu cockpit)
+    <section className="px-6 py-2 space-y-3">
+      {/* Barra Superior Compacta de Gestão do Cockpit */}
+      <div className="flex items-center justify-between pb-1 text-xs">
+        <div className="flex items-center gap-2">
+          <div className="h-2 w-2 rounded-full bg-primary" />
+          <h2 className="font-extrabold uppercase tracking-wider text-foreground text-[11px]">
+            Cockpit Operacional
+          </h2>
+          <span className="text-[11px] text-muted-foreground hidden sm:inline">
+            • 3 blocos modulares
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           {totalRestoreItems > 0 && (
             <Button
-              size="sm"
               variant="outline"
+              size="sm"
               onClick={() => setShowRestoreModal(true)}
-              className="h-7 text-xs border-dashed border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 rounded-xl flex items-center gap-1.5"
+              className="h-7 text-[11px] font-medium rounded-xl border-dashed border-primary/50 text-primary hover:bg-primary/10 gap-1 px-2.5"
             >
-              <Archive className="h-3 w-3" />
-              <span>Restaurar Elementos ({totalRestoreItems})</span>
+              <RotateCcw className="h-3 w-3" />
+              <span>Restaurar ({totalRestoreItems})</span>
             </Button>
           )}
 
           <Button
-            size="sm"
             variant="ghost"
+            size="sm"
             onClick={handleResetLayout}
-            className="h-7 text-[11px] text-muted-foreground hover:text-foreground rounded-lg"
-            title="Redefinir disposição dos blocos e cards para o padrão original"
+            className="h-7 text-[11px] text-muted-foreground hover:text-foreground rounded-xl px-2"
+            title="Restaurar disposição padrão"
           >
-            <RotateCcw className="h-3 w-3 mr-1" />
-            <span className="hidden md:inline">Layout Padrão</span>
+            Disposição Padrão
           </Button>
         </div>
       </div>
 
-      {/* BLOCOS PRINCIPAIS REORDENÁVEIS (INFRA | DISTRIBUIÇÃO | FUNIL) */}
-      <div className="space-y-4">
+      {/* BLOCOS OPERACIONAIS PRINCIPAIS (ARRÁSTAVEIS) */}
+      <div className="space-y-3">
         {activeBlocks.map((block) => {
+          const isDraggingBlock = draggedBlockId === block.id;
+          const isDragOverBlock = dragOverBlockId === block.id;
+
+          // Cards do bloco
           const blockCards = (layout.cards || [])
             .filter((c) => c.blockId === block.id && !c.archived && !c.removed)
             .sort((a, b) => a.order - b.order);
-
-          const isBlockDragging = draggedBlockId === block.id;
-
-          // Se for o bloco FUNIL, damos largura total para o pipeline visual brilhar
-          const isFunnelBlock = block.id === "funil";
 
           return (
             <div
@@ -531,45 +738,54 @@ export const ModularDashboard: React.FC = () => {
                 e.preventDefault();
                 setDragOverBlockId(block.id);
               }}
+              onDragLeave={() => setDragOverBlockId(null)}
               onDrop={() => handleBlockDrop(block.id)}
-              className={`rounded-3xl border transition-all duration-200 p-4 ${
-                isBlockDragging
-                  ? "opacity-30 border-dashed border-primary"
-                  : "bg-card border-border shadow-xs hover:border-border/80"
-              }`}
+              className={`rounded-2xl border bg-card/60 backdrop-blur-xs p-3 transition-all duration-200 ${
+                isDraggingBlock ? "opacity-30 border-dashed border-primary" : ""
+              } ${isDragOverBlock ? "border-primary ring-2 ring-primary/20" : "border-border"}`}
             >
-              {/* Header do Bloco com Handle de Arraste e Menu Contextual */}
-              <div className="flex items-center justify-between pb-3 mb-3 border-b border-border/60">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span
-                    className="cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-foreground"
-                    title="Arraste para reordenar este bloco no dashboard"
+              {/* CABEÇALHO DO BLOCO */}
+              <div className="flex items-center justify-between pb-2 mb-2 border-b border-border/60">
+                <div className="flex items-center gap-2">
+                  <div
+                    className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-foreground p-0.5 rounded"
+                    title="Arraste para reordenar o bloco"
                   >
-                    <GripVertical className="h-4 w-4" />
-                  </span>
-                  <h3
-                    onDoubleClick={() => {
-                      setEditingBlock(block);
-                      setEditBlockTitleInput(block.title);
-                    }}
-                    className="text-xs font-black uppercase tracking-wider text-foreground truncate cursor-pointer hover:text-primary transition-colors"
-                    title="Duplo-clique para renomear bloco"
-                  >
+                    <GripVertical className="h-3.5 w-3.5" />
+                  </div>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-foreground">
                     {block.title}
                   </h3>
-                  <Badge variant="outline" className="text-[9px] font-mono border-border text-muted-foreground py-0">
-                    {blockCards.length} elemento(s)
-                  </Badge>
                 </div>
 
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-2">
+                  {/* Se for o BLOCO 02 (DISTRIBUIÇÃO), exibe o seletor de período */}
+                  {block.id === "distribuicao" && (
+                    <div className="flex items-center p-0.5 rounded-lg bg-muted border border-border text-[10px]">
+                      {(["today", "7d", "30d"] as const).map((p) => (
+                        <button
+                          key={p}
+                          onClick={() => setDistPeriod(p)}
+                          className={`px-2 py-0.5 rounded-md font-bold transition-all ${
+                            distPeriod === p
+                              ? "bg-background text-foreground shadow-xs"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {p === "today" ? "Hoje" : p === "7d" ? "7 dias" : "30 dias"}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Menu do Bloco */}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button className="h-6 w-6 rounded hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground">
+                      <button className="h-6 w-6 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground">
                         <MoreVertical className="h-3.5 w-3.5" />
                       </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="text-xs w-44">
+                    <DropdownMenuContent align="end" className="w-48 text-xs p-1">
                       <DropdownMenuItem
                         onClick={() => {
                           setEditingBlock(block);
@@ -579,14 +795,10 @@ export const ModularDashboard: React.FC = () => {
                         <Edit2 className="h-3.5 w-3.5 mr-2" />
                         Renomear Bloco
                       </DropdownMenuItem>
+                      <DropdownMenuSeparator />
                       <DropdownMenuItem
-                        onClick={() => {
-                          mutate((ws, ctx) => {
-                            updateDashboardBlock(ws, ctx, block.id, { archived: true });
-                          });
-                          toast.success("Bloco arquivado.");
-                        }}
-                        className="text-amber-600"
+                        onClick={() => handleArchiveBlock(block.id)}
+                        className="text-amber-600 focus:text-amber-600"
                       >
                         <Archive className="h-3.5 w-3.5 mr-2" />
                         Arquivar Bloco
@@ -596,74 +808,69 @@ export const ModularDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* GRID DE CARDS DENTRO DO BLOCO */}
-              {blockCards.length === 0 ? (
-                <div className="py-6 text-center text-xs text-muted-foreground/60 border border-dashed border-border rounded-2xl">
-                  Nenhum card neste bloco. Arraste cards de outros blocos ou restaure elementos arquivados.
+              {/* GRID OU ÁREA DE CONTEÚDO DO BLOCO */}
+              {block.id === "funil" ? (
+                // O Bloco de Funil renderiza a esteira visual diretamente
+                <div className="w-full">
+                  <ConnectedProgressiveFunnel compact={true} />
                 </div>
               ) : (
                 <div
-                  className={`grid gap-3.5 ${
-                    isFunnelBlock
-                      ? "grid-cols-1"
-                      : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+                  className={`grid gap-2.5 ${
+                    block.id === "infra"
+                      ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6"
+                      : "grid-cols-1 sm:grid-cols-3"
                   }`}
                 >
                   {blockCards.map((card) => {
-                    const isCardDragging = draggedCardId === card.id;
+                    const isDraggingCard = draggedCardId === card.id;
+                    const isDragOverCard = dragOverCardId === card.id;
 
                     return (
                       <div
                         key={card.id}
                         draggable
-                        onDragStart={(e) => {
-                          e.stopPropagation();
-                          handleCardDragStart(card.id);
-                        }}
+                        onDragStart={() => handleCardDragStart(card.id)}
                         onDragOver={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
                           setDragOverCardId(card.id);
                         }}
+                        onDragLeave={() => setDragOverCardId(null)}
                         onDrop={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
                           handleCardDrop(card.id, block.id);
                         }}
-                        className={`rounded-2xl border p-3.5 flex flex-col justify-between transition-all duration-200 select-none ${
-                          isCardDragging
-                            ? "opacity-30 border-dashed border-primary scale-95"
-                            : "bg-background/80 hover:bg-background border-border/80 hover:border-primary/40 shadow-xs hover:shadow-sm"
+                        className={`rounded-xl border p-2.5 bg-card flex flex-col justify-between transition-all duration-150 relative group ${
+                          isDraggingCard ? "opacity-30 border-dashed border-primary" : ""
+                        } ${
+                          isDragOverCard
+                            ? "border-primary ring-2 ring-primary/20 scale-[0.99]"
+                            : "border-border/80 hover:border-primary/40 hover:shadow-xs"
                         }`}
                       >
-                        {/* Header do Card: Título Editável, Drag Handle e Menu Contextual */}
-                        <div className="flex items-center justify-between gap-1.5 mb-2">
-                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                        {/* Linha Superior do Card: Alça, Título e Menu */}
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <div className="flex items-center gap-1 min-w-0">
                             <span
-                              className="cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-foreground shrink-0"
-                              title="Arraste para reposicionar este card"
+                              className="cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-foreground"
+                              title="Arraste para mover o card"
                             >
-                              <GripVertical className="h-3.5 w-3.5" />
+                              <GripVertical className="h-3 w-3" />
                             </span>
-                            <span
-                              onDoubleClick={() => {
-                                setEditingCard(card);
-                                setEditTitleInput(card.title);
-                              }}
-                              className="text-[11px] font-bold text-foreground truncate cursor-pointer hover:text-primary transition-colors"
-                              title="Duplo-clique para editar título"
-                            >
+                            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight truncate">
                               {card.title}
                             </span>
                           </div>
 
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <button className="h-6 w-6 rounded hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground shrink-0">
-                                <span className="text-xs leading-none">•••</span>
+                              <button className="h-5 w-5 rounded hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground opacity-60 group-hover:opacity-100 transition-opacity">
+                                <MoreVertical className="h-3 w-3" />
                               </button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="text-xs w-48">
+                            <DropdownMenuContent align="end" className="w-48 text-xs p-1">
                               <DropdownMenuItem
                                 onClick={() => {
                                   setEditingCard(card);
@@ -674,30 +881,33 @@ export const ModularDashboard: React.FC = () => {
                                 Editar Título
                               </DropdownMenuItem>
 
-                              {/* Mover para outro bloco compatível */}
                               <DropdownMenuSeparator />
-                              <div className="px-2 py-1 text-[10px] uppercase font-bold text-muted-foreground">
-                                Mover para bloco:
+
+                              <div className="px-2 py-1 text-[10px] font-bold uppercase text-muted-foreground">
+                                Mover para bloco
                               </div>
                               {activeBlocks
-                                .filter((b) => b.id !== block.id)
-                                .map((b) => (
+                                .filter((b) => b.id !== block.id && b.id !== "funil")
+                                .map((targetB) => (
                                   <DropdownMenuItem
-                                    key={b.id}
-                                    onClick={() => handleMoveCardToBlock(card.id, b.id)}
+                                    key={targetB.id}
+                                    onClick={() => handleMoveCardToBlock(card.id, targetB.id)}
                                   >
-                                    → {b.title}
+                                    <ChevronRight className="h-3 w-3 mr-2" />
+                                    {targetB.title}
                                   </DropdownMenuItem>
                                 ))}
 
                               <DropdownMenuSeparator />
+
                               <DropdownMenuItem
                                 onClick={() => handleArchiveCard(card.id)}
-                                className="text-amber-600"
+                                className="text-amber-600 focus:text-amber-600"
                               >
                                 <Archive className="h-3.5 w-3.5 mr-2" />
-                                Arquivar
+                                Arquivar Card
                               </DropdownMenuItem>
+
                               <DropdownMenuItem
                                 onClick={() => handleRemoveCard(card.id)}
                                 className="text-destructive focus:text-destructive"
@@ -709,10 +919,8 @@ export const ModularDashboard: React.FC = () => {
                           </DropdownMenu>
                         </div>
 
-                        {/* Conteúdo Dinâmico do Card */}
-                        <div className="flex-1 min-w-0">
-                          {renderCardContent(card)}
-                        </div>
+                        {/* Conteúdo do Card */}
+                        {renderCardContent(card)}
                       </div>
                     );
                   })}
@@ -723,156 +931,210 @@ export const ModularDashboard: React.FC = () => {
         })}
       </div>
 
-      {/* DIÁLOGO: EDITAR TÍTULO DO CARD */}
+      {/* MODAL: EDITAR TÍTULO DO CARD */}
       <Dialog open={!!editingCard} onOpenChange={(open) => !open && setEditingCard(null)}>
-        <DialogContent className="bg-card border-border text-card-foreground max-w-sm">
+        <DialogContent className="max-w-xs p-5 rounded-2xl bg-card border border-border text-card-foreground">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold flex items-center gap-2">
-              <Edit2 className="h-4 w-4 text-primary" />
-              Editar Título do Card
+            <DialogTitle className="text-sm font-bold text-foreground">
+              Editar Nome do Card
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-2 py-2 text-xs">
-            <label className="text-muted-foreground font-semibold block">Nome de Exibição</label>
+          <div className="py-2 space-y-2">
+            <label className="text-[11px] text-muted-foreground block">
+              Nome de Exibição
+            </label>
             <Input
               value={editTitleInput}
               onChange={(e) => setEditTitleInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSaveCardTitle()}
-              placeholder="Novo título para o card..."
-              className="h-8 text-xs bg-background border-input text-foreground"
+              className="h-8 text-xs bg-background border-input text-foreground rounded-xl"
+              autoFocus
             />
-            <span className="text-[10px] text-muted-foreground block">
-              A alteração de nome é puramente visual e não modifica a identificação nem a fonte de dados do indicador.
-            </span>
+            <p className="text-[10px] text-muted-foreground">
+              A alteração do título não altera os identificadores nem a fonte dos dados.
+            </p>
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setEditingCard(null)} className="text-xs text-muted-foreground">
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveCardTitle} size="sm" className="text-xs bg-primary text-primary-foreground font-bold">
-              Salvar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* DIÁLOGO: EDITAR TÍTULO DO BLOCO */}
-      <Dialog open={!!editingBlock} onOpenChange={(open) => !open && setEditingBlock(null)}>
-        <DialogContent className="bg-card border-border text-card-foreground max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold flex items-center gap-2">
-              <Edit2 className="h-4 w-4 text-primary" />
-              Editar Título do Bloco
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-2 py-2 text-xs">
-            <label className="text-muted-foreground font-semibold block">Nome do Bloco</label>
-            <Input
-              value={editBlockTitleInput}
-              onChange={(e) => setEditBlockTitleInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSaveBlockTitle()}
-              placeholder="Novo título para o bloco..."
-              className="h-8 text-xs bg-background border-input text-foreground font-bold"
-            />
-          </div>
-          <DialogFooter className="gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setEditingBlock(null)} className="text-xs text-muted-foreground">
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveBlockTitle} size="sm" className="text-xs bg-primary text-primary-foreground font-bold">
-              Salvar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* DIÁLOGO: RESTAURAR ELEMENTOS ARQUIVADOS OU REMOVIDOS */}
-      <Dialog open={showRestoreModal} onOpenChange={setShowRestoreModal}>
-        <DialogContent className="bg-card border-border text-card-foreground max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold flex items-center gap-2">
-              <Archive className="h-4 w-4 text-amber-500" />
-              Elementos Arquivados e Removidos
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-3 py-2 text-xs max-h-72 overflow-y-auto">
-            {totalRestoreItems === 0 ? (
-              <p className="text-muted-foreground italic text-center py-4">
-                Nenhum elemento arquivado ou removido no momento.
-              </p>
-            ) : (
-              <>
-                {archivedBlocks.length > 0 && (
-                  <div className="space-y-1.5">
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground block">
-                      Blocos Arquivados:
-                    </span>
-                    {archivedBlocks.map((b) => (
-                      <div
-                        key={b.id}
-                        className="flex items-center justify-between p-2 rounded-xl bg-muted/40 border border-border"
-                      >
-                        <span className="font-bold text-foreground">{b.title}</span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleRestoreBlock(b.id)}
-                          className="h-6 text-[10px] text-primary"
-                        >
-                          Restaurar Bloco
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {archivedOrRemovedCards.length > 0 && (
-                  <div className="space-y-1.5 pt-2">
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground block">
-                      Cards Arquivados ou Removidos:
-                    </span>
-                    {archivedOrRemovedCards.map((c) => (
-                      <div
-                        key={c.id}
-                        className="flex items-center justify-between p-2 rounded-xl bg-muted/40 border border-border"
-                      >
-                        <div>
-                          <span className="font-medium text-foreground block">{c.title}</span>
-                          <span className="text-[10px] text-muted-foreground">
-                            Bloco de destino: {c.blockId.toUpperCase()} {c.removed ? "· Removido" : "· Arquivado"}
-                          </span>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleRestoreCard(c.id)}
-                          className="h-6 text-[10px] text-primary"
-                        >
-                          Restaurar Card
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-
-          <DialogFooter className="justify-between gap-2">
             <Button
               variant="ghost"
               size="sm"
-              onClick={handleResetLayout}
-              className="text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => setEditingCard(null)}
+              className="text-xs"
             >
-              Restaurar Layout Padrão
+              Cancelar
             </Button>
             <Button
-              variant="outline"
+              size="sm"
+              onClick={handleSaveCardTitle}
+              className="text-xs bg-primary text-primary-foreground rounded-xl font-bold"
+            >
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL: EDITAR TÍTULO DO BLOCO */}
+      <Dialog open={!!editingBlock} onOpenChange={(open) => !open && setEditingBlock(null)}>
+        <DialogContent className="max-w-xs p-5 rounded-2xl bg-card border border-border text-card-foreground">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-bold text-foreground">
+              Renomear Bloco
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-2">
+            <label className="text-[11px] text-muted-foreground block">
+              Título da Seção
+            </label>
+            <Input
+              value={editBlockTitleInput}
+              onChange={(e) => setEditBlockTitleInput(e.target.value)}
+              className="h-8 text-xs bg-background border-input text-foreground rounded-xl"
+              autoFocus
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setEditingBlock(null)}
+              className="text-xs"
+            >
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSaveBlockTitle}
+              className="text-xs bg-primary text-primary-foreground rounded-xl font-bold"
+            >
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL: AJUSTAR GASTO ADS */}
+      <Dialog open={isEditingAdSpend} onOpenChange={setIsEditingAdSpend}>
+        <DialogContent className="max-w-xs p-5 rounded-2xl bg-card border border-border text-card-foreground">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-bold text-foreground">
+              Ajustar Gasto com Anúncios
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-2">
+            <label className="text-[11px] text-muted-foreground block">
+              Valor Investido (R$)
+            </label>
+            <Input
+              type="number"
+              step="0.01"
+              value={adSpendInput}
+              onChange={(e) => setAdSpendInput(e.target.value)}
+              className="h-8 text-xs bg-background border-input text-foreground rounded-xl font-mono"
+              autoFocus
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsEditingAdSpend(false)}
+              className="text-xs"
+            >
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSaveAdSpend}
+              className="text-xs bg-primary text-primary-foreground rounded-xl font-bold"
+            >
+              Salvar Valor
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL: RESTAURAR ELEMENTOS ARQUIVADOS OU REMOVIDOS */}
+      <Dialog open={showRestoreModal} onOpenChange={setShowRestoreModal}>
+        <DialogContent className="max-w-md p-6 rounded-3xl bg-card border border-border text-card-foreground">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-foreground flex items-center gap-2">
+              <RotateCcw className="h-4 w-4 text-primary" />
+              Restaurar Elementos Ocultos
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-xs">
+            {/* Blocos Arquivados */}
+            {archivedBlocks.length > 0 && (
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block mb-1.5">
+                  Blocos Arquivados ({archivedBlocks.length})
+                </span>
+                <div className="space-y-1.5">
+                  {archivedBlocks.map((b) => (
+                    <div
+                      key={b.id}
+                      className="p-2.5 rounded-xl bg-muted/40 border border-border flex items-center justify-between"
+                    >
+                      <span className="font-bold text-foreground">{b.title}</span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleRestoreBlock(b.id)}
+                        className="h-6 text-[10px] rounded-lg"
+                      >
+                        Restaurar Bloco
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Cards Arquivados ou Removidos */}
+            {archivedOrRemovedCards.length > 0 && (
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block mb-1.5">
+                  Cards Arquivados / Removidos ({archivedOrRemovedCards.length})
+                </span>
+                <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                  {archivedOrRemovedCards.map((c) => (
+                    <div
+                      key={c.id}
+                      className="p-2.5 rounded-xl bg-muted/40 border border-border flex items-center justify-between"
+                    >
+                      <div>
+                        <div className="font-bold text-foreground">{c.title}</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          {c.archived ? "Status: Arquivado" : "Status: Removido da exibição"}
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleRestoreCard(c.id)}
+                        className="h-6 text-[10px] rounded-lg"
+                      >
+                        Restaurar Card
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {totalRestoreItems === 0 && (
+              <div className="py-6 text-center text-muted-foreground">
+                Nenhum elemento arquivado ou removido no momento.
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
               size="sm"
               onClick={() => setShowRestoreModal(false)}
-              className="text-xs"
+              className="text-xs rounded-xl"
             >
               Fechar
             </Button>

@@ -549,6 +549,12 @@ export interface ContentDistributionMetrics {
   reach: number;
   clicks: number;
   groupEntries: number;
+  groupExits?: number;
+  testsCompleted?: number;
+  newFollowers?: number;
+  followersGainToday?: number;
+  followersGain7d?: number;
+  followersGain30d?: number;
   leadsCaptured: number;
   adSpend: number;
   period: "today" | "7d" | "30d" | "sprint";
@@ -691,25 +697,25 @@ export const DEFAULT_FUNNEL_STAGES: Omit<FunnelStage, "id">[] = [
 
 export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayoutConfig = {
   blocks: [
-    { id: "infra", title: "INFRAESTRUTURA & OPERAÇÃO", order: 0 },
-    { id: "distribuicao", title: "DISTRIBUIÇÃO DE CONTEÚDO", order: 1 },
-    { id: "funil", title: "FUNIL COMERCIAL X1", order: 2 },
+    { id: "infra", title: "BLOCO 01 — INFRA", order: 0 },
+    { id: "distribuicao", title: "BLOCO 02 — DISTRIBUIÇÃO", order: 1 },
+    { id: "funil", title: "BLOCO 03 — FUNIL", order: 2 },
   ],
   cards: [
-    // Bloco INFRA
-    { id: "infra_setup", blockId: "infra", title: "Setup Técnico & Acessos", order: 0 },
-    { id: "infra_blocks", blockId: "infra", title: "Travas & Bloqueios Ativos", order: 1 },
-    { id: "infra_deliverables", blockId: "infra", title: "Entregáveis Auditáveis", order: 2 },
-    { id: "infra_pace", blockId: "infra", title: "Ritmo de Entrega & Prazos", order: 3 },
+    // Bloco 01 — INFRA (6 indicadores)
+    { id: "infra_progress", blockId: "infra", title: "Progresso Atual", order: 0 },
+    { id: "infra_ad_spend", blockId: "infra", title: "Gasto Ads", order: 1 },
+    { id: "infra_sales", blockId: "infra", title: "Vendas", order: 2 },
+    { id: "infra_group_entries", blockId: "infra", title: "Entradas no Grupo", order: 3 },
+    { id: "infra_group_exits", blockId: "infra", title: "Saídas do Grupo", order: 4 },
+    { id: "infra_tests", blockId: "infra", title: "Testes Realizados", order: 5 },
 
-    // Bloco DISTRIBUIÇÃO
-    { id: "dist_reels", blockId: "distribuicao", title: "Meta Diária de Reels (7D)", order: 0 },
-    { id: "dist_posts", blockId: "distribuicao", title: "Publicações & Visualizações", order: 1 },
-    { id: "dist_clicks", blockId: "distribuicao", title: "Cliques no Link", order: 2 },
-    { id: "dist_groups", blockId: "distribuicao", title: "Entradas no Grupo", order: 3 },
+    // Bloco 02 — DISTRIBUIÇÃO (3 indicadores)
+    { id: "dist_followers", blockId: "distribuicao", title: "Novos Seguidores", order: 0 },
+    { id: "dist_posts", blockId: "distribuicao", title: "Posts Realizados", order: 1 },
+    { id: "dist_views", blockId: "distribuicao", title: "Views", order: 2 },
 
-    // Bloco FUNIL
-    { id: "funnel_visual", blockId: "funil", title: "Pipeline Visual de Conversão", order: 0 },
-    { id: "funnel_kpis", blockId: "funil", title: "Métricas Globais do Funil", order: 1 },
+    // Bloco 03 — FUNIL (Esteira visual progressiva conectada)
+    { id: "funnel_pipeline", blockId: "funil", title: "Funil Comercial de Conversão", order: 0 },
   ],
 };

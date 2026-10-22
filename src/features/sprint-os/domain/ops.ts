@@ -563,7 +563,19 @@ export function getDashboardLayout(ws: Workspace): DashboardLayoutConfig {
   if (!ws.dashboardLayoutConfig || !ws.dashboardLayoutConfig.blocks || ws.dashboardLayoutConfig.blocks.length === 0) {
     return JSON.parse(JSON.stringify(DEFAULT_DASHBOARD_LAYOUT));
   }
-  return ws.dashboardLayoutConfig;
+  const layout = ws.dashboardLayoutConfig;
+  // Garante que os novos blocos e cards padrão existam na configuração sem perder os customizados
+  DEFAULT_DASHBOARD_LAYOUT.blocks.forEach((db) => {
+    if (!layout.blocks.some((b) => b.id === db.id)) {
+      layout.blocks.push({ ...db });
+    }
+  });
+  DEFAULT_DASHBOARD_LAYOUT.cards.forEach((dc) => {
+    if (!layout.cards.some((c) => c.id === dc.id)) {
+      layout.cards.push({ ...dc });
+    }
+  });
+  return layout;
 }
 
 export function saveDashboardLayout(ws: Workspace, ctx: Ctx, layout: DashboardLayoutConfig) {
