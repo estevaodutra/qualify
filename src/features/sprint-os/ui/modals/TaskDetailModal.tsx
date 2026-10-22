@@ -39,6 +39,8 @@ import {
   Lock,
   Unlock,
   Circle,
+  Edit2,
+  Calendar,
 } from "lucide-react";
 import {
   Dialog,
@@ -55,6 +57,7 @@ import { toast } from "sonner";
 import { useSprintOSStore } from "../../state/sprintOsStore";
 import {
   subtasksOf,
+  stagesOf,
   updateTask,
   setTaskStatus,
   createSubtask,
@@ -96,9 +99,14 @@ import { fmtDateTime, fmtMinutes } from "../../scheduler/time";
 export const TaskDetailModal: React.FC = () => {
   const {
     workspace,
+    activeSprintId,
     selectedTaskId,
     isTaskModalOpen,
     setIsTaskModalOpen,
+    setTaskStatusAction,
+    moveTaskAction,
+    updateSubtaskAction,
+    deleteSubtaskAction,
     toggleSubtaskAction,
     stepSubtaskCountAction,
     setTaskImpactFlagsAction,
@@ -114,6 +122,10 @@ export const TaskDetailModal: React.FC = () => {
   const [activeTab, setActiveTab] = useState("execution");
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [newSubtaskTarget, setNewSubtaskTarget] = useState("");
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
+  const [editingSubtaskTitle, setEditingSubtaskTitle] = useState("");
+  const [editingCriterionId, setEditingCriterionId] = useState<string | null>(null);
+  const [editingCriterionText, setEditingCriterionText] = useState("");
   const [timeMinutes, setTimeMinutes] = useState("");
   const [timeNote, setTimeNote] = useState("");
   const [evidenceName, setEvidenceName] = useState("");
@@ -152,6 +164,9 @@ export const TaskDetailModal: React.FC = () => {
   if (!task) return null;
 
   const stage = workspace.stages[task.stageId];
+  const stagesList = activeSprintId
+    ? stagesOf(workspace, activeSprintId)
+    : Object.values(workspace.stages).filter((s) => !s.archivedAt);
   const subtasks = subtasksOf(workspace, task.id);
   const members = Object.values(workspace.members).filter((m) => !m.archivedAt);
   const assignee = task.assigneeId ? workspace.members[task.assigneeId] : null;
@@ -263,6 +278,18 @@ export const TaskDetailModal: React.FC = () => {
   const handleDeleteCriterion = (criterionId: string) => {
     const currentList = task.completionCriteria || [];
     handleUpdate({ completionCriteria: currentList.filter((c) => c.id !== criterionId) });
+  };
+
+  const handleUpdateCriterionText = (criterionId: string, text: string) => {
+    const currentList = task.completionCriteria || [];
+    const updated = currentList.map((c) => (c.id === criterionId ? { ...c, text } : c));
+    handleUpdate({ completionCriteria: updated });
+  };
+
+  const handleToggleCriterionRequired = (criterionId: string, required: boolean) => {
+    const currentList = task.completionCriteria || [];
+    const updated = currentList.map((c) => (c.id === criterionId ? { ...c, required } : c));
+    handleUpdate({ completionCriteria: updated });
   };
 
   // --- Handlers de Entregáveis e Versionamento 7D (P1.5) ---
@@ -445,21 +472,63 @@ export const TaskDetailModal: React.FC = () => {
 
         {/* Cabeçalho */}
         <div className="p-6 pb-4 border-b border-border bg-muted/40">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm">{STATUS_ICON[task.status]}</span>
-              <Badge variant="outline" className="text-[10px] uppercase font-mono border-border text-muted-foreground">
-                {stage?.title || "Etapa"}
-              </Badge>
+              {/* Status Selector */}
+              <select
+                value={task.status}
+                onChange={(e) => setTaskStatusAction(task.id, e.target.value as TaskStatus)}
+                className="h-7 rounded-lg bg-background border border-input text-xs text-foreground px-2 font-bold"
+                title="Status da Tarefa"
+              >
+                <option value="pending">🔴 Pendente</option>
+                <option value="doing">🟡 Fazendo</option>
+                <option value="done">🟢 Feito</option>
+              </select>
 
-              {/* P1.1: Badge Discreto de Origem 7D */}
-              <Badge variant="outline" className={`text-[10px] font-bold uppercase font-mono ${originCfg.badgeClass}`}>
-                {originCfg.label}
-              </Badge>
+              {/* Etapa Selector */}
+              <select
+                value={task.stageId}
+                onChange={(e) => {
+                  const newStageId = e.target.value;
+                  if (newStageId && newStageId !== task.stageId) {
+                    moveTaskAction(task.id, newStageId, 0);
+                  }
+                }}
+                className="h-7 rounded-lg bg-background border border-input text-xs text-foreground px-2 font-medium"
+                title="Mover para outra Etapa"
+              >
+                {stagesList.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.title}
+                  </option>
+                ))}
+              </select>
 
-              <Badge className="text-[10px] font-black py-0 px-2 bg-primary/20 text-primary border-primary/30">
-                {PRIORITY_LABEL[task.priority]}
-              </Badge>
+              {/* Prioridade Selector */}
+              <select
+                value={task.priority}
+                onChange={(e) => handleUpdate({ priority: e.target.value as any })}
+                className="h-7 rounded-lg bg-background border border-input text-xs text-foreground px-2 font-bold"
+                title="Prioridade"
+              >
+                <option value="P0">P0 — Crítica</option>
+                <option value="P1">P1 — Alta</option>
+                <option value="P2">P2 — Média</option>
+                <option value="P3">P3 — Baixa</option>
+              </select>
+
+              {/* Origem 7D Selector */}
+              <select
+                value={task.origin || "defined"}
+                onChange={(e) => handleUpdate({ origin: e.target.value as TaskOrigin })}
+                className="h-7 rounded-lg bg-background border border-input text-xs text-foreground px-2 font-mono font-bold"
+                title="Origem da Tarefa (Arquitetura 7D)"
+              >
+                <option value="defined">🎯 DEFINIDO</option>
+                <option value="derived">⚡ DERIVADO</option>
+                <option value="proposed">💡 PROPOSTO</option>
+              </select>
             </div>
 
             <div className="flex items-center gap-1.5">
@@ -468,16 +537,22 @@ export const TaskDetailModal: React.FC = () => {
                 onClick={handleStatusTransition}
                 className="h-7 text-xs bg-muted hover:bg-muted/80 text-foreground border border-border rounded-lg font-bold"
               >
-                Mudar: {task.status === "pending" ? "Iniciar (Fazendo)" : task.status === "doing" ? "Concluir (Feito)" : "Reabrir"}
+                {task.status === "pending" ? "Iniciar → Fazendo" : task.status === "doing" ? "Concluir → Feito" : "Reabrir Tarefa"}
               </Button>
             </div>
           </div>
 
-          <Input
-            value={task.title}
-            onChange={(e) => handleUpdate({ title: e.target.value })}
-            className="text-base font-bold bg-transparent border-transparent hover:border-border focus:border-primary p-0 h-auto rounded-none text-foreground tracking-tight"
-          />
+          <div className="space-y-1">
+            <label className="text-[10px] uppercase font-bold text-muted-foreground block">
+              Título da Tarefa
+            </label>
+            <Input
+              value={task.title}
+              onChange={(e) => handleUpdate({ title: e.target.value })}
+              className="text-base font-bold bg-background border-input text-foreground h-9 rounded-xl tracking-tight"
+              placeholder="Título da tarefa..."
+            />
+          </div>
         </div>
 
         {/* Abas do Inspetor */}
@@ -555,6 +630,85 @@ export const TaskDetailModal: React.FC = () => {
                 </div>
               </div>
 
+              {/* Descrição e Orientações da Tarefa */}
+              <div className="p-4 rounded-2xl bg-muted/30 border border-border space-y-1.5">
+                <label className="text-xs font-bold text-muted-foreground block flex items-center justify-between">
+                  <span>Descrição & Orientações da Tarefa</span>
+                  <span className="text-[10px] font-normal text-muted-foreground">Contexto e premissas operacionais</span>
+                </label>
+                <Textarea
+                  value={task.description || ""}
+                  onChange={(e) => handleUpdate({ description: e.target.value })}
+                  placeholder="Descreva o escopo, orientações e passo a passo desta tarefa..."
+                  className="text-xs bg-background border-input text-foreground min-h-[70px] rounded-xl leading-relaxed"
+                />
+              </div>
+
+              {/* Prazos, Duração e Agendamento */}
+              <div className="p-4 rounded-2xl bg-muted/30 border border-border space-y-3">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-primary" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                    Prazos, Duração & Agendamento
+                  </h4>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <label className="text-muted-foreground block mb-1 font-medium">Início Previsto</label>
+                    <Input
+                      type="datetime-local"
+                      value={task.plannedStart ? task.plannedStart.slice(0, 16) : ""}
+                      onChange={(e) => handleUpdate({ plannedStart: e.target.value ? e.target.value + ":00" : null })}
+                      className="h-8 text-xs bg-background border-input text-foreground font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-muted-foreground block mb-1 font-medium">Fim Previsto (Prazo)</label>
+                    <Input
+                      type="datetime-local"
+                      value={task.plannedEnd ? task.plannedEnd.slice(0, 16) : ""}
+                      onChange={(e) => handleUpdate({ plannedEnd: e.target.value ? e.target.value + ":00" : null })}
+                      className="h-8 text-xs bg-background border-input text-foreground font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-muted-foreground block mb-1 font-medium">Duração Estimada (min)</label>
+                    <Input
+                      type="number"
+                      value={task.durationMinutes || ""}
+                      onChange={(e) => handleUpdate({ durationMinutes: e.target.value ? Number(e.target.value) : null })}
+                      placeholder="Ex: 60"
+                      className="h-8 text-xs bg-background border-input text-foreground font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-1 text-xs">
+                  <label className="flex items-center gap-2 cursor-pointer text-muted-foreground hover:text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={!!task.pinned}
+                      onChange={(e) => handleUpdate({ pinned: e.target.checked })}
+                      className="rounded"
+                    />
+                    <span>Fixar data (impede que o motor de agendamento mova esta tarefa)</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer text-muted-foreground hover:text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={!!task.financialImpact}
+                      onChange={(e) => handleUpdate({ financialImpact: e.target.checked })}
+                      className="rounded"
+                    />
+                    <span>Impacto financeiro ($)</span>
+                  </label>
+                </div>
+              </div>
+
               {/* P1.4: CRITÉRIOS VERIFICÁVEIS DE CONCLUSÃO */}
               <div className="p-4 rounded-2xl bg-muted/30 border border-border space-y-3">
                 <div className="flex items-center justify-between">
@@ -584,29 +738,82 @@ export const TaskDetailModal: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => handleToggleCriterion(crit.id, crit.done)}
-                          className="flex items-center gap-2 text-left flex-1 min-w-0"
+                          className="shrink-0"
+                          title={crit.done ? "Marcar pendente" : "Marcar atendido"}
                         >
                           {crit.done ? (
-                            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                           ) : (
-                            <Circle className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <Circle className="h-4 w-4 text-muted-foreground" />
                           )}
-                          <span className={`truncate ${crit.done ? "line-through text-muted-foreground" : "text-foreground font-medium"}`}>
-                            {crit.text}
-                          </span>
                         </button>
 
-                        <div className="flex items-center gap-2 shrink-0">
-                          {crit.required && (
-                            <Badge variant="outline" className="text-[9px] uppercase border-rose-500/30 text-rose-600 dark:text-rose-400 font-mono">
-                              Obrigatório
-                            </Badge>
-                          )}
+                        {editingCriterionId === crit.id ? (
+                          <Input
+                            value={editingCriterionText}
+                            onChange={(e) => setEditingCriterionText(e.target.value)}
+                            onBlur={() => {
+                              if (editingCriterionText.trim() && editingCriterionText !== crit.text) {
+                                handleUpdateCriterionText(crit.id, editingCriterionText.trim());
+                              }
+                              setEditingCriterionId(null);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                if (editingCriterionText.trim() && editingCriterionText !== crit.text) {
+                                  handleUpdateCriterionText(crit.id, editingCriterionText.trim());
+                                }
+                                setEditingCriterionId(null);
+                              }
+                            }}
+                            autoFocus
+                            className="h-6 text-xs bg-background border-primary text-foreground flex-1"
+                          />
+                        ) : (
+                          <span
+                            onDoubleClick={() => {
+                              setEditingCriterionId(crit.id);
+                              setEditingCriterionText(crit.text);
+                            }}
+                            onClick={() => handleToggleCriterion(crit.id, crit.done)}
+                            className={`flex-1 truncate cursor-pointer ${crit.done ? "line-through text-muted-foreground" : "text-foreground font-medium"}`}
+                            title="Duplo-clique para editar o critério"
+                          >
+                            {crit.text}
+                          </span>
+                        )}
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleCriterionRequired(crit.id, !crit.required)}
+                            className={`text-[9px] uppercase font-mono px-1.5 py-0.5 rounded border transition-colors ${
+                              crit.required
+                                ? "border-rose-500/30 text-rose-600 dark:text-rose-400 bg-rose-500/10 font-bold"
+                                : "border-border text-muted-foreground hover:text-foreground"
+                            }`}
+                            title="Alternar se o critério é obrigatório"
+                          >
+                            {crit.required ? "Obrigatório" : "Opcional"}
+                          </button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setEditingCriterionId(crit.id);
+                              setEditingCriterionText(crit.text);
+                            }}
+                            className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                            title="Editar texto do critério"
+                          >
+                            <Edit2 className="h-3 w-3" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => handleDeleteCriterion(crit.id)}
                             className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                            title="Excluir critério"
                           >
                             <Trash2 className="h-3 w-3" />
                           </Button>
@@ -620,6 +827,7 @@ export const TaskDetailModal: React.FC = () => {
                   <Input
                     value={newCriterionText}
                     onChange={(e) => setNewCriterionText(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleAddCriterion()}
                     placeholder="Adicionar critério de aceite (ex: Arquivo disponibilizado, link testado)..."
                     className="h-8 text-xs bg-background border-input text-foreground flex-1"
                   />
@@ -638,43 +846,108 @@ export const TaskDetailModal: React.FC = () => {
                 </div>
               </div>
 
-              {/* Subtarefas */}
+              {/* Subtarefas / Checklist */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs font-bold uppercase text-muted-foreground">
-                  <span>Subtarefas ({subtasks.filter((s) => s.done).length}/{subtasks.length})</span>
+                  <span>Subtarefas / Checklist ({subtasks.filter((s) => s.done).length}/{subtasks.length})</span>
+                  <span className="text-[10px] font-normal lowercase">duplo-clique para renomear</span>
                 </div>
                 <div className="space-y-1.5">
-                  {subtasks.map((st) => (
-                    <div
-                      key={st.id}
-                      className="flex items-center justify-between p-2 rounded-xl bg-card border border-border text-xs"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => toggleSubtaskAction(st.id, !st.done)}
-                        className="flex items-center gap-2 text-left flex-1"
-                      >
-                        {st.done ? (
-                          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                        ) : (
-                          <Circle className="h-4 w-4 text-muted-foreground" />
-                        )}
-                        <span className={st.done ? "line-through text-muted-foreground" : "text-foreground"}>
-                          {st.title}
-                        </span>
-                      </button>
+                  {subtasks.length === 0 ? (
+                    <div className="text-xs text-muted-foreground/60 italic py-2 text-center border border-dashed border-border rounded-xl">
+                      Nenhuma subtarefa adicionada.
                     </div>
-                  ))}
+                  ) : (
+                    subtasks.map((st) => (
+                      <div
+                        key={st.id}
+                        className="flex items-center justify-between p-2 rounded-xl bg-card border border-border text-xs gap-2"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => toggleSubtaskAction(st.id, !st.done)}
+                          className="shrink-0"
+                          title={st.done ? "Marcar pendente" : "Marcar concluída"}
+                        >
+                          {st.done ? (
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                          ) : (
+                            <Circle className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </button>
+
+                        {editingSubtaskId === st.id ? (
+                          <Input
+                            value={editingSubtaskTitle}
+                            onChange={(e) => setEditingSubtaskTitle(e.target.value)}
+                            onBlur={() => {
+                              if (editingSubtaskTitle.trim() && editingSubtaskTitle !== st.title) {
+                                updateSubtaskAction(st.id, { title: editingSubtaskTitle.trim() });
+                              }
+                              setEditingSubtaskId(null);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                if (editingSubtaskTitle.trim() && editingSubtaskTitle !== st.title) {
+                                  updateSubtaskAction(st.id, { title: editingSubtaskTitle.trim() });
+                                }
+                                setEditingSubtaskId(null);
+                              }
+                            }}
+                            autoFocus
+                            className="h-6 text-xs bg-background border-primary text-foreground flex-1"
+                          />
+                        ) : (
+                          <span
+                            onDoubleClick={() => {
+                              setEditingSubtaskId(st.id);
+                              setEditingSubtaskTitle(st.title);
+                            }}
+                            onClick={() => toggleSubtaskAction(st.id, !st.done)}
+                            className={`flex-1 cursor-pointer truncate ${st.done ? "line-through text-muted-foreground" : "text-foreground font-medium"}`}
+                            title="Clique para alternar ou duplo-clique para editar o título"
+                          >
+                            {st.title}
+                          </span>
+                        )}
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setEditingSubtaskId(st.id);
+                              setEditingSubtaskTitle(st.title);
+                            }}
+                            className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                            title="Editar título da subtarefa"
+                          >
+                            <Edit2 className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteSubtaskAction(st.id)}
+                            className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                            title="Excluir subtarefa"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2 pt-1">
                   <Input
                     value={newSubtaskTitle}
                     onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                    placeholder="Nova subtarefa..."
+                    onKeyDown={(e) => e.key === "Enter" && handleAddSubtask()}
+                    placeholder="Adicionar nova subtarefa..."
                     className="h-8 text-xs bg-background border-input text-foreground flex-1"
                   />
-                  <Button onClick={handleAddSubtask} size="sm" className="h-8 text-xs bg-primary text-primary-foreground font-bold">
+                  <Button onClick={handleAddSubtask} size="sm" className="h-8 text-xs bg-primary text-primary-foreground font-bold shrink-0">
                     Adicionar
                   </Button>
                 </div>
@@ -1299,6 +1572,48 @@ export const TaskDetailModal: React.FC = () => {
                     Salvar Duração
                   </Button>
                 </div>
+              </div>
+
+              {/* Complexidade e Escopo */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 rounded-2xl bg-muted/30 border border-border text-xs">
+                <div>
+                  <label className="text-muted-foreground block mb-1 font-semibold">Complexidade Operacional</label>
+                  <select
+                    value={task.complexity || "M"}
+                    onChange={(e) => handleUpdate({ complexity: e.target.value as any })}
+                    className="w-full h-8 rounded-lg bg-background border border-input text-xs text-foreground px-2"
+                  >
+                    <option value="S">S — Baixa (Simples)</option>
+                    <option value="M">M — Média (Padrão)</option>
+                    <option value="L">L — Alta (Complexa)</option>
+                    <option value="XL">XL — Crítica (Estratégica)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-muted-foreground block mb-1 font-semibold">Escopo</label>
+                  <select
+                    value={task.scope || "standard"}
+                    onChange={(e) => handleUpdate({ scope: e.target.value as any })}
+                    className="w-full h-8 rounded-lg bg-background border border-input text-xs text-foreground px-2"
+                  >
+                    <option value="standard">Padrão</option>
+                    <option value="critical">Crítico</option>
+                    <option value="optional">Opcional</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Notas e Observações */}
+              <div className="p-4 rounded-2xl bg-muted/30 border border-border space-y-2">
+                <label className="text-xs font-bold text-muted-foreground block">
+                  Notas & Observações Internas
+                </label>
+                <Textarea
+                  value={task.notes || ""}
+                  onChange={(e) => handleUpdate({ notes: e.target.value })}
+                  placeholder="Observações complementares, notas técnicas ou links de referência..."
+                  className="text-xs bg-background border-input text-foreground min-h-[70px] rounded-xl"
+                />
               </div>
             </TabsContent>
 

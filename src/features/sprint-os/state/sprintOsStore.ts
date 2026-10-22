@@ -64,6 +64,7 @@ import {
   acceptTask,
   archiveStage,
   archiveTask,
+  archiveEntity,
   restoreTask,
   upsertIndicator,
   deleteIndicator,
@@ -230,6 +231,22 @@ interface SprintOSState {
   updateContentMetricsAction: (patch: Partial<ContentDistributionMetrics>, actorName?: string) => Promise<void>;
   updateHoursCalcAction: (patch: Partial<HoursCalculatorData>, actorName?: string) => Promise<void>;
   updateAdsCalcAction: (patch: Partial<AdsCalculatorData>, actorName?: string) => Promise<void>;
+
+  // Cronogramas & Metadados
+  updateWorkspaceInfoAction: (
+    workspaceId: ID,
+    patch: { name?: string; projectName?: string; client?: string; status?: "draft" | "active" | "completed" },
+    companyId?: string | null,
+    actorName?: string
+  ) => Promise<void>;
+
+  // Subtarefas / Checklists
+  updateSubtaskAction: (subtaskId: ID, patch: Partial<Pick<Subtask, "title" | "description" | "required" | "assigneeId" | "target">>, actorName?: string) => Promise<void>;
+  deleteSubtaskAction: (subtaskId: ID, actorName?: string) => Promise<void>;
+
+  // Marcos / Checkpoints
+  upsertMilestoneAction: (data: Partial<Milestone> & { sprintId: ID; title: string }, actorName?: string) => Promise<ID>;
+  deleteMilestoneAction: (id: ID, actorName?: string) => Promise<void>;
 
   // Prazos e Execução
   openDeadlineUpdatePreview: () => void;
@@ -890,6 +907,98 @@ export const useSprintOSStore = create<SprintOSState>((set, get) => ({
       toast.success("👁️ Confirmação de ciência registrada!");
     } catch (e: any) {
       toast.error(e.message);
+    }
+  },
+
+  updateWorkspaceInfoAction: async (workspaceId, patch, companyId, actorName = "Operador") => {
+    try {
+      const { activeWorkspaceId, workspace } = get();
+      if (activeWorkspaceId === workspaceId && workspace) {
+        await get().mutate((ws, ctx) => {
+          if (patch.projectName || patch.client) {
+            updateProject(ws, ctx, {
+              ...(patch.projectName ? { name: patch.projectName } : {}),
+              ...(patch.client ? { client: patch.client } : {}),
+            });
+          }
+          const sprint = Object.values(ws.sprints || {}).find((s) => !s.archivedAt);
+          if (sprint) {
+            if (patch.name) updateSprint(ws, ctx, sprint.id, { name: patch.name });
+            if (patch.status) {
+              sprint.status = patch.status === "completed" ? "completed" : patch.status === "active" ? "active" : "draft";
+              if (patch.status === "active" && !sprint.activatedAt) sprint.activatedAt = ctx.nowIso;
+              if (patch.status === "draft") sprint.activatedAt = null;
+            }
+          }
+        }, actorName);
+      } else {
+        const loaded = await SprintOSRepository.loadWorkspace(workspaceId, companyId);
+        if (loaded) {
+          const ctx = { actorName, nowIso: new Date().toISOString() };
+          if (patch.projectName || patch.client) {
+            updateProject(loaded, ctx, {
+              ...(patch.projectName ? { name: patch.projectName } : {}),
+              ...(patch.client ? { client: patch.client } : {}),
+            });
+          }
+          const sprint = Object.values(loaded.sprints || {}).find((s) => !s.archivedAt);
+          if (sprint) {
+            if (patch.name) updateSprint(loaded, ctx, sprint.id, { name: patch.name });
+            if (patch.status) {
+              sprint.status = patch.status === "completed" ? "completed" : patch.status === "active" ? "active" : "draft";
+              if (patch.status === "active" && !sprint.activatedAt) sprint.activatedAt = ctx.nowIso;
+              if (patch.status === "draft") sprint.activatedAt = null;
+            }
+          }
+          await SprintOSRepository.saveWorkspace(loaded, 1, companyId, actorName);
+        }
+      }
+      await get().fetchWorkspacesList(companyId);
+      toast.success("Cronograma atualizado com sucesso!");
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao atualizar cronograma");
+    }
+  },
+
+  updateSubtaskAction: async (subtaskId, patch, actorName = "Operador") => {
+    try {
+      await get().mutate((ws, ctx) => {
+        updateSubtask(ws, ctx, subtaskId, patch);
+      }, actorName);
+      toast.success("Subtarefa atualizada!");
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao atualizar subtarefa");
+    }
+  },
+
+  deleteSubtaskAction: async (subtaskId, actorName = "Operador") => {
+    try {
+      await get().mutate((ws, ctx) => {
+        deleteSubtask(ws, ctx, subtaskId);
+      }, actorName);
+      toast.success("Subtarefa removida!");
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao remover subtarefa");
+    }
+  },
+
+  upsertMilestoneAction: async (data, actorName = "Operador") => {
+    let id = data.id || "";
+    await get().mutate((ws, ctx) => {
+      id = upsertMilestone(ws, ctx, data);
+    }, actorName);
+    toast.success("Marco salvo com sucesso!");
+    return id;
+  },
+
+  deleteMilestoneAction: async (id, actorName = "Operador") => {
+    try {
+      await get().mutate((ws, ctx) => {
+        archiveEntity(ws, ctx, "milestones", id);
+      }, actorName);
+      toast.success("Marco removido!");
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao remover marco");
     }
   },
 }));

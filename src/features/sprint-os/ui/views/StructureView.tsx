@@ -21,6 +21,7 @@ import {
   ArrowDown,
   Copy,
   Trash2,
+  Edit2,
   Clock,
   User,
   AlertTriangle,
@@ -82,6 +83,8 @@ export const StructureView: React.FC = () => {
     setIsTaskModalOpen,
     setTaskStatusAction,
     toggleSubtaskAction,
+    updateSubtaskAction,
+    deleteSubtaskAction,
     assignTaskMemberAction,
     reorderStagesAction,
     moveTaskAction,
@@ -96,6 +99,9 @@ export const StructureView: React.FC = () => {
   const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>({});
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
   const [editingTitleText, setEditingTitleText] = useState("");
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
+  const [editingSubtaskTitle, setEditingSubtaskTitle] = useState("");
+  const [newSubtaskInputs, setNewSubtaskInputs] = useState<Record<string, string>>({});
 
   // Drag & Drop
   const [draggedStageId, setDraggedStageId] = useState<string | null>(null);
@@ -635,29 +641,116 @@ export const StructureView: React.FC = () => {
                                 </p>
                               )}
 
-                              {/* Subtarefas */}
+                              {/* Subtarefas / Checklist */}
                               <div className="space-y-1.5 pt-1">
                                 {subtasks.map((st) => (
                                   <div
                                     key={st.id}
-                                    className="flex items-center justify-between p-1.5 rounded-lg bg-card/60 hover:bg-card border border-border/50 text-[11px]"
+                                    className="flex items-center justify-between p-1.5 rounded-lg bg-card/60 hover:bg-card border border-border/50 text-[11px] gap-2"
                                   >
                                     <button
                                       type="button"
                                       onClick={() => toggleSubtaskAction(st.id, !st.done)}
-                                      className="flex items-center gap-2 text-left flex-1 min-w-0"
+                                      className="shrink-0"
                                     >
                                       {st.done ? (
                                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                                       ) : (
                                         <Circle className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
                                       )}
-                                      <span className={st.done ? "line-through text-muted-foreground" : "text-foreground"}>
+                                    </button>
+
+                                    {editingSubtaskId === st.id ? (
+                                      <Input
+                                        value={editingSubtaskTitle}
+                                        onChange={(e) => setEditingSubtaskTitle(e.target.value)}
+                                        onBlur={() => {
+                                          if (editingSubtaskTitle.trim() && editingSubtaskTitle !== st.title) {
+                                            updateSubtaskAction(st.id, { title: editingSubtaskTitle.trim() });
+                                          }
+                                          setEditingSubtaskId(null);
+                                        }}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter") {
+                                            if (editingSubtaskTitle.trim() && editingSubtaskTitle !== st.title) {
+                                              updateSubtaskAction(st.id, { title: editingSubtaskTitle.trim() });
+                                            }
+                                            setEditingSubtaskId(null);
+                                          }
+                                        }}
+                                        autoFocus
+                                        className="h-6 text-[11px] bg-background border-primary text-foreground flex-1"
+                                      />
+                                    ) : (
+                                      <span
+                                        onDoubleClick={() => {
+                                          setEditingSubtaskId(st.id);
+                                          setEditingSubtaskTitle(st.title);
+                                        }}
+                                        onClick={() => toggleSubtaskAction(st.id, !st.done)}
+                                        className={`flex-1 min-w-0 truncate cursor-pointer ${st.done ? "line-through text-muted-foreground" : "text-foreground font-medium"}`}
+                                        title="Clique para alternar ou duplo-clique para editar"
+                                      >
                                         {st.title}
                                       </span>
-                                    </button>
+                                    )}
+
+                                    <div className="flex items-center gap-0.5 shrink-0">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingSubtaskId(st.id);
+                                          setEditingSubtaskTitle(st.title);
+                                        }}
+                                        className="p-1 hover:bg-muted text-muted-foreground hover:text-foreground rounded"
+                                        title="Editar subtarefa"
+                                      >
+                                        <Edit2 className="h-3 w-3" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => deleteSubtaskAction(st.id)}
+                                        className="p-1 hover:bg-muted text-muted-foreground hover:text-destructive rounded"
+                                        title="Excluir subtarefa"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </button>
+                                    </div>
                                   </div>
                                 ))}
+
+                                {/* Input rápido para adicionar nova subtarefa */}
+                                <div className="flex items-center gap-1.5 pt-1">
+                                  <Input
+                                    value={newSubtaskInputs[task.id] || ""}
+                                    onChange={(e) => setNewSubtaskInputs((prev) => ({ ...prev, [task.id]: e.target.value }))}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter" && newSubtaskInputs[task.id]?.trim()) {
+                                        mutate((ws, ctx) => {
+                                          createSubtask(ws, ctx, task.id, newSubtaskInputs[task.id].trim());
+                                        });
+                                        setNewSubtaskInputs((prev) => ({ ...prev, [task.id]: "" }));
+                                      }
+                                    }}
+                                    placeholder="+ Adicionar subtarefa..."
+                                    className="h-6 text-[11px] bg-background border-input text-foreground flex-1"
+                                  />
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => {
+                                      if (newSubtaskInputs[task.id]?.trim()) {
+                                        mutate((ws, ctx) => {
+                                          createSubtask(ws, ctx, task.id, newSubtaskInputs[task.id].trim());
+                                        });
+                                        setNewSubtaskInputs((prev) => ({ ...prev, [task.id]: "" }));
+                                      }
+                                    }}
+                                    className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
+                                  >
+                                    Salvar
+                                  </Button>
+                                </div>
                               </div>
                             </div>
                           )}

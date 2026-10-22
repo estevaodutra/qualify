@@ -54,15 +54,43 @@ export const SchedulesListView: React.FC = () => {
     openWorkspace,
     duplicateCurrentWorkspace,
     deleteWorkspaceAction,
+    updateWorkspaceInfoAction,
     setIsCreateModalOpen,
     setIsEditTemplateModalOpen,
     setEditingTemplateId,
   } = useSprintOSStore();
 
   const [activeTab, setActiveTab] = useState<"schedules" | "templates">("schedules");
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState("");
+  const [editingItem, setEditingItem] = useState<any | null>(null);
+  const [editSprintName, setEditSprintName] = useState("");
+  const [editProjectName, setEditProjectName] = useState("");
+  const [editClient, setEditClient] = useState("");
+  const [editStatus, setEditStatus] = useState<"draft" | "active" | "completed">("draft");
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  const handleStartEdit = (item: any) => {
+    setEditingItem(item);
+    setEditSprintName(item.name || "");
+    setEditProjectName(item.projectName || "");
+    setEditClient(item.client || "");
+    setEditStatus(item.status || "draft");
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingItem) return;
+    await updateWorkspaceInfoAction(
+      editingItem.id,
+      {
+        name: editSprintName.trim() || editingItem.name,
+        projectName: editProjectName.trim() || editingItem.projectName,
+        client: editClient.trim() || editingItem.client,
+        status: editStatus,
+      },
+      activeCompanyId,
+      user?.email || "Operador"
+    );
+    setEditingItem(null);
+  };
 
   const handleOpen = (id: string) => {
     openWorkspace(id, activeCompanyId, user?.email || "Operador");
@@ -183,6 +211,10 @@ export const SchedulesListView: React.FC = () => {
                               <DropdownMenuItem onClick={() => handleOpen(item.id)} className="cursor-pointer">
                                 <ExternalLink className="h-3.5 w-3.5 mr-2 text-primary" />
                                 Abrir Cockpit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleStartEdit(item)} className="cursor-pointer">
+                                <Edit2 className="h-3.5 w-3.5 mr-2 text-amber-500" />
+                                Editar Informações
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handleDuplicate(item.id)} className="cursor-pointer">
                                 <Copy className="h-3.5 w-3.5 mr-2" />
@@ -325,6 +357,67 @@ export const SchedulesListView: React.FC = () => {
             </Button>
             <Button variant="destructive" size="sm" onClick={handleDelete} className="text-xs bg-destructive hover:bg-destructive/90 text-destructive-foreground">
               Sim, Excluir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo de Edição de Informações do Cronograma */}
+      <Dialog open={!!editingItem} onOpenChange={(open) => !open && setEditingItem(null)}>
+        <DialogContent className="bg-card border-border text-card-foreground max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Edit2 className="h-4 w-4 text-primary" />
+              Editar Informações do Cronograma
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3.5 py-2 text-xs">
+            <div>
+              <label className="text-muted-foreground font-semibold block mb-1">Nome do Cronograma / Sprint</label>
+              <Input
+                value={editSprintName}
+                onChange={(e) => setEditSprintName(e.target.value)}
+                placeholder="Ex: Sprint 01 — Fundação"
+                className="h-8 text-xs bg-background border-input text-foreground"
+              />
+            </div>
+            <div>
+              <label className="text-muted-foreground font-semibold block mb-1">Projeto / Operação</label>
+              <Input
+                value={editProjectName}
+                onChange={(e) => setEditProjectName(e.target.value)}
+                placeholder="Ex: Percurso da Vida"
+                className="h-8 text-xs bg-background border-input text-foreground"
+              />
+            </div>
+            <div>
+              <label className="text-muted-foreground font-semibold block mb-1">Cliente / Solicitante</label>
+              <Input
+                value={editClient}
+                onChange={(e) => setEditClient(e.target.value)}
+                placeholder="Ex: Rodrigo"
+                className="h-8 text-xs bg-background border-input text-foreground"
+              />
+            </div>
+            <div>
+              <label className="text-muted-foreground font-semibold block mb-1">Status Operacional</label>
+              <select
+                value={editStatus}
+                onChange={(e) => setEditStatus(e.target.value as any)}
+                className="w-full h-8 rounded-xl bg-background border border-input text-xs text-foreground px-2.5 font-medium"
+              >
+                <option value="draft">🟡 Rascunho (Não ativado)</option>
+                <option value="active">🟢 Ativa (Em execução)</option>
+                <option value="completed">🏁 Concluída</option>
+              </select>
+            </div>
+          </div>
+          <DialogFooter className="mt-2 gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setEditingItem(null)} className="text-xs text-muted-foreground">
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveEdit} size="sm" className="text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-bold">
+              Salvar Alterações
             </Button>
           </DialogFooter>
         </DialogContent>
