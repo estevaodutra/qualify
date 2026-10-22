@@ -25,6 +25,7 @@ import { SchedulesListView } from "./views/SchedulesListView";
 import { ExecutiveHeader } from "./ExecutiveHeader";
 import { KanbanView } from "./views/KanbanView";
 import { ModularDashboard } from "./dashboard/ModularDashboard";
+import { BrandManualView } from "./views/BrandManualView";
 
 import { DeadlineUpdateModal } from "./modals/DeadlineUpdateModal";
 import { ActivateSprintModal } from "./modals/ActivateSprintModal";
@@ -139,12 +140,23 @@ export const SprintOSPage: React.FC = () => {
     activeWorkspaceId,
     workspace,
     isLoading,
+    activeTab,
+    setActiveTab,
     initWorkspace,
     mutate,
   } = useSprintOSStore();
 
   const lastInitCompanyIdRef = useRef<string | null | undefined>(undefined);
   const syncedMembersRef = useRef<Set<string>>(new Set());
+
+  // Detecção de parâmetro ?tab=brand_manual na URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get("tab");
+    if (tabParam === "brand_manual" || tabParam === "manual_marca" || tabParam === "manual") {
+      setActiveTab("brand_manual");
+    }
+  }, [setActiveTab]);
 
   // Inicialização do workspace (uma única vez por empresa ativa)
   useEffect(() => {
@@ -207,13 +219,22 @@ export const SprintOSPage: React.FC = () => {
       {/* Região 1: Cabeçalho Compacto (Linear Style) */}
       <ExecutiveHeader />
 
-      {/* Cockpit Operacional Minimalista 80/20: INFRA | DISTRIBUIÇÃO | FUNIL */}
-      <ModularDashboard />
+      {/* Alternância de Visualização Principal: Operação/Kanban vs Manual de Marca 7D */}
+      {activeTab === "brand_manual" ? (
+        <main className="px-6 pt-4 flex-1">
+          <BrandManualView />
+        </main>
+      ) : (
+        <>
+          {/* Cockpit Operacional Minimalista 80/20: INFRA | DISTRIBUIÇÃO | FUNIL */}
+          <ModularDashboard />
 
-      {/* Visualização Principal: Apenas Kanban */}
-      <main className="px-6 pt-2 flex-1">
-        <KanbanView />
-      </main>
+          {/* Visualização Principal: Apenas Kanban */}
+          <main className="px-6 pt-2 flex-1">
+            <KanbanView />
+          </main>
+        </>
+      )}
 
       {/* Floating Pomodoro / Stopwatch Timer */}
       <FloatingTimerBar />

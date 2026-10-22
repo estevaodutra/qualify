@@ -28,6 +28,7 @@ import {
   UserCheck,
   Users,
   X,
+  Kanban,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -50,6 +51,8 @@ export const ExecutiveHeader: React.FC = () => {
   const {
     workspace,
     activeSprintId,
+    activeTab,
+    setActiveTab,
     filterAssigneeId,
     setFilterAssigneeId,
     openDeadlineUpdatePreview,
@@ -210,6 +213,44 @@ export const ExecutiveHeader: React.FC = () => {
             </Badge>
           </div>
         )}
+      </div>
+
+      {/* Centro: Switcher de Visão (Operação Kanban vs Manual de Marca 7D) */}
+      <div className="flex items-center p-0.5 bg-muted/60 border border-border/80 rounded-2xl gap-1 shrink-0">
+        <button
+          onClick={() => setActiveTab("kanban")}
+          className={`h-7 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+            activeTab !== "brand_manual"
+              ? "bg-background text-foreground shadow-xs font-bold"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+          title="Visão Operacional Kanban & Cockpit 80/20"
+        >
+          <Kanban className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Operação</span>
+        </button>
+        <button
+          onClick={() => setActiveTab("brand_manual")}
+          className={`h-7 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+            activeTab === "brand_manual"
+              ? "bg-background text-primary shadow-xs font-bold"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+          title="Manual de Marca 7D — Briefing Inteligente e Modular"
+        >
+          <Sparkles className="h-3.5 w-3.5 text-primary" />
+          <span>Manual de Marca</span>
+          {(() => {
+            const fields = workspace.brandManual?.fields || [];
+            const count = fields.filter((f) => !f.archived && !f.removed && (f.response || "").trim().length > 15).length;
+            if (count === 0) return null;
+            return (
+              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-primary/10 text-primary font-bold">
+                {count}/10
+              </span>
+            );
+          })()}
+        </button>
       </div>
 
       {/* Lado Direito: Minhas Demandas (Filtro de Atribuição) + Atualizar Prazos + Menu "••• Mais opções" */}
@@ -389,6 +430,16 @@ export const ExecutiveHeader: React.FC = () => {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="bg-popover border-border text-popover-foreground text-xs w-52 p-1.5 rounded-2xl shadow-xl">
+            <DropdownMenuItem
+              onClick={() => setActiveTab(activeTab === "brand_manual" ? "kanban" : "brand_manual")}
+              className="cursor-pointer font-medium"
+            >
+              <Sparkles className="h-3.5 w-3.5 mr-2 text-primary" />
+              {activeTab === "brand_manual" ? "Alternar para Kanban" : "Abrir Manual de Marca 7D"}
+            </DropdownMenuItem>
+
+            <DropdownMenuSeparator />
+
             {!isActivated && (
               <DropdownMenuItem
                 onClick={() => setIsActivateModalOpen(true)}

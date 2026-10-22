@@ -104,7 +104,8 @@ export type ViewTab =
   | "calculators"
   | "funnel"
   | "routines"
-  | "milestones";
+  | "milestones"
+  | "brand_manual";
 
 export interface ActiveTaskTimer {
   taskId: ID;

@@ -684,6 +684,8 @@ export interface Workspace {
   adsCalculator?: AdsCalculatorData;
   /** Configuração modular personalizável da Dashboard (INFRA | DISTRIBUIÇÃO | FUNIL) */
   dashboardLayoutConfig?: DashboardLayoutConfig;
+  /** Manual de Marca 7D (AJ-014) — Briefing Inteligente, Modular e Editável */
+  brandManual?: BrandManualData;
   /** Custo/hora por membro — separado para não ser exposto em links públicos. */
   costs: Record<ID, number | null>;
   /** Prompts otimizados por tarefa (chave = taskId). */
@@ -764,3 +766,327 @@ export const DEFAULT_DASHBOARD_LAYOUT: DashboardLayoutConfig = {
     { id: "funnel_pipeline", blockId: "funil", title: "Funil Comercial de Conversão", order: 0 },
   ],
 };
+
+// ==========================================
+// MANUAL DE MARCA 7D (AJ-014)
+// Briefing Inteligente, Modular e Editável
+// ==========================================
+
+export type BrandManualInputType =
+  | "text"
+  | "textarea"
+  | "number"
+  | "url"
+  | "select"
+  | "audio"
+  | "file"
+  | "compound";
+
+export type BrandManualFieldStatus = "pending" | "completed" | "approved";
+
+export interface BrandManualFieldHistory {
+  timestamp: string;
+  response: string;
+  author?: string;
+  version: number;
+}
+
+export interface BrandManualField {
+  id: string;
+  moduleId: string; // "posicionamento" | "alma_copy" | "raio_x_icp" | "copy_ads" | string
+  sectionId?: string;
+  title: string;
+  context: string;
+  preset?: string;
+  inputType: BrandManualInputType;
+  response?: string;
+  audioUrl?: string;
+  transcription?: string;
+  status?: BrandManualFieldStatus;
+  strategicMapping: string[]; // ex: ["produto", "mecanismo", "dor-mãe"]
+  order: number;
+  required?: boolean;
+  archived?: boolean;
+  removed?: boolean;
+  history?: BrandManualFieldHistory[];
+}
+
+export interface CopyAdVariantHistory {
+  timestamp: string;
+  headline: string;
+  subheadline: string;
+  version: number;
+}
+
+export interface CopyAdVariant {
+  id: string;
+  variantNumber: number; // 1 a 10
+  angle: string; // ex: "Dor Central / Inimigo Comum"
+  headline: string;
+  subheadline: string;
+  status: "draft" | "approved" | "rejected";
+  version: number;
+  notes?: string;
+  archived?: boolean;
+  history?: CopyAdVariantHistory[];
+}
+
+export interface BrandManualModule {
+  id: string;
+  title: string;
+  description: string;
+  order: number;
+  collapsed?: boolean;
+  archived?: boolean;
+  generatedAnalysis?: any;
+  analysisStatus?: "idle" | "generating" | "generated" | "approved";
+  analysisUpdatedAt?: string;
+}
+
+export interface BrandManualData {
+  modules: BrandManualModule[];
+  fields: BrandManualField[];
+  copyAds: CopyAdVariant[];
+  masterPrompt?: string;
+  lastUpdatedAt?: string;
+  lastUpdatedBy?: string;
+  overallStatus?: "draft" | "in_progress" | "completed" | "approved";
+}
+
+export const DEFAULT_BRAND_MANUAL_MODULES: BrandManualModule[] = [
+  {
+    id: "posicionamento",
+    title: "1. POSICIONAMENTO",
+    description: "Definição clara do produto, transformação real, mecanismo único e diferenciação de mercado.",
+    order: 0,
+  },
+  {
+    id: "alma_copy",
+    title: "2. ALMA DA COPY",
+    description: "Extração da essência emocional, dor-mãe, desejo-mãe e territórios narrativos autênticos.",
+    order: 1,
+  },
+  {
+    id: "raio_x_icp",
+    title: "3. RAIO X DO ICP",
+    description: "Mapeamento comportamental, rotina concreta, falas reais e 22 saídas analíticas do cliente ideal.",
+    order: 2,
+  },
+  {
+    id: "copy_ads",
+    title: "4. COPY ADS",
+    description: "10 Variantes modulares de Headline + Subheadline com ângulos estratégicos para validação rápida.",
+    order: 3,
+  },
+];
+
+export const DEFAULT_BRAND_MANUAL_FIELDS: BrandManualField[] = [
+  // Módulo 01: POSICIONAMENTO
+  {
+    id: "pos_01",
+    moduleId: "posicionamento",
+    title: "O que você vende e como isso melhora, na prática, a vida de quem compra?",
+    context: "Explique o que o cliente enfrenta hoje, o que você entrega e qual mudança ocorre depois.",
+    preset: "Meu produto é [solução]. Ele atende [público] que enfrenta [situação], utilizando [mecanismo] para chegar a [resultado].",
+    inputType: "textarea",
+    strategicMapping: ["produto", "público", "problema", "resultado", "transformação"],
+    order: 0,
+    required: true,
+  },
+  {
+    id: "pos_02",
+    moduleId: "posicionamento",
+    title: "O que você faz de diferente para produzir esse resultado?",
+    context: "Imagine que um cliente pergunte: 'O que acontece depois que eu contrato você?'. Explique a sequência prática, desde o início até a entrega.",
+    preset: "Primeiro eu [ação]. Depois [processo]. Por fim, entrego [resultado]. A diferença é que [característica concreta].",
+    inputType: "textarea",
+    strategicMapping: ["mecanismo", "processo", "diferencial", "brecha de mercado", "mecanismo hero"],
+    order: 1,
+    required: true,
+  },
+  {
+    id: "pos_03",
+    moduleId: "posicionamento",
+    title: "O que muda no dia a dia do cliente depois que ele utiliza sua solução?",
+    context: "Descreva uma situação antes e depois. Pense em algo que poderia ser observado em sua rotina.",
+    preset: "Antes, o cliente precisava [ação antiga]. Depois, consegue [nova ação] sem precisar [esforço eliminado].",
+    inputType: "textarea",
+    strategicMapping: ["antes", "depois", "mudança observável", "benefício", "promessa"],
+    order: 2,
+    required: true,
+  },
+  {
+    id: "pos_04",
+    moduleId: "posicionamento",
+    title: "O que as pessoas costumam fazer para resolver esse problema que você considera errado ou insuficiente?",
+    context: "Explique qual caminho comum não resolve completamente a situação e o que você acredita que deveria ser feito de outra maneira.",
+    preset: "Muita gente tenta [abordagem comum]. O problema é que [limitação]. Eu acredito que [nova crença] porque [justificativa].",
+    inputType: "textarea",
+    strategicMapping: ["inimigo", "crença antiga", "nova crença", "tese central", "diferenciação"],
+    order: 3,
+    required: true,
+  },
+
+  // Módulo 02: ALMA DA COPY
+  {
+    id: "alm_01",
+    moduleId: "alma_copy",
+    title: "Que situação fez você perceber que essa solução precisava existir?",
+    context: "Conte um problema que observou em clientes ou na própria experiência e que motivou a criação do produto.",
+    preset: "Percebi que as pessoas precisavam [ação repetitiva ou difícil] e isso provocava [consequência]. Foi por isso que desenvolvi [solução].",
+    inputType: "textarea",
+    strategicMapping: ["origem", "dor-mãe", "problema central", "inimigo"],
+    order: 0,
+    required: true,
+  },
+  {
+    id: "alm_02",
+    moduleId: "alma_copy",
+    title: "O que seu cliente deixa de fazer ou passa a fazer depois de comprar?",
+    context: "Pense nas atividades que desaparecem, diminuem ou mudam após a utilização da solução.",
+    preset: "Antes precisava [ação]. Agora [novo comportamento]. Isso elimina ou reduz [problema], conforme [condição real].",
+    inputType: "textarea",
+    strategicMapping: ["antes/depois", "transformação-mãe", "comportamento", "mecanismo"],
+    order: 1,
+    required: true,
+  },
+  {
+    id: "alm_03",
+    moduleId: "alma_copy",
+    title: "Além do resultado principal, o que essa mudança permite que o cliente faça ou viva?",
+    context: "Imagine como a rotina muda quando o problema deixa de ocupar tanto espaço.",
+    preset: "Além de [resultado], ele consegue [nova situação concreta], porque não precisa mais [esforço antigo].",
+    inputType: "textarea",
+    strategicMapping: ["desejo-mãe", "benefício final", "consequência", "alma do produto"],
+    order: 2,
+    required: true,
+  },
+
+  // Módulo 03: RAIO X DO ICP
+  {
+    id: "icp_01",
+    moduleId: "raio_x_icp",
+    title: "Por que seu cliente precisa do seu produto?",
+    context: "Conte uma situação real em que o problema aparece na rotina dele.",
+    preset: "Quando [acontecimento] acontece, ele precisa [ação] e isso acaba gerando [consequência].",
+    inputType: "textarea",
+    strategicMapping: ["situação real", "problema", "gatilho de dor"],
+    order: 0,
+    required: true,
+  },
+  {
+    id: "icp_02",
+    moduleId: "raio_x_icp",
+    title: "O que muda na prática depois que ele utiliza seu produto?",
+    context: "Explique o que ele fazia antes e qual comportamento muda com a sua solução.",
+    preset: "Antes ele precisava [ação antiga]. Com meu produto, passa a [nova ação] e não precisa mais [esforço eliminado].",
+    inputType: "textarea",
+    strategicMapping: ["mudança prática", "transformação", "alívio imediato"],
+    order: 1,
+    required: true,
+  },
+  {
+    id: "icp_03",
+    moduleId: "raio_x_icp",
+    title: "Quando esse problema acontece, o que seu cliente faz, pensa ou fala?",
+    context: "Descreva a cena como se estivesse observando o cliente naquele momento.",
+    preset: 'Quando [situação] acontece, ele normalmente [comportamento] e pensa ou fala: "[frase natural]".',
+    inputType: "textarea",
+    strategicMapping: ["pensamento e fala", "linguagem real", "expressão espontânea"],
+    order: 2,
+    required: true,
+  },
+];
+
+export const DEFAULT_COPY_ADS_VARIANTS: CopyAdVariant[] = [
+  {
+    id: "var_01",
+    variantNumber: 1,
+    angle: "Dor Central / Inimigo Comum",
+    headline: "Cansado de perder tempo com processos manuais que nunca trazem resultado previsível?",
+    subheadline: "Descubra como estruturar sua operação comercial com método validado e fechar contratos sem depender de sorte.",
+    status: "draft",
+    version: 1.0,
+  },
+  {
+    id: "var_02",
+    variantNumber: 2,
+    angle: "Mecanismo Único / Método",
+    headline: "O método passo a passo que substitui o improviso por tração diária.",
+    subheadline: "Uma esteira enxuta que qualifica o lead certo antes mesmo da primeira conversa no WhatsApp.",
+    status: "draft",
+    version: 1.0,
+  },
+  {
+    id: "var_03",
+    variantNumber: 3,
+    angle: "Contradição / Quebra de Padrão",
+    headline: "Por que postar todos os dias pode estar sabotando as suas vendas.",
+    subheadline: "Menos volume, mais precisão: aprenda a atrair compradores qualificados sem virar escravo do algoritmo.",
+    status: "draft",
+    version: 1.0,
+  },
+  {
+    id: "var_04",
+    variantNumber: 4,
+    angle: "Prova Social / Mudança Observável",
+    headline: "De 2 horas de negociação confusa para fechamentos em menos de 15 minutos.",
+    subheadline: "Veja como dezenas de especialistas estão usando o Playbook 7D para converter leads frios em clientes pagantes.",
+    status: "draft",
+    version: 1.0,
+  },
+  {
+    id: "var_05",
+    variantNumber: 5,
+    angle: "Pergunta Provocativa / Espelho do ICP",
+    headline: "Você realmente sabe o que o seu cliente pensa quando lê a sua oferta?",
+    subheadline: "Alinhe sua mensagem exatamente com o que tira o sono de quem tem dinheiro para comprar de você.",
+    status: "draft",
+    version: 1.0,
+  },
+  {
+    id: "var_06",
+    variantNumber: 6,
+    angle: "Antes & Depois Radical",
+    headline: "Antes: agenda cheia de curiosos. Depois: pipeline previsível com compradores prontos.",
+    subheadline: "A transformação prática na rotina comercial de quem implementa uma máquina de qualificação X1.",
+    status: "draft",
+    version: 1.0,
+  },
+  {
+    id: "var_07",
+    variantNumber: 7,
+    angle: "Alívio Imediato / Sem Esforço Antigo",
+    headline: "Chega de reuniões intermináveis com quem não tem orçamento para fechar.",
+    subheadline: "Filtre automaticamente quem não é seu perfil ideal e foque 100% da sua energia em quem fecha contrato.",
+    status: "draft",
+    version: 1.0,
+  },
+  {
+    id: "var_08",
+    variantNumber: 8,
+    angle: "Oportunidade Oculta / Brecha de Mercado",
+    headline: "A brecha oculta que os maiores players do mercado utilizam para qualificar em escala.",
+    subheadline: "Acesse os roteiros e frameworks de condução comercial que ninguém revela abertamente.",
+    status: "draft",
+    version: 1.0,
+  },
+  {
+    id: "var_09",
+    variantNumber: 9,
+    angle: "Consequência de Não Agir (Custo da Inação)",
+    headline: "Quanto dinheiro você deixa na mesa a cada lead perdido por falta de follow-up?",
+    subheadline: "Recupere o controle da sua esteira e garanta que nenhum lead qualificado fique sem atendimento imediato.",
+    status: "draft",
+    version: 1.0,
+  },
+  {
+    id: "var_10",
+    variantNumber: 10,
+    angle: "Convite Direto / Oferta Irrecusável",
+    headline: "Implemente a Arquitetura 7D no seu negócio e tenha clareza absoluta da sua comunicação.",
+    subheadline: "Clique agora para agendar uma sessão de diagnóstico estratégico e desbloquear seu próximo nível.",
+    status: "draft",
+    version: 1.0,
+  },
+];

@@ -9,8 +9,12 @@ import type {
   CustomIndicator, OKRGoal, OKRKeyResult, ContentDistributionMetrics, HoursCalculatorData, AdsCalculatorData,
   ImpactFlag, ContentPublication, FunnelStage,
   DashboardLayoutConfig, DashboardBlockConfig, DashboardCardConfig,
+  BrandManualData, BrandManualModule, BrandManualField, CopyAdVariant,
 } from "./types";
-import { emptyLearnings, DEFAULT_DASHBOARD_LAYOUT, DEFAULT_FUNNEL_STAGES } from "./types";
+import {
+  emptyLearnings, DEFAULT_DASHBOARD_LAYOUT, DEFAULT_FUNNEL_STAGES,
+  DEFAULT_BRAND_MANUAL_MODULES, DEFAULT_BRAND_MANUAL_FIELDS, DEFAULT_COPY_ADS_VARIANTS,
+} from "./types";
 import { wouldCreateCycle } from "../scheduler/engine";
 
 export class DomainError extends Error {}
@@ -1020,6 +1024,249 @@ export function createBlankWorkspace(name = "Novo Cronograma", client = "Cliente
       otherCosts: 0,
     },
   };
+}
+
+// ==========================================
+// BRAND MANUAL 7D (AJ-014) OPERATIONS
+// ==========================================
+
+export function getBrandManualData(ws: Workspace): BrandManualData {
+  if (!ws.brandManual) {
+    ws.brandManual = {
+      modules: JSON.parse(JSON.stringify(DEFAULT_BRAND_MANUAL_MODULES)),
+      fields: JSON.parse(JSON.stringify(DEFAULT_BRAND_MANUAL_FIELDS)),
+      copyAds: JSON.parse(JSON.stringify(DEFAULT_COPY_ADS_VARIANTS)),
+      lastUpdatedAt: new Date().toISOString(),
+      overallStatus: "draft",
+    };
+  } else {
+    if (!ws.brandManual.modules || ws.brandManual.modules.length === 0) {
+      ws.brandManual.modules = JSON.parse(JSON.stringify(DEFAULT_BRAND_MANUAL_MODULES));
+    }
+    if (!ws.brandManual.fields || ws.brandManual.fields.length === 0) {
+      ws.brandManual.fields = JSON.parse(JSON.stringify(DEFAULT_BRAND_MANUAL_FIELDS));
+    }
+    if (!ws.brandManual.copyAds || ws.brandManual.copyAds.length === 0) {
+      ws.brandManual.copyAds = JSON.parse(JSON.stringify(DEFAULT_COPY_ADS_VARIANTS));
+    }
+  }
+  return ws.brandManual;
+}
+
+export function updateBrandManualField(
+  ws: Workspace,
+  ctx: Ctx,
+  fieldId: string,
+  updates: Partial<BrandManualField>
+) {
+  const bm = getBrandManualData(ws);
+  const idx = bm.fields.findIndex((f) => f.id === fieldId);
+  if (idx === -1) return;
+
+  const current = bm.fields[idx];
+  const oldResponse = current.response;
+
+  if (updates.response !== undefined && updates.response !== oldResponse && updates.response.trim().length > 0) {
+    const historyList = current.history ? [...current.history] : [];
+    historyList.unshift({
+      timestamp: ctx.nowIso,
+      response: updates.response,
+      author: ctx.actorName,
+      version: historyList.length + 1,
+    });
+    current.history = historyList;
+    current.status = "completed";
+  }
+
+  bm.fields[idx] = {
+    ...current,
+    ...updates,
+  };
+  bm.lastUpdatedAt = ctx.nowIso;
+  bm.lastUpdatedBy = ctx.actorName;
+  touch(ws.project, ctx);
+  log(ws, ctx, "update", "BrandManualField", fieldId, `Campo "${current.title}" atualizado`);
+}
+
+export function addBrandManualField(
+  ws: Workspace,
+  ctx: Ctx,
+  field: Omit<BrandManualField, "id">
+): string {
+  const bm = getBrandManualData(ws);
+  const id = `f_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  const moduleFields = bm.fields.filter((f) => f.moduleId === field.moduleId && !f.removed);
+  const order = field.order !== undefined ? field.order : moduleFields.length;
+
+  const newField: BrandManualField = {
+    ...field,
+    id,
+    order,
+    status: "pending",
+  };
+
+  bm.fields.push(newField);
+  bm.lastUpdatedAt = ctx.nowIso;
+  bm.lastUpdatedBy = ctx.actorName;
+  touch(ws.project, ctx);
+  log(ws, ctx, "create", "BrandManualField", id, `Pergunta "${field.title}" adicionada ao módulo ${field.moduleId}`);
+  return id;
+}
+
+export function archiveBrandManualField(ws: Workspace, ctx: Ctx, fieldId: string) {
+  const bm = getBrandManualData(ws);
+  const field = bm.fields.find((f) => f.id === fieldId);
+  if (!field) return;
+  field.archived = true;
+  bm.lastUpdatedAt = ctx.nowIso;
+  touch(ws.project, ctx);
+  log(ws, ctx, "archive", "BrandManualField", fieldId, `Campo "${field.title}" arquivado`);
+}
+
+export function restoreBrandManualField(ws: Workspace, ctx: Ctx, fieldId: string) {
+  const bm = getBrandManualData(ws);
+  const field = bm.fields.find((f) => f.id === fieldId);
+  if (!field) return;
+  field.archived = false;
+  bm.lastUpdatedAt = ctx.nowIso;
+  touch(ws.project, ctx);
+  log(ws, ctx, "restore", "BrandManualField", fieldId, `Campo "${field.title}" restaurado`);
+}
+
+export function removeBrandManualField(ws: Workspace, ctx: Ctx, fieldId: string) {
+  const bm = getBrandManualData(ws);
+  const field = bm.fields.find((f) => f.id === fieldId);
+  if (!field) return;
+  field.removed = true;
+  bm.lastUpdatedAt = ctx.nowIso;
+  touch(ws.project, ctx);
+  log(ws, ctx, "delete", "BrandManualField", fieldId, `Campo "${field.title}" removido da estrutura`);
+}
+
+export function duplicateBrandManualField(ws: Workspace, ctx: Ctx, fieldId: string): string | null {
+  const bm = getBrandManualData(ws);
+  const source = bm.fields.find((f) => f.id === fieldId);
+  if (!source) return null;
+
+  const id = `f_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  const clone: BrandManualField = {
+    ...source,
+    id,
+    title: `${source.title} (Cópia)`,
+    response: "", // Nunca duplica respostas pessoais (Section 2.6)
+    transcription: undefined,
+    audioUrl: undefined,
+    history: [],
+    status: "pending",
+    order: source.order + 1,
+  };
+
+  bm.fields.push(clone);
+  bm.lastUpdatedAt = ctx.nowIso;
+  touch(ws.project, ctx);
+  log(ws, ctx, "duplicate", "BrandManualField", id, `Campo "${source.title}" duplicado`);
+  return id;
+}
+
+export function reorderBrandManualFields(
+  ws: Workspace,
+  ctx: Ctx,
+  moduleId: string,
+  orderedFieldIds: string[]
+) {
+  const bm = getBrandManualData(ws);
+  orderedFieldIds.forEach((id, index) => {
+    const f = bm.fields.find((item) => item.id === id);
+    if (f) {
+      f.order = index;
+      f.moduleId = moduleId;
+    }
+  });
+  bm.lastUpdatedAt = ctx.nowIso;
+  touch(ws.project, ctx);
+  log(ws, ctx, "reorder", "BrandManualField", null, `Campos do módulo ${moduleId} reordenados`);
+}
+
+export function updateBrandManualModule(
+  ws: Workspace,
+  ctx: Ctx,
+  moduleId: string,
+  updates: Partial<BrandManualModule>
+) {
+  const bm = getBrandManualData(ws);
+  const mod = bm.modules.find((m) => m.id === moduleId);
+  if (!mod) return;
+  Object.assign(mod, updates);
+  bm.lastUpdatedAt = ctx.nowIso;
+  touch(ws.project, ctx);
+  log(ws, ctx, "update", "BrandManualModule", moduleId, `Módulo "${mod.title}" atualizado`);
+}
+
+export function reorderBrandManualModules(ws: Workspace, ctx: Ctx, orderedModuleIds: string[]) {
+  const bm = getBrandManualData(ws);
+  orderedModuleIds.forEach((id, index) => {
+    const m = bm.modules.find((mod) => mod.id === id);
+    if (m) m.order = index;
+  });
+  bm.lastUpdatedAt = ctx.nowIso;
+  touch(ws.project, ctx);
+  log(ws, ctx, "reorder", "BrandManualModule", null, "Módulos do Manual de Marca reordenados");
+}
+
+export function updateCopyAdVariant(
+  ws: Workspace,
+  ctx: Ctx,
+  variantId: string,
+  updates: Partial<CopyAdVariant>
+) {
+  const bm = getBrandManualData(ws);
+  const v = bm.copyAds.find((item) => item.id === variantId);
+  if (!v) return;
+
+  if (
+    (updates.headline && updates.headline !== v.headline) ||
+    (updates.subheadline && updates.subheadline !== v.subheadline)
+  ) {
+    const historyList = v.history ? [...v.history] : [];
+    historyList.unshift({
+      timestamp: ctx.nowIso,
+      headline: v.headline,
+      subheadline: v.subheadline,
+      version: v.version,
+    });
+    v.history = historyList;
+    v.version = Math.round((v.version + 0.1) * 10) / 10;
+  }
+
+  Object.assign(v, updates);
+  bm.lastUpdatedAt = ctx.nowIso;
+  touch(ws.project, ctx);
+  log(ws, ctx, "update", "CopyAdVariant", variantId, `Variante ${v.variantNumber} atualizada`);
+}
+
+export function saveBrandManualAnalysis(
+  ws: Workspace,
+  ctx: Ctx,
+  moduleId: string,
+  analysis: any
+) {
+  const bm = getBrandManualData(ws);
+  const mod = bm.modules.find((m) => m.id === moduleId);
+  if (!mod) return;
+  mod.generatedAnalysis = analysis;
+  mod.analysisStatus = "generated";
+  mod.analysisUpdatedAt = ctx.nowIso;
+  bm.lastUpdatedAt = ctx.nowIso;
+  touch(ws.project, ctx);
+  log(ws, ctx, "generate", "BrandManualModule", moduleId, `Análise de IA salva para o módulo ${mod.title}`);
+}
+
+export function saveMasterPrompt(ws: Workspace, ctx: Ctx, promptText: string) {
+  const bm = getBrandManualData(ws);
+  bm.masterPrompt = promptText;
+  bm.lastUpdatedAt = ctx.nowIso;
+  touch(ws.project, ctx);
+  log(ws, ctx, "update", "MasterPrompt", null, "Master Prompt Consolidado salvo");
 }
 
 export type { ScheduleRevision };
