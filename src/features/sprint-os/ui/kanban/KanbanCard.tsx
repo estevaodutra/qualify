@@ -80,6 +80,11 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
   const [isEditingStageTitle, setIsEditingStageTitle] = useState(false);
   const [stageTitleText, setStageTitleText] = useState("");
 
+  // Refs para detecção robusta de duplo clique (evita interferência de drag e modal)
+  const stageClickTimeRef = useRef<number>(0);
+  const titleClickTimeRef = useRef<number>(0);
+  const subtaskClickTimeRef = useRef<Record<string, number>>({});
+
   // Estados expansíveis do card
   const [showHistory, setShowHistory] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
@@ -309,11 +314,16 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
       {/* 1. LINHA SUPERIOR: ETAPA, PRIORIDADE E MENU CONTEXTUAL */}
       <div className="flex items-center justify-between gap-2 mb-2">
         {isEditingStageTitle ? (
-          <div className="flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="flex-1 min-w-0"
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
             <Input
               value={stageTitleText}
               onChange={(e) => setStageTitleText(e.target.value)}
               onBlur={handleCommitStageTitle}
+              onFocus={(e) => e.target.select()}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
@@ -329,7 +339,21 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
             />
           </div>
         ) : (
-          <span
+          <div
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              const now = Date.now();
+              if (now - stageClickTimeRef.current < 450) {
+                if (stage) {
+                  setStageTitleText(stage.title);
+                  setIsEditingStageTitle(true);
+                }
+                stageClickTimeRef.current = 0;
+              } else {
+                stageClickTimeRef.current = now;
+              }
+            }}
             onDoubleClick={(e) => {
               e.stopPropagation();
               if (stage) {
@@ -337,11 +361,14 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
                 setIsEditingStageTitle(true);
               }
             }}
-            className="text-[10px] text-muted-foreground uppercase font-black tracking-wider truncate cursor-pointer hover:text-primary transition-colors select-text"
-            title="Duplo clique para alterar o nome da etapa"
+            className="flex items-center gap-1 group/stage cursor-pointer py-0.5 px-1 rounded-md hover:bg-muted/80 transition-colors max-w-[200px]"
+            title="Dê 2 cliques para alterar o nome da etapa"
           >
-            {stage?.title || "Etapa Operacional"}
-          </span>
+            <span className="text-[10px] text-muted-foreground uppercase font-black tracking-wider truncate group-hover/stage:text-primary transition-colors select-none">
+              {stage?.title || "Etapa Operacional"}
+            </span>
+            <Edit2 className="h-2.5 w-2.5 text-muted-foreground/30 group-hover/stage:text-primary shrink-0 transition-opacity" />
+          </div>
         )}
 
         <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -609,11 +636,16 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
 
       {/* 3. TÍTULO COM EDIÇÃO INLINE OU CLIQUE DUPLO */}
       {isEditingTitle ? (
-        <div onClick={(e) => e.stopPropagation()} className="mb-2">
+        <div
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          className="mb-2"
+        >
           <Input
             value={titleText}
             onChange={(e) => setTitleText(e.target.value)}
             onBlur={handleCommitTitle}
+            onFocus={(e) => e.target.select()}
             onKeyDown={(e) => {
               if (e.key === "Enter") handleCommitTitle();
               if (e.key === "Escape") {
@@ -622,24 +654,40 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
               }
             }}
             autoFocus
-            className="h-7 text-xs font-bold bg-background border-primary text-foreground rounded-lg"
+            className="h-7 text-xs font-bold bg-background border-primary text-foreground rounded-lg shadow-xs"
           />
         </div>
       ) : (
-        <h4
+        <div
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            const now = Date.now();
+            if (now - titleClickTimeRef.current < 450) {
+              setIsEditingTitle(true);
+              titleClickTimeRef.current = 0;
+            } else {
+              titleClickTimeRef.current = now;
+            }
+          }}
           onDoubleClick={(e) => {
             e.stopPropagation();
             setIsEditingTitle(true);
           }}
-          className={`text-xs font-bold leading-snug mb-2 transition-colors cursor-pointer ${
-            isDone
-              ? "line-through text-muted-foreground"
-              : "text-foreground group-hover:text-primary"
-          }`}
-          title="Clique duas vezes para renomear"
+          className="flex items-center gap-1 group/title cursor-pointer mb-2"
+          title="Dê 2 cliques para renomear a tarefa"
         >
-          {task.title}
-        </h4>
+          <h4
+            className={`text-xs font-bold leading-snug transition-colors flex-1 ${
+              isDone
+                ? "line-through text-muted-foreground"
+                : "text-foreground group-hover/title:text-primary"
+            }`}
+          >
+            {task.title}
+          </h4>
+          <Edit2 className="h-3 w-3 text-muted-foreground/30 group-hover/title:text-primary shrink-0 transition-opacity" />
+        </div>
       )}
 
       {/* 4. SINALIZADORES OPERACIONAIS E VÍNCULOS COM O MANUAL DE MARCA */}
@@ -960,11 +1008,13 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
                         <div
                           className="flex-1 min-w-0"
                           onClick={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => e.stopPropagation()}
                         >
                           <Input
                             value={editingSubtaskTitle}
                             onChange={(e) => setEditingSubtaskTitle(e.target.value)}
                             onBlur={() => handleCommitEditSubtask(st.id)}
+                            onFocus={(e) => e.target.select()}
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
                                 e.preventDefault();
@@ -981,13 +1031,25 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
                         </div>
                       ) : (
                         <span
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const now = Date.now();
+                            const last = subtaskClickTimeRef.current[st.id] || 0;
+                            if (now - last < 450) {
+                              handleStartEditSubtask(e, st.id, st.title);
+                              subtaskClickTimeRef.current[st.id] = 0;
+                            } else {
+                              subtaskClickTimeRef.current[st.id] = now;
+                            }
+                          }}
                           onDoubleClick={(e) => handleStartEditSubtask(e, st.id, st.title)}
-                          className={`flex-1 min-w-0 truncate cursor-text transition-colors select-text hover:text-primary ${
+                          className={`flex-1 min-w-0 truncate cursor-pointer transition-colors select-none hover:text-primary ${
                             st.done
                               ? "line-through text-muted-foreground"
                               : "text-foreground font-medium"
                           }`}
-                          title="Duplo clique para editar este item do checklist"
+                          title="Dê 2 cliques para editar este item do checklist"
                         >
                           {st.title}
                         </span>
