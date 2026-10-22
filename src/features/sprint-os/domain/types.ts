@@ -753,7 +753,12 @@ export const PRIORITY_RANK: Record<Priority, number> = { P0: 0, P1: 1, P2: 2, P3
 
 export const STATUS_LABEL: Record<TaskStatus, string> = { pending: "Pendente", doing: "Fazendo", done: "Feito" };
 export const STATUS_ICON: Record<TaskStatus, string> = { pending: "🔴", doing: "🟡", done: "🟢" };
-export const PRIORITY_LABEL: Record<Priority, string> = { P0: "P0 · Crítica", P1: "P1 · Alta", P2: "P2 · Média", P3: "P3 · Baixa" };
+export const PRIORITY_LABEL: Record<Priority, string> = {
+  P0: "P0 — Urgente (Vermelho)",
+  P1: "P1 — Importante (Laranja)",
+  P2: "P2 — Útil (Amarelo)",
+  P3: "P3 — Baixa (Neutro)",
+};
 export const COMPLEXITY_LABEL: Record<Complexity, string> = { low: "Baixa", medium: "Média", high: "Alta" };
 export const SCOPE_LABEL: Record<ScopeType, string> = { original: "Escopo original", adjustment: "Ajuste operacional", additional: "Solicitação adicional" };
 

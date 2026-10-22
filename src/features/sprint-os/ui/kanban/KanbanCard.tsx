@@ -44,6 +44,7 @@ import {
   archiveTask,
   createSubtask,
   toggleSubtask,
+  deleteSubtask,
   startTaskSession,
   pauseTaskSession,
   concludeTaskWithSession,
@@ -190,6 +191,31 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
     toast.success("Subtarefa adicionada!");
   };
 
+  const handleDeleteSubtask = async (e: React.MouseEvent, subtaskId: string) => {
+    e.stopPropagation();
+    await mutate((ws, ctx) => {
+      deleteSubtask(ws, ctx, subtaskId);
+    }, user?.email || "Operador");
+    toast.info("Item removido do checklist");
+  };
+
+  // ───────────── Ação de Prioridade (AJ-022) ─────────────
+  const handleSetPriority = async (p: Priority) => {
+    if (task.priority === p) return;
+    await mutate((ws, ctx) => {
+      updateTask(ws, ctx, task.id, { priority: p });
+    }, user?.email || "Operador");
+    toast.success(
+      p === "P0"
+        ? "Prioridade: P0 — Urgente (Vermelho)"
+        : p === "P1"
+        ? "Prioridade: P1 — Importante (Laranja)"
+        : p === "P2"
+        ? "Prioridade: P2 — Útil (Amarelo)"
+        : "Prioridade: P3 — Baixa"
+    );
+  };
+
   // ───────────── Ações de Responsável ─────────────
   const handleAssignMember = async (memberId: string | null) => {
     await mutate((ws, ctx) => {
@@ -218,20 +244,80 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
         </span>
 
         <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-          {/* Prioridade Estrita (P0, P1, P2, P3) */}
-          <Badge
-            className={`text-[9px] font-black py-0 px-1.5 ${
-              task.priority === "P0"
-                ? "bg-rose-500/15 text-rose-600 dark:text-rose-300 border-rose-500/30"
-                : task.priority === "P1"
-                ? "bg-orange-500/15 text-orange-600 dark:text-orange-300 border-orange-500/30"
-                : task.priority === "P2"
-                ? "bg-blue-500/15 text-blue-600 dark:text-blue-300 border-blue-500/30"
-                : "bg-muted text-muted-foreground border-border"
-            }`}
-          >
-            {task.priority}
-          </Badge>
+          {/* Seletor Rápido e Interativo de Prioridade no Card (AJ-022) */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={`text-[10px] font-bold py-0.5 px-2 rounded-lg border transition-all flex items-center gap-1 cursor-pointer hover:scale-105 active:scale-95 ${
+                  task.priority === "P0"
+                    ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30"
+                    : task.priority === "P1"
+                    ? "bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/30"
+                    : task.priority === "P2"
+                    ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30"
+                    : "bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-500/30"
+                }`}
+                title="Clique para alterar a prioridade da tarefa"
+              >
+                <span>
+                  {task.priority === "P0"
+                    ? "P0 Urgente"
+                    : task.priority === "P1"
+                    ? "P1 Importante"
+                    : task.priority === "P2"
+                    ? "P2 Útil"
+                    : "P3 Baixa"}
+                </span>
+                <ChevronDown className="h-2.5 w-2.5 opacity-60" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52 p-1.5 rounded-2xl shadow-xl text-xs">
+              <div className="px-2 py-1 text-[10px] font-black uppercase text-muted-foreground tracking-wider">
+                Alterar Prioridade
+              </div>
+              <DropdownMenuItem
+                onClick={() => handleSetPriority("P0")}
+                className={`cursor-pointer gap-2 font-bold ${
+                  task.priority === "P0" ? "bg-rose-500/10 text-rose-600 dark:text-rose-400" : "text-rose-600 dark:text-rose-400"
+                }`}
+              >
+                <span className="h-2 w-2 rounded-full bg-rose-500 shrink-0" />
+                <span>P0 — Urgente (Vermelho)</span>
+                {task.priority === "P0" && <Check className="h-3.5 w-3.5 ml-auto text-rose-600" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleSetPriority("P1")}
+                className={`cursor-pointer gap-2 font-bold ${
+                  task.priority === "P1" ? "bg-orange-500/10 text-orange-600 dark:text-orange-400" : "text-orange-600 dark:text-orange-400"
+                }`}
+              >
+                <span className="h-2 w-2 rounded-full bg-orange-500 shrink-0" />
+                <span>P1 — Importante (Laranja)</span>
+                {task.priority === "P1" && <Check className="h-3.5 w-3.5 ml-auto text-orange-600" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleSetPriority("P2")}
+                className={`cursor-pointer gap-2 font-bold ${
+                  task.priority === "P2" ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" : "text-amber-600 dark:text-amber-400"
+                }`}
+              >
+                <span className="h-2 w-2 rounded-full bg-amber-500 shrink-0" />
+                <span>P2 — Útil (Amarelo)</span>
+                {task.priority === "P2" && <Check className="h-3.5 w-3.5 ml-auto text-amber-600" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleSetPriority("P3")}
+                className={`cursor-pointer gap-2 text-muted-foreground ${
+                  task.priority === "P3" ? "bg-muted font-bold text-foreground" : ""
+                }`}
+              >
+                <span className="h-2 w-2 rounded-full bg-slate-400 shrink-0" />
+                <span>P3 — Baixa (Neutro)</span>
+                {task.priority === "P3" && <Check className="h-3.5 w-3.5 ml-auto" />}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Menu de Contexto (Três Pontos) */}
           <DropdownMenu>
@@ -244,7 +330,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
                 <MoreVertical className="h-3.5 w-3.5" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48 p-1.5 rounded-2xl shadow-xl text-xs">
+            <DropdownMenuContent align="end" className="w-52 p-1.5 rounded-2xl shadow-xl text-xs">
               <DropdownMenuItem
                 onClick={() => {
                   setIsEditingTitle(true);
@@ -264,7 +350,38 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
                 className="cursor-pointer gap-2"
               >
                 <ListTodo className="h-3.5 w-3.5 text-muted-foreground" />
-                <span>Adicionar Subtarefa</span>
+                <span>Adicionar ao Checklist</span>
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+
+              {/* Submenu de Prioridades no Menu */}
+              <div className="px-2 py-1 text-[10px] font-bold uppercase text-muted-foreground">
+                Prioridade
+              </div>
+              <DropdownMenuItem
+                onClick={() => handleSetPriority("P0")}
+                className="cursor-pointer gap-2 text-rose-600 dark:text-rose-400 font-semibold"
+              >
+                <span className="h-2 w-2 rounded-full bg-rose-500" />
+                <span>P0 — Urgente (Vermelho)</span>
+                {task.priority === "P0" && <Check className="h-3 w-3 ml-auto" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleSetPriority("P1")}
+                className="cursor-pointer gap-2 text-orange-600 dark:text-orange-400 font-semibold"
+              >
+                <span className="h-2 w-2 rounded-full bg-orange-500" />
+                <span>P1 — Importante (Laranja)</span>
+                {task.priority === "P1" && <Check className="h-3 w-3 ml-auto" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleSetPriority("P2")}
+                className="cursor-pointer gap-2 text-amber-600 dark:text-amber-400 font-semibold"
+              >
+                <span className="h-2 w-2 rounded-full bg-amber-500" />
+                <span>P2 — Útil (Amarelo)</span>
+                {task.priority === "P2" && <Check className="h-3 w-3 ml-auto" />}
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
@@ -324,7 +441,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
         </div>
       </div>
 
-      {/* 2. ETIQUETAS PERSONALIZÁVEIS TIPO TRELLO (AJ-022) */}
+      {/* 2. ETIQUETAS PERSONALIZÁVEIS E ATALHO DE CHECKLIST NO TOPO */}
       <div
         className="flex flex-wrap items-center gap-1.5 mb-2"
         onClick={(e) => e.stopPropagation()}
@@ -360,6 +477,20 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
             </button>
           }
         />
+
+        {/* Botão Atalho + Checklist */}
+        <button
+          type="button"
+          onClick={() => {
+            setShowChecklist(true);
+            setIsAddingSubtask(true);
+          }}
+          className="h-5 px-1.5 rounded-md border border-dashed border-border hover:border-primary/50 text-[10px] text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors cursor-pointer"
+          title="Adicionar item ao Checklist dentro do card"
+        >
+          <ListTodo className="h-2.5 w-2.5" />
+          <span>+ Checklist</span>
+        </button>
       </div>
 
       {/* 3. TÍTULO COM EDIÇÃO INLINE OU CLIQUE DUPLO */}
@@ -618,87 +749,165 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
         </div>
       )}
 
-      {/* 7. PROGRESSO DO CHECKLIST / SUBTAREFAS & PREVIEW EXPANSÍVEL */}
-      {subtasks.length > 0 && (
-        <div className="mb-2 text-xs" onClick={(e) => e.stopPropagation()}>
-          <div
-            onClick={() => setShowChecklist(!showChecklist)}
-            className="flex items-center justify-between text-[10px] text-muted-foreground hover:text-foreground py-0.5 cursor-pointer"
-          >
-            <div className="flex items-center gap-1 font-semibold">
-              <CheckCircle2 className="h-3 w-3 text-primary" />
-              <span>
-                Subtarefas ({subtasks.filter((s) => s.done).length}/{subtasks.length})
-              </span>
-            </div>
-            {showChecklist ? (
-              <ChevronUp className="h-3 w-3" />
-            ) : (
-              <ChevronDown className="h-3 w-3" />
-            )}
-          </div>
-
-          {/* Lista Compacta de Subtarefas com Toggle Direto */}
-          {showChecklist && (
-            <div className="mt-1.5 space-y-1 p-2 rounded-xl bg-muted/30 border border-border/40">
-              {subtasks.map((st) => (
-                <div
-                  key={st.id}
-                  className="flex items-center justify-between gap-1.5 text-[11px] group/sub"
-                >
-                  <button
-                    type="button"
-                    onClick={(e) => handleToggleSubtask(e, st.id, st.done)}
-                    className="flex items-center gap-1.5 text-left flex-1 min-w-0 cursor-pointer"
-                  >
-                    {st.done ? (
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    ) : (
-                      <Circle className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
-                    )}
-                    <span
-                      className={`truncate ${
-                        st.done ? "line-through text-muted-foreground" : "text-foreground"
-                      }`}
-                    >
-                      {st.title}
-                    </span>
-                  </button>
-                </div>
-              ))}
-
-              {/* Adicionar subtarefa rápido */}
-              {isAddingSubtask ? (
-                <form onSubmit={handleCreateSubtask} className="pt-1 flex items-center gap-1">
-                  <Input
-                    value={newSubtaskTitle}
-                    onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                    placeholder="Nome da subtarefa..."
-                    className="h-6 text-[11px] bg-background border-input rounded-md flex-1"
-                    autoFocus
-                  />
-                  <Button
-                    type="submit"
-                    size="sm"
-                    className="h-6 px-2 text-[10px] bg-primary text-primary-foreground font-bold rounded-md"
-                  >
-                    OK
-                  </Button>
-                </form>
-              ) : (
+      {/* 7. PROGRESSO DO CHECKLIST / SUBTAREFAS & PREVIEW EXPANSÍVEL (AJ-022) */}
+      <div className="mb-2 text-xs" onClick={(e) => e.stopPropagation()}>
+        {subtasks.length > 0 ? (
+          <div>
+            <div
+              onClick={() => setShowChecklist(!showChecklist)}
+              className="flex items-center justify-between text-[10px] text-muted-foreground hover:text-foreground py-0.5 cursor-pointer"
+            >
+              <div className="flex items-center gap-1 font-semibold">
+                <CheckCircle2 className="h-3 w-3 text-primary" />
+                <span>
+                  Checklist ({subtasks.filter((s) => s.done).length}/{subtasks.length})
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={() => setIsAddingSubtask(true)}
-                  className="text-[10px] text-primary hover:underline font-bold flex items-center gap-0.5 pt-1 cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowChecklist(true);
+                    setIsAddingSubtask(true);
+                  }}
+                  className="text-[10px] text-primary hover:underline font-bold flex items-center gap-0.5"
+                  title="Adicionar item ao checklist"
                 >
                   <Plus className="h-3 w-3" />
-                  <span>Adicionar subtarefa</span>
+                  <span>Item</span>
                 </button>
-              )}
+                {showChecklist ? (
+                  <ChevronUp className="h-3 w-3" />
+                ) : (
+                  <ChevronDown className="h-3 w-3" />
+                )}
+              </div>
             </div>
-          )}
-        </div>
-      )}
+
+            {/* Lista Compacta de Subtarefas com Toggle Direto */}
+            {showChecklist && (
+              <div className="mt-1.5 space-y-1 p-2 rounded-xl bg-muted/30 border border-border/40">
+                {subtasks.map((st) => (
+                  <div
+                    key={st.id}
+                    className="flex items-center justify-between gap-1.5 text-[11px] group/sub"
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => handleToggleSubtask(e, st.id, st.done)}
+                      className="flex items-center gap-1.5 text-left flex-1 min-w-0 cursor-pointer"
+                    >
+                      {st.done ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      ) : (
+                        <Circle className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
+                      )}
+                      <span
+                        className={`truncate ${
+                          st.done ? "line-through text-muted-foreground" : "text-foreground"
+                        }`}
+                      >
+                        {st.title}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteSubtask(e, st.id)}
+                      className="opacity-0 group-hover/sub:opacity-100 p-0.5 text-muted-foreground hover:text-rose-600 rounded transition-opacity"
+                      title="Remover item"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+
+                {/* Adicionar subtarefa rápido */}
+                {isAddingSubtask ? (
+                  <form onSubmit={handleCreateSubtask} className="pt-1 flex items-center gap-1">
+                    <Input
+                      value={newSubtaskTitle}
+                      onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                      placeholder="Novo item do checklist..."
+                      className="h-6 text-[11px] bg-background border-input rounded-md flex-1"
+                      autoFocus
+                    />
+                    <Button
+                      type="submit"
+                      size="sm"
+                      className="h-6 px-2 text-[10px] bg-primary text-primary-foreground font-bold rounded-md"
+                    >
+                      OK
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setIsAddingSubtask(false)}
+                      className="h-6 px-1.5 text-[10px] text-muted-foreground rounded-md"
+                    >
+                      X
+                    </Button>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingSubtask(true)}
+                    className="text-[10px] text-primary hover:underline font-bold flex items-center gap-0.5 pt-1 cursor-pointer"
+                  >
+                    <Plus className="h-3 w-3" />
+                    <span>Adicionar item</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Quando ainda não há itens: botão visível para criar checklist direto no card */
+          <div>
+            {isAddingSubtask ? (
+              <form onSubmit={handleCreateSubtask} className="p-2 rounded-xl bg-muted/40 border border-border/60 flex items-center gap-1.5">
+                <Input
+                  value={newSubtaskTitle}
+                  onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                  placeholder="Digite o item do checklist..."
+                  className="h-6 text-[11px] bg-background border-input rounded-md flex-1"
+                  autoFocus
+                />
+                <Button
+                  type="submit"
+                  size="sm"
+                  className="h-6 px-2 text-[10px] bg-primary text-primary-foreground font-bold rounded-md"
+                >
+                  Adicionar
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setIsAddingSubtask(false)}
+                  className="h-6 px-1.5 text-[10px] text-muted-foreground rounded-md"
+                >
+                  Cancelar
+                </Button>
+              </form>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowChecklist(true);
+                  setIsAddingSubtask(true);
+                }}
+                className="w-full py-1.5 px-2 rounded-xl border border-dashed border-border/80 hover:border-primary/50 text-[10px] text-muted-foreground hover:text-primary flex items-center justify-center gap-1.5 transition-colors cursor-pointer bg-muted/10 hover:bg-muted/30"
+              >
+                <ListTodo className="h-3 w-3" />
+                <span>+ Adicionar Checklist no Card</span>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* 8. RODAPÉ DO CARD: RESPONSÁVEL E BOTÃO DE DETALHES */}
       <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-2 border-t border-border/60">
