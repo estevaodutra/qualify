@@ -183,12 +183,17 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
   const handleCreateSubtask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubtaskTitle.trim()) return;
-    await mutate((ws, ctx) => {
-      createSubtask(ws, ctx, task.id, newSubtaskTitle.trim());
-    }, user?.email || "Operador");
-    setNewSubtaskTitle("");
-    setIsAddingSubtask(false);
-    toast.success("Subtarefa adicionada!");
+    try {
+      await mutate((ws, ctx) => {
+        createSubtask(ws, ctx, task.id, newSubtaskTitle.trim());
+      }, user?.email || "Operador");
+      setNewSubtaskTitle("");
+      setIsAddingSubtask(false);
+      setShowChecklist(true);
+      toast.success("Item adicionado ao checklist!");
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao adicionar item");
+    }
   };
 
   const handleDeleteSubtask = async (e: React.MouseEvent, subtaskId: string) => {

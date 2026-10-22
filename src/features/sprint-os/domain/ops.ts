@@ -50,7 +50,13 @@ export const sprintOfTask = (ws: Workspace, taskId: ID): Sprint | undefined =>
 function renumber<T extends { position: number }>(items: T[]) { items.forEach((it, i) => { it.position = i; }); }
 
 function get<T>(rec: Record<ID, T>, id: ID, what: string): T {
-  const v = rec[id];
+  let v = rec[id];
+  if (!v && rec) {
+    v = Object.values(rec).find((item: any) => item && (item.id === id || String(item.id) === String(id))) as T;
+    if (v && (v as any).id) {
+      rec[(v as any).id] = v;
+    }
+  }
   if (!v) throw new DomainError(`${what} não encontrado(a)`);
   return v;
 }
@@ -328,8 +334,8 @@ export function ackState(ws: Workspace, taskId: ID, memberId: ID | null): AckSta
 // ───────────── Subtasks ─────────────
 
 export function createSubtask(ws: Workspace, ctx: Ctx, taskId: ID, title: string, target: number | null = null): ID {
-  get(ws.tasks, taskId, "Tarefa");
-  const s = makeSubtask(ctx, taskId, title, subtasksOf(ws, taskId).length, { target });
+  const task = get(ws.tasks, taskId, "Tarefa");
+  const s = makeSubtask(ctx, task.id, title, subtasksOf(ws, task.id).length, { target });
   ws.subtasks[s.id] = s;
   log(ws, ctx, "create", "subtask", s.id, `Subtarefa criada: ${title}`);
   return s.id;
@@ -1361,6 +1367,26 @@ export function reconcileWorkspaceWithAJ019(ws: Workspace, ctx: Ctx): boolean {
 
   let changed = false;
 
+  // 0. Auto-correção e reconciliação de integridade de chaves em ws.tasks e ws.subtasks
+  if (ws.tasks) {
+    for (const [key, t] of Object.entries(ws.tasks)) {
+      if (t && t.id && key !== t.id) {
+        delete ws.tasks[key];
+        ws.tasks[t.id] = t;
+        changed = true;
+      }
+    }
+  }
+  if (ws.subtasks) {
+    for (const [key, st] of Object.entries(ws.subtasks)) {
+      if (st && st.id && key !== st.id) {
+        delete ws.subtasks[key];
+        ws.subtasks[st.id] = st;
+        changed = true;
+      }
+    }
+  }
+
   // 1. Inserir ETAPA 01 — INTELIGÊNCIA DO EXPERT se não existir IM-01
   if (!hasIM01) {
     // Deslocar posições dos estágios existentes
@@ -1507,7 +1533,6 @@ export function reconcileWorkspaceWithAJ019(ws: Workspace, ctx: Ctx): boolean {
     ];
 
     intelTasks.forEach((it, taskIdx) => {
-      const taskId = newId();
       const task = makeTask(ctx, intelStageId, it.title, taskIdx, {
         priority: it.priority,
         complexity: it.complexity,
@@ -1516,11 +1541,11 @@ export function reconcileWorkspaceWithAJ019(ws: Workspace, ctx: Ctx): boolean {
         durationSource: "fixed",
         status: "pending",
       });
-      ws.tasks[taskId] = task;
+      ws.tasks[task.id] = task;
 
       it.subtasks.forEach((stTitle, stIdx) => {
-        const subtaskId = newId();
-        ws.subtasks[subtaskId] = makeSubtask(ctx, taskId, stTitle, stIdx);
+        const sub = makeSubtask(ctx, task.id, stTitle, stIdx);
+        ws.subtasks[sub.id] = sub;
       });
     });
 
@@ -1779,7 +1804,6 @@ export function reconcileWorkspaceWithAJ019(ws: Workspace, ctx: Ctx): boolean {
     ];
 
     groupAndAutoTasks.forEach((gt, idx) => {
-      const taskId = newId();
       const task = makeTask(ctx, autoStage!.id, gt.title, startTaskPos + idx, {
         priority: gt.priority,
         complexity: gt.complexity,
@@ -1788,11 +1812,11 @@ export function reconcileWorkspaceWithAJ019(ws: Workspace, ctx: Ctx): boolean {
         durationSource: "fixed",
         status: "pending",
       });
-      ws.tasks[taskId] = task;
+      ws.tasks[task.id] = task;
 
       gt.subtasks.forEach((stTitle, stIdx) => {
-        const subtaskId = newId();
-        ws.subtasks[subtaskId] = makeSubtask(ctx, taskId, stTitle, stIdx);
+        const sub = makeSubtask(ctx, task.id, stTitle, stIdx);
+        ws.subtasks[sub.id] = sub;
       });
     });
 
