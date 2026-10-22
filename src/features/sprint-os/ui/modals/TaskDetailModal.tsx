@@ -29,6 +29,7 @@ import {
   Circle,
   Plus,
   Trash2,
+  Edit2,
   Calendar,
   Clock,
   User,
@@ -60,6 +61,7 @@ import {
   updateTask,
   setTaskStatus,
   createSubtask,
+  updateSubtask,
   deleteSubtask,
   toggleSubtask,
   startTaskSession,
@@ -95,6 +97,8 @@ export const TaskDetailModal: React.FC = () => {
   // Subtarefas / Checklist
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
+  const [editingSubtaskTitle, setEditingSubtaskTitle] = useState("");
 
   // Comentários
   const [newCommentText, setNewCommentText] = useState("");
@@ -202,6 +206,29 @@ export const TaskDetailModal: React.FC = () => {
       deleteSubtask(ws, ctx, subtaskId);
     }, user?.email || "Operador");
     toast.info("Item removido.");
+  };
+
+  const handleStartEditSubtask = (subtaskId: string, currentTitle: string) => {
+    setEditingSubtaskId(subtaskId);
+    setEditingSubtaskTitle(currentTitle);
+  };
+
+  const handleCommitEditSubtask = async (subtaskId: string) => {
+    if (!editingSubtaskId) return;
+    const trimmed = editingSubtaskTitle.trim();
+    const existing = subtasks.find((s) => s.id === subtaskId);
+    if (trimmed && trimmed !== existing?.title) {
+      try {
+        await mutate((ws, ctx) => {
+          updateSubtask(ws, ctx, subtaskId, { title: trimmed });
+        }, user?.email || "Operador");
+        toast.success("Item do checklist atualizado!");
+      } catch (err: any) {
+        toast.error(err.message || "Erro ao atualizar item");
+      }
+    }
+    setEditingSubtaskId(null);
+    setEditingSubtaskTitle("");
   };
 
   // Handlers de Cronômetro
@@ -555,44 +582,86 @@ export const TaskDetailModal: React.FC = () => {
                 </div>
               )}
 
-              {/* Lista de Itens do Checklist */}
+              {/* Lista de Itens do Checklist com Edição por Duplo Clique */}
               <div className="space-y-1">
-                {subtasks.map((st) => (
-                  <div
-                    key={st.id}
-                    className="flex items-start justify-between gap-2 p-1.5 rounded-lg hover:bg-muted/30 group transition-colors text-xs"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => handleToggleSubtask(st.id, st.done)}
-                      className="mt-0.5 text-muted-foreground hover:text-emerald-500 transition-colors cursor-pointer shrink-0"
+                {subtasks.map((st) => {
+                  const isEditingThis = editingSubtaskId === st.id;
+
+                  return (
+                    <div
+                      key={st.id}
+                      className="flex items-center justify-between gap-2 p-1.5 rounded-lg hover:bg-muted/30 group transition-colors text-xs"
                     >
-                      {st.done ? (
-                        <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      <button
+                        type="button"
+                        onClick={() => handleToggleSubtask(st.id, st.done)}
+                        className="text-muted-foreground hover:text-emerald-500 transition-colors cursor-pointer shrink-0"
+                        title={st.done ? "Marcar como pendente" : "Marcar como concluído"}
+                      >
+                        {st.done ? (
+                          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                        ) : (
+                          <Circle className="h-4 w-4 text-muted-foreground/60 hover:text-emerald-500" />
+                        )}
+                      </button>
+
+                      {isEditingThis ? (
+                        <div className="flex-1 min-w-0">
+                          <Input
+                            value={editingSubtaskTitle}
+                            onChange={(e) => setEditingSubtaskTitle(e.target.value)}
+                            onBlur={() => handleCommitEditSubtask(st.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleCommitEditSubtask(st.id);
+                              }
+                              if (e.key === "Escape") {
+                                setEditingSubtaskId(null);
+                                setEditingSubtaskTitle("");
+                              }
+                            }}
+                            autoFocus
+                            className="h-7 text-xs px-2 bg-background border-primary text-foreground rounded-md w-full shadow-xs"
+                          />
+                        </div>
                       ) : (
-                        <Circle className="h-4 w-4 text-muted-foreground/60" />
+                        <span
+                          onDoubleClick={() => handleStartEditSubtask(st.id, st.title)}
+                          className={`flex-1 cursor-text leading-tight select-text transition-colors hover:text-primary ${
+                            st.done
+                              ? "line-through text-muted-foreground"
+                              : "text-foreground font-medium"
+                          }`}
+                          title="Duplo clique para editar este item do checklist"
+                        >
+                          {st.title}
+                        </span>
                       )}
-                    </button>
 
-                    <span
-                      onClick={() => handleToggleSubtask(st.id, st.done)}
-                      className={`flex-1 cursor-pointer leading-tight ${
-                        st.done ? "line-through text-muted-foreground" : "text-foreground font-medium"
-                      }`}
-                    >
-                      {st.title}
-                    </span>
-
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteSubtask(st.id)}
-                      className="opacity-0 group-hover:opacity-100 p-0.5 text-muted-foreground hover:text-rose-500 rounded transition-opacity cursor-pointer shrink-0"
-                      title="Excluir item"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ))}
+                      {!isEditingThis && (
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditSubtask(st.id, st.title)}
+                            className="p-1 text-muted-foreground hover:text-primary rounded transition-colors cursor-pointer"
+                            title="Editar item (ou dê 2 cliques no texto)"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSubtask(st.id)}
+                            className="p-1 text-muted-foreground hover:text-rose-500 rounded transition-colors cursor-pointer"
+                            title="Excluir item"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Formulário para Adicionar Item */}

@@ -43,6 +43,7 @@ import {
   deleteTask,
   archiveTask,
   createSubtask,
+  updateSubtask,
   toggleSubtask,
   deleteSubtask,
   startTaskSession,
@@ -79,6 +80,8 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
   const [showChecklist, setShowChecklist] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
+  const [editingSubtaskTitle, setEditingSubtaskTitle] = useState("");
 
   // Estado do cronômetro em tempo real
   const [currentSeconds, setCurrentSeconds] = useState<number>(() =>
@@ -184,6 +187,30 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
     await mutate((ws, ctx) => {
       toggleSubtask(ws, ctx, subtaskId, !currentDone);
     }, user?.email || "Operador");
+  };
+
+  const handleStartEditSubtask = (e: React.MouseEvent, subtaskId: string, currentTitle: string) => {
+    e.stopPropagation();
+    setEditingSubtaskId(subtaskId);
+    setEditingSubtaskTitle(currentTitle);
+  };
+
+  const handleCommitEditSubtask = async (subtaskId: string) => {
+    if (!editingSubtaskId) return;
+    const trimmed = editingSubtaskTitle.trim();
+    const existing = subtasks.find((s) => s.id === subtaskId);
+    if (trimmed && trimmed !== existing?.title) {
+      try {
+        await mutate((ws, ctx) => {
+          updateSubtask(ws, ctx, subtaskId, { title: trimmed });
+        }, user?.email || "Operador");
+        toast.success("Item do checklist atualizado!");
+      } catch (err: any) {
+        toast.error(err.message || "Erro ao atualizar item");
+      }
+    }
+    setEditingSubtaskId(null);
+    setEditingSubtaskTitle("");
   };
 
   const handleCreateSubtask = async (e: React.FormEvent) => {
@@ -827,43 +854,93 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
               />
             </div>
 
-            {/* Lista Compacta de Subtarefas com Toggle Direto */}
+            {/* Lista Compacta de Subtarefas com Toggle Direto e Edição por Duplo Clique */}
             {showChecklist && (
               <div className="mt-1.5 space-y-1 p-2 rounded-xl bg-muted/30 border border-border/40">
-                {subtasks.map((st) => (
-                  <div
-                    key={st.id}
-                    className="flex items-center justify-between gap-1.5 text-[11px] group/sub"
-                  >
-                    <button
-                      type="button"
-                      onClick={(e) => handleToggleSubtask(e, st.id, st.done)}
-                      className="flex items-center gap-1.5 text-left flex-1 min-w-0 cursor-pointer"
-                    >
-                      {st.done ? (
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                      ) : (
-                        <Circle className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
-                      )}
-                      <span
-                        className={`truncate ${
-                          st.done ? "line-through text-muted-foreground" : "text-foreground"
-                        }`}
-                      >
-                        {st.title}
-                      </span>
-                    </button>
+                {subtasks.map((st) => {
+                  const isEditingThis = editingSubtaskId === st.id;
 
-                    <button
-                      type="button"
-                      onClick={(e) => handleDeleteSubtask(e, st.id)}
-                      className="opacity-0 group-hover/sub:opacity-100 p-0.5 text-muted-foreground hover:text-rose-600 rounded transition-opacity"
-                      title="Remover item"
+                  return (
+                    <div
+                      key={st.id}
+                      className="flex items-center justify-between gap-1.5 text-[11px] group/sub py-0.5"
                     >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
+                      {/* Botão de Conclusão / Checkbox */}
+                      <button
+                        type="button"
+                        onClick={(e) => handleToggleSubtask(e, st.id, st.done)}
+                        className="p-0.5 text-muted-foreground hover:text-emerald-500 transition-colors cursor-pointer shrink-0"
+                        title={st.done ? "Marcar como pendente" : "Marcar como concluído"}
+                      >
+                        {st.done ? (
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        ) : (
+                          <Circle className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0 hover:text-emerald-500" />
+                        )}
+                      </button>
+
+                      {/* Informação / Título com Edição por Duplo Clique */}
+                      {isEditingThis ? (
+                        <div
+                          className="flex-1 min-w-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Input
+                            value={editingSubtaskTitle}
+                            onChange={(e) => setEditingSubtaskTitle(e.target.value)}
+                            onBlur={() => handleCommitEditSubtask(st.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleCommitEditSubtask(st.id);
+                              }
+                              if (e.key === "Escape") {
+                                setEditingSubtaskId(null);
+                                setEditingSubtaskTitle("");
+                              }
+                            }}
+                            autoFocus
+                            className="h-6 text-[11px] px-2 py-0.5 bg-background border-primary text-foreground rounded-md w-full shadow-xs"
+                          />
+                        </div>
+                      ) : (
+                        <span
+                          onDoubleClick={(e) => handleStartEditSubtask(e, st.id, st.title)}
+                          className={`flex-1 min-w-0 truncate cursor-text transition-colors select-text hover:text-primary ${
+                            st.done
+                              ? "line-through text-muted-foreground"
+                              : "text-foreground font-medium"
+                          }`}
+                          title="Duplo clique para editar este item do checklist"
+                        >
+                          {st.title}
+                        </span>
+                      )}
+
+                      {/* Ações de Hover (Editar + Excluir) */}
+                      {!isEditingThis && (
+                        <div className="flex items-center gap-0.5 opacity-0 group-hover/sub:opacity-100 transition-opacity shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => handleStartEditSubtask(e, st.id, st.title)}
+                            className="p-0.5 text-muted-foreground hover:text-primary rounded transition-colors cursor-pointer"
+                            title="Editar item (ou 2 cliques no texto)"
+                          >
+                            <Edit2 className="h-3 w-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteSubtask(e, st.id)}
+                            className="p-0.5 text-muted-foreground hover:text-rose-600 rounded transition-colors cursor-pointer"
+                            title="Remover item"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
 
                 {/* Adicionar subtarefa rápido */}
                 {isAddingSubtask ? (
