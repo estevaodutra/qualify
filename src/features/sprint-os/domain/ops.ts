@@ -84,6 +84,10 @@ export function makeSprint(ctx: Ctx, projectId: ID, name: string, position: numb
     schedulingMode: "hybrid", activatedAt: null, baseline: null, ...extra };
 }
 
+export function makeStage(ctx: Ctx, sprintId: ID, title: string, position: number, extra: Partial<Stage> = {}): Stage {
+  return { ...base(ctx), sprintId, title, position, ...extra };
+}
+
 // ───────────── Project / Sprint ─────────────
 
 export function updateProject(ws: Workspace, ctx: Ctx, patch: Partial<Pick<Workspace["project"], "name" | "client" | "description" | "contractModel">>) {
@@ -214,6 +218,10 @@ export function archiveTask(ws: Workspace, ctx: Ctx, id: ID) {
   t.archivedAt = ctx.nowIso; touch(t, ctx);
   renumber(tasksOf(ws, t.stageId));
   log(ws, ctx, "archive", "task", id, `Tarefa arquivada: ${t.title}`);
+}
+
+export function deleteTask(ws: Workspace, ctx: Ctx, id: ID) {
+  archiveTask(ws, ctx, id);
 }
 
 export function restoreTask(ws: Workspace, ctx: Ctx, id: ID) {
