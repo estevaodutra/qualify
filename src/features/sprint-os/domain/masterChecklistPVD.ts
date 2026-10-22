@@ -1,9 +1,17 @@
 /**
- * AJ-024 — CHECKLIST MASTER COMPLETO DO KANBAN PVD
+ * AJ-027 — SIMPLIFICAÇÃO COMPLETA DO KANBAN PVD
  *
- * Estrutura: ETAPA → TAREFA → SUBTAREFA
- * 13 Etapas completas, tarefas individualizadas com códigos, prioridades e checklists operacionais.
- * Função de reconciliação inteligente que preserva registros existentes, status, sessões de cronômetro e subtarefas já concluídas.
+ * Estrutura: ETAPA → TAREFA → SUBTAREFA (Controle de Entregas)
+ * 13 Etapas oficiais e exatamente 71 Tarefas operacionais concretas (T01 a T71).
+ * Cada tarefa possui preferencialmente de 2 a 5 checks objetivos e acionáveis com verbos de ação.
+ *
+ * Migração Segura:
+ * - Preserva IDs das tarefas existentes;
+ * - Preserva conclusões comprovadas (subtarefas já concluídas continuam concluídas);
+ * - Preserva status (done, in_progress, pending), responsáveis e sessões de cronômetro;
+ * - Arquiva itens de formulários extensos e redundantes para auditoria;
+ * - Elimina tarefas template antigas órfãs que inflavam a contagem do quadro;
+ * - Fornece links diretos para navegação imediata ao módulo correspondente.
  */
 
 import type {
@@ -13,7 +21,6 @@ import type {
   Subtask,
   Priority,
   Complexity,
-  ID,
 } from "./types";
 import {
   base,
@@ -22,226 +29,142 @@ import {
   makeSubtask,
   touch,
   log,
-  subtasksOf,
 } from "./ops";
 
+export type NavigationTarget = {
+  tab:
+    | "structure"
+    | "kanban"
+    | "gantt"
+    | "indicators"
+    | "calculators"
+    | "funnel"
+    | "routines"
+    | "milestones"
+    | "brand_manual"
+    | "creatives"
+    | "scripts_and_audios";
+  moduleId?: string;
+  label: string;
+};
+
 export interface MasterTaskDefinition {
-  code: string;
+  code: string; // "T01" a "T71"
+  legacyCodes?: string[]; // "01.01", "IM-01", etc.
   title: string;
   priority: Priority;
   complexity: Complexity;
-  financialImpact?: boolean;
-  durationMinutes?: number;
+  destination?: NavigationTarget;
   subtasks: string[];
 }
 
 export interface MasterStageDefinition {
-  code: string;
+  code: string; // "ETAPA-01" a "ETAPA-13"
   title: string;
   position: number;
   priority: Priority;
   tasks: MasterTaskDefinition[];
 }
 
-export const MASTER_STAGES_PVD: MasterStageDefinition[] = [
+export const MASTER_STAGES_AJ027: MasterStageDefinition[] = [
   // =========================================================================
-  // ETAPA 01 — INTELIGÊNCIA E MANUAL DE MARCA
+  // ETAPA 01 — INTELIGÊNCIA DO EXPERT
   // =========================================================================
   {
     code: "ETAPA-01",
-    title: "ETAPA 01 — INTELIGÊNCIA E MANUAL DE MARCA",
+    title: "ETAPA 01 — INTELIGÊNCIA DO EXPERT",
     position: 0,
     priority: "P1",
     tasks: [
       {
-        code: "01.01",
-        title: "TAREFA 01.01 — ⏳ PREENCHER POSICIONAMENTO",
+        code: "T01",
+        legacyCodes: ["01.01", "IM-01"],
+        title: "T01 — ⏳ Preencher Posicionamento | P1",
         priority: "P1",
         complexity: "medium",
-        financialImpact: true,
-        durationMinutes: 120,
+        destination: { tab: "brand_manual", moduleId: "posicionamento", label: "Manual de Marca" },
         subtasks: [
-          "⏳ POS-01 — Responder: O que você vende e como isso melhora, na prática, a vida de quem compra?",
-          "⏳ POS-02 — Responder: O que você faz de diferente para produzir esse resultado?",
-          "⏳ POS-03 — Responder: O que muda no dia a dia do cliente depois que utiliza sua solução?",
-          "⏳ POS-04 — Responder: O que as pessoas costumam fazer para resolver esse problema que você considera errado ou insuficiente?",
-          "Confirmar salvamento das quatro respostas.",
-          "Revisar transcrições, quando houver.",
-          "Identificar respostas insuficientes.",
-          "⏳ Solicitar complementações específicas, quando necessárias.",
-          "Executar análise de posicionamento.",
-          "Revisar tese central.",
-          "Revisar promessa e transformação.",
-          "Revisar mecanismo e diferencial.",
-          "Revisar narrativa e identidade.",
-          "Verificar se todas as afirmações estão fundamentadas.",
-          "⏳ Solicitar aprovação da análise.",
-          "Salvar versão aprovada.",
+          "Preencher Manual de Marca — Posicionamento.",
+          "Confirmar preenchimento.",
+          "Gerar e aprovar análise.",
         ],
       },
       {
-        code: "01.02",
-        title: "TAREFA 01.02 — ⏳ PREENCHER ALMA DA COPY",
+        code: "T02",
+        legacyCodes: ["01.02", "IM-02"],
+        title: "T02 — ⏳ Preencher Alma da Copy | P1",
         priority: "P1",
         complexity: "medium",
-        financialImpact: true,
-        durationMinutes: 120,
+        destination: { tab: "brand_manual", moduleId: "alma_copy", label: "Manual de Marca" },
         subtasks: [
-          "⏳ ALM-01 — Responder: Que situação fez você perceber que essa solução precisava existir?",
-          "⏳ ALM-02 — Responder: O que o cliente deixa de fazer ou passa a fazer depois de comprar?",
-          "⏳ ALM-03 — Responder: Além do resultado principal, o que essa mudança permite que o cliente faça ou viva?",
-          "Confirmar as três respostas.",
-          "Revisar transcrições.",
-          "Executar motor de Extração da Alma do Produto.",
-          "Identificar dor-mãe.",
-          "Identificar desejo-mãe.",
-          "Identificar inimigo e brecha.",
-          "Identificar transformação-mãe.",
-          "Identificar crença central.",
-          "Consolidar narrativa do produto.",
-          "Gerar territórios e ângulos de comunicação.",
-          "Revisar coerência e concretude.",
-          "⏳ Solicitar complementações necessárias.",
-          "Aprovar análise final.",
-          "Salvar versão.",
+          "Preencher Manual de Marca — Alma da Copy.",
+          "Confirmar preenchimento.",
+          "Gerar e aprovar análise.",
         ],
       },
       {
-        code: "01.03",
-        title: "TAREFA 01.03 — ⏳ PREENCHER RAIO X DO ICP",
+        code: "T03",
+        legacyCodes: ["01.03", "IM-03"],
+        title: "T03 — ⏳ Preencher Raio X do ICP | P1",
         priority: "P1",
         complexity: "medium",
-        financialImpact: true,
-        durationMinutes: 120,
+        destination: { tab: "brand_manual", moduleId: "raio_x_icp", label: "Manual de Marca" },
         subtasks: [
-          "⏳ ICP-01 — Responder: Por que seu cliente precisa do produto?",
-          "⏳ ICP-02 — Responder: O que muda depois que ele utiliza o produto?",
-          "⏳ ICP-03 — Responder: Quando o problema acontece, o que ele faz, pensa ou fala?",
-          "Confirmar respostas.",
-          "Revisar transcrições.",
-          "Executar análise do Raio X.",
-          "Consolidar ICP comportamental.",
-          "Identificar situações reais.",
-          "Identificar dor visível e problema real.",
-          "Identificar pensamentos e falas.",
-          "Identificar emoções predominantes.",
-          "Organizar fragmentos da rotina.",
-          "Identificar tentativas anteriores.",
-          "Gerar cenas aplicáveis a anúncios.",
-          "Gerar banco de hooks e headlines.",
-          "Revisar inferências e hipóteses.",
-          "Aprovar análise.",
+          "Preencher Manual de Marca — Raio X do ICP.",
+          "Confirmar preenchimento.",
+          "Gerar e aprovar análise.",
+        ],
+      },
+      {
+        code: "T04",
+        legacyCodes: ["01.04", "IM-04"],
+        title: "T04 — ⏳ Preencher Personalidade | P1",
+        priority: "P1",
+        complexity: "medium",
+        destination: { tab: "brand_manual", moduleId: "personalidade", label: "Manual de Marca" },
+        subtasks: [
+          "Preencher Manual de Marca — Personalidade.",
+          "Confirmar preenchimento.",
+          "Consolidar linguagem do expert.",
+        ],
+      },
+      {
+        code: "T05",
+        legacyCodes: ["01.05", "IM-05"],
+        title: "T05 — Gerar Copy ADS | P1",
+        priority: "P1",
+        complexity: "medium",
+        destination: { tab: "creatives", label: "Criativos" },
+        subtasks: [
+          "Gerar dez variantes.",
+          "Revisar e aprovar copies.",
+          "Disponibilizar para Criativos.",
+        ],
+      },
+      {
+        code: "T06",
+        legacyCodes: ["01.06", "IM-06"],
+        title: "T06 — Consolidar Master Prompt | P1",
+        priority: "P1",
+        complexity: "medium",
+        destination: { tab: "brand_manual", label: "Manual de Marca" },
+        subtasks: [
+          "Gerar Master Prompt.",
+          "Revisar e aprovar.",
           "Salvar versão final.",
         ],
       },
       {
-        code: "01.04",
-        title: "TAREFA 01.04 — ⏳ PREENCHER PERSONALIDADE",
+        code: "T07",
+        legacyCodes: ["01.07", "IM-07"],
+        title: "T07 — ⏳ Coletar Áudios do Expert | P1",
         priority: "P1",
         complexity: "medium",
-        financialImpact: true,
-        durationMinutes: 90,
+        destination: { tab: "scripts_and_audios", label: "Scripts e Áudios" },
         subtasks: [
-          "⏳ PER-01 — Vícios de linguagem.",
-          "⏳ PER-02 — Gírias e dialetos.",
-          "⏳ PER-03 — Frases e expressões próprias.",
-          "⏳ PER-04 — Frases quebradas e construção verbal.",
-          "⏳ PER-05 — Maneira de explicar.",
-          "⏳ PER-06 — Humor e intensidade.",
-          "⏳ PER-07 — Palavras que nunca usaria.",
-          "⏳ PER-08 — Exemplos reais de fala.",
-          "Confirmar respostas recebidas.",
-          "Revisar áudios e transcrições.",
-          "Identificar vocabulário recorrente.",
-          "Identificar estilo de argumentação.",
-          "Identificar expressões naturais.",
-          "Consolidar tom de voz.",
-          "Validar linguagem com o expert.",
-          "Salvar análise aprovada.",
-        ],
-      },
-      {
-        code: "01.05",
-        title: "TAREFA 01.05 — GERAR DEZ VARIANTES DE COPY ADS",
-        priority: "P1",
-        complexity: "high",
-        financialImpact: true,
-        durationMinutes: 180,
-        subtasks: [
-          "Consultar Posicionamento.",
-          "Consultar Alma da Copy.",
-          "Consultar Raio X do ICP.",
-          "Consultar Personalidade.",
-          "Confirmar produto e mecanismo.",
-          "Confirmar CTA principal.",
-          "Identificar lacunas relevantes.",
-          "ADS-COPY-01 — Gerar Headline + Subheadline: rotina do ICP.",
-          "ADS-COPY-02 — Gerar Headline + Subheadline: dor concreta.",
-          "ADS-COPY-03 — Gerar Headline + Subheadline: pensamento oculto.",
-          "ADS-COPY-04 — Gerar Headline + Subheadline: desejo e transformação.",
-          "ADS-COPY-05 — Gerar Headline + Subheadline: contraste antes/depois.",
-          "ADS-COPY-06 — Gerar Headline + Subheadline: erro ou crença antiga.",
-          "ADS-COPY-07 — Gerar Headline + Subheadline: mecanismo.",
-          "ADS-COPY-08 — Gerar Headline + Subheadline: prova e autoridade.",
-          "ADS-COPY-09 — Gerar Headline + Subheadline: objeção.",
-          "ADS-COPY-10 — Gerar Headline + Subheadline: convite.",
-          "Revisar as dez headlines.",
-          "Revisar as dez subheadlines.",
-          "Verificar diferenças reais entre os ângulos.",
-          "Remover frases genéricas.",
-          "Verificar naturalidade da linguagem.",
-          "Remover afirmações não comprovadas.",
-          "⏳ Solicitar aprovação das variantes selecionadas.",
-          "Salvar versões aprovadas.",
-          "Disponibilizar na aba Criativos.",
-        ],
-      },
-      {
-        code: "01.06",
-        title: "TAREFA 01.06 — CONSOLIDAR MASTER PROMPT",
-        priority: "P1",
-        complexity: "medium",
-        financialImpact: true,
-        durationMinutes: 90,
-        subtasks: [
-          "Recuperar versão aprovada do Posicionamento.",
-          "Recuperar versão aprovada da Alma da Copy.",
-          "Recuperar versão aprovada do Raio X.",
-          "Recuperar versão aprovada de Personalidade.",
-          "Recuperar variantes aprovadas de Copy ADS.",
-          "Consolidar ICP.",
-          "Consolidar narrativa.",
-          "Consolidar mecanismo.",
-          "Consolidar transformação.",
-          "Consolidar linguagem natural.",
-          "Consolidar evidências.",
-          "Registrar restrições e informações pendentes.",
-          "Gerar arquivo Markdown.",
-          "Revisar instruções de produção de headlines, hooks, corpo e CTA.",
-          "⏳ Solicitar aprovação.",
-          "Salvar versão final no Backup Master.",
-        ],
-      },
-      {
-        code: "01.07",
-        title: "TAREFA 01.07 — ⏳ COLETAR SCRIPTS E ÁUDIOS DE REFERÊNCIA",
-        priority: "P1",
-        complexity: "medium",
-        durationMinutes: 90,
-        subtasks: [
-          "Criar solicitação de áudio sobre a solução.",
-          "Criar solicitação de áudio sobre o mecanismo.",
-          "Criar solicitação de explicação espontânea.",
-          "Definir contexto de cada solicitação.",
-          "Escrever roteiro de apoio.",
-          "⏳ Atribuir responsável.",
+          "Criar solicitações em Scripts e Áudios.",
           "⏳ Receber gravações.",
-          "Confirmar hospedagem interna.",
-          "Testar reprodução.",
-          "Transcrever quando o serviço estiver disponível.",
-          "Revisar transcrições.",
-          "Vincular material às perguntas correspondentes.",
-          "Salvar os áudios aprovados na biblioteca.",
+          "Revisar e salvar áudios.",
         ],
       },
     ],
@@ -257,175 +180,92 @@ export const MASTER_STAGES_PVD: MasterStageDefinition[] = [
     priority: "P1",
     tasks: [
       {
-        code: "02.01",
-        title: "TAREFA 02.01 — CRIAR E CONFIGURAR GRUPO",
+        code: "T08",
+        legacyCodes: ["02.01"],
+        title: "T08 — Configurar Grupo | P1",
         priority: "P1",
         complexity: "low",
-        durationMinutes: 60,
         subtasks: [
-          "Definir nome do grupo.",
-          "Criar grupo na plataforma definida.",
-          "Configurar administradores.",
-          "Revisar permissões de participantes.",
-          "Configurar informações básicas.",
+          "Criar grupo e configurar permissões.",
           "Gerar link de convite.",
-          "Testar abertura do link.",
-          "Testar entrada de participante.",
-          "Registrar link oficial.",
-          "Vincular grupo ao sistema operacional.",
-          "Registrar dados no Backup Master.",
+          "Testar entrada no grupo.",
         ],
       },
       {
-        code: "02.02",
-        title: "TAREFA 02.02 — ⏳ PRODUZIR CAPA DO GRUPO",
+        code: "T09",
+        legacyCodes: ["02.02", "GRP-01"],
+        title: "T09 — ⏳ Criar Capa do Grupo | P1",
         priority: "P1",
         complexity: "low",
-        durationMinutes: 60,
+        destination: { tab: "creatives", label: "Criativos" },
         subtasks: [
-          "Definir texto principal da capa.",
-          "Definir orientação visual.",
-          "Vincular identidade de marca.",
-          "Criar briefing para designer.",
-          "⏳ Atribuir criação.",
-          "⏳ Receber arte.",
-          "Conferir dimensões.",
-          "Conferir legibilidade em miniatura.",
-          "Revisar composição visual.",
-          "⏳ Solicitar ajustes, se necessários.",
-          "⏳ Aprovar capa.",
-          "Fazer upload do arquivo final.",
+          "Criar briefing da capa.",
+          "⏳ Produzir e aprovar arte.",
           "Aplicar capa no grupo.",
-          "Conferir exibição no aplicativo.",
         ],
       },
       {
-        code: "02.03",
-        title: "TAREFA 02.03 — CRIAR DESCRIÇÃO DO GRUPO",
+        code: "T10",
+        legacyCodes: ["02.03", "GRP-02"],
+        title: "T10 — Criar Descrição do Grupo | P1",
         priority: "P1",
         complexity: "low",
-        durationMinutes: 45,
         subtasks: [
-          "Definir propósito do grupo.",
-          "Escrever descrição principal.",
-          "Explicar o que o participante encontrará.",
-          "Informar orientação inicial.",
-          "Definir CTA ou ação esperada.",
-          "Revisar clareza.",
-          "⏳ Solicitar aprovação.",
-          "Inserir descrição.",
-          "Validar formatação.",
-          "Salvar texto aprovado.",
+          "Criar descrição.",
+          "Aprovar texto.",
+          "Aplicar no grupo.",
         ],
       },
       {
-        code: "02.04",
-        title: "TAREFA 02.04 — CRIAR SEQUÊNCIA DE COPIES DO GRUPO",
-        priority: "P1",
-        complexity: "high",
-        financialImpact: true,
-        durationMinutes: 180,
-        subtasks: [
-          "Criar mensagem de boas-vindas.",
-          "Criar mensagem de contextualização.",
-          "Criar orientação de participação.",
-          "Definir CTA da entrada.",
-          "Criar copy de abertura da manhã.",
-          "Criar texto de apoio ao vídeo GRP-VID-01.",
-          "Criar CTA de levantamento de mão.",
-          "Definir ordem de apresentação dos materiais.",
-          "Identificar intervalos pendentes de confirmação.",
-          "Criar copy de prova/estudo de caso.",
-          "Confirmar a evidência utilizada.",
-          "Criar texto de apoio ao vídeo GRP-VID-02.",
-          "Criar levantamento de mão.",
-          "Registrar horário confirmado quando disponível.",
-          "Criar copy do conteúdo final.",
-          "Criar texto de apoio ao vídeo GRP-VID-03.",
-          "Criar levantamento de mão.",
-          "Registrar horário confirmado quando disponível.",
-          "Revisar coerência da sequência.",
-          "Revisar links e CTAs.",
-          "Verificar horários informados.",
-          "⏳ Solicitar aprovação das copies.",
-          "Salvar cada copy individualmente.",
-          "Vincular às automações correspondentes.",
-        ],
-      },
-      {
-        code: "02.05",
-        title: "TAREFA 02.05 — ⏳ PRODUZIR VÍDEO GRP-VID-01 — DESTAQUE DA MANHÃ",
+        code: "T11",
+        legacyCodes: ["02.04", "GRP-03"],
+        title: "T11 — Criar Sequência de Copies do Grupo | P1",
         priority: "P1",
         complexity: "medium",
-        financialImpact: true,
-        durationMinutes: 120,
         subtasks: [
-          "Definir objetivo do vídeo.",
-          "Definir tema.",
-          "Criar headline.",
-          "Criar hook.",
-          "Criar corpo.",
-          "Criar CTA interativo.",
-          "Consolidar roteiro.",
-          "⏳ Solicitar aprovação do roteiro.",
-          "Criar solicitação na aba Scripts e Áudios, se necessária.",
-          "⏳ Atribuir gravação.",
-          "⏳ Receber vídeo bruto.",
-          "⏳ Providenciar edição.",
-          "Receber vídeo editado.",
-          "Fazer upload na aba Criativos.",
-          "Testar reprodução.",
-          "⏳ Aprovar versão final.",
-          "Vincular GRP-VID-01 ao AUTO-02.",
+          "Criar boas-vindas e contextualização.",
+          "Criar copies dos três períodos.",
+          "Criar levantamentos de mão.",
+          "Aprovar sequência.",
         ],
       },
       {
-        code: "02.06",
-        title: "TAREFA 02.06 — ⏳ PRODUZIR VÍDEO GRP-VID-02 — MEIO DO DIA",
+        code: "T12",
+        legacyCodes: ["02.05", "GRP-VID-01"],
+        title: "T12 — ⏳ Produzir Vídeo GRP-VID-01 — Manhã | P1",
         priority: "P1",
         complexity: "medium",
-        financialImpact: true,
-        durationMinutes: 120,
+        destination: { tab: "creatives", label: "Criativos" },
         subtasks: [
-          "Definir conteúdo de prova ou estudo de caso.",
-          "Confirmar que a evidência é real.",
-          "Criar headline.",
-          "Criar hook.",
-          "Criar corpo.",
-          "Criar CTA.",
-          "Consolidar roteiro.",
-          "⏳ Aprovar roteiro.",
-          "⏳ Atribuir gravação.",
-          "⏳ Receber material bruto.",
-          "⏳ Editar.",
-          "Fazer upload final.",
-          "Testar reprodução.",
-          "⏳ Aprovar vídeo.",
-          "Vincular GRP-VID-02 ao AUTO-03.",
+          "Criar roteiro.",
+          "⏳ Gravar e editar vídeo.",
+          "Aprovar e salvar em Criativos.",
         ],
       },
       {
-        code: "02.07",
-        title: "TAREFA 02.07 — ⏳ PRODUZIR VÍDEO GRP-VID-03 — FINAL DO DIA",
+        code: "T13",
+        legacyCodes: ["02.06", "GRP-VID-02"],
+        title: "T13 — ⏳ Produzir Vídeo GRP-VID-02 — Meio do Dia | P1",
         priority: "P1",
         complexity: "medium",
-        financialImpact: true,
-        durationMinutes: 120,
+        destination: { tab: "creatives", label: "Criativos" },
         subtasks: [
-          "Definir tema do período.",
-          "Definir situação real abordada.",
-          "Criar headline.",
-          "Criar hook.",
-          "Criar corpo.",
-          "Criar CTA de interação.",
-          "Consolidar roteiro.",
-          "⏳ Aprovar roteiro.",
-          "⏳ Gravar.",
-          "⏳ Editar.",
-          "Fazer upload.",
-          "Conferir arquivo.",
-          "⏳ Aprovar vídeo.",
-          "Vincular GRP-VID-03 ao AUTO-04.",
+          "Criar roteiro de prova/conteúdo.",
+          "⏳ Gravar e editar.",
+          "Aprovar e salvar em Criativos.",
+        ],
+      },
+      {
+        code: "T14",
+        legacyCodes: ["02.07", "GRP-VID-03"],
+        title: "T14 — ⏳ Produzir Vídeo GRP-VID-03 — Final do Dia | P1",
+        priority: "P1",
+        complexity: "medium",
+        destination: { tab: "creatives", label: "Criativos" },
+        subtasks: [
+          "Criar roteiro.",
+          "⏳ Gravar e editar.",
+          "Aprovar e salvar em Criativos.",
         ],
       },
     ],
@@ -441,406 +281,253 @@ export const MASTER_STAGES_PVD: MasterStageDefinition[] = [
     priority: "P1",
     tasks: [
       {
-        code: "03.01",
-        title: "TAREFA 03.01 — AUTOMATIZAR AUTO-01 — ENTRADA NO GRUPO",
-        priority: "P1",
-        complexity: "medium",
-        durationMinutes: 60,
-        subtasks: [
-          "Identificar grupo correto.",
-          "Confirmar suporte técnico ao evento de entrada.",
-          "Selecionar copy de boas-vindas aprovada.",
-          "Configurar gatilho.",
-          "Configurar envio de mensagem inicial.",
-          "Vincular CTA.",
-          "Testar com participante de teste.",
-          "Confirmar mensagem recebida.",
-          "Validar execução única.",
-          "Registrar resultado.",
-          "Aprovar fluxo.",
-        ],
-      },
-      {
-        code: "03.02",
-        title: "TAREFA 03.02 — AUTOMATIZAR AUTO-02 — ENVIO DA MANHÃ",
-        priority: "P1",
-        complexity: "medium",
-        durationMinutes: 90,
-        subtasks: [
-          "Selecionar grupo de destino.",
-          "Vincular copy da manhã.",
-          "Vincular GRP-VID-01 aprovado.",
-          "Vincular levantamento de mão da manhã.",
-          "Configurar disparo principal para 08h00.",
-          "Registrar sequência interna aprovada.",
-          "Confirmar intervalos necessários.",
-          "Configurar intervalos confirmados.",
-          "Testar recebimento do texto.",
-          "Testar recebimento do vídeo.",
-          "Testar reprodução.",
-          "Testar CTA e interação.",
-          "Verificar duplicidades.",
-          "Registrar evidência do teste.",
-          "Aprovar fluxo.",
-        ],
-      },
-      {
-        code: "03.03",
-        title: "TAREFA 03.03 — AUTOMATIZAR AUTO-03 — MEIO DO DIA",
-        priority: "P1",
-        complexity: "medium",
-        durationMinutes: 90,
-        subtasks: [
-          "⏳ Confirmar horário do envio principal.",
-          "Registrar horário no card e no fluxo.",
-          "Vincular copy de prova.",
-          "Vincular GRP-VID-02 aprovado.",
-          "Vincular levantamento de mão.",
-          "Registrar sequência dos três materiais.",
-          "Confirmar intervalos.",
-          "Configurar disparo.",
-          "Testar mensagem.",
-          "Testar vídeo.",
-          "Testar CTA.",
-          "Verificar ausência de duplicidade.",
-          "Registrar teste.",
-          "Aprovar fluxo.",
-        ],
-      },
-      {
-        code: "03.04",
-        title: "TAREFA 03.04 — AUTOMATIZAR AUTO-04 — FINAL DO DIA",
-        priority: "P1",
-        complexity: "medium",
-        durationMinutes: 90,
-        subtasks: [
-          "⏳ Confirmar horário do envio principal.",
-          "Registrar horário.",
-          "Vincular copy final.",
-          "Vincular GRP-VID-03 aprovado.",
-          "Vincular levantamento de mão final.",
-          "Registrar sequência.",
-          "Confirmar intervalos.",
-          "Configurar disparo.",
-          "Testar texto.",
-          "Testar vídeo.",
-          "Testar CTA.",
-          "Verificar execução.",
-          "Registrar resultado.",
-          "Aprovar fluxo.",
-        ],
-      },
-      {
-        code: "03.05",
-        title: "TAREFA 03.05 — AUTOMATIZAR AUTO-05 — PALAVRAS-CHAVE",
-        priority: "P1",
-        complexity: "medium",
-        durationMinutes: 90,
-        subtasks: [
-          "Confirmar palavras-chave aprovadas.",
-          "Cadastrar palavra-chave.",
-          "Vincular resposta correspondente.",
-          "Configurar condição de acionamento.",
-          "Definir próximo passo comercial.",
-          "Vincular etapa de CRM.",
-          "Configurar encaminhamento.",
-          "Testar palavra-chave válida.",
-          "Testar texto que não deve acionar o fluxo.",
-          "Verificar mensagens duplicadas.",
-          "Registrar evidência.",
-          "Aprovar fluxo.",
-        ],
-      },
-      {
-        code: "03.06",
-        title: "TAREFA 03.06 — AUTOMATIZAR AUTO-06 — SAÍDA DO GRUPO",
+        code: "T15",
+        legacyCodes: ["03.01", "AUTO-01"],
+        title: "T15 — Automatizar AUTO-01 — Entrada | P1",
         priority: "P1",
         complexity: "low",
-        durationMinutes: 45,
         subtasks: [
-          "Confirmar suporte ao evento.",
-          "Definir estado do contato após a saída.",
-          "Configurar atualização.",
-          "Configurar bloqueio de envios indevidos.",
-          "Testar saída, quando suportada.",
-          "Verificar atualização do contato.",
-          "Registrar resultado.",
+          "Configurar entrada e boas-vindas.",
+          "Testar recebimento.",
           "Aprovar fluxo.",
         ],
       },
       {
-        code: "03.07",
-        title: "TAREFA 03.07 — TESTAR OPERAÇÃO COMPLETA DO GRUPO",
+        code: "T16",
+        legacyCodes: ["03.02", "AUTO-02"],
+        title: "T16 — Automatizar AUTO-02 — Manhã, 08h00 | P1",
+        priority: "P1",
+        complexity: "medium",
+        subtasks: [
+          "Programar copy, GRP-VID-01 e levantada de mão.",
+          "Testar envio das 08h00.",
+          "Aprovar fluxo.",
+        ],
+      },
+      {
+        code: "T17",
+        legacyCodes: ["03.03", "AUTO-03"],
+        title: "T17 — Automatizar AUTO-03 — Meio do Dia | P1",
+        priority: "P1",
+        complexity: "medium",
+        subtasks: [
+          "⏳ Confirmar horário.",
+          "Programar copy, GRP-VID-02 e levantada de mão.",
+          "Testar e aprovar fluxo.",
+        ],
+      },
+      {
+        code: "T18",
+        legacyCodes: ["03.04", "AUTO-04"],
+        title: "T18 — Automatizar AUTO-04 — Final do Dia | P1",
+        priority: "P1",
+        complexity: "medium",
+        subtasks: [
+          "⏳ Confirmar horário.",
+          "Programar copy, GRP-VID-03 e levantada de mão.",
+          "Testar e aprovar fluxo.",
+        ],
+      },
+      {
+        code: "T19",
+        legacyCodes: ["03.05", "AUTO-05"],
+        title: "T19 — Automatizar AUTO-05 — Palavras-chave | P1",
+        priority: "P1",
+        complexity: "medium",
+        destination: { tab: "funnel", label: "CRM" },
+        subtasks: [
+          "Configurar palavras-chave e respostas.",
+          "Vincular encaminhamento comercial.",
+          "Testar e aprovar fluxo.",
+        ],
+      },
+      {
+        code: "T20",
+        legacyCodes: ["03.06", "AUTO-06"],
+        title: "T20 — Automatizar AUTO-06 — Saída | P1",
+        priority: "P1",
+        complexity: "low",
+        subtasks: [
+          "Validar disponibilidade do gatilho.",
+          "Configurar tratamento da saída, se suportado.",
+          "Testar e aprovar.",
+        ],
+      },
+      {
+        code: "T21",
+        legacyCodes: ["03.07", "TEST-01"],
+        title: "T21 — Validar Operação do Grupo | P1",
         priority: "P1",
         complexity: "high",
-        durationMinutes: 120,
         subtasks: [
-          "Testar entrada de participante.",
-          "Testar link de convite.",
-          "Testar mensagem inicial.",
-          "Testar fluxo da manhã — 08h00.",
-          "Testar fluxo do meio do dia.",
-          "Testar fluxo do final do dia.",
-          "Testar GRP-VID-01.",
-          "Testar GRP-VID-02.",
-          "Testar GRP-VID-03.",
-          "Testar os levantamentos de mão.",
-          "Testar palavras-chave.",
-          "Testar condições de saída suportadas.",
-          "Registrar falhas.",
-          "Corrigir falhas.",
-          "Repetir testes afetados.",
-          "⏳ Solicitar aprovação final.",
-          "Liberar operação.",
+          "Testar entradas e saídas disponíveis.",
+          "Testar copies, vídeos e interações.",
+          "Corrigir falhas e aprovar operação.",
         ],
       },
     ],
   },
 
   // =========================================================================
-  // ETAPA 04 — INSTAGRAM E INFRAESTRUTURA DE AQUISIÇÃO
+  // ETAPA 04 — INSTAGRAM E INFRAESTRUTURA
   // =========================================================================
   {
     code: "ETAPA-04",
-    title: "ETAPA 04 — INSTAGRAM E INFRAESTRUTURA DE AQUISIÇÃO",
+    title: "ETAPA 04 — INSTAGRAM E INFRAESTRUTURA",
     position: 3,
     priority: "P1",
     tasks: [
       {
-        code: "04.01",
-        title: "TAREFA 04.01 — CONFIGURAR PERFIL DO INSTAGRAM",
+        code: "T22",
+        legacyCodes: ["04.01"],
+        title: "T22 — Configurar Instagram | P1",
         priority: "P1",
         complexity: "low",
-        durationMinutes: 60,
         subtasks: [
-          "Validar acesso ao perfil.",
-          "Confirmar dados básicos.",
-          "Criar bio a partir do posicionamento aprovado.",
-          "⏳ Aprovar bio.",
-          "Aplicar bio.",
-          "Criar ou selecionar link de captação.",
-          "Vincular link à bio.",
-          "Testar redirecionamento.",
-          "Conferir visualização no celular.",
-          "Registrar dados de acesso necessários de modo seguro.",
+          "Atualizar bio e link.",
+          "Revisar perfil.",
+          "Testar captação.",
         ],
       },
       {
-        code: "04.02",
-        title: "TAREFA 04.02 — ⏳ PRODUZIR DESTAQUE DO INSTAGRAM",
+        code: "T23",
+        legacyCodes: ["04.02"],
+        title: "T23 — ⏳ Criar Destaque do Instagram | P1",
         priority: "P1",
         complexity: "medium",
-        durationMinutes: 90,
+        destination: { tab: "creatives", label: "Criativos" },
         subtasks: [
-          "Definir objetivo do destaque.",
-          "Definir nome.",
-          "Criar roteiro do conteúdo.",
-          "Criar capa.",
-          "⏳ Solicitar mídias necessárias.",
-          "Montar sequência de stories.",
-          "Inserir CTA.",
-          "⏳ Aprovar.",
-          "Publicar.",
-          "Conferir sequência.",
-          "Testar destino.",
+          "Criar conteúdo e capa.",
+          "⏳ Produzir e aprovar.",
+          "Publicar e revisar.",
         ],
       },
       {
-        code: "04.03",
-        title: "TAREFA 04.03 — PRODUZIR POST DE POSICIONAMENTO",
+        code: "T24",
+        legacyCodes: ["04.03"],
+        title: "T24 — ⏳ Criar Post de Posicionamento | P1",
         priority: "P1",
         complexity: "medium",
-        durationMinutes: 60,
+        destination: { tab: "creatives", label: "Criativos" },
         subtasks: [
-          "Definir objetivo.",
-          "Criar headline.",
-          "Criar corpo da legenda.",
-          "Criar CTA.",
-          "Criar briefing visual.",
+          "Criar copy.",
           "⏳ Produzir arte.",
-          "⏳ Aprovar.",
-          "Publicar.",
-          "Conferir exibição.",
+          "Aprovar e publicar.",
         ],
       },
       {
-        code: "04.04",
-        title: "TAREFA 04.04 — PRODUZIR CARROSSEL",
+        code: "T25",
+        legacyCodes: ["04.04"],
+        title: "T25 — ⏳ Criar Carrossel | P1",
         priority: "P1",
         complexity: "medium",
-        durationMinutes: 90,
+        destination: { tab: "creatives", label: "Criativos" },
         subtasks: [
-          "Definir tema.",
-          "Criar headline da capa.",
-          "Escrever sequência dos slides.",
-          "Criar slide final com CTA.",
+          "Criar sequência de conteúdo.",
           "⏳ Produzir design.",
-          "Revisar.",
-          "⏳ Aprovar.",
-          "Publicar.",
-          "Conferir slides.",
+          "Aprovar e publicar.",
         ],
       },
       {
-        code: "04.05",
-        title: "TAREFA 04.05 — PRODUZIR STORY ESTÁTICO",
+        code: "T26",
+        legacyCodes: ["04.05"],
+        title: "T26 — ⏳ Criar Story Estático | P1",
         priority: "P1",
-        complexity: "low",
-        durationMinutes: 45,
+        complexity: "medium",
+        destination: { tab: "creatives", label: "Criativos" },
         subtasks: [
-          "Definir mensagem.",
-          "Criar headline.",
-          "Criar apoio textual.",
-          "Definir CTA.",
+          "Criar copy e CTA.",
           "⏳ Produzir arte.",
-          "⏳ Aprovar.",
-          "Publicar.",
-          "Testar link.",
+          "Aprovar e publicar.",
         ],
       },
       {
-        code: "04.06",
-        title: "TAREFA 04.06 — CONFIGURAR INFRAESTRUTURA META ADS",
+        code: "T27",
+        legacyCodes: ["04.06"],
+        title: "T27 — Configurar Meta Ads | P1",
         priority: "P1",
-        complexity: "high",
-        financialImpact: true,
-        durationMinutes: 120,
+        complexity: "medium",
         subtasks: [
-          "Verificar BM.",
-          "Verificar conta de anúncios.",
-          "Verificar permissões.",
-          "Vincular perfil do Instagram.",
-          "Confirmar página vinculada, quando necessária.",
-          "Verificar restrições existentes.",
-          "⏳ Confirmar cartão/meio de pagamento.",
-          "Verificar disponibilidade de orçamento.",
-          "Confirmar destino dos anúncios.",
-          "Configurar rastreamento disponível.",
-          "Realizar teste de configuração.",
-          "Registrar liberação da infraestrutura.",
+          "Validar BM e conta de anúncios.",
+          "Configurar permissões e pagamento.",
+          "Testar estrutura e liberar anúncios.",
         ],
       },
     ],
   },
 
   // =========================================================================
-  // ETAPA 05 — FUNIL COMERCIAL, CRM E CHECKOUT
+  // ETAPA 05 — FUNIL COMERCIAL E CRM
   // =========================================================================
   {
     code: "ETAPA-05",
-    title: "ETAPA 05 — FUNIL COMERCIAL, CRM E CHECKOUT",
+    title: "ETAPA 05 — FUNIL COMERCIAL E CRM",
     position: 4,
     priority: "P1",
     tasks: [
       {
-        code: "05.01",
-        title: "TAREFA 05.01 — CRIAR SCRIPT DE PRÉ-QUALIFICAÇÃO",
+        code: "T28",
+        legacyCodes: ["05.01"],
+        title: "T28 — Criar Pré-qualificação | P1",
         priority: "P1",
         complexity: "medium",
-        durationMinutes: 90,
+        destination: { tab: "funnel", label: "CRM" },
         subtasks: [
-          "Definir entrada do atendimento.",
-          "Criar mensagem de abertura.",
-          "Criar primeira pergunta de identificação.",
-          "Criar perguntas de contexto.",
-          "Criar minipromessa.",
-          "Definir utilização do Teste Aliança, quando aprovado.",
-          "Criar encaminhamento para próximo estágio.",
-          "Definir condições de avanço.",
-          "Criar tratamento para respostas incompletas.",
-          "⏳ Aprovar script.",
-          "Testar conversa completa.",
+          "Criar script de entrada e perguntas.",
+          "Revisar e aprovar.",
+          "Configurar no CRM.",
+        ],
+      },
+      {
+        code: "T29",
+        legacyCodes: ["05.02"],
+        title: "T29 — Criar Script de Negociação | P1",
+        priority: "P1",
+        complexity: "medium",
+        destination: { tab: "funnel", label: "CRM" },
+        subtasks: [
+          "Criar perguntas e tratamento de objeções.",
+          "Revisar e aprovar.",
           "Vincular ao CRM.",
         ],
       },
       {
-        code: "05.02",
-        title: "TAREFA 05.02 — CRIAR SCRIPT DE NEGOCIAÇÃO",
+        code: "T30",
+        legacyCodes: ["05.03"],
+        title: "T30 — Criar Script de Venda | P1",
         priority: "P1",
         complexity: "medium",
-        durationMinutes: 90,
+        destination: { tab: "funnel", label: "CRM" },
         subtasks: [
-          "Identificar objeções prioritárias.",
-          "Criar pergunta de prioridade.",
-          "Criar pergunta de disponibilidade.",
-          "Criar abordagem de investimento.",
-          "Criar resposta para objeção de preço.",
-          "Criar resposta para objeção de tempo.",
-          "Criar resposta para insegurança.",
-          "Definir próximo passo.",
-          "⏳ Aprovar script.",
-          "Testar simulações.",
-          "Vincular ao CRM.",
+          "Validar oferta e condições.",
+          "Criar e aprovar script.",
+          "Vincular checkout.",
         ],
       },
       {
-        code: "05.03",
-        title: "TAREFA 05.03 — CRIAR SCRIPT DE VENDA",
+        code: "T31",
+        legacyCodes: ["05.04"],
+        title: "T31 — Configurar CRM | P1",
         priority: "P1",
-        complexity: "high",
-        financialImpact: true,
-        durationMinutes: 90,
+        complexity: "medium",
+        destination: { tab: "funnel", label: "Pipeline CRM" },
         subtasks: [
-          "Confirmar oferta.",
-          "Confirmar benefícios e entregáveis.",
-          "Confirmar preço atual.",
-          "Validar eventual ancoragem de R$ 120.",
-          "Validar eventual condição de R$ 69.",
-          "Criar apresentação do workshop.",
-          "Criar argumento principal.",
-          "Criar CTA de pagamento.",
-          "Criar mensagem com link.",
-          "Criar mensagem de confirmação.",
-          "⏳ Aprovar script e condições.",
-          "Testar fluxo até o checkout.",
+          "Configurar Pipeline CRM.",
+          "Fazer revisão.",
+          "Consolidar CRM.",
         ],
       },
       {
-        code: "05.04",
-        title: "TAREFA 05.04 — CONFIGURAR PIPELINE COMERCIAL",
+        code: "T32",
+        legacyCodes: ["05.05"],
+        title: "T32 — Configurar Checkout | P1",
         priority: "P1",
-        complexity: "high",
-        durationMinutes: 120,
+        complexity: "medium",
+        destination: { tab: "funnel", label: "Checkout" },
         subtasks: [
-          "Criar ou validar EM ABERTO.",
-          "Criar ou validar PRÉ-QUALIFICAÇÃO.",
-          "Criar ou validar INTERESSADO.",
-          "Criar ou validar NEGOCIAÇÃO.",
-          "Criar ou validar FOLLOW-UP.",
-          "Criar ou validar VENDA.",
-          "Definir critérios de movimentação.",
-          "Definir responsáveis.",
-          "Vincular mensagens.",
-          "Vincular automações.",
-          "Testar criação de lead.",
-          "Testar transferência entre etapas.",
-          "Testar atribuição.",
-          "Testar registro de venda.",
-          "Corrigir inconsistências.",
-          "Aprovar pipeline.",
-        ],
-      },
-      {
-        code: "05.05",
-        title: "TAREFA 05.05 — CONFIGURAR CHECKOUT",
-        priority: "P1",
-        complexity: "high",
-        financialImpact: true,
-        durationMinutes: 90,
-        subtasks: [
-          "⏳ Confirmar produto.",
-          "⏳ Confirmar preço.",
-          "⏳ Confirmar condições.",
-          "Criar ou selecionar produto na plataforma.",
-          "Configurar checkout.",
-          "Configurar dados solicitados ao comprador.",
-          "Configurar destino após pagamento.",
-          "Validar link.",
-          "Testar pagamento conforme recursos disponíveis.",
-          "Testar confirmação de compra.",
-          "Testar registro da venda.",
-          "Salvar link no Backup Master.",
-          "Aprovar operação.",
+          "Configurar produto e pagamento.",
+          "Testar checkout.",
+          "Aprovar e salvar link.",
         ],
       },
     ],
@@ -856,63 +543,40 @@ export const MASTER_STAGES_PVD: MasterStageDefinition[] = [
     priority: "P1",
     tasks: [
       {
-        code: "06.01",
-        title: "TAREFA 06.01 — ORGANIZAR TRÊS CRIATIVOS INICIAIS",
+        code: "T33",
+        legacyCodes: ["06.01"],
+        title: "T33 — ⏳ Preparar Criativos Iniciais | P1",
         priority: "P1",
         complexity: "medium",
-        durationMinutes: 120,
+        destination: { tab: "creatives", label: "Criativos" },
         subtasks: [
-          "Criar registro AQ-01.",
-          "Criar registro AQ-02.",
-          "Criar registro AQ-03.",
-          "Identificar arquivos existentes reutilizáveis.",
-          "Definir objetivo de cada material.",
-          "Criar scripts ausentes.",
-          "⏳ Aprovar roteiros necessários.",
-          "⏳ Solicitar gravações pendentes.",
-          "⏳ Providenciar edição.",
-          "Fazer upload dos materiais finais.",
-          "Testar reprodução.",
-          "⏳ Aprovar os três criativos.",
+          "Selecionar ou criar AQ-01, AQ-02 e AQ-03.",
+          "⏳ Finalizar materiais pendentes.",
+          "Aprovar criativos.",
         ],
       },
       {
-        code: "06.02",
-        title: "TAREFA 06.02 — ⏳ CONFIRMAR ORÇAMENTO DE ATIVAÇÃO",
+        code: "T34",
+        legacyCodes: ["06.02"],
+        title: "T34 — ⏳ Confirmar Verba | P1",
         priority: "P1",
         complexity: "low",
-        financialImpact: true,
-        durationMinutes: 30,
         subtasks: [
-          "Definir orçamento inicial.",
-          "Identificar responsável financeiro.",
-          "⏳ Solicitar aprovação.",
-          "⏳ Confirmar verba.",
-          "Verificar meio de pagamento.",
-          "Registrar autorização.",
+          "Definir orçamento.",
+          "⏳ Confirmar disponibilidade.",
+          "Liberar ativação.",
         ],
       },
       {
-        code: "06.03",
-        title: "TAREFA 06.03 — PUBLICAR E IMPULSIONAR",
+        code: "T35",
+        legacyCodes: ["06.03"],
+        title: "T35 — Ativar Aquisição Inicial | P1",
         priority: "P1",
-        complexity: "high",
-        financialImpact: true,
-        durationMinutes: 90,
+        complexity: "medium",
         subtasks: [
-          "Publicar AQ-01.",
-          "Publicar AQ-02.",
-          "Publicar AQ-03.",
-          "Confirmar destino do tráfego.",
-          "Configurar impulsionamentos ou campanhas conforme planejamento.",
-          "Aplicar referência de R$ 6,90 por impulsionamento somente quando compatível com a plataforma e a verba aprovada.",
-          "Conferir criativo e copy.",
-          "Verificar rastreamento.",
-          "Ativar anúncios.",
-          "Confirmar entrega.",
-          "Registrar investimento.",
-          "Registrar entradas no grupo.",
-          "Identificar problemas de ativação.",
+          "Configurar três anúncios/impulsionamentos.",
+          "Testar destino e rastreamento.",
+          "Ativar e verificar entrega.",
         ],
       },
     ],
@@ -928,204 +592,116 @@ export const MASTER_STAGES_PVD: MasterStageDefinition[] = [
     priority: "P1",
     tasks: [
       {
-        code: "07.01",
-        title: "TAREFA 07.01 — ⏳ DEFINIR BRIEFING DO EVENTO",
+        code: "T36",
+        legacyCodes: ["07.01"],
+        title: "T36 — ⏳ Definir Webinário | P1",
         priority: "P1",
         complexity: "medium",
-        durationMinutes: 90,
+        destination: { tab: "structure", label: "Webinário" },
         subtasks: [
-          "⏳ Confirmar promessa.",
-          "⏳ Confirmar público.",
-          "⏳ Confirmar três pilares.",
-          "⏳ Informar histórias relevantes.",
-          "⏳ Disponibilizar evidências reais.",
-          "⏳ Confirmar conteúdo a apresentar.",
-          "⏳ Confirmar disponibilidade para o evento.",
-          "Definir estrutura da apresentação.",
-          "Revisar narrativa.",
-          "⏳ Aprovar briefing.",
+          "Preencher briefing do evento.",
+          "⏳ Confirmar conteúdo, data e horário.",
+          "Consolidar roteiro.",
         ],
       },
       {
-        code: "07.02",
-        title: "TAREFA 07.02 — CRIAR NOVE COPIES DO WEBINÁRIO",
+        code: "T37",
+        legacyCodes: ["07.02"],
+        title: "T37 — Criar Nove Copies do Webinário | P1",
+        priority: "P1",
+        complexity: "medium",
+        subtasks: [
+          "Criar três copies de antecipação.",
+          "Criar três copies do dia do evento.",
+          "Criar três copies pós-evento.",
+          "Aprovar e vincular à programação.",
+        ],
+      },
+      {
+        code: "T38",
+        legacyCodes: ["07.03"],
+        title: "T38 — ⏳ Produzir WEB-A01 a WEB-A03 | P1",
         priority: "P1",
         complexity: "high",
-        durationMinutes: 180,
+        destination: { tab: "creatives", label: "Criativos" },
         subtasks: [
-          "WEB-COPY-01 — Antecipação / manhã — ⏳ horário a confirmar.",
-          "WEB-COPY-02 — Antecipação / tarde — ⏳ horário a confirmar.",
-          "WEB-COPY-03 — Antecipação / noite — ⏳ horário a confirmar.",
-          "WEB-COPY-04 — Dia do evento / manhã — ⏳ horário a confirmar.",
-          "WEB-COPY-05 — Dia do evento / tarde — ⏳ horário a confirmar.",
-          "WEB-COPY-06 — Dia do evento / noite — ⏳ horário a confirmar.",
-          "WEB-COPY-07 — Pós-evento / manhã — ⏳ horário a confirmar.",
-          "WEB-COPY-08 — Pós-evento / tarde — ⏳ horário a confirmar.",
-          "WEB-COPY-09 — Pós-evento / noite — ⏳ horário a confirmar.",
-          "Definir CTA específico de cada mensagem.",
-          "Validar links.",
-          "Revisar repetição e coerência da sequência.",
-          "⏳ Aprovar as nove copies.",
-          "Registrar horários confirmados.",
-          "Vincular cada copy ao fluxo correspondente.",
+          "Criar três roteiros.",
+          "⏳ Gravar e editar três vídeos.",
+          "Aprovar e salvar.",
         ],
       },
       {
-        code: "07.03",
-        title: "TAREFA 07.03 — ⏳ PRODUZIR VÍDEOS WEB-A01, A02 E A03",
+        code: "T39",
+        legacyCodes: ["07.04"],
+        title: "T39 — ⏳ Produzir WEB-B01 a WEB-B03 | P1",
         priority: "P1",
         complexity: "high",
-        durationMinutes: 180,
+        destination: { tab: "creatives", label: "Criativos" },
         subtasks: [
-          "Criar objetivo e ângulo do WEB-A01.",
-          "Criar hook, corpo e CTA do WEB-A01.",
-          "Criar objetivo e ângulo do WEB-A02.",
-          "Criar hook, corpo e CTA do WEB-A02.",
-          "Criar objetivo e ângulo do WEB-A03.",
-          "Criar hook, corpo e CTA do WEB-A03.",
-          "⏳ Aprovar os três roteiros.",
-          "⏳ Gravar WEB-A01.",
-          "⏳ Gravar WEB-A02.",
-          "⏳ Gravar WEB-A03.",
-          "⏳ Providenciar edição.",
-          "Fazer upload individual.",
-          "Testar reprodução.",
-          "⏳ Aprovar três arquivos.",
-          "Vincular à comunicação do webinário.",
+          "Criar três roteiros.",
+          "⏳ Gravar e editar três vídeos.",
+          "Aprovar e salvar.",
         ],
       },
       {
-        code: "07.04",
-        title: "TAREFA 07.04 — ⏳ PRODUZIR VÍDEOS WEB-B01, B02 E B03",
+        code: "T40",
+        legacyCodes: ["07.05"],
+        title: "T40 — Configurar Google Meet | P1",
         priority: "P1",
-        complexity: "high",
-        durationMinutes: 180,
+        complexity: "low",
         subtasks: [
-          "Criar objetivo e ângulo do WEB-B01.",
-          "Criar hook, corpo e CTA do WEB-B01.",
-          "Criar hook, corpo e CTA do WEB-B02.",
-          "Criar hook, corpo e CTA do WEB-B02.",
-          "Criar objetivo e ângulo do WEB-B03.",
-          "Criar hook, corpo e CTA do WEB-B03.",
-          "⏳ Aprovar três roteiros.",
-          "⏳ Gravar WEB-B01.",
-          "⏳ Gravar WEB-B02.",
-          "⏳ Gravar WEB-B03.",
-          "⏳ Editar.",
-          "Fazer upload individual.",
-          "Testar reprodução.",
-          "⏳ Aprovar arquivos.",
-          "Vincular à distribuição.",
+          "Criar e configurar sala.",
+          "Testar acesso e recursos.",
+          "Aprovar link do evento.",
         ],
       },
       {
-        code: "07.05",
-        title: "TAREFA 07.05 — CONFIGURAR GOOGLE MEET E EVENTO",
+        code: "T41",
+        legacyCodes: ["07.06"],
+        title: "T41 — Criar Comunicação \"Estamos ao Vivo\" | P1",
         priority: "P1",
-        complexity: "medium",
-        durationMinutes: 60,
+        complexity: "low",
         subtasks: [
-          "⏳ Confirmar data do evento.",
-          "⏳ Confirmar horário de início.",
-          "Confirmar responsável pela transmissão.",
-          "Criar sala Google Meet.",
-          "Gerar link.",
-          "Configurar acesso.",
-          "Testar entrada com outra conta.",
-          "Confirmar funcionamento de áudio.",
-          "Confirmar funcionamento de câmera.",
-          "Confirmar compartilhamento de tela, se utilizado.",
-          "Vincular link às copies aprovadas.",
-          "Configurar processo de confirmação de presença.",
-          "Confirmar checkout.",
-          "Registrar link no Backup Master.",
-          "⏳ Aprovar configuração final.",
+          "Criar copy e CTA.",
+          "Vincular link da live.",
+          "Programar e testar envio.",
         ],
       },
       {
-        code: "07.06",
-        title: 'TAREFA 07.06 — CRIAR COMUNICAÇÃO "ESTAMOS AO VIVO"',
+        code: "T42",
+        legacyCodes: ["07.07"],
+        title: "T42 — Criar Comunicação \"Encerrou\" | P1",
         priority: "P1",
-        complexity: "medium",
-        durationMinutes: 60,
+        complexity: "low",
         subtasks: [
-          "Criar headline de chamada.",
-          'Criar copy "Estamos ao Vivo".',
-          "Inserir link da sala.",
-          "Criar CTA direto de entrada.",
-          "Criar mensagem de reforço, se prevista.",
-          "Vincular vídeo existente, quando aplicável.",
-          "⏳ Aprovar comunicação.",
-          "Configurar horário com base no início confirmado.",
-          "Testar link.",
-          "Validar disparo.",
-          "Registrar aprovação.",
-        ],
-      },
-      {
-        code: "07.07",
-        title: 'TAREFA 07.07 — CRIAR COMUNICAÇÃO "ENCERROU"',
-        priority: "P1",
-        complexity: "medium",
-        durationMinutes: 60,
-        subtasks: [
-          "Criar mensagem de encerramento.",
-          "Criar orientação para participantes.",
-          "Criar orientação para não participantes, se prevista.",
-          "Definir CTA pós-evento.",
+          "Criar copy e CTA pós-evento.",
           "Vincular destino.",
-          "Vincular vídeo adicional apenas quando aprovado.",
-          "⏳ Aprovar mensagem.",
-          "Configurar envio associado ao encerramento.",
-          "Testar links.",
-          "Registrar validação.",
+          "Programar e testar envio.",
         ],
       },
       {
-        code: "07.08",
-        title: "TAREFA 07.08 — AUTOMATIZAR CONVITES E CONFIRMAÇÕES",
+        code: "T43",
+        legacyCodes: ["07.08"],
+        title: "T43 — Automatizar Convites e Confirmações | P1",
         priority: "P1",
-        complexity: "high",
-        durationMinutes: 120,
+        complexity: "medium",
         subtasks: [
-          "Identificar participantes elegíveis para convite.",
-          "Vincular sequência de antecipação.",
-          "Vincular vídeos selecionados.",
-          "Configurar confirmação de participação.",
-          "Registrar confirmação no CRM ou sistema correspondente.",
-          "Vincular mensagens do dia do evento.",
-          'Configurar "Estamos ao Vivo".',
-          "Configurar comunicação pós-evento.",
-          "Confirmar horários pendentes.",
-          "Evitar envios duplicados.",
-          "Testar convites.",
-          "Testar confirmação.",
-          "Testar links.",
-          "Testar mensagens associadas ao evento.",
-          "Aprovar fluxo.",
+          "Configurar convites e confirmação.",
+          "Programar comunicações do evento.",
+          "Testar e aprovar fluxo.",
         ],
       },
       {
-        code: "07.09",
-        title: "TAREFA 07.09 — VALIDAR OPERAÇÃO DO WEBINÁRIO",
+        code: "T44",
+        legacyCodes: ["07.09"],
+        title: "T44 — Validar Webinário | P1",
         priority: "P1",
-        complexity: "high",
-        durationMinutes: 120,
+        complexity: "medium",
+        destination: { tab: "structure", label: "Webinário" },
         subtasks: [
-          "Verificar sala.",
-          "Verificar data e horário.",
-          "Verificar roteiro do expert.",
-          "Verificar seis vídeos de convite.",
-          "Verificar nove copies.",
-          'Verificar mensagem "Estamos ao Vivo".',
-          'Verificar comunicação "Encerrou".',
-          "Verificar checkout.",
-          "Verificar captura de confirmações.",
-          "Verificar capacidade de registrar entradas.",
-          "Verificar como será medida a permanência até o final.",
-          "Verificar registro de compras.",
-          "⏳ Obter aprovação final.",
-          "Liberar operação.",
+          "Revisar sala, materiais e links.",
+          "Testar confirmação e checkout.",
+          "Aprovar operação.",
         ],
       },
     ],
@@ -1141,235 +717,96 @@ export const MASTER_STAGES_PVD: MasterStageDefinition[] = [
     priority: "P1",
     tasks: [
       {
-        code: "08.01",
-        title: "TAREFA 08.01 — CRIAR MATRIZ DAS CAMPANHAS",
+        code: "T45",
+        legacyCodes: ["08.01"],
+        title: "T45 — Estruturar Quatro Campanhas | P1",
         priority: "P1",
         complexity: "medium",
-        durationMinutes: 90,
         subtasks: [
-          "Criar Campanha 01 — Conexão e Solução.",
-          "Criar Campanha 02 — Provas e Evidências.",
-          "Criar Campanha 03 — Autoridade e Relevância.",
-          "Criar Campanha 04 — Boi de Piranha.",
-          "Definir hipótese de cada campanha.",
-          "Definir ICP.",
-          "Definir destino.",
-          "Definir CTA.",
-          "Definir orçamento a confirmar.",
-          "Vincular três registros de criativo a cada campanha.",
-          "Verificar consistência com Manual de Marca.",
-          "Aprovar matriz.",
+          "Configurar matriz de campanhas e ângulos.",
+          "Definir destinos e orçamentos.",
+          "Aprovar estrutura.",
         ],
       },
       {
-        code: "08.02",
-        title: "TAREFA 08.02 — ⏳ CAMPANHA 01 — CONEXÃO E SOLUÇÃO",
+        code: "T46",
+        legacyCodes: ["08.02"],
+        title: "T46 — ⏳ Campanha Conexão e Solução | P1",
         priority: "P1",
         complexity: "high",
-        financialImpact: true,
-        durationMinutes: 180,
+        destination: { tab: "creatives", label: "Criativos" },
         subtasks: [
-          "C01-01 — Criar headline.",
-          "C01-01 — Criar hook.",
-          "C01-01 — Criar corpo.",
-          "C01-01 — Criar CTA.",
-          "C01-01 — ⏳ Aprovar roteiro.",
-          "C01-01 — ⏳ Gravar/produzir.",
-          "C01-01 — ⏳ Editar.",
-          "C01-01 — Fazer upload.",
-          "C01-01 — Aprovar arquivo.",
-          "C01-02 — Criar headline.",
-          "C01-02 — Criar hook.",
-          "C01-02 — Criar corpo.",
-          "C01-02 — Criar CTA.",
-          "C01-02 — ⏳ Aprovar roteiro.",
-          "C01-02 — ⏳ Gravar/produzir.",
-          "C01-02 — ⏳ Editar.",
-          "C01-02 — Fazer upload.",
-          "C01-02 — Aprovar arquivo.",
-          "C01-03 — Criar headline.",
-          "C01-03 — Criar hook.",
-          "C01-03 — Criar corpo.",
-          "C01-03 — Criar CTA.",
-          "C01-03 — ⏳ Aprovar roteiro.",
-          "C01-03 — ⏳ Gravar/produzir.",
-          "C01-03 — ⏳ Editar.",
-          "C01-03 — Fazer upload.",
-          "C01-03 — Aprovar arquivo.",
-          "Configurar campanha.",
-          "Vincular os três criativos.",
-          "Configurar destino.",
-          "Configurar orçamento aprovado.",
-          "Conferir anúncios.",
-          "Testar links.",
-          "Ativar.",
-          "Registrar desempenho.",
+          "Criar três roteiros C01-01 a C01-03.",
+          "⏳ Produzir e aprovar três criativos.",
+          "Configurar e testar campanha.",
+          "Ativar após liberação.",
         ],
       },
       {
-        code: "08.03",
-        title: "TAREFA 08.03 — ⏳ CAMPANHA 02 — PROVAS E EVIDÊNCIAS",
+        code: "T47",
+        legacyCodes: ["08.03"],
+        title: "T47 — ⏳ Campanha Provas e Evidências | P1",
         priority: "P1",
         complexity: "high",
-        financialImpact: true,
-        durationMinutes: 180,
+        destination: { tab: "creatives", label: "Criativos" },
         subtasks: [
-          "C02-01 — Selecionar prova real.",
-          "C02-01 — Confirmar autorização de uso, quando necessária.",
-          "C02-01 — Criar headline.",
-          "C02-01 — Criar hook, corpo e CTA.",
-          "C02-01 — ⏳ Aprovar roteiro.",
-          "C02-01 — ⏳ Produzir.",
-          "C02-01 — ⏳ Editar.",
-          "C02-01 — Fazer upload.",
-          "C02-01 — Aprovar.",
-          "C02-02 — Definir o que será demonstrado.",
-          "C02-02 — Criar headline.",
-          "C02-02 — Criar hook, corpo e CTA.",
-          "C02-02 — ⏳ Aprovar.",
-          "C02-02 — ⏳ Produzir.",
-          "C02-02 — ⏳ Editar.",
-          "C02-02 — Fazer upload.",
-          "C02-02 — Aprovar.",
-          "C02-03 — Definir transformação demonstrável.",
-          "C02-03 — Verificar evidência disponível.",
-          "C02-03 — Criar headline.",
-          "C02-03 — Criar hook, corpo e CTA.",
-          "C02-03 — ⏳ Aprovar.",
-          "C02-03 — ⏳ Produzir.",
-          "C02-03 — ⏳ Editar.",
-          "C02-03 — Fazer upload.",
-          "C02-03 — Aprovar.",
-          "Configurar Campanha 02.",
-          "Vincular três arquivos.",
-          "Configurar destino e orçamento.",
-          "Verificar anúncios.",
-          "Testar links.",
-          "Ativar.",
-          "Registrar desempenho.",
+          "Criar três roteiros C02-01 a C02-03.",
+          "⏳ Produzir e aprovar três criativos.",
+          "Configurar e testar campanha.",
+          "Ativar após liberação.",
         ],
       },
       {
-        code: "08.04",
-        title: "TAREFA 08.04 — ⏳ CAMPANHA 03 — AUTORIDADE E RELEVÂNCIA",
+        code: "T48",
+        legacyCodes: ["08.04"],
+        title: "T48 — ⏳ Campanha Autoridade e Relevância | P1",
         priority: "P1",
         complexity: "high",
-        financialImpact: true,
-        durationMinutes: 180,
+        destination: { tab: "creatives", label: "Criativos" },
         subtasks: [
-          "C03-01 — Confirmar evidências de autoridade.",
-          "C03-01 — Criar headline.",
-          "C03-01 — Criar hook, corpo e CTA.",
-          "C03-01 — ⏳ Aprovar.",
-          "C03-01 — ⏳ Produzir.",
-          "C03-01 — ⏳ Editar.",
-          "C03-01 — Fazer upload.",
-          "C03-01 — Aprovar.",
-          "C03-02 — Selecionar tese validada.",
-          "C03-02 — Criar headline.",
-          "C03-02 — Criar hook, corpo e CTA.",
-          "C03-02 — ⏳ Aprovar.",
-          "C03-02 — ⏳ Produzir.",
-          "C03-02 — ⏳ Editar.",
-          "C03-02 — Fazer upload.",
-          "C03-02 — Aprovar.",
-          "C03-03 — Selecionar diferencial real.",
-          "C03-03 — Criar headline.",
-          "C03-03 — Criar hook, corpo e CTA.",
-          "C03-03 — ⏳ Aprovar.",
-          "C03-03 — ⏳ Produzir.",
-          "C03-03 — ⏳ Editar.",
-          "C03-03 — Fazer upload.",
-          "C03-03 — Aprovar.",
-          "Configurar Campanha 03.",
-          "Vincular três arquivos.",
-          "Configurar destino e orçamento.",
-          "Verificar anúncios.",
-          "Testar links.",
-          "Ativar.",
-          "Registrar desempenho.",
+          "Criar três roteiros C03-01 a C03-03.",
+          "⏳ Produzir e aprovar três criativos.",
+          "Configurar e testar campanha.",
+          "Ativar após liberação.",
         ],
       },
       {
-        code: "08.05",
-        title: "TAREFA 08.05 — ⏳ CAMPANHA 04 — BOI DE PIRANHA",
+        code: "T49",
+        legacyCodes: ["08.05"],
+        title: "T49 — ⏳ Campanha Boi de Piranha | P1",
         priority: "P1",
         complexity: "high",
-        financialImpact: true,
-        durationMinutes: 180,
+        destination: { tab: "creatives", label: "Criativos" },
         subtasks: [
-          "Confirmar proposta gratuita.",
-          "Confirmar o que será entregue.",
-          "Confirmar público elegível.",
-          "Confirmar mecanismo de captação.",
-          "Definir encaminhamento comercial.",
-          "⏳ Aprovar proposta.",
-          "BP-01 — Criar headline.",
-          "BP-01 — Criar hook, corpo e CTA.",
-          "BP-01 — ⏳ Aprovar.",
-          "BP-01 — ⏳ Gravar/produzir.",
-          "BP-01 — ⏳ Editar.",
-          "BP-01 — Fazer upload.",
-          "BP-01 — Aprovar.",
-          "BP-02 — Criar headline.",
-          "BP-02 — Criar hook, corpo e CTA.",
-          "BP-02 — ⏳ Aprovar.",
-          "BP-02 — ⏳ Gravar/produzir.",
-          "BP-02 — ⏳ Editar.",
-          "BP-02 — Fazer upload.",
-          "BP-02 — Aprovar.",
-          "BP-03 — Criar headline.",
-          "BP-03 — Criar hook, corpo e CTA.",
-          "BP-03 — ⏳ Aprovar.",
-          "BP-03 — ⏳ Gravar/produzir.",
-          "BP-03 — ⏳ Editar.",
-          "BP-03 — Fazer upload.",
-          "BP-03 — Aprovar.",
-          "Configurar Campanha 04.",
-          "Vincular três anúncios.",
-          "Configurar destino.",
-          "Configurar qualificação.",
-          "Configurar orçamento.",
-          "Testar captação.",
-          "Testar encaminhamento.",
-          "Ativar.",
-          "Registrar leads qualificados.",
-          "Registrar conversões.",
+          "Validar oferta gratuita e destino.",
+          "Criar três roteiros BP-01 a BP-03.",
+          "⏳ Produzir e aprovar três criativos.",
+          "Configurar, testar e ativar.",
         ],
       },
       {
-        code: "08.06",
-        title: "TAREFA 08.06 — ⏳ CONFIRMAR BUDGET DE VALIDAÇÃO",
+        code: "T50",
+        legacyCodes: ["08.06"],
+        title: "T50 — ⏳ Confirmar Orçamento das Campanhas | P1",
         priority: "P1",
         complexity: "low",
-        financialImpact: true,
-        durationMinutes: 30,
         subtasks: [
-          "Definir verba total.",
-          "Definir distribuição por campanha.",
-          "⏳ Confirmar aprovação financeira.",
-          "⏳ Confirmar disponibilidade.",
-          "Verificar meio de pagamento.",
-          "Registrar autorização.",
+          "Definir budget.",
+          "⏳ Aprovar e disponibilizar verba.",
+          "Liberar testes.",
         ],
       },
       {
-        code: "08.07",
-        title: "TAREFA 08.07 — MONITORAR VALIDAÇÃO",
+        code: "T51",
+        legacyCodes: ["08.07"],
+        title: "T51 — Monitorar Campanhas | P1",
         priority: "P1",
         complexity: "medium",
-        durationMinutes: 60,
+        destination: { tab: "structure", label: "Dashboard" },
         subtasks: [
-          "Verificar entrega dos anúncios.",
-          "Registrar gasto.",
-          "Registrar leads por campanha.",
-          "Registrar entradas no grupo.",
-          "Registrar interações qualificadas.",
-          "Registrar vendas atribuídas.",
-          "Comparar criativos.",
-          "Identificar ângulos com melhor desempenho.",
-          "Registrar hipóteses confirmadas e não confirmadas.",
-          "Definir otimizações posteriores.",
+          "Registrar investimento e captação.",
+          "Comparar criativos e conversões.",
+          "Consolidar resultados.",
         ],
       },
     ],
@@ -1385,483 +822,318 @@ export const MASTER_STAGES_PVD: MasterStageDefinition[] = [
     priority: "P2",
     tasks: [
       {
-        code: "09.01",
-        title: "TAREFA 09.01 — DEFINIR FORMATO DE VÍDEO",
+        code: "T52",
+        legacyCodes: ["09.01"],
+        title: "T52 — Definir Formato Orgânico | P2",
         priority: "P2",
-        complexity: "medium",
-        durationMinutes: 60,
+        complexity: "low",
         subtasks: [
-          "Consultar linguagem do expert.",
-          "Definir formatos possíveis de gravação.",
-          "Definir duração por formato.",
-          "Criar modelos de hook.",
-          "Criar modelos de corpo.",
-          "Criar CTA adequado.",
-          "Definir orientação de gravação.",
-          "⏳ Validar formato com o expert.",
-          "Salvar modelos na aba Criativos.",
+          "Criar formato de vídeo e estrutura de copy.",
+          "⏳ Validar com expert.",
+          "Consolidar modelo.",
         ],
       },
       {
-        code: "09.02",
-        title: "TAREFA 09.02 — PRODUZIR LOTE ORGÂNICO",
+        code: "T53",
+        legacyCodes: ["09.02"],
+        title: "T53 — ⏳ Produzir Lote Orgânico | P2",
         priority: "P2",
-        complexity: "high",
-        durationMinutes: 180,
+        complexity: "medium",
+        destination: { tab: "creatives", label: "Criativos" },
         subtasks: [
-          "Definir quantidade do lote.",
-          "Criar temas.",
-          "Criar roteiros.",
-          "⏳ Aprovar.",
-          "⏳ Atribuir gravações.",
-          "⏳ Receber materiais.",
-          "⏳ Editar.",
-          "Fazer upload.",
-          "Revisar arquivos.",
-          "Aprovar lote.",
-          "Registrar na Biblioteca de Conteúdo.",
+          "Criar roteiros do lote.",
+          "⏳ Gravar e editar.",
+          "Aprovar e salvar na biblioteca.",
         ],
       },
       {
-        code: "09.03",
-        title: "TAREFA 09.03 — PROGRAMAR DISTRIBUIÇÃO",
+        code: "T54",
+        legacyCodes: ["09.03"],
+        title: "T54 — Programar Publicações | P2",
         priority: "P2",
         complexity: "medium",
-        durationMinutes: 90,
         subtasks: [
-          "Definir quantidade de publicações por dia.",
-          "Validar capacidade de produção.",
-          "Organizar sequência.",
-          "Confirmar horários de postagem.",
-          "Programar conteúdos disponíveis.",
-          "Conferir legendas.",
-          "Conferir capas.",
-          "Conferir CTA.",
-          "Confirmar publicações.",
-          "Monitorar visualizações.",
-          "Comparar formatos.",
+          "Organizar lote.",
+          "Programar na Criafy.",
+          "Conferir agendamentos e publicação.",
         ],
       },
       {
-        code: "09.04",
-        title: "TAREFA 09.04 — CRIAR TRÊS STORIES CORINGA",
+        code: "T55",
+        legacyCodes: ["09.04"],
+        title: "T55 — ⏳ Criar Três Stories Coringa | P2",
         priority: "P2",
         complexity: "medium",
-        durationMinutes: 60,
+        destination: { tab: "creatives", label: "Criativos" },
         subtasks: [
-          "Criar story coringa 01.",
-          "Criar story coringa 02.",
-          "Criar story coringa 03.",
-          "Criar CTAs correspondentes.",
-          "⏳ Solicitar artes ou mídias.",
-          "⏳ Aprovar.",
-          "Fazer upload.",
-          "Disponibilizar na biblioteca.",
+          "Criar três conteúdos.",
+          "⏳ Produzir e aprovar.",
+          "Salvar na biblioteca.",
         ],
       },
       {
-        code: "09.05",
-        title: "TAREFA 09.05 — CRIAR NARRATIVA CORINGA",
+        code: "T56",
+        legacyCodes: ["09.05"],
+        title: "T56 — Criar Narrativa Coringa | P2",
         priority: "P2",
-        complexity: "medium",
-        durationMinutes: 60,
+        complexity: "low",
         subtasks: [
-          "Definir situação de aplicação.",
-          "Criar abertura.",
-          "Criar corpo.",
-          "Criar CTA.",
-          "Revisar linguagem.",
-          "⏳ Aprovar.",
-          "Registrar preset editável.",
-          "Disponibilizar para reutilização.",
+          "Criar copy reutilizável.",
+          "Revisar e aprovar.",
+          "Salvar preset.",
         ],
       },
     ],
   },
 
   // =========================================================================
-  // ETAPA 10 — REMARKETING E RECUPERAÇÃO
+  // ETAPA 10 — REMARKETING
   // =========================================================================
   {
     code: "ETAPA-10",
-    title: "ETAPA 10 — REMARKETING E RECUPERAÇÃO",
+    title: "ETAPA 10 — REMARKETING",
     position: 9,
     priority: "P1",
     tasks: [
       {
-        code: "10.01",
-        title: "TAREFA 10.01 — CRIAR SCRIPT DE RECUPERAÇÃO",
+        code: "T57",
+        legacyCodes: ["10.01"],
+        title: "T57 — Criar Recuperação Comercial | P1",
         priority: "P1",
         complexity: "medium",
-        durationMinutes: 60,
+        destination: { tab: "funnel", label: "CRM" },
         subtasks: [
-          "Definir público de recuperação.",
-          "Criar abordagem pós-evento.",
-          "Criar pergunta de percepção.",
-          "Criar pergunta de objeção.",
-          "Criar resposta para objeções prioritárias.",
-          "Criar reabordagem da oferta.",
-          "Definir CTA.",
-          "⏳ Aprovar script.",
-          "Testar mensagens.",
+          "Criar script de recuperação.",
+          "Revisar e aprovar.",
           "Vincular ao CRM.",
         ],
       },
       {
-        code: "10.02",
-        title: "TAREFA 10.02 — AUTOMATIZAR RECUPERAÇÃO",
+        code: "T58",
+        legacyCodes: ["10.02"],
+        title: "T58 — Automatizar Remarketing | P1",
         priority: "P1",
-        complexity: "high",
-        durationMinutes: 120,
+        complexity: "medium",
         subtasks: [
-          "Identificar participantes que não compraram.",
-          "Identificar convidados que não compareceram.",
-          "Definir segmentos.",
-          "Definir sequência por segmento.",
-          "Confirmar horários/janelas aplicáveis.",
-          "Vincular copies aprovadas.",
-          "Configurar gatilhos.",
-          "Excluir compradores quando o fluxo não se aplicar a eles.",
-          "Testar segmentação.",
-          "Testar mensagens.",
-          "Corrigir erros.",
-          "Aprovar automação.",
-          "Registrar recuperações.",
+          "Configurar segmentos e fluxos.",
+          "Testar mensagens e exclusões.",
+          "Aprovar e ativar.",
         ],
       },
       {
-        code: "10.03",
-        title: "TAREFA 10.03 — ⏳ ESTRUTURAR PRODUTO SECUNDÁRIO",
+        code: "T59",
+        legacyCodes: ["10.03"],
+        title: "T59 — ⏳ Criar Produto Secundário | P2",
         priority: "P2",
         complexity: "medium",
-        financialImpact: true,
-        durationMinutes: 90,
+        destination: { tab: "funnel", label: "Checkout" },
         subtasks: [
-          "⏳ Definir proposta.",
-          "⏳ Confirmar público.",
-          "⏳ Confirmar entregáveis.",
-          "⏳ Validar preço.",
-          "Criar copy de oferta.",
-          "Criar CTA.",
-          "Configurar checkout.",
-          "Testar pagamento.",
-          "⏳ Aprovar oferta.",
-          "Vincular ao fluxo de recuperação.",
+          "⏳ Definir proposta e preço.",
+          "Criar copy e checkout.",
+          "Testar e aprovar.",
         ],
       },
       {
-        code: "10.04",
-        title: "TAREFA 10.04 — ⏳ ESTRUTURAR COMUNIDADE RECORRENTE",
+        code: "T60",
+        legacyCodes: ["10.04"],
+        title: "T60 — ⏳ Criar Comunidade Recorrente | P2",
         priority: "P2",
-        complexity: "high",
-        financialImpact: true,
-        durationMinutes: 120,
+        complexity: "medium",
         subtasks: [
-          "⏳ Definir proposta.",
-          "⏳ Definir conteúdo entregue.",
-          "⏳ Definir periodicidade.",
-          "⏳ Confirmar modelo de acesso.",
-          "Avaliar referência de R$ 37/mês.",
-          "Confirmar preço efetivo.",
-          "Criar copy.",
-          "Criar checkout recorrente.",
-          "Testar assinatura.",
-          "⏳ Aprovar operação.",
+          "⏳ Definir conteúdo e condições.",
+          "Configurar oferta recorrente.",
+          "Testar e aprovar.",
         ],
       },
       {
-        code: "10.05",
-        title: "TAREFA 10.05 — ORGANIZAR RELACIONAMENTO PASSIVO",
+        code: "T61",
+        legacyCodes: ["10.05"],
+        title: "T61 — Organizar Relacionamento Passivo | P3",
         priority: "P3",
-        complexity: "medium",
-        durationMinutes: 60,
+        complexity: "low",
         subtasks: [
-          "Identificar leads sem compra.",
-          "Segmentar contatos.",
-          "Selecionar conteúdos aprovados.",
-          "Definir cadência após aprovação.",
-          "Vincular materiais.",
-          "Configurar sequência.",
-          "Testar elegibilidade.",
-          "Monitorar reativações.",
+          "Definir público e conteúdos.",
+          "Configurar cadência.",
+          "Testar e acompanhar.",
         ],
       },
     ],
   },
 
   // =========================================================================
-  // ETAPA 11 — DASHBOARD, WEBINÁRIO E PERFORMANCE
+  // ETAPA 11 — DASHBOARD E PERFORMANCE
   // =========================================================================
   {
     code: "ETAPA-11",
-    title: "ETAPA 11 — DASHBOARD, WEBINÁRIO E PERFORMANCE",
+    title: "ETAPA 11 — DASHBOARD E PERFORMANCE",
     position: 10,
     priority: "P1",
     tasks: [
       {
-        code: "11.01",
-        title: "TAREFA 11.01 — VALIDAR BLOCO INFRA",
+        code: "T62",
+        legacyCodes: ["11.01"],
+        title: "T62 — Validar Indicadores INFRA | P1",
         priority: "P1",
-        complexity: "medium",
-        durationMinutes: 60,
+        complexity: "low",
+        destination: { tab: "structure", label: "Dashboard" },
         subtasks: [
-          "Validar progresso de tarefas.",
-          "Validar gasto Ads.",
-          "Validar entradas no grupo.",
-          "Validar saídas do grupo.",
-          "Validar testes realizados.",
-          "Validar vendas.",
-          "Identificar fontes de dados.",
-          "Verificar lançamentos manuais.",
-          "Verificar integrações.",
-          "Testar persistência.",
-          "Corrigir inconsistências.",
+          "Configurar fontes e valores.",
+          "Revisar consistência.",
+          "Validar dashboard.",
         ],
       },
       {
-        code: "11.02",
-        title: "TAREFA 11.02 — CONFIGURAR BLOCO WEBINÁRIO",
+        code: "T63",
+        legacyCodes: ["11.02"],
+        title: "T63 — Configurar Indicadores WEBINÁRIO | P1",
         priority: "P1",
-        complexity: "high",
-        durationMinutes: 90,
+        complexity: "low",
+        destination: { tab: "structure", label: "Webinário" },
         subtasks: [
-          "Criar indicador Recebeu convite.",
-          "Criar indicador Confirmou participação ao vivo.",
-          "Criar indicador Entrou ao vivo.",
-          "Criar indicador Ficou até o final.",
-          "Criar indicador Comprou.",
-          "Definir evento/edição dos dados.",
-          "Definir origem dos convites recebidos.",
-          "Definir origem das confirmações.",
-          "Definir origem dos acessos reais.",
-          "Definir como verificar permanência até o final.",
-          "Definir origem das compras confirmadas.",
-          "Configurar lançamentos manuais quando necessários.",
-          "Evitar contagem duplicada.",
-          "Calcular taxas de conversão.",
-          "Testar atualização.",
-          "Verificar persistência.",
-          "Aprovar bloco.",
+          "Configurar convidados e confirmações.",
+          "Configurar entradas e permanência.",
+          "Configurar compradores.",
+          "Testar dados e conversões.",
         ],
       },
       {
-        code: "11.03",
-        title: "TAREFA 11.03 — MONITORAR MÉTRICAS 80/20",
+        code: "T64",
+        legacyCodes: ["11.03"],
+        title: "T64 — Monitorar Métricas 80/20 | P1",
         priority: "P1",
-        complexity: "medium",
-        durationMinutes: 60,
+        complexity: "low",
+        destination: { tab: "structure", label: "Métricas" },
         subtasks: [
-          "Registrar gasto Ads.",
-          "Registrar entradas no grupo.",
-          "Registrar testes concluídos.",
-          "Registrar checkouts iniciados.",
-          "Registrar confirmações de live.",
-          "Registrar entradas na live.",
-          "Registrar contatos WhatsApp capturados.",
-          "Registrar vendas confirmadas.",
-          "Verificar consistência das fontes.",
-          "Atualizar dashboard.",
+          "Atualizar indicadores principais.",
+          "Revisar números.",
+          "Consolidar desempenho.",
         ],
       },
       {
-        code: "11.04",
-        title: "TAREFA 11.04 — MONITORAR DISTRIBUIÇÃO",
+        code: "T65",
+        legacyCodes: ["11.04"],
+        title: "T65 — Monitorar Distribuição de Mídia | P2",
         priority: "P2",
         complexity: "low",
-        durationMinutes: 45,
+        destination: { tab: "structure", label: "Redes Sociais" },
         subtasks: [
-          "Registrar visualizações.",
-          "Identificar melhores formatos.",
-          "Registrar seguidores.",
-          "Registrar comentários.",
-          "Registrar ligações.",
-          "Registrar leads de social selling.",
-          "Comparar períodos.",
-          "Identificar conteúdos com maior resposta.",
-          "Registrar oportunidades de otimização.",
+          "Configurar redes e indicadores.",
+          "Habilitar Criafy quando necessário.",
+          "Verificar publicações, agendamentos e métricas.",
         ],
       },
     ],
   },
 
   // =========================================================================
-  // ETAPA 12 — BIBLIOTECA, SCRIPTS, ÁUDIOS E BACKUP
+  // ETAPA 12 — BIBLIOTECA E BACKUP
   // =========================================================================
   {
     code: "ETAPA-12",
-    title: "ETAPA 12 — BIBLIOTECA, SCRIPTS, ÁUDIOS E BACKUP",
+    title: "ETAPA 12 — BIBLIOTECA E BACKUP",
     position: 11,
     priority: "P1",
     tasks: [
       {
-        code: "12.01",
-        title: "TAREFA 12.01 — CONFIGURAR BIBLIOTECA DE CONTEÚDO",
+        code: "T66",
+        legacyCodes: ["12.01"],
+        title: "T66 — Configurar Biblioteca de Conteúdo | P1",
         priority: "P1",
-        complexity: "high",
-        durationMinutes: 90,
+        complexity: "low",
+        destination: { tab: "creatives", label: "Biblioteca" },
         subtasks: [
-          "Verificar storage persistente.",
-          "Configurar acesso por projeto.",
-          "Validar permissões.",
-          "Habilitar upload de vídeo.",
-          "Habilitar upload de áudio.",
-          "Habilitar upload de imagem.",
-          "Habilitar upload de documentos necessários.",
-          "Criar agrupamentos do PVD.",
-          "Habilitar pesquisa e filtros.",
-          "Testar envio.",
-          "Testar reprodução.",
-          "Testar acesso após refresh.",
-          "Testar reutilização sem duplicar arquivo.",
-          "Validar arquivamento e restauração.",
+          "Configurar armazenamento e permissões.",
+          "Testar upload e reprodução.",
           "Aprovar biblioteca.",
         ],
       },
       {
-        code: "12.02",
-        title: "TAREFA 12.02 — CONFIGURAR SCRIPTS E ÁUDIOS",
+        code: "T67",
+        legacyCodes: ["12.02"],
+        title: "T67 — Configurar Scripts e Áudios | P1",
         priority: "P1",
-        complexity: "high",
-        durationMinutes: 120,
+        complexity: "low",
+        destination: { tab: "scripts_and_audios", label: "Scripts e Áudios" },
         subtasks: [
-          "Validar aba Scripts e Áudios.",
-          "Validar criação de solicitação.",
-          "Validar campo de título.",
-          "Validar contexto da solicitação.",
-          "Validar roteiro de apoio.",
-          "Validar responsável.",
-          "Validar botão Gravar agora.",
-          "Testar permissão de microfone.",
-          "Testar captura real.",
-          "Testar parada da gravação.",
-          "Testar escuta antes do envio.",
-          "Testar regravação.",
-          "Testar upload.",
-          "Confirmar armazenamento persistente.",
-          "Testar player estilo mensagem de voz.",
-          "Testar Play/Pause.",
-          "Testar barra de progresso.",
-          "Testar velocidade.",
-          "Testar múltiplas gravações.",
-          "Testar vínculo com tarefas.",
-          "Testar vínculo com Manual de Marca.",
-          "Testar vínculo com Criativos.",
+          "Configurar solicitações e gravação.",
+          "Testar armazenamento e player.",
           "Aprovar módulo.",
         ],
       },
       {
-        code: "12.03",
-        title: "TAREFA 12.03 — ORGANIZAR BACKUP MASTER",
+        code: "T68",
+        legacyCodes: ["12.03"],
+        title: "T68 — Organizar Backup Master | P1",
         priority: "P1",
-        complexity: "medium",
-        durationMinutes: 60,
+        complexity: "low",
         subtasks: [
-          "Criar pasta de Posicionamento.",
-          "Criar pasta de Alma da Copy.",
-          "Criar pasta de Raio X do ICP.",
-          "Criar pasta de Personalidade.",
-          "Criar pasta de Copy ADS.",
-          "Criar pasta de Grupos.",
-          "Criar pasta de Vídeos.",
-          "Criar pasta de Áudios.",
-          "Criar pasta de Criativos.",
-          "Criar pasta de Campanhas.",
-          "Criar pasta de Scripts Comerciais.",
-          "Criar pasta de Checkout e Links.",
-          "Criar pasta de Webinário.",
-          "Criar pasta de Automações.",
-          "Criar pasta de Relatórios.",
-          "Criar pasta de Aprovações.",
-          "Conferir permissões.",
-          "Testar recuperação de arquivos.",
+          "Organizar pastas e arquivos.",
+          "Validar links e permissões.",
+          "Consolidar backup.",
         ],
       },
       {
-        code: "12.04",
-        title: "TAREFA 12.04 — VALIDAR ENTREGAS E VERSÕES",
+        code: "T69",
+        legacyCodes: ["12.04"],
+        title: "T69 — Revisar Entregas e Versões | P2",
         priority: "P2",
-        complexity: "medium",
-        durationMinutes: 60,
+        complexity: "low",
         subtasks: [
-          "Conferir arquivos finais.",
-          "Conferir links.",
-          "Verificar autor/responsável.",
-          "Verificar aprovação.",
-          "Registrar versão.",
-          "Vincular arquivo à tarefa.",
-          "Vincular arquivo ao criativo.",
-          "Vincular arquivo à automação, quando aplicável.",
-          "Verificar arquivos reutilizados.",
-          "Evitar exclusão de arquivos ainda utilizados.",
-          "Validar acesso dos usuários autorizados.",
+          "Conferir arquivos e aprovações.",
+          "Organizar versões.",
+          "Validar integridade.",
         ],
       },
     ],
   },
 
   // =========================================================================
-  // ETAPA 13 — OTIMIZAÇÕES OPCIONAIS E FUTURAS
+  // ETAPA 13 — OTIMIZAÇÕES OPCIONAIS
   // =========================================================================
   {
     code: "ETAPA-13",
-    title: "ETAPA 13 — OTIMIZAÇÕES OPCIONAIS E FUTURAS",
+    title: "ETAPA 13 — OTIMIZAÇÕES OPCIONAIS",
     position: 12,
     priority: "P0",
     tasks: [
       {
-        code: "13.01",
-        title: "TAREFA 13.01 — REGISTRAR OPORTUNIDADES",
+        code: "T70",
+        legacyCodes: ["13.01"],
+        title: "T70 — Registrar Oportunidades | P0",
         priority: "P0",
         complexity: "low",
-        durationMinutes: 45,
         subtasks: [
-          "Descrever oportunidade.",
-          "Identificar problema.",
-          "Descrever melhoria proposta.",
-          "Identificar impacto esperado.",
-          "Identificar recursos.",
-          "Identificar dependências.",
+          "Registrar proposta e impacto.",
           "⏳ Solicitar aprovação.",
-          "Registrar decisão.",
-          "Transformar em execução somente se aprovada.",
+          "Incorporar somente se aprovada.",
         ],
       },
       {
-        code: "13.02",
-        title: "TAREFA 13.02 — AVALIAR MONETIZAÇÃO ANTECIPADA",
+        code: "T71",
+        legacyCodes: ["13.02"],
+        title: "T71 — Avaliar Monetização Antecipada | P0",
         priority: "P0",
-        complexity: "medium",
-        financialImpact: true,
-        durationMinutes: 60,
+        complexity: "low",
         subtasks: [
-          "Avaliar utilização do Teste Aliança.",
-          "Avaliar oferta após o teste.",
-          "Avaliar ingresso pago para workshop.",
-          "Avaliar acesso à gravação.",
-          "Identificar alterações no checkout.",
-          "Identificar necessidade de novas copies.",
-          "Identificar novas automações.",
-          "⏳ Solicitar aprovação.",
-          "Registrar decisão.",
+          "Avaliar Teste Aliança e ofertas.",
+          "Avaliar checkout e comunicação.",
+          "⏳ Aprovar ou arquivar hipótese.",
         ],
       },
     ],
   },
 ];
 
+export const MASTER_STAGES_PVD = MASTER_STAGES_AJ027;
+
 /**
- * Reconcilia o Workspace com o Checklist Master Completo do PVD (AJ-024).
- * Preserva:
- * - Tarefas concluídas e seus status;
- * - Tempo acumulado e sessões de cronômetro;
- * - Responsáveis e atribuições;
- * - Subtarefas já marcadas como concluídas;
- * Cria:
- * - Etapas ausentes;
- * - Tarefas ausentes;
- * - Subtarefas ausentes para tarefas que não tinham checklist.
+ * Reconciliação inteligente do Kanban com o AJ-027.
+ * Executa a simplificação mantendo conclusões reais, sessões de cronômetro e integridade total.
  */
-export function reconcileWorkspaceWithAJ024(ws: Workspace, ctx: { actorName: string; nowIso: string }): boolean {
+export function reconcileWorkspaceWithAJ027(
+  ws: Workspace,
+  ctx: { actorName: string; nowIso: string }
+): boolean {
   if (!ws || !ws.stages || !ws.tasks) return false;
 
   const sprintId = ws.activeSprintId || Object.keys(ws.sprints || {})[0];
@@ -1891,15 +1163,17 @@ export function reconcileWorkspaceWithAJ024(ws: Workspace, ctx: { actorName: str
     (s) => !s.archivedAt && s.sprintId === sprintId
   );
 
-  // Percorrer cada uma das 13 Etapas do Master Checklist
-  for (const stageDef of MASTER_STAGES_PVD) {
-    // Tentar localizar estágio existente equivalente
+  const stageIdMap = new Map<string, string>(); // code -> stageId
+  const reconciledTaskIds = new Set<string>();
+
+  // Processar 13 Etapas
+  for (const stageDef of MASTER_STAGES_AJ027) {
     let matchedStage = existingStages.find((s) => {
       const sTitleUpper = s.title.toUpperCase();
-      const defUpper = stageDef.title.toUpperCase();
-      // Match por código ("ETAPA 01", "ETAPA 02") ou título exato ou palavras-chave fortes
-      if (sTitleUpper.includes(`ETAPA ${stageDef.position + 1 < 10 ? "0" : ""}${stageDef.position + 1}`)) return true;
-      if (sTitleUpper.includes(stageDef.code)) return true;
+      const codeUpper = stageDef.code.toUpperCase();
+      const posStr = `ETAPA ${stageDef.position + 1 < 10 ? "0" : ""}${stageDef.position + 1}`;
+      if (sTitleUpper.includes(posStr)) return true;
+      if (sTitleUpper.includes(codeUpper)) return true;
       if (stageDef.code === "ETAPA-01" && (sTitleUpper.includes("INTELIGÊNCIA") || sTitleUpper.includes("MANUAL DE MARCA"))) return true;
       if (stageDef.code === "ETAPA-02" && sTitleUpper.includes("GRUPO DE CAPTAÇÃO") && !sTitleUpper.includes("AUTOMAÇÕES")) return true;
       if (stageDef.code === "ETAPA-03" && sTitleUpper.includes("AUTOMAÇÕES DO GRUPO")) return true;
@@ -1928,73 +1202,133 @@ export function reconcileWorkspaceWithAJ024(ws: Workspace, ctx: { actorName: str
       ws.stages[stageId] = matchedStage;
       changed = true;
     } else {
-      // Atualizar título para a nomenclatura oficial se necessário
       if (matchedStage.title !== stageDef.title) {
         matchedStage.title = stageDef.title;
         changed = true;
       }
-      matchedStage.position = stageDef.position;
+      if (matchedStage.position !== stageDef.position) {
+        matchedStage.position = stageDef.position;
+        changed = true;
+      }
     }
 
+    stageIdMap.set(stageDef.code, matchedStage.id);
     const currentStageId = matchedStage.id;
 
     // 3. Processar Tarefas desta Etapa
-    const liveTasksInStage = Object.values(ws.tasks).filter(
-      (t) => !t.archivedAt && (t.stageId === currentStageId || t.stageId === matchedStage!.id)
-    );
-
     for (let taskIdx = 0; taskIdx < stageDef.tasks.length; taskIdx++) {
       const taskDef = stageDef.tasks[taskIdx];
 
-      // Localizar tarefa existente correspondente
+      // Localizar tarefa existente
       let matchedTask = Object.values(ws.tasks).find((t) => {
-        if (t.archivedAt) return false;
+        if (reconciledTaskIds.has(t.id)) return false;
         const titleUpper = t.title.toUpperCase();
-        // Match por código ("01.01", "IM-01", "02.01", "GRP-01", etc.)
+
+        // 1. Match direto por código oficial T01-T71
         if (titleUpper.includes(taskDef.code)) return true;
-        // Match específico por equivalência de código legado
-        if (taskDef.code === "01.01" && (titleUpper.includes("IM-01") || titleUpper.includes("POSICIONAMENTO"))) return true;
-        if (taskDef.code === "01.02" && (titleUpper.includes("IM-02") || titleUpper.includes("ALMA DA COPY"))) return true;
-        if (taskDef.code === "01.03" && (titleUpper.includes("IM-03") || titleUpper.includes("RAIO X"))) return true;
-        if (taskDef.code === "01.04" && (titleUpper.includes("IM-04") || titleUpper.includes("PERSONALIDADE"))) return true;
-        if (taskDef.code === "01.05" && (titleUpper.includes("IM-05") || titleUpper.includes("COPY ADS"))) return true;
-        if (taskDef.code === "01.06" && (titleUpper.includes("IM-06") || titleUpper.includes("MASTER PROMPT"))) return true;
-        if (taskDef.code === "01.07" && titleUpper.includes("SCRIPTS E ÁUDIOS")) return true;
-        if (taskDef.code === "02.02" && (titleUpper.includes("GRP-01") || titleUpper.includes("CAPA DO GRUPO"))) return true;
-        if (taskDef.code === "02.03" && (titleUpper.includes("GRP-02") || titleUpper.includes("DESCRIÇÃO DO GRUPO"))) return true;
-        if (taskDef.code === "02.04" && (titleUpper.includes("GRP-03") || titleUpper.includes("SEQUÊNCIA DE COPIES"))) return true;
-        if (taskDef.code === "02.05" && (titleUpper.includes("GRP-VID-01") || titleUpper.includes("DESTAQUE DA MANHÃ"))) return true;
-        if (taskDef.code === "02.06" && (titleUpper.includes("GRP-VID-02") || titleUpper.includes("MEIO DO DIA"))) return true;
-        if (taskDef.code === "02.07" && (titleUpper.includes("GRP-VID-03") || titleUpper.includes("FINAL DO DIA"))) return true;
-        if (taskDef.code === "03.01" && titleUpper.includes("AUTO-01")) return true;
-        if (taskDef.code === "03.02" && titleUpper.includes("AUTO-02")) return true;
-        if (taskDef.code === "03.03" && titleUpper.includes("AUTO-03")) return true;
-        if (taskDef.code === "03.04" && titleUpper.includes("AUTO-04")) return true;
-        if (taskDef.code === "03.05" && titleUpper.includes("AUTO-05")) return true;
-        if (taskDef.code === "03.06" && titleUpper.includes("AUTO-06")) return true;
-        if (taskDef.code === "03.07" && (titleUpper.includes("TESTAR OPERAÇÃO") || titleUpper.includes("TEST-01"))) return true;
+
+        // 2. Match por códigos legados
+        if (taskDef.legacyCodes) {
+          for (const leg of taskDef.legacyCodes) {
+            if (titleUpper.includes(leg)) return true;
+          }
+        }
+
+        // 3. Match semântico por palavras-chave inequívocas
+        if (taskDef.code === "T01" && titleUpper.includes("POSICIONAMENTO")) return true;
+        if (taskDef.code === "T02" && titleUpper.includes("ALMA DA COPY")) return true;
+        if (taskDef.code === "T03" && titleUpper.includes("RAIO X")) return true;
+        if (taskDef.code === "T04" && titleUpper.includes("PERSONALIDADE")) return true;
+        if (taskDef.code === "T05" && titleUpper.includes("COPY ADS")) return true;
+        if (taskDef.code === "T06" && titleUpper.includes("MASTER PROMPT")) return true;
+        if (taskDef.code === "T07" && (titleUpper.includes("ÁUDIOS") || titleUpper.includes("AUDIOS"))) return true;
+        if (taskDef.code === "T08" && (titleUpper.includes("CONFIGURAR GRUPO") || titleUpper.includes("CRIAR GRUPO"))) return true;
+        if (taskDef.code === "T09" && titleUpper.includes("CAPA DO GRUPO")) return true;
+        if (taskDef.code === "T10" && titleUpper.includes("DESCRIÇÃO DO GRUPO")) return true;
+        if (taskDef.code === "T11" && titleUpper.includes("SEQUÊNCIA DE COPIES")) return true;
+        if (taskDef.code === "T12" && (titleUpper.includes("GRP-VID-01") || titleUpper.includes("MANHÃ"))) return true;
+        if (taskDef.code === "T13" && (titleUpper.includes("GRP-VID-02") || titleUpper.includes("MEIO DO DIA"))) return true;
+        if (taskDef.code === "T14" && (titleUpper.includes("GRP-VID-03") || titleUpper.includes("FINAL DO DIA"))) return true;
+        if (taskDef.code === "T15" && titleUpper.includes("AUTO-01")) return true;
+        if (taskDef.code === "T16" && titleUpper.includes("AUTO-02")) return true;
+        if (taskDef.code === "T17" && titleUpper.includes("AUTO-03")) return true;
+        if (taskDef.code === "T18" && titleUpper.includes("AUTO-04")) return true;
+        if (taskDef.code === "T19" && titleUpper.includes("AUTO-05")) return true;
+        if (taskDef.code === "T20" && titleUpper.includes("AUTO-06")) return true;
+        if (taskDef.code === "T21" && (titleUpper.includes("VALIDAR OPERAÇÃO") || titleUpper.includes("TEST-01"))) return true;
+        if (taskDef.code === "T22" && (titleUpper.includes("CONFIGURAR INSTAGRAM") || titleUpper.includes("PERFIL"))) return true;
+        if (taskDef.code === "T23" && titleUpper.includes("DESTAQUE DO INSTAGRAM")) return true;
+        if (taskDef.code === "T24" && titleUpper.includes("POST DE POSICIONAMENTO")) return true;
+        if (taskDef.code === "T25" && titleUpper.includes("CARROSSEL")) return true;
+        if (taskDef.code === "T26" && titleUpper.includes("STORY ESTÁTICO")) return true;
+        if (taskDef.code === "T27" && (titleUpper.includes("META ADS") || titleUpper.includes("BM"))) return true;
+        if (taskDef.code === "T28" && (titleUpper.includes("PRÉ-QUALIFICAÇÃO") || titleUpper.includes("PRE-QUALIFICACAO"))) return true;
+        if (taskDef.code === "T29" && (titleUpper.includes("NEGOCIAÇÃO") || titleUpper.includes("NEGOCIACAO"))) return true;
+        if (taskDef.code === "T30" && titleUpper.includes("SCRIPT DE VENDA")) return true;
+        if (taskDef.code === "T31" && (titleUpper.includes("CONFIGURAR CRM") || titleUpper.includes("PIPELINE CRM"))) return true;
+        if (taskDef.code === "T32" && titleUpper.includes("CONFIGURAR CHECKOUT")) return true;
+        if (taskDef.code === "T33" && (titleUpper.includes("CRIATIVOS INICIAIS") || titleUpper.includes("AQ-01"))) return true;
+        if (taskDef.code === "T34" && (titleUpper.includes("CONFIRMAR VERBA") || titleUpper.includes("ORÇAMENTO INICIAL"))) return true;
+        if (taskDef.code === "T35" && (titleUpper.includes("ATIVAR AQUISIÇÃO") || titleUpper.includes("ATIVAR AQUISICAO"))) return true;
+        if (taskDef.code === "T36" && (titleUpper.includes("DEFINIR WEBINÁRIO") || titleUpper.includes("BRIEFING DO WEBINÁRIO"))) return true;
+        if (taskDef.code === "T37" && (titleUpper.includes("NOVE COPIES") || titleUpper.includes("COPIES DO WEBINÁRIO"))) return true;
+        if (taskDef.code === "T38" && titleUpper.includes("WEB-A")) return true;
+        if (taskDef.code === "T39" && titleUpper.includes("WEB-B")) return true;
+        if (taskDef.code === "T40" && (titleUpper.includes("GOOGLE MEET") || titleUpper.includes("SALA DE TRANSMISSÃO"))) return true;
+        if (taskDef.code === "T41" && titleUpper.includes("ESTAMOS AO VIVO")) return true;
+        if (taskDef.code === "T42" && titleUpper.includes("ENCERROU")) return true;
+        if (taskDef.code === "T43" && titleUpper.includes("CONVITES E CONFIRMAÇÕES")) return true;
+        if (taskDef.code === "T44" && titleUpper.includes("VALIDAR WEBINÁRIO")) return true;
+        if (taskDef.code === "T45" && (titleUpper.includes("QUATRO CAMPANHAS") || titleUpper.includes("MATRIZ DE CAMPANHAS"))) return true;
+        if (taskDef.code === "T46" && (titleUpper.includes("C01") || titleUpper.includes("CONEXÃO E SOLUÇÃO"))) return true;
+        if (taskDef.code === "T47" && (titleUpper.includes("C02") || titleUpper.includes("PROVAS E EVIDÊNCIAS"))) return true;
+        if (taskDef.code === "T48" && (titleUpper.includes("C03") || titleUpper.includes("AUTORIDADE E RELEVÂNCIA"))) return true;
+        if (taskDef.code === "T49" && (titleUpper.includes("BOI DE PIRANHA") || titleUpper.includes("BP-"))) return true;
+        if (taskDef.code === "T50" && titleUpper.includes("ORÇAMENTO DAS CAMPANHAS")) return true;
+        if (taskDef.code === "T51" && titleUpper.includes("MONITORAR CAMPANHAS")) return true;
+        if (taskDef.code === "T52" && titleUpper.includes("FORMATO ORGÂNICO")) return true;
+        if (taskDef.code === "T53" && titleUpper.includes("LOTE ORGÂNICO")) return true;
+        if (taskDef.code === "T54" && (titleUpper.includes("PROGRAMAR PUBLICAÇÕES") || titleUpper.includes("CRIAFY"))) return true;
+        if (taskDef.code === "T55" && titleUpper.includes("STORIES CORINGA")) return true;
+        if (taskDef.code === "T56" && titleUpper.includes("NARRATIVA CORINGA")) return true;
+        if (taskDef.code === "T57" && titleUpper.includes("RECUPERAÇÃO COMERCIAL")) return true;
+        if (taskDef.code === "T58" && titleUpper.includes("AUTOMATIZAR REMARKETING")) return true;
+        if (taskDef.code === "T59" && (titleUpper.includes("PRODUTO SECUNDÁRIO") || titleUpper.includes("DOWNSELL"))) return true;
+        if (taskDef.code === "T60" && titleUpper.includes("COMUNIDADE RECORRENTE")) return true;
+        if (taskDef.code === "T61" && titleUpper.includes("RELACIONAMENTO PASSIVO")) return true;
+        if (taskDef.code === "T62" && titleUpper.includes("INDICADORES INFRA")) return true;
+        if (taskDef.code === "T63" && titleUpper.includes("INDICADORES WEBINÁRIO")) return true;
+        if (taskDef.code === "T64" && titleUpper.includes("MÉTRICAS 80/20")) return true;
+        if (taskDef.code === "T65" && (titleUpper.includes("DISTRIBUIÇÃO DE MÍDIA") || titleUpper.includes("REDES SOCIAIS"))) return true;
+        if (taskDef.code === "T66" && titleUpper.includes("BIBLIOTECA DE CONTEÚDO")) return true;
+        if (taskDef.code === "T67" && titleUpper.includes("SCRIPTS E ÁUDIOS")) return true;
+        if (taskDef.code === "T68" && titleUpper.includes("BACKUP MASTER")) return true;
+        if (taskDef.code === "T69" && titleUpper.includes("REVISAR ENTREGAS")) return true;
+        if (taskDef.code === "T70" && titleUpper.includes("OPORTUNIDADES")) return true;
+        if (taskDef.code === "T71" && (titleUpper.includes("MONETIZAÇÃO ANTECIPADA") || titleUpper.includes("TESTE ALIANÇA"))) return true;
+
         return false;
       });
 
       if (!matchedTask) {
-        // Criar tarefa nova
         matchedTask = makeTask(ctx, currentStageId, taskDef.title, taskIdx, {
           priority: taskDef.priority,
           complexity: taskDef.complexity,
-          financialImpact: taskDef.financialImpact || false,
-          durationMinutes: taskDef.durationMinutes || 60,
-          durationSource: "fixed",
           status: "pending",
         });
         ws.tasks[matchedTask.id] = matchedTask;
         changed = true;
       } else {
-        // Preserva id, status, assignee, workSessions, mas garante stageId e atualiza título oficial
+        // Preserva id, status, workSessions, assignees, mas atualiza título limpo oficial e prioridade
+        if (matchedTask.archivedAt) {
+          delete matchedTask.archivedAt;
+          changed = true;
+        }
         if (matchedTask.stageId !== currentStageId) {
           matchedTask.stageId = currentStageId;
           changed = true;
         }
-        if (!matchedTask.title.includes(taskDef.code)) {
+        if (matchedTask.title !== taskDef.title) {
           matchedTask.title = taskDef.title;
           changed = true;
         }
@@ -2002,49 +1336,168 @@ export function reconcileWorkspaceWithAJ024(ws: Workspace, ctx: { actorName: str
           matchedTask.priority = taskDef.priority;
           changed = true;
         }
+        if (matchedTask.position !== taskIdx) {
+          matchedTask.position = taskIdx;
+          changed = true;
+        }
       }
 
-      // 4. Subtarefas da Tarefa (Garantia de que nenhuma tarefa fique sem checklist!)
+      reconciledTaskIds.add(matchedTask.id);
+
+      // 4. Subtarefas da Tarefa (Apenas 2 a 5 itens objetivos por tarefa)
       const existingSubtasks = Object.values(ws.subtasks).filter(
-        (st) => !st.archivedAt && st.taskId === matchedTask!.id
+        (st) => st.taskId === matchedTask!.id
       );
+
+      const reconciledSubtaskIds = new Set<string>();
 
       for (let stIdx = 0; stIdx < taskDef.subtasks.length; stIdx++) {
         const subDefTitle = taskDef.subtasks[stIdx];
 
-        // Verificar se já existe subtarefa correspondente
+        // Tentar localizar subtarefa existente correspondente
         const matchedSub = existingSubtasks.find((st) => {
+          if (reconciledSubtaskIds.has(st.id)) return false;
           const stTitleTrim = st.title.trim().toLowerCase();
           const defTitleTrim = subDefTitle.trim().toLowerCase();
           if (stTitleTrim === defTitleTrim) return true;
-          // Match por código exato (ex: "POS-01", "ALM-01", "ICP-01", "ADS-COPY-01", etc.)
-          const codeMatch = subDefTitle.match(/(POS|ALM|ICP|PER|ADS-COPY|GRP-VID|AUTO|AQ|WEB|C01|C02|C03|BP)-(\d+|[A-Z0-9]+)/i);
-          if (codeMatch && st.title.toUpperCase().includes(codeMatch[0].toUpperCase())) {
+
+          // Match semântico por palavras chave
+          const cleanDef = defTitleTrim.replace(/[^\w\s]/g, "");
+          const cleanSt = stTitleTrim.replace(/[^\w\s]/g, "");
+          const defWords = cleanDef.split(/\s+/).filter((w) => w.length > 4);
+          if (defWords.length > 0 && defWords.every((w) => cleanSt.includes(w))) {
             return true;
           }
           return false;
         });
 
         if (!matchedSub) {
-          // Cria a subtarefa que estava faltando
+          // Cria nova subtarefa limpa
           const newSub = makeSubtask(ctx, matchedTask.id, subDefTitle, stIdx);
           ws.subtasks[newSub.id] = newSub;
+          reconciledSubtaskIds.add(newSub.id);
           changed = true;
         } else {
-          // Subtarefa já existe: mantém o status 'done' e atualiza o texto para o oficial se mudou levemente
-          if (matchedSub.title !== subDefTitle && !matchedSub.title.includes(subDefTitle.slice(0, 15))) {
+          // Mantém id e o status done comprovado! Atualiza título e posição
+          if (matchedSub.archivedAt) {
+            delete matchedSub.archivedAt;
+            changed = true;
+          }
+          if (matchedSub.title !== subDefTitle) {
             matchedSub.title = subDefTitle;
             changed = true;
           }
+          if (matchedSub.position !== stIdx) {
+            matchedSub.position = stIdx;
+            changed = true;
+          }
+          reconciledSubtaskIds.add(matchedSub.id);
+        }
+      }
+
+      // Arquivar subtarefas antigas redundantes que não pertencem ao novo checklist enxuto
+      for (const st of existingSubtasks) {
+        if (!reconciledSubtaskIds.has(st.id) && !st.archivedAt) {
+          st.archivedAt = ctx.nowIso;
+          changed = true;
         }
       }
     }
   }
 
+  // 5. Arquivar tarefas redundantes do sprint que não fazem parte do checklist canônico de 71 tarefas
+  const currentSprintStageIds = new Set(stageIdMap.values());
+  for (const t of Object.values(ws.tasks)) {
+    if (t.stageId && currentSprintStageIds.has(t.stageId) && !reconciledTaskIds.has(t.id) && !t.archivedAt) {
+      t.archivedAt = ctx.nowIso;
+      changed = true;
+    }
+  }
+
   if (changed) {
     touch(ws.project, ctx);
-    log(ws, ctx, "reconcile", "master_checklist", "pvd", "Checklist Master AJ-024 reconciliado com sucesso");
+    log(
+      ws,
+      ctx,
+      "reconcile",
+      "master_checklist",
+      "pvd",
+      "Checklist Master AJ-027 simplificado e reconciliado com sucesso (71 tarefas operacionais)"
+    );
   }
 
   return changed;
+}
+
+/**
+ * Backward compatibility alias para chamadas de reconciliação existentes
+ */
+export const reconcileWorkspaceWithAJ024 = reconcileWorkspaceWithAJ027;
+
+/**
+ * Helper para identificar o destino de navegação rápida a partir do título da tarefa ou subtarefa
+ */
+export function getTaskDestination(title: string): NavigationTarget | null {
+  const upper = title.toUpperCase();
+
+  if (upper.includes("POSICIONAMENTO")) {
+    return { tab: "brand_manual", moduleId: "posicionamento", label: "Manual de Marca" };
+  }
+  if (upper.includes("ALMA DA COPY")) {
+    return { tab: "brand_manual", moduleId: "alma_copy", label: "Manual de Marca" };
+  }
+  if (upper.includes("RAIO X")) {
+    return { tab: "brand_manual", moduleId: "raio_x_icp", label: "Manual de Marca" };
+  }
+  if (upper.includes("PERSONALIDADE")) {
+    return { tab: "brand_manual", moduleId: "personalidade", label: "Manual de Marca" };
+  }
+  if (upper.includes("MANUAL DE MARCA")) {
+    return { tab: "brand_manual", moduleId: "posicionamento", label: "Manual de Marca" };
+  }
+  if (upper.includes("ÁUDIOS") || upper.includes("AUDIOS") || upper.includes("SCRIPTS E ÁUDIOS")) {
+    return { tab: "scripts_and_audios", label: "Scripts e Áudios" };
+  }
+  if (
+    upper.includes("CRIATIVOS") ||
+    upper.includes("COPY ADS") ||
+    upper.includes("GRP-VID") ||
+    upper.includes("WEB-A") ||
+    upper.includes("WEB-B") ||
+    upper.includes("DESTAQUE") ||
+    upper.includes("POST DE POSICIONAMENTO") ||
+    upper.includes("CARROSSEL") ||
+    upper.includes("STORY ESTÁTICO") ||
+    upper.includes("LOTE ORGÂNICO") ||
+    upper.includes("STORIES CORINGA") ||
+    upper.includes("BIBLIOTECA")
+  ) {
+    return { tab: "creatives", label: "Criativos" };
+  }
+  if (
+    upper.includes("CRM") ||
+    upper.includes("PRÉ-QUALIFICAÇÃO") ||
+    upper.includes("PRE-QUALIFICACAO") ||
+    upper.includes("NEGOCIAÇÃO") ||
+    upper.includes("NEGOCIACAO") ||
+    upper.includes("SCRIPT DE VENDA") ||
+    upper.includes("CHECKOUT") ||
+    upper.includes("RECUPERAÇÃO COMERCIAL") ||
+    upper.includes("PALAVRAS-CHAVE")
+  ) {
+    return { tab: "funnel", label: "CRM / Funil" };
+  }
+  if (upper.includes("WEBINÁRIO") || upper.includes("WEBINARIO") || upper.includes("GOOGLE MEET")) {
+    return { tab: "structure", label: "Webinário" };
+  }
+  if (
+    upper.includes("DASHBOARD") ||
+    upper.includes("INFRA") ||
+    upper.includes("MÉTRICAS") ||
+    upper.includes("REDES SOCIAIS")
+  ) {
+    return { tab: "structure", label: "Cockpit" };
+  }
+
+  return null;
 }

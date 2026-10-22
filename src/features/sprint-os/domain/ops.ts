@@ -22,7 +22,7 @@ import {
   DEFAULT_SOCIAL_NETWORKS,
 } from "./types";
 import { wouldCreateCycle } from "../scheduler/engine";
-import { reconcileWorkspaceWithAJ024 } from "./masterChecklistPVD";
+import { reconcileWorkspaceWithAJ024, reconcileWorkspaceWithAJ027 } from "./masterChecklistPVD";
 
 export class DomainError extends Error {}
 
@@ -1957,7 +1957,7 @@ export function reconcileWorkspaceWithAJ019(ws: Workspace, ctx: Ctx): boolean {
   return changed;
 }
 
-export { reconcileWorkspaceWithAJ024 };
+export { reconcileWorkspaceWithAJ024, reconcileWorkspaceWithAJ027 };
 
 // ==========================================
 // OPERAÇÕES DE SCRIPTS E ÁUDIOS (AJ-021)

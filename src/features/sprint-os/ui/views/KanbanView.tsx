@@ -27,6 +27,7 @@ import {
   updateTask,
   reconcileWorkspaceWithAJ019,
   reconcileWorkspaceWithAJ024,
+  reconcileWorkspaceWithAJ027,
   startTaskSession,
   pauseTaskSession,
   concludeTaskWithSession,
@@ -130,22 +131,18 @@ export const KanbanView: React.FC = () => {
     }
   };
 
-  // Auto-reconciliação do workspace com o Checklist Master AJ-024 se faltar itens
+  // Auto-reconciliação do workspace com o Checklist Master Simplificado AJ-027
   useEffect(() => {
     if (workspace && activeSprintId) {
       const live = Object.values(workspace.tasks || {}).filter((t) => !t.archivedAt);
-      const hasIM01 = live.some((t) => t.title.includes("01.01") || t.title.includes("IM-01"));
-      const hasSubtasksOnIM01 = live.some(
-        (t) =>
-          (t.title.includes("01.01") || t.title.includes("IM-01")) &&
-          Object.values(workspace.subtasks || {}).some((st) => !st.archivedAt && st.taskId === t.id)
-      );
-      const hasEtapa13 = live.some((t) => t.title.includes("13.01") || t.title.includes("OPORTUNIDADES"));
-      const hasLabels = workspace.labels && Object.keys(workspace.labels).length > 0;
+      const isAJ027Reconciled =
+        live.some((t) => t.title.startsWith("T01 —")) &&
+        live.some((t) => t.title.startsWith("T71 —")) &&
+        !live.some((t) => t.title.includes("TAREFA 01.01"));
 
-      if (!hasIM01 || !hasSubtasksOnIM01 || !hasEtapa13 || !hasLabels) {
+      if (!isAJ027Reconciled) {
         mutate((ws, ctx) => {
-          reconcileWorkspaceWithAJ024(ws, ctx);
+          reconcileWorkspaceWithAJ027(ws, ctx);
           reconcileWorkspaceWithAJ019(ws, ctx);
         }, user?.email || "Operador");
       }

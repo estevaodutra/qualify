@@ -58,6 +58,7 @@ import {
 import type { Task, TaskStatus, Priority } from "../../domain/types";
 import { LabelsManagerPopover } from "./LabelsManagerPopover";
 import { fmtDateTime } from "../../scheduler/time";
+import { getTaskDestination } from "../../domain/masterChecklistPVD";
 import { toast } from "sonner";
 
 interface KanbanCardProps {
@@ -69,8 +70,23 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
   task,
   onOpenDetails,
 }) => {
-  const { workspace, mutate, setSelectedTaskId, setIsTaskModalOpen, setActiveBrandManualTarget } = useSprintOSStore();
+  const {
+    workspace,
+    mutate,
+    setSelectedTaskId,
+    setIsTaskModalOpen,
+    setActiveBrandManualTarget,
+    setActiveTab,
+  } = useSprintOSStore();
   const { user } = useAuth();
+
+  const handleNavigateToDestination = (dest: { tab: any; moduleId?: string; label: string }) => {
+    if (dest.tab === "brand_manual" && dest.moduleId) {
+      setActiveBrandManualTarget(dest.moduleId);
+    } else {
+      setActiveTab(dest.tab);
+    }
+  };
 
   // Estados locais de edição inline do título
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -695,6 +711,25 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
         const titleUpper = task.title.toUpperCase();
         const bmFields = workspace.brandManual?.fields || [];
         const badges: React.ReactNode[] = [];
+        const taskDest = getTaskDestination(task.title);
+
+        if (taskDest) {
+          badges.push(
+            <button
+              key="dest-nav"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleNavigateToDestination(taskDest);
+              }}
+              className="inline-flex items-center gap-1 text-[9px] font-bold text-primary bg-primary/10 hover:bg-primary/20 px-2 py-0.5 rounded-md border border-primary/20 transition-colors cursor-pointer"
+              title={`Abrir módulo ${taskDest.label}`}
+            >
+              <span>{taskDest.label}</span>
+              <ExternalLink className="h-2.5 w-2.5" />
+            </button>
+          );
+        }
 
         if (titleUpper.includes("08H00") || titleUpper.includes("08:00")) {
           badges.push(
@@ -1054,6 +1089,26 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
                           {st.title}
                         </span>
                       )}
+
+                      {/* Link direto para execução no módulo especializado (AJ-027) */}
+                      {!isEditingThis && (() => {
+                        const subDest = getTaskDestination(st.title);
+                        if (!subDest) return null;
+                        return (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleNavigateToDestination(subDest);
+                            }}
+                            className="inline-flex items-center gap-0.5 text-[9px] font-bold text-primary bg-primary/10 hover:bg-primary/20 px-1.5 py-0.5 rounded border border-primary/20 transition-colors ml-1 shrink-0 cursor-pointer"
+                            title={`Abrir módulo ${subDest.label}`}
+                          >
+                            <span>{subDest.label}</span>
+                            <ExternalLink className="h-2 w-2" />
+                          </button>
+                        );
+                      })()}
 
                       {/* Ações de Hover (Editar + Excluir) */}
                       {!isEditingThis && (
