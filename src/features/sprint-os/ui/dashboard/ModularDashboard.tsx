@@ -1254,23 +1254,6 @@ export const ModularDashboard: React.FC = () => {
       );
     }
 
-            {/* Ação de detalhes */}
-            <button
-              onClick={() => handleOpenUnitMarker(channel, "views", "Visualizações")}
-              className="text-[9px] bg-primary/10 hover:bg-primary/20 text-primary px-1.5 py-0.5 rounded-lg font-bold flex items-center gap-0.5 ml-auto"
-              title="Registrar marcação completa de views"
-            >
-              <Eye className="h-2.5 w-2.5" />
-              <span>Marcar</span>
-            </button>
-          </div>
-          <div className="text-[11px] text-muted-foreground truncate">
-            Visualizações acumuladas
-          </div>
-        </div>
-      );
-    }
-
     // 3. CARDS DO FUNIL
     if (card.id === "funnel_pipeline" || card.id === "funnel_visual") {
       return (
