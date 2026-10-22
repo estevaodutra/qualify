@@ -94,6 +94,42 @@ export const KanbanView: React.FC = () => {
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dragOverColId, setDragOverColId] = useState<TaskStatus | null>(null);
 
+  // Estado de criação de card estilo Trello (+ no cabeçalho)
+  const [addingCardInCol, setAddingCardInCol] = useState<TaskStatus | null>(null);
+  const [newCardTitle, setNewCardTitle] = useState("");
+
+  const handleCreateBlankCard = async (status: TaskStatus = "pending", customTitle?: string) => {
+    if (!workspace) return;
+    const stages = activeSprintId ? stagesOf(workspace, activeSprintId) : Object.values(workspace.stages || {});
+    const stageId = stages[0]?.id || Object.keys(workspace.stages || {})[0];
+    if (!stageId) {
+      toast.error("Nenhuma etapa operacional encontrada.");
+      return;
+    }
+
+    const title = (customTitle !== undefined ? customTitle : newCardTitle).trim() || "Novo Card";
+    let createdTaskId = "";
+
+    try {
+      await mutate((ws, ctx) => {
+        createdTaskId = createTask(ws, ctx, stageId, title, {
+          status,
+          priority: "P2",
+        });
+      }, user?.email || "Operador");
+
+      setAddingCardInCol(null);
+      setNewCardTitle("");
+      toast.success(`Card criado em ${status === "done" ? "Concluída" : status === "doing" ? "Fazendo" : "Pendente"}!`);
+
+      if (createdTaskId) {
+        handleOpenTaskDetails(createdTaskId);
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao criar card");
+    }
+  };
+
   // Auto-reconciliação do workspace com o Checklist Master AJ-024 se faltar itens
   useEffect(() => {
     if (workspace && activeSprintId) {
@@ -207,6 +243,32 @@ export const KanbanView: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {/* Cabeçalho do Kanban (Estilo Trello) com Ação de Criar Card em Branco */}
+      <div className="flex items-center justify-between gap-4 pb-2 border-b border-border/40">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-extrabold text-foreground tracking-tight">
+            Quadro Kanban
+          </span>
+          <Badge
+            variant="outline"
+            className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg border-border text-muted-foreground bg-muted/40"
+          >
+            {tasks.length} {tasks.length === 1 ? "card" : "cards"}
+          </Badge>
+        </div>
+
+        <Button
+          type="button"
+          onClick={() => handleCreateBlankCard("pending")}
+          size="sm"
+          className="h-8 px-3 text-xs font-bold bg-primary text-primary-foreground rounded-xl flex items-center gap-1.5 hover:brightness-110 shadow-xs cursor-pointer"
+          title="Criar um novo card em branco tipo Trello"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          <span>+ Criar Card em Branco</span>
+        </Button>
+      </div>
+
       {/* 3 Colunas Principais: Pendente, Fazendo, Concluída */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 min-h-[640px]">
         {COLUMNS.map((col) => {
@@ -223,7 +285,7 @@ export const KanbanView: React.FC = () => {
                 isOver ? col.dropBorder : ""
               }`}
             >
-              {/* Cabeçalho da Coluna */}
+              {/* Cabeçalho da Coluna com Botão '+' Tipo Trello */}
               <div className="flex items-center justify-between pb-3 mb-3 border-b border-border">
                 <div className="flex items-center gap-2">
                   <span className="text-base">{col.icon}</span>
@@ -231,21 +293,86 @@ export const KanbanView: React.FC = () => {
                     {col.title}
                   </span>
                 </div>
-                <Badge
-                  variant="outline"
-                  className="text-xs font-bold border-border text-muted-foreground bg-muted rounded-xl px-2 py-0.5"
-                >
-                  {colTasks.length}
-                </Badge>
+                <div className="flex items-center gap-1.5">
+                  <Badge
+                    variant="outline"
+                    className="text-xs font-bold border-border text-muted-foreground bg-muted rounded-xl px-2 py-0.5"
+                  >
+                    {colTasks.length}
+                  </Badge>
+
+                  {/* Botão '+' no cabeçalho da coluna para criar card em branco */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (addingCardInCol === col.id) {
+                        setAddingCardInCol(null);
+                        setNewCardTitle("");
+                      } else {
+                        setAddingCardInCol(col.id);
+                        setNewCardTitle("");
+                      }
+                    }}
+                    className="h-6 w-6 rounded-lg bg-background/80 hover:bg-primary hover:text-primary-foreground border border-border/80 flex items-center justify-center text-muted-foreground transition-all cursor-pointer shadow-2xs hover:scale-105 active:scale-95"
+                    title={`Adicionar novo card em branco em ${col.title}`}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
+
+              {/* Composer Rápido Estilo Trello ao Clicar no '+' */}
+              {addingCardInCol === col.id && (
+                <div className="mb-3 p-3 rounded-2xl bg-card border-2 border-primary/50 shadow-md space-y-2 animate-in fade-in-50 duration-150">
+                  <Input
+                    value={newCardTitle}
+                    onChange={(e) => setNewCardTitle(e.target.value)}
+                    placeholder="Insira o título (ou Enter para 'Novo Card')..."
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleCreateBlankCard(col.id);
+                      }
+                      if (e.key === "Escape") {
+                        setAddingCardInCol(null);
+                        setNewCardTitle("");
+                      }
+                    }}
+                    className="h-8 text-xs font-medium bg-background border-border rounded-lg"
+                  />
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => handleCreateBlankCard(col.id)}
+                      className="h-7 px-3 text-xs bg-primary text-primary-foreground font-bold rounded-lg cursor-pointer"
+                    >
+                      Adicionar cartão
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setAddingCardInCol(null);
+                        setNewCardTitle("");
+                      }}
+                      className="h-7 px-2 text-xs text-muted-foreground rounded-lg cursor-pointer"
+                    >
+                      ✕
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               {/* Lista de Cards da Coluna */}
               <div className="space-y-3 flex-1 overflow-y-auto pr-1">
-                {colTasks.length === 0 ? (
+                {colTasks.length === 0 && addingCardInCol !== col.id ? (
                   <div className="h-40 flex flex-col items-center justify-center text-xs text-muted-foreground/50 border border-dashed border-border/80 rounded-2xl p-4 text-center">
                     <span>Nenhuma tarefa em {col.title}</span>
                     <span className="text-[10px] text-muted-foreground/40 mt-1">
-                      Arraste um card para cá ou inicie pelo botão Play
+                      Arraste um card para cá ou clique no + para criar
                     </span>
                   </div>
                 ) : (
@@ -262,6 +389,21 @@ export const KanbanView: React.FC = () => {
                       />
                     </div>
                   ))
+                )}
+
+                {/* Botão no rodapé da coluna tipo Trello '+ Adicionar cartão' */}
+                {addingCardInCol !== col.id && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddingCardInCol(col.id);
+                      setNewCardTitle("");
+                    }}
+                    className="w-full mt-1 py-2 px-3 rounded-xl border border-dashed border-border/70 hover:border-primary/50 bg-background/30 hover:bg-background/80 text-muted-foreground hover:text-foreground text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>Adicionar cartão</span>
+                  </button>
                 )}
               </div>
             </div>

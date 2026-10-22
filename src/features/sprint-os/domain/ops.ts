@@ -170,9 +170,9 @@ export function archiveStage(ws: Workspace, ctx: Ctx, id: ID) {
 
 // ───────────── Tasks ─────────────
 
-export function createTask(ws: Workspace, ctx: Ctx, stageId: ID, title: string): ID {
+export function createTask(ws: Workspace, ctx: Ctx, stageId: ID, title: string, extra: Partial<Task> = {}): ID {
   get(ws.stages, stageId, "Etapa");
-  const t = makeTask(ctx, stageId, title, tasksOf(ws, stageId).length);
+  const t = makeTask(ctx, stageId, title, tasksOf(ws, stageId).length, extra);
   ws.tasks[t.id] = t;
   log(ws, ctx, "create", "task", t.id, `Tarefa criada: ${title}`);
   return t.id;
