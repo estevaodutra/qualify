@@ -11,19 +11,12 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   Layers,
   Kanban,
-  Filter,
-  DollarSign,
-  Search,
-  RotateCcw,
-  Sparkles,
-  Target,
   Play,
   Pause,
   Square,
   Clock,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -152,20 +145,6 @@ export const SprintOSPage: React.FC = () => {
     isLoading,
     activeTab,
     setActiveTab,
-    searchQuery,
-    setSearchQuery,
-    filterAssigneeId,
-    setFilterAssigneeId,
-    filterPriority,
-    setFilterPriority,
-    filterStatus,
-    setFilterStatus,
-    filterImpact,
-    setFilterImpact,
-    filterExpertDemands,
-    setFilterExpertDemands,
-    filterOrigin,
-    setFilterOrigin,
     initWorkspace,
     mutate,
   } = useSprintOSStore();
@@ -229,8 +208,6 @@ export const SprintOSPage: React.FC = () => {
   }
 
   // 2. CRONOGRAMA ABERTO -> COCKPIT OPERACIONAL 80/20 (Seção 6)
-  const membersList = Object.values(workspace.members).filter((m) => !m.archivedAt);
-
   return (
     <div className="min-h-full bg-background text-foreground flex flex-col font-sans pb-16">
       {/* Região 1: Cabeçalho Compacto (Linear Style) */}
@@ -238,122 +215,6 @@ export const SprintOSPage: React.FC = () => {
 
       {/* Cockpit Operacional Minimalista 80/20: INFRA | DISTRIBUIÇÃO | FUNIL */}
       <ModularDashboard />
-
-      {/* Região 3: Filtros Compactos */}
-      <section className="px-6 pt-3 pb-2">
-        <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-card border border-border shadow-sm">
-          <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-[280px]">
-            {/* Campo de Busca */}
-            <div className="relative w-64">
-              <Search className="h-3.5 w-3.5 text-muted-foreground absolute left-3 top-2.5" />
-              <Input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar tarefa ou entrega..."
-                className="h-8 pl-8 text-xs bg-background border-input text-foreground rounded-xl placeholder:text-muted-foreground"
-              />
-            </div>
-
-            {/* Filtro por Responsável */}
-            <select
-              value={filterAssigneeId || ""}
-              onChange={(e) => setFilterAssigneeId(e.target.value || null)}
-              className="h-8 rounded-xl bg-background border border-input text-xs text-foreground px-2.5"
-            >
-              <option value="">Todos os Responsáveis</option>
-              {membersList.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
-
-            {/* Filtro por Prioridade */}
-            <select
-              value={filterPriority || ""}
-              onChange={(e) => setFilterPriority((e.target.value as any) || null)}
-              className="h-8 rounded-xl bg-background border border-input text-xs text-foreground px-2.5"
-            >
-              <option value="">Todas as Prioridades</option>
-              <option value="P0">P0 — Crítica</option>
-              <option value="P1">P1 — Alta</option>
-              <option value="P2">P2 — Média</option>
-              <option value="P3">P3 — Baixa</option>
-            </select>
-
-            {/* Filtro por Status */}
-            <select
-              value={filterStatus || ""}
-              onChange={(e) => setFilterStatus((e.target.value as any) || null)}
-              className="h-8 rounded-xl bg-background border border-input text-xs text-foreground px-2.5"
-            >
-              <option value="">Todos os Status</option>
-              <option value="pending">🔴 Pendente</option>
-              <option value="doing">🟡 Fazendo</option>
-              <option value="done">🟢 Feito</option>
-            </select>
-
-            {/* Filtro por Impacto */}
-            <select
-              value={filterImpact || ""}
-              onChange={(e) => setFilterImpact((e.target.value as any) || null)}
-              className="h-8 rounded-xl bg-background border border-input text-xs text-foreground px-2.5"
-            >
-              <option value="">Todos os Impactos</option>
-              <option value="financial_light">💸 Fin. Leve</option>
-              <option value="financial_heavy">💰 Fin. Alto</option>
-              <option value="progress_blocker">⏳ No Andamento</option>
-              <option value="operational">⚙️ Operacional</option>
-              <option value="infrastructure">⚠️ Infraestrutura</option>
-            </select>
-
-            {/* Filtro por Origem (PATCH 002) */}
-            <select
-              value={filterOrigin || ""}
-              onChange={(e) => setFilterOrigin((e.target.value as any) || null)}
-              className="h-8 rounded-xl bg-background border border-input text-xs text-foreground px-2.5"
-            >
-              <option value="">Todas as Origens</option>
-              <option value="defined">🎯 Definido</option>
-              <option value="derived">⚡ Derivado</option>
-              <option value="proposed">💡 Proposto</option>
-            </select>
-
-            {/* Filtro por Demandas do Expert (P1.3) */}
-            <button
-              type="button"
-              onClick={() => setFilterExpertDemands(!filterExpertDemands)}
-              className={`h-8 px-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all border ${
-                filterExpertDemands
-                  ? "bg-primary text-primary-foreground border-primary shadow-xs"
-                  : "bg-background text-muted-foreground border-input hover:text-foreground hover:bg-muted"
-              }`}
-              title="Filtrar tarefas que representam demandas executivas do expert"
-            >
-              <span>👔</span>
-              <span>Demandas do Expert</span>
-              {filterExpertDemands && <span className="text-[10px] ml-0.5">✕</span>}
-            </button>
-
-            {(searchQuery || filterAssigneeId || filterPriority || filterStatus || filterImpact || filterExpertDemands || filterOrigin) && (
-              <button
-                onClick={() => {
-                  setSearchQuery("");
-                  setFilterAssigneeId(null);
-                  setFilterPriority(null);
-                  setFilterStatus(null);
-                  setFilterImpact(null);
-                  setFilterExpertDemands(false);
-                  setFilterOrigin(null);
-                }}
-                className="text-[11px] text-primary hover:underline font-bold"
-              >
-                Limpar Filtros
-              </button>
-            )}
-          </div>
-        </div>
-      </section>
 
       {/* Navegação Principal: ETAPAS | KANBAN (AJ-006) */}
       <main className="px-6 pt-2 flex-1">
