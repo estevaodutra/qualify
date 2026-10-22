@@ -371,6 +371,10 @@ export const StructureView: React.FC = () => {
                               : task.status === "doing"
                               ? "bg-amber-500/5 border-amber-500/20 text-foreground"
                               : "bg-card border-border hover:border-primary/30 text-foreground shadow-xs"
+                          } ${
+                            filterAssigneeId && task.assigneeId === filterAssigneeId
+                              ? "ring-2 ring-primary/60 border-primary bg-primary/[0.04] shadow-md"
+                              : ""
                           }`}
                         >
                           {/* Linha Principal da Tarefa (80/20) */}

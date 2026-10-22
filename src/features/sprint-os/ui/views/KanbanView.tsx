@@ -117,7 +117,11 @@ export const KanbanView: React.FC = () => {
                     <div
                       key={task.id}
                       onClick={() => handleCardClick(task.id)}
-                      className="p-3.5 rounded-xl border border-border bg-card hover:border-primary/40 hover:shadow-md transition-all cursor-pointer shadow-sm group relative text-card-foreground"
+                      className={`p-3.5 rounded-xl border transition-all cursor-pointer shadow-sm group relative text-card-foreground ${
+                        filterAssigneeId && task.assigneeId === filterAssigneeId
+                          ? "ring-2 ring-primary/60 border-primary bg-primary/[0.04] shadow-md"
+                          : "border-border bg-card hover:border-primary/40 hover:shadow-md"
+                      }`}
                     >
                       {/* Topo do Card: Etapa & Prioridade */}
                       <div className="flex items-center justify-between gap-2 mb-2">

@@ -4,7 +4,7 @@
  * Mostra:
  * - Botão "← Cronogramas" para voltar à listagem
  * - Projeto / Nome do Cronograma (editáveis inline)
- * - Alternador dos 3 Modos (Organização, Execução, Planejamento)
+ * - Filtro Rápido de Atribuição: "Minhas Demandas"
  * - Botão em destaque "Atualizar Prazos"
  * - Menu compacto "••• Mais opções" que reúne todas as opções secundárias
  */
@@ -25,6 +25,9 @@ import {
   Check,
   ChevronDown,
   Sparkles,
+  UserCheck,
+  Users,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -39,14 +42,16 @@ import { Input } from "@/components/ui/input";
 import { useSprintOSStore } from "../state/sprintOsStore";
 import { updateProject, updateSprint } from "../domain/ops";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 export const ExecutiveHeader: React.FC = () => {
   const { activeCompanyId } = useCompany();
+  const { user } = useAuth();
   const {
     workspace,
     activeSprintId,
-    interactionMode,
-    setInteractionMode,
+    filterAssigneeId,
+    setFilterAssigneeId,
     openDeadlineUpdatePreview,
     closeWorkspace,
     setIsActivateModalOpen,
@@ -67,6 +72,35 @@ export const ExecutiveHeader: React.FC = () => {
   const sprints = Object.values(workspace.sprints).filter((s) => !s.archivedAt);
   const activeSprint = activeSprintId ? workspace.sprints[activeSprintId] : sprints[0];
   const isActivated = !!activeSprint?.activatedAt;
+
+  const membersList = Object.values(workspace.members || {}).filter((m) => !m.archivedAt);
+
+  // Encontra membro correspondente ao usuário logado
+  const myMember = membersList.find(
+    (m) =>
+      (user?.id && m.userId === user.id) ||
+      (user?.email && m.name.toLowerCase().includes(user.email.toLowerCase()))
+  );
+
+  // Membro atualmente selecionado no filtro de atribuição
+  const selectedMember = filterAssigneeId ? workspace.members[filterAssigneeId] : null;
+
+  // Tarefas da sprint atual (não arquivadas)
+  const sprintTasksList = Object.values(workspace.tasks || {}).filter(
+    (t) => !t.archivedAt && (activeSprintId ? t.sprintId === activeSprintId : true)
+  );
+
+  // Contagem de tarefas por membro
+  const taskCountsByMember = sprintTasksList.reduce<Record<string, number>>((acc, t) => {
+    if (t.assigneeId) {
+      acc[t.assigneeId] = (acc[t.assigneeId] || 0) + 1;
+    }
+    return acc;
+  }, {});
+
+  const currentFilterCount = filterAssigneeId
+    ? sprintTasksList.filter((t) => t.assigneeId === filterAssigneeId).length
+    : 0;
 
   const handleStartEdit = () => {
     setEditedProjectName(workspace.project.name);
@@ -167,24 +201,160 @@ export const ExecutiveHeader: React.FC = () => {
         )}
       </div>
 
-      {/* Lado Direito: Modos de Operação + Atualizar Prazos + Menu "••• Mais opções" */}
+      {/* Lado Direito: Minhas Demandas (Filtro de Atribuição) + Atualizar Prazos + Menu "••• Mais opções" */}
       <div className="flex items-center gap-2.5 shrink-0">
-        {/* Alternador de Modos (Linear/Pill Style) */}
-        <div className="hidden md:flex items-center p-0.5 rounded-xl bg-muted border border-border text-[11px]">
-          {(["organize", "execute", "plan"] as const).map((mode) => (
+        {/* Filtro Rápido de Atribuição: "Minhas Demandas" */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
             <button
-              key={mode}
-              onClick={() => setInteractionMode(mode)}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
-                interactionMode === mode
-                  ? "bg-background text-foreground font-bold shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
+              className={`h-8 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all border shadow-xs select-none ${
+                filterAssigneeId
+                  ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                  : "bg-muted/80 hover:bg-muted text-foreground border-border"
               }`}
+              title="Filtrar tarefas por atribuição"
             >
-              {mode === "organize" ? "Organização" : mode === "execute" ? "Execução" : "Planejamento"}
+              <UserCheck className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate max-w-[130px]">
+                {filterAssigneeId
+                  ? selectedMember
+                    ? selectedMember.id === myMember?.id
+                      ? "Minhas Demandas"
+                      : selectedMember.name.split(" ")[0]
+                    : "Demandas Filtradas"
+                  : "Minhas Demandas"}
+              </span>
+
+              {filterAssigneeId ? (
+                <span className="flex items-center gap-1">
+                  <Badge
+                    variant="secondary"
+                    className="h-4 px-1.5 text-[10px] font-mono font-bold bg-white/20 text-white border-none"
+                  >
+                    {currentFilterCount}
+                  </Badge>
+                  <span
+                    role="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFilterAssigneeId(null);
+                    }}
+                    className="h-4 w-4 rounded-full hover:bg-white/20 flex items-center justify-center text-white/80 hover:text-white"
+                    title="Remover filtro"
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </span>
+                </span>
+              ) : (
+                <ChevronDown className="h-3 w-3 opacity-60 ml-0.5 shrink-0" />
+              )}
             </button>
-          ))}
-        </div>
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent align="end" className="w-64 p-1.5 rounded-2xl shadow-xl bg-card border border-border text-card-foreground">
+            <div className="px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+              <span>Filtro de Atribuição</span>
+              {filterAssigneeId && (
+                <button
+                  onClick={() => setFilterAssigneeId(null)}
+                  className="text-primary hover:underline lowercase font-normal text-[10px]"
+                >
+                  limpar filtro
+                </button>
+              )}
+            </div>
+
+            {/* Opção Rápida 1: Minhas Demandas (Usuário Logado) */}
+            {myMember ? (
+              <DropdownMenuItem
+                onClick={() =>
+                  setFilterAssigneeId(filterAssigneeId === myMember.id ? null : myMember.id)
+                }
+                className={`cursor-pointer rounded-xl flex items-center justify-between text-xs py-2 px-2.5 ${
+                  filterAssigneeId === myMember.id
+                    ? "bg-primary/10 text-primary font-bold"
+                    : "hover:bg-muted"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <div className="h-6 w-6 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-[10px]">
+                    Eu
+                  </div>
+                  <div>
+                    <div className="leading-tight font-bold">Minhas Demandas</div>
+                    <div className="text-[10px] text-muted-foreground">{myMember.name} (Você)</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-mono font-bold text-muted-foreground">
+                    {taskCountsByMember[myMember.id] || 0}
+                  </span>
+                  {filterAssigneeId === myMember.id && <Check className="h-3.5 w-3.5 text-primary" />}
+                </div>
+              </DropdownMenuItem>
+            ) : (
+              <div className="px-2 py-1 text-[11px] text-muted-foreground italic">
+                Selecione um membro para filtrar demandas:
+              </div>
+            )}
+
+            <DropdownMenuSeparator className="my-1" />
+
+            <div className="px-2.5 py-1 text-[10px] font-bold uppercase text-muted-foreground/70">
+              Membros da Equipe ({membersList.length})
+            </div>
+
+            {/* Lista de Membros da Equipe */}
+            <div className="max-h-52 overflow-y-auto space-y-0.5 pr-0.5">
+              {membersList.length === 0 ? (
+                <div className="py-3 text-center text-xs text-muted-foreground">
+                  Nenhum membro cadastrado.
+                </div>
+              ) : (
+                membersList.map((m) => {
+                  const isSelected = filterAssigneeId === m.id;
+                  const count = taskCountsByMember[m.id] || 0;
+                  return (
+                    <DropdownMenuItem
+                      key={m.id}
+                      onClick={() => setFilterAssigneeId(isSelected ? null : m.id)}
+                      className={`cursor-pointer rounded-xl flex items-center justify-between text-xs py-1.5 px-2.5 ${
+                        isSelected
+                          ? "bg-primary/10 text-primary font-bold"
+                          : "hover:bg-muted"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="h-5 w-5 rounded-full bg-muted border border-border flex items-center justify-center text-[10px] font-bold text-muted-foreground shrink-0 uppercase">
+                          {m.name.slice(0, 2)}
+                        </div>
+                        <span className="truncate">{m.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-[10px] font-mono text-muted-foreground">
+                          {count} {count === 1 ? "tarefa" : "tarefas"}
+                        </span>
+                        {isSelected && <Check className="h-3.5 w-3.5 text-primary" />}
+                      </div>
+                    </DropdownMenuItem>
+                  );
+                })
+              )}
+            </div>
+
+            {filterAssigneeId && (
+              <>
+                <DropdownMenuSeparator className="my-1" />
+                <DropdownMenuItem
+                  onClick={() => setFilterAssigneeId(null)}
+                  className="cursor-pointer rounded-xl text-xs text-muted-foreground hover:text-foreground justify-center py-1.5 font-medium"
+                >
+                  Exibir Todas as Demandas (Sem Filtro)
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* Botão de Destaque: Atualizar Prazos */}
         <Button
