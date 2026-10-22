@@ -9,24 +9,20 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import {
-  Layers,
-  Kanban,
   Play,
   Pause,
   Square,
   Clock,
 } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompanyMembers } from "@/hooks/useCompanyMembers";
 
-import { useSprintOSStore, type ViewTab } from "../state/sprintOsStore";
+import { useSprintOSStore } from "../state/sprintOsStore";
 import { SchedulesListView } from "./views/SchedulesListView";
 import { ExecutiveHeader } from "./ExecutiveHeader";
-import { StructureView } from "./views/StructureView";
 import { KanbanView } from "./views/KanbanView";
 import { ModularDashboard } from "./dashboard/ModularDashboard";
 
@@ -143,8 +139,6 @@ export const SprintOSPage: React.FC = () => {
     activeWorkspaceId,
     workspace,
     isLoading,
-    activeTab,
-    setActiveTab,
     initWorkspace,
     mutate,
   } = useSprintOSStore();
@@ -216,40 +210,9 @@ export const SprintOSPage: React.FC = () => {
       {/* Cockpit Operacional Minimalista 80/20: INFRA | DISTRIBUIÇÃO | FUNIL */}
       <ModularDashboard />
 
-      {/* Navegação Principal: ETAPAS | KANBAN (AJ-006) */}
+      {/* Visualização Principal: Apenas Kanban */}
       <main className="px-6 pt-2 flex-1">
-        <Tabs
-          value={activeTab === "kanban" ? "kanban" : "structure"}
-          onValueChange={(t) => setActiveTab(t as ViewTab)}
-          className="w-full"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <TabsList className="bg-muted/50 border border-border/80 p-1 rounded-2xl h-auto inline-flex gap-1 shadow-2xs">
-              <TabsTrigger
-                value="structure"
-                className="text-xs font-bold gap-2 px-4 py-1.5 rounded-xl transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs"
-              >
-                <Layers className="h-3.5 w-3.5" />
-                <span>Etapas</span>
-              </TabsTrigger>
-              <TabsTrigger
-                value="kanban"
-                className="text-xs font-bold gap-2 px-4 py-1.5 rounded-xl transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs"
-              >
-                <Kanban className="h-3.5 w-3.5" />
-                <span>Kanban</span>
-              </TabsTrigger>
-            </TabsList>
-          </div>
-
-          <TabsContent value="structure" className="mt-0 outline-none">
-            <StructureView />
-          </TabsContent>
-
-          <TabsContent value="kanban" className="mt-0 outline-none">
-            <KanbanView />
-          </TabsContent>
-        </Tabs>
+        <KanbanView />
       </main>
 
       {/* Floating Pomodoro / Stopwatch Timer */}
