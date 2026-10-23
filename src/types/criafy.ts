@@ -135,3 +135,73 @@ export interface CriafyPublicationAttempt {
   raw_response_sanitized: Record<string, any>;
   attempted_at: string;
 }
+
+// ==========================================
+// REPLICA DO FEED DO INSTAGRAM
+// ==========================================
+export interface InstagramCommentReply {
+  id: string;
+  text: string;
+  timestamp: string;
+  username: string;
+  like_count?: number;
+}
+
+export interface InstagramComment {
+  id: string;
+  text: string;
+  timestamp: string;
+  username: string;
+  like_count?: number;
+  replies?: {
+    data: InstagramCommentReply[];
+  };
+}
+
+export interface InstagramMediaChild {
+  id: string;
+  media_type: 'IMAGE' | 'VIDEO';
+  media_url: string;
+  thumbnail_url?: string;
+}
+
+export interface InstagramPost {
+  id: string;
+  caption?: string;
+  media_type: 'IMAGE' | 'VIDEO' | 'CAROUSEL_ALBUM';
+  media_url?: string;
+  thumbnail_url?: string;
+  permalink?: string;
+  timestamp: string;
+  username?: string;
+  like_count?: number;
+  comments_count?: number;
+  children?: {
+    data: InstagramMediaChild[];
+  };
+  comments?: {
+    data: InstagramComment[];
+  };
+}
+
+export interface InstagramAccountFeedResult {
+  profile: {
+    id: string;
+    username: string;
+    name?: string;
+    biography?: string;
+    profile_picture_url?: string;
+    followers_count?: number;
+    follows_count?: number;
+    media_count?: number;
+    website?: string;
+  };
+  posts: InstagramPost[];
+  paging?: {
+    cursors?: {
+      after?: string;
+      before?: string;
+    };
+    next?: string;
+  };
+}

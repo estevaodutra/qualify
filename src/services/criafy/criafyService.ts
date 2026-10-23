@@ -8,6 +8,9 @@ import {
   CriafyPublicationAttempt,
   CriafyMediaType,
   CriafyPublicationType,
+  InstagramAccountFeedResult,
+  InstagramPost,
+  InstagramComment,
 } from "@/types/criafy";
 import {
   CriafyOAuthExchangeResult,
@@ -682,5 +685,94 @@ export const criafyService = {
 
     if (error) throw error;
     return data || [];
+  },
+  // ==========================================
+  // FEED REPLICA DO INSTAGRAM
+  // ==========================================
+  async getInstagramFeed(accountId: string, afterCursor?: string): Promise<InstagramAccountFeedResult> {
+    const { data: account, error: getErr } = await (supabase as any)
+      .from("criafy_instagram_accounts")
+      .select("*")
+      .eq("id", accountId)
+      .single();
+    if (getErr || !account) throw new Error("Conta do Instagram não encontrada");
+
+    const token = account.access_token;
+    const igId = account.instagram_account_id;
+    if (!token || !igId) throw new Error("Conta sem token ou ID de acesso da Meta.");
+
+    // 1. Perfil completo atualizado
+    const profileRes = await fetch(
+      `https://graph.facebook.com/v22.0/${igId}?fields=id,username,name,biography,profile_picture_url,followers_count,follows_count,media_count,website&access_token=${token}`
+    );
+    const profileData = await profileRes.json();
+    if (profileData.error) throw new Error(`Meta API Perfil: ${profileData.error.message}`);
+
+    // 2. Posts com mídias, carrossel e comentários
+    let mediaUrl = `https://graph.facebook.com/v22.0/${igId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,username,like_count,comments_count,children{id,media_type,media_url,thumbnail_url},comments{id,text,timestamp,username,like_count,replies{id,text,timestamp,username}}&limit=30&access_token=${token}`;
+    if (afterCursor) {
+      mediaUrl += `&after=${afterCursor}`;
+    }
+
+    const mediaRes = await fetch(mediaUrl);
+    const mediaData = await mediaRes.json();
+
+    if (mediaData.error) {
+      console.warn("[criafyService] Erro na busca aninhada de mídias/comentários, tentando fallback padrão:", mediaData.error);
+      const fallbackUrl = `https://graph.facebook.com/v22.0/${igId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,username,like_count,comments_count,children{id,media_type,media_url,thumbnail_url}&limit=30&access_token=${token}${afterCursor ? `&after=${afterCursor}` : ""}`;
+      const fbRes = await fetch(fallbackUrl);
+      const fbData = await fbRes.json();
+      if (fbData.error) {
+        throw new Error(`Meta API Mídias: ${fbData.error.message}`);
+      }
+      return {
+        profile: profileData,
+        posts: fbData.data || [],
+        paging: fbData.paging,
+      };
+    }
+
+    return {
+      profile: profileData,
+      posts: mediaData.data || [],
+      paging: mediaData.paging,
+    };
+  },
+
+  async getPostComments(accountId: string, mediaId: string): Promise<InstagramComment[]> {
+    const { data: account, error: getErr } = await (supabase as any)
+      .from("criafy_instagram_accounts")
+      .select("access_token")
+      .eq("id", accountId)
+      .single();
+    if (getErr || !account?.access_token) throw new Error("Conta ou token não encontrado");
+
+    const res = await fetch(
+      `https://graph.facebook.com/v22.0/${mediaId}/comments?fields=id,text,timestamp,username,like_count,replies{id,text,timestamp,username}&limit=50&access_token=${account.access_token}`
+    );
+    const data = await res.json();
+    if (data.error) throw new Error(`Meta API Comentários: ${data.error.message}`);
+    return data.data || [];
+  },
+
+  async addPostComment(accountId: string, mediaId: string, message: string): Promise<any> {
+    const { data: account, error: getErr } = await (supabase as any)
+      .from("criafy_instagram_accounts")
+      .select("access_token")
+      .eq("id", accountId)
+      .single();
+    if (getErr || !account?.access_token) throw new Error("Conta ou token não encontrado");
+
+    const res = await fetch(
+      `https://graph.facebook.com/v22.0/${mediaId}/comments`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, access_token: account.access_token }),
+      }
+    );
+    const data = await res.json();
+    if (data.error) throw new Error(`Meta API Comentário: ${data.error.message}`);
+    return data;
   },
 };

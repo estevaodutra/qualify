@@ -33,6 +33,7 @@ import { QueueRulesView } from "@/components/criafy/QueueRulesView";
 import { CriafyCalendarView } from "@/components/criafy/CriafyCalendarView";
 import { AddAccountModal } from "@/components/criafy/AddAccountModal";
 import { AccountBriefingModal } from "@/components/criafy/AccountBriefingModal";
+import { InstagramFeedModal } from "@/components/criafy/InstagramFeedModal";
 
 import { useSearchParams } from "react-router-dom";
 
@@ -50,6 +51,9 @@ export default function CriafyHub() {
   const [addAccountOpen, setAddAccountOpen] = useState(false);
   const [briefingModalOpen, setBriefingModalOpen] = useState(false);
   const [selectedBriefingAccount, setSelectedBriefingAccount] =
+    useState<CriafyInstagramAccount | null>(null);
+  const [feedModalOpen, setFeedModalOpen] = useState(false);
+  const [selectedFeedAccount, setSelectedFeedAccount] =
     useState<CriafyInstagramAccount | null>(null);
   const [syncingAccountId, setSyncingAccountId] = useState<string | null>(null);
 
@@ -291,6 +295,11 @@ export default function CriafyHub() {
     setBriefingModalOpen(true);
   };
 
+  const openFeedModal = (account: CriafyInstagramAccount) => {
+    setSelectedFeedAccount(account);
+    setFeedModalOpen(true);
+  };
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* Header */}
@@ -428,6 +437,15 @@ export default function CriafyHub() {
                   {/* Ações */}
                   <div className="pt-1 flex items-center gap-1.5">
                     <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => openFeedModal(account)}
+                      className="flex-1 text-[11px] h-8 gap-1 bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 text-white hover:opacity-95 transition-all font-semibold shadow-xs"
+                      title="Ver feed completo com postagens, fotos, vídeos e comentários"
+                    >
+                      <Instagram className="w-3 h-3" /> Ver Feed
+                    </Button>
+                    <Button
                       variant="outline"
                       size="sm"
                       onClick={() => openBriefingModal(account)}
@@ -440,7 +458,7 @@ export default function CriafyHub() {
                       size="sm"
                       onClick={() => handleSyncProfile(account.id)}
                       disabled={syncingAccountId === account.id}
-                      className="text-[11px] h-8 px-2 gap-1 text-muted-foreground hover:text-foreground"
+                      className="text-[11px] h-8 px-2 gap-1 text-muted-foreground hover:text-foreground shrink-0"
                       title="Sincronizar dados em tempo real com o Instagram"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${syncingAccountId === account.id ? "animate-spin text-pink-500" : ""}`} />
@@ -514,6 +532,12 @@ export default function CriafyHub() {
         account={selectedBriefingAccount}
         open={briefingModalOpen}
         onOpenChange={setBriefingModalOpen}
+      />
+
+      <InstagramFeedModal
+        account={selectedFeedAccount}
+        open={feedModalOpen}
+        onOpenChange={setFeedModalOpen}
       />
     </div>
   );

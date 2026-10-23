@@ -1,6 +1,6 @@
 {
-  "commit": "8ead0ed3b32e94315ac6a36c4f3b7b38b1d3f3ac",
-  "shortCommit": "8ead0ed",
-  "message": "fix(workflows): resolve duplicate key error on save with upsert, duplicate id guard, and permission fix for company members/owners",
-  "builtAt": "2026-10-20T17:16:29.809Z"
+  "commit": "854209214bd92bb696963b7c3b9b477f16a6743a",
+  "shortCommit": "8542092",
+  "message": "fix(sprint-os): importar useRef em ModularDashboard e TaskDetailModal",
+  "builtAt": "2026-10-23T01:17:56.019Z"
 }
