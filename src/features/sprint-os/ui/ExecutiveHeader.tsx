@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 /**
  * Header Executivo Compacto do Sprint OS (Cockpit 80/20).
@@ -51,6 +52,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/contexts/AuthContext";
 
 export const ExecutiveHeader: React.FC = () => {
+  const navigate = useNavigate();
   const { activeCompanyId } = useCompany();
   const { user } = useAuth();
   const {
@@ -149,7 +151,7 @@ export const ExecutiveHeader: React.FC = () => {
         <Button
           variant="ghost"
           size="sm"
-          onClick={closeWorkspace}
+          onClick={() => { closeWorkspace(); navigate("/sprint-os"); }}
           className="h-8 px-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl flex items-center gap-1.5 shrink-0"
           title="Voltar para a lista de cronogramas"
         >

@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 /**
  * Modal de Criação de Cronograma.
  * Especificação: Master Prompt v9.0 — Seção 5.
@@ -53,6 +54,10 @@ export const CreateScheduleModal: React.FC = () => {
         await createBlank(name.trim(), client.trim() || "Cliente", activeCompanyId);
       } else {
         await createFromTemplateAction(selectedTemplateId, name.trim(), client.trim() || "Cliente", activeCompanyId);
+      }
+      const newWsId = useSprintOSStore.getState().activeWorkspaceId;
+      if (newWsId) {
+        navigate(`/sprint-os/${newWsId}`);
       }
     } finally {
       setIsSubmitting(false);

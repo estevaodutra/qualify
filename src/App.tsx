@@ -146,7 +146,9 @@ const App = () => {
 
                       {/* Quiz / Funnel routes (inside AppLayout with sidebar support) */}
                       <Route path="/sprint-os" element={<SprintOSPage />} />
+                      <Route path="/sprint-os/:workspaceId" element={<SprintOSPage />} />
                       <Route path="/cronogramas" element={<SprintOSPage />} />
+                      <Route path="/cronogramas/:workspaceId" element={<SprintOSPage />} />
                       <Route path="/criafy" element={<CriafyHub />} />
                       <Route path="/quiz" element={<QuizFunnelsPage />} />
                       <Route path="/quiz/:id" element={<QuizEditorPage />} />

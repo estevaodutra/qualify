@@ -1,3 +1,4 @@
+import { useParams, useNavigate } from "react-router-dom";
 /**
  * Página Principal do Módulo de Cronogramas / Sprint OS (Apps → Cronogramas).
  * Especificação: Master Prompt v9.0 — Lean Operations Dashboard 80/20.
@@ -164,12 +165,28 @@ export const SprintOSPage: React.FC = () => {
     }
   }, [setActiveTab]);
 
-  // Inicialização do workspace (uma única vez por empresa ativa)
+  const { workspaceId: urlWorkspaceId } = useParams<{ workspaceId?: string }>();
+  const navigate = useNavigate();
+
+  // Inicialização do workspace (por empresa ativa e sincronizado com o ID da URL)
   useEffect(() => {
-    if (lastInitCompanyIdRef.current === activeCompanyId) return;
     lastInitCompanyIdRef.current = activeCompanyId;
-    initWorkspace(activeCompanyId, null, user?.email || "Operador");
-  }, [activeCompanyId, initWorkspace, user?.email]);
+    initWorkspace(activeCompanyId, urlWorkspaceId || null, user?.email || "Operador");
+  }, [activeCompanyId, urlWorkspaceId, initWorkspace, user?.email]);
+
+  // Sincronização da URL com o cronograma ativo
+  useEffect(() => {
+    if (activeWorkspaceId && (!urlWorkspaceId || urlWorkspaceId !== activeWorkspaceId)) {
+      navigate(`/sprint-os/${activeWorkspaceId}`, { replace: true });
+    }
+  }, [activeWorkspaceId, urlWorkspaceId, navigate]);
+
+  // Ao voltar via histórico do navegador para /sprint-os sem ID
+  useEffect(() => {
+    if (!urlWorkspaceId && activeWorkspaceId) {
+      useSprintOSStore.getState().closeWorkspace();
+    }
+  }, [urlWorkspaceId]);
 
   // Sincronização automática dos membros do Qualify no Sprint OS em lote único
   useEffect(() => {

@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 /**
  * Página "Meus Cronogramas" (Apps → Cronogramas).
@@ -93,8 +94,11 @@ export const SchedulesListView: React.FC = () => {
     setEditingItem(null);
   };
 
+  const navigate = useNavigate();
+
   const handleOpen = (id: string) => {
     openWorkspace(id, activeCompanyId, user?.email || "Operador");
+    navigate(`/sprint-os/${id}`);
   };
 
   const handleDuplicate = async (id: string) => {
