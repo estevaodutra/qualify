@@ -441,50 +441,19 @@ export const SocialNetworksBlock: React.FC<SocialNetworksBlockProps> = ({
             </Button>
           )}
 
-          {/* Botão de Selecionar Conta Criafy */}
+          {/* Botão Único: Adicionar Conta (lista contas da Criafy) */}
           <Button
             type="button"
-            variant="outline"
             size="sm"
             onClick={() => {
               loadCriafyAccounts();
               setIsCriafyModalOpen(true);
             }}
-            className="h-7 px-2.5 text-[11px] font-bold rounded-xl border-pink-500/30 bg-pink-500/5 hover:bg-pink-500/10 text-pink-600 dark:text-pink-400 gap-1.5 cursor-pointer shadow-xs"
-            title="Selecionar conta do Instagram conectada no Criafy"
+            className="h-7 px-3 text-[11px] font-bold rounded-xl bg-gradient-to-r from-amber-500 via-rose-500 to-purple-600 hover:opacity-90 text-white gap-1.5 cursor-pointer shadow-xs"
+            title="Adicionar conta e listar contas da Criafy"
           >
-            <Instagram className="h-3.5 w-3.5" />
-            <span>
-              {workspace.mediaApiConfigs?.instagram?.criafyAccountData
-                ? `@${workspace.mediaApiConfigs.instagram.criafyAccountData.username}`
-                : "Selecionar Conta Criafy"}
-            </span>
-          </Button>
-
-          {/* Botão de Adicionar Nova Rede */}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setIsNewNetworkModalOpen(true)}
-            className="h-7 px-2.5 text-[11px] font-semibold rounded-xl border-border gap-1 hover:border-primary/50 text-foreground cursor-pointer"
-            title="Cadastrar uma nova rede social"
-          >
-            <Plus className="h-3 w-3" />
-            <span>+ Nova Rede</span>
-          </Button>
-
-          {/* Botão de Conectar APIs */}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => onOpenApiModal("instagram")}
-            className="h-7 px-2.5 text-[11px] font-bold rounded-xl border-border gap-1.5 text-primary hover:bg-primary/5 cursor-pointer"
-            title="Gerenciar conexão das APIs oficiais"
-          >
-            <Key className="h-3 w-3" />
-            <span>Conectar APIs</span>
+            <Plus className="h-3.5 w-3.5" />
+            <span>Adicionar Conta</span>
           </Button>
         </div>
       </div>
@@ -1662,11 +1631,11 @@ export const SocialNetworksBlock: React.FC<SocialNetworksBlockProps> = ({
                 <Instagram className="h-4 w-4" />
               </div>
               <DialogTitle className="text-base font-bold">
-                Selecionar Conta do Criafy
+                Adicionar Conta da Criafy
               </DialogTitle>
             </div>
             <DialogDescription className="text-xs text-muted-foreground">
-              Escolha uma conta do Instagram conectada na Criafy para importar seguidores, alcance, visualizações e interações para este cronograma.
+              Selecione uma conta conectada na Criafy para adicionar ao cronograma e sincronizar suas métricas em tempo real.
             </DialogDescription>
           </DialogHeader>
 
