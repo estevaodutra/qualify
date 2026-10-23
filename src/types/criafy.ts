@@ -205,3 +205,58 @@ export interface InstagramAccountFeedResult {
     next?: string;
   };
 }
+
+// ==========================================
+// INSIGHTS & ANALYTICS DA CONTA
+// ==========================================
+export interface InstagramInsightsOverview {
+  periodDays: number;
+  lastSyncedAt: string;
+  kpis: {
+    views: { value: number; changePct: number };
+    netFollowers: { value: number; changePct: number };
+    interactions: { value: number; changePct: number };
+    profileViews: { value: number; changePct: number };
+    websiteClicks: { value: number; changePct: number };
+    shares: { value: number; changePct: number };
+  };
+  viewsPerformance: {
+    total: number;
+    changePct: number;
+    history: Array<{ date: string; label: string; views: number }>;
+  };
+  viewsByType: {
+    reels: number;
+    stories: number;
+    posts: number;
+  };
+  interactionsByType: {
+    reels: number;
+    stories: number;
+    posts: number;
+  };
+  audience: {
+    gender: {
+      menPct: number;
+      womenPct: number;
+      menCount: number;
+      womenCount: number;
+    };
+    ageRanges: Array<{
+      range: string;
+      pct: number;
+      count: number;
+    }>;
+    locations: Array<{
+      name: string;
+      code: string;
+      pct: number;
+      count: number;
+    }>;
+    activityHours: Array<{
+      hour: string;
+      value: number;
+    }>;
+    peakActivityText: string;
+  };
+}

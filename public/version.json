@@ -1,6 +1,6 @@
 {
-  "commit": "854209214bd92bb696963b7c3b9b477f16a6743a",
-  "shortCommit": "8542092",
-  "message": "fix(sprint-os): importar useRef em ModularDashboard e TaskDetailModal",
-  "builtAt": "2026-10-23T01:17:56.019Z"
+  "commit": "77e22d9a89d3048d96a657f591d88fcd8ce8fbc1",
+  "shortCommit": "77e22d9",
+  "message": "feat(sprint-os): rotas dinamicas com ID do cronograma na URL (/sprint-os/:workspaceId)",
+  "builtAt": "2026-10-23T18:13:19.258Z"
 }
