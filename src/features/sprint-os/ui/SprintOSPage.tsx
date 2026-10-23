@@ -181,6 +181,13 @@ export const SprintOSPage: React.FC = () => {
     }
   }, [activeWorkspaceId, urlWorkspaceId, navigate]);
 
+  // Se houver um ID na URL mas não houver cronograma ativo e o carregamento terminou, volta para a lista
+  useEffect(() => {
+    if (urlWorkspaceId && !activeWorkspaceId && !isLoading) {
+      navigate("/sprint-os", { replace: true });
+    }
+  }, [urlWorkspaceId, activeWorkspaceId, isLoading, navigate]);
+
   // Ao voltar via histórico do navegador para /sprint-os sem ID
   useEffect(() => {
     if (!urlWorkspaceId && activeWorkspaceId) {

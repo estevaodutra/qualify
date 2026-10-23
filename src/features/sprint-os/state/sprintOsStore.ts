@@ -443,13 +443,14 @@ export const useSprintOSStore = create<SprintOSState>((set, get) => ({
       });
     } catch (e: any) {
       toast.error(`Erro ao abrir cronograma: ${e.message}`);
-      set({ isLoading: false });
+      set({ isLoading: false, activeWorkspaceId: null, workspace: null });
     }
   },
 
   closeWorkspace: () => {
-    set({ activeWorkspaceId: null });
-    get().fetchWorkspacesList();
+    const { companyId } = get();
+    set({ activeWorkspaceId: null, workspace: null });
+    get().fetchWorkspacesList(companyId);
   },
 
   createBlank: async (name, client, companyId) => {
