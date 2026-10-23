@@ -107,31 +107,73 @@ export class SprintOSRepository {
             }
           });
 
-          // PURGA TOTAL DO LOCALSTORAGE:
-          // Remove qualquer chave local desta empresa que NÃO esteja na lista de cronogramas ativos do banco
-          // e remove chaves legadas desvinculadas para evitar reaparição de dados antigos excluídos.
+          // 2. MIGRAÇÃO / PERSISTÊNCIA AUTOMÁTICA DO LOCALSTORAGE PARA O SUPABASE:
+          // Se houver dados/cronogramas na memória do navegador (LocalStorage) que ainda não foram para o Supabase,
+          // nós salvamos no banco de dados imediatamente para preservar tudo.
           try {
             const companyPrefix = `${LOCAL_STORAGE_KEY_PREFIX}${companyId}_`;
-            const toPurge: string[] = [];
             for (let i = 0; i < localStorage.length; i++) {
               const key = localStorage.key(i);
-              if (key) {
-                if (key.startsWith(companyPrefix)) {
-                  const wsId = key.substring(companyPrefix.length);
-                  if (!activeIds.has(wsId)) {
-                    toPurge.push(key);
+              if (
+                key &&
+                (key.startsWith(companyPrefix) ||
+                  (key.startsWith(LOCAL_STORAGE_KEY_PREFIX) &&
+                    !key.startsWith(TEMPLATE_STORAGE_KEY_PREFIX) &&
+                    key !== ACTIVE_WS_ID_KEY))
+              ) {
+                const raw = localStorage.getItem(key);
+                if (raw) {
+                  try {
+                    const localWs = JSON.parse(raw) as Workspace;
+                    if (localWs?.project?.id) {
+                      const wsId = localWs.project.id;
+                      if (!activeIds.has(wsId)) {
+                        // Verifica se este workspace já foi arquivado/excluído no Supabase
+                        const { data: archivedCheck } = await (supabase as any)
+                          .from("sprint_os_workspaces")
+                          .select("id, archived_at")
+                          .eq("id", wsId)
+                          .maybeSingle();
+
+                        if (archivedCheck?.archived_at) {
+                          // Foi explicitamente excluído no banco: remove do cache local
+                          localStorage.removeItem(key);
+                        } else if (!archivedCheck) {
+                          // NÃO existe no Supabase: migra para o Supabase agora mesmo!
+                          console.log("[SprintOSRepository] Migrando cronograma local para o Supabase:", wsId);
+                          await SprintOSRepository.saveWorkspace(localWs, 1, companyId, "Operador");
+
+                          activeIds.add(wsId);
+                          const liveTasks = Object.values(localWs.tasks || {}).filter((t) => !t.archivedAt);
+                          const doneTasks = liveTasks.filter((t) => t.status === "done");
+                          const activeSprint =
+                            Object.values(localWs.sprints || {}).find((s) => !s.archivedAt && s.status === "active") ||
+                            Object.values(localWs.sprints || {}).find((s) => !s.archivedAt);
+
+                          map.set(wsId, {
+                            id: wsId,
+                            name: activeSprint?.name || localWs.project.name,
+                            projectName: localWs.project.name,
+                            client: localWs.project.client || "Cliente",
+                            updatedAt: localWs.project.updatedAt || new Date().toISOString(),
+                            taskCount: liveTasks.length,
+                            doneTaskCount: doneTasks.length,
+                            progress: liveTasks.length ? Math.round((doneTasks.length / liveTasks.length) * 100) : 0,
+                            status: activeSprint?.status === "completed" ? "completed" : activeSprint?.activatedAt ? "active" : "draft",
+                            sprintCount: Object.keys(localWs.sprints || {}).length,
+                          });
+                        }
+                      }
+                    }
+                  } catch (e) {
+                    console.warn("[SprintOSRepository] Erro ao parsear item local para migração:", e);
                   }
-                } else if (
-                  key.startsWith(LOCAL_STORAGE_KEY_PREFIX) &&
-                  !key.startsWith(TEMPLATE_STORAGE_KEY_PREFIX) &&
-                  key !== ACTIVE_WS_ID_KEY
-                ) {
-                  toPurge.push(key);
                 }
               }
             }
-            toPurge.forEach((k) => localStorage.removeItem(k));
-          } catch {}
+          } catch (e) {
+            console.warn("[SprintOSRepository] Erro no sync LocalStorage -> Supabase:", e);
+          }
         }
       } catch (e) {
         console.warn("[SprintOSRepository] Erro ao listar do Supabase:", e);
