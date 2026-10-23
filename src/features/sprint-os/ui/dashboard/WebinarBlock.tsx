@@ -11,7 +11,7 @@
  * Totalmente modular: arrastar cards, editar títulos, editar descrições, arquivar e restaurar.
  */
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   Video,
   Plus,
@@ -158,6 +158,43 @@ export const WebinarBlock: React.FC<WebinarBlockProps> = ({
 
   // Modal para editar descrição do card
   const [editingDescCard, setEditingDescCard] = useState<DashboardCardConfig | null>(null);
+
+  // Edição inline do título do funil do webinário (quando clicar em cima)
+  const [isEditingFunnelTitle, setIsEditingFunnelTitle] = useState(false);
+  const [editingFunnelTitleValue, setEditingFunnelTitleValue] = useState("");
+  const funnelTitleInputRef = useRef<HTMLInputElement>(null);
+
+  const handleStartEditFunnelTitle = () => {
+    setEditingFunnelTitleValue(activeEdition.title);
+    setIsEditingFunnelTitle(true);
+    setTimeout(() => {
+      funnelTitleInputRef.current?.focus();
+      funnelTitleInputRef.current?.select();
+    }, 50);
+  };
+
+  const handleCommitFunnelTitle = async () => {
+    const trimmed = editingFunnelTitleValue.trim();
+    if (!trimmed) {
+      toast.error("O título não pode ficar vazio.");
+      setIsEditingFunnelTitle(false);
+      return;
+    }
+    if (trimmed === activeEdition.title) {
+      setIsEditingFunnelTitle(false);
+      return;
+    }
+    await mutate((ws, ctx) => {
+      const data = getWebinarData(ws);
+      const ed = data.editions[activeEdition.id];
+      if (ed) {
+        ed.title = trimmed;
+        ed.updatedAt = ctx.nowIso;
+      }
+    }, user?.email || "Operador");
+    setIsEditingFunnelTitle(false);
+    toast.success("Título do webinário atualizado!");
+  };
   const [cardDescInput, setCardDescInput] = useState("");
 
   // Drag & Drop interno dos cards do webinário
@@ -389,10 +426,67 @@ export const WebinarBlock: React.FC<WebinarBlockProps> = ({
       {/* 1. BARRA COMPACTA DO FUNIL DE CONVERSÃO (TAXAS AJ-023) */}
       <div className="p-2.5 rounded-xl bg-muted/40 border border-border/60 text-xs">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5 font-bold text-muted-foreground text-[10px] uppercase tracking-wider">
-            <TrendingUp className="h-3.5 w-3.5 text-primary" />
-            <span>Funil do Webinário: {activeEdition.title}</span>
-          </div>
+          {isEditingFunnelTitle ? (
+            <div className="flex items-center gap-1.5 py-0.5">
+              <TrendingUp className="h-3.5 w-3.5 text-primary shrink-0" />
+              <span className="text-[10px] uppercase font-bold text-muted-foreground shrink-0">
+                Funil do Webinário:
+              </span>
+              <div className="flex items-center gap-1">
+                <Input
+                  ref={funnelTitleInputRef}
+                  value={editingFunnelTitleValue}
+                  onChange={(e) => setEditingFunnelTitleValue(e.target.value)}
+                  onBlur={handleCommitFunnelTitle}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleCommitFunnelTitle();
+                    } else if (e.key === "Escape") {
+                      setIsEditingFunnelTitle(false);
+                    }
+                  }}
+                  className="h-6 text-xs font-bold px-2 py-0.5 w-64 sm:w-80 rounded-md border-primary bg-background shadow-xs text-foreground uppercase tracking-wider"
+                  placeholder="Nome do webinário..."
+                  autoFocus
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleCommitFunnelTitle}
+                  className="h-6 w-6 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10 rounded-md shrink-0 cursor-pointer"
+                  title="Salvar título (Enter)"
+                >
+                  <Check className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setIsEditingFunnelTitle(false)}
+                  className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground rounded-md shrink-0 cursor-pointer"
+                  title="Cancelar (Esc)"
+                >
+                  ✕
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div
+              onClick={handleStartEditFunnelTitle}
+              className="flex items-center gap-1.5 font-bold text-muted-foreground hover:text-foreground text-[10px] uppercase tracking-wider cursor-pointer group transition-colors py-0.5 px-1.5 rounded-md hover:bg-background/80 border border-transparent hover:border-border/60"
+              title="Clique para editar o título do webinário"
+            >
+              <TrendingUp className="h-3.5 w-3.5 text-primary shrink-0" />
+              <span>
+                Funil do Webinário:{" "}
+                <strong className="text-foreground font-black group-hover:underline">
+                  {activeEdition.title}
+                </strong>
+              </span>
+              <Edit2 className="h-3 w-3 text-muted-foreground/50 group-hover:text-primary transition-colors opacity-70 group-hover:opacity-100 shrink-0 ml-0.5" />
+            </div>
+          )}
 
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap text-[11px] font-mono">
             {/* Confirmação */}

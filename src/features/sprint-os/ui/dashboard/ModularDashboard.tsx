@@ -1923,15 +1923,16 @@ export const ModularDashboard: React.FC = () => {
                     />
                   ) : (
                     <h3
-                      onDoubleClick={(e) => {
+                      onClick={(e) => {
                         e.stopPropagation();
                         setInlineEditingBlockId(block.id);
                         setInlineBlockTitle(block.title);
                       }}
-                      className="text-xs font-black uppercase tracking-wider text-foreground cursor-pointer hover:text-primary transition-colors"
-                      title="Dois cliques para renomear"
+                      className="text-xs font-black uppercase tracking-wider text-foreground cursor-pointer hover:text-primary transition-colors flex items-center gap-1 group"
+                      title="Clique para renomear o bloco"
                     >
-                      {isMediaBlock ? (block.title.includes("INSTAGRAM") || block.title.includes("TIKTOK") || block.title.includes("YOUTUBE") ? "DISTRIBUIÇÃO DE MÍDIA" : block.title) : block.title}
+                      <span>{isMediaBlock ? (block.title.includes("INSTAGRAM") || block.title.includes("TIKTOK") || block.title.includes("YOUTUBE") ? "DISTRIBUIÇÃO DE MÍDIA" : block.title) : block.title}</span>
+                      <Edit2 className="h-2.5 w-2.5 opacity-0 group-hover:opacity-100 text-muted-foreground transition-opacity" />
                     </h3>
                   )}
                 </div>
