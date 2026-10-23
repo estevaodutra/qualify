@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Input } from "@/components/ui/input";
 import {
   Instagram,
   Sparkles,
@@ -20,6 +21,9 @@ import {
   CalendarDays,
   Users,
   ExternalLink,
+  Search,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -34,7 +38,8 @@ import { CriafyCalendarView } from "@/components/criafy/CriafyCalendarView";
 import { AddAccountModal } from "@/components/criafy/AddAccountModal";
 import { AccountBriefingModal } from "@/components/criafy/AccountBriefingModal";
 import { InstagramFeedModal } from "@/components/criafy/InstagramFeedModal";
-import { AccountInsightsCard } from "@/components/criafy/AccountInsightsCard";
+import { AccountCompactCard } from "@/components/criafy/AccountCompactCard";
+import { AccountInsightsModal } from "@/components/criafy/AccountInsightsModal";
 
 import { useSearchParams } from "react-router-dom";
 
@@ -45,7 +50,11 @@ export default function CriafyHub() {
   const [loading, setLoading] = useState(true);
   const processedOAuthCallbackRef = useRef<string | null>(null);
 
-  // Selected Account Filter
+  // Search and view mode for accounts
+  const [searchAccountQuery, setSearchAccountQuery] = useState("");
+  const [accountViewMode, setAccountViewMode] = useState<"grid" | "list">("grid");
+
+  // Selected Account Filter for calendar/media
   const [selectedAccountId, setSelectedAccountId] = useState<string>("all");
 
   // Modals state
@@ -57,6 +66,22 @@ export default function CriafyHub() {
   const [selectedFeedAccount, setSelectedFeedAccount] =
     useState<CriafyInstagramAccount | null>(null);
   const [syncingAccountId, setSyncingAccountId] = useState<string | null>(null);
+
+  // Insights Modal state
+  const [insightsModalOpen, setInsightsModalOpen] = useState(false);
+  const [selectedInsightsAccount, setSelectedInsightsAccount] =
+    useState<CriafyInstagramAccount | null>(null);
+  const [insightsInitialTab, setInsightsInitialTab] =
+    useState<"OVERVIEW" | "CONTENT" | "AUDIENCE">("OVERVIEW");
+
+  const openInsightsModal = (
+    acc: CriafyInstagramAccount,
+    tab: "OVERVIEW" | "CONTENT" | "AUDIENCE" = "OVERVIEW"
+  ) => {
+    setSelectedInsightsAccount(acc);
+    setInsightsInitialTab(tab);
+    setInsightsModalOpen(true);
+  };
 
   function extractCompanyIdFromState(rawState: string | null): string | null {
     if (!rawState) return null;
@@ -343,11 +368,55 @@ export default function CriafyHub() {
         </div>
       </div>
 
-      {/* Main Account Grid (Home Orientada por Conta) */}
-      <div className="space-y-3">
-        <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-          Contas Conectadas na Empresa ({accounts.length})
-        </h2>
+      {/* Contas Conectadas na Empresa */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+          <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+            Contas Conectadas na Empresa ({accounts.length})
+          </h2>
+
+          <div className="flex items-center gap-2">
+            <div className="relative w-full sm:w-64">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Buscar contas..."
+                value={searchAccountQuery}
+                onChange={(e) => setSearchAccountQuery(e.target.value)}
+                className="pl-8 h-8 text-xs rounded-xl bg-card border-border/70 shadow-none"
+              />
+            </div>
+
+            <div className="flex items-center border border-border/70 rounded-xl p-0.5 bg-card">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setAccountViewMode("grid")}
+                className={`h-7 w-7 rounded-lg ${
+                  accountViewMode === "grid"
+                    ? "bg-muted text-foreground font-semibold shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                title="Visualização em Grade"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setAccountViewMode("list")}
+                className={`h-7 w-7 rounded-lg ${
+                  accountViewMode === "list"
+                    ? "bg-muted text-foreground font-semibold shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                title="Visualização em Lista"
+              >
+                <List className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          </div>
+        </div>
 
         {loading ? (
           <div className="flex justify-center p-8">
@@ -368,52 +437,48 @@ export default function CriafyHub() {
               </Button>
             </CardContent>
           </Card>
-        ) : (
-          <div className="space-y-4">
-            {/* Se houver mais de 1 conta, exibe seletor de contas */}
-            {accounts.length > 1 && (
-              <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                {accounts.map((acc) => {
-                  const isSelected = selectedAccountId === acc.id || (selectedAccountId === "all" && accounts[0].id === acc.id);
-                  return (
-                    <button
-                      key={acc.id}
-                      type="button"
-                      onClick={() => setSelectedAccountId(acc.id)}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
-                        isSelected
-                          ? "border-pink-500 bg-pink-500/10 text-pink-700 dark:text-pink-300 ring-1 ring-pink-500/30"
-                          : "border-border hover:bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      <Avatar className="w-5 h-5">
-                        <AvatarImage src={acc.profile_picture_url || undefined} />
-                        <AvatarFallback className="text-[9px]">@{acc.username[0]}</AvatarFallback>
-                      </Avatar>
-                      <span>@{acc.username}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+        ) : (() => {
+          const filtered = accounts.filter((acc) => {
+            if (!searchAccountQuery.trim()) return true;
+            const q = searchAccountQuery.toLowerCase();
+            return (
+              acc.username.toLowerCase().includes(q) ||
+              (acc.name && acc.name.toLowerCase().includes(q)) ||
+              (acc.metadata?.page_name && acc.metadata.page_name.toLowerCase().includes(q))
+            );
+          });
 
-            {/* Card Rico de Insights do Instagram */}
-            {(() => {
-              const activeAcc =
-                accounts.find((a) => a.id === selectedAccountId) || accounts[0];
-              return (
-                <AccountInsightsCard
-                  account={activeAcc}
+          if (filtered.length === 0) {
+            return (
+              <div className="p-8 text-center text-xs text-muted-foreground border border-dashed rounded-2xl bg-card/30">
+                Nenhuma conta encontrada com o termo "{searchAccountQuery}".
+              </div>
+            );
+          }
+
+          return (
+            <div
+              className={
+                accountViewMode === "grid"
+                  ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"
+                  : "space-y-3"
+              }
+            >
+              {filtered.map((account) => (
+                <AccountCompactCard
+                  key={account.id}
+                  account={account}
                   onOpenFeed={openFeedModal}
                   onOpenBriefing={openBriefingModal}
+                  onOpenInsights={openInsightsModal}
                   onSyncProfile={handleSyncProfile}
                   onCheckHealth={handleCheckHealth}
-                  isSyncing={syncingAccountId === activeAcc.id}
+                  isSyncing={syncingAccountId === account.id}
                 />
-              );
-            })()}
-          </div>
-        )}
+              ))}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Tabs Navigation for Criafy Modules */}
@@ -483,6 +548,18 @@ export default function CriafyHub() {
         account={selectedFeedAccount}
         open={feedModalOpen}
         onOpenChange={setFeedModalOpen}
+      />
+
+      <AccountInsightsModal
+        account={selectedInsightsAccount}
+        open={insightsModalOpen}
+        onOpenChange={setInsightsModalOpen}
+        initialTab={insightsInitialTab}
+        onOpenFeed={openFeedModal}
+        onOpenBriefing={openBriefingModal}
+        onSyncProfile={handleSyncProfile}
+        onCheckHealth={handleCheckHealth}
+        isSyncing={syncingAccountId === selectedInsightsAccount?.id}
       />
     </div>
   );

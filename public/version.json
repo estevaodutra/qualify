@@ -1,6 +1,6 @@
 {
-  "commit": "77e22d9a89d3048d96a657f591d88fcd8ce8fbc1",
-  "shortCommit": "77e22d9",
-  "message": "feat(sprint-os): rotas dinamicas com ID do cronograma na URL (/sprint-os/:workspaceId)",
-  "builtAt": "2026-10-23T18:13:19.258Z"
+  "commit": "ad65c97e309a4d593251e132fc86c7a0bf50ce36",
+  "shortCommit": "ad65c97",
+  "message": "feat(criafy): add complete Instagram insights analytics dashboard card with live Meta API metrics",
+  "builtAt": "2026-10-23T18:35:50.687Z"
 }

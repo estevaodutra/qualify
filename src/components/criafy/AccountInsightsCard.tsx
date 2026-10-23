@@ -71,6 +71,7 @@ interface AccountInsightsCardProps {
   onSyncProfile: (accountId: string) => void;
   onCheckHealth?: (accountId: string) => void;
   isSyncing?: boolean;
+  initialTab?: "OVERVIEW" | "CONTENT" | "AUDIENCE";
 }
 
 export function AccountInsightsCard({
@@ -80,13 +81,20 @@ export function AccountInsightsCard({
   onSyncProfile,
   onCheckHealth,
   isSyncing = false,
+  initialTab = "OVERVIEW",
 }: AccountInsightsCardProps) {
   const [periodDays, setPeriodDays] = useState<number>(30);
-  const [activeTab, setActiveTab] = useState<"OVERVIEW" | "CONTENT" | "AUDIENCE">("OVERVIEW");
+  const [activeTab, setActiveTab] = useState<"OVERVIEW" | "CONTENT" | "AUDIENCE">(initialTab);
   const [insights, setInsights] = useState<InstagramInsightsOverview | null>(
     (account.metadata?.insights as InstagramInsightsOverview) || null
   );
   const [loadingInsights, setLoadingInsights] = useState(false);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   useEffect(() => {
     loadInsights(periodDays);
