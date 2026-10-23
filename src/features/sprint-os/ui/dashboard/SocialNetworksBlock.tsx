@@ -749,63 +749,7 @@ export const SocialNetworksBlock: React.FC<SocialNetworksBlockProps> = ({
                       </div>
                     </div>
 
-                    {/* Formatos Ativos no Cronograma */}
-                    <div className="space-y-1.5 my-2">
-                      <div className="flex items-center justify-between text-[11px] font-bold text-foreground">
-                        <span className="text-muted-foreground uppercase text-[10px] tracking-wider font-extrabold">
-                          Formatos ativos
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setEditingFormatsNetwork(net)}
-                          className="text-primary hover:underline flex items-center gap-1 text-[11px] font-bold cursor-pointer"
-                        >
-                          <Edit2 className="h-3 w-3" />
-                          <span>Editar</span>
-                        </button>
-                      </div>
 
-                      <div className="flex flex-wrap items-center gap-1.5 min-h-[26px]">
-                        {net.formats.filter((f) => f.enabled).length === 0 ? (
-                          <span className="text-[10px] text-muted-foreground italic">
-                            Nenhum formato ativo (clique em Editar)
-                          </span>
-                        ) : (
-                          net.formats
-                            .filter((f) => f.enabled)
-                            .map((fmt) => {
-                              const pillColor =
-                                fmt.id === "reels" || fmt.id === "shorts"
-                                  ? "bg-rose-500/10 text-rose-600 dark:text-rose-300 border-rose-500/25"
-                                  : fmt.id === "videos"
-                                  ? "bg-cyan-500/10 text-cyan-600 dark:text-cyan-300 border-cyan-500/25"
-                                  : fmt.id === "carrossel"
-                                  ? "bg-purple-500/10 text-purple-600 dark:text-purple-300 border-purple-500/25"
-                                  : fmt.id === "stories"
-                                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-300 border-amber-500/25"
-                                  : "bg-blue-500/10 text-blue-600 dark:text-blue-300 border-blue-500/25";
-
-                              return (
-                                <div
-                                  key={fmt.id}
-                                  className={`inline-flex items-center gap-1.5 py-0.5 px-2.5 rounded-full border text-[11px] font-bold ${pillColor} transition-all`}
-                                >
-                                  <span>{fmt.icon || "•"}</span>
-                                  <span>{fmt.label}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleToggleFormat(net.id, fmt.id, false)}
-                                    className="hover:opacity-70 text-current p-0.5 rounded-full transition-opacity cursor-pointer"
-                                    title={`Desativar formato ${fmt.label}`}
-                                  >
-                                    ✕
-                                  </button>
-                                </div>
-                              );
-                            })
-                        )}
-                      </div>
-                    </div>
                   </div>
 
                   {/* Rodapé do Card Simplificado */}
@@ -1139,63 +1083,7 @@ export const SocialNetworksBlock: React.FC<SocialNetworksBlockProps> = ({
                     )}
                   </div>
 
-                  {/* 2.3 FORMATOS ATIVOS */}
-                  <div className="space-y-1.5 my-2">
-                    <div className="flex items-center justify-between text-[11px] font-bold text-foreground">
-                      <span className="text-muted-foreground uppercase text-[10px] tracking-wider font-extrabold">
-                        Formatos ativos
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setEditingFormatsNetwork(net)}
-                        className="text-primary hover:underline flex items-center gap-1 text-[11px] font-bold cursor-pointer"
-                      >
-                        <Edit2 className="h-3 w-3" />
-                        <span>Editar</span>
-                      </button>
-                    </div>
 
-                    <div className="flex flex-wrap items-center gap-1.5 min-h-[30px]">
-                      {net.formats.filter((f) => f.enabled).length === 0 ? (
-                        <span className="text-[10px] text-muted-foreground italic">
-                          Nenhum formato ativo (clique em Editar)
-                        </span>
-                      ) : (
-                        net.formats
-                          .filter((f) => f.enabled)
-                          .map((fmt) => {
-                            const pillColor =
-                              fmt.id === "reels" || fmt.id === "shorts"
-                                ? "bg-rose-500/10 text-rose-600 dark:text-rose-300 border-rose-500/25"
-                                : fmt.id === "videos"
-                                ? "bg-cyan-500/10 text-cyan-600 dark:text-cyan-300 border-cyan-500/25"
-                                : fmt.id === "carrossel"
-                                ? "bg-purple-500/10 text-purple-600 dark:text-purple-300 border-purple-500/25"
-                                : fmt.id === "stories"
-                                ? "bg-amber-500/10 text-amber-600 dark:text-amber-300 border-amber-500/25"
-                                : "bg-blue-500/10 text-blue-600 dark:text-blue-300 border-blue-500/25";
-
-                            return (
-                              <div
-                                key={fmt.id}
-                                className={`inline-flex items-center gap-1.5 py-0.5 px-2.5 rounded-full border text-[11px] font-bold ${pillColor} transition-all`}
-                              >
-                                <span>{fmt.icon || "•"}</span>
-                                <span>{fmt.label}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleFormat(net.id, fmt.id, false)}
-                                  className="hover:opacity-70 text-current p-0.5 rounded-full transition-opacity cursor-pointer"
-                                  title={`Desativar formato ${fmt.label}`}
-                                >
-                                  ✕
-                                </button>
-                              </div>
-                            );
-                          })
-                      )}
-                    </div>
-                  </div>
                 </div>
 
                 {/* 2.4 RODAPÉ DO CARD: BOTÃO "VER DETALHES >" */}
