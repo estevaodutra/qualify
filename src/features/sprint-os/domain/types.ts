@@ -703,6 +703,8 @@ export interface MediaApiConfig {
   pageIdOrHandle?: string;
   connected?: boolean;
   lastSyncedAt?: string | null;
+  criafyAccountId?: string;
+  criafyAccountData?: any;
 }
 
 /** Documento completo de um projeto. */
@@ -853,6 +855,8 @@ export interface SocialNetworkConfig {
   icon?: "instagram" | "tiktok" | "youtube" | "other";
   archived?: boolean;
   formats: SocialNetworkFormat[];
+  criafyAccountId?: string;
+  criafyAccountData?: any;
 }
 
 export const DEFAULT_SOCIAL_NETWORKS: Record<string, SocialNetworkConfig> = {
