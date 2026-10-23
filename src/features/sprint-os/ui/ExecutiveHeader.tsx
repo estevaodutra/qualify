@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 /**
  * Header Executivo Compacto do Sprint OS (Cockpit 80/20).
  * Especificação: Master Prompt v9.0 — Seção 6 (Região 1).
@@ -219,6 +220,19 @@ export const ExecutiveHeader: React.FC = () => {
             >
               {isActivated ? "Publicado" : "Rascunho"}
             </Badge>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(workspace.project.id);
+                toast.success(`ID copiado: ${workspace.project.id}`);
+              }}
+              className="flex items-center gap-1 font-mono text-[10px] text-muted-foreground/80 hover:text-foreground bg-muted/60 hover:bg-muted px-2 py-0.5 rounded-md border border-border/50 transition-colors cursor-pointer shrink-0 ml-1"
+              title={`Clique para copiar o ID: ${workspace.project.id}`}
+            >
+              <span className="text-[9px] text-muted-foreground/60 font-sans font-bold">ID</span>
+              <span className="font-semibold">{workspace.project.id.slice(0, 8)}</span>
+            </button>
           </div>
         )}
       </div>

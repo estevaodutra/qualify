@@ -515,11 +515,13 @@ export const useSprintOSStore = create<SprintOSState>((set, get) => ({
 
   deleteWorkspaceAction: async (id, companyId) => {
     try {
+      set((state) => ({
+        workspacesList: state.workspacesList.filter((w) => w.id !== id),
+        activeWorkspaceId: state.activeWorkspaceId === id ? null : state.activeWorkspaceId,
+        workspace: state.activeWorkspaceId === id ? null : state.workspace,
+      }));
       await SprintOSRepository.deleteWorkspace(id, companyId);
       await get().fetchWorkspacesList(companyId);
-      if (get().activeWorkspaceId === id) {
-        set({ activeWorkspaceId: null, workspace: null });
-      }
       toast.success("Cronograma excluído.");
     } catch (e: any) {
       toast.error(`Erro ao excluir: ${e.message}`);

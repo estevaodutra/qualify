@@ -142,11 +142,20 @@ export function businessDayDelta(cal: WorkCalendar, a: LocalDateTime, b: LocalDa
     : -(businessDaysBetween(cal, db, da) - (isWorkDay(cal, toMs(db)) ? 1 : 0));
 }
 
-export const fmtDateTime = (dt: LocalDateTime | null | undefined): string => {
+export const fmtDateTime = (dt: string | null | undefined): string => {
   if (!dt) return "—";
-  const [d, t] = dt.split("T");
-  const [y, m, day] = d.split("-");
-  return `${day}/${m}/${y.slice(2)}${t ? " " + t : ""}`;
+  try {
+    const parsed = new Date(dt);
+    if (!isNaN(parsed.getTime())) {
+      const d = String(parsed.getDate()).padStart(2, "0");
+      const m = String(parsed.getMonth() + 1).padStart(2, "0");
+      const y = String(parsed.getFullYear()).slice(2);
+      const h = String(parsed.getHours()).padStart(2, "0");
+      const min = String(parsed.getMinutes()).padStart(2, "0");
+      return `${d}/${m}/${y} às ${h}:${min}`;
+    }
+  } catch {}
+  return dt;
 };
 
 export const fmtMinutes = (m: number | null | undefined): string => {

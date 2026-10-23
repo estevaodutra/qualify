@@ -403,13 +403,29 @@ export class SprintOSRepository {
 
     if (companyId && UUID_REGEX.test(workspaceId)) {
       try {
+        await (supabase as any).rpc("sprint_os_archive", { p_id: workspaceId });
+      } catch (e) {
+        console.warn("[SprintOSRepository] Erro na RPC sprint_os_archive:", e);
+      }
+
+      try {
+        await (supabase as any)
+          .from("sprint_os_workspaces")
+          .update({ archived_at: new Date().toISOString() })
+          .eq("id", workspaceId)
+          .eq("company_id", companyId);
+      } catch (e) {
+        console.warn("[SprintOSRepository] Erro ao atualizar archived_at no Supabase:", e);
+      }
+
+      try {
         await (supabase as any)
           .from("sprint_os_workspaces")
           .delete()
           .eq("id", workspaceId)
           .eq("company_id", companyId);
       } catch (e) {
-        console.warn("[SprintOSRepository] Erro ao excluir do Supabase:", e);
+        console.warn("[SprintOSRepository] Erro ao excluir fisicamente do Supabase:", e);
       }
     }
   }

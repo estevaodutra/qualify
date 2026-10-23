@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 /**
  * Página "Meus Cronogramas" (Apps → Cronogramas).
  * Especificação: Master Prompt v9.0 — Seções 3, 4 e 5.
@@ -187,18 +188,34 @@ export const SchedulesListView: React.FC = () => {
                     <div>
                       {/* Top: Status & Ações */}
                       <div className="flex items-center justify-between gap-2 mb-3">
-                        <Badge
-                          variant="outline"
-                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                            item.status === "active"
-                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
-                              : item.status === "completed"
-                              ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
-                              : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
-                          }`}
-                        >
-                          {item.status === "active" ? "🟢 Ativa" : item.status === "completed" ? "🏁 Concluída" : "🟡 Rascunho"}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant="outline"
+                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                              item.status === "active"
+                                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                                : item.status === "completed"
+                                ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
+                                : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+                            }`}
+                          >
+                            {item.status === "active" ? "🟢 Ativa" : item.status === "completed" ? "🏁 Concluída" : "🟡 Rascunho"}
+                          </Badge>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigator.clipboard.writeText(item.id);
+                              toast.success(`ID copiado: ${item.id}`);
+                            }}
+                            className="flex items-center gap-1 font-mono text-[10px] text-muted-foreground/80 hover:text-foreground bg-muted/60 hover:bg-muted px-2 py-0.5 rounded-md border border-border/50 transition-colors cursor-pointer"
+                            title={`Clique para copiar o ID: ${item.id}`}
+                          >
+                            <span className="text-[9px] text-muted-foreground/60 font-sans font-bold">ID</span>
+                            <span className="font-semibold">{item.id.slice(0, 8)}</span>
+                          </button>
+                        </div>
 
                         <div className="flex items-center gap-1">
                           <DropdownMenu>
@@ -219,6 +236,16 @@ export const SchedulesListView: React.FC = () => {
                               <DropdownMenuItem onClick={() => handleDuplicate(item.id)} className="cursor-pointer">
                                 <Copy className="h-3.5 w-3.5 mr-2" />
                                 Duplicar Cronograma
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  navigator.clipboard.writeText(item.id);
+                                  toast.success(`ID copiado: ${item.id}`);
+                                }}
+                                className="cursor-pointer"
+                              >
+                                <Copy className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                                Copiar ID do Cronograma
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
