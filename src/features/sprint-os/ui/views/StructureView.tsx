@@ -133,7 +133,19 @@ export const StructureView: React.FC = () => {
   if (!workspace || !activeSprintId) return null;
 
   const stages = stagesOf(workspace, activeSprintId);
-  const members = Object.values(workspace.members || {}).filter((m) => !m.archivedAt);
+  const members = React.useMemo(() => {
+    const list = Object.values(workspace.members || {}).filter((m) => !m.archivedAt && m.name);
+    const seen = new Set<string>();
+    const res: typeof list = [];
+    for (const m of list) {
+      const key = (m.userId || m.name || "").trim().toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        res.push(m);
+      }
+    }
+    return res;
+  }, [workspace.members]);
 
   const toggleStage = (id: string) => {
     setExpandedStages((prev) => ({ ...prev, [id]: prev[id] === undefined ? false : !prev[id] }));

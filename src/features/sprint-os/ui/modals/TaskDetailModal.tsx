@@ -129,7 +129,19 @@ export const TaskDetailModal: React.FC = () => {
   const stage = workspace.stages[task.stageId];
   const stagesList = stagesOf(workspace, activeSprintId);
   const subtasks = subtasksOf(workspace, task.id);
-  const members = Object.values(workspace.members || {}).filter((m) => !m.archivedAt);
+  const members = React.useMemo(() => {
+    const list = Object.values(workspace.members || {}).filter((m) => !m.archivedAt && m.name);
+    const seen = new Set<string>();
+    const res: typeof list = [];
+    for (const m of list) {
+      const key = (m.userId || m.name || "").trim().toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        res.push(m);
+      }
+    }
+    return res;
+  }, [workspace.members]);
   const assignee = task.assigneeId ? workspace.members[task.assigneeId] : null;
 
   // Cálculo de Progresso do Checklist

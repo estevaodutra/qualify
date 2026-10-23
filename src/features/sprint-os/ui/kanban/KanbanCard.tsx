@@ -166,6 +166,19 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
       ? Math.round((completedSubtasksCount / totalSubtasksCount) * 100)
       : 0;
   const assignee = task.assigneeId ? workspace.members[task.assigneeId] : null;
+  const uniqueMembers = React.useMemo(() => {
+    const list = Object.values(workspace.members || {}).filter((m) => !m.archivedAt && m.name);
+    const seen = new Set<string>();
+    const res: typeof list = [];
+    for (const m of list) {
+      const key = (m.userId || m.name || "").trim().toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        res.push(m);
+      }
+    }
+    return res;
+  }, [workspace.members]);
   const taskLabels = (task.labelIds || [])
     .map((id) => workspace.labels?.[id])
     .filter(Boolean);
@@ -614,19 +627,26 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
               <div className="px-2 py-1 text-[10px] font-bold uppercase text-muted-foreground">
                 Atribuir Responsável
               </div>
-              {Object.values(workspace.members || {}).map((m) => (
-                <DropdownMenuItem
-                  key={m.id}
-                  onClick={() => handleAssignMember(m.id)}
-                  className={`cursor-pointer gap-2 ${
-                    task.assigneeId === m.id ? "bg-primary/10 text-primary font-bold" : ""
-                  }`}
-                >
-                  <User className="h-3 w-3" />
-                  <span className="truncate">{m.name}</span>
-                  {task.assigneeId === m.id && <Check className="h-3 w-3 ml-auto" />}
-                </DropdownMenuItem>
-              ))}
+              {uniqueMembers.map((m) => {
+                const isSelected =
+                  task.assigneeId === m.id ||
+                  (assignee &&
+                    ((assignee.userId && m.userId && assignee.userId === m.userId) ||
+                     (assignee.name && m.name && assignee.name.trim().toLowerCase() === m.name.trim().toLowerCase())));
+                return (
+                  <DropdownMenuItem
+                    key={m.id}
+                    onClick={() => handleAssignMember(m.id)}
+                    className={`cursor-pointer gap-2 ${
+                      isSelected ? "bg-primary/10 text-primary font-bold" : ""
+                    }`}
+                  >
+                    <User className="h-3 w-3" />
+                    <span className="truncate">{m.name}</span>
+                    {isSelected && <Check className="h-3 w-3 ml-auto" />}
+                  </DropdownMenuItem>
+                );
+              })}
               {task.assigneeId && (
                 <DropdownMenuItem
                   onClick={() => handleAssignMember(null)}

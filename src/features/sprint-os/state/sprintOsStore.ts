@@ -82,6 +82,7 @@ import {
   createBlankWorkspace,
   reconcileWorkspaceWithAJ019,
   reconcileWorkspaceWithAJ024,
+  cleanDuplicateMembers,
   touch,
   log,
 } from "../domain/ops";
@@ -426,7 +427,8 @@ export const useSprintOSStore = create<SprintOSState>((set, get) => ({
 
       // Reconciliar workspace com os entregáveis e tarefas do AJ-019 se necessário
       const changed = reconcileWorkspaceWithAJ019(workspace, { actorName, nowIso: new Date().toISOString() });
-      if (changed) {
+      const duplicatesRemoved = cleanDuplicateMembers(workspace, { actorName, nowIso: new Date().toISOString() });
+      if (changed || duplicatesRemoved > 0) {
         SprintOSRepository.saveWorkspace(workspace, version, companyId, actorName).catch(console.warn);
       }
 

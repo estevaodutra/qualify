@@ -38,7 +38,7 @@ import { ShareLinkModal } from "./modals/ShareLinkModal";
 import { TemplatesModal } from "./modals/TemplatesModal";
 import { CreateScheduleModal } from "./modals/CreateScheduleModal";
 import { EditTemplateModal } from "./modals/EditTemplateModal";
-import { upsertMember } from "../domain/ops";
+import { upsertMember, cleanDuplicateMembers } from "../domain/ops";
 
 const FloatingTimerBar: React.FC = () => {
   const { user } = useAuth();
@@ -195,29 +195,50 @@ export const SprintOSPage: React.FC = () => {
     }
   }, [urlWorkspaceId]);
 
-  // Sincronização automática dos membros do Qualify no Sprint OS em lote único
+  // Sincronização automática e higienização dos membros do Qualify no Sprint OS em lote único
   useEffect(() => {
-    if (!workspace || !companyMembers || companyMembers.length === 0) return;
+    if (!workspace) return;
 
-    const missing = companyMembers.filter(
-      (cm) => !workspace.members[cm.id] && !syncedMembersRef.current.has(cm.id)
+    // Detecta se existem duplicatas no workspace atual (por userId ou por nome)
+    const existingList = Object.values(workspace.members || {});
+    const hasDuplicates = existingList.some((m, idx) =>
+      existingList.findIndex(
+        (other) =>
+          other.id !== m.id &&
+          ((m.userId && other.userId && m.userId === other.userId) ||
+           (m.name && other.name && m.name.trim().toLowerCase() === other.name.trim().toLowerCase()))
+      ) > idx
     );
 
-    if (missing.length === 0) return;
+    const missing = (companyMembers || []).filter((cm) => {
+      const alreadyHas = Object.values(workspace.members || {}).some(
+        (m) =>
+          m.id === cm.id ||
+          (cm.user_id && m.userId === cm.user_id) ||
+          (cm.full_name && m.name && m.name.trim().toLowerCase() === cm.full_name.trim().toLowerCase())
+      );
+      return !alreadyHas && !syncedMembersRef.current.has(cm.id);
+    });
 
-    missing.forEach((cm) => syncedMembersRef.current.add(cm.id));
+    if (hasDuplicates || missing.length > 0) {
+      missing.forEach((cm) => syncedMembersRef.current.add(cm.id));
 
-    mutate((ws, ctx) => {
-      missing.forEach((cm) => {
-        upsertMember(ws, ctx, {
-          id: cm.id,
-          userId: cm.user_id,
-          name: cm.full_name || cm.email || "Membro Qualify",
-          role: cm.role,
-          active: cm.is_active,
+      mutate((ws, ctx) => {
+        // Higieniza duplicatas pré-existentes
+        cleanDuplicateMembers(ws, ctx);
+
+        // Adiciona apenas membros que realmente faltavam
+        missing.forEach((cm) => {
+          upsertMember(ws, ctx, {
+            id: cm.id,
+            userId: cm.user_id,
+            name: cm.full_name || cm.email || "Membro Qualify",
+            role: cm.role,
+            active: cm.is_active,
+          });
         });
-      });
-    }, user?.email || "Sistema");
+      }, user?.email || "Sistema");
+    }
   }, [workspace?.project?.id, companyMembers, mutate, user?.email]);
 
   if (isLoading) {

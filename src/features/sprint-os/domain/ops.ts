@@ -451,15 +451,137 @@ export function removeDependency(ws: Workspace, ctx: Ctx, id: ID) {
 // ───────────── Members / Calendars / Costs ─────────────
 
 export function upsertMember(ws: Workspace, ctx: Ctx, data: Partial<Member> & { name: string }): ID {
+  // 1. Se veio id direto e já existe na coleção
   if (data.id && ws.members[data.id]) {
-    Object.assign(ws.members[data.id], data); touch(ws.members[data.id], ctx);
+    Object.assign(ws.members[data.id], data);
+    touch(ws.members[data.id], ctx);
     log(ws, ctx, "update", "member", data.id, `Responsável atualizado: ${data.name}`);
     return data.id;
   }
-  const m: Member = { ...base(ctx), userId: null, role: "", calendarId: null, active: true, ...data, id: newId() };
-  ws.members[m.id] = m;
-  log(ws, ctx, "create", "member", m.id, `Responsável adicionado: ${m.name}`);
-  return m.id;
+
+  // 2. Se já existe membro com o mesmo userId (não arquivado)
+  if (data.userId) {
+    const existingByUserId = Object.values(ws.members || {}).find(
+      (m) => m.userId === data.userId && !m.archivedAt
+    );
+    if (existingByUserId) {
+      Object.assign(existingByUserId, data);
+      touch(existingByUserId, ctx);
+      log(ws, ctx, "update", "member", existingByUserId.id, `Responsável atualizado por userId: ${data.name}`);
+      return existingByUserId.id;
+    }
+  }
+
+  // 3. Se já existe membro com o mesmo nome (não arquivado, case-insensitive)
+  if (data.name) {
+    const cleanName = data.name.trim().toLowerCase();
+    const existingByName = Object.values(ws.members || {}).find(
+      (m) => m.name && m.name.trim().toLowerCase() === cleanName && !m.archivedAt
+    );
+    if (existingByName) {
+      Object.assign(existingByName, data);
+      touch(existingByName, ctx);
+      log(ws, ctx, "update", "member", existingByName.id, `Responsável atualizado por nome: ${data.name}`);
+      return existingByName.id;
+    }
+  }
+
+  // 4. Criação de novo membro garantindo ID estável
+  const targetId = data.id || newId();
+  const m: Member = {
+    ...base(ctx),
+    userId: null,
+    role: "",
+    calendarId: null,
+    active: true,
+    ...data,
+    id: targetId,
+  };
+  ws.members[targetId] = m;
+  log(ws, ctx, "create", "member", targetId, `Responsável adicionado: ${m.name}`);
+  return targetId;
+}
+
+/**
+ * Higieniza membros duplicados existentes no workspace (mesmo userId ou mesmo nome),
+ * migrando as tarefas associadas para o membro canônico.
+ */
+export function cleanDuplicateMembers(ws: Workspace, ctx: Ctx): number {
+  if (!ws.members) return 0;
+
+  const members = Object.values(ws.members);
+  if (members.length <= 1) return 0;
+
+  const canonicalByKey = new Map<string, Member>();
+  const idMap = new Map<string, string>(); // duplicateId -> canonicalId
+  const duplicateIdsToRemove = new Set<string>();
+
+  for (const m of members) {
+    if (!m || !m.id) continue;
+    // Chave única: preferencialmente userId se existir, senão nome normalizado
+    const key = m.userId
+      ? `user:${m.userId}`
+      : `name:${(m.name || "").trim().toLowerCase()}`;
+
+    if (!canonicalByKey.has(key)) {
+      canonicalByKey.set(key, m);
+    } else {
+      const canonical = canonicalByKey.get(key)!;
+      // Preserva userId no canônico se o duplicado tiver
+      if (m.userId && !canonical.userId) {
+        canonical.userId = m.userId;
+      }
+      idMap.set(m.id, canonical.id);
+      duplicateIdsToRemove.add(m.id);
+    }
+  }
+
+  if (duplicateIdsToRemove.size === 0) return 0;
+
+  // Remapear tarefas que apontavam para membros duplicados
+  if (ws.tasks) {
+    for (const t of Object.values(ws.tasks)) {
+      if (t.assigneeId && idMap.has(t.assigneeId)) {
+        t.assigneeId = idMap.get(t.assigneeId)!;
+        touch(t, ctx);
+      }
+      if (t.validatorId && idMap.has(t.validatorId)) {
+        t.validatorId = idMap.get(t.validatorId)!;
+        touch(t, ctx);
+      }
+      if (Array.isArray(t.participantIds) && t.participantIds.length > 0) {
+        const nextParticipants = Array.from(
+          new Set(t.participantIds.map((pid) => idMap.get(pid) || pid))
+        );
+        if (
+          nextParticipants.length !== t.participantIds.length ||
+          nextParticipants.some((p, i) => p !== t.participantIds[i])
+        ) {
+          t.participantIds = nextParticipants;
+          touch(t, ctx);
+        }
+      }
+    }
+  }
+
+  // Deletar membros duplicados
+  for (const dupId of duplicateIdsToRemove) {
+    delete ws.members[dupId];
+    if (ws.costs && ws.costs[dupId] !== undefined) {
+      delete ws.costs[dupId];
+    }
+  }
+
+  touch(ws.project, ctx);
+  log(
+    ws,
+    ctx,
+    "cleanup",
+    "member",
+    ws.project.id,
+    `Higienização de membros: ${duplicateIdsToRemove.size} duplicatas consolidadas.`
+  );
+  return duplicateIdsToRemove.size;
 }
 
 export function setMemberCost(ws: Workspace, ctx: Ctx, memberId: ID, cost: number | null) {

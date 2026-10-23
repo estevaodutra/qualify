@@ -85,7 +85,19 @@ export const ExecutiveHeader: React.FC = () => {
   const activeSprint = activeSprintId ? workspace.sprints[activeSprintId] : sprints[0];
   const isActivated = !!activeSprint?.activatedAt;
 
-  const membersList = Object.values(workspace.members || {}).filter((m) => !m.archivedAt);
+  const membersList = React.useMemo(() => {
+    const list = Object.values(workspace.members || {}).filter((m) => !m.archivedAt && m.name);
+    const seen = new Set<string>();
+    const res: typeof list = [];
+    for (const m of list) {
+      const key = (m.userId || m.name || "").trim().toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        res.push(m);
+      }
+    }
+    return res;
+  }, [workspace.members]);
 
   // Encontra membro correspondente ao usuário logado
   const myMember = membersList.find(
