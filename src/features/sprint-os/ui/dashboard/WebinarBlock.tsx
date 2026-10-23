@@ -29,6 +29,7 @@ import {
   MoreVertical,
   Archive,
   FileText,
+  DollarSign,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -152,6 +153,10 @@ export const WebinarBlock: React.FC<WebinarBlockProps> = ({
   const [editingMetricKey, setEditingMetricKey] = useState<string | null>(null);
   const [editingValueInput, setEditingValueInput] = useState("");
 
+  // Edição inline de faturamento monetário (card Compraram/Vendas)
+  const [isEditingRevenue, setIsEditingRevenue] = useState(false);
+  const [editingRevenueInput, setEditingRevenueInput] = useState("");
+
   // Edição inline de título de card
   const [inlineEditingCardId, setInlineEditingCardId] = useState<string | null>(null);
   const [inlineCardTitle, setInlineCardTitle] = useState("");
@@ -220,6 +225,7 @@ export const WebinarBlock: React.FC<WebinarBlockProps> = ({
         liveAttendance: { value: 0, source: "manual" },
         retention: { value: 0, source: "manual" },
         buyers: { value: 0, source: "manual" },
+        revenue: { value: 0, source: "manual" },
       },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -231,6 +237,7 @@ export const WebinarBlock: React.FC<WebinarBlockProps> = ({
   const liveVal = m.liveAttendance?.value ?? 0;
   const retentionVal = m.retention?.value ?? 0;
   const buyersVal = m.buyers?.value ?? 0;
+  const revenueVal = m.revenue?.value ?? 0;
 
   // -------------------------------------------------------------
   // CÁLCULO DAS TAXAS DO FUNIL DE CONVERSÃO (SEÇÃO 4 DO AJ-023)
@@ -285,6 +292,34 @@ export const WebinarBlock: React.FC<WebinarBlockProps> = ({
   ) => {
     setEditingMetricKey(metricKey);
     setEditingValueInput(String(currentVal));
+  };
+
+  const handleStartEditRevenue = (currentRevenue: number) => {
+    setIsEditingRevenue(true);
+    setEditingRevenueInput(currentRevenue > 0 ? String(currentRevenue) : "");
+  };
+
+  const handleCommitRevenue = async () => {
+    let cleaned = editingRevenueInput.trim().replace(/\s/g, "");
+    if (cleaned.includes(",") && cleaned.includes(".")) {
+      cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+    } else if (cleaned.includes(",")) {
+      cleaned = cleaned.replace(",", ".");
+    }
+    const parsed = parseFloat(cleaned);
+    const nextVal = isNaN(parsed) ? 0 : Math.max(0, Math.round(parsed * 100) / 100);
+    await mutate((ws, ctx) => {
+      updateWebinarMetric(
+        ws,
+        ctx,
+        activeEdition.id,
+        "revenue",
+        nextVal,
+        "manual"
+      );
+    }, user?.email || "Operador");
+    setIsEditingRevenue(false);
+    toast.success("Faturamento monetário atualizado!");
   };
 
   const handleCommitInlineEdit = async (
@@ -403,7 +438,7 @@ export const WebinarBlock: React.FC<WebinarBlockProps> = ({
     webinar_buyers: {
       metricKey: "buyers",
       defaultTitle: "Compraram",
-      desc: "Compras confirmadas no evento",
+      desc: "Compras confirmadas e faturamento gerado",
       icon: <ShoppingBag className="h-3.5 w-3.5 text-emerald-500" />,
       colorClass: "text-emerald-600 dark:text-emerald-400 font-black",
     },
@@ -565,12 +600,16 @@ export const WebinarBlock: React.FC<WebinarBlockProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
         {displayCards.map((card) => {
           const cfg = CARDS_CONFIG[card.id] || CARDS_CONFIG.webinar_invites;
+          const isSalesCard = card.id === "webinar_buyers" || cfg.metricKey === "buyers";
           const metricData = activeEdition.metrics[cfg.metricKey];
           const val = metricData?.value ?? 0;
           const isInline = editingMetricKey === cfg.metricKey;
           const isDragging = draggedCardId === card.id;
           const isDragOver = dragOverCardId === card.id;
           const cardDescription = card.description || cfg.desc;
+          const latestUpdate = isSalesCard && activeEdition.metrics.revenue?.updatedAt && (!metricData?.updatedAt || activeEdition.metrics.revenue.updatedAt > metricData.updatedAt)
+            ? activeEdition.metrics.revenue
+            : metricData;
 
           return (
             <div
@@ -726,13 +765,20 @@ export const WebinarBlock: React.FC<WebinarBlockProps> = ({
                       </button>
                     </div>
                   ) : (
-                    <span
-                      onClick={() => handleStartInlineEdit(cfg.metricKey, val)}
-                      className={`text-2xl font-black font-mono tracking-tight cursor-pointer hover:underline ${cfg.colorClass}`}
-                      title="Clique para editar valor diretamente"
-                    >
-                      {val.toLocaleString("pt-BR")}
-                    </span>
+                    <div className="flex items-baseline gap-1.5">
+                      <span
+                        onClick={() => handleStartInlineEdit(cfg.metricKey, val)}
+                        className={`text-2xl font-black font-mono tracking-tight cursor-pointer hover:underline ${cfg.colorClass}`}
+                        title="Clique para editar quantidade unitária diretamente"
+                      >
+                        {val.toLocaleString("pt-BR")}
+                      </span>
+                      {isSalesCard && (
+                        <span className="text-[11px] font-semibold text-muted-foreground font-sans">
+                          {val === 1 ? "venda" : "vendas"}
+                        </span>
+                      )}
+                    </div>
                   )}
 
                   {/* Controles de Incremento e Decremento */}
@@ -766,16 +812,101 @@ export const WebinarBlock: React.FC<WebinarBlockProps> = ({
                   )}
                 </div>
 
+                {/* Bloco de Valor Monetário (Faturamento) no Card de Vendas */}
+                {isSalesCard && (
+                  <div className="pt-1.5 mt-1 border-t border-border/40 space-y-1">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                        <DollarSign className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                        Faturamento
+                      </span>
+                      {!isEditingRevenue && (
+                        <button
+                          type="button"
+                          onClick={() => handleStartEditRevenue(revenueVal)}
+                          className="text-[10px] text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400 flex items-center gap-0.5 cursor-pointer transition-colors"
+                          title="Editar faturamento em R$"
+                        >
+                          <Edit2 className="h-2.5 w-2.5" />
+                          <span>Editar</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {isEditingRevenue ? (
+                      <div className="flex items-center gap-1">
+                        <div className="relative flex-1">
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted-foreground font-mono">
+                            R$
+                          </span>
+                          <Input
+                            type="text"
+                            value={editingRevenueInput}
+                            onChange={(e) => setEditingRevenueInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleCommitRevenue();
+                              if (e.key === "Escape") setIsEditingRevenue(false);
+                            }}
+                            autoFocus
+                            placeholder="0,00"
+                            className="h-6 text-xs font-mono font-bold bg-background border-emerald-500 text-foreground pl-7 pr-1 rounded-md"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleCommitRevenue}
+                          className="h-6 w-6 flex items-center justify-center bg-emerald-600 text-white hover:bg-emerald-700 rounded-md cursor-pointer shrink-0"
+                          title="Salvar faturamento (Enter)"
+                        >
+                          <Check className="h-3 w-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingRevenue(false)}
+                          className="h-6 w-6 flex items-center justify-center bg-muted text-muted-foreground hover:text-foreground rounded-md cursor-pointer shrink-0 text-xs"
+                          title="Cancelar (Esc)"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() => handleStartEditRevenue(revenueVal)}
+                        className="group/rev flex items-baseline justify-between cursor-pointer py-0.5 px-1 -mx-1 rounded-md hover:bg-emerald-500/10 transition-colors"
+                        title="Clique para editar o faturamento"
+                      >
+                        <span className="text-base sm:text-lg font-black font-mono tracking-tight text-emerald-600 dark:text-emerald-400 group-hover/rev:underline">
+                          {revenueVal.toLocaleString("pt-BR", {
+                            style: "currency",
+                            currency: "BRL",
+                          })}
+                        </span>
+                        {val > 0 && revenueVal > 0 && (
+                          <span
+                            className="text-[9px] font-mono text-muted-foreground bg-muted/60 px-1 py-0.2 rounded border border-border/50"
+                            title="Ticket Médio por venda"
+                          >
+                            TM: {(revenueVal / val).toLocaleString("pt-BR", {
+                              style: "currency",
+                              currency: "BRL",
+                            })}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Descrição Curta */}
                 <p className="text-[10px] text-muted-foreground line-clamp-1" title={cardDescription}>
                   {cardDescription}
                 </p>
 
                 {/* Rastreabilidade: Data e Responsável da última alteração */}
-                {metricData?.updatedAt && (
+                {latestUpdate?.updatedAt && (
                   <div className="text-[9px] text-muted-foreground/60 pt-0.5 border-t border-border/30 truncate">
-                    Atualizado em {fmtDateTime(metricData.updatedAt).split(" ")[1]}
-                    {metricData.updatedBy ? ` por ${metricData.updatedBy}` : ""}
+                    Atualizado em {fmtDateTime(latestUpdate.updatedAt).split(" ")[1]}
+                    {latestUpdate.updatedBy ? ` por ${latestUpdate.updatedBy}` : ""}
                   </div>
                 )}
               </div>

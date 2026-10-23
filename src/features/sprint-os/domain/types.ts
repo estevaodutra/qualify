@@ -926,7 +926,8 @@ export interface WebinarEdition {
     confirmed: WebinarMetric;      // 02 — CONFIRMOU PARTICIPAÇÃO
     liveAttendance: WebinarMetric; // 03 — ENTROU AO VIVO
     retention: WebinarMetric;       // 04 — FICOU ATÉ O FINAL
-    buyers: WebinarMetric;          // 05 — COMPROU
+    buyers: WebinarMetric;          // 05 — COMPROU (quantidade unitária)
+    revenue?: WebinarMetric;        // 05.1 — FATURAMENTO / VALOR MONETÁRIO (R$)
   };
   notes?: string;
   createdAt: string;
@@ -953,6 +954,7 @@ export const DEFAULT_WEBINAR_DATA: WebinarData = {
         liveAttendance: { value: 0, source: "manual", updatedAt: new Date().toISOString(), updatedBy: "Operador" },
         retention: { value: 0, source: "manual", updatedAt: new Date().toISOString(), updatedBy: "Operador" },
         buyers: { value: 0, source: "manual", updatedAt: new Date().toISOString(), updatedBy: "Operador" },
+        revenue: { value: 0, source: "manual", updatedAt: new Date().toISOString(), updatedBy: "Operador" },
       },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

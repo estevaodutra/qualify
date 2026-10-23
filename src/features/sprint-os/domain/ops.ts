@@ -2440,13 +2440,20 @@ export function updateWebinarMetric(
         liveAttendance: { value: 0, source: "manual", updatedAt: ctx.nowIso, updatedBy: ctx.actorName },
         retention: { value: 0, source: "manual", updatedAt: ctx.nowIso, updatedBy: ctx.actorName },
         buyers: { value: 0, source: "manual", updatedAt: ctx.nowIso, updatedBy: ctx.actorName },
+        revenue: { value: 0, source: "manual", updatedAt: ctx.nowIso, updatedBy: ctx.actorName },
       },
       createdAt: ctx.nowIso,
       updatedAt: ctx.nowIso,
     };
   }
   const edition = data.editions[editionId];
-  const safeVal = Math.max(0, Math.round(Number(value) || 0));
+  if (!edition.metrics.revenue) {
+    edition.metrics.revenue = { value: 0, source: "manual", updatedAt: ctx.nowIso, updatedBy: ctx.actorName };
+  }
+  const safeVal =
+    metricKey === "revenue"
+      ? Math.max(0, Math.round((Number(value) || 0) * 100) / 100)
+      : Math.max(0, Math.round(Number(value) || 0));
   edition.metrics[metricKey] = {
     value: safeVal,
     source,
@@ -2485,6 +2492,7 @@ export function createWebinarEdition(
       liveAttendance: { value: 0, source: "manual", updatedAt: ctx.nowIso, updatedBy: ctx.actorName },
       retention: { value: 0, source: "manual", updatedAt: ctx.nowIso, updatedBy: ctx.actorName },
       buyers: { value: 0, source: "manual", updatedAt: ctx.nowIso, updatedBy: ctx.actorName },
+      revenue: { value: 0, source: "manual", updatedAt: ctx.nowIso, updatedBy: ctx.actorName },
     },
     createdAt: ctx.nowIso,
     updatedAt: ctx.nowIso,
