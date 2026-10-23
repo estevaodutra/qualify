@@ -16,6 +16,7 @@ import { createBlankWorkspace, newId } from "../domain/ops";
 const LOCAL_STORAGE_KEY_PREFIX = "sprint_os_ws_";
 const TEMPLATE_STORAGE_KEY_PREFIX = "sprint_os_tpl_";
 const ACTIVE_WS_ID_KEY = "sprint_os_active_workspace_id";
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface WorkspaceListItem {
   id: string;
@@ -61,48 +62,7 @@ export class SprintOSRepository {
   static async listWorkspaces(companyId?: string | null): Promise<WorkspaceListItem[]> {
     const map = new Map<string, WorkspaceListItem>();
 
-    // 1. Carregar do LocalStorage
-    try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith(LOCAL_STORAGE_KEY_PREFIX)) {
-          const raw = localStorage.getItem(key);
-          if (raw) {
-            const ws = JSON.parse(raw) as Workspace;
-            if (ws?.project?.id) {
-              const liveTasks = Object.values(ws.tasks || {}).filter((t) => !t.archivedAt);
-              const doneTasks = liveTasks.filter((t) => t.status === "done");
-              const activeSprint = Object.values(ws.sprints || {}).find((s) => !s.archivedAt && s.status === "active")
-                || Object.values(ws.sprints || {}).find((s) => !s.archivedAt);
-
-              const sprintStatus: "draft" | "active" | "completed" =
-                activeSprint?.status === "completed"
-                  ? "completed"
-                  : activeSprint?.activatedAt
-                  ? "active"
-                  : "draft";
-
-              map.set(ws.project.id, {
-                id: ws.project.id,
-                name: activeSprint?.name || ws.project.name,
-                projectName: ws.project.name,
-                client: ws.project.client || "Cliente",
-                updatedAt: ws.project.updatedAt || new Date().toISOString(),
-                taskCount: liveTasks.length,
-                doneTaskCount: doneTasks.length,
-                progress: liveTasks.length ? Math.round((doneTasks.length / liveTasks.length) * 100) : 0,
-                status: sprintStatus,
-                sprintCount: Object.keys(ws.sprints || {}).length,
-              });
-            }
-          }
-        }
-      }
-    } catch (e) {
-      console.warn("[SprintOSRepository] Erro ao listar do LocalStorage:", e);
-    }
-
-    // 2. Carregar do Supabase se houver companyId
+    // 1. Carregar do Supabase se houver companyId (fonte primária de verdade)
     if (companyId) {
       try {
         const { data, error } = await (supabase as any)
@@ -118,8 +78,9 @@ export class SprintOSRepository {
             if (ws && ws.project) {
               const liveTasks = Object.values(ws.tasks || {}).filter((t) => !t.archivedAt);
               const doneTasks = liveTasks.filter((t) => t.status === "done");
-              const activeSprint = Object.values(ws.sprints || {}).find((s) => !s.archivedAt && s.status === "active")
-                || Object.values(ws.sprints || {}).find((s) => !s.archivedAt);
+              const activeSprint =
+                Object.values(ws.sprints || {}).find((s) => !s.archivedAt && s.status === "active") ||
+                Object.values(ws.sprints || {}).find((s) => !s.archivedAt);
 
               map.set(row.id, {
                 id: row.id,
@@ -130,9 +91,14 @@ export class SprintOSRepository {
                 taskCount: liveTasks.length,
                 doneTaskCount: doneTasks.length,
                 progress: liveTasks.length ? Math.round((doneTasks.length / liveTasks.length) * 100) : 0,
-                status: activeSprint?.activatedAt ? "active" : "draft",
+                status: activeSprint?.status === "completed" ? "completed" : activeSprint?.activatedAt ? "active" : "draft",
                 sprintCount: Object.keys(ws.sprints || {}).length,
               });
+
+              // Atualiza cache local isolado desta empresa
+              try {
+                localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}${companyId}_${row.id}`, JSON.stringify(ws));
+              } catch {}
             }
           });
         }
@@ -141,24 +107,92 @@ export class SprintOSRepository {
       }
     }
 
-    // Se nenhum cronograma existir, inicializa o seed matriz "Percurso da Vida"
-    if (map.size === 0) {
-      const seed = createPercursoDaVidaSeed();
-      localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}${seed.project.id}`, JSON.stringify(seed));
-      const liveTasks = Object.values(seed.tasks).filter((t) => !t.archivedAt);
-      const doneTasks = liveTasks.filter((t) => t.status === "done");
-      map.set(seed.project.id, {
-        id: seed.project.id,
-        name: Object.values(seed.sprints)[0]?.name || seed.project.name,
-        projectName: seed.project.name,
-        client: seed.project.client,
-        updatedAt: seed.project.updatedAt,
-        taskCount: liveTasks.length,
-        doneTaskCount: doneTasks.length,
-        progress: liveTasks.length ? Math.round((doneTasks.length / liveTasks.length) * 100) : 0,
-        status: "draft",
-        sprintCount: 1,
-      });
+    // 2. Carregar do LocalStorage APENAS os cronogramas da empresa atual
+    const companyPrefix = companyId ? `${LOCAL_STORAGE_KEY_PREFIX}${companyId}_` : `${LOCAL_STORAGE_KEY_PREFIX}anon_`;
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(companyPrefix)) {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const ws = JSON.parse(raw) as Workspace;
+            if (ws?.project?.id && !map.has(ws.project.id)) {
+              const liveTasks = Object.values(ws.tasks || {}).filter((t) => !t.archivedAt);
+              const doneTasks = liveTasks.filter((t) => t.status === "done");
+              const activeSprint =
+                Object.values(ws.sprints || {}).find((s) => !s.archivedAt && s.status === "active") ||
+                Object.values(ws.sprints || {}).find((s) => !s.archivedAt);
+
+              map.set(ws.project.id, {
+                id: ws.project.id,
+                name: activeSprint?.name || ws.project.name,
+                projectName: ws.project.name,
+                client: ws.project.client || "Cliente",
+                updatedAt: ws.project.updatedAt || new Date().toISOString(),
+                taskCount: liveTasks.length,
+                doneTaskCount: doneTasks.length,
+                progress: liveTasks.length ? Math.round((doneTasks.length / liveTasks.length) * 100) : 0,
+                status: activeSprint?.status === "completed" ? "completed" : activeSprint?.activatedAt ? "active" : "draft",
+                sprintCount: Object.keys(ws.sprints || {}).length,
+              });
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[SprintOSRepository] Erro ao listar do LocalStorage:", e);
+    }
+
+    // 3. Migração automática de cronograma legado local (se existir sem prefixo de empresa)
+    if (companyId && map.size === 0) {
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith(LOCAL_STORAGE_KEY_PREFIX) && !key.includes(companyId) && !key.startsWith(TEMPLATE_STORAGE_KEY_PREFIX)) {
+            const raw = localStorage.getItem(key);
+            if (raw) {
+              const ws = JSON.parse(raw) as Workspace;
+              if (ws?.project?.id) {
+                const validId = UUID_REGEX.test(ws.project.id) ? ws.project.id : newId();
+                ws.project.id = validId;
+                if (ws.sprints) {
+                  Object.values(ws.sprints).forEach((s) => {
+                    s.projectId = validId;
+                  });
+                }
+
+                // Salva no Supabase e no cache com a chave da empresa
+                SprintOSRepository.saveWorkspace(ws, 1, companyId, "Operador").catch(console.warn);
+
+                // Remove a chave legada antiga
+                localStorage.removeItem(key);
+
+                const liveTasks = Object.values(ws.tasks || {}).filter((t) => !t.archivedAt);
+                const doneTasks = liveTasks.filter((t) => t.status === "done");
+                const activeSprint =
+                  Object.values(ws.sprints || {}).find((s) => !s.archivedAt && s.status === "active") ||
+                  Object.values(ws.sprints || {}).find((s) => !s.archivedAt);
+
+                map.set(validId, {
+                  id: validId,
+                  name: activeSprint?.name || ws.project.name,
+                  projectName: ws.project.name,
+                  client: ws.project.client || "Cliente",
+                  updatedAt: ws.project.updatedAt || new Date().toISOString(),
+                  taskCount: liveTasks.length,
+                  doneTaskCount: doneTasks.length,
+                  progress: liveTasks.length ? Math.round((doneTasks.length / liveTasks.length) * 100) : 0,
+                  status: activeSprint?.status === "completed" ? "completed" : activeSprint?.activatedAt ? "active" : "draft",
+                  sprintCount: Object.keys(ws.sprints || {}).length,
+                });
+                break;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[SprintOSRepository] Erro ao migrar cronograma local:", e);
+      }
     }
 
     return Array.from(map.values()).sort(
@@ -167,21 +201,36 @@ export class SprintOSRepository {
   }
 
   /**
-   * Salva o workspace. Tenta salvar no Supabase se houver companyId e sessão;
+   * Salva o workspace. Tenta salvar no Supabase se houver companyId;
    * faz fallback seguro e imediato para localStorage.
    */
   static async saveWorkspace(
     workspace: Workspace,
-    expectedVersion: number,
+    expectedVersion = 1,
     companyId?: string | null,
     actorName = "Operador"
   ): Promise<SaveResult> {
+    // Garante que o projeto tenha um ID no formato UUID válido aceito pelo PostgreSQL
+    if (!UUID_REGEX.test(workspace.project.id)) {
+      const oldId = workspace.project.id;
+      const validUuid = newId();
+      workspace.project.id = validUuid;
+      if (workspace.sprints) {
+        Object.values(workspace.sprints).forEach((s) => {
+          if (s.projectId === oldId) s.projectId = validUuid;
+        });
+      }
+    }
+
     const wsId = workspace.project.id;
     const wsName = workspace.project.name;
 
-    // Salvar sempre localmente como garantia imediata
+    // Salvar sempre localmente com chave isolada por empresa
+    const storageKey = companyId
+      ? `${LOCAL_STORAGE_KEY_PREFIX}${companyId}_${wsId}`
+      : `${LOCAL_STORAGE_KEY_PREFIX}${wsId}`;
     try {
-      localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}${wsId}`, JSON.stringify(workspace));
+      localStorage.setItem(storageKey, JSON.stringify(workspace));
       localStorage.setItem(ACTIVE_WS_ID_KEY, wsId);
     } catch (e) {
       console.warn("[SprintOSRepository] Erro ao salvar no LocalStorage:", e);
@@ -192,6 +241,40 @@ export class SprintOSRepository {
     }
 
     try {
+      // 1. Verificar se o registro já existe no Supabase para a empresa
+      const { data: existing, error: selectErr } = await (supabase as any)
+        .from("sprint_os_workspaces")
+        .select("id, version")
+        .eq("id", wsId)
+        .maybeSingle();
+
+      if (selectErr) {
+        console.warn("[SprintOSRepository] Aviso ao checar existência no Supabase:", selectErr.message);
+      }
+
+      if (!existing) {
+        // 2. Não existe ainda: Faz o INSERT inicial com o company_id
+        const { data: inserted, error: insertErr } = await (supabase as any)
+          .from("sprint_os_workspaces")
+          .insert({
+            id: wsId,
+            company_id: companyId,
+            name: wsName,
+            data: workspace,
+            version: 1,
+          })
+          .select("id, version")
+          .single();
+
+        if (insertErr) {
+          console.error("[SprintOSRepository] Erro no INSERT inicial do Supabase:", insertErr.message);
+          return { ok: true, version: expectedVersion + 1 };
+        }
+
+        return { ok: true, version: inserted?.version ?? 1 };
+      }
+
+      // 3. Já existe: Tenta atualizar via RPC sprint_os_save (concorrência otimista)
       const { data, error } = await (supabase as any).rpc("sprint_os_save", {
         p_id: wsId,
         p_expected_version: expectedVersion,
@@ -200,7 +283,21 @@ export class SprintOSRepository {
       });
 
       if (error) {
-        console.warn("[SprintOSRepository] RPC Supabase indisponível ou com erro, mantendo persistência local:", error.message);
+        console.warn("[SprintOSRepository] RPC sprint_os_save falhou, tentando update direto:", error.message);
+        const { error: directUpdateErr } = await (supabase as any)
+          .from("sprint_os_workspaces")
+          .update({
+            data: workspace,
+            name: wsName,
+            version: expectedVersion + 1,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", wsId)
+          .eq("company_id", companyId);
+
+        if (directUpdateErr) {
+          console.warn("[SprintOSRepository] Direct update error:", directUpdateErr.message);
+        }
         return { ok: true, version: expectedVersion + 1 };
       }
 
@@ -219,7 +316,7 @@ export class SprintOSRepository {
 
       return { ok: true, version: expectedVersion + 1 };
     } catch (err: any) {
-      console.warn("[SprintOSRepository] Falha de rede com Supabase, salvo localmente:", err.message);
+      console.warn("[SprintOSRepository] Falha de comunicação com Supabase:", err.message);
       return { ok: true, version: expectedVersion + 1 };
     }
   }
@@ -230,8 +327,8 @@ export class SprintOSRepository {
   static async loadWorkspace(companyId?: string | null, workspaceId?: string | null): Promise<{ workspace: Workspace; version: number }> {
     let targetId = workspaceId || localStorage.getItem(ACTIVE_WS_ID_KEY);
 
-    // 1. Tentar carregar do Supabase se houver companyId e targetId
-    if (companyId && targetId) {
+    // 1. Tentar carregar do Supabase se houver companyId e targetId válido
+    if (companyId && targetId && UUID_REGEX.test(targetId)) {
       try {
         const { data, error } = await (supabase as any)
           .from("sprint_os_workspaces")
@@ -244,8 +341,10 @@ export class SprintOSRepository {
         if (!error && data && data.data) {
           const ws = data.data as Workspace;
           if (ws && ws.schemaVersion === 1) {
-            localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}${data.id}`, JSON.stringify(ws));
-            localStorage.setItem(ACTIVE_WS_ID_KEY, data.id);
+            try {
+              localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}${companyId}_${data.id}`, JSON.stringify(ws));
+              localStorage.setItem(ACTIVE_WS_ID_KEY, data.id);
+            } catch {}
             return { workspace: ws, version: data.version };
           }
         }
@@ -254,12 +353,15 @@ export class SprintOSRepository {
       }
     }
 
-    // 2. Tentar carregar do LocalStorage
+    // 2. Tentar carregar do LocalStorage (com isolamento por empresa e fallback)
     if (targetId) {
-      const localRaw = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}${targetId}`);
-      if (localRaw) {
+      const companyKey = companyId ? `${LOCAL_STORAGE_KEY_PREFIX}${companyId}_${targetId}` : null;
+      const legacyKey = `${LOCAL_STORAGE_KEY_PREFIX}${targetId}`;
+
+      const raw = (companyKey ? localStorage.getItem(companyKey) : null) || localStorage.getItem(legacyKey);
+      if (raw) {
         try {
-          const ws = JSON.parse(localRaw) as Workspace;
+          const ws = JSON.parse(raw) as Workspace;
           if (ws && ws.schemaVersion === 1) {
             return { workspace: ws, version: 1 };
           }
@@ -269,11 +371,17 @@ export class SprintOSRepository {
       }
     }
 
-    // 3. Fallback: Inicializar com o seed canônico "Percurso da Vida"
+    // 3. Fallback: Inicializar um workspace com UUID válido
     const seed = createPercursoDaVidaSeed();
+    const validUuid = newId();
+    seed.project.id = validUuid;
+    if (seed.sprints) {
+      Object.values(seed.sprints).forEach((s) => { s.projectId = validUuid; });
+    }
     try {
-      localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}${seed.project.id}`, JSON.stringify(seed));
-      localStorage.setItem(ACTIVE_WS_ID_KEY, seed.project.id);
+      const storageKey = companyId ? `${LOCAL_STORAGE_KEY_PREFIX}${companyId}_${validUuid}` : `${LOCAL_STORAGE_KEY_PREFIX}${validUuid}`;
+      localStorage.setItem(storageKey, JSON.stringify(seed));
+      localStorage.setItem(ACTIVE_WS_ID_KEY, validUuid);
     } catch {}
 
     return { workspace: seed, version: 1 };
@@ -285,12 +393,15 @@ export class SprintOSRepository {
   static async deleteWorkspace(workspaceId: string, companyId?: string | null): Promise<void> {
     try {
       localStorage.removeItem(`${LOCAL_STORAGE_KEY_PREFIX}${workspaceId}`);
+      if (companyId) {
+        localStorage.removeItem(`${LOCAL_STORAGE_KEY_PREFIX}${companyId}_${workspaceId}`);
+      }
       if (localStorage.getItem(ACTIVE_WS_ID_KEY) === workspaceId) {
         localStorage.removeItem(ACTIVE_WS_ID_KEY);
       }
     } catch {}
 
-    if (companyId) {
+    if (companyId && UUID_REGEX.test(workspaceId)) {
       try {
         await (supabase as any)
           .from("sprint_os_workspaces")
@@ -303,9 +414,6 @@ export class SprintOSRepository {
     }
   }
 
-  /**
-   * Duplica um cronograma gerando novos IDs e zerando execuções passadas.
-   */
   static duplicateWorkspace(source: Workspace, newName: string): Workspace {
     const clone = JSON.parse(JSON.stringify(source)) as Workspace;
     const oldProjId = clone.project.id;

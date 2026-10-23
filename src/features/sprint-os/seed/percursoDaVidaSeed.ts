@@ -35,7 +35,7 @@ export function createPercursoDaVidaSeed(actorName = "Admin / Engenheiro"): Work
 
   // 2. Projeto
   const project: Project = {
-    id: "proj-percurso-da-vida",
+    id: "e0000000-0000-0000-0000-000000000001",
     name: "Percurso da Vida",
     client: "Pablo e Flávia",
     description: "Implementação da máquina comercial, campanhas de aquisição, atendimento SDR e planejamento de webinar.",

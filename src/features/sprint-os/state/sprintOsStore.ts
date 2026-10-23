@@ -130,6 +130,8 @@ interface SprintOSState {
   workspacesList: WorkspaceListItem[];
   templatesList: TemplateListItem[];
   activeWorkspaceId: ID | null;
+  companyId: string | null;
+  setCompanyId: (id: string | null) => void;
 
   workspace: Workspace | null;
   version: number;
@@ -279,6 +281,8 @@ export const useSprintOSStore = create<SprintOSState>((set, get) => ({
   workspacesList: [],
   templatesList: [],
   activeWorkspaceId: null,
+  companyId: null,
+  setCompanyId: (id) => set({ companyId: id }),
 
   workspace: null,
   version: 1,
@@ -416,7 +420,7 @@ export const useSprintOSStore = create<SprintOSState>((set, get) => ({
   },
 
   openWorkspace: async (id, companyId, actorName = "Operador") => {
-    set({ isLoading: true });
+    set({ companyId: companyId || null, isLoading: true });
     try {
       const { workspace, version } = await SprintOSRepository.loadWorkspace(companyId, id);
 
@@ -545,7 +549,7 @@ export const useSprintOSStore = create<SprintOSState>((set, get) => ({
   },
 
   initWorkspace: async (companyId, workspaceId, actorName = "Engenheiro Operacional") => {
-    set({ isLoading: true });
+    set({ companyId: companyId || null, isLoading: true });
     try {
       await get().fetchWorkspacesList(companyId);
       get().fetchTemplatesList();
@@ -595,7 +599,7 @@ export const useSprintOSStore = create<SprintOSState>((set, get) => ({
   setEditingTemplateId: (id) => set({ editingTemplateId: id }),
 
   mutate: async (fn, actorName = "Engenheiro Operacional") => {
-    const { workspace, version } = get();
+    const { workspace, version, companyId } = get();
     if (!workspace) return;
 
     set({ autosaveStatus: "saving" });
@@ -606,11 +610,12 @@ export const useSprintOSStore = create<SprintOSState>((set, get) => ({
     try {
       fn(draft, ctx);
 
-      // Autosave imediato e síncrono no LocalStorage (proteção total contra fechamento da aba)
+      // Autosave imediato e síncrono no LocalStorage (isolado por empresa)
       const wsId = draft.project?.id;
       if (wsId) {
         try {
-          localStorage.setItem(`sprint_os_ws_${wsId}`, JSON.stringify(draft));
+          const storageKey = companyId ? `sprint_os_ws_${companyId}_${wsId}` : `sprint_os_ws_${wsId}`;
+          localStorage.setItem(storageKey, JSON.stringify(draft));
           localStorage.setItem("sprint_os_active_workspace_id", wsId);
         } catch (storageErr) {
           console.warn("[Autosave] LocalStorage:", storageErr);
@@ -618,7 +623,7 @@ export const useSprintOSStore = create<SprintOSState>((set, get) => ({
       }
 
       set({ workspace: draft, autosaveStatus: "saved", lastSavedAt: new Date() });
-      const res = await SprintOSRepository.saveWorkspace(draft, version, null, actorName);
+      const res = await SprintOSRepository.saveWorkspace(draft, version, companyId, actorName);
       if (res.ok) {
         set({ version: res.version });
       }
@@ -1010,25 +1015,25 @@ export const useSprintOSStore = create<SprintOSState>((set, get) => ({
           }
         }, actorName);
       } else {
-        const loaded = await SprintOSRepository.loadWorkspace(workspaceId, companyId);
-        if (loaded) {
+        const { workspace: loadedWs, version: loadedVer } = await SprintOSRepository.loadWorkspace(companyId, workspaceId);
+        if (loadedWs) {
           const ctx = { actorName, nowIso: new Date().toISOString() };
           if (patch.projectName || patch.client) {
-            updateProject(loaded, ctx, {
+            updateProject(loadedWs, ctx, {
               ...(patch.projectName ? { name: patch.projectName } : {}),
               ...(patch.client ? { client: patch.client } : {}),
             });
           }
-          const sprint = Object.values(loaded.sprints || {}).find((s) => !s.archivedAt);
+          const sprint = Object.values(loadedWs.sprints || {}).find((s) => !s.archivedAt);
           if (sprint) {
-            if (patch.name) updateSprint(loaded, ctx, sprint.id, { name: patch.name });
+            if (patch.name) updateSprint(loadedWs, ctx, sprint.id, { name: patch.name });
             if (patch.status) {
               sprint.status = patch.status === "completed" ? "completed" : patch.status === "active" ? "active" : "draft";
               if (patch.status === "active" && !sprint.activatedAt) sprint.activatedAt = ctx.nowIso;
               if (patch.status === "draft") sprint.activatedAt = null;
             }
           }
-          await SprintOSRepository.saveWorkspace(loaded, 1, companyId, actorName);
+          await SprintOSRepository.saveWorkspace(loadedWs, loadedVer, companyId, actorName);
         }
       }
       await get().fetchWorkspacesList(companyId);
