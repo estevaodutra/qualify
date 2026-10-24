@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +47,7 @@ import { useSearchParams } from "react-router-dom";
 export default function CriafyHub() {
   const { activeCompany, activeCompanyId } = useCompany();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [accounts, setAccounts] = useState<CriafyInstagramAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const processedOAuthCallbackRef = useRef<string | null>(null);
@@ -317,8 +319,8 @@ export default function CriafyHub() {
   };
 
   const openBriefingModal = (account: CriafyInstagramAccount) => {
-    setSelectedBriefingAccount(account);
-    setBriefingModalOpen(true);
+    navigate(`/criafy/estrategia/${account.id}`);
+
   };
 
   const openFeedModal = (account: CriafyInstagramAccount) => {

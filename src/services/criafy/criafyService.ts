@@ -1,4 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
+import { CriafyStrategyData } from "@/types/criafyStrategy";
+import { createEmptyStrategy } from "@/utils/criafyStrategyDefaults";
 import {
   CriafyInstagramAccount,
   CriafyAccountBriefing,
@@ -249,6 +251,118 @@ export const criafyService = {
 
     if (error) throw error;
     return data;
+  },
+
+  // ==========================================
+  // CENTRAL ESTRATÉGICA DA CONTA (CRIAFY STRATEGY)
+  // ==========================================
+  async getAccountStrategy(accountId: string, companyId: string): Promise<CriafyStrategyData> {
+    try {
+      const briefing = await this.getBriefing(accountId);
+      if (briefing && briefing.free_ai_context) {
+        try {
+          const parsed = JSON.parse(briefing.free_ai_context);
+          if (parsed && typeof parsed === 'object' && parsed.audience) {
+            return parsed as CriafyStrategyData;
+          }
+        } catch {}
+      }
+
+      const { data: account } = await (supabase as any)
+        .from('criafy_instagram_accounts')
+        .select('metadata')
+        .eq('id', accountId)
+        .maybeSingle();
+
+      if (account?.metadata?.strategy) {
+        return account.metadata.strategy as CriafyStrategyData;
+      }
+
+      const empty = createEmptyStrategy(accountId, companyId);
+      if (briefing) {
+        if (briefing.brand_name) empty.brandContext.whatIs = briefing.brand_name;
+        if (briefing.target_audience) empty.audience.mainAudience = briefing.target_audience;
+        if (briefing.brand_positioning) empty.positioning.desiredPerception = briefing.brand_positioning;
+        if (briefing.about) empty.strategicSummary = briefing.about;
+        if (briefing.tone_of_voice) {
+          empty.communication.toneOfVoice = briefing.tone_of_voice.split('·').map((s) => s.trim());
+        }
+        if (Array.isArray(briefing.preferred_ctas) && briefing.preferred_ctas.length > 0) {
+          empty.communication.ctas = briefing.preferred_ctas;
+        }
+        if (Array.isArray(briefing.preferred_vocabulary) && briefing.preferred_vocabulary.length > 0) {
+          empty.communication.preferredWords = briefing.preferred_vocabulary;
+        }
+        if (Array.isArray(briefing.forbidden_vocabulary) && briefing.forbidden_vocabulary.length > 0) {
+          empty.communication.forbiddenWords = briefing.forbidden_vocabulary;
+        }
+        if (Array.isArray(briefing.main_topics) && briefing.main_topics.length > 0) {
+          empty.communication.contentPillars = briefing.main_topics.map((t, idx) => ({
+            id: 'p-' + (idx + 1),
+            name: t,
+            objective: 'Pilar temático editorial',
+            themes: [t],
+          }));
+        }
+      }
+      return empty;
+    } catch (err) {
+      console.warn('[criafyService] Erro ao carregar estratégia:', err);
+      return createEmptyStrategy(accountId, companyId);
+    }
+  },
+
+  async saveAccountStrategy(strategyData: CriafyStrategyData): Promise<CriafyStrategyData> {
+    strategyData.updatedAt = new Date().toISOString();
+    const serialized = JSON.stringify(strategyData);
+
+    try {
+      await this.saveBriefing({
+        company_id: strategyData.companyId,
+        account_id: strategyData.accountId,
+        brand_name: strategyData.brandContext.whatIs || strategyData.profile.displayName || '',
+        about: strategyData.strategicSummary || strategyData.brandContext.whatIs || '',
+        objective: strategyData.brandContext.profileObjective || '',
+        target_audience: strategyData.audience.mainAudience || '',
+        brand_positioning:
+          strategyData.positioning.bigIdea?.finalBigIdea ||
+          strategyData.positioning.desiredPerception ||
+          '',
+        tone_of_voice: strategyData.communication.toneOfVoice?.join(' · ') || '',
+        preferred_ctas: strategyData.communication.ctas || [],
+        preferred_vocabulary: strategyData.communication.preferredWords || [],
+        forbidden_vocabulary: strategyData.communication.forbiddenWords || [],
+        main_topics: strategyData.communication.contentPillars?.map((p) => p.name) || [],
+        free_ai_context: serialized,
+      });
+    } catch (bErr) {
+      console.warn('[criafyService] Erro ao sincronizar briefing:', bErr);
+    }
+
+    try {
+      const { data: currentAcc } = await (supabase as any)
+        .from('criafy_instagram_accounts')
+        .select('metadata')
+        .eq('id', strategyData.accountId)
+        .maybeSingle();
+
+      const updatedMetadata = {
+        ...(currentAcc?.metadata || {}),
+        strategy: strategyData,
+      };
+
+      await (supabase as any)
+        .from('criafy_instagram_accounts')
+        .update({
+          metadata: updatedMetadata,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', strategyData.accountId);
+    } catch (mErr) {
+      console.warn('[criafyService] Erro ao atualizar metadata:', mErr);
+    }
+
+    return strategyData;
   },
 
   // ==========================================

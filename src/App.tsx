@@ -60,6 +60,7 @@ import QuizFunnelsPage from "./pages/quiz/QuizFunnelsPage";
 import QuizEditorPage from "./pages/quiz/QuizEditorPage";
 import QuizPublicPage from "./pages/public/QuizPublicPage";
 import CriafyHub from "./pages/criafy/CriafyHub";
+import AccountStrategyPage from "./pages/criafy/AccountStrategyPage";
 import SprintOSPage from "./features/sprint-os/ui/SprintOSPage";
 import SprintOSSharedPage from "./features/sprint-os/ui/SprintOSSharedPage";
 import { AdminRoute } from "@/components/auth/AdminRoute";
@@ -150,6 +151,7 @@ const App = () => {
                       <Route path="/cronogramas" element={<SprintOSPage />} />
                       <Route path="/cronogramas/:workspaceId" element={<SprintOSPage />} />
                       <Route path="/criafy" element={<CriafyHub />} />
+                      <Route path="/criafy/estrategia/:accountId" element={<AccountStrategyPage />} />
                       <Route path="/quiz" element={<QuizFunnelsPage />} />
                       <Route path="/quiz/:id" element={<QuizEditorPage />} />
 
