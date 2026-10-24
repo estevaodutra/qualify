@@ -59,7 +59,7 @@ export function CriafyCalendarView({
   const [loading, setLoading] = useState(false);
 
   // View Mode: Month vs Week (Google Calendar style)
-  const [viewMode, setViewMode] = useState<"MONTH" | "WEEK">("MONTH");
+  const [viewMode, setViewMode] = useState<"MONTH" | "WEEK">("WEEK");
 
   // Navigation state
   const [currentDate, setCurrentDate] = useState(new Date());
