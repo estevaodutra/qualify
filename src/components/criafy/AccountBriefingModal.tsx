@@ -123,7 +123,7 @@ export function AccountBriefingModal({ account, open, onOpenChange }: AccountBri
             </div>
             <div>
               <DialogTitle className="text-lg font-bold">
-                Briefing da Conta: @{account.username}
+                Estratégia da Conta: @{account.username}
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
                 Este briefing serve como contexto permanente para a IA gerar legendas, copys e copys customizadas para esta conta.
@@ -275,7 +275,7 @@ export function AccountBriefingModal({ account, open, onOpenChange }: AccountBri
               </Button>
               <Button type="submit" disabled={saving}>
                 {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Salvar Briefing da Conta
+                Salvar Estratégia da Conta
               </Button>
             </DialogFooter>
           </form>

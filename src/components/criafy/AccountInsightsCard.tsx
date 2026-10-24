@@ -34,6 +34,7 @@ import {
   RefreshCw,
   MoreHorizontal,
   Instagram,
+  Target,
   BookOpen,
   BarChart3,
   ExternalLink,
@@ -827,7 +828,7 @@ export function AccountInsightsCard({
               onClick={() => onOpenBriefing(account)}
               className="h-9 px-3.5 text-xs font-semibold rounded-xl border-border hover:bg-muted gap-1.5 cursor-pointer"
             >
-              <BookOpen className="w-3.5 h-3.5 text-amber-500" /> Briefing
+              <Target className="w-3.5 h-3.5 text-amber-500" /> Estratégia
             </Button>
 
             {/* Botão Insights */}

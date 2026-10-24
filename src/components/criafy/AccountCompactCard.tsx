@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Instagram,
-  BookOpen,
+  Target,
   BarChart3,
   ExternalLink,
   MoreVertical,
@@ -22,8 +22,6 @@ import {
   AlertCircle,
   TrendingUp,
   TrendingDown,
-  LayoutTemplate,
-  Users,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -59,7 +57,6 @@ export function AccountCompactCard({
   const [insights, setInsights] = useState<InstagramInsightsOverview | null>(
     (account.metadata?.insights as InstagramInsightsOverview) || null
   );
-  const [activeSubTab, setActiveSubTab] = useState<"OVERVIEW" | "CONTENT" | "AUDIENCE">("OVERVIEW");
 
   // Load insights if not cached
   useEffect(() => {
@@ -288,7 +285,7 @@ export function AccountCompactCard({
         </div>
 
         {/* 3. Mini Sparkline Graphic Preview */}
-        <div className="w-full h-11 -mt-1 -mb-1">
+        <div className="w-full h-12 my-1">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={sparklineData} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
               <defs>
@@ -321,46 +318,7 @@ export function AccountCompactCard({
           </ResponsiveContainer>
         </div>
 
-        {/* 4. Sub-pills: Visão Geral | Conteúdo | Público */}
-        <div className="grid grid-cols-3 gap-1.5 pt-1">
-          <button
-            type="button"
-            onClick={() => {
-              setActiveSubTab("OVERVIEW");
-              onOpenInsights(account, "OVERVIEW");
-            }}
-            className="flex items-center justify-center gap-1 py-1.5 px-2 rounded-xl text-xs font-semibold bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 hover:bg-purple-200/80 transition-colors"
-          >
-            <BarChart3 className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-            <span>Visão geral</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveSubTab("CONTENT");
-              onOpenInsights(account, "CONTENT");
-            }}
-            className="flex items-center justify-center gap-1 py-1.5 px-2 rounded-xl text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/70 transition-colors border border-border/40"
-          >
-            <LayoutTemplate className="w-3.5 h-3.5" />
-            <span>Conteúdo</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveSubTab("AUDIENCE");
-              onOpenInsights(account, "AUDIENCE");
-            }}
-            className="flex items-center justify-center gap-1 py-1.5 px-2 rounded-xl text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/70 transition-colors border border-border/40"
-          >
-            <Users className="w-3.5 h-3.5" />
-            <span>Público</span>
-          </button>
-        </div>
-
-        {/* 5. Rodapé com 3 Botões de Ação */}
+        {/* 4. Rodapé com os botões de Ação */}
         <div className="grid grid-cols-3 gap-2 pt-1">
           {/* Ver Feed */}
           <Button
@@ -374,23 +332,23 @@ export function AccountCompactCard({
             <span>Ver Feed</span>
           </Button>
 
-          {/* Briefing */}
+          {/* Estratégia */}
           <Button
             variant="outline"
             size="sm"
             onClick={() => onOpenBriefing(account)}
             className="h-9 text-xs font-semibold gap-1.5 rounded-xl border-border/80 hover:bg-muted text-foreground transition-all"
-            title="Diretrizes e briefing de conteúdo da marca"
+            title="Estratégia e diretrizes de conteúdo da marca"
           >
-            <BookOpen className="w-3.5 h-3.5 text-amber-500" />
-            <span>Briefing</span>
+            <Target className="w-3.5 h-3.5 text-amber-500" />
+            <span>Estratégia</span>
           </Button>
 
-          {/* Insights (Abre o card completo expandido) */}
+          {/* Insights */}
           <Button
             variant="outline"
             size="sm"
-            onClick={() => onOpenInsights(account, activeSubTab)}
+            onClick={() => onOpenInsights(account, "OVERVIEW")}
             className="h-9 text-xs font-semibold gap-1.5 rounded-xl border-border/80 hover:bg-muted text-foreground transition-all"
             title="Abrir visualização completa de métricas e gráficos de Insights"
           >
