@@ -38,6 +38,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAlerts } from "@/hooks/useAlerts";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -66,6 +67,7 @@ export function AppSidebar() {
   const location = useLocation();
   const isCollapsed = state === "collapsed" && !isMobile;
   const { companies, activeCompany, setActiveCompany } = useCompany();
+  const { unreadCount } = useAlerts();
 
   // Helper to handle link click on mobile
   const handleNavClick = () => {
@@ -291,15 +293,31 @@ export function AppSidebar() {
         <div className="mt-auto pt-6 space-y-1">
           <SidebarMenu className="gap-1.5">
             {/* Notificações (Alerts) */}
-            <SidebarMenuItem>
+            <SidebarMenuItem id="sidebar-notifications-trigger" className="relative">
               <SidebarMenuButton asChild tooltip="Notificações" className="h-auto p-0">
                 <NavLink
                   to="/alerts"
                   onClick={handleNavClick}
                   className={cn(navLinkClasses, location.pathname.startsWith("/alerts") && activeClasses)}
                 >
-                  <Bell className={cn("h-5 w-5 flex-shrink-0", location.pathname.startsWith("/alerts") && "text-primary")} />
-                  {!isCollapsed && <span className="text-[13px] font-bold tracking-tight">Notificações</span>}
+                  <div className="relative flex items-center justify-center">
+                    <Bell className={cn("h-5 w-5 flex-shrink-0", location.pathname.startsWith("/alerts") && "text-primary")} />
+                    {isCollapsed && unreadCount > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-primary text-[10px] font-black text-white shadow-sm">
+                        {unreadCount > 9 ? "9+" : unreadCount}
+                      </span>
+                    )}
+                  </div>
+                  {!isCollapsed && (
+                    <div className="flex items-center justify-between flex-1 min-w-0">
+                      <span className="text-[13px] font-bold tracking-tight">Notificações</span>
+                      {unreadCount > 0 && (
+                        <span className="flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-[11px] font-black text-white shadow-sm">
+                          {unreadCount > 99 ? "99+" : unreadCount}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </NavLink>
               </SidebarMenuButton>
             </SidebarMenuItem>
