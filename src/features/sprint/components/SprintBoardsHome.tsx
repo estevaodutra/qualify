@@ -149,20 +149,14 @@ export const SprintBoardsHome: React.FC = () => {
           <span>Seus Quadros</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {/* Botão de Criar Quadro */}
-          <button
-            onClick={() => setIsCreateOpen(true)}
-            className="h-32 rounded-xl border-2 border-dashed border-border hover:border-primary/60 bg-muted/20 hover:bg-muted/40 transition-all flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-foreground group cursor-pointer"
-          >
-            <div className="h-8 w-8 rounded-full bg-secondary group-hover:bg-primary/10 group-hover:text-primary flex items-center justify-center transition-colors">
-              <Plus className="h-4 w-4" />
-            </div>
-            <span className="text-xs font-semibold">Criar novo quadro</span>
-          </button>
-
-          {/* Lista de Quadros */}
-          {boards.map((board) => (
+        {boards.length === 0 ? (
+          <div className="p-8 rounded-xl border border-border/60 bg-card text-center space-y-1.5">
+            <p className="text-sm font-medium text-foreground">Nenhum quadro encontrado</p>
+            <p className="text-xs text-muted-foreground">Clique no botão "Criar novo quadro" no canto superior direito para criar seu primeiro fluxo.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {boards.map((board) => (
             <div
               key={board.id}
               onClick={() => navigate(`/sprint/b/${board.id}`)}
@@ -191,7 +185,8 @@ export const SprintBoardsHome: React.FC = () => {
               </div>
             </div>
           ))}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Modal Criar Novo Quadro */}
