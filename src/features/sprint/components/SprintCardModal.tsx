@@ -26,6 +26,7 @@ import { Progress } from "@/components/ui/progress";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SprintMentionInput } from "./SprintMentionInput";
 import { SprintMentionTextarea } from "./SprintMentionTextarea";
+import { SprintMentionRenderer } from "./SprintMentionRenderer";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -231,7 +232,9 @@ export const SprintCardModal: React.FC = () => {
                   onClick={() => setIsEditingDesc(true)}
                   className="min-h-[70px] p-3 rounded-xl bg-muted/20 border border-border/80 hover:border-border cursor-pointer text-sm text-foreground whitespace-pre-wrap transition-colors"
                 >
-                  {activeCard.description || (
+                  {activeCard.description ? (
+                    <SprintMentionRenderer text={activeCard.description} />
+                  ) : (
                     <span className="text-muted-foreground italic">
                       Adicione uma descrição mais detalhada...
                     </span>
@@ -286,14 +289,16 @@ export const SprintCardModal: React.FC = () => {
                             onChange={() => toggleChecklistItem(checklist.id, item.id)}
                             className="h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary"
                           />
-                          <span
-                            className={cn(
-                              "text-sm break-words flex-1",
-                              item.is_completed ? "line-through text-muted-foreground" : "text-foreground"
-                            )}
-                          >
-                            {item.title}
-                          </span>
+                          <div className="flex-1 min-w-0">
+                            <SprintMentionRenderer
+                              text={item.title}
+                              isCompleted={item.is_completed}
+                              className={cn(
+                                "text-sm break-words",
+                                item.is_completed ? "line-through text-muted-foreground" : "text-foreground"
+                              )}
+                            />
+                          </div>
                         </div>
                         <Button
                           variant="ghost"
@@ -392,7 +397,7 @@ export const SprintCardModal: React.FC = () => {
                             {format(new Date(c.created_at), "dd/MM/yyyy HH:mm")}
                           </span>
                         </div>
-                        <p className="text-foreground whitespace-pre-wrap">{c.content}</p>
+                        <div className="text-foreground whitespace-pre-wrap"><SprintMentionRenderer text={c.content} /></div>
                         {user?.id === c.user_id && (
                           <div className="mt-2 text-right">
                             <button

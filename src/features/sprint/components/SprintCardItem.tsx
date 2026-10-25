@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { format, isPast, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { SprintMentionRenderer } from "./SprintMentionRenderer";
 
 interface SprintCardItemProps {
   card: SprintCard;
@@ -95,7 +96,7 @@ export const SprintCardItem: React.FC<SprintCardItemProps> = ({ card }) => {
 
       {/* Título do Cartão */}
       <h3 className="text-xs md:text-sm font-medium text-foreground leading-snug break-words">
-        {card.title}
+        <SprintMentionRenderer text={card.title} isCompleted={card.is_completed} />
       </h3>
 
       {/* Badges do Rodapé */}
