@@ -10,6 +10,7 @@ import { useCompanyMembers } from "@/hooks/useCompanyMembers";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   CheckSquare,
+  Pencil,
   Clock,
   Tag,
   Users,
@@ -34,6 +35,64 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 
+
+interface ChecklistTitleEditorProps {
+  title: string;
+  onSave: (newTitle: string) => void;
+}
+
+const ChecklistTitleEditor: React.FC<ChecklistTitleEditorProps> = ({ title, onSave }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [val, setVal] = useState(title);
+
+  useEffect(() => {
+    setVal(title);
+  }, [title]);
+
+  const handleCommit = () => {
+    setIsEditing(false);
+    if (val.trim() && val.trim() !== title) {
+      onSave(val.trim());
+    } else {
+      setVal(title);
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <input
+        type="text"
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={handleCommit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            handleCommit();
+          }
+          if (e.key === "Escape") {
+            setIsEditing(false);
+            setVal(title);
+          }
+        }}
+        autoFocus
+        className="font-semibold text-sm bg-background border border-primary px-2 py-0.5 rounded text-foreground focus:outline-none ring-1 ring-primary w-full max-w-sm"
+      />
+    );
+  }
+
+  return (
+    <div
+      onClick={() => setIsEditing(true)}
+      className="group flex items-center gap-1.5 cursor-pointer rounded px-1.5 py-0.5 -ml-1.5 hover:bg-muted/80 transition-colors"
+      title="Clique para editar o título"
+    >
+      <span className="font-semibold text-sm text-foreground">{title}</span>
+      <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+    </div>
+  );
+};
+
 export const SprintCardModal: React.FC = () => {
   const { user } = useAuth();
   const { data: members = [] } = useCompanyMembers();
@@ -50,6 +109,7 @@ export const SprintCardModal: React.FC = () => {
     deleteComment,
     addChecklist,
     deleteChecklist,
+    updateChecklistTitle,
     addChecklistItem,
     toggleChecklistItem,
     deleteChecklistItem,
@@ -337,9 +397,12 @@ export const SprintCardModal: React.FC = () => {
               return (
                 <div key={checklist.id} className="space-y-3 p-4 rounded-xl bg-muted/20 border border-border/80">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-foreground font-semibold text-sm">
-                      <CheckSquare className="h-4 w-4 text-primary" />
-                      <span>{checklist.title}</span>
+                    <div className="flex items-center gap-2 text-foreground font-semibold text-sm flex-1 min-w-0">
+                      <CheckSquare className="h-4 w-4 text-primary shrink-0" />
+                      <ChecklistTitleEditor
+                        title={checklist.title}
+                        onSave={(newTitle) => updateChecklistTitle(checklist.id, newTitle)}
+                      />
                     </div>
                     <Button
                       variant="ghost"

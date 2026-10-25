@@ -74,6 +74,7 @@ interface SprintState {
 
   // Checklists
   addChecklist: (cardId: string, title: string) => Promise<void>;
+  updateChecklistTitle: (checklistId: string, title: string) => Promise<void>;
   deleteChecklist: (checklistId: string) => Promise<void>;
   addChecklistItem: (params: {
     checklistId: string;
@@ -392,6 +393,24 @@ export const useSprintStore = create<SprintState>((set, get) => ({
         activeCard: state.activeCard?.id === cardId ? updateCardChecklists(state.activeCard) : state.activeCard,
       };
     });
+  },
+
+  updateChecklistTitle: async (checklistId, title) => {
+    set((state) => {
+      const updateChk = (c: SprintCard) => ({
+        ...c,
+        checklists: (c.checklists || []).map((ch) =>
+          ch.id === checklistId ? { ...ch, title } : ch
+        ),
+      });
+
+      return {
+        lists: state.lists.map((l) => ({ ...l, cards: l.cards.map(updateChk) })),
+        activeCard: state.activeCard ? updateChk(state.activeCard) : null,
+      };
+    });
+
+    await sprintService.updateChecklist(checklistId, { title });
   },
 
   deleteChecklist: async (checklistId) => {

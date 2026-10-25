@@ -477,6 +477,15 @@ export const sprintService = {
     return { ...data, items: [] } as SprintChecklist;
   },
 
+  async updateChecklist(checklistId: string, updates: { title?: string; position?: number }): Promise<void> {
+    const { error } = await (supabase as any)
+      .from("sprint_checklists")
+      .update(updates)
+      .eq("id", checklistId);
+
+    if (error) throw error;
+  },
+
   async deleteChecklist(checklistId: string): Promise<void> {
     const { error } = await (supabase as any)
       .from("sprint_checklists")
