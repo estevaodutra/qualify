@@ -5,6 +5,34 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function formatActionUrl(rawUrl: string, publicBaseUrl?: string): string {
+  let url = rawUrl;
+  if (url.includes("/verify?") && !url.includes("/auth/v1/verify?")) {
+    url = url.replace("/verify?", "/auth/v1/verify?");
+  }
+
+  if (publicBaseUrl) {
+    try {
+      const parsed = new URL(url);
+      const publicParsed = new URL(publicBaseUrl);
+      if (
+        parsed.hostname === "kong" ||
+        parsed.hostname === "localhost" ||
+        parsed.hostname === "127.0.0.1" ||
+        parsed.port === "8000"
+      ) {
+        parsed.protocol = publicParsed.protocol;
+        parsed.host = publicParsed.host;
+        parsed.port = publicParsed.port;
+        url = parsed.toString();
+      }
+    } catch (_) {
+      // keep url as is
+    }
+  }
+  return url;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -68,6 +96,123 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ success: true, company }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    if (action === "create-user") {
+      const { email, full_name, redirect_to } = payload || {};
+      if (!email) {
+        throw new Error("Email é obrigatório");
+      }
+      const cleanEmail = String(email).trim().toLowerCase();
+      const cleanName = String(full_name || "").trim();
+
+      const publicSupabaseUrl = Deno.env.get("PUBLIC_SUPABASE_URL") || Deno.env.get("API_EXTERNAL_URL") || "https://qualify-supabase.d2x.site";
+      const targetRedirectTo = redirect_to || "https://app.qualifys.app/redefinir-senha";
+
+      // 1. Verificar se usuário já existe em profiles
+      const { data: existingProfile } = await adminClient
+        .from("profiles")
+        .select("id, email, full_name")
+        .eq("email", cleanEmail)
+        .maybeSingle();
+
+      let targetUserId = existingProfile?.id;
+      let isNewUser = false;
+
+      if (!targetUserId) {
+        // Criar no auth.users
+        const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
+          email: cleanEmail,
+          email_confirm: true,
+          user_metadata: {
+            full_name: cleanName || cleanEmail.split("@")[0],
+          },
+        });
+
+        if (createError) {
+          const errMsg = createError.message?.toLowerCase() || "";
+          if (errMsg.includes("already") || errMsg.includes("exists") || (createError as any).status === 422) {
+            console.log("User already exists in auth.users, continuing to link generation");
+          } else {
+            throw createError;
+          }
+        } else if (newUser?.user) {
+          targetUserId = newUser.user.id;
+          isNewUser = true;
+        }
+      }
+
+      // Upsert profile para garantir consistência
+      if (targetUserId) {
+        await adminClient.from("profiles").upsert(
+          {
+            id: targetUserId,
+            email: cleanEmail,
+            full_name: cleanName || existingProfile?.full_name || cleanEmail.split("@")[0],
+          },
+          { onConflict: "id" }
+        );
+      }
+
+      // 2. Gerar link de recuperação/definição de senha
+      const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
+        type: "recovery",
+        email: cleanEmail,
+        options: {
+          redirectTo: targetRedirectTo,
+        },
+      });
+
+      if (linkError) {
+        throw linkError;
+      }
+
+      let inviteLink = linkData?.properties?.action_link || "";
+      inviteLink = formatActionUrl(inviteLink, publicSupabaseUrl);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          user: {
+            id: targetUserId || linkData?.user?.id,
+            email: cleanEmail,
+            full_name: cleanName || existingProfile?.full_name || cleanEmail.split("@")[0],
+          },
+          inviteLink,
+          isNewUser,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (action === "generate-invite-link") {
+      const { email, redirect_to } = payload || {};
+      if (!email) throw new Error("Email é obrigatório");
+      const cleanEmail = String(email).trim().toLowerCase();
+      const publicSupabaseUrl = Deno.env.get("PUBLIC_SUPABASE_URL") || Deno.env.get("API_EXTERNAL_URL") || "https://qualify-supabase.d2x.site";
+      const targetRedirectTo = redirect_to || "https://app.qualifys.app/redefinir-senha";
+
+      const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
+        type: "recovery",
+        email: cleanEmail,
+        options: {
+          redirectTo: targetRedirectTo,
+        },
+      });
+
+      if (linkError) throw linkError;
+
+      let inviteLink = linkData?.properties?.action_link || "";
+      inviteLink = formatActionUrl(inviteLink, publicSupabaseUrl);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          email: cleanEmail,
+          inviteLink,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     throw new Error("Invalid action");

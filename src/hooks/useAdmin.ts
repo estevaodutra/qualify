@@ -310,6 +310,103 @@ export function useDeleteUser() {
   });
 }
 
+export interface CreateAdminUserResult {
+  success: boolean;
+  user: {
+    id: string;
+    email: string;
+    full_name: string;
+  };
+  inviteLink: string;
+  isNewUser?: boolean;
+}
+
+export function useCreateAdminUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      email,
+      fullName,
+      redirectTo,
+    }: {
+      email: string;
+      fullName: string;
+      redirectTo?: string;
+    }): Promise<CreateAdminUserResult> => {
+      const targetRedirect = redirectTo || `${window.location.origin}/redefinir-senha`;
+
+      let res = await supabase.functions.invoke("admin-user-create", {
+        body: {
+          action: "create-user",
+          email: email.trim().toLowerCase(),
+          full_name: fullName.trim(),
+          redirect_to: targetRedirect,
+        },
+      });
+
+      if (res.error && (res.error.message?.includes("404") || (res.error as any)?.status === 404)) {
+        res = await supabase.functions.invoke("admin-management", {
+          body: {
+            action: "create-user",
+            payload: {
+              email: email.trim().toLowerCase(),
+              full_name: fullName.trim(),
+              redirect_to: targetRedirect,
+            },
+          },
+        });
+      }
+
+      if (res.error) throw res.error;
+      if (res.data?.error) throw new Error(res.data.error);
+
+      return res.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "users"] });
+    },
+  });
+}
+
+export function useGenerateUserInviteLink() {
+  return useMutation({
+    mutationFn: async ({
+      email,
+      redirectTo,
+    }: {
+      email: string;
+      redirectTo?: string;
+    }): Promise<{ success: boolean; inviteLink: string; email: string }> => {
+      const targetRedirect = redirectTo || `${window.location.origin}/redefinir-senha`;
+
+      let res = await supabase.functions.invoke("admin-user-create", {
+        body: {
+          action: "generate-invite-link",
+          email: email.trim().toLowerCase(),
+          redirect_to: targetRedirect,
+        },
+      });
+
+      if (res.error && (res.error.message?.includes("404") || (res.error as any)?.status === 404)) {
+        res = await supabase.functions.invoke("admin-management", {
+          body: {
+            action: "generate-invite-link",
+            payload: {
+              email: email.trim().toLowerCase(),
+              redirect_to: targetRedirect,
+            },
+          },
+        });
+      }
+
+      if (res.error) throw res.error;
+      if (res.data?.error) throw new Error(res.data.error);
+
+      return res.data;
+    },
+  });
+}
+
 export function useToggleSuperadmin() {
   const qc = useQueryClient();
   return useMutation({

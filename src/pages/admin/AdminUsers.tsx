@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Shield, ShieldOff, MoreHorizontal, Trash2, Plus } from "lucide-react";
+import { Search, Shield, ShieldOff, MoreHorizontal, Trash2, Plus, KeyRound } from "lucide-react";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CreateUserDialog } from "@/components/admin/CreateUserDialog";
@@ -17,6 +17,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
@@ -27,6 +28,7 @@ export default function AdminUsers() {
   const toggle = useToggleSuperadmin();
   const [search, setSearch] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [selectedUserForLink, setSelectedUserForLink] = useState<AdminUser | null>(null);
   const [deletingUser, setDeletingUser] = useState<AdminUser | null>(null);
 
   const filtered = (data || []).filter((u) =>
@@ -35,6 +37,16 @@ export default function AdminUsers() {
     u.full_name?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const handleOpenCreate = () => {
+    setSelectedUserForLink(null);
+    setIsCreating(true);
+  };
+
+  const handleGenerateLink = (user: AdminUser) => {
+    setSelectedUserForLink(user);
+    setIsCreating(true);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -42,7 +54,7 @@ export default function AdminUsers() {
           <h1 className="text-3xl font-bold tracking-tight">Usuários</h1>
           <p className="text-muted-foreground">Todos os usuários da plataforma</p>
         </div>
-        <Button onClick={() => setIsCreating(true)}>
+        <Button onClick={handleOpenCreate}>
           <Plus className="mr-2 h-4 w-4" /> Novo Usuário
         </Button>
       </div>
@@ -118,6 +130,13 @@ export default function AdminUsers() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem
+                              onClick={() => handleGenerateLink(u)}
+                              className="cursor-pointer"
+                            >
+                              <KeyRound className="mr-2 h-4 w-4 text-primary" /> Gerar link de acesso
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
                               onClick={() => setDeletingUser(u)}
                               className="text-destructive focus:text-destructive cursor-pointer"
                             >
@@ -137,7 +156,11 @@ export default function AdminUsers() {
 
       <CreateUserDialog
         open={isCreating}
-        onClose={() => setIsCreating(false)}
+        onClose={() => {
+          setIsCreating(false);
+          setSelectedUserForLink(null);
+        }}
+        existingUser={selectedUserForLink}
       />
 
       <DeleteUserDialog

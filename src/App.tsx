@@ -41,6 +41,7 @@ import ApiDocs from "./pages/ApiDocs";
 import WebhookDocs from "./pages/WebhookDocs";
 import WebhookEvents from "./pages/WebhookEvents";
 import Auth from "./pages/Auth";
+import ResetPassword from "./pages/ResetPassword";
 import Chat from "./pages/Chat";
 import OperatorScript from "./pages/OperatorScript";
 import CallPanel from "./pages/CallPanel";
@@ -95,6 +96,8 @@ const App = () => {
                   <Routes>
                     {/* Public routes */}
                     <Route path="/auth" element={<Auth />} />
+                    <Route path="/redefinir-senha" element={<ResetPassword />} />
+                    <Route path="/reset-password" element={<ResetPassword />} />
                     <Route path="/webhook-docs" element={<WebhookDocs />} />
                     <Route path="/q/:slug" element={<QuizPublicPage />} />
                     <Route path="/sprint-os/shared/:token" element={<SprintOSSharedPage />} />
