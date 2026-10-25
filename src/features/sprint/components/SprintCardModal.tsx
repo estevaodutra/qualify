@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { useSprintStore } from "../state/sprintStore";
 import { useCompanyMembers } from "@/hooks/useCompanyMembers";
@@ -63,6 +64,14 @@ export const SprintCardModal: React.FC = () => {
   const [isAddingChecklist, setIsAddingChecklist] = useState(false);
   const [newItemTitles, setNewItemTitles] = useState<Record<string, string>>({});
 
+  // Sincroniza o título e a descrição sempre que o cartão ativo mudar
+  useEffect(() => {
+    if (activeCard) {
+      setTitle(activeCard.title || "");
+      setDescription(activeCard.description || "");
+    }
+  }, [activeCard?.id, activeCard?.title, activeCard?.description]);
+
   if (!activeCard || !activeCardId) return null;
 
   const currentList = lists.find((l) => l.id === activeCard.list_id);
@@ -114,15 +123,18 @@ export const SprintCardModal: React.FC = () => {
     <Dialog open={!!activeCardId} onOpenChange={(open) => !open && closeCardModal()}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-card border-border text-card-foreground p-6 rounded-2xl shadow-xl">
         <DialogHeader className="space-y-1">
-          <div className="flex items-start justify-between gap-4">
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onBlur={handleTitleBlur}
-              className="text-xl font-bold bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none w-full px-1 py-0.5 rounded transition-all text-foreground font-['Sora']"
-            />
-          </div>
+          <DialogTitle asChild>
+            <div className="flex items-start justify-between gap-4">
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onBlur={handleTitleBlur}
+                placeholder="Título do cartão..."
+                className="text-xl font-bold bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none w-full px-1 py-0.5 rounded transition-all text-foreground font-['Sora']"
+              />
+            </div>
+          </DialogTitle>
           <p className="text-xs text-muted-foreground">
             na lista <span className="font-semibold text-foreground underline">{currentList?.title || "Geral"}</span>
           </p>
