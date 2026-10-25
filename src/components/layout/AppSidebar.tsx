@@ -79,6 +79,7 @@ export function AppSidebar() {
 
   // Apps group active state and collapse state
   const isAppsRoute =
+    location.pathname.startsWith("/sprint") ||
     location.pathname.startsWith("/sprint-os") ||
     location.pathname.startsWith("/criafy") ||
     location.pathname.startsWith("/quiz") ||

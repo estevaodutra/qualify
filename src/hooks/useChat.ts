@@ -1059,10 +1059,10 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
         return { ...oldData, pages: newPages };
       });
       queryClient.invalidateQueries({ queryKey: ["chat-conversations", activeCompanyId] });
-      toast({ title: "Conexão atualizada", description: "A instância desta conversa foi alterada com sucesso." });
+      queryClient.invalidateQueries({ queryKey: ["chat-lead-conversations"] });
     },
     onError: (err: any) => {
-      toast({ title: "Erro ao trocar conexão", description: err.message, variant: "destructive" });
+      console.error("[useChat] Erro ao trocar conexão:", err);
     },
   });
 
@@ -1088,18 +1088,40 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
     mutationFn: async ({ leadId, instanceId }: { leadId: string; instanceId?: string }) => {
       if (!activeCompanyId) throw new Error("Sem empresa ativa");
       
-      const { data: existing } = await supabase
+      let query = supabase
         .from("chat_conversations")
-        .select("id")
+        .select(`
+          id,
+          company_id,
+          instance_id,
+          status,
+          operator_id,
+          unread_count,
+          last_message_preview,
+          last_message_at,
+          tags,
+          waiting_since,
+          created_at,
+          updated_at,
+          lead:leads(id, name, phone, email, tags, custom_fields),
+          operator:profiles(id, full_name, email),
+          instance:instances(id, name, phone, provider, status)
+        `)
         .eq("company_id", activeCompanyId)
-        .eq("lead_id", leadId)
-        .maybeSingle();
+        .eq("lead_id", leadId);
 
-      if (existing) {
-        if (instanceId) {
-          await supabase.from("chat_conversations").update({ instance_id: instanceId }).eq("id", existing.id);
-        }
-        return existing as ChatConversation;
+      if (instanceId) {
+        query = query.eq("instance_id", instanceId);
+      }
+
+      const { data: existingList, error: queryErr } = await query
+        .order("last_message_at", { ascending: false, nullsFirst: false })
+        .limit(1);
+
+      if (queryErr) throw queryErr;
+
+      if (existingList && existingList.length > 0) {
+        return existingList[0] as unknown as ChatConversation;
       }
 
       const { data, error } = await supabase
@@ -1111,14 +1133,31 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
           status: "open",
           unread_count: 0,
         })
-        .select()
+        .select(`
+          id,
+          company_id,
+          instance_id,
+          status,
+          operator_id,
+          unread_count,
+          last_message_preview,
+          last_message_at,
+          tags,
+          waiting_since,
+          created_at,
+          updated_at,
+          lead:leads(id, name, phone, email, tags, custom_fields),
+          operator:profiles(id, full_name, email),
+          instance:instances(id, name, phone, provider, status)
+        `)
         .single();
 
       if (error) throw error;
-      return data as ChatConversation;
+      return data as unknown as ChatConversation;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["chat-conversations", activeCompanyId] });
+      queryClient.invalidateQueries({ queryKey: ["chat-lead-conversations"] });
     },
   });
 

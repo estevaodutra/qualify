@@ -62,6 +62,7 @@ import QuizPublicPage from "./pages/public/QuizPublicPage";
 import CriafyHub from "./pages/criafy/CriafyHub";
 import AccountStrategyPage from "./pages/criafy/AccountStrategyPage";
 import SprintOSPage from "./features/sprint-os/ui/SprintOSPage";
+import SprintAppPage from "./features/sprint/SprintAppPage";
 import SprintOSSharedPage from "./features/sprint-os/ui/SprintOSSharedPage";
 import { AdminRoute } from "@/components/auth/AdminRoute";
 import { AdminLayout } from "@/components/admin/AdminLayout";
@@ -146,6 +147,9 @@ const App = () => {
                       <Route path="/configuracoes/membros" element={<Settings />} />
 
                       {/* Quiz / Funnel routes (inside AppLayout with sidebar support) */}
+                      {/* Sprint (Trello Clone) */}
+                      <Route path="/sprint" element={<SprintAppPage />} />
+                      <Route path="/sprint/b/:boardId" element={<SprintAppPage />} />
                       <Route path="/sprint-os" element={<SprintOSPage />} />
                       <Route path="/sprint-os/:workspaceId" element={<SprintOSPage />} />
                       <Route path="/cronogramas" element={<SprintOSPage />} />

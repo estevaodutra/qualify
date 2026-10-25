@@ -200,25 +200,134 @@ export default function Chat() {
     return conversations.find((c) => c.id === selectedConvId) || directConv || null;
   }, [conversations, selectedConvId, directConv]);
 
-  // Find all conversations belonging to the currently selected lead
+  // Find all conversations belonging to the currently selected lead from local conversations
   const leadConversations = useMemo(() => {
     if (!selectedConv?.lead_id) return [];
     return conversations.filter((c) => c.lead_id === selectedConv.lead_id);
   }, [conversations, selectedConv?.lead_id]);
 
-  // Handle switching instance connection without splitting history into separate conversations
+  // Also fetch all conversations for this lead from the database to cover all instances (even if not in loaded pages)
+  const { data: leadDbConversations = [], refetch: refetchLeadConversations } = useQuery({
+    queryKey: ["chat-lead-conversations", selectedConv?.lead_id, activeCompanyId],
+    queryFn: async () => {
+      if (!selectedConv?.lead_id || !activeCompanyId) return [];
+      const { data, error } = await supabase
+        .from("chat_conversations")
+        .select(`
+          id,
+          company_id,
+          lead_id,
+          contact_phone,
+          contact_name,
+          instance_id,
+          status,
+          operator_id,
+          unread_count,
+          last_message_preview,
+          last_message_at,
+          tags,
+          waiting_since,
+          created_at,
+          updated_at,
+          is_archived,
+          archived_at,
+          archived_by,
+          lead:leads(id, name, phone, email, tags, custom_fields),
+          operator:profiles(id, full_name, email),
+          instance:instances(id, name, phone, provider, status)
+        `)
+        .eq("company_id", activeCompanyId)
+        .eq("lead_id", selectedConv.lead_id)
+        .order("last_message_at", { ascending: false });
+
+      if (error) {
+        console.warn("[Chat] Error fetching lead conversations:", error);
+        return [];
+      }
+      return (data || []) as unknown as ChatConversation[];
+    },
+    enabled: !!selectedConv?.lead_id && !!activeCompanyId,
+    staleTime: 15000,
+  });
+
+  // Unified list of all conversations for this lead across all instances
+  const allLeadConversations = useMemo(() => {
+    const map = new Map<string, ChatConversation>();
+    leadConversations.forEach((c) => map.set(c.id, c));
+    leadDbConversations.forEach((c) => map.set(c.id, c));
+    return Array.from(map.values());
+  }, [leadConversations, leadDbConversations]);
+
+  // Handle switching instance connection (canal)
   const handleSwitchInstance = async (val: string) => {
     if (!selectedConv) return;
     const targetInstanceId = val === "none" ? null : val;
 
+    // If selecting the currently active instance, do nothing
+    if (selectedConv.instance_id === targetInstanceId) return;
+
     try {
+      if (targetInstanceId) {
+        // 1. Check if a conversation on this instance already exists for this lead
+        const existingTargetConv = allLeadConversations.find(
+          (c) => c.instance_id === targetInstanceId
+        );
+
+        if (existingTargetConv) {
+          // Channel already exists! Switch conversation directly to avoid unique constraint violation
+          handleSelectConv(existingTargetConv.id);
+          refetchConversations();
+          const instName =
+            instances.find((i) => i.id === targetInstanceId)?.name ||
+            existingTargetConv.instance?.name ||
+            "Canal selecionado";
+          toast.success(`Canal alternado para ${instName}`);
+          return;
+        }
+
+        // 2. If the current conversation does not have an instance attached yet, bind it
+        if (!selectedConv.instance_id) {
+          const updated = await updateConversationInstance({
+            conversationId: selectedConv.id,
+            instanceId: targetInstanceId,
+          });
+          if (updated?.id) {
+            const instName =
+              instances.find((i) => i.id === targetInstanceId)?.name || "Canal selecionado";
+            toast.success(`Conexão vinculada a ${instName}`);
+            refetchConversations();
+            refetchLeadConversations();
+          }
+          return;
+        }
+
+        // 3. Current conversation is already on an instance, and target instance doesn't have a conversation yet:
+        // Create a conversation for the new instance so both instances retain separate histories
+        const newConv = await createConversation({
+          leadId: selectedConv.lead_id,
+          instanceId: targetInstanceId,
+        });
+
+        if (newConv?.id) {
+          handleSelectConv(newConv.id);
+          refetchConversations();
+          refetchLeadConversations();
+          const instName =
+            instances.find((i) => i.id === targetInstanceId)?.name || "Canal selecionado";
+          toast.success(`Novo canal aberto: ${instName}`);
+        }
+        return;
+      }
+
+      // If val === "none" (removing instance association)
       const updated = await updateConversationInstance({
         conversationId: selectedConv.id,
-        instanceId: targetInstanceId,
+        instanceId: null,
       });
       if (updated?.id) {
-        toast.success("Conexão atualizada com sucesso!");
+        toast.success("Conexão desvinculada.");
         refetchConversations();
+        refetchLeadConversations();
       }
     } catch (err: any) {
       toast.error(`Erro ao trocar conexão: ${err.message}`);
@@ -277,9 +386,14 @@ export default function Chat() {
     if (selectedConv && !selectedConv.instance_id && !isInternal) {
       const connectedInst = instances.find(i => i.status === "connected") || instances[0];
       if (connectedInst) {
-        await updateConversationInstance({ conversationId: selectedConvId, instanceId: connectedInst.id });
+        const existingForInst = allLeadConversations.find(c => c.instance_id === connectedInst.id);
+        if (existingForInst) {
+          handleSelectConv(existingForInst.id);
+        } else {
+          await updateConversationInstance({ conversationId: selectedConvId, instanceId: connectedInst.id });
+        }
       } else {
-        toast.error("Selecione uma instância para enviar a mensagem");
+        toast.error("Selecione uma conexão para enviar a mensagem");
         return;
       }
     }
@@ -515,7 +629,7 @@ export default function Chat() {
                             Nenhuma Conexão
                           </SelectItem>
                           {instances.map((inst) => {
-                            const hasHistory = leadConversations.some(c => c.instance_id === inst.id);
+                            const hasHistory = allLeadConversations.some(c => c.instance_id === inst.id);
                             return (
                               <SelectItem key={inst.id} value={inst.id} className="text-xs">
                                 <div className="flex items-center justify-between gap-3 w-full">
