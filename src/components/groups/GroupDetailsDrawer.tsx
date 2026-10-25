@@ -16,6 +16,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 
 interface GroupDetailsDrawerProps {
   group: WhatsAppGroupItem | null;

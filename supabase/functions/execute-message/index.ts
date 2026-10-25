@@ -7,7 +7,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const cleanPhone = (phone?: string) => (phone ? String(phone).replace(/\D/g, "") : "");
+const cleanPhone = (phone?: any) => (phone ? String(phone).replace(/\D/g, "") : "");
 const cleanCpf = (cpf?: string) => (cpf ? String(cpf).replace(/\D/g, "") : "");
 
 const syncSentMessageToChat = async (
@@ -2293,9 +2293,9 @@ Deno.serve(async (req) => {
       // ── REGRA DE EXECUÇÃO ÚNICA POR WORKFLOW POR LEAD ──────────────────────────
       const effectiveLeadId = triggerContext?.leadId || triggerContext?.contactId;
       const effectivePhone = (triggerContext?.respondentPhone || triggerContext?.contactPhone || "") as string;
-      const cleanPhone = effectivePhone ? effectivePhone.replace(/\D/g, "") : "";
+      const cleanTriggerPhone = effectivePhone ? effectivePhone.replace(/\D/g, "") : "";
 
-      if (effectiveSequenceId && (effectiveLeadId || cleanPhone)) {
+      if (effectiveSequenceId && (effectiveLeadId || cleanTriggerPhone)) {
         try {
           let existingExecQuery = supabase
             .from("sequence_executions")
@@ -2305,8 +2305,8 @@ Deno.serve(async (req) => {
 
           if (effectiveLeadId) {
             existingExecQuery = existingExecQuery.or(`trigger_context->>leadId.eq.${effectiveLeadId},trigger_context->>contactId.eq.${effectiveLeadId}`);
-          } else if (cleanPhone) {
-            existingExecQuery = existingExecQuery.or(`trigger_context->>respondentPhone.ilike.%${cleanPhone}%,trigger_context->>contactPhone.ilike.%${cleanPhone}%`);
+          } else if (cleanTriggerPhone) {
+            existingExecQuery = existingExecQuery.or(`trigger_context->>respondentPhone.ilike.%${cleanTriggerPhone}%,trigger_context->>contactPhone.ilike.%${cleanTriggerPhone}%`);
           }
 
           const { data: activeList } = await existingExecQuery;
@@ -2322,7 +2322,7 @@ Deno.serve(async (req) => {
               // Marcar qualquer outra execução duplicada desse mesmo fluxo para esse lead como superseded/concluída
               const dupIds = activeList.filter(e => e.id !== workflowExecutionId).map(e => e.id);
               if (dupIds.length > 0) {
-                console.log(`[ExecuteMessage] Limpando ${dupIds.length} execuções duplicadas da sequência ${effectiveSequenceId} no lead ${effectiveLeadId || cleanPhone}`);
+                console.log(`[ExecuteMessage] Limpando ${dupIds.length} execuções duplicadas da sequência ${effectiveSequenceId} no lead ${effectiveLeadId || cleanTriggerPhone}`);
                 await Promise.all([
                   supabase.from("sequence_executions").update({ status: "superseded", error_message: "Substituído por retomada de execução", updated_at: new Date().toISOString() }).in("id", dupIds),
                   supabase.from("workflow_executions").update({ status: "success", finished_at: new Date().toISOString() }).in("id", dupIds),
@@ -2332,7 +2332,7 @@ Deno.serve(async (req) => {
               // Nova execução do mesmo fluxo para o mesmo lead:
               // Regra: "o mesmo fluxo não pode executar ao mesmo tempo dentro do mesmo lead, não importa a fase"
               // Cancelar a execução anterior para que apenas a nova permaneça ativa
-              console.log(`[ExecuteMessage] Substituindo ${activeList.length} execução(ões) anterior(es) da sequência ${effectiveSequenceId} no lead ${effectiveLeadId || cleanPhone}`);
+              console.log(`[ExecuteMessage] Substituindo ${activeList.length} execução(ões) anterior(es) da sequência ${effectiveSequenceId} no lead ${effectiveLeadId || cleanTriggerPhone}`);
               const oldIds = activeList.map(e => e.id);
               await Promise.all([
                 supabase.from("sequence_executions").update({ status: "superseded", error_message: "Substituído por nova execução do mesmo fluxo", updated_at: new Date().toISOString() }).in("id", oldIds),

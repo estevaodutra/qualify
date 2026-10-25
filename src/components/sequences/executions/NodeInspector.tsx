@@ -6,6 +6,7 @@ import { Copy, X } from "lucide-react";
 import { WorkflowNodeExecution } from "@/hooks/useWorkflowExecutions";
 import { maskSensitiveData } from "@/lib/maskSensitiveData";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 interface NodeInspectorProps {
   nodeExecution: WorkflowNodeExecution;
