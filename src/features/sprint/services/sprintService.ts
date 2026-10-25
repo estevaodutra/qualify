@@ -47,7 +47,7 @@ export const sprintService = {
     const board = data as SprintBoard;
 
     // Criar listas padrão do Trello automaticamente para comodidade
-    const defaultLists = ["A Fazer", "Em Andamento", "Concluído"];
+    const defaultLists = ["PENDENTE", "FAZENDO", "CONCLUÍDA"];
     for (let i = 0; i < defaultLists.length; i++) {
       await (supabase as any).from("sprint_lists").insert({
         board_id: board.id,

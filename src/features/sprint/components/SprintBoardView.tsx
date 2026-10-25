@@ -398,8 +398,8 @@ export const SprintBoardView: React.FC = () => {
         >
           <div className="flex items-start gap-4 h-full" style={{ minWidth: "max-content" }}>
             <SortableContext items={listIds} strategy={horizontalListSortingStrategy}>
-              {lists.map((list) => (
-                <SprintListColumn key={list.id} list={list} />
+              {lists.map((list, index) => (
+                <SprintListColumn key={list.id} list={list} index={index} />
               ))}
             </SortableContext>
 
