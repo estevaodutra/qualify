@@ -5,7 +5,6 @@ import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
-import { useEffect } from "react";
 
 export interface Alert {
   id: string;
@@ -69,9 +68,6 @@ export function useAlerts() {
 
       if (activeCompanyId) {
         if (user?.id) {
-          // Mostra alertas da empresa ativa:
-          // - Alertas sem user_id (gerais da empresa)
-          // - Alertas direcionados especificamente a este usuário (ex: menção em card)
           query = query
             .eq("company_id", activeCompanyId)
             .or(`user_id.is.null,user_id.eq.${user.id}`);
@@ -85,7 +81,6 @@ export function useAlerts() {
       const { data, error } = await query;
 
       if (error) {
-        // Fallback simples se o filtro .or der problema de sintaxe em alguma versão do PostgREST
         const fallbackQuery = (supabase as any)
           .from("alerts")
           .select("*")
@@ -106,75 +101,6 @@ export function useAlerts() {
     },
     enabled: !!user,
   });
-
-  // Listener Realtime para alertas e pop-ups
-  useEffect(() => {
-    if (!user) return;
-
-    const channelName = `alerts-channel-${user.id}-${activeCompanyId || "default"}`;
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "alerts",
-        },
-        (payload) => {
-          const newAlert = payload.new as DbAlert;
-          const isTargetedToMe =
-            newAlert.user_id === user.id ||
-            (!newAlert.user_id && newAlert.company_id === activeCompanyId);
-
-          if (isTargetedToMe) {
-            queryClient.invalidateQueries({ queryKey: ["alerts"] });
-
-            // Dispara evento para abrir o pop-up ao lado do painel de notificações
-            window.dispatchEvent(
-              new CustomEvent("app:notification_popup", {
-                detail: {
-                  id: newAlert.id,
-                  userId: newAlert.user_id,
-                  title: newAlert.title,
-                  description: newAlert.description,
-                  entity: newAlert.entity,
-                  link: newAlert.link,
-                  created_at: newAlert.created_at,
-                },
-              })
-            );
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "alerts",
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ["alerts"] });
-        }
-      )
-      .on("broadcast", { event: "mention_notification" }, ({ payload }) => {
-        if (!payload) return;
-        if (payload.userId === user.id) {
-          queryClient.invalidateQueries({ queryKey: ["alerts"] });
-          window.dispatchEvent(
-            new CustomEvent("app:notification_popup", {
-              detail: payload,
-            })
-          );
-        }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user?.id, activeCompanyId, queryClient]);
 
   const { mutateAsync: markAsRead } = useMutation({
     mutationFn: async (id: string) => {
@@ -206,7 +132,6 @@ export function useAlerts() {
 
       const { error } = await query;
       if (error) {
-        // Fallback
         await supabase
           .from("alerts")
           .update({ read: true })

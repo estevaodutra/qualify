@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { X, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
 import { useSprintStore } from "@/features/sprint/state/sprintStore";
 import { parseNotificationTarget } from "@/services/notificationService";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,6 +25,7 @@ export interface ActivePopupNotification {
 
 export const NotificationPopupManager: React.FC = () => {
   const { user } = useAuth();
+  const { activeCompanyId } = useCompany();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { openCardModal } = useSprintStore();
@@ -140,6 +142,89 @@ export const NotificationPopupManager: React.FC = () => {
     [dismissPopup, navigate, openCardModal, queryClient]
   );
 
+  // Escuta canal Realtime único para alertas e menções
+  useEffect(() => {
+    if (!user) return;
+
+    const channelName = `realtime-alerts-${user.id}`;
+    
+    // Remove canal pré-existente seguro
+    const channels = supabase.getChannels();
+    for (const ch of channels) {
+      if (ch.topic === `realtime:${channelName}`) {
+        supabase.removeChannel(ch);
+      }
+    }
+
+    const channel = supabase.channel(channelName);
+    channel
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "alerts",
+        },
+        (payload) => {
+          const newAlert = payload.new as any;
+          const isTargetedToMe =
+            newAlert.user_id === user.id ||
+            (!newAlert.user_id && newAlert.company_id === activeCompanyId);
+
+          if (isTargetedToMe) {
+            queryClient.invalidateQueries({ queryKey: ["alerts"] });
+
+            if (!newAlert.read) {
+              setPopups((prev) => {
+                if (prev.some((p) => p.id === newAlert.id)) return prev;
+                return [
+                  {
+                    id: newAlert.id,
+                    userId: newAlert.user_id,
+                    title: newAlert.title,
+                    description: newAlert.description,
+                    entity: newAlert.entity,
+                    link: newAlert.link,
+                    created_at: newAlert.created_at,
+                  },
+                  ...prev,
+                ].slice(0, 2);
+              });
+              setTimeout(updateAnchor, 50);
+            }
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "alerts",
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["alerts"] });
+        }
+      )
+      .on("broadcast", { event: "mention_notification" }, ({ payload }) => {
+        if (!payload) return;
+        if (payload.userId === user.id) {
+          queryClient.invalidateQueries({ queryKey: ["alerts"] });
+          setPopups((prev) => {
+            if (prev.some((p) => p.id === payload.id)) return prev;
+            return [payload, ...prev].slice(0, 2);
+          });
+          setTimeout(updateAnchor, 50);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, activeCompanyId, queryClient, updateAnchor]);
+
+  // Listener para eventos locais disparados na mesma aba
   useEffect(() => {
     const handleIncomingPopup = (e: Event) => {
       const customEvent = e as CustomEvent<ActivePopupNotification>;
