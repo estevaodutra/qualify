@@ -4,7 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { VersionUpdateBalloon } from "@/components/version/VersionUpdateBalloon";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { LanguageProvider } from "@/i18n";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -127,7 +127,7 @@ const App = () => {
                       <Route path="/groups" element={<Groups />} />
                       <Route path="/pipelines" element={<Pipelines />} />
                       <Route path="/instances" element={<Instances />} />
-                      <Route path="/alerts" element={<Alerts />} />
+                      <Route path="/alerts" element={<Navigate to="/" replace />} />
                       <Route path="/billing" element={<Billing />} />
                       <Route path="/settings" element={<Settings />} />
                       <Route path="/settings/profile" element={<Settings />} />
