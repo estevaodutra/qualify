@@ -365,7 +365,7 @@ export default function CriafyHub() {
             onClick={() => setAddAccountOpen(true)}
             className="gap-1.5 text-xs h-9 bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:opacity-90 transition-all border-0 shadow-sm"
           >
-            <Plus className="w-4 h-4" /> Conectar Conta do Instagram
+            <Plus className="w-4 h-4" /> Conectar Conta
           </Button>
         </div>
       </div>
@@ -435,7 +435,7 @@ export default function CriafyHub() {
                 Sua empresa ({activeCompany?.name}) ainda não possui contas do Instagram conectadas ao Criafy.
               </p>
               <Button size="sm" onClick={() => setAddAccountOpen(true)} className="gap-1.5 text-xs">
-                <Plus className="w-4 h-4" /> Adicionar Primeira Conta
+                <Plus className="w-4 h-4" /> Conectar Primeira Conta
               </Button>
             </CardContent>
           </Card>
