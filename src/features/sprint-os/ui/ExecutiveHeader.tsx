@@ -264,11 +264,11 @@ export const ExecutiveHeader: React.FC = () => {
           <span className="inline">Operação</span>
         </button>
 
-        {/* Manual da Marca (Página Separada no Criafy) */}
+        {/* Manual da Marca (no Criafy) */}
         <button
-          onClick={() => navigate(`/criafy/manual-da-marca/${workspace.project.id}`)}
+          onClick={() => navigate(`/criafy?tab=manual-marca`)}
           className="h-7 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap text-purple-600 dark:text-purple-300 hover:bg-purple-500/10 cursor-pointer"
-          title="Abrir página dedicada do Manual da Marca, Criativos e Scripts no Criafy"
+          title="Abrir aba do Manual da Marca no Criafy"
         >
           <Sparkles className="h-3.5 w-3.5 text-purple-500" />
           <span>Manual da Marca</span>
@@ -487,7 +487,7 @@ export const ExecutiveHeader: React.FC = () => {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="bg-popover border-border text-popover-foreground text-xs w-52 p-1.5 rounded-2xl shadow-xl">
             <DropdownMenuItem
-              onClick={() => navigate(`/criafy/manual-da-marca/${workspace.project.id}`)}
+              onClick={() => navigate(`/criafy?tab=manual-marca`)}
               className="cursor-pointer font-medium"
             >
               <Sparkles className="h-3.5 w-3.5 mr-2 text-purple-500" />

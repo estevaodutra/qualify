@@ -86,7 +86,6 @@ export function AppSidebar() {
     location.pathname.startsWith("/sprint-os") ||
     location.pathname.startsWith("/cronogramas") ||
     location.pathname.startsWith("/criafy") ||
-    location.pathname.startsWith("/manual-da-marca") ||
     location.pathname.startsWith("/quiz") ||
     location.pathname.startsWith("/prospeccao") ||
     location.pathname.startsWith("/agendamentos");

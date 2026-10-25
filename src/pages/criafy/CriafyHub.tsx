@@ -36,6 +36,7 @@ import { MediaLibraryView } from "@/components/criafy/MediaLibraryView";
 import { PublicationsView } from "@/components/criafy/PublicationsView";
 import { QueueRulesView } from "@/components/criafy/QueueRulesView";
 import { CriafyCalendarView } from "@/components/criafy/CriafyCalendarView";
+import { CriafyBrandManualView } from "@/components/criafy/CriafyBrandManualView";
 import { AddAccountModal } from "@/components/criafy/AddAccountModal";
 import { AccountBriefingModal } from "@/components/criafy/AccountBriefingModal";
 import { InstagramFeedModal } from "@/components/criafy/InstagramFeedModal";
@@ -48,6 +49,31 @@ export default function CriafyHub() {
   const { activeCompany, activeCompanyId } = useCompany();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+
+  // Active module tab
+  const [activeModuleTab, setActiveModuleTab] = useState<string>(() => {
+    const tabParam = searchParams.get("tab");
+    if (tabParam === "manual-marca" || tabParam === "manual_marca" || tabParam === "brand_manual" || tabParam === "manual") {
+      return "manual-marca";
+    }
+    return "calendario";
+  });
+
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (tabParam === "manual-marca" || tabParam === "manual_marca" || tabParam === "brand_manual" || tabParam === "manual") {
+      setActiveModuleTab("manual-marca");
+    } else if (tabParam && ["calendario", "conteudos", "publicacoes", "fila"].includes(tabParam)) {
+      setActiveModuleTab(tabParam);
+    }
+  }, [searchParams]);
+
+  const handleTabChange = (value: string) => {
+    setActiveModuleTab(value);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("tab", value);
+    setSearchParams(nextParams, { replace: true });
+  };
   const [accounts, setAccounts] = useState<CriafyInstagramAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const processedOAuthCallbackRef = useRef<string | null>(null);
@@ -355,9 +381,9 @@ export default function CriafyHub() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate("/criafy/manual-da-marca")}
-            className="gap-1.5 text-xs h-9 border-purple-500/30 hover:border-purple-500/50 hover:bg-purple-500/10 text-purple-600 dark:text-purple-300 font-semibold"
-            title="Abrir página dedicada do Manual da Marca (7D, Criativos e Scripts)"
+            onClick={() => handleTabChange("manual-marca")}
+            className="gap-1.5 text-xs h-9 border-purple-500/30 hover:border-purple-500/50 hover:bg-purple-500/10 text-purple-600 dark:text-purple-300 font-semibold cursor-pointer"
+            title="Abrir aba do Manual da Marca (7D, Criativos e Scripts)"
           >
             <BookOpen className="w-4 h-4 text-purple-500" /> Manual da Marca
           </Button>
@@ -493,7 +519,7 @@ export default function CriafyHub() {
       </div>
 
       {/* Tabs Navigation for Criafy Modules */}
-      <Tabs defaultValue="calendario" className="space-y-4 pt-4">
+      <Tabs value={activeModuleTab} onValueChange={handleTabChange} className="space-y-4 pt-4">
         <TabsList className="bg-muted/60 p-1 h-10">
           <TabsTrigger value="calendario" className="text-xs gap-1.5 h-8 font-semibold">
             <CalendarDays className="w-3.5 h-3.5 text-pink-500" /> Calendário Editorial
@@ -507,16 +533,9 @@ export default function CriafyHub() {
           <TabsTrigger value="fila" className="text-xs gap-1.5 h-8">
             <Clock className="w-3.5 h-3.5" /> Fila Automática & Cadência
           </TabsTrigger>
-          <button
-            type="button"
-            onClick={() => navigate("/criafy/manual-da-marca")}
-            className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-xs font-semibold ring-offset-background transition-all hover:bg-background/80 hover:text-foreground text-purple-600 dark:text-purple-300 gap-1.5 h-8 cursor-pointer ml-auto"
-            title="Abrir página dedicada do Manual da Marca (7D, Criativos e Scripts)"
-          >
-            <BookOpen className="w-3.5 h-3.5 text-purple-500" />
-            <span>Manual da Marca</span>
-            <ExternalLink className="w-3 h-3 opacity-60" />
-          </button>
+          <TabsTrigger value="manual-marca" className="text-xs gap-1.5 h-8 font-semibold text-purple-600 dark:text-purple-300 data-[state=active]:text-purple-600">
+            <BookOpen className="w-3.5 h-3.5 text-purple-500" /> Manual da Marca
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="calendario">
@@ -549,6 +568,10 @@ export default function CriafyHub() {
             selectedAccountId={selectedAccountId}
             onSelectAccountFilter={setSelectedAccountId}
           />
+        </TabsContent>
+
+        <TabsContent value="manual-marca">
+          <CriafyBrandManualView />
         </TabsContent>
       </Tabs>
 
