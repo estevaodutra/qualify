@@ -38,7 +38,6 @@ export const SprintCardItem: React.FC<SprintCardItemProps> = ({ card }) => {
     transition,
   };
 
-  // Checklist counts
   const totalChecklistItems = (card.checklists || []).reduce(
     (acc, chk) => acc + chk.items.length,
     0
@@ -48,16 +47,15 @@ export const SprintCardItem: React.FC<SprintCardItemProps> = ({ card }) => {
     0
   );
 
-  // Due date status
-  let dueDateBadgeColor = "text-slate-400 bg-slate-800/80";
+  let dueDateBadgeColor = "text-muted-foreground bg-secondary";
   if (card.due_date) {
     const d = new Date(card.due_date);
     if (card.is_completed) {
-      dueDateBadgeColor = "text-emerald-400 bg-emerald-500/10 border-emerald-500/30";
+      dueDateBadgeColor = "text-emerald-600 bg-emerald-500/10 border-emerald-500/20";
     } else if (isPast(d) && !isToday(d)) {
-      dueDateBadgeColor = "text-rose-400 bg-rose-500/10 border-rose-500/30";
+      dueDateBadgeColor = "text-rose-600 bg-rose-500/10 border-rose-500/20";
     } else if (isToday(d)) {
-      dueDateBadgeColor = "text-amber-400 bg-amber-500/10 border-amber-500/30";
+      dueDateBadgeColor = "text-amber-600 bg-amber-500/10 border-amber-500/20";
     }
   }
 
@@ -69,45 +67,45 @@ export const SprintCardItem: React.FC<SprintCardItemProps> = ({ card }) => {
       {...listeners}
       onClick={() => openCardModal(card.id)}
       className={cn(
-        "group relative rounded-xl bg-slate-900 border border-slate-800/80 hover:border-slate-700 p-3 shadow-md hover:shadow-xl cursor-grab active:cursor-grabbing transition-all select-none space-y-2.5",
+        "group relative rounded-lg bg-card border border-border p-3 shadow-[0_1px_3px_hsl(220_15%_10%/0.08)] hover:border-primary/40 cursor-grab active:cursor-grabbing transition-all select-none space-y-2",
         isDragging && "opacity-40 scale-95 border-dashed border-primary"
       )}
     >
-      {/* Cover Color (optional) */}
+      {/* Cover Color (se houver) */}
       {card.cover_color && (
         <div
           style={{ backgroundColor: card.cover_color }}
-          className="h-7 -mx-3 -mt-3 rounded-t-xl"
+          className="h-6 -mx-3 -mt-3 rounded-t-lg"
         />
       )}
 
-      {/* Labels */}
+      {/* Etiquetas */}
       {(card.labels || []).length > 0 && (
         <div className="flex flex-wrap gap-1">
           {card.labels?.map((label) => (
             <span
               key={label.id}
               style={{ backgroundColor: label.color }}
-              className="h-2 w-8 rounded-full shadow-sm"
+              className="h-1.5 w-7 rounded-full shadow-2xs"
               title={label.name}
             />
           ))}
         </div>
       )}
 
-      {/* Card Title */}
-      <h3 className="text-sm font-medium text-slate-100 leading-snug break-words">
+      {/* Título do Cartão */}
+      <h3 className="text-xs md:text-sm font-medium text-foreground leading-snug break-words">
         {card.title}
       </h3>
 
-      {/* Badges Footer */}
+      {/* Badges do Rodapé */}
       <div className="flex items-center justify-between pt-1 gap-2 text-xs">
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Due date */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Prazo */}
           {card.due_date && (
             <div
               className={cn(
-                "flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-medium border border-transparent",
+                "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border border-transparent",
                 dueDateBadgeColor
               )}
             >
@@ -120,10 +118,10 @@ export const SprintCardItem: React.FC<SprintCardItemProps> = ({ card }) => {
           {totalChecklistItems > 0 && (
             <div
               className={cn(
-                "flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-medium",
+                "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium",
                 completedChecklistItems === totalChecklistItems
-                  ? "bg-emerald-500/10 text-emerald-400"
-                  : "bg-slate-800/80 text-slate-400"
+                  ? "bg-emerald-500/10 text-emerald-600"
+                  : "bg-secondary text-secondary-foreground"
               )}
             >
               <CheckSquare className="h-3 w-3" />
@@ -133,16 +131,16 @@ export const SprintCardItem: React.FC<SprintCardItemProps> = ({ card }) => {
             </div>
           )}
 
-          {/* Comments count */}
+          {/* Comentários */}
           {(card.comments_count || 0) > 0 && (
-            <div className="flex items-center gap-1 text-[11px] text-slate-400">
+            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
               <MessageSquare className="h-3 w-3" />
               <span>{card.comments_count}</span>
             </div>
           )}
         </div>
 
-        {/* Assigned members avatars */}
+        {/* Membros Atribuídos */}
         {(card.members || []).length > 0 && (
           <div className="flex items-center -space-x-1.5 shrink-0 ml-auto">
             {card.members?.map((m) => {
@@ -151,10 +149,10 @@ export const SprintCardItem: React.FC<SprintCardItemProps> = ({ card }) => {
               return (
                 <Avatar
                   key={m.user_id}
-                  className="h-5 w-5 border border-slate-900 ring-1 ring-slate-800"
+                  className="h-5 w-5 border border-background ring-1 ring-border"
                   title={name}
                 >
-                  <AvatarFallback className="bg-primary/20 text-primary font-bold text-[8px]">
+                  <AvatarFallback className="bg-primary/10 text-primary font-bold text-[8px]">
                     {name.slice(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>

@@ -36,6 +36,8 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   DropdownMenu,
@@ -86,7 +88,7 @@ export const SprintBoardView: React.FC = () => {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 5, // Avoid accidental drag on clicks
+        distance: 5,
       },
     })
   );
@@ -128,7 +130,6 @@ export const SprintBoardView: React.FC = () => {
 
     if (!isActiveACard) return;
 
-    // Moving Card over Card in different or same column
     if (isActiveACard && isOverACard) {
       const activeCard = active.data.current?.card as SprintCard;
       const overCard = over.data.current?.card as SprintCard;
@@ -148,7 +149,6 @@ export const SprintBoardView: React.FC = () => {
       }
     }
 
-    // Moving Card directly over an empty Column container
     if (isActiveACard && isOverAColumn) {
       const activeCard = active.data.current?.card as SprintCard;
       const targetListId = String(overId);
@@ -172,7 +172,6 @@ export const SprintBoardView: React.FC = () => {
     const activeId = active.id;
     const overId = over.id;
 
-    // Reordering columns
     if (active.data.current?.type === "Column") {
       if (activeId !== overId) {
         const activeIndex = lists.findIndex((l) => l.id === activeId);
@@ -185,9 +184,7 @@ export const SprintBoardView: React.FC = () => {
       return;
     }
 
-    // Reordering cards within the same column
     if (active.data.current?.type === "Card") {
-      const activeCard = active.data.current?.card as SprintCard;
       const targetList = lists.find((l) => l.cards.some((c) => c.id === activeId));
       if (!targetList) return;
 
@@ -205,7 +202,7 @@ export const SprintBoardView: React.FC = () => {
 
   if (!currentBoard) {
     return (
-      <div className="flex-1 flex items-center justify-center p-8 text-slate-400">
+      <div className="flex-1 flex items-center justify-center p-8 text-muted-foreground bg-background">
         Carregando quadro...
       </div>
     );
@@ -218,67 +215,66 @@ export const SprintBoardView: React.FC = () => {
     selectedMemberFilters.length > 0;
 
   return (
-    <div
-      style={{ backgroundColor: currentBoard.background_value }}
-      className="flex-1 flex flex-col h-[calc(100vh-65px)] overflow-hidden"
-    >
-      {/* Board Top Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 bg-black/40 backdrop-blur-md border-b border-white/10 shrink-0">
+    <div className="flex-1 flex flex-col h-[calc(100vh-65px)] overflow-hidden bg-background">
+      {/* Board Top Header seguindo o design do sistema */}
+      <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 bg-card border-b border-border shrink-0">
         <div className="flex items-center gap-3">
           <Button
             variant="ghost"
             size="icon"
             onClick={() => navigate("/sprint")}
-            className="h-8 w-8 text-white/80 hover:text-white hover:bg-white/10"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
 
-          <h1 className="text-lg font-bold text-white tracking-tight">
-            {currentBoard.title}
-          </h1>
+          <div className="flex items-center gap-2">
+            <div
+              className="h-3 w-3 rounded-full shrink-0"
+              style={{ backgroundColor: currentBoard.background_value }}
+            />
+            <h1 className="text-base md:text-lg font-bold text-foreground tracking-tight font-['Sora']">
+              {currentBoard.title}
+            </h1>
+          </div>
 
-          <button className="text-white/60 hover:text-amber-400 transition-colors">
-            <Star className={cn("h-4 w-4", currentBoard.is_favorite && "fill-amber-400 text-amber-400")} />
+          <button className="text-muted-foreground hover:text-amber-500 transition-colors ml-1 cursor-pointer">
+            <Star className={cn("h-4 w-4", currentBoard.is_favorite && "fill-amber-500 text-amber-500")} />
           </button>
         </div>
 
-        {/* Filters and Actions */}
+        {/* Filtros e Ações */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Search Input */}
+          {/* Busca de Cartões */}
           <div className="relative">
-            <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-white/50" />
-            <input
-              type="text"
+            <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
               value={searchFilter}
               onChange={(e) => setSearchFilter(e.target.value)}
               placeholder="Filtrar cartões..."
-              className="pl-8 pr-3 py-1 text-xs rounded-lg bg-white/10 border border-white/10 text-white placeholder:text-white/50 focus:outline-none focus:ring-1 focus:ring-primary w-36 md:w-48 transition-all"
+              className="pl-8 h-8 text-xs w-36 md:w-48 bg-background"
             />
           </div>
 
-          {/* Labels Filter Popover */}
+          {/* Filtro de Etiquetas */}
           <Popover>
             <PopoverTrigger asChild>
               <Button
-                variant="ghost"
+                variant={selectedLabelFilters.length > 0 ? "secondary" : "outline"}
                 size="sm"
-                className={cn(
-                  "h-7 px-2.5 text-xs text-white/80 hover:text-white hover:bg-white/10 gap-1.5",
-                  selectedLabelFilters.length > 0 && "bg-white/20 text-white font-semibold"
-                )}
+                className="h-8 text-xs gap-1.5"
               >
-                <Tag className="h-3 w-3" />
+                <Tag className="h-3.5 w-3.5 text-muted-foreground" />
                 <span>Etiquetas</span>
                 {selectedLabelFilters.length > 0 && (
-                  <span className="ml-1 text-[10px] bg-primary text-white rounded-full px-1.5 py-0.2">
+                  <Badge variant="default" className="h-4 px-1 text-[10px] ml-0.5">
                     {selectedLabelFilters.length}
-                  </span>
+                  </Badge>
                 )}
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-56 p-2 bg-slate-900 border-slate-800 text-slate-200">
-              <div className="text-xs font-semibold px-2 py-1 text-slate-400">Filtrar por etiqueta</div>
+            <PopoverContent align="end" className="w-56 p-2 bg-popover border-border text-popover-foreground">
+              <div className="text-xs font-semibold px-2 py-1 text-muted-foreground">Filtrar por etiqueta</div>
               <div className="space-y-1 mt-1 max-h-48 overflow-y-auto">
                 {labels.map((l) => (
                   <button
@@ -286,8 +282,8 @@ export const SprintBoardView: React.FC = () => {
                     onClick={() => toggleLabelFilter(l.id)}
                     style={{ backgroundColor: l.color }}
                     className={cn(
-                      "w-full text-left px-2.5 py-1 rounded text-xs font-semibold text-white shadow-sm transition-opacity",
-                      selectedLabelFilters.includes(l.id) ? "opacity-100 ring-2 ring-white" : "opacity-60 hover:opacity-90"
+                      "w-full text-left px-2.5 py-1 rounded text-xs font-semibold text-white shadow-xs transition-opacity cursor-pointer",
+                      selectedLabelFilters.includes(l.id) ? "opacity-100 ring-2 ring-primary" : "opacity-75 hover:opacity-100"
                     )}
                   >
                     {l.name}
@@ -297,38 +293,35 @@ export const SprintBoardView: React.FC = () => {
             </PopoverContent>
           </Popover>
 
-          {/* Members Filter Popover */}
+          {/* Filtro de Membros */}
           <Popover>
             <PopoverTrigger asChild>
               <Button
-                variant="ghost"
+                variant={selectedMemberFilters.length > 0 ? "secondary" : "outline"}
                 size="sm"
-                className={cn(
-                  "h-7 px-2.5 text-xs text-white/80 hover:text-white hover:bg-white/10 gap-1.5",
-                  selectedMemberFilters.length > 0 && "bg-white/20 text-white font-semibold"
-                )}
+                className="h-8 text-xs gap-1.5"
               >
-                <Users className="h-3 w-3" />
+                <Users className="h-3.5 w-3.5 text-muted-foreground" />
                 <span>Membros</span>
                 {selectedMemberFilters.length > 0 && (
-                  <span className="ml-1 text-[10px] bg-primary text-white rounded-full px-1.5 py-0.2">
+                  <Badge variant="default" className="h-4 px-1 text-[10px] ml-0.5">
                     {selectedMemberFilters.length}
-                  </span>
+                  </Badge>
                 )}
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-56 p-2 bg-slate-900 border-slate-800 text-slate-200">
-              <div className="text-xs font-semibold px-2 py-1 text-slate-400">Filtrar por membro</div>
+            <PopoverContent align="end" className="w-56 p-2 bg-popover border-border text-popover-foreground">
+              <div className="text-xs font-semibold px-2 py-1 text-muted-foreground">Filtrar por membro</div>
               <div className="space-y-1 mt-1 max-h-48 overflow-y-auto">
                 {members.filter((m) => m.is_active).map((member) => (
                   <button
                     key={member.id}
                     onClick={() => toggleMemberFilter(member.user_id)}
                     className={cn(
-                      "w-full text-left px-2 py-1.5 rounded text-xs transition-colors",
+                      "w-full text-left px-2 py-1.5 rounded text-xs transition-colors cursor-pointer",
                       selectedMemberFilters.includes(member.user_id)
-                        ? "bg-primary/20 text-primary font-medium"
-                        : "hover:bg-slate-800 text-slate-300"
+                        ? "bg-primary/10 text-primary font-medium"
+                        : "hover:bg-accent text-foreground"
                     )}
                   >
                     {member.full_name || member.email}
@@ -338,27 +331,25 @@ export const SprintBoardView: React.FC = () => {
             </PopoverContent>
           </Popover>
 
-          {/* Clear Filters */}
           {hasActiveFilters && (
             <Button
               variant="ghost"
               size="sm"
               onClick={clearFilters}
-              className="h-7 px-2 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/20 gap-1"
+              className="h-8 text-xs text-destructive hover:text-destructive gap-1 px-2"
             >
-              <X className="h-3 w-3" />
+              <X className="h-3.5 w-3.5" />
               <span>Limpar filtros</span>
             </Button>
           )}
 
-          {/* Board Options */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-white/80 hover:text-white hover:bg-white/10">
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-slate-900 border-slate-800 text-slate-200">
+            <DropdownMenuContent align="end">
               <DropdownMenuItem
                 onClick={async () => {
                   if (confirm("Tem certeza que deseja excluir este quadro?")) {
@@ -366,7 +357,7 @@ export const SprintBoardView: React.FC = () => {
                     navigate("/sprint");
                   }
                 }}
-                className="text-red-400 hover:text-red-300 gap-2 cursor-pointer"
+                className="text-destructive gap-2 cursor-pointer"
               >
                 <Trash2 className="h-4 w-4" />
                 <span>Excluir Quadro</span>
@@ -376,8 +367,8 @@ export const SprintBoardView: React.FC = () => {
         </div>
       </div>
 
-      {/* Kanban Board Horizontal Area */}
-      <div className="flex-1 overflow-x-auto overflow-y-hidden p-6">
+      {/* Área do Kanban com fundo padrão de board */}
+      <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 bg-muted/20">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
@@ -385,30 +376,29 @@ export const SprintBoardView: React.FC = () => {
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div className="flex items-start gap-4 h-full">
+          <div className="flex items-start gap-4 h-full" style={{ minWidth: "max-content" }}>
             <SortableContext items={listIds} strategy={horizontalListSortingStrategy}>
               {lists.map((list) => (
                 <SprintListColumn key={list.id} list={list} />
               ))}
             </SortableContext>
 
-            {/* + Add Another List Button */}
+            {/* Botão de Adicionar Lista */}
             <div className="w-72 shrink-0">
               {isAddingList ? (
                 <form
                   onSubmit={handleCreateList}
-                  className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 backdrop-blur-xl shadow-xl space-y-2"
+                  className="p-3 rounded-xl bg-card border border-border shadow-sm space-y-2"
                 >
-                  <input
-                    type="text"
+                  <Input
                     value={newListTitle}
                     onChange={(e) => setNewListTitle(e.target.value)}
                     placeholder="Nome da lista..."
                     autoFocus
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="h-8 text-xs"
                   />
                   <div className="flex items-center gap-1.5">
-                    <Button type="submit" size="sm" className="h-7 text-xs bg-primary hover:bg-primary/90 text-white">
+                    <Button type="submit" size="sm" className="h-7 text-xs">
                       Adicionar Lista
                     </Button>
                     <Button
@@ -416,7 +406,7 @@ export const SprintBoardView: React.FC = () => {
                       variant="ghost"
                       size="icon"
                       onClick={() => setIsAddingList(false)}
-                      className="h-7 w-7 text-slate-400 hover:text-white"
+                      className="h-7 w-7 text-muted-foreground"
                     >
                       <X className="h-4 w-4" />
                     </Button>
@@ -425,16 +415,15 @@ export const SprintBoardView: React.FC = () => {
               ) : (
                 <button
                   onClick={() => setIsAddingList(true)}
-                  className="w-full flex items-center gap-2 px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white/90 hover:text-white text-xs font-semibold backdrop-blur-md border border-white/10 transition-all shadow-sm"
+                  className="w-full flex items-center gap-2 px-4 py-3 rounded-xl bg-card/60 hover:bg-card border border-border/80 hover:border-border text-foreground text-xs font-semibold shadow-2xs transition-all cursor-pointer"
                 >
-                  <Plus className="h-4 w-4" />
+                  <Plus className="h-4 w-4 text-muted-foreground" />
                   <span>Adicionar outra lista</span>
                 </button>
               )}
             </div>
           </div>
 
-          {/* Drag Overlay for smooth preview */}
           <DragOverlay>
             {activeDragItem?.type === "Column" && (
               <SprintListColumn list={activeDragItem.data as SprintList} />
@@ -446,7 +435,6 @@ export const SprintBoardView: React.FC = () => {
         </DndContext>
       </div>
 
-      {/* Card Details Modal */}
       <SprintCardModal />
     </div>
   );

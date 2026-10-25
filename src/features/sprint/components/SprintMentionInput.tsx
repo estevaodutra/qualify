@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import { useCompanyMembers, CompanyMember } from "@/hooks/useCompanyMembers";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -122,14 +122,14 @@ export const SprintMentionInput: React.FC<SprintMentionInputProps> = ({
         autoFocus={autoFocus}
         placeholder={placeholder}
         className={cn(
-          "w-full bg-slate-900/60 border border-slate-700/60 rounded-md px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all",
+          "w-full bg-background border border-input rounded-md px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all",
           className
         )}
       />
 
       {mentionQuery !== null && filteredMembers.length > 0 && (
-        <div className="absolute left-0 top-full mt-1.5 z-50 w-64 max-h-56 overflow-y-auto rounded-xl border border-slate-700/80 bg-slate-900/95 backdrop-blur-xl shadow-2xl p-1">
-          <div className="px-2 py-1 text-[10px] uppercase font-bold tracking-wider text-slate-400">
+        <div className="absolute left-0 top-full mt-1.5 z-50 w-64 max-h-56 overflow-y-auto rounded-xl border border-border bg-popover text-popover-foreground shadow-xl p-1">
+          <div className="px-2 py-1 text-[10px] uppercase font-bold tracking-wider text-muted-foreground">
             Mencionar membro da equipe
           </div>
           {filteredMembers.map((member, idx) => {
@@ -146,14 +146,14 @@ export const SprintMentionInput: React.FC<SprintMentionInputProps> = ({
                   selectMember(member);
                 }}
                 className={cn(
-                  "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-xs transition-colors",
+                  "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-xs transition-colors cursor-pointer",
                   isSelected
-                    ? "bg-primary text-white"
-                    : "text-slate-200 hover:bg-slate-800"
+                    ? "bg-primary text-primary-foreground font-medium"
+                    : "text-foreground hover:bg-accent"
                 )}
               >
-                <Avatar className="h-6 w-6 text-[10px] border border-white/10 shrink-0">
-                  <AvatarFallback className="bg-slate-800 text-slate-200 font-semibold">
+                <Avatar className="h-6 w-6 text-[10px] border border-border shrink-0">
+                  <AvatarFallback className="bg-secondary text-secondary-foreground font-semibold">
                     {initials}
                   </AvatarFallback>
                 </Avatar>

@@ -8,8 +8,8 @@ import {
   Star,
   Kanban,
   Layout,
-  Clock,
-  Sparkles,
+  Layers,
+  ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,15 +18,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 const BG_PRESETS = [
-  { name: "Slate Dark", value: "#0F172A" },
-  { name: "Ocean Deep", value: "#1E293B" },
-  { name: "Indigo Night", value: "#312E81" },
-  { name: "Emerald Forest", value: "#064E3B" },
-  { name: "Wine Berry", value: "#831843" },
-  { name: "Midnight Purple", value: "#4C1D95" },
+  { name: "Padrão", value: "#3b82f6" },
+  { name: "Índigo", value: "#6366f1" },
+  { name: "Esmeralda", value: "#10b981" },
+  { name: "Âmbar", value: "#f59e0b" },
+  { name: "Rosa", value: "#ec4899" },
+  { name: "Grafite", value: "#475569" },
 ];
 
 export const SprintBoardsHome: React.FC = () => {
@@ -73,37 +76,37 @@ export const SprintBoardsHome: React.FC = () => {
   const favoriteBoards = boards.filter((b) => b.is_favorite);
 
   return (
-    <div className="flex-1 min-h-[calc(100vh-65px)] bg-[#0B0E14] text-slate-100 p-8 space-y-8 overflow-y-auto">
-      {/* Top Banner / Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-6">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2.5">
-            <div className="h-9 w-9 rounded-xl bg-primary/20 border border-primary/30 flex items-center justify-center text-primary">
-              <Kanban className="h-5 w-5" />
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight text-white">
+    <div className="flex-1 bg-background text-foreground p-6 md:p-8 space-y-8 overflow-y-auto">
+      {/* Top Header com Padrão do Sistema */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border/60 pb-5">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 shadow-sm">
+            <Kanban className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground font-['Sora']">
               Sprint
             </h1>
+            <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
+              Gestão visual de fluxos em Kanban com menções universais (@) e checklists integrados.
+            </p>
           </div>
-          <p className="text-sm text-slate-400">
-            Quadros de trabalho estilo Trello com menções universais (@) e fluxos Kanban ágeis.
-          </p>
         </div>
 
         <Button
           onClick={() => setIsCreateOpen(true)}
-          className="bg-primary hover:bg-primary/90 text-white font-semibold gap-2 shadow-lg shadow-primary/20"
+          className="gap-2 shadow-sm font-semibold"
         >
           <Plus className="h-4 w-4" />
           <span>Criar novo quadro</span>
         </Button>
       </div>
 
-      {/* Favorites Section (if any) */}
+      {/* Seção Favoritos (se houver) */}
       {favoriteBoards.length > 0 && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 text-sm font-semibold text-amber-400 uppercase tracking-wider">
-            <Star className="h-4 w-4 fill-amber-400" />
+        <div className="space-y-3.5">
+          <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-wider">
+            <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" />
             <span>Quadros Favoritos</span>
           </div>
 
@@ -112,14 +115,26 @@ export const SprintBoardsHome: React.FC = () => {
               <div
                 key={board.id}
                 onClick={() => navigate(`/sprint/b/${board.id}`)}
-                style={{ backgroundColor: board.background_value }}
-                className="group relative h-28 rounded-2xl p-4 cursor-pointer border border-white/10 hover:border-white/30 shadow-lg hover:shadow-2xl transition-all flex flex-col justify-between overflow-hidden"
+                className="group relative rounded-xl border border-border bg-card hover:border-primary/50 shadow-xs hover:shadow-md transition-all p-4 cursor-pointer flex flex-col justify-between h-32 overflow-hidden"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-bold text-white text-base leading-snug group-hover:underline">
+                <div
+                  className="absolute top-0 left-0 right-0 h-1.5"
+                  style={{ backgroundColor: board.background_value }}
+                />
+                <div className="flex items-start justify-between gap-2 pt-1">
+                  <h3 className="font-semibold text-foreground text-sm leading-tight group-hover:text-primary transition-colors">
                     {board.title}
                   </h3>
-                  <Star className="h-4 w-4 fill-amber-400 text-amber-400 shrink-0" />
+                  <Star className="h-4 w-4 fill-amber-500 text-amber-500 shrink-0" />
+                </div>
+                {board.description && (
+                  <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                    {board.description}
+                  </p>
+                )}
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-2 border-t border-border/40 mt-auto">
+                  <span>Abrir quadro</span>
+                  <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
                 </div>
               </div>
             ))}
@@ -127,97 +142,98 @@ export const SprintBoardsHome: React.FC = () => {
         </div>
       )}
 
-      {/* All Boards Section */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 text-sm font-semibold text-slate-400 uppercase tracking-wider">
-          <Layout className="h-4 w-4" />
+      {/* Seção Todos os Quadros */}
+      <div className="space-y-3.5">
+        <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-wider">
+          <Layout className="h-3.5 w-3.5" />
           <span>Seus Quadros</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {/* Create Board Card Button */}
+          {/* Botão de Criar Quadro */}
           <button
             onClick={() => setIsCreateOpen(true)}
-            className="h-28 rounded-2xl border-2 border-dashed border-slate-800 hover:border-primary/60 bg-slate-900/30 hover:bg-slate-900/60 transition-all flex flex-col items-center justify-center gap-2 text-slate-400 hover:text-white group"
+            className="h-32 rounded-xl border-2 border-dashed border-border hover:border-primary/60 bg-muted/20 hover:bg-muted/40 transition-all flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-foreground group cursor-pointer"
           >
-            <div className="h-8 w-8 rounded-full bg-slate-800 group-hover:bg-primary/20 group-hover:text-primary flex items-center justify-center transition-colors">
+            <div className="h-8 w-8 rounded-full bg-secondary group-hover:bg-primary/10 group-hover:text-primary flex items-center justify-center transition-colors">
               <Plus className="h-4 w-4" />
             </div>
             <span className="text-xs font-semibold">Criar novo quadro</span>
           </button>
 
-          {/* Boards List */}
+          {/* Lista de Quadros */}
           {boards.map((board) => (
             <div
               key={board.id}
               onClick={() => navigate(`/sprint/b/${board.id}`)}
-              style={{ backgroundColor: board.background_value }}
-              className="group relative h-28 rounded-2xl p-4 cursor-pointer border border-white/10 hover:border-white/30 shadow-lg hover:shadow-2xl transition-all flex flex-col justify-between overflow-hidden"
+              className="group relative rounded-xl border border-border bg-card hover:border-primary/50 shadow-xs hover:shadow-md transition-all p-4 cursor-pointer flex flex-col justify-between h-32 overflow-hidden"
             >
-              <div className="flex items-start justify-between gap-2">
-                <h3 className="font-bold text-white text-base leading-snug group-hover:underline">
+              <div
+                className="absolute top-0 left-0 right-0 h-1.5"
+                style={{ backgroundColor: board.background_value }}
+              />
+              <div className="flex items-start justify-between gap-2 pt-1">
+                <h3 className="font-semibold text-foreground text-sm leading-tight group-hover:text-primary transition-colors">
                   {board.title}
                 </h3>
                 {board.is_favorite && (
-                  <Star className="h-4 w-4 fill-amber-400 text-amber-400 shrink-0" />
+                  <Star className="h-4 w-4 fill-amber-500 text-amber-500 shrink-0" />
                 )}
               </div>
               {board.description && (
-                <p className="text-xs text-white/70 line-clamp-1">
+                <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
                   {board.description}
                 </p>
               )}
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-2 border-t border-border/40 mt-auto">
+                <span>Abrir quadro</span>
+                <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
+              </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Create Board Modal */}
+      {/* Modal Criar Novo Quadro */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent className="max-w-md bg-slate-900 border-slate-800 text-slate-100 p-6 rounded-2xl shadow-2xl">
+        <DialogContent className="max-w-md bg-card border-border text-card-foreground p-6 rounded-2xl shadow-xl">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-white">
+            <DialogTitle className="text-lg font-bold text-foreground">
               Criar Novo Quadro
             </DialogTitle>
           </DialogHeader>
 
           <form onSubmit={handleCreateBoard} className="space-y-4 mt-2">
-            {/* Board Title */}
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-300">
-                Título do Quadro <span className="text-rose-500">*</span>
+              <label className="text-xs font-semibold text-foreground">
+                Título do Quadro <span className="text-destructive">*</span>
               </label>
-              <input
-                type="text"
+              <Input
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Ex: Lançamento de Produto, Marketing, Roadmap..."
+                placeholder="Ex: Lançamento, Marketing, Operações..."
                 required
                 autoFocus
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
 
-            {/* Board Description */}
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-300">
+              <label className="text-xs font-semibold text-foreground">
                 Descrição (opcional)
               </label>
-              <input
-                type="text"
+              <Textarea
+                rows={2}
                 value={newDescription}
                 onChange={(e) => setNewDescription(e.target.value)}
                 placeholder="Objetivo principal deste quadro..."
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
 
-            {/* Background Color Picker */}
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-300">
-                Cor de Fundo
+              <label className="text-xs font-semibold text-foreground">
+                Cor de Destaque
               </label>
-              <div className="grid grid-cols-6 gap-2">
+              <div className="flex items-center gap-2.5">
                 {BG_PRESETS.map((preset) => (
                   <button
                     key={preset.value}
@@ -225,9 +241,9 @@ export const SprintBoardsHome: React.FC = () => {
                     onClick={() => setSelectedBg(preset.value)}
                     style={{ backgroundColor: preset.value }}
                     className={cn(
-                      "h-10 rounded-xl border transition-all active:scale-95",
+                      "h-8 w-8 rounded-full border-2 transition-all active:scale-95 cursor-pointer",
                       selectedBg === preset.value
-                        ? "ring-2 ring-primary border-white"
+                        ? "ring-2 ring-primary ring-offset-2 ring-offset-background border-white"
                         : "border-transparent opacity-80 hover:opacity-100"
                     )}
                     title={preset.name}
@@ -236,19 +252,17 @@ export const SprintBoardsHome: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
               <Button
                 type="button"
                 variant="ghost"
                 onClick={() => setIsCreateOpen(false)}
-                className="text-slate-400 hover:text-white"
               >
                 Cancelar
               </Button>
               <Button
                 type="submit"
                 disabled={isSubmitting || !newTitle.trim()}
-                className="bg-primary hover:bg-primary/90 text-white"
               >
                 {isSubmitting ? "Criando..." : "Criar Quadro"}
               </Button>

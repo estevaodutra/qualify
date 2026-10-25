@@ -7,7 +7,7 @@ import { SprintCardItem } from "./SprintCardItem";
 import { SprintMentionInput } from "./SprintMentionInput";
 import { useSprintStore } from "../state/sprintStore";
 import { useAuth } from "@/contexts/AuthContext";
-import { MoreHorizontal, Plus, Trash2, X } from "lucide-react";
+import { MoreHorizontal, Plus, Trash2, X, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -30,7 +30,6 @@ export const SprintListColumn: React.FC<SprintListColumnProps> = ({ list }) => {
     searchFilter,
     selectedLabelFilters,
     selectedMemberFilters,
-    autoAssignMemberMention,
   } = useSprintStore();
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -69,7 +68,7 @@ export const SprintListColumn: React.FC<SprintListColumnProps> = ({ list }) => {
     if (!newCardTitle.trim()) return;
     const cardTitle = newCardTitle.trim();
     setNewCardTitle("");
-    const created = await createCard({
+    await createCard({
       listId: list.id,
       boardId: list.board_id,
       companyId: list.company_id,
@@ -78,7 +77,6 @@ export const SprintListColumn: React.FC<SprintListColumnProps> = ({ list }) => {
     });
   };
 
-  // Filter cards based on search and filters
   const filteredCards = list.cards.filter((card) => {
     if (searchFilter) {
       const q = searchFilter.toLowerCase();
@@ -109,17 +107,18 @@ export const SprintListColumn: React.FC<SprintListColumnProps> = ({ list }) => {
       ref={setNodeRef}
       style={style}
       className={cn(
-        "w-72 shrink-0 flex flex-col max-h-full rounded-2xl bg-slate-950/70 border border-slate-800/80 backdrop-blur-xl shadow-lg transition-all",
+        "w-72 shrink-0 flex flex-col max-h-full rounded-xl bg-card border border-border/70 shadow-xs transition-all",
         isDragging && "opacity-50 ring-2 ring-primary"
       )}
     >
-      {/* Header */}
+      {/* Header da Coluna */}
       <div
         {...attributes}
         {...listeners}
-        className="flex items-center justify-between px-3.5 py-3 cursor-grab active:cursor-grabbing border-b border-slate-800/60"
+        className="flex items-center justify-between p-3 cursor-grab active:cursor-grabbing border-b border-border/50 bg-muted/20 rounded-t-xl group/stage"
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
+          <GripVertical className="w-3.5 h-3.5 text-muted-foreground/40 group-hover/stage:text-muted-foreground transition-colors shrink-0" />
           {isEditingTitle ? (
             <input
               type="text"
@@ -127,31 +126,31 @@ export const SprintListColumn: React.FC<SprintListColumnProps> = ({ list }) => {
               onChange={(e) => setTitle(e.target.value)}
               onBlur={handleTitleBlur}
               autoFocus
-              className="text-sm font-semibold bg-slate-900 border border-slate-700 px-2 py-0.5 rounded text-white w-full focus:outline-none focus:ring-1 focus:ring-primary"
+              className="text-sm font-semibold bg-background border border-border px-2 py-0.5 rounded text-foreground w-full focus:outline-none focus:ring-1 focus:ring-primary"
             />
           ) : (
             <h2
               onClick={() => setIsEditingTitle(true)}
-              className="text-sm font-semibold text-slate-200 truncate cursor-pointer hover:text-white"
+              className="text-sm font-semibold text-foreground truncate cursor-pointer hover:text-primary transition-colors"
             >
               {list.title}
             </h2>
           )}
-          <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-400">
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground">
             {filteredCards.length}
           </span>
         </div>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-white">
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground">
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="bg-slate-900 border-slate-800 text-slate-200">
+          <DropdownMenuContent align="end">
             <DropdownMenuItem
               onClick={() => archiveList(list.id)}
-              className="text-red-400 hover:text-red-300 gap-2 cursor-pointer"
+              className="text-destructive gap-2 cursor-pointer"
             >
               <Trash2 className="h-4 w-4" />
               <span>Arquivar Lista</span>
@@ -160,8 +159,8 @@ export const SprintListColumn: React.FC<SprintListColumnProps> = ({ list }) => {
         </DropdownMenu>
       </div>
 
-      {/* Cards Area */}
-      <div className="flex-1 overflow-y-auto p-2.5 space-y-2.5 scrollbar-thin scrollbar-thumb-slate-800">
+      {/* Cartões da Lista */}
+      <div className="flex-1 overflow-y-auto p-2.5 space-y-2.5">
         <SortableContext items={cardIds} strategy={verticalListSortingStrategy}>
           {filteredCards.map((card) => (
             <SprintCardItem key={card.id} card={card} />
@@ -169,8 +168,8 @@ export const SprintListColumn: React.FC<SprintListColumnProps> = ({ list }) => {
         </SortableContext>
       </div>
 
-      {/* Footer: Quick Add Card */}
-      <div className="p-2.5 border-t border-slate-800/60">
+      {/* Rodapé: Adicionar Cartão */}
+      <div className="p-2.5 border-t border-border/50">
         {isAddingCard ? (
           <div className="space-y-2">
             <SprintMentionInput
@@ -186,22 +185,23 @@ export const SprintListColumn: React.FC<SprintListColumnProps> = ({ list }) => {
                 }
               }}
               autoFocus
-              placeholder="Título do cartão... (use @ para mencionar)"
+              placeholder="Título do cartão... (use @ para citar)"
               className="text-xs"
             />
             <div className="flex items-center gap-1.5">
               <Button
                 size="sm"
                 onClick={handleAddCard}
-                className="h-7 px-3 text-xs bg-primary hover:bg-primary/90 text-white"
+                className="h-7 px-3 text-xs"
               >
-                Adicionar Cartão
+                Adicionar
               </Button>
               <Button
+                type="button"
                 variant="ghost"
                 size="icon"
                 onClick={() => setIsAddingCard(false)}
-                className="h-7 w-7 text-slate-400 hover:text-white"
+                className="h-7 w-7 text-muted-foreground"
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -211,7 +211,7 @@ export const SprintListColumn: React.FC<SprintListColumnProps> = ({ list }) => {
           <Button
             variant="ghost"
             onClick={() => setIsAddingCard(true)}
-            className="w-full justify-start gap-2 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 h-8 px-2"
+            className="w-full justify-start gap-2 text-xs text-muted-foreground hover:text-foreground h-8 px-2"
           >
             <Plus className="h-3.5 w-3.5" />
             <span>Adicionar um cartão</span>

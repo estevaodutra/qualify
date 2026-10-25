@@ -3,7 +3,6 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
-  DialogTitle,
 } from "@/components/ui/dialog";
 import { useSprintStore } from "../state/sprintStore";
 import { useCompanyMembers } from "@/hooks/useCompanyMembers";
@@ -18,10 +17,10 @@ import {
   MessageSquare,
   AlignLeft,
   X,
-  Calendar as CalendarIcon,
   CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -112,7 +111,7 @@ export const SprintCardModal: React.FC = () => {
 
   return (
     <Dialog open={!!activeCardId} onOpenChange={(open) => !open && closeCardModal()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-slate-900 border-slate-800 text-slate-100 p-6 rounded-2xl shadow-2xl">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-card border-border text-card-foreground p-6 rounded-2xl shadow-xl">
         <DialogHeader className="space-y-1">
           <div className="flex items-start justify-between gap-4">
             <input
@@ -120,23 +119,23 @@ export const SprintCardModal: React.FC = () => {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               onBlur={handleTitleBlur}
-              className="text-xl font-bold bg-transparent border-b border-transparent hover:border-slate-700 focus:border-primary focus:outline-none w-full px-1 py-0.5 rounded transition-all text-white"
+              className="text-xl font-bold bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none w-full px-1 py-0.5 rounded transition-all text-foreground font-['Sora']"
             />
           </div>
-          <p className="text-xs text-slate-400">
-            na lista <span className="font-semibold text-slate-300 underline">{currentList?.title || "Geral"}</span>
+          <p className="text-xs text-muted-foreground">
+            na lista <span className="font-semibold text-foreground underline">{currentList?.title || "Geral"}</span>
           </p>
         </DialogHeader>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-4">
-          {/* Main Content Area (3 Cols) */}
+          {/* Coluna Principal */}
           <div className="md:col-span-3 space-y-6">
-            {/* Quick Metadata: Labels & Members */}
+            {/* Metadados: Etiquetas, Membros e Prazo */}
             <div className="flex flex-wrap items-center gap-6">
-              {/* Labels */}
+              {/* Etiquetas */}
               {(activeCard.labels || []).length > 0 && (
                 <div>
-                  <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                  <h4 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
                     Etiquetas
                   </h4>
                   <div className="flex flex-wrap gap-1.5">
@@ -144,7 +143,7 @@ export const SprintCardModal: React.FC = () => {
                       <span
                         key={label.id}
                         style={{ backgroundColor: label.color }}
-                        className="px-2.5 py-0.5 rounded-full text-xs font-semibold text-white shadow-sm"
+                        className="px-2.5 py-0.5 rounded-full text-xs font-semibold text-white shadow-2xs"
                       >
                         {label.name}
                       </span>
@@ -153,10 +152,10 @@ export const SprintCardModal: React.FC = () => {
                 </div>
               )}
 
-              {/* Members */}
+              {/* Membros */}
               {(activeCard.members || []).length > 0 && (
                 <div>
-                  <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                  <h4 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
                     Membros
                   </h4>
                   <div className="flex items-center -space-x-1.5">
@@ -166,10 +165,10 @@ export const SprintCardModal: React.FC = () => {
                       return (
                         <Avatar
                           key={m.user_id}
-                          className="h-7 w-7 border-2 border-slate-900 ring-1 ring-slate-700"
+                          className="h-7 w-7 border-2 border-background ring-1 ring-border"
                           title={name}
                         >
-                          <AvatarFallback className="bg-primary/20 text-primary font-bold text-[10px]">
+                          <AvatarFallback className="bg-primary/10 text-primary font-bold text-[10px]">
                             {name.slice(0, 2).toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
@@ -179,23 +178,23 @@ export const SprintCardModal: React.FC = () => {
                 </div>
               )}
 
-              {/* Due Date */}
+              {/* Prazo de Entrega */}
               {activeCard.due_date && (
                 <div>
-                  <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                  <h4 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
                     Data de Entrega
                   </h4>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => updateCard(activeCard.id, { is_completed: !activeCard.is_completed })}
                       className={cn(
-                        "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors",
+                        "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer",
                         activeCard.is_completed
-                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                          : "bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-600"
+                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600"
+                          : "bg-secondary border-border text-foreground hover:bg-secondary/80"
                       )}
                     >
-                      <CheckCircle2 className={cn("h-4 w-4", activeCard.is_completed ? "text-emerald-400" : "text-slate-500")} />
+                      <CheckCircle2 className={cn("h-4 w-4", activeCard.is_completed ? "text-emerald-500" : "text-muted-foreground")} />
                       <span>{format(new Date(activeCard.due_date), "dd 'de' MMM, HH:mm", { locale: ptBR })}</span>
                       {activeCard.is_completed && <span className="text-[10px] font-bold uppercase">(Concluído)</span>}
                     </button>
@@ -204,10 +203,10 @@ export const SprintCardModal: React.FC = () => {
               )}
             </div>
 
-            {/* Description */}
+            {/* Descrição */}
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-slate-300 font-semibold text-sm">
-                <AlignLeft className="h-4 w-4 text-slate-400" />
+              <div className="flex items-center gap-2 text-foreground font-semibold text-sm">
+                <AlignLeft className="h-4 w-4 text-muted-foreground" />
                 <span>Descrição</span>
               </div>
               {isEditingDesc ? (
@@ -219,7 +218,7 @@ export const SprintCardModal: React.FC = () => {
                     onMentionSelected={(m) => autoAssignMemberMention(activeCard.id, { user_id: m.user_id, full_name: m.full_name || undefined, email: m.email || undefined })}
                   />
                   <div className="flex items-center gap-2">
-                    <Button size="sm" onClick={handleSaveDescription} className="bg-primary hover:bg-primary/90 text-white">
+                    <Button size="sm" onClick={handleSaveDescription}>
                       Salvar
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => setIsEditingDesc(false)}>
@@ -230,10 +229,10 @@ export const SprintCardModal: React.FC = () => {
               ) : (
                 <div
                   onClick={() => setIsEditingDesc(true)}
-                  className="min-h-[70px] p-3 rounded-xl bg-slate-950/40 border border-slate-800 hover:border-slate-700 cursor-pointer text-sm text-slate-300 whitespace-pre-wrap transition-colors"
+                  className="min-h-[70px] p-3 rounded-xl bg-muted/20 border border-border/80 hover:border-border cursor-pointer text-sm text-foreground whitespace-pre-wrap transition-colors"
                 >
                   {activeCard.description || (
-                    <span className="text-slate-500 italic">
+                    <span className="text-muted-foreground italic">
                       Adicione uma descrição mais detalhada...
                     </span>
                   )}
@@ -248,49 +247,49 @@ export const SprintCardModal: React.FC = () => {
               const percent = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
 
               return (
-                <div key={checklist.id} className="space-y-3 p-4 rounded-xl bg-slate-950/40 border border-slate-800/80">
+                <div key={checklist.id} className="space-y-3 p-4 rounded-xl bg-muted/20 border border-border/80">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-slate-200 font-semibold text-sm">
+                    <div className="flex items-center gap-2 text-foreground font-semibold text-sm">
                       <CheckSquare className="h-4 w-4 text-primary" />
                       <span>{checklist.title}</span>
                     </div>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7 text-slate-500 hover:text-red-400"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
                       onClick={() => deleteChecklist(checklist.id)}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
 
-                  {/* Progress Bar */}
+                  {/* Barra de Progresso */}
                   <div className="space-y-1">
-                    <div className="flex justify-between text-[11px] text-slate-400 font-medium">
+                    <div className="flex justify-between text-[11px] text-muted-foreground font-medium">
                       <span>Progresso</span>
                       <span>{percent}%</span>
                     </div>
-                    <Progress value={percent} className="h-1.5 bg-slate-800" />
+                    <Progress value={percent} className="h-1.5" />
                   </div>
 
-                  {/* Items List */}
-                  <div className="space-y-2 pt-1">
+                  {/* Itens do Checklist */}
+                  <div className="space-y-1.5 pt-1">
                     {checklist.items.map((item) => (
                       <div
                         key={item.id}
-                        className="group flex items-center justify-between gap-3 p-1.5 rounded-lg hover:bg-slate-800/40 transition-colors"
+                        className="group flex items-center justify-between gap-3 p-1.5 rounded-lg hover:bg-muted/40 transition-colors"
                       >
                         <div className="flex items-center gap-2.5 flex-1 min-w-0">
                           <input
                             type="checkbox"
                             checked={item.is_completed}
                             onChange={() => toggleChecklistItem(checklist.id, item.id)}
-                            className="h-4 w-4 rounded border-slate-700 bg-slate-800 text-primary focus:ring-primary cursor-pointer accent-primary"
+                            className="h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary"
                           />
                           <span
                             className={cn(
                               "text-sm break-words flex-1",
-                              item.is_completed ? "line-through text-slate-500" : "text-slate-200"
+                              item.is_completed ? "line-through text-muted-foreground" : "text-foreground"
                             )}
                           >
                             {item.title}
@@ -299,7 +298,7 @@ export const SprintCardModal: React.FC = () => {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6 opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 transition-opacity"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
                           onClick={() => deleteChecklistItem(checklist.id, item.id)}
                         >
                           <X className="h-3.5 w-3.5" />
@@ -307,7 +306,7 @@ export const SprintCardModal: React.FC = () => {
                       </div>
                     ))}
 
-                    {/* Add Item Input with @ Mention */}
+                    {/* Adicionar Item com Menção */}
                     <div className="pt-2 flex items-center gap-2">
                       <SprintMentionInput
                         value={newItemTitles[checklist.id] || ""}
@@ -327,13 +326,13 @@ export const SprintCardModal: React.FC = () => {
                             email: m.email || undefined,
                           });
                         }}
-                        placeholder="Adicionar item... (digite @ para mencionar responsável)"
-                        className="text-xs py-1.5"
+                        placeholder="Adicionar item... (digite @ para citar responsável)"
+                        className="text-xs h-8"
                       />
                       <Button
                         size="sm"
                         onClick={() => handleCreateChecklistItem(checklist.id)}
-                        className="h-8 px-3 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200"
+                        className="h-8 px-3 text-xs"
                       >
                         Adicionar
                       </Button>
@@ -343,14 +342,13 @@ export const SprintCardModal: React.FC = () => {
               );
             })}
 
-            {/* Comments & Activity Section */}
+            {/* Atividades e Comentários */}
             <div className="space-y-4 pt-2">
-              <div className="flex items-center gap-2 text-slate-300 font-semibold text-sm">
-                <MessageSquare className="h-4 w-4 text-slate-400" />
+              <div className="flex items-center gap-2 text-foreground font-semibold text-sm">
+                <MessageSquare className="h-4 w-4 text-muted-foreground" />
                 <span>Atividades e Comentários</span>
               </div>
 
-              {/* Add Comment */}
               <form onSubmit={handleAddComment} className="space-y-2">
                 <SprintMentionTextarea
                   value={newComment}
@@ -369,13 +367,13 @@ export const SprintCardModal: React.FC = () => {
                   type="submit"
                   size="sm"
                   disabled={!newComment.trim()}
-                  className="bg-primary hover:bg-primary/90 text-white text-xs h-8 px-4"
+                  className="text-xs h-8 px-4"
                 >
                   Comentar
                 </Button>
               </form>
 
-              {/* Comments Feed */}
+              {/* Feed de Comentários */}
               <div className="space-y-3 pt-2">
                 {cardComments.map((c) => {
                   const author = members.find((m) => m.user_id === c.user_id);
@@ -383,24 +381,24 @@ export const SprintCardModal: React.FC = () => {
                   return (
                     <div key={c.id} className="flex gap-3 text-xs">
                       <Avatar className="h-7 w-7 mt-0.5">
-                        <AvatarFallback className="bg-slate-800 text-slate-300 font-semibold text-[10px]">
+                        <AvatarFallback className="bg-secondary text-secondary-foreground font-semibold text-[10px]">
                           {authorName.slice(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
-                      <div className="flex-1 bg-slate-950/60 border border-slate-800/80 rounded-xl p-3">
+                      <div className="flex-1 bg-muted/20 border border-border/80 rounded-xl p-3">
                         <div className="flex items-center justify-between gap-2 mb-1">
-                          <span className="font-semibold text-slate-200">{authorName}</span>
-                          <span className="text-[10px] text-slate-500">
+                          <span className="font-semibold text-foreground">{authorName}</span>
+                          <span className="text-[10px] text-muted-foreground">
                             {format(new Date(c.created_at), "dd/MM/yyyy HH:mm")}
                           </span>
                         </div>
-                        <p className="text-slate-300 whitespace-pre-wrap">{c.content}</p>
+                        <p className="text-foreground whitespace-pre-wrap">{c.content}</p>
                         {user?.id === c.user_id && (
                           <div className="mt-2 text-right">
                             <button
                               type="button"
                               onClick={() => deleteComment(c.id)}
-                              className="text-[10px] text-slate-500 hover:text-red-400 transition-colors"
+                              className="text-[10px] text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
                             >
                               Excluir
                             </button>
@@ -414,27 +412,27 @@ export const SprintCardModal: React.FC = () => {
             </div>
           </div>
 
-          {/* Right Sidebar Actions (1 Col) */}
+          {/* Coluna Lateral de Ações */}
           <div className="space-y-4">
-            <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+            <h4 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
               Adicionar ao Cartão
             </h4>
 
             <div className="space-y-2">
-              {/* Membros Popover */}
+              {/* Membros */}
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
                     size="sm"
-                    className="w-full justify-start gap-2 bg-slate-800/50 border-slate-700/60 text-slate-300 hover:bg-slate-800 text-xs h-8"
+                    className="w-full justify-start gap-2 text-xs h-8"
                   >
-                    <Users className="h-3.5 w-3.5 text-slate-400" />
+                    <Users className="h-3.5 w-3.5 text-muted-foreground" />
                     <span>Membros</span>
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent align="start" className="w-56 p-2 bg-slate-900 border-slate-800 text-slate-200">
-                  <div className="text-xs font-semibold px-2 py-1 text-slate-400">Membros da Equipe</div>
+                <PopoverContent align="start" className="w-56 p-2 bg-popover border-border text-popover-foreground">
+                  <div className="text-xs font-semibold px-2 py-1 text-muted-foreground">Membros da Equipe</div>
                   <div className="space-y-1 mt-1 max-h-48 overflow-y-auto">
                     {members.filter((m) => m.is_active).map((member) => {
                       const isAssigned = (activeCard.members || []).some((m) => m.user_id === member.user_id);
@@ -449,8 +447,8 @@ export const SprintCardModal: React.FC = () => {
                             })
                           }
                           className={cn(
-                            "w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs transition-colors",
-                            isAssigned ? "bg-primary/20 text-primary font-medium" : "hover:bg-slate-800 text-slate-300"
+                            "w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs transition-colors cursor-pointer",
+                            isAssigned ? "bg-primary/10 text-primary font-medium" : "hover:bg-accent text-foreground"
                           )}
                         >
                           <span className="truncate">{member.full_name || member.email}</span>
@@ -462,20 +460,20 @@ export const SprintCardModal: React.FC = () => {
                 </PopoverContent>
               </Popover>
 
-              {/* Etiquetas Popover */}
+              {/* Etiquetas */}
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
                     size="sm"
-                    className="w-full justify-start gap-2 bg-slate-800/50 border-slate-700/60 text-slate-300 hover:bg-slate-800 text-xs h-8"
+                    className="w-full justify-start gap-2 text-xs h-8"
                   >
-                    <Tag className="h-3.5 w-3.5 text-slate-400" />
+                    <Tag className="h-3.5 w-3.5 text-muted-foreground" />
                     <span>Etiquetas</span>
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent align="start" className="w-56 p-2 bg-slate-900 border-slate-800 text-slate-200">
-                  <div className="text-xs font-semibold px-2 py-1 text-slate-400">Etiquetas do Quadro</div>
+                <PopoverContent align="start" className="w-56 p-2 bg-popover border-border text-popover-foreground">
+                  <div className="text-xs font-semibold px-2 py-1 text-muted-foreground">Etiquetas do Quadro</div>
                   <div className="space-y-1.5 mt-1.5 max-h-56 overflow-y-auto">
                     {labels.map((label) => {
                       const isAttached = (activeCard.labels || []).some((l) => l.id === label.id);
@@ -485,8 +483,8 @@ export const SprintCardModal: React.FC = () => {
                           onClick={() => toggleCardLabel(activeCard.id, label)}
                           style={{ backgroundColor: label.color }}
                           className={cn(
-                            "w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-semibold text-white shadow-sm transition-transform active:scale-95",
-                            isAttached && "ring-2 ring-white"
+                            "w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-semibold text-white shadow-2xs transition-transform active:scale-95 cursor-pointer",
+                            isAttached && "ring-2 ring-primary"
                           )}
                         >
                           <span>{label.name}</span>
@@ -498,19 +496,18 @@ export const SprintCardModal: React.FC = () => {
                 </PopoverContent>
               </Popover>
 
-              {/* Checklist Popover */}
+              {/* Checklist */}
               {isAddingChecklist ? (
-                <form onSubmit={handleCreateChecklist} className="space-y-2 p-2 bg-slate-800/40 rounded-lg border border-slate-700/60">
-                  <input
-                    type="text"
+                <form onSubmit={handleCreateChecklist} className="space-y-2 p-2 bg-muted/40 rounded-lg border border-border">
+                  <Input
                     value={newChecklistTitle}
                     onChange={(e) => setNewChecklistTitle(e.target.value)}
                     placeholder="Título do Checklist"
                     autoFocus
-                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="h-7 text-xs"
                   />
                   <div className="flex gap-1">
-                    <Button type="submit" size="sm" className="h-7 text-[11px] bg-primary text-white">Criar</Button>
+                    <Button type="submit" size="sm" className="h-7 text-[11px]">Criar</Button>
                     <Button type="button" variant="ghost" size="sm" onClick={() => setIsAddingChecklist(false)} className="h-7 text-[11px]">Cancelar</Button>
                   </div>
                 </form>
@@ -519,26 +516,26 @@ export const SprintCardModal: React.FC = () => {
                   variant="outline"
                   size="sm"
                   onClick={() => setIsAddingChecklist(true)}
-                  className="w-full justify-start gap-2 bg-slate-800/50 border-slate-700/60 text-slate-300 hover:bg-slate-800 text-xs h-8"
+                  className="w-full justify-start gap-2 text-xs h-8"
                 >
-                  <CheckSquare className="h-3.5 w-3.5 text-slate-400" />
+                  <CheckSquare className="h-3.5 w-3.5 text-muted-foreground" />
                   <span>Checklist</span>
                 </Button>
               )}
 
-              {/* Data Popover */}
+              {/* Datas */}
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
                     size="sm"
-                    className="w-full justify-start gap-2 bg-slate-800/50 border-slate-700/60 text-slate-300 hover:bg-slate-800 text-xs h-8"
+                    className="w-full justify-start gap-2 text-xs h-8"
                   >
-                    <Clock className="h-3.5 w-3.5 text-slate-400" />
+                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                     <span>Datas</span>
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent align="start" className="w-64 p-3 bg-slate-900 border-slate-800 text-slate-200">
+                <PopoverContent align="start" className="w-64 p-3 bg-popover border-border text-popover-foreground">
                   <div className="text-xs font-semibold mb-2">Definir Prazo</div>
                   <input
                     type="datetime-local"
@@ -547,14 +544,14 @@ export const SprintCardModal: React.FC = () => {
                       const val = e.target.value;
                       updateCard(activeCard.id, { due_date: val ? new Date(val).toISOString() : null });
                     }}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-xs text-white"
+                    className="w-full bg-background border border-border rounded-md p-2 text-xs text-foreground"
                   />
                   {activeCard.due_date && (
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => updateCard(activeCard.id, { due_date: null })}
-                      className="w-full mt-2 text-red-400 hover:text-red-300 text-xs h-7"
+                      className="w-full mt-2 text-destructive hover:text-destructive text-xs h-7"
                     >
                       Remover Prazo
                     </Button>
@@ -563,15 +560,15 @@ export const SprintCardModal: React.FC = () => {
               </Popover>
             </div>
 
-            <div className="pt-4 border-t border-slate-800 space-y-2">
-              <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+            <div className="pt-4 border-t border-border space-y-2">
+              <h4 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                 Ações
               </h4>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => archiveCard(activeCard.id)}
-                className="w-full justify-start gap-2 bg-red-950/20 border-red-900/40 text-red-400 hover:bg-red-950/40 text-xs h-8"
+                className="w-full justify-start gap-2 border-destructive/30 text-destructive hover:bg-destructive/10 text-xs h-8"
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 <span>Arquivar Cartão</span>
