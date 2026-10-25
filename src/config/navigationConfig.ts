@@ -15,6 +15,7 @@ import {
   Settings,
   Sparkles,
   Rocket,
+  BookOpen,
   LucideIcon,
 } from "lucide-react";
 
@@ -40,6 +41,7 @@ export const APP_SUB_ITEMS: NavItem[] = [
   { id: "sprint", title: "Sprint", url: "/sprint", icon: Kanban },
   { id: "sprint-os", title: "Cronogramas", url: "/sprint-os", icon: Rocket },
   { id: "criafy", title: "Criafy", url: "/criafy", icon: Sparkles },
+  { id: "manual-da-marca", title: "Manual da Marca", url: "/criafy/manual-da-marca", icon: BookOpen },
   { id: "quiz", title: "Quiz", url: "/quiz", icon: Layers },
   { id: "prospeccao", title: "Prospecção", url: "/prospeccao", icon: Search },
   { id: "agendamentos", title: "Agendamentos", url: "/agendamentos/calendarios", icon: CalendarDays },

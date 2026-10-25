@@ -152,21 +152,21 @@ export const SprintOSPage: React.FC = () => {
   const lastInitCompanyIdRef = useRef<string | null | undefined>(undefined);
   const syncedMembersRef = useRef<Set<string>>(new Set());
 
-  // Detecção de parâmetro ?tab= na URL
+  const { workspaceId: urlWorkspaceId } = useParams<{ workspaceId?: string }>();
+  const navigate = useNavigate();
+
+  // Redirecionamento de abas do Manual da Marca para a nova página dedicada no Criafy
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get("tab");
     if (tabParam === "brand_manual" || tabParam === "manual_marca" || tabParam === "manual") {
-      setActiveTab("brand_manual");
+      navigate(`/criafy/manual-da-marca${urlWorkspaceId ? `/${urlWorkspaceId}` : ""}?tab=brand_manual`, { replace: true });
     } else if (tabParam === "scripts_and_audios" || tabParam === "audios" || tabParam === "scripts") {
-      setActiveTab("scripts_and_audios");
+      navigate(`/criafy/manual-da-marca${urlWorkspaceId ? `/${urlWorkspaceId}` : ""}?tab=scripts_and_audios`, { replace: true });
     } else if (tabParam === "creatives" || tabParam === "criativos") {
-      setActiveTab("creatives");
+      navigate(`/criafy/manual-da-marca${urlWorkspaceId ? `/${urlWorkspaceId}` : ""}?tab=creatives`, { replace: true });
     }
-  }, [setActiveTab]);
-
-  const { workspaceId: urlWorkspaceId } = useParams<{ workspaceId?: string }>();
-  const navigate = useNavigate();
+  }, [urlWorkspaceId, navigate]);
 
   // Inicialização do workspace (por empresa ativa e sincronizado com o ID da URL)
   useEffect(() => {

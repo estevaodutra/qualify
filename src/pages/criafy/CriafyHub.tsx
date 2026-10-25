@@ -355,6 +355,15 @@ export default function CriafyHub() {
           <Button
             variant="outline"
             size="sm"
+            onClick={() => navigate("/criafy/manual-da-marca")}
+            className="gap-1.5 text-xs h-9 border-purple-500/30 hover:border-purple-500/50 hover:bg-purple-500/10 text-purple-600 dark:text-purple-300 font-semibold"
+            title="Abrir página dedicada do Manual da Marca (7D, Criativos e Scripts)"
+          >
+            <BookOpen className="w-4 h-4 text-purple-500" /> Manual da Marca
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={loadAccounts}
             className="gap-1.5 text-xs h-9"
           >
@@ -498,6 +507,16 @@ export default function CriafyHub() {
           <TabsTrigger value="fila" className="text-xs gap-1.5 h-8">
             <Clock className="w-3.5 h-3.5" /> Fila Automática & Cadência
           </TabsTrigger>
+          <button
+            type="button"
+            onClick={() => navigate("/criafy/manual-da-marca")}
+            className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-xs font-semibold ring-offset-background transition-all hover:bg-background/80 hover:text-foreground text-purple-600 dark:text-purple-300 gap-1.5 h-8 cursor-pointer ml-auto"
+            title="Abrir página dedicada do Manual da Marca (7D, Criativos e Scripts)"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-purple-500" />
+            <span>Manual da Marca</span>
+            <ExternalLink className="w-3 h-3 opacity-60" />
+          </button>
         </TabsList>
 
         <TabsContent value="calendario">

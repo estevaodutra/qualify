@@ -251,83 +251,27 @@ export const ExecutiveHeader: React.FC = () => {
         )}
       </div>
 
-      {/* Centro: Switcher de 4 Abas Principais (AJ-021) */}
+      {/* Centro: Visualização Operacional + Atalho para Manual da Marca no Criafy */}
       <div className="flex items-center p-0.5 bg-muted/60 border border-border/80 rounded-2xl gap-1 shrink-0 overflow-x-auto">
-        {/* Aba 1: Operação */}
+        {/* Aba Operação */}
         <button
           onClick={() => setActiveTab("kanban")}
-          className={`h-7 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap ${
-            activeTab === "kanban" || activeTab === "structure"
-              ? "bg-background text-foreground shadow-xs font-bold"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
+          className="h-7 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap bg-background text-foreground shadow-xs font-bold"
           title="Visão Operacional Kanban & Cockpit 80/20"
         >
           <Kanban className="h-3.5 w-3.5" />
           <span className="inline">Operação</span>
         </button>
 
-        {/* Aba 2: Manual de Marca */}
+        {/* Manual da Marca (Página Separada no Criafy) */}
         <button
-          onClick={() => setActiveTab("brand_manual")}
-          className={`h-7 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap ${
-            activeTab === "brand_manual"
-              ? "bg-background text-primary shadow-xs font-bold"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-          title="Manual de Marca 7D — Briefing Inteligente e Modular"
+          onClick={() => navigate(`/criafy/manual-da-marca/${workspace.project.id}`)}
+          className="h-7 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap text-purple-600 dark:text-purple-300 hover:bg-purple-500/10 cursor-pointer"
+          title="Abrir página dedicada do Manual da Marca, Criativos e Scripts no Criafy"
         >
-          <Sparkles className="h-3.5 w-3.5 text-primary" />
-          <span>Manual de Marca</span>
-          {(() => {
-            const fields = workspace.brandManual?.fields || [];
-            const activeFields = fields.filter((f) => !f.archived && !f.removed);
-            const count = activeFields.filter((f) => (f.response || "").trim().length > 15).length;
-            if (count === 0) return null;
-            return (
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-primary/10 text-primary font-bold">
-                {count}/{activeFields.length}
-              </span>
-            );
-          })()}
-        </button>
-
-        {/* Aba 3: Criativos */}
-        <button
-          onClick={() => setActiveTab("creatives")}
-          className={`h-7 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap ${
-            activeTab === "creatives"
-              ? "bg-background text-primary shadow-xs font-bold"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-          title="Criativos — Biblioteca de Anúncios e Conteúdo"
-        >
-          <Palette className="h-3.5 w-3.5 text-primary" />
-          <span>Criativos</span>
-        </button>
-
-        {/* Aba 4: Scripts e Áudios (AJ-021) */}
-        <button
-          onClick={() => setActiveTab("scripts_and_audios")}
-          className={`h-7 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap ${
-            activeTab === "scripts_and_audios"
-              ? "bg-background text-primary shadow-xs font-bold"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-          title="Scripts e Áudios — Solicitações e Gravações de Voz"
-        >
-          <Mic className="h-3.5 w-3.5 text-primary" />
-          <span>Scripts e Áudios</span>
-          {(() => {
-            const reqs = Object.values(workspace.audioRequests || {}).filter((r) => !r.archivedAt && !r.archived);
-            const recordedCount = reqs.filter((r) => r.recordings && r.recordings.length > 0).length;
-            if (reqs.length === 0) return null;
-            return (
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-primary/10 text-primary font-bold">
-                {recordedCount}/{reqs.length}
-              </span>
-            );
-          })()}
+          <Sparkles className="h-3.5 w-3.5 text-purple-500" />
+          <span>Manual da Marca</span>
+          <ExternalLink className="h-3 w-3 opacity-60" />
         </button>
       </div>
 
@@ -542,11 +486,11 @@ export const ExecutiveHeader: React.FC = () => {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="bg-popover border-border text-popover-foreground text-xs w-52 p-1.5 rounded-2xl shadow-xl">
             <DropdownMenuItem
-              onClick={() => setActiveTab(activeTab === "brand_manual" ? "kanban" : "brand_manual")}
+              onClick={() => navigate(`/criafy/manual-da-marca/${workspace.project.id}`)}
               className="cursor-pointer font-medium"
             >
-              <Sparkles className="h-3.5 w-3.5 mr-2 text-primary" />
-              {activeTab === "brand_manual" ? "Alternar para Kanban" : "Abrir Manual de Marca 7D"}
+              <Sparkles className="h-3.5 w-3.5 mr-2 text-purple-500" />
+              Abrir Manual da Marca no Criafy
             </DropdownMenuItem>
 
             <DropdownMenuSeparator />

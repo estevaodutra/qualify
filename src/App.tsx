@@ -62,6 +62,7 @@ import QuizEditorPage from "./pages/quiz/QuizEditorPage";
 import QuizPublicPage from "./pages/public/QuizPublicPage";
 import CriafyHub from "./pages/criafy/CriafyHub";
 import AccountStrategyPage from "./pages/criafy/AccountStrategyPage";
+import CriafyBrandManualPage from "./pages/criafy/CriafyBrandManualPage";
 import SprintOSPage from "./features/sprint-os/ui/SprintOSPage";
 import SprintAppPage from "./features/sprint/SprintAppPage";
 import SprintOSSharedPage from "./features/sprint-os/ui/SprintOSSharedPage";
@@ -159,6 +160,10 @@ const App = () => {
                       <Route path="/cronogramas/:workspaceId" element={<SprintOSPage />} />
                       <Route path="/criafy" element={<CriafyHub />} />
                       <Route path="/criafy/estrategia/:accountId" element={<AccountStrategyPage />} />
+                      <Route path="/criafy/manual-da-marca" element={<CriafyBrandManualPage />} />
+                      <Route path="/criafy/manual-da-marca/:workspaceId" element={<CriafyBrandManualPage />} />
+                      <Route path="/manual-da-marca" element={<CriafyBrandManualPage />} />
+                      <Route path="/manual-da-marca/:workspaceId" element={<CriafyBrandManualPage />} />
                       <Route path="/quiz" element={<QuizFunnelsPage />} />
                       <Route path="/quiz/:id" element={<QuizEditorPage />} />
 
