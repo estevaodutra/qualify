@@ -1,13 +1,15 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useCompanyMembers, CompanyMember } from "@/hooks/useCompanyMembers";
+import { useAuth } from "@/contexts/AuthContext";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { UserCheck } from "lucide-react";
 
 interface SprintMentionInputProps {
   value: string;
   onChange: (value: string) => void;
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
-  onMentionSelected?: (member: CompanyMember) => void;
+  onMentionSelected?: (member: { user_id: string; full_name?: string | null; email?: string | null }) => void;
   placeholder?: string;
   className?: string;
   autoFocus?: boolean;
@@ -24,23 +26,57 @@ export const SprintMentionInput: React.FC<SprintMentionInputProps> = ({
   autoFocus,
   onBlur,
 }) => {
+  const { user } = useAuth();
   const { data: members = [] } = useCompanyMembers();
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState<number>(0);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const activeMembers = members.filter((m) => m.is_active);
+  // Lista consolidada com garantia de presença
+  const memberList = useMemo(() => {
+    const list: Array<{ id: string; user_id: string; full_name?: string | null; email?: string | null }> = [];
 
-  const filteredMembers = mentionQuery !== null
-    ? activeMembers.filter((m) => {
-        const query = mentionQuery.toLowerCase();
-        const nameMatch = m.full_name?.toLowerCase().includes(query);
-        const emailMatch = m.email?.toLowerCase().includes(query);
-        return nameMatch || emailMatch;
-      })
-    : [];
+    // Adicionar membros da empresa
+    members.forEach((m) => {
+      if (m && m.is_active !== false) {
+        list.push({
+          id: m.id || m.user_id,
+          user_id: m.user_id,
+          full_name: m.full_name || m.email?.split("@")[0] || "Membro",
+          email: m.email || null,
+        });
+      }
+    });
 
+    // Se o usuário atual não estiver na lista, adiciona ele no topo
+    if (user && !list.some((m) => m.user_id === user.id)) {
+      list.unshift({
+        id: user.id,
+        user_id: user.id,
+        full_name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split("@")[0] || "Você",
+        email: user.email || null,
+      });
+    }
+
+    return list;
+  }, [members, user]);
+
+  // Filtro de membros
+  const filteredMembers = useMemo(() => {
+    if (mentionQuery === null) return [];
+    if (!mentionQuery.trim()) return memberList;
+
+    const q = mentionQuery.toLowerCase();
+    return memberList.filter((m) => {
+      const name = (m.full_name || "").toLowerCase();
+      const email = (m.email || "").toLowerCase();
+      return name.includes(q) || email.includes(q);
+    });
+  }, [mentionQuery, memberList]);
+
+  // Detecta digitação e o caractere "@"
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     onChange(val);
@@ -65,7 +101,7 @@ export const SprintMentionInput: React.FC<SprintMentionInputProps> = ({
     setMentionQuery(null);
   };
 
-  const selectMember = (member: CompanyMember) => {
+  const selectMember = (member: { user_id: string; full_name?: string | null; email?: string | null }) => {
     if (mentionIndex === null) return;
     const displayName = member.full_name || member.email?.split("@")[0] || "membro";
     const before = value.slice(0, mentionIndex);
@@ -110,6 +146,23 @@ export const SprintMentionInput: React.FC<SprintMentionInputProps> = ({
     onKeyDown?.(e);
   };
 
+  // Fechar ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node) &&
+        inputRef.current &&
+        !inputRef.current.contains(e.target as Node)
+      ) {
+        setMentionQuery(null);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   return (
     <div className="relative w-full">
       <input
@@ -127,43 +180,62 @@ export const SprintMentionInput: React.FC<SprintMentionInputProps> = ({
         )}
       />
 
-      {mentionQuery !== null && filteredMembers.length > 0 && (
-        <div className="absolute left-0 top-full mt-1.5 z-50 w-64 max-h-56 overflow-y-auto rounded-xl border border-border bg-popover text-popover-foreground shadow-xl p-1">
-          <div className="px-2 py-1 text-[10px] uppercase font-bold tracking-wider text-muted-foreground">
-            Mencionar membro da equipe
+      {/* Menu Suspenso de Menção */}
+      {mentionQuery !== null && (
+        <div
+          ref={dropdownRef}
+          className="absolute left-0 top-full mt-1.5 z-[9999] w-72 max-h-60 overflow-y-auto rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl p-1.5 animate-in fade-in zoom-in-95 duration-100"
+        >
+          <div className="flex items-center justify-between px-2.5 py-1.5 text-[10px] uppercase font-bold tracking-wider text-muted-foreground border-b border-border/50 mb-1">
+            <span className="flex items-center gap-1.5">
+              <UserCheck className="h-3 w-3 text-primary" />
+              <span>Mencionar Membro</span>
+            </span>
+            <span>{filteredMembers.length} disponível(is)</span>
           </div>
-          {filteredMembers.map((member, idx) => {
-            const isSelected = idx === selectedIndex;
-            const name = member.full_name || member.email || "Sem nome";
-            const initials = name.slice(0, 2).toUpperCase();
 
-            return (
-              <button
-                key={member.id}
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  selectMember(member);
-                }}
-                className={cn(
-                  "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-xs transition-colors cursor-pointer",
-                  isSelected
-                    ? "bg-primary text-primary-foreground font-medium"
-                    : "text-foreground hover:bg-accent"
-                )}
-              >
-                <Avatar className="h-6 w-6 text-[10px] border border-border shrink-0">
-                  <AvatarFallback className="bg-secondary text-secondary-foreground font-semibold">
-                    {initials}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="truncate">
-                  <p className="font-medium truncate">{name}</p>
-                  <p className="text-[10px] opacity-70 truncate">{member.email}</p>
-                </div>
-              </button>
-            );
-          })}
+          {filteredMembers.length === 0 ? (
+            <div className="p-3 text-center text-xs text-muted-foreground">
+              Nenhum membro encontrado para "{mentionQuery}"
+            </div>
+          ) : (
+            filteredMembers.map((member, idx) => {
+              const isSelected = idx === selectedIndex;
+              const name = member.full_name || member.email || "Sem nome";
+              const initials = name.slice(0, 2).toUpperCase();
+
+              return (
+                <button
+                  key={member.id}
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    selectMember(member);
+                  }}
+                  className={cn(
+                    "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left text-xs transition-colors cursor-pointer",
+                    isSelected
+                      ? "bg-primary text-primary-foreground font-semibold"
+                      : "text-foreground hover:bg-accent"
+                  )}
+                >
+                  <Avatar className="h-6 w-6 text-[10px] border border-border shrink-0">
+                    <AvatarFallback className={cn("font-bold text-[9px]", isSelected ? "bg-primary-foreground/20 text-primary-foreground" : "bg-secondary text-secondary-foreground")}>
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="truncate flex-1 min-w-0">
+                    <p className="font-medium truncate leading-tight">{name}</p>
+                    {member.email && (
+                      <p className={cn("text-[10px] truncate leading-tight", isSelected ? "opacity-85" : "text-muted-foreground")}>
+                        {member.email}
+                      </p>
+                    )}
+                  </div>
+                </button>
+              );
+            })
+          )}
         </div>
       )}
     </div>
