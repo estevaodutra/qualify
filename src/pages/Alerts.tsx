@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { PageHeader, EmptyState } from "@/components/dispatch";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,11 +10,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Bell, AlertTriangle, AlertCircle, Info, CheckCircle } from "lucide-react";
+import { Bell, AlertTriangle, AlertCircle, Info, CheckCircle, ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAlerts, type Alert } from "@/hooks/useAlerts";
 import { Skeleton } from "@/components/ui/skeleton";
+import { parseNotificationTarget } from "@/services/notificationService";
+import { useSprintStore } from "@/features/sprint/state/sprintStore";
 
 const severityConfig = {
   info: {
@@ -39,8 +42,10 @@ const severityConfig = {
 };
 
 export default function Alerts() {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const { alerts, isLoading, unreadCount, markAsRead, markAllAsRead } = useAlerts();
+  const { openCardModal } = useSprintStore();
   const [severityFilter, setSeverityFilter] = useState<string>("all");
   const [readFilter, setReadFilter] = useState<string>("all");
 
@@ -60,10 +65,21 @@ export default function Alerts() {
   const handleAlertClick = async (alert: Alert) => {
     if (!alert.read) {
       await markAsRead(alert.id);
-      toast({
-        title: "Alerta marcado como lido",
-        description: alert.title,
-      });
+    }
+
+    const target = parseNotificationTarget(alert.entity, alert.link);
+    if (target.type === "sprint_card" && target.cardId) {
+      if (target.boardId) {
+        if (window.location.pathname === `/sprint/b/${target.boardId}`) {
+          openCardModal(target.cardId);
+          return;
+        }
+        navigate(`/sprint/b/${target.boardId}?cardId=${target.cardId}`);
+      } else {
+        navigate(`/sprint`);
+      }
+    } else if (target.url) {
+      navigate(target.url);
     }
   };
 
@@ -140,6 +156,8 @@ export default function Alerts() {
           {filteredAlerts.map((alert) => {
             const config = severityConfig[alert.severity];
             const Icon = config.icon;
+            const target = parseNotificationTarget(alert.entity, alert.link);
+            const isSprintCard = target.type === "sprint_card";
 
             return (
               <Card
@@ -150,25 +168,49 @@ export default function Alerts() {
                 onClick={() => handleAlertClick(alert)}
               >
                 <CardContent className="flex items-start gap-4 p-4">
-                  <div className={`rounded-full p-2 ${config.bgClass}`}>
+                  <div className={`rounded-full p-2 shrink-0 ${config.bgClass}`}>
                     <Icon className={`h-4 w-4 ${config.iconClass}`} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <h4 className={`font-medium ${!alert.read ? "" : "text-muted-foreground"}`}>
+                      <div className="space-y-1">
+                        <h4 className={`font-semibold text-sm ${!alert.read ? "text-foreground" : "text-muted-foreground"}`}>
                           {alert.title}
                         </h4>
-                        <p className="text-sm text-muted-foreground mt-0.5">{alert.description}</p>
-                        {alert.entity && (
-                          <Badge variant="secondary" className="mt-2 text-xs font-normal">
-                            {alert.entity}
-                          </Badge>
+                        <p className="text-sm text-muted-foreground leading-relaxed">{alert.description}</p>
+                        <div className="flex items-center gap-2 pt-1">
+                          {isSprintCard ? (
+                            <Badge variant="outline" className="bg-primary/10 border-primary/20 text-primary text-[11px] font-semibold">
+                              Sprint • Cartão
+                            </Badge>
+                          ) : (
+                            alert.entity && (
+                              <Badge variant="secondary" className="text-xs font-normal">
+                                {alert.entity}
+                              </Badge>
+                            )
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-2 shrink-0">
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                          {alert.timestamp}
+                        </span>
+                        {isSprintCard && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs font-semibold gap-1 text-primary hover:bg-primary hover:text-primary-foreground border-primary/30"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAlertClick(alert);
+                            }}
+                          >
+                            <span>Acessar card</span>
+                            <ArrowRight className="h-3 w-3" />
+                          </Button>
                         )}
                       </div>
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">
-                        {alert.timestamp}
-                      </span>
                     </div>
                   </div>
                 </CardContent>

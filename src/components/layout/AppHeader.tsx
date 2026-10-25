@@ -1,6 +1,4 @@
-import { Bell, Search, LogOut, Settings, UserCircle, Wallet as WalletIcon, Menu, PanelLeft } from "lucide-react";
-
-// ... rest of imports unchanged ...
+import { Bell, Search, LogOut, Settings, UserCircle, Wallet as WalletIcon, Menu, PanelLeft, ArrowRight, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -16,12 +14,14 @@ import { useLanguage } from "@/i18n";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
-import { useAlerts } from "@/hooks/useAlerts";
+import { useAlerts, type Alert } from "@/hooks/useAlerts";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useWallet } from "@/hooks/useWallet";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { parseNotificationTarget } from "@/services/notificationService";
+import { useSprintStore } from "@/features/sprint/state/sprintStore";
 
 const SEVERITY_DOT: Record<string, string> = {
   info: "bg-info",
@@ -54,6 +54,7 @@ export function AppHeader() {
   const { activeCompanyId } = useCompany();
   const { data: wallet } = useWallet();
   const { isSubscribed, subscribe, isLoading: isPushLoading } = usePushNotifications();
+  const { openCardModal } = useSprintStore();
 
   const handleSignOut = async () => {
     const { error } = await signOut();
@@ -72,6 +73,27 @@ export function AppHeader() {
     }
 
     navigate("/auth");
+  };
+
+  const handleAlertItemClick = async (alert: Alert) => {
+    if (!alert.read) {
+      await markAsRead(alert.id);
+    }
+
+    const target = parseNotificationTarget(alert.entity, alert.link);
+    if (target.type === "sprint_card" && target.cardId) {
+      if (target.boardId) {
+        if (window.location.pathname === `/sprint/b/${target.boardId}`) {
+          openCardModal(target.cardId);
+          return;
+        }
+        navigate(`/sprint/b/${target.boardId}?cardId=${target.cardId}`);
+      } else {
+        navigate(`/sprint`);
+      }
+    } else if (target.url) {
+      navigate(target.url);
+    }
   };
 
   const userEmail = user?.email || "Usuário";
@@ -124,20 +146,30 @@ export function AppHeader() {
           {/* Notifications */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="relative h-9 w-9 flex items-center justify-center rounded-xl border border-border/50 bg-muted/30 text-muted-foreground hover:bg-accent hover:text-foreground hover:border-border transition-all duration-200">
+              <button
+                className="relative h-9 w-9 flex items-center justify-center rounded-xl border border-border/50 bg-muted/30 text-muted-foreground hover:bg-accent hover:text-foreground hover:border-border transition-all duration-200"
+                aria-label="Abrir notificações"
+              >
                 <Bell className="h-4 w-4" />
                 {unreadCount > 0 && (
-                  <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-primary border-2 border-background" />
+                  <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary ring-2 ring-background animate-pulse" />
                 )}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80 rounded-2xl shadow-elevation-lg border-border/50 bg-background/95 backdrop-blur-xl p-2 max-h-96 overflow-y-auto">
+            <DropdownMenuContent align="end" className="w-84 sm:w-96 rounded-2xl shadow-elevation-lg border-border/50 bg-background/95 backdrop-blur-xl p-2.5 max-h-[460px] overflow-y-auto">
               <div className="flex items-center justify-between px-2 py-1.5">
-                <DropdownMenuLabel className="p-0 text-[13px] font-bold">Notificações</DropdownMenuLabel>
+                <div className="flex items-center gap-2">
+                  <DropdownMenuLabel className="p-0 text-[13px] font-bold">Notificações</DropdownMenuLabel>
+                  {unreadCount > 0 && (
+                    <span className="text-[10px] font-bold bg-primary/15 text-primary px-2 py-0.5 rounded-full">
+                      {unreadCount} {unreadCount === 1 ? "nova" : "novas"}
+                    </span>
+                  )}
+                </div>
                 {unreadCount > 0 && (
                   <button
                     onClick={() => markAllAsRead()}
-                    className="text-[11px] font-semibold text-primary hover:underline"
+                    className="text-[11px] font-semibold text-primary hover:underline cursor-pointer"
                   >
                     Marcar todas como lidas
                   </button>
@@ -145,7 +177,7 @@ export function AppHeader() {
               </div>
 
               {!isSubscribed && (
-                <div className="mx-2 my-1.5 p-2.5 rounded-xl bg-primary/10 border border-primary/20 flex flex-col gap-1.5">
+                <div className="mx-1.5 my-1.5 p-2.5 rounded-xl bg-primary/10 border border-primary/20 flex flex-col gap-1.5">
                   <p className="text-[11px] font-semibold text-foreground leading-tight">
                     Receba avisos no celular quando chegarem novas mensagens.
                   </p>
@@ -158,26 +190,60 @@ export function AppHeader() {
                   </button>
                 </div>
               )}
-              <DropdownMenuSeparator className="bg-border/50 my-1" />
+              <DropdownMenuSeparator className="bg-border/50 my-1.5" />
               {alerts.length === 0 ? (
-                <p className="text-xs text-muted-foreground/60 text-center py-6">Nenhuma notificação por aqui.</p>
+                <div className="text-center py-8 px-4">
+                  <Bell className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
+                  <p className="text-xs text-muted-foreground/70">Nenhuma notificação por aqui.</p>
+                </div>
               ) : (
-                alerts.slice(0, 20).map((alert) => (
-                  <DropdownMenuItem
-                    key={alert.id}
-                    onClick={() => !alert.read && markAsRead(alert.id)}
-                    className={cn("rounded-xl gap-2.5 px-3 py-2.5 cursor-pointer items-start", !alert.read && "bg-primary/5")}
-                  >
-                    <span className={cn("h-1.5 w-1.5 rounded-full mt-1.5 shrink-0", SEVERITY_DOT[alert.severity] || "bg-muted-foreground")} />
-                    <div className="min-w-0">
-                      <p className="text-[12px] font-semibold text-foreground truncate">{alert.title}</p>
-                      {alert.description && (
-                        <p className="text-[11px] text-muted-foreground/70 line-clamp-2">{alert.description}</p>
-                      )}
-                      <p className="text-[10px] text-muted-foreground/50 mt-0.5">{alert.timestamp}</p>
-                    </div>
-                  </DropdownMenuItem>
-                ))
+                <div className="space-y-1">
+                  {alerts.slice(0, 25).map((alert) => {
+                    const target = parseNotificationTarget(alert.entity, alert.link);
+                    const isSprintCard = target.type === "sprint_card";
+
+                    return (
+                      <div
+                        key={alert.id}
+                        onClick={() => handleAlertItemClick(alert)}
+                        className={cn(
+                          "group rounded-xl p-2.5 transition-all cursor-pointer border border-transparent hover:bg-accent/60 hover:border-border/40",
+                          !alert.read ? "bg-primary/5 border-primary/15" : "opacity-85 hover:opacity-100"
+                        )}
+                      >
+                        <div className="flex items-start gap-2.5">
+                          <span
+                            className={cn(
+                              "h-2 w-2 rounded-full mt-1.5 shrink-0",
+                              !alert.read
+                                ? "bg-primary shadow-[0_0_6px_rgba(59,130,246,0.6)]"
+                                : "bg-muted-foreground/30"
+                            )}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className={cn("text-[12px] font-bold text-foreground leading-snug", !alert.read && "text-primary")}>
+                              {alert.title}
+                            </p>
+                            {alert.description && (
+                              <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5 leading-relaxed">
+                                {alert.description}
+                              </p>
+                            )}
+                            <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-border/30">
+                              <span className="text-[10px] text-muted-foreground/60">{alert.timestamp}</span>
+                              {isSprintCard && (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary group-hover:underline">
+                                  <span>Acessar card</span>
+                                  <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </DropdownMenuContent>
           </DropdownMenu>

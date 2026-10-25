@@ -230,6 +230,56 @@ export const sprintService = {
     };
   },
 
+  async getCardById(cardId: string): Promise<SprintCard | null> {
+    const { data: cardData, error } = await (supabase as any)
+      .from("sprint_cards")
+      .select("*")
+      .eq("id", cardId)
+      .single();
+
+    if (error || !cardData) return null;
+
+    try {
+      const [labelsRes, membersRes, chkRes, commentsCountRes] = await Promise.all([
+        (supabase as any)
+          .from("sprint_card_labels")
+          .select("label:sprint_labels(*)")
+          .eq("card_id", cardId),
+        (supabase as any)
+          .from("sprint_card_members")
+          .select("user_id")
+          .eq("card_id", cardId),
+        (supabase as any)
+          .from("sprint_checklists")
+          .select("*, items:sprint_checklist_items(*)")
+          .eq("card_id", cardId)
+          .order("position", { ascending: true }),
+        (supabase as any)
+          .from("sprint_card_comments")
+          .select("id", { count: "exact", head: true })
+          .eq("card_id", cardId),
+      ]);
+
+      const labels = (labelsRes.data || []).map((r: any) => r.label).filter(Boolean);
+      const members = (membersRes.data || []).map((r: any) => ({ user_id: r.user_id }));
+      const checklists = (chkRes.data || []).map((chk: any) => ({
+        ...chk,
+        items: chk.items ? chk.items.sort((a: any, b: any) => a.position - b.position) : [],
+      }));
+      const comments_count = commentsCountRes.count || 0;
+
+      return {
+        ...cardData,
+        labels,
+        members,
+        checklists,
+        comments_count,
+      };
+    } catch {
+      return cardData as SprintCard;
+    }
+  },
+
   // --- LISTS ---
   async createList(params: {
     boardId: string;

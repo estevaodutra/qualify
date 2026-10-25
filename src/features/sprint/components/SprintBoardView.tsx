@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   DndContext,
   DragOverlay,
@@ -49,6 +49,8 @@ import { cn } from "@/lib/utils";
 
 export const SprintBoardView: React.FC = () => {
   const { boardId } = useParams<{ boardId: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const cardIdParam = searchParams.get("cardId");
   const navigate = useNavigate();
   const { activeCompanyId } = useCompany();
   const { data: members = [] } = useCompanyMembers();
@@ -69,6 +71,8 @@ export const SprintBoardView: React.FC = () => {
     selectedMemberFilters,
     toggleMemberFilter,
     clearFilters,
+    openCardModal,
+    activeCardId,
   } = useSprintStore();
 
   const [activeDragItem, setActiveDragItem] = useState<{
@@ -84,6 +88,22 @@ export const SprintBoardView: React.FC = () => {
       loadBoardDetails(boardId);
     }
   }, [boardId]);
+
+  // Abre o card automaticamente se o cardId estiver na URL
+  useEffect(() => {
+    if (cardIdParam) {
+      openCardModal(cardIdParam);
+    }
+  }, [cardIdParam, lists]);
+
+  // Limpa o parâmetro da URL quando o modal for fechado
+  useEffect(() => {
+    if (!activeCardId && cardIdParam) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("cardId");
+      setSearchParams(next, { replace: true });
+    }
+  }, [activeCardId, cardIdParam, searchParams, setSearchParams]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {

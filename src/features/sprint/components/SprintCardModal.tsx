@@ -28,6 +28,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { SprintMentionInput } from "./SprintMentionInput";
 import { SprintMentionTextarea } from "./SprintMentionTextarea";
 import { SprintMentionRenderer } from "./SprintMentionRenderer";
+import { extractMentionedUserIds } from "../utils/mentionExtractor";
+import { notifySprintCardMention } from "@/services/notificationService";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -63,6 +65,9 @@ export const SprintCardModal: React.FC = () => {
   const [newChecklistTitle, setNewChecklistTitle] = useState("");
   const [isAddingChecklist, setIsAddingChecklist] = useState(false);
   const [newItemTitles, setNewItemTitles] = useState<Record<string, string>>({});
+  const [mentionedChecklistMembers, setMentionedChecklistMembers] = useState<Record<string, Array<{ user_id: string }>>>({});
+  const [mentionedCommentMembers, setMentionedCommentMembers] = useState<Array<{ user_id: string }>>([]);
+  const [mentionedDescMembers, setMentionedDescMembers] = useState<Array<{ user_id: string }>>([]);
 
   // Sincroniza o título e a descrição sempre que o cartão ativo mudar
   useEffect(() => {
@@ -82,9 +87,28 @@ export const SprintCardModal: React.FC = () => {
     }
   };
 
-  const handleSaveDescription = () => {
-    updateCard(activeCard.id, { description });
+  const handleSaveDescription = async () => {
+    await updateCard(activeCard.id, { description });
     setIsEditingDesc(false);
+
+    if (description.trim() && user && activeCard) {
+      const mentionedUserIds = extractMentionedUserIds(description, members, mentionedDescMembers);
+      if (mentionedUserIds.length > 0) {
+        const authorName = user.user_metadata?.full_name || user.email?.split("@")[0] || "Um membro";
+        await notifySprintCardMention({
+          companyId: activeCard.company_id,
+          boardId: activeCard.board_id,
+          cardId: activeCard.id,
+          cardTitle: activeCard.title,
+          authorUserId: user.id,
+          authorName,
+          mentionedUserIds,
+          contextType: "description",
+          contextText: description,
+        });
+      }
+    }
+    setMentionedDescMembers([]);
   };
 
   const handleCreateChecklist = (e: React.FormEvent) => {
@@ -95,28 +119,70 @@ export const SprintCardModal: React.FC = () => {
     setIsAddingChecklist(false);
   };
 
-  const handleCreateChecklistItem = (checklistId: string) => {
+  const handleCreateChecklistItem = async (checklistId: string) => {
     const text = newItemTitles[checklistId];
-    if (!text || !text.trim()) return;
+    if (!text || !text.trim() || !activeCard) return;
 
-    addChecklistItem({
+    const trimmedText = text.trim();
+    const explicitMembers = mentionedChecklistMembers[checklistId] || [];
+    const mentionedUserIds = extractMentionedUserIds(trimmedText, members, explicitMembers);
+
+    await addChecklistItem({
       checklistId,
       cardId: activeCard.id,
-      title: text.trim(),
+      title: trimmedText,
     });
+
+    if (mentionedUserIds.length > 0 && user) {
+      const authorName = user.user_metadata?.full_name || user.email?.split("@")[0] || "Um membro";
+      await notifySprintCardMention({
+        companyId: activeCard.company_id,
+        boardId: activeCard.board_id,
+        cardId: activeCard.id,
+        cardTitle: activeCard.title,
+        authorUserId: user.id,
+        authorName,
+        mentionedUserIds,
+        contextType: "checklist",
+        contextText: trimmedText,
+        checklistItemId: checklistId,
+      });
+    }
 
     setNewItemTitles((prev) => ({ ...prev, [checklistId]: "" }));
+    setMentionedChecklistMembers((prev) => ({ ...prev, [checklistId]: [] }));
   };
 
-  const handleAddComment = (e: React.FormEvent) => {
+  const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newComment.trim() || !user) return;
-    addComment({
+    if (!newComment.trim() || !user || !activeCard) return;
+
+    const commentText = newComment.trim();
+    const mentionedUserIds = extractMentionedUserIds(commentText, members, mentionedCommentMembers);
+
+    await addComment({
       cardId: activeCard.id,
       userId: user.id,
-      content: newComment.trim(),
+      content: commentText,
     });
+
+    if (mentionedUserIds.length > 0) {
+      const authorName = user.user_metadata?.full_name || user.email?.split("@")[0] || "Um membro";
+      await notifySprintCardMention({
+        companyId: activeCard.company_id,
+        boardId: activeCard.board_id,
+        cardId: activeCard.id,
+        cardTitle: activeCard.title,
+        authorUserId: user.id,
+        authorName,
+        mentionedUserIds,
+        contextType: "comment",
+        contextText: commentText,
+      });
+    }
+
     setNewComment("");
+    setMentionedCommentMembers([]);
   };
 
   return (
@@ -228,7 +294,14 @@ export const SprintCardModal: React.FC = () => {
                     value={description}
                     onChange={setDescription}
                     placeholder="Adicione uma descrição detalhada... (use @ para mencionar)"
-                    onMentionSelected={(m) => autoAssignMemberMention(activeCard.id, { user_id: m.user_id, full_name: m.full_name || undefined, email: m.email || undefined })}
+                    onMentionSelected={(m) => {
+                      autoAssignMemberMention(activeCard.id, {
+                        user_id: m.user_id,
+                        full_name: m.full_name || undefined,
+                        email: m.email || undefined,
+                      });
+                      setMentionedDescMembers((prev) => [...prev, { user_id: m.user_id }]);
+                    }}
                   />
                   <div className="flex items-center gap-2">
                     <Button size="sm" onClick={handleSaveDescription}>
@@ -342,6 +415,10 @@ export const SprintCardModal: React.FC = () => {
                             full_name: m.full_name || undefined,
                             email: m.email || undefined,
                           });
+                          setMentionedChecklistMembers((prev) => ({
+                            ...prev,
+                            [checklist.id]: [...(prev[checklist.id] || []), { user_id: m.user_id }],
+                          }));
                         }}
                         placeholder="Adicionar item... (digite @ para citar responsável)"
                         className="text-xs h-8"
@@ -372,13 +449,14 @@ export const SprintCardModal: React.FC = () => {
                   onChange={setNewComment}
                   rows={2}
                   placeholder="Escreva um comentário... (use @ para citar alguém)"
-                  onMentionSelected={(m) =>
+                  onMentionSelected={(m) => {
                     autoAssignMemberMention(activeCard.id, {
                       user_id: m.user_id,
                       full_name: m.full_name || undefined,
                       email: m.email || undefined,
-                    })
-                  }
+                    });
+                    setMentionedCommentMembers((prev) => [...prev, { user_id: m.user_id }]);
+                  }}
                 />
                 <Button
                   type="submit"

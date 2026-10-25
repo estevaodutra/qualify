@@ -66,7 +66,7 @@ interface SprintState {
   }) => Promise<void>;
 
   // Card Modal
-  openCardModal: (cardId: string) => void;
+  openCardModal: (cardId: string) => Promise<void> | void;
   closeCardModal: () => void;
   loadCardComments: (cardId: string) => Promise<void>;
   addComment: (params: { cardId: string; userId: string; content: string }) => Promise<void>;
@@ -322,7 +322,7 @@ export const useSprintStore = create<SprintState>((set, get) => ({
     });
   },
 
-  openCardModal: (cardId: string) => {
+  openCardModal: async (cardId: string) => {
     const { lists } = get();
     for (const list of lists) {
       const found = list.cards.find((c) => c.id === cardId);
@@ -331,6 +331,16 @@ export const useSprintStore = create<SprintState>((set, get) => ({
         get().loadCardComments(cardId);
         return;
       }
+    }
+
+    try {
+      const card = await sprintService.getCardById(cardId);
+      if (card) {
+        set({ activeCardId: cardId, activeCard: card });
+        get().loadCardComments(cardId);
+      }
+    } catch (e) {
+      console.warn("Failed to load card for modal", e);
     }
   },
 

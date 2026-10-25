@@ -9,6 +9,7 @@ import { useCallQueue } from "@/hooks/useCallQueue";
 import { ChatExpressDock } from "@/components/chat/express/ChatExpressDock";
 import { CallFloatingLauncher } from "@/components/call/CallFloatingLauncher";
 import { PwaInstallPrompt } from "@/components/pwa/PwaInstallPrompt";
+import { NotificationPopupManager } from "../notifications/NotificationPopupManager";
 
 interface AppLayoutProps {
   children?: React.ReactNode;
@@ -33,6 +34,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           <ImpersonationBanner />
           {!isQuizEditor && <AppHeader />}
           {!isQuizEditor && <InstanceStatusBanner />}
+          <NotificationPopupManager />
           <main className={
             isQuizEditor
               ? "flex-1 overflow-hidden p-0 h-[100dvh]"
