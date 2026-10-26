@@ -20,6 +20,7 @@ import {
   AlertTriangle,
   MessageSquare,
   FastForward,
+  Copy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLeadExecutions, LeadExecutionItem } from "@/hooks/useLeadExecutions";
@@ -426,14 +427,29 @@ export default function LeadExecutionsButton({
                   className="p-3 rounded-xl border border-border/60 bg-card/60 hover:border-primary/30 transition-all shadow-sm space-y-2 text-xs"
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="font-bold text-foreground truncate flex items-center gap-1.5">
                         <GitBranch className="h-3.5 w-3.5 text-primary shrink-0" />
                         {exec.sequenceName}
                       </p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">
-                        Iniciado {formatRelativeTime(exec.startedAt)}
-                      </p>
+                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-0.5 flex-wrap">
+                        <span>Iniciado {formatRelativeTime(exec.startedAt)}</span>
+                        <span>•</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(exec.id);
+                            toast.success("ID da execução copiado!");
+                          }}
+                          className="inline-flex items-center gap-1 font-mono text-[10px] text-muted-foreground hover:text-foreground bg-muted/60 hover:bg-muted px-1.5 py-0.5 rounded transition-colors group/copy border border-border/40 cursor-pointer"
+                          title={`ID da Execução: ${exec.id}\nClique para copiar`}
+                        >
+                          <span className="font-semibold text-foreground/70">ID:</span>
+                          <span>{exec.id.slice(0, 8)}...</span>
+                          <Copy className="h-2.5 w-2.5 opacity-60 group-hover/copy:opacity-100 shrink-0" />
+                        </button>
+                      </div>
                     </div>
 
                     {renderStatusBadge(exec.status)}
@@ -471,7 +487,7 @@ export default function LeadExecutionsButton({
                   )}
 
                   {/* Actions */}
-                  <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-border/30">
+                  <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-border/30">
                     {confirmStopId === exec.id ? (
                       <div className="flex items-center gap-1.5 w-full justify-between animate-in fade-in duration-150">
                         <span className="text-[10px] text-destructive font-semibold flex items-center gap-1">
@@ -502,52 +518,69 @@ export default function LeadExecutionsButton({
                       </div>
                     ) : (
                       <>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={isSkipping}
-                          onClick={() => skipExecution(exec.id)}
-                          title="Pular para o próximo passo"
-                          className="h-7 text-xs font-semibold gap-1 rounded-lg border-sky-500/30 text-sky-600 hover:bg-sky-500/10 px-2.5"
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(exec.id);
+                            toast.success("ID da execução copiado!");
+                          }}
+                          className="inline-flex items-center gap-1 font-mono text-[10px] text-muted-foreground hover:text-foreground bg-muted/40 hover:bg-muted/80 px-2 py-1 rounded-md transition-colors group/copy border border-border/40 shrink-0 cursor-pointer"
+                          title={`ID completo: ${exec.id}\nClique para copiar`}
                         >
-                          {isSkipping ? <Loader2 className="h-3 w-3 animate-spin" /> : <FastForward className="h-3 w-3" />}
-                          Pular
-                        </Button>
+                          <span className="font-semibold text-foreground/70">ID:</span>
+                          <span className="truncate max-w-[120px]">{exec.id}</span>
+                          <Copy className="h-2.5 w-2.5 opacity-60 group-hover/copy:opacity-100 shrink-0" />
+                        </button>
 
-                        {exec.status === "paused" ? (
-                          <Button
-                            variant="default"
-                            size="sm"
-                            disabled={isResuming}
-                            onClick={() => resumeExecution(exec.id)}
-                            className="h-7 text-xs font-semibold gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-2.5"
-                          >
-                            {isResuming ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3 fill-current" />}
-                            Retomar
-                          </Button>
-                        ) : (
+                        <div className="flex items-center gap-1.5">
                           <Button
                             variant="outline"
                             size="sm"
-                            disabled={isPausing}
-                            onClick={() => pauseExecution(exec.id)}
-                            className="h-7 text-xs font-semibold gap-1 rounded-lg border-orange-500/30 text-orange-600 hover:bg-orange-500/10 px-2.5"
+                            disabled={isSkipping}
+                            onClick={() => skipExecution(exec.id)}
+                            title="Pular para o próximo passo"
+                            className="h-7 text-xs font-semibold gap-1 rounded-lg border-sky-500/30 text-sky-600 hover:bg-sky-500/10 px-2.5"
                           >
-                            {isPausing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Pause className="h-3 w-3" />}
-                            Pausar
+                            {isSkipping ? <Loader2 className="h-3 w-3 animate-spin" /> : <FastForward className="h-3 w-3" />}
+                            Pular
                           </Button>
-                        )}
 
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={isStopping}
-                          onClick={() => setConfirmStopId(exec.id)}
-                          className="h-7 text-xs font-semibold gap-1 rounded-lg border-destructive/30 text-destructive hover:bg-destructive/10 px-2"
-                        >
-                          <Square className="h-3 w-3 fill-current text-destructive" />
-                          Parar
-                        </Button>
+                          {exec.status === "paused" ? (
+                            <Button
+                              variant="default"
+                              size="sm"
+                              disabled={isResuming}
+                              onClick={() => resumeExecution(exec.id)}
+                              className="h-7 text-xs font-semibold gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-2.5"
+                            >
+                              {isResuming ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3 fill-current" />}
+                              Retomar
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={isPausing}
+                              onClick={() => pauseExecution(exec.id)}
+                              className="h-7 text-xs font-semibold gap-1 rounded-lg border-orange-500/30 text-orange-600 hover:bg-orange-500/10 px-2.5"
+                            >
+                              {isPausing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Pause className="h-3 w-3" />}
+                              Pausar
+                            </Button>
+                          )}
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={isStopping}
+                            onClick={() => setConfirmStopId(exec.id)}
+                            className="h-7 text-xs font-semibold gap-1 rounded-lg border-destructive/30 text-destructive hover:bg-destructive/10 px-2"
+                          >
+                            <Square className="h-3 w-3 fill-current text-destructive" />
+                            Parar
+                          </Button>
+                        </div>
                       </>
                     )}
                   </div>
@@ -566,12 +599,27 @@ export default function LeadExecutionsButton({
                   key={exec.id}
                   className="p-2.5 rounded-xl border border-border/40 bg-card/40 flex items-center justify-between gap-2 text-xs"
                 >
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="font-semibold text-foreground truncate">{exec.sequenceName}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">
-                      {format(new Date(exec.startedAt), "dd/MM HH:mm")}
-                      {exec.durationMs != null && ` • ${Math.round(exec.durationMs / 1000)}s`}
-                    </p>
+                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-0.5 flex-wrap">
+                      <span>{format(new Date(exec.startedAt), "dd/MM HH:mm")}</span>
+                      {exec.durationMs != null && <span>• {Math.round(exec.durationMs / 1000)}s</span>}
+                      <span>•</span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigator.clipboard.writeText(exec.id);
+                          toast.success("ID da execução copiado!");
+                        }}
+                        className="inline-flex items-center gap-1 font-mono text-[9px] text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted px-1.5 py-0.5 rounded transition-colors group/copy border border-border/40 cursor-pointer"
+                        title={`ID da Execução: ${exec.id}\nClique para copiar`}
+                      >
+                        <span className="font-semibold text-foreground/70">ID:</span>
+                        <span>{exec.id.slice(0, 8)}...</span>
+                        <Copy className="h-2 w-2 opacity-60 group-hover/copy:opacity-100 shrink-0" />
+                      </button>
+                    </div>
                     {exec.errorMessage && (
                       <p className="text-[10px] text-destructive truncate mt-0.5">
                         {exec.errorMessage}

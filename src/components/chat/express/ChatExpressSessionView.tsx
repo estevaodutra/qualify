@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Loader2, Minimize2, X, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 interface ChatExpressSessionViewProps {
   session: ChatExpressSession;
@@ -86,6 +87,23 @@ export function ChatExpressSessionView({ session }: ChatExpressSessionViewProps)
                   )}
                 </SelectContent>
               </Select>
+              {session.conversationId && (
+                <>
+                  <div className="w-1 h-1 bg-border rounded-full shrink-0" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(session.conversationId!);
+                      toast.success("ID único da conversa copiado!");
+                    }}
+                    className="h-4 px-1.5 py-0.2 rounded text-[9px] font-mono text-muted-foreground hover:text-foreground bg-muted/40 hover:bg-muted/80 border border-border/40 transition-colors flex items-center gap-0.5 cursor-pointer shrink-0"
+                    title={`ID único da conversa: ${session.conversationId} (Clique para copiar)`}
+                  >
+                    <span className="font-bold text-primary">ID:</span>
+                    <span>{session.conversationId.slice(0, 6)}...</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

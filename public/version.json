@@ -1,6 +1,6 @@
 {
-  "commit": "716d44078ba58b36ce6b08db420f4485cddf247f",
-  "shortCommit": "716d440",
-  "message": "feat(broadcasts): nova funcionalidade de disparos em massa com selecao de audiencia, execucao de fluxos, agendamento e cadencia anti-ban",
-  "builtAt": "2026-10-26T20:32:23.841Z"
+  "commit": "49026c73a897f3878d6da7c1c30896531ef9dc84",
+  "shortCommit": "49026c7",
+  "message": "fix(realtime): usa canal unico para operator e call-log evitando erro de subscricao",
+  "builtAt": "2026-10-26T20:45:40.820Z"
 }
