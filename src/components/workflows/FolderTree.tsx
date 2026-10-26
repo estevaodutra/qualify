@@ -121,7 +121,12 @@ function FolderTreeItem({
           isDragging && "opacity-50",
           isDropTarget && "ring-2 ring-primary/40 bg-primary/5"
         )}
-        onClick={() => onSelectFolder(node.id)}
+        onClick={() => {
+          onSelectFolder(node.id);
+          if (hasChildren && !isExpanded) {
+            onToggleExpand(node.id);
+          }
+        }}
         onDragOver={(e) => {
           if (onDropWorkflow) {
             e.preventDefault();

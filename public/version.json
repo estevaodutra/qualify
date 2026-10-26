@@ -1,6 +1,6 @@
 {
-  "commit": "ad65c97e309a4d593251e132fc86c7a0bf50ce36",
-  "shortCommit": "ad65c97",
-  "message": "feat(criafy): add complete Instagram insights analytics dashboard card with live Meta API metrics",
-  "builtAt": "2026-10-23T18:35:50.687Z"
+  "commit": "f329e7f56db25f3bf3eca4773183acc9664680d7",
+  "shortCommit": "f329e7f",
+  "message": "feat(sprint): incluir metricas de evolucao da sprint nos cards de quadros",
+  "builtAt": "2026-10-26T20:18:31.727Z"
 }

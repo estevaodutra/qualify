@@ -10,7 +10,7 @@ import {
   DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  MoreVertical, FolderInput, ExternalLink, Send, Users, Skull, Activity, PhoneCall, Trash2, Copy, Webhook, CalendarClock, Power, Loader2
+  MoreVertical, FolderInput, ExternalLink, Send, Users, Skull, Activity, PhoneCall, Trash2, Copy, Webhook, CalendarClock, Power, Loader2, Folder
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WorkflowDefinition, WorkflowSourceType } from "@/hooks/useWorkflowDefinitions";
@@ -77,6 +77,7 @@ const SOURCE_TYPE_BUILDER_ROUTE: Record<WorkflowSourceType, (def: WorkflowDefini
 interface WorkflowCardProps {
   workflow: WorkflowDefinition;
   folders: WorkflowFolder[];
+  folderName?: string;
   onMoveToFolder: (folderId: string | null) => void;
   onDelete?: () => void;
   onDuplicate?: () => void;
@@ -86,6 +87,7 @@ interface WorkflowCardProps {
 export function WorkflowCard({
   workflow,
   folders,
+  folderName,
   onMoveToFolder,
   onDelete,
   onDuplicate,
@@ -127,13 +129,18 @@ export function WorkflowCard({
     >
       <CardHeader className="pb-2 flex-row items-start justify-between space-y-0">
         <div className="space-y-1.5 min-w-0 flex-1 pr-2">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Badge className={cn("text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 border", STATUS_COLORS[workflow.status])}>
               {STATUS_LABELS[workflow.status]}
             </Badge>
             <Badge variant="outline" className={cn("text-[9px] font-semibold gap-1 border", meta.className)}>
               <Icon className="h-3 w-3" /> {meta.label}
             </Badge>
+            {folderName && (
+              <Badge variant="secondary" className="text-[9px] font-medium gap-1 bg-muted/80 text-muted-foreground border-border/50 truncate max-w-[140px]">
+                <Folder className="h-2.5 w-2.5 text-primary shrink-0" /> <span className="truncate">{folderName}</span>
+              </Badge>
+            )}
           </div>
           <CardTitle className="text-sm font-bold truncate">{workflow.name}</CardTitle>
           {workflow.description && (
