@@ -149,19 +149,13 @@ const ChecklistItemRow: React.FC<{
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [notesText, setNotesText] = useState(item.notes || "");
-  const [commentInput, setCommentInput] = useState("");
-  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const noteContainerRef = React.useRef<HTMLDivElement>(null);
   const isSavingNoteRef = React.useRef(false);
 
   const {
     updateChecklistItemNotes,
-    addChecklistItemComment,
-    deleteChecklistItemComment,
     autoAssignMemberMention,
   } = useSprintStore();
-  const { user } = useAuth();
-  const { members = [] } = useCompanyMembers();
 
   useEffect(() => {
     setEditText(item.title);
@@ -204,20 +198,7 @@ const ChecklistItemRow: React.FC<{
     handleSaveNotes();
   };
 
-  const handleAddComment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!commentInput.trim() || isSubmittingComment) return;
-    try {
-      setIsSubmittingComment(true);
-      await addChecklistItemComment(checklistId, item.id, cardId, commentInput.trim());
-      setCommentInput("");
-    } finally {
-      setIsSubmittingComment(false);
-    }
-  };
-
-  const commentsCount = item.comments?.length || item.comments_count || 0;
-  const hasInfo = commentsCount > 0 || !!item.notes;
+  const hasNotes = !!item.notes?.trim();
 
   return (
     <div
@@ -282,8 +263,8 @@ const ChecklistItemRow: React.FC<{
                 />
               </div>
 
-              {/* Indicador de Notas / Comentários na Atividade */}
-              {hasInfo && (
+              {/* Indicador de Nota na Atividade */}
+              {hasNotes && (
                 <button
                   type="button"
                   onClick={(e) => {
@@ -291,14 +272,10 @@ const ChecklistItemRow: React.FC<{
                     setIsDetailsOpen((prev) => !prev);
                   }}
                   className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] bg-primary/10 text-primary font-medium hover:bg-primary/20 transition-colors shrink-0 cursor-pointer"
-                  title="Ver notas e comentários desta atividade"
+                  title="Ver nota desta atividade"
                 >
-                  <MessageSquare className="h-2.5 w-2.5" />
-                  {commentsCount > 0 ? (
-                    <span>{commentsCount}</span>
-                  ) : (
-                    <span>Nota</span>
-                  )}
+                  <StickyNote className="h-2.5 w-2.5" />
+                  <span>Nota</span>
                 </button>
               )}
             </div>
@@ -307,20 +284,28 @@ const ChecklistItemRow: React.FC<{
 
         {/* Botões de Ação na Atividade */}
         <div className="flex items-center gap-0.5">
-          {/* Botão de Comentar / Nota */}
+          {/* Botão de Nota da Atividade */}
           <Button
             variant="ghost"
             size="icon"
             className={cn(
               "h-6 w-6 transition-all",
-              hasInfo || isDetailsOpen
+              hasNotes || isDetailsOpen
                 ? "opacity-100 text-primary bg-primary/10"
                 : "opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary hover:bg-primary/10"
             )}
-            onClick={() => setIsDetailsOpen((prev) => !prev)}
-            title="Comentar ou adicionar nota nesta atividade"
+            onClick={() => {
+              setIsDetailsOpen((prev) => {
+                const next = !prev;
+                if (next && !item.notes) {
+                  setIsEditingNotes(true);
+                }
+                return next;
+              });
+            }}
+            title={hasNotes ? "Ver / editar nota da atividade" : "Adicionar nota nesta atividade"}
           >
-            <MessageSquare className="h-3 w-3" />
+            <StickyNote className="h-3 w-3" />
           </Button>
 
           {/* Botão Editar Item */}
@@ -350,12 +335,12 @@ const ChecklistItemRow: React.FC<{
       {/* Painel Expansível de Detalhes / Comentários da Atividade */}
       {isDetailsOpen && (
         <div className="ml-6 pl-3 border-l-2 border-primary/40 my-1.5 space-y-3 bg-muted/15 rounded-r-xl p-3 border border-border/50 animate-in fade-in-50 duration-150">
-          {/* Seção: Informações / Nota da Atividade */}
+          {/* Seção: Nota da Atividade */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between text-xs font-semibold text-foreground">
               <span className="flex items-center gap-1.5 text-muted-foreground text-[11px]">
                 <StickyNote className="h-3 w-3 text-primary" />
-                <span>Nota / Informações da Atividade</span>
+                <span>Nota da Atividade</span>
               </span>
               {!isEditingNotes && (
                 <button
@@ -423,90 +408,9 @@ const ChecklistItemRow: React.FC<{
                 onClick={() => setIsEditingNotes(true)}
                 className="p-2 rounded-lg border border-dashed border-border text-[11px] text-muted-foreground italic cursor-pointer hover:border-primary/50 hover:text-foreground transition-colors"
               >
-                Nenhuma nota adicionada. Clique para acrescentar informações ou observações a esta tarefa.
+                Nenhuma nota adicionada. Clique para acrescentar informações ou observações a esta atividade.
               </div>
             )}
-          </div>
-
-          {/* Seção: Comentários nesta atividade */}
-          <div className="space-y-2 pt-2 border-t border-border/40">
-            <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <MessageSquare className="h-3 w-3 text-primary" />
-                <span>Comentários ({commentsCount})</span>
-              </span>
-            </div>
-
-            {/* Lista de comentários da atividade */}
-            {(item.comments || []).length > 0 && (
-              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-0.5">
-                {item.comments?.map((comment) => {
-                  const author = members.find((m) => m.user_id === comment.user_id);
-                  const authorName = author?.full_name || author?.email || "Usuário";
-                  return (
-                    <div
-                      key={comment.id}
-                      className="flex gap-2 text-xs bg-background p-2 rounded-lg border border-border/70 shadow-2xs"
-                    >
-                      <Avatar className="h-5 w-5 mt-0.5 shrink-0">
-                        <AvatarFallback className="bg-secondary text-secondary-foreground font-bold text-[8px]">
-                          {authorName.slice(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-1 mb-0.5">
-                          <span className="font-semibold text-foreground text-[11px] truncate">
-                            {authorName}
-                          </span>
-                          <span className="text-[9px] text-muted-foreground shrink-0">
-                            {format(new Date(comment.created_at), "dd/MM HH:mm")}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-foreground leading-normal">
-                          <SprintMentionRenderer text={comment.content} />
-                        </div>
-                        {user?.id === comment.user_id && (
-                          <div className="mt-1 text-right">
-                            <button
-                              type="button"
-                              onClick={() => deleteChecklistItemComment(checklistId, item.id, comment.id)}
-                              className="text-[9px] text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
-                            >
-                              Excluir
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Input para adicionar comentário */}
-            <form onSubmit={handleAddComment} className="flex items-center gap-1.5 pt-0.5">
-              <SprintMentionInput
-                value={commentInput}
-                onChange={setCommentInput}
-                placeholder="Comentar nesta atividade... (use @ para citar)"
-                className="h-7 text-xs bg-background flex-1"
-                onMentionSelected={(m) => {
-                  autoAssignMemberMention(cardId, {
-                    user_id: m.user_id,
-                    full_name: m.full_name || undefined,
-                    email: m.email || undefined,
-                  });
-                }}
-              />
-              <Button
-                type="submit"
-                size="sm"
-                disabled={!commentInput.trim() || isSubmittingComment}
-                className="h-7 px-2.5 text-xs shrink-0"
-              >
-                {isSubmittingComment ? "Enviando..." : "Comentar"}
-              </Button>
-            </form>
           </div>
         </div>
       )}

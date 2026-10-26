@@ -76,11 +76,12 @@ export const SprintMentionRenderer: React.FC<SprintMentionRendererProps> = ({
 
   if (!text) return null;
 
-  // Renderiza tokens inline (Negrito *, Itálico _, Tachado ~, Código `, Menção @)
+  // Renderiza tokens inline (Negrito *, Itálico _, Tachado ~, Código `, Links https?:// ou www., Menção @)
   const renderInlineTokens = (line: string, keyPrefix: string): React.ReactNode => {
-    // Regex para tokens inline seguindo regras do WhatsApp
+    // Regex para tokens inline seguindo regras do WhatsApp + auto-link
     const tokenRegex = new RegExp(
       `(\`[^\`\\n]+\`)|` +
+      `((?:https?:\\/\\/|www\\.)[^\\s<>"'\`]+)|` +
       `(${mentionPattern})|` +
       `(?:(?<=[^\\wÀ-ÿ*]|^)\\*(?!\\s)([^*\\n]+?)(?<!\\s)\\*(?=[^\\wÀ-ÿ*]|$))|` +
       `(?:(?<=[^\\wÀ-ÿ_]|^)_(?!\\s)([^_\\n]+?)(?<!\\s)_(?=[^\\wÀ-ÿ_]|$))|` +
@@ -113,6 +114,42 @@ export const SprintMentionRenderer: React.FC<SprintMentionRendererProps> = ({
           </code>
         );
       } else if (match[2]) {
+        // Link clicável (https://..., http://..., www....)
+        let rawUrl = match[2];
+        let trailing = "";
+
+        // Remover pontuações finais que normalmente pertencem à frase e não ao link
+        while (
+          /[.,!?:;>'"]$/.test(rawUrl) ||
+          (rawUrl.endsWith(")") && (rawUrl.match(/\(/g) || []).length < (rawUrl.match(/\)/g) || []).length) ||
+          (rawUrl.endsWith("]") && (rawUrl.match(/\[/g) || []).length < (rawUrl.match(/\]/g) || []).length)
+        ) {
+          trailing = rawUrl.slice(-1) + trailing;
+          rawUrl = rawUrl.slice(0, -1);
+        }
+
+        if (trailing.length > 0) {
+          tokenRegex.lastIndex = match.index + rawUrl.length;
+        }
+
+        const href = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
+
+        elements.push(
+          <a
+            key={`${keyPrefix}-link-${tokenIdx++}`}
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => {
+              e.stopPropagation();
+            }}
+            className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline underline-offset-2 font-medium transition-colors cursor-pointer break-all"
+            title={href}
+          >
+            {rawUrl}
+          </a>
+        );
+      } else if (match[3]) {
         // Menção: @Nome
         elements.push(
           <span
@@ -124,28 +161,28 @@ export const SprintMentionRenderer: React.FC<SprintMentionRendererProps> = ({
                 : "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30 hover:bg-blue-500/20 shadow-2xs"
             )}
           >
-            {match[2]}
+            {match[3]}
           </span>
         );
-      } else if (match[3]) {
+      } else if (match[4]) {
         // Negrito: *texto*
         elements.push(
           <strong key={`${keyPrefix}-b-${tokenIdx++}`} className="font-bold text-foreground">
-            {renderInlineTokens(match[3], `${keyPrefix}-b`)}
+            {renderInlineTokens(match[4], `${keyPrefix}-b`)}
           </strong>
         );
-      } else if (match[4]) {
+      } else if (match[5]) {
         // Itálico: _texto_
         elements.push(
           <em key={`${keyPrefix}-i-${tokenIdx++}`} className="italic">
-            {renderInlineTokens(match[4], `${keyPrefix}-i`)}
+            {renderInlineTokens(match[5], `${keyPrefix}-i`)}
           </em>
         );
-      } else if (match[5]) {
+      } else if (match[6]) {
         // Tachado: ~texto~
         elements.push(
           <del key={`${keyPrefix}-s-${tokenIdx++}`} className="line-through opacity-80">
-            {renderInlineTokens(match[5], `${keyPrefix}-s`)}
+            {renderInlineTokens(match[6], `${keyPrefix}-s`)}
           </del>
         );
       }
