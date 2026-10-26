@@ -4,7 +4,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { SprintCard } from "../types";
 import { useSprintStore } from "../state/sprintStore";
 import { useCompanyMembers } from "@/hooks/useCompanyMembers";
-import { CheckSquare, MessageSquare, Clock } from "lucide-react";
+import { CheckSquare, MessageSquare, Clock, Archive } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { format, isPast, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -16,7 +16,7 @@ interface SprintCardItemProps {
 }
 
 export const SprintCardItem: React.FC<SprintCardItemProps> = ({ card }) => {
-  const { openCardModal } = useSprintStore();
+  const { openCardModal, archiveCard } = useSprintStore();
   const { data: members = [] } = useCompanyMembers();
 
   const {
@@ -72,6 +72,20 @@ export const SprintCardItem: React.FC<SprintCardItemProps> = ({ card }) => {
         isDragging && "opacity-40 scale-95 border-dashed border-primary"
       )}
     >
+      {/* Botão de Arquivar Direto com 1 clique */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          archiveCard(card.id);
+        }}
+        onPointerDown={(e) => e.stopPropagation()}
+        className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-all p-1 rounded-md text-muted-foreground hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-500/10 bg-card/90 backdrop-blur-xs border border-transparent hover:border-amber-500/20 cursor-pointer shadow-2xs"
+        title="Arquivar cartão"
+      >
+        <Archive className="h-3.5 w-3.5" />
+      </button>
       {/* Cover Color (se houver) */}
       {card.cover_color && (
         <div
@@ -95,7 +109,7 @@ export const SprintCardItem: React.FC<SprintCardItemProps> = ({ card }) => {
       )}
 
       {/* Título do Cartão */}
-      <h3 className="text-xs md:text-sm font-medium text-foreground leading-snug break-words">
+      <h3 className="text-xs md:text-sm font-medium text-foreground leading-snug break-words pr-6">
         <SprintMentionRenderer text={card.title} isCompleted={card.is_completed} />
       </h3>
 

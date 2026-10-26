@@ -38,6 +38,7 @@ interface SprintState {
     background_value?: string;
     userId?: string;
   }) => Promise<SprintBoard>;
+  updateBoard: (boardId: string, updates: Partial<SprintBoard>) => Promise<void>;
   deleteBoard: (boardId: string) => Promise<void>;
 
   loadBoardDetails: (boardId: string) => Promise<void>;
@@ -144,6 +145,17 @@ export const useSprintStore = create<SprintState>((set, get) => ({
     set((state) => ({ boards: [newBoard, ...state.boards] }));
     toast.success("Quadro criado com sucesso!");
     return newBoard;
+  },
+
+  updateBoard: async (boardId: string, updates: Partial<SprintBoard>) => {
+    set((state) => ({
+      boards: state.boards.map((b) => (b.id === boardId ? { ...b, ...updates } : b)),
+      currentBoard:
+        state.currentBoard?.id === boardId
+          ? { ...state.currentBoard, ...updates }
+          : state.currentBoard,
+    }));
+    await sprintService.updateBoard(boardId, updates);
   },
 
   deleteBoard: async (boardId: string) => {

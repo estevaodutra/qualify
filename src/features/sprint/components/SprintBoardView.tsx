@@ -21,6 +21,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useCompanyMembers } from "@/hooks/useCompanyMembers";
 import { SprintListColumn } from "./SprintListColumn";
 import { SprintCardItem } from "./SprintCardItem";
+import { SprintSidebar } from "./SprintSidebar";
 import { SprintCardModal } from "./SprintCardModal";
 import { SprintCard, SprintList } from "../types";
 import {
@@ -34,6 +35,7 @@ import {
   X,
   MoreHorizontal,
   Trash2,
+  PanelLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,6 +59,9 @@ export const SprintBoardView: React.FC = () => {
 
   const {
     currentBoard,
+    boards,
+    loadBoards,
+    updateBoard,
     lists,
     labels,
     loadBoardDetails,
@@ -104,6 +109,20 @@ export const SprintBoardView: React.FC = () => {
       setSearchParams(next, { replace: true });
     }
   }, [activeCardId, cardIdParam, searchParams, setSearchParams]);
+
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    return localStorage.getItem("sprint_sidebar_open") !== "false";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("sprint_sidebar_open", String(isSidebarOpen));
+  }, [isSidebarOpen]);
+
+  useEffect(() => {
+    if (activeCompanyId && boards.length === 0) {
+      loadBoards(activeCompanyId);
+    }
+  }, [activeCompanyId, boards.length]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -235,33 +254,57 @@ export const SprintBoardView: React.FC = () => {
     selectedMemberFilters.length > 0;
 
   return (
-    <div className="flex-1 flex flex-col h-[calc(100vh-65px)] overflow-hidden bg-background">
-      {/* Board Top Header seguindo o design do sistema */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 bg-card border-b border-border shrink-0">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate("/sprint")}
-            className="h-8 w-8 text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
+    <div className="flex-1 flex h-[calc(100vh-65px)] overflow-hidden bg-background">
+      {/* Sidebar com Lista de Quadros */}
+      <SprintSidebar
+        isOpen={isSidebarOpen}
+        onToggle={() => setIsSidebarOpen((prev) => !prev)}
+      />
 
-          <div className="flex items-center gap-2">
-            <div
-              className="h-3 w-3 rounded-full shrink-0"
-              style={{ backgroundColor: currentBoard.background_value }}
-            />
-            <h1 className="text-base md:text-lg font-bold text-foreground tracking-tight font-['Sora']">
-              {currentBoard.title}
-            </h1>
+      {/* Conteúdo Principal do Quadro */}
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+        {/* Board Top Header seguindo o design do sistema */}
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 md:px-6 py-3 bg-card border-b border-border shrink-0">
+          <div className="flex items-center gap-2 md:gap-3 min-w-0">
+            {/* Botão de Toggle da Sidebar de Quadros */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsSidebarOpen((prev) => !prev)}
+              className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0"
+              title={isSidebarOpen ? "Recolher lista de quadros" : "Expandir lista de quadros"}
+            >
+              <PanelLeft className="h-4 w-4" />
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate("/sprint")}
+              className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0"
+              title="Voltar para todos os quadros"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+
+            <div className="flex items-center gap-2 min-w-0">
+              <div
+                className="h-3 w-3 rounded-full shrink-0 shadow-2xs"
+                style={{ backgroundColor: currentBoard.background_value }}
+              />
+              <h1 className="text-base md:text-lg font-bold text-foreground tracking-tight font-['Sora'] truncate max-w-[180px] sm:max-w-xs md:max-w-md">
+                {currentBoard.title}
+              </h1>
+            </div>
+
+            <button
+              onClick={() => updateBoard(currentBoard.id, { is_favorite: !currentBoard.is_favorite })}
+              className="text-muted-foreground hover:text-amber-500 transition-colors ml-1 cursor-pointer shrink-0"
+              title={currentBoard.is_favorite ? "Remover dos favoritos" : "Favoritar quadro"}
+            >
+              <Star className={cn("h-4 w-4", currentBoard.is_favorite && "fill-amber-500 text-amber-500")} />
+            </button>
           </div>
-
-          <button className="text-muted-foreground hover:text-amber-500 transition-colors ml-1 cursor-pointer">
-            <Star className={cn("h-4 w-4", currentBoard.is_favorite && "fill-amber-500 text-amber-500")} />
-          </button>
-        </div>
 
         {/* Filtros e Ações */}
         <div className="flex items-center gap-2 flex-wrap">
@@ -453,6 +496,7 @@ export const SprintBoardView: React.FC = () => {
             )}
           </DragOverlay>
         </DndContext>
+      </div>
       </div>
 
       <SprintCardModal />
