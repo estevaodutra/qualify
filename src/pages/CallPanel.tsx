@@ -1206,7 +1206,7 @@ export default function CallPanel() {
   useEffect(() => {
     if (!user) return;
     const channel = supabase
-      .channel("call-panel-workflow-tasks-realtime")
+      .channel(`call-panel-workflow-tasks-realtime-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "workflow_call_tasks" },

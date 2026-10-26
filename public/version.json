@@ -1,6 +1,6 @@
 {
-  "commit": "f329e7f56db25f3bf3eca4773183acc9664680d7",
-  "shortCommit": "f329e7f",
-  "message": "feat(sprint): incluir metricas de evolucao da sprint nos cards de quadros",
-  "builtAt": "2026-10-26T20:18:31.727Z"
+  "commit": "716d44078ba58b36ce6b08db420f4485cddf247f",
+  "shortCommit": "716d440",
+  "message": "feat(broadcasts): nova funcionalidade de disparos em massa com selecao de audiencia, execucao de fluxos, agendamento e cadencia anti-ban",
+  "builtAt": "2026-10-26T20:32:23.841Z"
 }

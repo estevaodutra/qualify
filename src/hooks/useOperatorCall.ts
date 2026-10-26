@@ -117,7 +117,7 @@ export function useOperatorCall() {
     }
 
     const channel = supabase
-      .channel(`call-log-${callId}`)
+      .channel(`call-log-${callId}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`)
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "call_logs", filter: `id=eq.${callId}` },
@@ -252,7 +252,7 @@ export function useOperatorCall() {
     if (!operator) return;
 
     const channel = supabase
-      .channel(`operator-${operator.id}`)
+      .channel(`operator-${operator.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`)
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "call_operators", filter: `id=eq.${operator.id}` },
