@@ -1,6 +1,6 @@
 {
-  "commit": "d92c90485b8a2139e1de230c85f0ad8d3df29ae2",
-  "shortCommit": "d92c904",
-  "message": "fix(sidebar): corrigir corte da sidebar colapsada pela header e alinhar espacamento",
-  "builtAt": "2026-10-26T21:50:01.146Z"
+  "commit": "ad939ef984ae1568246c92c87d041295855d8b83",
+  "shortCommit": "ad939ef",
+  "message": "feat(layout): simplificar header e mover sign out com perfil para o footer da sidebar",
+  "builtAt": "2026-10-26T21:54:48.730Z"
 }

@@ -4,6 +4,7 @@ import {
   Phone,
   Users,
   UserSearch,
+  Radio,
   MessageSquare,
   Share2,
   Box,
@@ -51,6 +52,7 @@ export const TOP_NAV_ITEMS: NavItem[] = [
   { id: "call-panel", title: "Call Panel", url: "/painel-ligacoes", icon: Phone },
   { id: "leads", title: "Leads", url: "/leads", icon: Users },
   { id: "groups", title: "Groups", url: "/groups", icon: UserSearch },
+  { id: "disparos", title: "Disparos", url: "/disparos", icon: Radio },
   { id: "chat", title: "Chat", url: "/chat", icon: MessageSquare },
   { id: "workflows", title: "Workflows", url: "/workflows", icon: Share2 },
 ];

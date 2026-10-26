@@ -289,29 +289,6 @@ export function AppSidebar() {
 
           {/* SECTION: APPS */}
           <div>
-            {!isCollapsed ? (
-              <div
-                onClick={() => handleAppsOpenChange(!appsOpen)}
-                className="flex items-center justify-between px-3 py-1.5 cursor-pointer select-none group"
-              >
-                <span className="text-[10.5px] font-bold text-slate-400 tracking-wider uppercase group-hover:text-slate-600 transition-colors">
-                  APPS
-                </span>
-                <button
-                  type="button"
-                  className="text-slate-400 group-hover:text-slate-600 transition-colors"
-                >
-                  {appsOpen ? (
-                    <ChevronUp className="h-3.5 w-3.5" />
-                  ) : (
-                    <ChevronDown className="h-3.5 w-3.5" />
-                  )}
-                </button>
-              </div>
-            ) : (
-              <div className="h-[1px] bg-slate-200/60 my-2 mx-2" />
-            )}
-
             <SidebarMenu className="gap-1">
               <SidebarMenuItem>
                 {isCollapsed ? (
@@ -362,12 +339,18 @@ export function AppSidebar() {
                       <button
                         type="button"
                         className={cn(
-                          "flex items-center gap-3.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[#334155] hover:bg-slate-100/70 hover:text-slate-900 transition-all w-full text-left cursor-pointer",
-                          isAppsRoute && !appsOpen && "bg-[#EEF0FD] text-[#5856d6] font-semibold"
+                          "relative flex items-center gap-3.5 px-3 py-2 rounded-xl text-[13px] font-medium transition-all w-full text-left cursor-pointer",
+                          isAppsRoute && !appsOpen
+                            ? "bg-[#EEF0FD] text-[#5856d6] font-semibold"
+                            : "text-[#334155] hover:bg-slate-100/70 hover:text-slate-900"
                         )}
                       >
-                        <Box className="h-[18px] w-[18px] shrink-0 text-[#334155]" />
+                        {isAppsRoute && !appsOpen && (
+                          <span className="absolute left-0 top-2 bottom-2 w-[3px] bg-[#5856d6] rounded-r-full" />
+                        )}
+                        <Box className={cn("h-[18px] w-[18px] shrink-0", isAppsRoute && !appsOpen ? "text-[#5856d6]" : "text-[#334155]")} />
                         <span className="flex-1">Apps</span>
+                        <ChevronRight className={cn("h-3.5 w-3.5 text-slate-400 transition-transform duration-200", appsOpen && "rotate-90")} />
                       </button>
                     </CollapsibleTrigger>
                     <CollapsibleContent className="pt-0.5">
