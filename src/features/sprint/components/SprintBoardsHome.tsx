@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSprintStore } from "../state/sprintStore";
+import { SprintBoard } from "../types";
 import {
   Plus,
   Star,
@@ -10,6 +11,8 @@ import {
   Layout,
   Layers,
   ArrowRight,
+  TrendingUp,
+  CheckSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +34,113 @@ const BG_PRESETS = [
   { name: "Rosa", value: "#ec4899" },
   { name: "Grafite", value: "#475569" },
 ];
+
+const SprintBoardCard: React.FC<{
+  board: SprintBoard;
+  onClick: () => void;
+}> = ({ board, onClick }) => {
+  const metrics = board.metrics || {
+    total_cards: board.cards_count || 0,
+    completed_cards: 0,
+    in_progress_cards: 0,
+    pending_cards: board.cards_count || 0,
+    progress_percent: 0,
+    total_checklists: 0,
+    completed_checklists: 0,
+    members_count: 0,
+  };
+
+  const isCompleted = metrics.total_cards > 0 && metrics.progress_percent === 100;
+
+  return (
+    <div
+      onClick={onClick}
+      className="group relative rounded-xl border border-border bg-card hover:border-primary/50 shadow-xs hover:shadow-md transition-all p-4 cursor-pointer flex flex-col justify-between min-h-[172px] overflow-hidden gap-3"
+    >
+      <div
+        className="absolute top-0 left-0 right-0 h-1.5"
+        style={{ backgroundColor: board.background_value }}
+      />
+
+      {/* Cabeçalho */}
+      <div>
+        <div className="flex items-start justify-between gap-2 pt-0.5">
+          <h3 className="font-semibold text-foreground text-sm leading-tight group-hover:text-primary transition-colors line-clamp-1">
+            {board.title}
+          </h3>
+          {board.is_favorite && (
+            <Star className="h-4 w-4 fill-amber-500 text-amber-500 shrink-0" />
+          )}
+        </div>
+        {board.description && (
+          <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+            {board.description}
+          </p>
+        )}
+      </div>
+
+      {/* Métricas de Evolução do Sprint */}
+      <div className="space-y-2 py-0.5">
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
+            <TrendingUp className="h-3.5 w-3.5 text-primary" />
+            <span>Evolução do Sprint</span>
+          </span>
+          <span
+            className={cn(
+              "text-[11px] font-bold px-1.5 py-0.5 rounded-md",
+              isCompleted
+                ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                : metrics.progress_percent > 0
+                ? "bg-primary/10 text-primary"
+                : "bg-muted text-muted-foreground"
+            )}
+          >
+            {metrics.progress_percent}%
+          </span>
+        </div>
+
+        {/* Barra de Progresso da Evolução */}
+        <div className="h-1.5 w-full bg-muted/60 rounded-full overflow-hidden">
+          <div
+            className={cn(
+              "h-full rounded-full transition-all duration-500",
+              isCompleted ? "bg-emerald-500" : "bg-primary"
+            )}
+            style={{ width: `${Math.max(metrics.progress_percent, metrics.total_cards > 0 ? 3 : 0)}%` }}
+          />
+        </div>
+
+        {/* Contadores e Indicadores */}
+        <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-0.5">
+          <span className="flex items-center gap-1">
+            <strong className="text-foreground font-semibold">{metrics.completed_cards}</strong>/{metrics.total_cards} tarefas
+          </span>
+          {metrics.in_progress_cards > 0 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium">
+              {metrics.in_progress_cards} em andamento
+            </span>
+          )}
+          {metrics.total_checklists > 0 && (
+            <span
+              className="text-[10px] flex items-center gap-1 text-muted-foreground"
+              title="Subtarefas de checklist concluídas"
+            >
+              <CheckSquare className="h-3 w-3 text-primary/70" />
+              <span>{metrics.completed_checklists}/{metrics.total_checklists}</span>
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Rodapé */}
+      <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-2 border-t border-border/40 mt-auto">
+        <span className="group-hover:text-primary transition-colors">Abrir quadro</span>
+        <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 group-hover:text-primary transition-all" />
+      </div>
+    </div>
+  );
+};
 
 export const SprintBoardsHome: React.FC = () => {
   const navigate = useNavigate();
@@ -112,31 +222,11 @@ export const SprintBoardsHome: React.FC = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {favoriteBoards.map((board) => (
-              <div
+              <SprintBoardCard
                 key={board.id}
+                board={board}
                 onClick={() => navigate(`/sprint/b/${board.id}`)}
-                className="group relative rounded-xl border border-border bg-card hover:border-primary/50 shadow-xs hover:shadow-md transition-all p-4 cursor-pointer flex flex-col justify-between h-32 overflow-hidden"
-              >
-                <div
-                  className="absolute top-0 left-0 right-0 h-1.5"
-                  style={{ backgroundColor: board.background_value }}
-                />
-                <div className="flex items-start justify-between gap-2 pt-1">
-                  <h3 className="font-semibold text-foreground text-sm leading-tight group-hover:text-primary transition-colors">
-                    {board.title}
-                  </h3>
-                  <Star className="h-4 w-4 fill-amber-500 text-amber-500 shrink-0" />
-                </div>
-                {board.description && (
-                  <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
-                    {board.description}
-                  </p>
-                )}
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-2 border-t border-border/40 mt-auto">
-                  <span>Abrir quadro</span>
-                  <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
-                </div>
-              </div>
+              />
             ))}
           </div>
         </div>
@@ -157,34 +247,12 @@ export const SprintBoardsHome: React.FC = () => {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {boards.map((board) => (
-            <div
-              key={board.id}
-              onClick={() => navigate(`/sprint/b/${board.id}`)}
-              className="group relative rounded-xl border border-border bg-card hover:border-primary/50 shadow-xs hover:shadow-md transition-all p-4 cursor-pointer flex flex-col justify-between h-32 overflow-hidden"
-            >
-              <div
-                className="absolute top-0 left-0 right-0 h-1.5"
-                style={{ backgroundColor: board.background_value }}
+              <SprintBoardCard
+                key={board.id}
+                board={board}
+                onClick={() => navigate(`/sprint/b/${board.id}`)}
               />
-              <div className="flex items-start justify-between gap-2 pt-1">
-                <h3 className="font-semibold text-foreground text-sm leading-tight group-hover:text-primary transition-colors">
-                  {board.title}
-                </h3>
-                {board.is_favorite && (
-                  <Star className="h-4 w-4 fill-amber-500 text-amber-500 shrink-0" />
-                )}
-              </div>
-              {board.description && (
-                <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
-                  {board.description}
-                </p>
-              )}
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-2 border-t border-border/40 mt-auto">
-                <span>Abrir quadro</span>
-                <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
-              </div>
-            </div>
-          ))}
+            ))}
           </div>
         )}
       </div>

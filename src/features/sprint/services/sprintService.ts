@@ -13,7 +13,7 @@ import {
 export const sprintService = {
   // --- BOARDS ---
   async getBoards(companyId: string): Promise<SprintBoard[]> {
-    const { data, error } = await (supabase as any)
+    const { data: boardsData, error } = await (supabase as any)
       .from("sprint_boards")
       .select("*")
       .eq("company_id", companyId)
@@ -21,7 +21,116 @@ export const sprintService = {
       .order("created_at", { ascending: false });
 
     if (error) throw error;
-    return (data || []) as SprintBoard[];
+    if (!boardsData || boardsData.length === 0) return [];
+
+    const boardIds = boardsData.map((b: any) => b.id);
+
+    // Buscar listas para mapear colunas do fluxo
+    const { data: listsData } = await (supabase as any)
+      .from("sprint_lists")
+      .select("id, board_id, title, position")
+      .in("board_id", boardIds)
+      .order("position", { ascending: true });
+
+    // Buscar cartões ativos para computar evolução
+    const { data: cardsData } = await (supabase as any)
+      .from("sprint_cards")
+      .select("id, board_id, list_id, is_completed")
+      .in("board_id", boardIds)
+      .is("archived_at", null);
+
+    const cardIds = (cardsData || []).map((c: any) => c.id);
+
+    // Buscar subtarefas/itens de checklist
+    let checklistItems: any[] = [];
+    if (cardIds.length > 0) {
+      const { data: chkData } = await (supabase as any)
+        .from("sprint_checklist_items")
+        .select("id, card_id, is_completed")
+        .in("card_id", cardIds);
+      checklistItems = chkData || [];
+    }
+
+    const listsByBoard = new Map<string, any[]>();
+    (listsData || []).forEach((l: any) => {
+      if (!listsByBoard.has(l.board_id)) listsByBoard.set(l.board_id, []);
+      listsByBoard.get(l.board_id)!.push(l);
+    });
+
+    const cardsByBoard = new Map<string, any[]>();
+    (cardsData || []).forEach((c: any) => {
+      if (!cardsByBoard.has(c.board_id)) cardsByBoard.set(c.board_id, []);
+      cardsByBoard.get(c.board_id)!.push(c);
+    });
+
+    const checklistsByCard = new Map<string, any[]>();
+    checklistItems.forEach((item: any) => {
+      if (!checklistsByCard.has(item.card_id)) checklistsByCard.set(item.card_id, []);
+      checklistsByCard.get(item.card_id)!.push(item);
+    });
+
+    return boardsData.map((b: any) => {
+      const boardLists = listsByBoard.get(b.id) || [];
+      const boardCards = cardsByBoard.get(b.id) || [];
+      const listMap = new Map(boardLists.map((l: any) => [l.id, (l.title || "").toLowerCase()]));
+
+      let totalCards = boardCards.length;
+      let completedCards = 0;
+      let inProgressCards = 0;
+      let pendingCards = 0;
+
+      let totalChecklistItems = 0;
+      let completedChecklistItems = 0;
+
+      boardCards.forEach((card: any) => {
+        const listTitle = listMap.get(card.list_id) || "";
+        const isDone =
+          card.is_completed ||
+          listTitle.includes("conclu") ||
+          listTitle.includes("finaliz") ||
+          listTitle.includes("done");
+
+        const isInProgress =
+          !isDone &&
+          (listTitle.includes("fazen") ||
+            listTitle.includes("andamento") ||
+            listTitle.includes("doing") ||
+            listTitle.includes("revis"));
+
+        if (isDone) {
+          completedCards++;
+        } else if (isInProgress) {
+          inProgressCards++;
+        } else {
+          pendingCards++;
+        }
+
+        const chkList = checklistsByCard.get(card.id) || [];
+        totalChecklistItems += chkList.length;
+        completedChecklistItems += chkList.filter((it: any) => it.is_completed).length;
+      });
+
+      let progressPercent = 0;
+      if (totalCards > 0) {
+        progressPercent = Math.round((completedCards / totalCards) * 100);
+      }
+
+      return {
+        ...b,
+        lists_count: boardLists.length,
+        cards_count: totalCards,
+        metrics: {
+          total_cards: totalCards,
+          completed_cards: completedCards,
+          in_progress_cards: inProgressCards,
+          pending_cards: pendingCards,
+          progress_percent: progressPercent,
+          total_checklists: totalChecklistItems,
+          completed_checklists: completedChecklistItems,
+          members_count: 0,
+        },
+      } as SprintBoard;
+    });
   },
 
   async createBoard(params: {

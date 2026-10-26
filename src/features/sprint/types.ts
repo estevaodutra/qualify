@@ -1,3 +1,14 @@
+export interface SprintBoardMetrics {
+  total_cards: number;
+  completed_cards: number;
+  in_progress_cards: number;
+  pending_cards: number;
+  progress_percent: number;
+  total_checklists: number;
+  completed_checklists: number;
+  members_count: number;
+}
+
 export interface SprintBoard {
   id: string;
   company_id: string;
@@ -12,6 +23,7 @@ export interface SprintBoard {
   // Computed / aggregated
   lists_count?: number;
   cards_count?: number;
+  metrics?: SprintBoardMetrics;
 }
 
 export interface SprintLabel {
