@@ -34,7 +34,7 @@ export const SprintMentionRenderer: React.FC<SprintMentionRendererProps> = ({
   const { user } = useAuth();
   const { members = [] } = useCompanyMembers();
 
-  const regex = useMemo(() => {
+  const mentionPattern = useMemo(() => {
     const namesSet = new Set<string>();
 
     members.forEach((m) => {
@@ -55,7 +55,6 @@ export const SprintMentionRenderer: React.FC<SprintMentionRendererProps> = ({
       if (uName?.trim()) namesSet.add(uName.trim());
     }
 
-    // Ordenar por tamanho decrescente para priorizar nomes completos ("Pablo Santana" antes de "Pablo")
     const sorted = Array.from(namesSet)
       .filter((n) => n.length > 0)
       .sort((a, b) => b.length - a.length);
@@ -72,33 +71,255 @@ export const SprintMentionRenderer: React.FC<SprintMentionRendererProps> = ({
     // Fallback: Qualquer palavra única após @ (ex: @pablo ou @usuario)
     patterns.push(`[\\wÀ-ÿ0-9_.-]+`);
 
-    return new RegExp(`(@(?:${patterns.join("|")}))`, "g");
+    return `@(?:${patterns.join("|")})`;
   }, [members, user]);
 
   if (!text) return null;
 
-  const parts = text.split(regex);
+  // Renderiza tokens inline (Negrito *, Itálico _, Tachado ~, Código `, Menção @)
+  const renderInlineTokens = (line: string, keyPrefix: string): React.ReactNode => {
+    // Regex para tokens inline seguindo regras do WhatsApp
+    const tokenRegex = new RegExp(
+      `(\`[^\`\\n]+\`)|` +
+      `(${mentionPattern})|` +
+      `(?:(?<=[^\\wÀ-ÿ*]|^)\\*(?!\\s)([^*\\n]+?)(?<!\\s)\\*(?=[^\\wÀ-ÿ*]|$))|` +
+      `(?:(?<=[^\\wÀ-ÿ_]|^)_(?!\\s)([^_\\n]+?)(?<!\\s)_(?=[^\\wÀ-ÿ_]|$))|` +
+      `(?:(?<=[^\\wÀ-ÿ~]|^)~(?!\s)([^~\\n]+?)(?<!\\s)~(?=[^\\wÀ-ÿ~]|$))`,
+      "g"
+    );
 
-  return (
-    <span className={cn("inline leading-normal", className)}>
-      {parts.map((part, index) => {
-        if (part.startsWith("@") && part.length > 1) {
-          return (
-            <span
-              key={index}
-              className={cn(
-                "inline-flex items-center px-1.5 py-0.5 mx-0.5 rounded-md text-[11px] font-medium border transition-colors select-none align-baseline",
-                isCompleted
-                  ? "bg-blue-500/10 text-blue-400/80 border-blue-500/20 line-through opacity-75"
-                  : "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30 hover:bg-blue-500/20 shadow-2xs"
-              )}
+    const elements: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    let tokenIdx = 0;
+
+    while ((match = tokenRegex.exec(line)) !== null) {
+      if (match.index > lastIndex) {
+        elements.push(
+          <React.Fragment key={`${keyPrefix}-txt-${tokenIdx++}`}>
+            {line.slice(lastIndex, match.index)}
+          </React.Fragment>
+        );
+      }
+
+      if (match[1]) {
+        // Código inline: `código`
+        elements.push(
+          <code
+            key={`${keyPrefix}-code-${tokenIdx++}`}
+            className="px-1.5 py-0.5 mx-0.5 rounded bg-muted font-mono text-[11px] text-foreground border border-border/60"
+          >
+            {match[1].slice(1, -1)}
+          </code>
+        );
+      } else if (match[2]) {
+        // Menção: @Nome
+        elements.push(
+          <span
+            key={`${keyPrefix}-men-${tokenIdx++}`}
+            className={cn(
+              "inline-flex items-center px-1.5 py-0.5 mx-0.5 rounded-md text-[11px] font-medium border transition-colors select-none align-baseline",
+              isCompleted
+                ? "bg-blue-500/10 text-blue-400/80 border-blue-500/20 line-through opacity-75"
+                : "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30 hover:bg-blue-500/20 shadow-2xs"
+            )}
+          >
+            {match[2]}
+          </span>
+        );
+      } else if (match[3]) {
+        // Negrito: *texto*
+        elements.push(
+          <strong key={`${keyPrefix}-b-${tokenIdx++}`} className="font-bold text-foreground">
+            {renderInlineTokens(match[3], `${keyPrefix}-b`)}
+          </strong>
+        );
+      } else if (match[4]) {
+        // Itálico: _texto_
+        elements.push(
+          <em key={`${keyPrefix}-i-${tokenIdx++}`} className="italic">
+            {renderInlineTokens(match[4], `${keyPrefix}-i`)}
+          </em>
+        );
+      } else if (match[5]) {
+        // Tachado: ~texto~
+        elements.push(
+          <del key={`${keyPrefix}-s-${tokenIdx++}`} className="line-through opacity-80">
+            {renderInlineTokens(match[5], `${keyPrefix}-s`)}
+          </del>
+        );
+      }
+
+      lastIndex = tokenRegex.lastIndex;
+    }
+
+    if (lastIndex < line.length) {
+      elements.push(
+        <React.Fragment key={`${keyPrefix}-txt-end`}>
+          {line.slice(lastIndex)}
+        </React.Fragment>
+      );
+    }
+
+    return elements;
+  };
+
+  // Se for texto de uma linha só sem blocos estruturais (ex: títulos de cartões ou itens de checklist simples)
+  if (!text.includes("\n") && !text.startsWith(">") && !text.startsWith("```")) {
+    return (
+      <span className={cn("inline leading-normal", className)}>
+        {renderInlineTokens(text, "single")}
+      </span>
+    );
+  }
+
+  // Parse de blocos para textos de múltiplas linhas (descrições, comentários, etc.)
+  const renderBlocks = () => {
+    const blocks: React.ReactNode[] = [];
+    const codeBlockRegex = /```([\s\S]*?)```/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    let blockIdx = 0;
+
+    const processTextChunk = (chunk: string) => {
+      const lines = chunk.split("\n");
+      let currentQuote: string[] = [];
+      let currentBulletList: string[] = [];
+      let currentNumberList: { num: string; text: string }[] = [];
+
+      const flushQuote = () => {
+        if (currentQuote.length > 0) {
+          const qIdx = blockIdx++;
+          blocks.push(
+            <blockquote
+              key={`quote-${qIdx}`}
+              className="border-l-3 border-primary/70 bg-primary/5 pl-3 py-1 my-1.5 rounded-r text-xs md:text-sm text-muted-foreground italic space-y-0.5"
             >
-              {part}
-            </span>
+              {currentQuote.map((qLine, i) => (
+                <div key={i}>{renderInlineTokens(qLine, `q-${qIdx}-${i}`)}</div>
+              ))}
+            </blockquote>
+          );
+          currentQuote = [];
+        }
+      };
+
+      const flushBulletList = () => {
+        if (currentBulletList.length > 0) {
+          const bIdx = blockIdx++;
+          blocks.push(
+            <ul key={`blist-${bIdx}`} className="space-y-1 my-1.5 pl-2 text-xs md:text-sm">
+              {currentBulletList.map((item, i) => (
+                <li key={i} className="flex items-start gap-2">
+                  <span className="text-primary font-bold select-none leading-relaxed">•</span>
+                  <div className="flex-1 leading-relaxed">
+                    {renderInlineTokens(item, `bitem-${bIdx}-${i}`)}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          );
+          currentBulletList = [];
+        }
+      };
+
+      const flushNumberList = () => {
+        if (currentNumberList.length > 0) {
+          const nIdx = blockIdx++;
+          blocks.push(
+            <ol key={`nlist-${nIdx}`} className="space-y-1 my-1.5 pl-2 text-xs md:text-sm">
+              {currentNumberList.map((item, i) => (
+                <li key={i} className="flex items-start gap-2">
+                  <span className="text-primary font-semibold select-none text-[11px] min-w-4 leading-relaxed">
+                    {item.num}.
+                  </span>
+                  <div className="flex-1 leading-relaxed">
+                    {renderInlineTokens(item.text, `nitem-${nIdx}-${i}`)}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          );
+          currentNumberList = [];
+        }
+      };
+
+      const flushAll = () => {
+        flushQuote();
+        flushBulletList();
+        flushNumberList();
+      };
+
+      lines.forEach((line, lIdx) => {
+        // Citação do WhatsApp: "> texto"
+        const quoteMatch = line.match(/^>\s?(.*)$/);
+        if (quoteMatch) {
+          flushBulletList();
+          flushNumberList();
+          currentQuote.push(quoteMatch[1]);
+          return;
+        }
+        flushQuote();
+
+        // Lista com marcadores do WhatsApp: "* item" ou "- item"
+        const bulletMatch = line.match(/^[\*\-]\s+(.*)$/);
+        if (bulletMatch) {
+          flushNumberList();
+          currentBulletList.push(bulletMatch[1]);
+          return;
+        }
+        flushBulletList();
+
+        // Lista numerada do WhatsApp: "1. item"
+        const numberMatch = line.match(/^(\d+)\.\s+(.*)$/);
+        if (numberMatch) {
+          currentNumberList.push({ num: numberMatch[1], text: numberMatch[2] });
+          return;
+        }
+        flushNumberList();
+
+        // Linha comum
+        if (line.trim() === "") {
+          blocks.push(<div key={`space-${blockIdx++}-${lIdx}`} className="h-2" />);
+        } else {
+          blocks.push(
+            <div key={`line-${blockIdx++}-${lIdx}`} className="min-h-[1.25rem] leading-relaxed">
+              {renderInlineTokens(line, `l-${blockIdx}-${lIdx}`)}
+            </div>
           );
         }
-        return <React.Fragment key={index}>{part}</React.Fragment>;
-      })}
-    </span>
+      });
+
+      flushAll();
+    };
+
+    while ((match = codeBlockRegex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        processTextChunk(text.slice(lastIndex, match.index));
+      }
+      const cIdx = blockIdx++;
+      const codeContent = match[1].replace(/^\n+|\n+$/g, "");
+      blocks.push(
+        <pre
+          key={`code-block-${cIdx}`}
+          className="bg-muted/60 text-foreground p-3 rounded-xl font-mono text-xs overflow-x-auto my-2 border border-border/70 shadow-xs"
+        >
+          <code>{codeContent}</code>
+        </pre>
+      );
+      lastIndex = codeBlockRegex.lastIndex;
+    }
+
+    if (lastIndex < text.length) {
+      processTextChunk(text.slice(lastIndex));
+    }
+
+    return blocks;
+  };
+
+  return (
+    <div className={cn("leading-relaxed break-words", className)}>
+      {renderBlocks()}
+    </div>
   );
 };

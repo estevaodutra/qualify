@@ -469,7 +469,9 @@ export const SprintCardModal: React.FC = () => {
                   <SprintMentionTextarea
                     value={description}
                     onChange={setDescription}
-                    placeholder="Adicione uma descrição detalhada... (use @ para mencionar)"
+                    minHeight={96}
+                    showToolbar={true}
+                    placeholder="Adicione uma descrição detalhada... (use @ para mencionar, *negrito*, _itálico_, ~tachado~, > citação, - listas)"
                     onMentionSelected={(m) => {
                       autoAssignMemberMention(activeCard.id, {
                         user_id: m.user_id,
@@ -605,7 +607,9 @@ export const SprintCardModal: React.FC = () => {
                   value={newComment}
                   onChange={setNewComment}
                   rows={2}
-                  placeholder="Escreva um comentário... (use @ para citar alguém)"
+                  minHeight={64}
+                  showToolbar={false}
+                  placeholder="Escreva um comentário... (use @ para citar alguém, *negrito*, _itálico_)"
                   onMentionSelected={(m) => {
                     autoAssignMemberMention(activeCard.id, {
                       user_id: m.user_id,
