@@ -1,6 +1,6 @@
 {
-  "commit": "70165a111ddf85d72986bbe7764c07d993a23393",
-  "shortCommit": "70165a1",
-  "message": "fix(chat): remove badge visivel de ID da conversa do cabecalho",
-  "builtAt": "2026-10-26T21:08:18.157Z"
+  "commit": "4bd3956d89a00de366eb5ecb6d9e0677b0b7ab0b",
+  "shortCommit": "4bd3956",
+  "message": "feat(sidebar): atualizar design para layout clean com header centralizada",
+  "builtAt": "2026-10-26T21:19:40.793Z"
 }

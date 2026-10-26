@@ -108,7 +108,7 @@ export function AppSidebar() {
           <div className="relative flex items-center justify-center w-full px-4 pt-5 pb-3">
             <div className="flex items-center justify-center">
               <img
-                src="/logo-sidebar-light.png"
+                src="/logo_sidebar_open.png"
                 alt="Qualify"
                 className="h-7 w-auto object-contain"
               />
