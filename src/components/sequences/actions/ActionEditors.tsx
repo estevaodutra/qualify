@@ -25,6 +25,7 @@ import {
   fetchAllTagsWithAutoSync,
   notifyTagsUpdated,
 } from "@/lib/tags/tagService";
+import { PipelineSelect } from "@/components/crm/pipelines/PipelineSelect";
 
 interface ActionEditorsProps {
   actionDef: ActionDefinition;
@@ -42,6 +43,7 @@ export const ActionEditors: React.FC<ActionEditorsProps> = ({
   customFieldsMetadata,
 }) => {
   const [pipelines, setPipelines] = useState<any[]>([]);
+  const [pipelineGroups, setPipelineGroups] = useState<any[]>([]);
   const [pipelineStages, setPipelineStages] = useState<any[]>([]);
   const [availableTags, setAvailableTags] = useState<CompanyTag[]>([]);
   const [companyMembers, setCompanyMembers] = useState<any[]>([]);
@@ -52,10 +54,18 @@ export const ActionEditors: React.FC<ActionEditorsProps> = ({
     const loadResources = async () => {
       if (!activeCompanyId) return;
       try {
-        // Pipelines
+        // Pipeline Groups
+        const { data: gData } = await supabase
+          .from("pipeline_groups")
+          .select("id, name, order_index")
+          .eq("company_id", activeCompanyId)
+          .order("order_index", { ascending: true });
+        if (gData) setPipelineGroups(gData);
+
+        // Pipelines with group join
         const { data: pData } = await supabase
           .from("pipelines")
-          .select("id, name, status")
+          .select("id, name, status, group_id, order_index, pipeline_groups(id, name, order_index)")
           .eq("company_id", activeCompanyId)
           .eq("status", "active")
           .order("order_index", { ascending: true });
@@ -527,7 +537,7 @@ export const ActionEditors: React.FC<ActionEditorsProps> = ({
           <div className="space-y-3 text-xs">
             <div className="space-y-1">
               <Label className="text-[11px] font-semibold text-slate-700">Pipeline</Label>
-              <Select
+              <PipelineSelect
                 value={pipelineId}
                 onValueChange={(v) => {
                   onChangeConfig({
@@ -539,18 +549,11 @@ export const ActionEditors: React.FC<ActionEditorsProps> = ({
                     },
                   });
                 }}
-              >
-                <SelectTrigger className="h-8 rounded-xl border-slate-200 text-xs">
-                  <SelectValue placeholder="Selecionar pipeline..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {pipelines.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                pipelines={pipelines}
+                pipelineGroups={pipelineGroups}
+                activeCompanyId={activeCompanyId}
+                triggerClassName="h-8"
+              />
             </div>
 
             <div className="space-y-1">
@@ -624,7 +627,7 @@ export const ActionEditors: React.FC<ActionEditorsProps> = ({
           <div className="space-y-3 text-xs">
             <div className="space-y-1">
               <Label className="text-[11px] font-semibold text-slate-700">Pipeline Destino</Label>
-              <Select
+              <PipelineSelect
                 value={pipelineId}
                 onValueChange={(v) => {
                   onChangeConfig({
@@ -636,18 +639,11 @@ export const ActionEditors: React.FC<ActionEditorsProps> = ({
                     },
                   });
                 }}
-              >
-                <SelectTrigger className="h-8 rounded-xl border-slate-200 text-xs">
-                  <SelectValue placeholder="Selecionar pipeline..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {pipelines.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                pipelines={pipelines}
+                pipelineGroups={pipelineGroups}
+                activeCompanyId={activeCompanyId}
+                triggerClassName="h-8"
+              />
             </div>
 
             <div className="space-y-1">

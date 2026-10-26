@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import { Pipeline, PipelineStage } from "@/types/crm.types";
 import { Plus, Loader2, Award, Calendar, DollarSign, FileText } from "lucide-react";
 import { dispatchWorkflowForDealMove } from "@/lib/workflow-dispatcher";
+import { PipelineSelect } from "@/components/crm/pipelines/PipelineSelect";
 
 interface CreateDealDialogProps {
   open: boolean;
@@ -71,7 +72,7 @@ export function CreateDealDialog({
       if (!activeCompanyId) return [];
       const { data, error } = await supabase
         .from("pipelines")
-        .select("*, stages:pipeline_stages(*)")
+        .select("*, stages:pipeline_stages(*), pipeline_groups(id, name, order_index)")
         .eq("company_id", activeCompanyId)
         .order("order_index", { ascending: true });
 
@@ -183,22 +184,15 @@ export function CreateDealDialog({
             {/* Pipeline */}
             <div className="space-y-1">
               <Label className="text-xs font-semibold">Pipeline *</Label>
-              <Select
+              <PipelineSelect
                 value={selectedPipelineId}
                 onValueChange={(val) => setSelectedPipelineId(val)}
+                pipelines={pipelines as any}
                 disabled={isLoadingPipelines}
-              >
-                <SelectTrigger className="h-8 text-xs rounded-xl border-border/50 bg-background/50">
-                  <SelectValue placeholder="Selecione..." />
-                </SelectTrigger>
-                <SelectContent className="z-[10000]">
-                  {pipelines.map((p) => (
-                    <SelectItem key={p.id} value={p.id} className="text-xs">
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                triggerClassName="h-8 text-xs rounded-xl border-border/50 bg-background/50"
+                contentClassName="z-[10000]"
+                placeholder="Selecione..."
+              />
             </div>
 
             {/* Etapa */}

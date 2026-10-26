@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { dispatchWorkflowForDealMove } from "@/lib/workflow-dispatcher";
 import { Deal, Pipeline } from "@/types/crm.types";
 import { GitBranch, Loader2, ArrowRight } from "lucide-react";
+import { PipelineSelect } from "@/components/crm/pipelines/PipelineSelect";
 
 interface MoveDealPipelineDialogProps {
   open: boolean;
@@ -49,7 +50,7 @@ export function MoveDealPipelineDialog({
       if (!activeCompanyId) return [];
       const { data, error } = await supabase
         .from("pipelines")
-        .select("*, stages:pipeline_stages(*)")
+        .select("*, stages:pipeline_stages(*), pipeline_groups(id, name, order_index)")
         .eq("company_id", activeCompanyId)
         .order("order_index", { ascending: true });
 
@@ -137,22 +138,15 @@ export function MoveDealPipelineDialog({
           {/* Pipeline de Destino */}
           <div className="space-y-1">
             <Label className="text-xs font-semibold">Pipeline de Destino *</Label>
-            <Select
+            <PipelineSelect
               value={targetPipelineId}
               onValueChange={(val) => setTargetPipelineId(val)}
+              pipelines={pipelines as any}
               disabled={isLoadingPipelines}
-            >
-              <SelectTrigger className="h-8 text-xs rounded-xl border-border/50 bg-background/50">
-                <SelectValue placeholder="Selecione a pipeline..." />
-              </SelectTrigger>
-              <SelectContent className="z-[10000]">
-                {pipelines.map((p) => (
-                  <SelectItem key={p.id} value={p.id} className="text-xs">
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              triggerClassName="h-8 text-xs rounded-xl border-border/50 bg-background/50"
+              contentClassName="z-[10000]"
+              placeholder="Selecione a pipeline..."
+            />
           </div>
 
           {/* Etapa de Destino */}

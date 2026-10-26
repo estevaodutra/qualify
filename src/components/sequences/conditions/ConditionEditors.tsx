@@ -9,6 +9,7 @@ import { AlertCircle, Tag as TagIcon, Layers, Users, FileText, CheckCircle2, XCi
 import { supabase } from "@/integrations/supabase/client";
 import { ConditionDefinition, getConditionOutputs } from "./conditionRegistry";
 import { fetchAllTagsWithAutoSync } from "@/lib/tags/tagService";
+import { PipelineSelect } from "@/components/crm/pipelines/PipelineSelect";
 
 interface ConditionEditorsProps {
   conditionDef: ConditionDefinition;
@@ -26,6 +27,7 @@ export const ConditionEditors: React.FC<ConditionEditorsProps> = ({
   customFieldsMetadata,
 }) => {
   const [pipelines, setPipelines] = useState<any[]>([]);
+  const [pipelineGroups, setPipelineGroups] = useState<any[]>([]);
   const [pipelineStages, setPipelineStages] = useState<any[]>([]);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [companyMembers, setCompanyMembers] = useState<any[]>([]);
@@ -38,10 +40,18 @@ export const ConditionEditors: React.FC<ConditionEditorsProps> = ({
       if (!activeCompanyId) return;
       setLoadingData(true);
       try {
-        // Pipelines
+        // Pipeline Groups
+        const { data: gData } = await supabase
+          .from("pipeline_groups")
+          .select("id, name, order_index")
+          .eq("company_id", activeCompanyId)
+          .order("order_index", { ascending: true });
+        if (gData) setPipelineGroups(gData);
+
+        // Pipelines with group join
         const { data: pData } = await supabase
           .from("pipelines")
-          .select("id, name, status")
+          .select("id, name, status, group_id, order_index, pipeline_groups(id, name, order_index)")
           .eq("company_id", activeCompanyId)
           .eq("status", "active")
           .order("order_index", { ascending: true });
@@ -145,18 +155,13 @@ export const ConditionEditors: React.FC<ConditionEditorsProps> = ({
           <div className="space-y-4">
             <div className="space-y-2">
               <Label className="text-xs font-semibold text-slate-700">Pipeline</Label>
-              <Select value={pipelineId} onValueChange={(v) => updateParam("pipelineId", v)}>
-                <SelectTrigger className="rounded-xl border-slate-200 text-xs">
-                  <SelectValue placeholder="Selecionar pipeline..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {pipelines.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <PipelineSelect
+                value={pipelineId}
+                onValueChange={(v) => updateParam("pipelineId", v)}
+                pipelines={pipelines}
+                pipelineGroups={pipelineGroups}
+                activeCompanyId={activeCompanyId}
+              />
               {isInvalid && (
                 <div className="flex items-center gap-1.5 text-amber-600 text-[11px] mt-1">
                   <AlertCircle className="h-3.5 w-3.5" />
@@ -180,7 +185,7 @@ export const ConditionEditors: React.FC<ConditionEditorsProps> = ({
           <div className="space-y-4">
             <div className="space-y-2">
               <Label className="text-xs font-semibold text-slate-700">Pipeline</Label>
-              <Select
+              <PipelineSelect
                 value={pipelineId}
                 onValueChange={(v) => {
                   onChangeConfig({
@@ -192,18 +197,10 @@ export const ConditionEditors: React.FC<ConditionEditorsProps> = ({
                     },
                   });
                 }}
-              >
-                <SelectTrigger className="rounded-xl border-slate-200 text-xs">
-                  <SelectValue placeholder="Selecionar pipeline..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {pipelines.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                pipelines={pipelines}
+                pipelineGroups={pipelineGroups}
+                activeCompanyId={activeCompanyId}
+              />
             </div>
 
             <div className="space-y-2">
