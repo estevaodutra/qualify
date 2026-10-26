@@ -28,6 +28,7 @@ import { Progress } from "@/components/ui/progress";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SprintMentionInput } from "./SprintMentionInput";
 import { SprintMentionTextarea } from "./SprintMentionTextarea";
+import { SprintChecklistItem } from "../types";
 import { SprintMentionRenderer } from "./SprintMentionRenderer";
 import { extractMentionedUserIds } from "../utils/mentionExtractor";
 import { notifySprintCardMention } from "@/services/notificationService";
@@ -60,24 +61,25 @@ const ChecklistTitleEditor: React.FC<ChecklistTitleEditorProps> = ({ title, onSa
 
   if (isEditing) {
     return (
-      <input
-        type="text"
-        value={val}
-        onChange={(e) => setVal(e.target.value)}
-        onBlur={handleCommit}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            handleCommit();
-          }
-          if (e.key === "Escape") {
-            setIsEditing(false);
-            setVal(title);
-          }
-        }}
-        autoFocus
-        className="font-semibold text-sm bg-background border border-primary px-2 py-0.5 rounded text-foreground focus:outline-none ring-1 ring-primary w-full max-w-sm"
-      />
+      <div className="w-full max-w-sm">
+        <SprintMentionInput
+          value={val}
+          onChange={setVal}
+          onBlur={handleCommit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleCommit();
+            }
+            if (e.key === "Escape") {
+              setIsEditing(false);
+              setVal(title);
+            }
+          }}
+          autoFocus
+          className="font-semibold text-sm bg-background border border-primary px-2 py-0.5 rounded text-foreground focus:outline-none ring-1 ring-primary w-full"
+        />
+      </div>
     );
   }
 
@@ -85,10 +87,112 @@ const ChecklistTitleEditor: React.FC<ChecklistTitleEditorProps> = ({ title, onSa
     <div
       onClick={() => setIsEditing(true)}
       className="group flex items-center gap-1.5 cursor-pointer rounded px-1.5 py-0.5 -ml-1.5 hover:bg-muted/80 transition-colors"
-      title="Clique para editar o título"
+      title="Clique para editar o título com menção (@)"
     >
-      <span className="font-semibold text-sm text-foreground">{title}</span>
+      <SprintMentionRenderer text={title} className="font-semibold text-sm text-foreground" />
       <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+    </div>
+  );
+};
+
+const ChecklistItemRow: React.FC<{
+  item: SprintChecklistItem;
+  onToggle: () => void;
+  onDelete: () => void;
+  onUpdateTitle: (newTitle: string) => void;
+}> = ({ item, onToggle, onDelete, onUpdateTitle }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState(item.title);
+
+  useEffect(() => {
+    setEditText(item.title);
+  }, [item.title]);
+
+  const handleSave = () => {
+    setIsEditing(false);
+    if (editText.trim() && editText.trim() !== item.title) {
+      onUpdateTitle(editText.trim());
+    } else {
+      setEditText(item.title);
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <div className="flex items-center gap-2 py-1 px-1.5 rounded-lg bg-muted/40">
+        <input
+          type="checkbox"
+          checked={item.is_completed}
+          onChange={onToggle}
+          className="h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary shrink-0"
+        />
+        <div className="flex-1 min-w-0">
+          <SprintMentionInput
+            value={editText}
+            onChange={setEditText}
+            onBlur={handleSave}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleSave();
+              }
+              if (e.key === "Escape") {
+                setIsEditing(false);
+                setEditText(item.title);
+              }
+            }}
+            autoFocus
+            className="text-sm bg-background border border-primary px-2 py-1 rounded w-full"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="group flex items-center justify-between gap-3 p-1.5 rounded-lg hover:bg-muted/40 transition-colors">
+      <div className="flex items-center gap-2.5 flex-1 min-w-0">
+        <input
+          type="checkbox"
+          checked={item.is_completed}
+          onChange={onToggle}
+          className="h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary"
+        />
+        <div
+          onClick={() => setIsEditing(true)}
+          className="flex-1 min-w-0 cursor-pointer"
+          title="Clique para editar item com menções (@)"
+        >
+          <SprintMentionRenderer
+            text={item.title}
+            isCompleted={item.is_completed}
+            className={cn(
+              "text-sm break-words",
+              item.is_completed ? "line-through text-muted-foreground" : "text-foreground"
+            )}
+          />
+        </div>
+      </div>
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 text-muted-foreground hover:text-foreground"
+          onClick={() => setIsEditing(true)}
+          title="Editar item com menção (@)"
+        >
+          <Pencil className="h-3 w-3" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 text-muted-foreground hover:text-destructive"
+          onClick={onDelete}
+          title="Excluir item"
+        >
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
     </div>
   );
 };
@@ -113,6 +217,7 @@ export const SprintCardModal: React.FC = () => {
     addChecklistItem,
     toggleChecklistItem,
     deleteChecklistItem,
+    updateChecklistItemTitle,
     toggleCardLabel,
     toggleCardMember,
     autoAssignMemberMention,
@@ -250,14 +355,25 @@ export const SprintCardModal: React.FC = () => {
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-card border-border text-card-foreground p-6 rounded-2xl shadow-xl">
         <DialogHeader className="space-y-1">
           <DialogTitle asChild>
-            <div className="flex items-start justify-between gap-4">
-              <input
-                type="text"
+            <div className="flex items-start justify-between gap-4 w-full">
+              <SprintMentionInput
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={setTitle}
                 onBlur={handleTitleBlur}
-                placeholder="Título do cartão..."
-                className="text-xl font-bold bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none w-full px-1 py-0.5 rounded transition-all text-foreground font-['Sora']"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.currentTarget.blur();
+                  }
+                }}
+                onMentionSelected={(m) => {
+                  autoAssignMemberMention(activeCard.id, {
+                    user_id: m.user_id,
+                    full_name: m.full_name || undefined,
+                    email: m.email || undefined,
+                  });
+                }}
+                placeholder="Título do cartão... (use @ para citar)"
+                className="text-xl font-bold bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none w-full px-1 py-0.5 rounded transition-all text-foreground font-['Sora'] shadow-none"
               />
             </div>
           </DialogTitle>
@@ -426,37 +542,15 @@ export const SprintCardModal: React.FC = () => {
                   {/* Itens do Checklist */}
                   <div className="space-y-1.5 pt-1">
                     {checklist.items.map((item) => (
-                      <div
+                      <ChecklistItemRow
                         key={item.id}
-                        className="group flex items-center justify-between gap-3 p-1.5 rounded-lg hover:bg-muted/40 transition-colors"
-                      >
-                        <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                          <input
-                            type="checkbox"
-                            checked={item.is_completed}
-                            onChange={() => toggleChecklistItem(checklist.id, item.id)}
-                            className="h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <SprintMentionRenderer
-                              text={item.title}
-                              isCompleted={item.is_completed}
-                              className={cn(
-                                "text-sm break-words",
-                                item.is_completed ? "line-through text-muted-foreground" : "text-foreground"
-                              )}
-                            />
-                          </div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
-                          onClick={() => deleteChecklistItem(checklist.id, item.id)}
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
+                        item={item}
+                        onToggle={() => toggleChecklistItem(checklist.id, item.id)}
+                        onDelete={() => deleteChecklistItem(checklist.id, item.id)}
+                        onUpdateTitle={(newTitle) =>
+                          updateChecklistItemTitle(checklist.id, item.id, newTitle)
+                        }
+                      />
                     ))}
 
                     {/* Adicionar Item com Menção */}
@@ -657,12 +751,12 @@ export const SprintCardModal: React.FC = () => {
               {/* Checklist */}
               {isAddingChecklist ? (
                 <form onSubmit={handleCreateChecklist} className="space-y-2 p-2 bg-muted/40 rounded-lg border border-border">
-                  <Input
+                  <SprintMentionInput
                     value={newChecklistTitle}
-                    onChange={(e) => setNewChecklistTitle(e.target.value)}
-                    placeholder="Título do Checklist"
+                    onChange={setNewChecklistTitle}
+                    placeholder="Título do Checklist... (use @)"
                     autoFocus
-                    className="h-7 text-xs"
+                    className="h-7 text-xs bg-background"
                   />
                   <div className="flex gap-1">
                     <Button type="submit" size="sm" className="h-7 text-[11px]">Criar</Button>
