@@ -55,7 +55,7 @@ export const SprintBoardView: React.FC = () => {
   const cardIdParam = searchParams.get("cardId");
   const navigate = useNavigate();
   const { activeCompanyId } = useCompany();
-  const { data: members = [] } = useCompanyMembers();
+  const { members = [] } = useCompanyMembers();
 
   const {
     currentBoard,

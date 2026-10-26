@@ -95,7 +95,7 @@ const ChecklistTitleEditor: React.FC<ChecklistTitleEditorProps> = ({ title, onSa
 
 export const SprintCardModal: React.FC = () => {
   const { user } = useAuth();
-  const { data: members = [] } = useCompanyMembers();
+  const { members = [] } = useCompanyMembers();
   const {
     activeCard,
     activeCardId,

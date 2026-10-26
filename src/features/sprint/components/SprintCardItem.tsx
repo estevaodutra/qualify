@@ -17,7 +17,7 @@ interface SprintCardItemProps {
 
 export const SprintCardItem: React.FC<SprintCardItemProps> = ({ card }) => {
   const { openCardModal, archiveCard } = useSprintStore();
-  const { data: members = [] } = useCompanyMembers();
+  const { members = [] } = useCompanyMembers();
 
   const {
     attributes,

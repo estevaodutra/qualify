@@ -122,6 +122,7 @@ export function useCompanyMembers() {
 
   return {
     members: query.data || [],
+    data: query.data || [],
     isLoading: query.isLoading,
     refetch: query.refetch,
     addMember,

@@ -27,7 +27,7 @@ export const SprintMentionInput: React.FC<SprintMentionInputProps> = ({
   onBlur,
 }) => {
   const { user } = useAuth();
-  const { data: members = [] } = useCompanyMembers();
+  const { members = [] } = useCompanyMembers();
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState<number>(0);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
