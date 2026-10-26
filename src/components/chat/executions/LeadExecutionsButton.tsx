@@ -272,7 +272,7 @@ export default function LeadExecutionsButton({
       <PopoverContent
         side="top"
         align="start"
-        className="w-[420px] max-w-[95vw] p-0 bg-popover/95 backdrop-blur-2xl border border-border/80 rounded-2xl shadow-2xl z-[9990] overflow-hidden flex flex-col max-h-[520px]"
+        className="w-[360px] sm:w-[400px] max-w-[calc(100vw-24px)] p-0 bg-popover/95 backdrop-blur-2xl border border-border/80 rounded-2xl shadow-2xl z-[9990] overflow-hidden flex flex-col max-h-[520px]"
       >
         {/* Header */}
         <div className="p-3.5 border-b border-border/40 bg-card/30 flex items-center justify-between">
@@ -392,7 +392,7 @@ export default function LeadExecutionsButton({
         )}
 
         {/* Body content */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 space-y-2.5">
           {activeTab === "active" ? (
             isLoading && activeExecutions.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-muted-foreground space-y-2">
@@ -424,7 +424,7 @@ export default function LeadExecutionsButton({
               activeExecutions.map((exec) => (
                 <div
                   key={exec.id}
-                  className="p-3 rounded-xl border border-border/60 bg-card/60 hover:border-primary/30 transition-all shadow-sm space-y-2 text-xs"
+                  className="p-3 rounded-xl border border-border/60 bg-card/60 hover:border-primary/30 transition-all shadow-sm space-y-2.5 text-xs"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
@@ -432,62 +432,16 @@ export default function LeadExecutionsButton({
                         <GitBranch className="h-3.5 w-3.5 text-primary shrink-0" />
                         {exec.sequenceName}
                       </p>
-                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-0.5 flex-wrap">
-                        <span>Iniciado {formatRelativeTime(exec.startedAt)}</span>
-                        <span>•</span>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigator.clipboard.writeText(exec.id);
-                            toast.success("ID da execução copiado!");
-                          }}
-                          className="inline-flex items-center gap-1 font-mono text-[10px] text-muted-foreground hover:text-foreground bg-muted/60 hover:bg-muted px-1.5 py-0.5 rounded transition-colors group/copy border border-border/40 cursor-pointer"
-                          title={`ID da Execução: ${exec.id}\nClique para copiar`}
-                        >
-                          <span className="font-semibold text-foreground/70">ID:</span>
-                          <span>{exec.id.slice(0, 8)}...</span>
-                          <Copy className="h-2.5 w-2.5 opacity-60 group-hover/copy:opacity-100 shrink-0" />
-                        </button>
-                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        Iniciado {formatRelativeTime(exec.startedAt)}
+                      </p>
                     </div>
 
                     {renderStatusBadge(exec.status)}
                   </div>
 
-                  {/* Step info with precise node and live countdown */}
-                  {exec.status === "waiting_delay" || exec.waitingType === "delay" ? (
-                    <div className="p-2 rounded-lg bg-amber-500/5 border border-amber-500/20 flex items-center justify-between text-[11px] gap-2">
-                      <div className="flex items-center gap-1.5 text-amber-900 dark:text-amber-200 min-w-0 font-medium">
-                        <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                        <span className="truncate">Delay {exec.delayFormatted || "30 segundos"}</span>
-                      </div>
-                      {exec.resumeAt && <CountdownBadge resumeAt={exec.resumeAt} />}
-                    </div>
-                  ) : exec.status === "waiting_user_input" || exec.waitingType === "user_input" ? (
-                    <div className="p-2 rounded-lg bg-sky-500/5 border border-sky-500/20 flex items-center justify-between text-[11px] gap-2">
-                      <div className="flex items-center gap-1.5 text-sky-900 dark:text-sky-200 min-w-0 font-medium">
-                        <MessageSquare className="h-3.5 w-3.5 text-sky-500 shrink-0" />
-                        <span className="truncate">Aguardando resposta do usuário</span>
-                      </div>
-                      <span className="text-[10px] font-semibold text-sky-600 bg-sky-500/10 px-1.5 py-0.2 rounded shrink-0">
-                        Interação
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="p-2 rounded-lg bg-muted/40 border border-border/40 flex items-center justify-between text-[11px] gap-2">
-                      <div className="flex items-center gap-1.5 text-muted-foreground min-w-0">
-                        <GitBranch className="h-3.5 w-3.5 text-primary shrink-0" />
-                        <span className="text-foreground truncate font-medium">
-                          {exec.currentNodeName || "Em processamento..."}
-                        </span>
-                      </div>
-                      {exec.resumeAt && <CountdownBadge resumeAt={exec.resumeAt} />}
-                    </div>
-                  )}
-
-                  {/* Actions */}
-                  <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-border/30">
+                  {/* Actions & ID */}
+                  <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-border/30">
                     {confirmStopId === exec.id ? (
                       <div className="flex items-center gap-1.5 w-full justify-between animate-in fade-in duration-150">
                         <span className="text-[10px] text-destructive font-semibold flex items-center gap-1">
@@ -525,15 +479,15 @@ export default function LeadExecutionsButton({
                             navigator.clipboard.writeText(exec.id);
                             toast.success("ID da execução copiado!");
                           }}
-                          className="inline-flex items-center gap-1 font-mono text-[10px] text-muted-foreground hover:text-foreground bg-muted/40 hover:bg-muted/80 px-2 py-1 rounded-md transition-colors group/copy border border-border/40 shrink-0 cursor-pointer"
-                          title={`ID completo: ${exec.id}\nClique para copiar`}
+                          className="inline-flex items-center gap-1 font-mono text-[10px] text-muted-foreground hover:text-foreground bg-muted/40 hover:bg-muted/80 px-2 py-1 rounded-md transition-colors group/copy border border-border/40 shrink-0 cursor-pointer min-w-0"
+                          title={`ID da execução: ${exec.id}\nClique para copiar`}
                         >
-                          <span className="font-semibold text-foreground/70">ID:</span>
-                          <span className="truncate max-w-[120px]">{exec.id}</span>
+                          <span className="font-semibold text-foreground/70 shrink-0">ID:</span>
+                          <span className="truncate max-w-[85px] sm:max-w-[110px]">{exec.id.slice(0, 8)}...</span>
                           <Copy className="h-2.5 w-2.5 opacity-60 group-hover/copy:opacity-100 shrink-0" />
                         </button>
 
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 shrink-0">
                           <Button
                             variant="outline"
                             size="sm"
