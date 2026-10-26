@@ -89,6 +89,15 @@ interface SprintState {
   addChecklistItemComment: (checklistId: string, itemId: string, cardId: string, content: string) => Promise<void>;
   deleteChecklistItemComment: (checklistId: string, itemId: string, commentId: string) => Promise<void>;
   deleteChecklistItem: (checklistId: string, itemId: string) => Promise<void>;
+  reorderChecklists: (cardId: string, newChecklists: SprintChecklist[]) => Promise<void>;
+  reorderChecklistItems: (checklistId: string, newItems: SprintChecklistItem[]) => Promise<void>;
+  moveChecklistItemBetweenChecklists: (
+    srcChecklistId: string,
+    tgtChecklistId: string,
+    srcItems: SprintChecklistItem[],
+    tgtItems: SprintChecklistItem[],
+    itemId: string
+  ) => Promise<void>;
 
   // Labels & Members
   toggleCardLabel: (cardId: string, label: SprintLabel) => Promise<void>;
@@ -549,6 +558,82 @@ export const useSprintStore = create<SprintState>((set, get) => ({
         activeCard: state.activeCard ? removeItemInCard(state.activeCard) : null,
       };
     });
+  },
+
+  reorderChecklists: async (cardId, newChecklists) => {
+    set((state) => {
+      const updateCardChecklists = (c: SprintCard) => {
+        if (c.id !== cardId) return c;
+        return { ...c, checklists: newChecklists };
+      };
+
+      return {
+        lists: state.lists.map((l) => ({ ...l, cards: l.cards.map(updateCardChecklists) })),
+        activeCard: state.activeCard?.id === cardId ? updateCardChecklists(state.activeCard) : state.activeCard,
+      };
+    });
+
+    for (let i = 0; i < newChecklists.length; i++) {
+      const chk = newChecklists[i];
+      const position = (i + 1) * 1000;
+      await sprintService.updateChecklist(chk.id, { position });
+    }
+  },
+
+  reorderChecklistItems: async (checklistId, newItems) => {
+    set((state) => {
+      const updateItemsInCard = (c: SprintCard) => ({
+        ...c,
+        checklists: (c.checklists || []).map((ch) => {
+          if (ch.id !== checklistId) return ch;
+          return { ...ch, items: newItems };
+        }),
+      });
+
+      return {
+        lists: state.lists.map((l) => ({ ...l, cards: l.cards.map(updateItemsInCard) })),
+        activeCard: state.activeCard ? updateItemsInCard(state.activeCard) : null,
+      };
+    });
+
+    for (let i = 0; i < newItems.length; i++) {
+      const item = newItems[i];
+      const position = (i + 1) * 1000;
+      await sprintService.updateChecklistItem(item.id, { position });
+    }
+  },
+
+  moveChecklistItemBetweenChecklists: async (srcChecklistId, tgtChecklistId, srcItems, tgtItems, itemId) => {
+    set((state) => {
+      const updateItemsInCard = (c: SprintCard) => ({
+        ...c,
+        checklists: (c.checklists || []).map((ch) => {
+          if (ch.id === srcChecklistId) return { ...ch, items: srcItems };
+          if (ch.id === tgtChecklistId) return { ...ch, items: tgtItems };
+          return ch;
+        }),
+      });
+
+      return {
+        lists: state.lists.map((l) => ({ ...l, cards: l.cards.map(updateItemsInCard) })),
+        activeCard: state.activeCard ? updateItemsInCard(state.activeCard) : null,
+      };
+    });
+
+    for (let i = 0; i < tgtItems.length; i++) {
+      const it = tgtItems[i];
+      const position = (i + 1) * 1000;
+      if (it.id === itemId) {
+        await sprintService.updateChecklistItem(it.id, { position, checklist_id: tgtChecklistId } as any);
+      } else {
+        await sprintService.updateChecklistItem(it.id, { position });
+      }
+    }
+    for (let i = 0; i < srcItems.length; i++) {
+      const it = srcItems[i];
+      const position = (i + 1) * 1000;
+      await sprintService.updateChecklistItem(it.id, { position });
+    }
   },
 
   createLabel: async (name, color) => {

@@ -1,3 +1,20 @@
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragStartEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { GripVertical } from "lucide-react";
 import { SprintCardTagPopover } from "./SprintCardTagPopover";
 import React, { useState, useEffect } from "react";
 import {
@@ -106,6 +123,27 @@ const ChecklistItemRow: React.FC<{
   onDelete: () => void;
   onUpdateTitle: (newTitle: string) => void;
 }> = ({ item, checklistId, cardId, onToggle, onDelete, onUpdateTitle }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: item.id,
+    data: {
+      type: "ChecklistItem",
+      item,
+      checklistId,
+    },
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(item.title);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
@@ -161,9 +199,24 @@ const ChecklistItemRow: React.FC<{
   const hasInfo = commentsCount > 0 || !!item.notes;
 
   return (
-    <div className="space-y-1">
-      <div className="group flex items-center justify-between gap-2 p-1.5 rounded-lg hover:bg-muted/40 transition-colors">
-        <div className="flex items-center gap-2.5 flex-1 min-w-0">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn("space-y-1 select-none", isDragging && "opacity-40 border-dashed border-primary")}
+    >
+      <div className="group flex items-center justify-between gap-1.5 p-1.5 rounded-lg hover:bg-muted/40 transition-colors">
+        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+          {/* Handle de Arrastar Item */}
+          <button
+            type="button"
+            {...attributes}
+            {...listeners}
+            className="opacity-0 group-hover:opacity-100 p-0.5 text-muted-foreground/60 hover:text-foreground cursor-grab active:cursor-grabbing transition-opacity shrink-0 rounded"
+            title="Arrastar para reordenar atividade"
+          >
+            <GripVertical className="h-3.5 w-3.5" />
+          </button>
+
           <input
             type="checkbox"
             checked={item.is_completed}
@@ -431,6 +484,147 @@ const ChecklistItemRow: React.FC<{
   );
 };
 
+// Componente Sortable para cada bloco de Checklist
+const SortableChecklistBlock: React.FC<{
+  checklist: SprintChecklist;
+  activeCard: SprintCard;
+  newItemTitle: string;
+  onNewItemTitleChange: (val: string) => void;
+  onAddChecklistItem: (checklistId: string) => void;
+  onUpdateTitle: (newTitle: string) => void;
+  onDeleteChecklist: () => void;
+  onToggleItem: (itemId: string) => void;
+  onDeleteItem: (itemId: string) => void;
+  onUpdateItemTitle: (itemId: string, newTitle: string) => void;
+}> = ({
+  checklist,
+  activeCard,
+  newItemTitle,
+  onNewItemTitleChange,
+  onAddChecklistItem,
+  onUpdateTitle,
+  onDeleteChecklist,
+  onToggleItem,
+  onDeleteItem,
+  onUpdateItemTitle,
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: checklist.id,
+    data: {
+      type: "Checklist",
+      checklist,
+    },
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  const totalItems = checklist.items.length;
+  const completedItems = checklist.items.filter((i) => i.is_completed).length;
+  const percent = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "space-y-3 p-4 rounded-xl bg-muted/20 border border-border/80 transition-all",
+        isDragging && "opacity-40 border-dashed border-primary shadow-lg"
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1 text-foreground font-semibold text-sm flex-1 min-w-0">
+          {/* Handle de Arrastar Checklist Inteiro */}
+          <button
+            type="button"
+            {...attributes}
+            {...listeners}
+            className="p-1 text-muted-foreground/60 hover:text-foreground cursor-grab active:cursor-grabbing rounded hover:bg-muted/60 transition-colors shrink-0"
+            title="Arrastar para reordenar este checklist"
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+          <CheckSquare className="h-4 w-4 text-primary shrink-0" />
+          <ChecklistTitleEditor
+            title={checklist.title}
+            onSave={onUpdateTitle}
+          />
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+          onClick={onDeleteChecklist}
+          title="Excluir checklist"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
+      {/* Barra de Progresso */}
+      <div className="space-y-1">
+        <div className="flex justify-between text-[11px] text-muted-foreground font-medium">
+          <span>Progresso</span>
+          <span>{percent}%</span>
+        </div>
+        <Progress value={percent} className="h-1.5" />
+      </div>
+
+      {/* Itens do Checklist com SortableContext */}
+      <SortableContext
+        items={checklist.items.map((i) => i.id)}
+        strategy={verticalListSortingStrategy}
+      >
+        <div className="space-y-1.5 pt-1">
+          {checklist.items.map((item) => (
+            <ChecklistItemRow
+              key={item.id}
+              item={item}
+              checklistId={checklist.id}
+              cardId={activeCard.id}
+              onToggle={() => onToggleItem(item.id)}
+              onDelete={() => onDeleteItem(item.id)}
+              onUpdateTitle={(newTitle) => onUpdateItemTitle(item.id, newTitle)}
+            />
+          ))}
+        </div>
+      </SortableContext>
+
+      {/* Adicionar Item com Menção */}
+      <div className="pt-2 flex items-center gap-2">
+        <SprintMentionInput
+          value={newItemTitle}
+          onChange={onNewItemTitleChange}
+          placeholder="Adicionar item... (digite @ para citar responsável)"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              onAddChecklistItem(checklist.id);
+            }
+          }}
+          className="h-8 text-xs bg-background"
+        />
+        <Button
+          size="sm"
+          onClick={() => onAddChecklistItem(checklist.id)}
+          className="h-8 text-xs font-semibold px-3 shrink-0"
+        >
+          Adicionar
+        </Button>
+      </div>
+    </div>
+  );
+};
+
 export const SprintCardModal: React.FC = () => {
   const { user } = useAuth();
   const { members = [] } = useCompanyMembers();
@@ -452,10 +646,83 @@ export const SprintCardModal: React.FC = () => {
     toggleChecklistItem,
     deleteChecklistItem,
     updateChecklistItemTitle,
+    reorderChecklists,
+    reorderChecklistItems,
+    moveChecklistItemBetweenChecklists,
     toggleCardLabel,
     toggleCardMember,
     autoAssignMemberMention,
   } = useSprintStore();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    })
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !activeCard) return;
+
+    const activeType = active.data.current?.type;
+    const overType = over.data.current?.type;
+
+    // 1. Reordenar Checklists inteiros
+    if (activeType === "Checklist") {
+      const currentChecklists = activeCard.checklists || [];
+      const oldIndex = currentChecklists.findIndex((c) => c.id === active.id);
+      const newIndex = currentChecklists.findIndex((c) => c.id === over.id);
+      if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+        const reordered = arrayMove(currentChecklists, oldIndex, newIndex);
+        await reorderChecklists(activeCard.id, reordered);
+      }
+      return;
+    }
+
+    // 2. Reordenar Itens de Checklist
+    if (activeType === "ChecklistItem") {
+      const activeChecklistId = active.data.current?.checklistId;
+      const overChecklistId = over.data.current?.checklistId || (overType === "Checklist" ? over.id : null);
+
+      if (!activeChecklistId) return;
+
+      // Mesma checklist
+      if (activeChecklistId === overChecklistId || (!overChecklistId && overType === "ChecklistItem")) {
+        const chk = (activeCard.checklists || []).find((c) => c.id === activeChecklistId);
+        if (!chk) return;
+        const oldIndex = chk.items.findIndex((i) => i.id === active.id);
+        const newIndex = chk.items.findIndex((i) => i.id === over.id);
+        if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+          const reordered = arrayMove(chk.items, oldIndex, newIndex);
+          await reorderChecklistItems(activeChecklistId, reordered);
+        }
+      } else if (overChecklistId && activeChecklistId !== overChecklistId) {
+        // Mover entre checklists diferentes
+        const srcChk = (activeCard.checklists || []).find((c) => c.id === activeChecklistId);
+        const tgtChk = (activeCard.checklists || []).find((c) => c.id === overChecklistId);
+        if (!srcChk || !tgtChk) return;
+
+        const itemToMove = srcChk.items.find((i) => i.id === active.id);
+        if (!itemToMove) return;
+
+        const srcRemaining = srcChk.items.filter((i) => i.id !== active.id);
+        const overIndex = tgtChk.items.findIndex((i) => i.id === over.id);
+        const tgtItems = [...tgtChk.items];
+        const insertIndex = overIndex >= 0 ? overIndex : tgtItems.length;
+        tgtItems.splice(insertIndex, 0, { ...itemToMove, checklist_id: overChecklistId });
+
+        await moveChecklistItemBetweenChecklists(
+          activeChecklistId,
+          overChecklistId,
+          srcRemaining,
+          tgtItems,
+          itemToMove.id
+        );
+      }
+    }
+  };
 
   const [title, setTitle] = useState(activeCard?.title || "");
   const [description, setDescription] = useState(activeCard?.description || "");
@@ -740,96 +1007,41 @@ export const SprintCardModal: React.FC = () => {
               )}
             </div>
 
-            {/* Checklists */}
-            {(activeCard.checklists || []).map((checklist) => {
-              const totalItems = checklist.items.length;
-              const completedItems = checklist.items.filter((i) => i.is_completed).length;
-              const percent = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
-
-              return (
-                <div key={checklist.id} className="space-y-3 p-4 rounded-xl bg-muted/20 border border-border/80">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-foreground font-semibold text-sm flex-1 min-w-0">
-                      <CheckSquare className="h-4 w-4 text-primary shrink-0" />
-                      <ChecklistTitleEditor
-                        title={checklist.title}
-                        onSave={(newTitle) => updateChecklistTitle(checklist.id, newTitle)}
-                      />
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                      onClick={() => deleteChecklist(checklist.id)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-
-                  {/* Barra de Progresso */}
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-[11px] text-muted-foreground font-medium">
-                      <span>Progresso</span>
-                      <span>{percent}%</span>
-                    </div>
-                    <Progress value={percent} className="h-1.5" />
-                  </div>
-
-                  {/* Itens do Checklist */}
-                  <div className="space-y-1.5 pt-1">
-                    {checklist.items.map((item) => (
-                      <ChecklistItemRow
-                        key={item.id}
-                        item={item}
-                        checklistId={checklist.id}
-                        cardId={activeCard.id}
-                        onToggle={() => toggleChecklistItem(checklist.id, item.id)}
-                        onDelete={() => deleteChecklistItem(checklist.id, item.id)}
-                        onUpdateTitle={(newTitle) =>
-                          updateChecklistItemTitle(checklist.id, item.id, newTitle)
+            {/* Checklists com Drag and Drop */}
+            {(activeCard.checklists || []).length > 0 && (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={(activeCard.checklists || []).map((c) => c.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-4">
+                    {(activeCard.checklists || []).map((checklist) => (
+                      <SortableChecklistBlock
+                        key={checklist.id}
+                        checklist={checklist}
+                        activeCard={activeCard}
+                        newItemTitle={newItemTitles[checklist.id] || ""}
+                        onNewItemTitleChange={(val) =>
+                          setNewItemTitles((prev) => ({ ...prev, [checklist.id]: val }))
+                        }
+                        onAddChecklistItem={handleCreateChecklistItem}
+                        onUpdateTitle={(newTitle) => updateChecklistTitle(checklist.id, newTitle)}
+                        onDeleteChecklist={() => deleteChecklist(checklist.id)}
+                        onToggleItem={(itemId) => toggleChecklistItem(checklist.id, itemId)}
+                        onDeleteItem={(itemId) => deleteChecklistItem(checklist.id, itemId)}
+                        onUpdateItemTitle={(itemId, newTitle) =>
+                          updateChecklistItemTitle(checklist.id, itemId, newTitle)
                         }
                       />
                     ))}
-
-                    {/* Adicionar Item com Menção */}
-                    <div className="pt-2 flex items-center gap-2">
-                      <SprintMentionInput
-                        value={newItemTitles[checklist.id] || ""}
-                        onChange={(val) =>
-                          setNewItemTitles((prev) => ({ ...prev, [checklist.id]: val }))
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            handleCreateChecklistItem(checklist.id);
-                          }
-                        }}
-                        onMentionSelected={(m) => {
-                          autoAssignMemberMention(activeCard.id, {
-                            user_id: m.user_id,
-                            full_name: m.full_name || undefined,
-                            email: m.email || undefined,
-                          });
-                          setMentionedChecklistMembers((prev) => ({
-                            ...prev,
-                            [checklist.id]: [...(prev[checklist.id] || []), { user_id: m.user_id }],
-                          }));
-                        }}
-                        placeholder="Adicionar item... (digite @ para citar responsável)"
-                        className="text-xs h-8"
-                      />
-                      <Button
-                        size="sm"
-                        onClick={() => handleCreateChecklistItem(checklist.id)}
-                        className="h-8 px-3 text-xs"
-                      >
-                        Adicionar
-                      </Button>
-                    </div>
                   </div>
-                </div>
-              );
-            })}
+                </SortableContext>
+              </DndContext>
+            )}
 
             {/* Atividades e Comentários */}
             <div className="space-y-4 pt-2">
