@@ -1,6 +1,6 @@
 {
-  "commit": "ad939ef984ae1568246c92c87d041295855d8b83",
-  "shortCommit": "ad939ef",
-  "message": "feat(layout): simplificar header e mover sign out com perfil para o footer da sidebar",
-  "builtAt": "2026-10-26T21:54:48.730Z"
+  "commit": "7d14f4b26543f96a074b43f0cc87e831664e04e1",
+  "shortCommit": "7d14f4b",
+  "message": "feat(sprint): habilitar links clicaveis e simplificar itens do checklist para notas",
+  "builtAt": "2026-10-26T23:49:13.925Z"
 }

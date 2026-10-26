@@ -455,6 +455,7 @@ export const BrandManualView: React.FC = () => {
     }, user?.email || "Estrategista");
     toast.success("Pergunta removida da visualização ativa.");
     setFieldToDelete(null);
+    setIcpStepIndex((i) => Math.max(0, i - 1));
   };
 
   // Reordenação de campos
@@ -521,9 +522,13 @@ export const BrandManualView: React.FC = () => {
         };
       } else if (moduleId === "raio_x_icp") {
         // Gera as 22 saídas analíticas
-        const p1 = answersMap["icp_01"] || "Operação travada sem fluxo contínuo de conversão.";
-        const p2 = answersMap["icp_02"] || "Tempo livre recuperado e previsibilidade nas conversões.";
-        const p3 = answersMap["icp_03"] || "'Não aguento mais gastar tempo com quem não fecha.'";
+        const icpFields = brandManual.fields.filter(
+          (f) => f.moduleId === "raio_x_icp" && !f.archived && !f.removed
+        );
+        const answeredIcp = icpFields.map((f) => f.response).filter(Boolean) as string[];
+        const p1 = answeredIcp[0] || answersMap["icp_01"] || "Operação travada sem fluxo contínuo de conversão.";
+        const p2 = answeredIcp[1] || answersMap["icp_02"] || "Tempo livre recuperado e previsibilidade nas conversões.";
+        const p3 = answeredIcp[2] || answersMap["icp_03"] || "'Não aguento mais gastar tempo com quem não fecha.'";
 
         generatedData = {
           outputs: {
@@ -1368,11 +1373,24 @@ export const BrandManualView: React.FC = () => {
         {activeModuleId === "raio_x_icp" && (
           <div className="space-y-4">
             {/* Toggle entre Modo Guiado (1 por vez) e Visão Geral */}
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-muted-foreground">
-                Mapeamento Comportamental do Cliente Ideal (3 Perguntas Essenciais)
-              </span>
-              <div className="flex items-center bg-muted/60 p-0.5 rounded-lg border border-border text-[11px]">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-muted-foreground">
+                  Mapeamento Comportamental do Cliente Ideal ({activeFields.length} {activeFields.length === 1 ? "Pergunta" : "Perguntas"})
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleOpenCreateField("raio_x_icp")}
+                  className="h-6 px-2 text-[11px] font-bold gap-1 rounded-lg border-primary/30 text-primary hover:bg-primary/10"
+                  title="Adicionar nova pergunta ao Raio X do ICP"
+                >
+                  <Plus className="h-3 w-3" />
+                  <span>Nova Pergunta</span>
+                </Button>
+              </div>
+
+              <div className="flex items-center bg-muted/60 p-0.5 rounded-lg border border-border text-[11px] self-start sm:self-auto">
                 <button
                   onClick={() => setIcpMode("guided")}
                   className={`px-2.5 py-0.5 rounded-md font-semibold transition-all ${
@@ -1418,15 +1436,124 @@ export const BrandManualView: React.FC = () => {
 
                   return (
                     <div id={`brand-field-${currentField.id}`} className="space-y-4">
-                      <div>
-                        <h3 className="text-base font-bold text-foreground leading-snug">
-                          {currentField.title}
-                        </h3>
-                        {currentField.context && (
-                          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                            {currentField.context}
-                          </p>
-                        )}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1.5 flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] font-mono font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">
+                              Pergunta {icpStepIndex + 1}
+                            </span>
+                            {currentField.required && (
+                              <span className="text-[10px] text-muted-foreground font-semibold">
+                                *Obrigatório
+                              </span>
+                            )}
+                            {currentField.strategicMapping && currentField.strategicMapping.length > 0 && (
+                              <div className="flex items-center gap-1 flex-wrap">
+                                {currentField.strategicMapping.map((tag) => (
+                                  <span
+                                    key={tag}
+                                    className="text-[9px] font-medium bg-muted text-muted-foreground px-1.5 py-0.5 rounded"
+                                  >
+                                    #{tag}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <h3 className="text-base font-bold text-foreground leading-snug">
+                            {currentField.title}
+                          </h3>
+                          {currentField.context && (
+                            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                              {currentField.context}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Botões Rápidos e Menu de Ações no Modo Guiado */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleOpenEditField(currentField)}
+                            className="h-8 px-2.5 text-xs gap-1 text-muted-foreground hover:text-foreground rounded-xl"
+                            title="Editar pergunta"
+                          >
+                            <Edit2 className="h-3.5 w-3.5 text-primary" />
+                            <span className="hidden sm:inline">Editar</span>
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setFieldToDelete(currentField)}
+                            className="h-8 w-8 text-muted-foreground hover:text-rose-600 rounded-xl"
+                            title="Excluir pergunta"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-xl"
+                                title="Mais opções"
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48 p-1.5 rounded-2xl shadow-xl">
+                              <DropdownMenuItem
+                                onClick={() => handleOpenEditField(currentField)}
+                                className="cursor-pointer text-xs"
+                              >
+                                <Edit2 className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                                Editar Pergunta
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleDuplicateField(currentField.id)}
+                                className="cursor-pointer text-xs"
+                              >
+                                <Copy className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                                Duplicar Pergunta
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => handleMoveField(currentField.id, "up")}
+                                disabled={icpStepIndex === 0}
+                                className="cursor-pointer text-xs"
+                              >
+                                <ChevronUp className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                                Mover para Cima
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleMoveField(currentField.id, "down")}
+                                disabled={icpStepIndex === activeFields.length - 1}
+                                className="cursor-pointer text-xs"
+                              >
+                                <ChevronDown className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                                Mover para Baixo
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => handleArchiveField(currentField.id)}
+                                className="cursor-pointer text-xs text-amber-600 dark:text-amber-400"
+                              >
+                                <Archive className="h-3.5 w-3.5 mr-2" />
+                                Arquivar Pergunta
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => setFieldToDelete(currentField)}
+                                className="cursor-pointer text-xs text-rose-600 dark:text-rose-400"
+                              >
+                                <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                Remover Pergunta
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </div>
 
                       <div className="relative">
@@ -1510,54 +1637,185 @@ export const BrandManualView: React.FC = () => {
             {/* MODO VISÃO GERAL (TODAS AS PERGUNTAS DO ICP) */}
             {icpMode === "all" && (
               <div className="space-y-4">
-                {activeFields.map((field, index) => {
-                  const responseValue = localResponses[field.id] ?? field.response ?? "";
-                  const isRecording = recordingFieldId === field.id;
-
-                  return (
-                    <div
-                      id={`brand-field-${field.id}`}
-                      key={field.id}
-                      className="bg-card border border-border rounded-2xl p-5 shadow-xs space-y-3"
+                {activeFields.length === 0 ? (
+                  <div className="p-8 text-center text-xs text-muted-foreground border border-dashed rounded-2xl bg-card">
+                    <p className="font-semibold mb-2">Nenhuma pergunta cadastrada no Raio X do ICP.</p>
+                    <Button
+                      size="sm"
+                      onClick={() => handleOpenCreateField("raio_x_icp")}
+                      className="gap-1.5 text-xs"
                     >
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <span className="text-[10px] font-mono font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">
-                            Pergunta {index + 1}
-                          </span>
-                          <h3 className="text-sm font-bold text-foreground mt-1">
-                            {field.title}
-                          </h3>
-                          {field.context && (
-                            <p className="text-xs text-muted-foreground mt-0.5">{field.context}</p>
-                          )}
-                        </div>
-                      </div>
+                      <Plus className="w-3.5 h-3.5" /> Criar Primeira Pergunta
+                    </Button>
+                  </div>
+                ) : (
+                  activeFields.map((field, index) => {
+                    const responseValue = localResponses[field.id] ?? field.response ?? "";
+                    const isRecording = recordingFieldId === field.id;
 
-                      <div className="relative">
-                        <Textarea
-                          value={responseValue}
-                          onChange={(e) => handleResponseChange(field.id, e.target.value)}
-                          placeholder="Digite aqui..."
-                          rows={3}
-                          className="text-xs bg-background border-input text-foreground rounded-xl resize-y pb-7 pr-24"
-                        />
-                        <div className="absolute right-2.5 bottom-2.5">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant={isRecording ? "destructive" : "secondary"}
-                            onClick={() => toggleVoiceRecording(field.id)}
-                            className="h-6 px-2 text-[11px] rounded-lg"
-                          >
-                            <Mic className="h-3 w-3 mr-1 text-primary" />
-                            <span>{isRecording ? "Parar" : "Gravar"}</span>
-                          </Button>
+                    return (
+                      <div
+                        id={`brand-field-${field.id}`}
+                        key={field.id}
+                        className="bg-card border border-border rounded-2xl p-5 shadow-xs space-y-3 transition-all hover:border-border/80"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                              <span className="text-[10px] font-mono font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">
+                                Pergunta {index + 1}
+                              </span>
+                              {field.required && (
+                                <span className="text-[10px] text-muted-foreground font-semibold">
+                                  *Obrigatório
+                                </span>
+                              )}
+                              {field.strategicMapping && field.strategicMapping.length > 0 && (
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  {field.strategicMapping.map((tag) => (
+                                    <span
+                                      key={tag}
+                                      className="text-[9px] font-medium bg-muted text-muted-foreground px-1.5 py-0.5 rounded"
+                                    >
+                                      #{tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <h3 className="text-sm font-bold text-foreground mt-1">
+                              {field.title}
+                            </h3>
+                            {field.context && (
+                              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{field.context}</p>
+                            )}
+                          </div>
+
+                          {/* Botões Rápidos e Menu de Ações */}
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleOpenEditField(field)}
+                              className="h-8 px-2.5 text-xs gap-1 text-muted-foreground hover:text-foreground rounded-xl"
+                              title="Editar pergunta"
+                            >
+                              <Edit2 className="h-3.5 w-3.5 text-primary" />
+                              <span className="hidden sm:inline">Editar</span>
+                            </Button>
+
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setFieldToDelete(field)}
+                              className="h-8 w-8 text-muted-foreground hover:text-rose-600 rounded-xl"
+                              title="Excluir pergunta"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-xl"
+                                  title="Mais opções"
+                                >
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48 p-1.5 rounded-2xl shadow-xl">
+                                <DropdownMenuItem
+                                  onClick={() => handleOpenEditField(field)}
+                                  className="cursor-pointer text-xs"
+                                >
+                                  <Edit2 className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                                  Editar Pergunta
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleDuplicateField(field.id)}
+                                  className="cursor-pointer text-xs"
+                                >
+                                  <Copy className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                                  Duplicar Pergunta
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => handleMoveField(field.id, "up")}
+                                  disabled={index === 0}
+                                  className="cursor-pointer text-xs"
+                                >
+                                  <ChevronUp className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                                  Mover para Cima
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleMoveField(field.id, "down")}
+                                  disabled={index === activeFields.length - 1}
+                                  className="cursor-pointer text-xs"
+                                >
+                                  <ChevronDown className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                                  Mover para Baixo
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => handleArchiveField(field.id)}
+                                  className="cursor-pointer text-xs text-amber-600 dark:text-amber-400"
+                                >
+                                  <Archive className="h-3.5 w-3.5 mr-2" />
+                                  Arquivar Pergunta
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => setFieldToDelete(field)}
+                                  className="cursor-pointer text-xs text-rose-600 dark:text-rose-400"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                  Remover Pergunta
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </div>
+
+                        <div className="relative">
+                          <Textarea
+                            value={responseValue}
+                            onChange={(e) => handleResponseChange(field.id, e.target.value)}
+                            placeholder="Digite aqui..."
+                            rows={3}
+                            className="text-xs bg-background border-input text-foreground rounded-xl resize-y pb-7 pr-24"
+                          />
+                          <div className="absolute right-2.5 bottom-2.5">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={isRecording ? "destructive" : "secondary"}
+                              onClick={() => toggleVoiceRecording(field.id)}
+                              className="h-6 px-2 text-[11px] rounded-lg"
+                            >
+                              <Mic className="h-3 w-3 mr-1 text-primary" />
+                              <span>{isRecording ? "Parar" : "Gravar"}</span>
+                            </Button>
+                          </div>
+                        </div>
+
+                        {field.preset && (
+                          <div className="p-3 bg-muted/60 border border-border/80 rounded-xl text-xs text-muted-foreground flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                            <p className="italic">Exemplo: "{field.preset}"</p>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleResponseChange(field.id, field.preset || "")}
+                              className="h-6 text-[10px] px-2 rounded-lg shrink-0"
+                            >
+                              Usar modelo
+                            </Button>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             )}
 
