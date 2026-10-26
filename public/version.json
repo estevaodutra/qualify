@@ -1,6 +1,6 @@
 {
-  "commit": "c7bf548cf1dc81a040926329210b9d2d66b3a0da",
-  "shortCommit": "c7bf548",
-  "message": "feat(crm): agrupar pipelines por grupos nos seletores de condicoes, acoes e gatilhos",
-  "builtAt": "2026-10-26T21:24:54.898Z"
+  "commit": "d92c90485b8a2139e1de230c85f0ad8d3df29ae2",
+  "shortCommit": "d92c904",
+  "message": "fix(sidebar): corrigir corte da sidebar colapsada pela header e alinhar espacamento",
+  "builtAt": "2026-10-26T21:50:01.146Z"
 }

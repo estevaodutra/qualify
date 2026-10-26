@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
 import { cn } from "@/lib/utils";
 import {
@@ -14,16 +14,19 @@ import {
   Box,
   Check,
   ExternalLink,
+  LogOut,
 } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Collapsible,
   CollapsibleContent,
@@ -31,6 +34,8 @@ import {
 } from "@/components/ui/collapsible";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAlerts } from "@/hooks/useAlerts";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 import { NotificationsPopover } from "../notifications/NotificationsPopover";
 import {
   DropdownMenu,
@@ -58,9 +63,12 @@ import { TOP_NAV_ITEMS, APP_SUB_ITEMS } from "@/config/navigationConfig";
 export function AppSidebar() {
   const { state, toggleSidebar, isMobile, setOpenMobile } = useSidebar();
   const location = useLocation();
+  const navigate = useNavigate();
+  const { toast } = useToast();
   const isCollapsed = state === "collapsed" && !isMobile;
   const { companies, activeCompany, setActiveCompany } = useCompany();
   const { unreadCount } = useAlerts();
+  const { user, signOut } = useAuth();
 
   // Helper to handle link click on mobile
   const handleNavClick = () => {
@@ -68,6 +76,30 @@ export function AppSidebar() {
       setOpenMobile(false);
     }
   };
+
+  const handleSignOut = async () => {
+    const { error } = await signOut();
+
+    if (error) {
+      toast({
+        title: "Erro ao sair",
+        description: "Não foi possível encerrar a sessão. Tente novamente.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Até logo!",
+        description: "Você foi desconectado com sucesso.",
+      });
+    }
+
+    navigate("/auth");
+  };
+
+  const userEmail = user?.email || "Usuário";
+  const userName = user?.user_metadata?.full_name || userEmail.split("@")[0];
+  const avatarUrl = user?.user_metadata?.avatar_url;
+  const initials = userName.slice(0, 2).toUpperCase();
 
   // Dialog state for Help
   const [helpDialogOpen, setHelpDialogOpen] = useState(false);
@@ -462,6 +494,52 @@ export function AppSidebar() {
           </SidebarMenu>
         </div>
       </SidebarContent>
+
+      {/* 3. FOOTER: User Profile & Sign Out Option */}
+      <SidebarFooter className="p-3 border-t border-slate-200/80 shrink-0 bg-[#FBFBFD]">
+        {!isCollapsed ? (
+          <div className="flex items-center justify-between gap-2 p-1.5 rounded-xl bg-white border border-slate-200/80 shadow-xs">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1 pl-1">
+              <Avatar className="h-8 w-8 rounded-lg shrink-0 shadow-xs">
+                <AvatarImage src={avatarUrl} alt={userName} className="object-cover" />
+                <AvatarFallback className="rounded-lg bg-gradient-to-br from-[#6366f1] to-[#7c3aed] text-white text-[11px] font-bold uppercase">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex flex-col min-w-0 flex-1 leading-tight">
+                <span className="text-xs font-bold text-slate-800 truncate">{userName}</span>
+                <span className="text-[10px] text-slate-400 font-medium truncate">{userEmail}</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="h-8 w-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer shrink-0"
+              title="Sign Out"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="h-10 w-10 mx-auto rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                  title="Sign Out"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="text-xs font-semibold">
+                Sign Out ({userName})
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+      </SidebarFooter>
 
       {/* Help Dialog (Clean Light Styling) */}
       <Dialog open={helpDialogOpen} onOpenChange={setHelpDialogOpen}>
