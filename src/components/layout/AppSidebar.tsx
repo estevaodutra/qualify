@@ -3,29 +3,21 @@ import { useLocation } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard,
-  Kanban,
-  PhoneCall,
-  Users,
-  MessageSquare,
-  GitBranch,
-  Grid,
-  Layers,
-  Search,
-  CalendarDays,
   Bell,
   HelpCircle,
   Settings,
   ChevronLeft,
   ChevronRight,
-  Building2,
+  ChevronDown,
+  ChevronUp,
+  Grid3X3,
+  Box,
   Check,
   ExternalLink,
 } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -92,7 +84,7 @@ export function AppSidebar() {
 
   const [appsOpen, setAppsOpen] = useState(() => {
     const saved = localStorage.getItem("sidebar_apps_open");
-    return saved === null ? false : saved === "true";
+    return saved === null ? true : saved === "true";
   });
 
   useEffect(() => {
@@ -104,220 +96,310 @@ export function AppSidebar() {
     localStorage.setItem("sidebar_apps_open", String(open));
   };
 
-  // Nav link styles
-  const navLinkClasses = cn(
-    "flex items-center gap-3.5 rounded-2xl px-4 py-3 text-white/80 transition-all duration-300",
-    "hover:bg-white/10 hover:text-white group",
-    isCollapsed && "justify-center px-0"
-  );
-
-  const activeClasses = "bg-white/10 text-white font-bold sidebar-active-item shadow-sm";
-
-  const subNavLinkClasses = "flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs text-white/60 hover:bg-white/10 hover:text-white transition-all";
-
   return (
     <Sidebar
       collapsible="icon"
-      className="border-r border-white/5 bg-[#0B0E14] backdrop-blur-3xl h-screen flex flex-col select-none"
+      className="border-r border-slate-200/80 bg-[#FBFBFD] h-screen flex flex-col select-none text-slate-800"
+      style={{ "--sidebar-width": "250px", "--sidebar-width-icon": "4.5rem" } as React.CSSProperties}
     >
-      {/* 1. HEAD (SidebarHeader): Logo + Organization Switcher */}
-      <SidebarHeader className={cn("py-6 space-y-4 shrink-0", isCollapsed ? "px-2" : "px-5")}>
-        {/* Logo */}
-        <div className={cn("flex items-center", isCollapsed ? "justify-center" : "px-1")}>
-          <div className="flex items-center justify-center shrink-0">
-            <img
-              src="/logo-fundo-transparente-branco.png"
-              alt="Qualify Logo"
-              className={cn("transition-all duration-300", isCollapsed ? "h-8 w-8" : "h-9 w-auto")}
-            />
+      {/* 1. HEADER: Centered Logo + Top-Right Collapse Toggle Button */}
+      <SidebarHeader className="p-0 shrink-0">
+        {!isCollapsed ? (
+          <div className="relative flex items-center justify-center w-full px-4 pt-5 pb-3">
+            <div className="flex items-center justify-center">
+              <img
+                src="/logo-sidebar-light.png"
+                alt="Qualify"
+                className="h-7 w-auto object-contain"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="absolute right-4 top-5 h-7 w-7 rounded-lg border border-slate-200/90 bg-white hover:bg-slate-50 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors shadow-xs cursor-pointer"
+              title="Recolher Sidebar"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
           </div>
-        </div>
-
-        {/* Organization Switcher */}
-        {companies.length > 0 && (
-          <div>
-            {isCollapsed ? (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button className="h-9 w-9 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center text-white hover:bg-white/10 transition-colors mx-auto">
-                            <Building2 className="h-4 w-4 text-primary" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-56 rounded-2xl shadow-2xl border-white/10 bg-zinc-900/95 backdrop-blur-3xl p-2 z-[9999]">
-                          <DropdownMenuLabel className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-black px-3 py-2">
-                            Organização
-                          </DropdownMenuLabel>
-                          {companies.map((company) => (
-                            <DropdownMenuItem
-                              key={company.id}
-                              onClick={() => setActiveCompany(company.id)}
-                              className="flex items-center justify-between rounded-xl px-3 py-2 text-white/70 focus:bg-primary/20 focus:text-white cursor-pointer"
-                            >
-                              <span className="truncate text-xs font-bold">{company.name}</span>
-                              {company.id === activeCompany?.id && <Check className="h-3.5 w-3.5 text-primary" />}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" className="text-xs font-semibold">
-                    {activeCompany?.name || "Organizações"}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            ) : (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-3 w-full rounded-2xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-xs text-white hover:bg-white/10 transition-all duration-300 cursor-pointer">
-                    <div className="h-6 w-6 rounded-xl bg-primary/20 flex items-center justify-center shrink-0">
-                      <Building2 className="h-3.5 w-3.5 text-primary" />
-                    </div>
-                    <span className="truncate flex-1 text-left font-bold tracking-tight text-white/90">
-                      {activeCompany?.name || "Selecionar Organização"}
-                    </span>
-                    <ChevronRight className="h-3.5 w-3.5 text-white/30 rotate-90 shrink-0" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-60 rounded-2xl shadow-2xl border-white/10 bg-zinc-900/95 backdrop-blur-3xl p-2 z-[9999]">
-                  <DropdownMenuLabel className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-black px-3 py-2">
-                    Organização Atual
-                  </DropdownMenuLabel>
-                  {companies.map((company) => (
-                    <DropdownMenuItem
-                      key={company.id}
-                      onClick={() => setActiveCompany(company.id)}
-                      className="flex items-center justify-between rounded-xl px-3 py-2.5 text-white/70 focus:bg-primary/20 focus:text-white cursor-pointer"
-                    >
-                      <span className="truncate text-xs font-bold">{company.name}</span>
-                      {company.id === activeCompany?.id && <Check className="h-4 w-4 text-primary" />}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+        ) : (
+          <div className="flex flex-col items-center justify-center w-full pt-4 pb-2 px-2 gap-3">
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="h-7 w-7 rounded-lg border border-slate-200/90 bg-white hover:bg-slate-50 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors shadow-xs cursor-pointer mx-auto"
+              title="Expandir Sidebar"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
           </div>
         )}
+
+        {/* Workspace Card Switcher */}
+        <div className={cn("px-3 mb-2", isCollapsed && "px-1.5")}>
+          {isCollapsed ? (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex justify-center">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="h-10 w-10 rounded-xl border border-slate-200/90 bg-gradient-to-br from-[#EEF0FD] to-[#E3E7FE] flex items-center justify-center text-[#5856d6] hover:brightness-95 transition-all shadow-xs cursor-pointer"
+                        >
+                          <Grid3X3 className="h-4.5 w-4.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-56 rounded-2xl shadow-xl border border-slate-200 bg-white p-1.5 z-[9999]">
+                        <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-slate-400 font-bold px-3 py-1.5">
+                          Workspaces
+                        </DropdownMenuLabel>
+                        {companies.map((company) => (
+                          <DropdownMenuItem
+                            key={company.id}
+                            onClick={() => setActiveCompany(company.id)}
+                            className="flex items-center justify-between rounded-xl px-3 py-2 text-slate-700 hover:bg-[#EEF0FD] hover:text-[#5856d6] focus:bg-[#EEF0FD] focus:text-[#5856d6] cursor-pointer"
+                          >
+                            <span className="truncate text-xs font-semibold">{company.name}</span>
+                            {company.id === activeCompany?.id && <Check className="h-4 w-4 text-[#5856d6]" />}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="text-xs font-semibold">
+                  {activeCompany?.name || "Qualify"}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-3 w-full rounded-2xl border border-slate-200/90 bg-white p-2.5 text-left hover:bg-slate-50/80 transition-all shadow-xs cursor-pointer group"
+                >
+                  <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-[#EEF0FD] to-[#E3E7FE] flex items-center justify-center shrink-0 border border-indigo-100/60 shadow-xs">
+                    <Grid3X3 className="h-4.5 w-4.5 text-[#5856d6]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] font-bold text-slate-800 truncate leading-tight">
+                      {activeCompany?.name || "Qualify"}
+                    </div>
+                    <div className="text-[11px] text-slate-400 font-medium truncate leading-tight mt-0.5">
+                      Seu workspace
+                    </div>
+                  </div>
+                  <ChevronDown className="h-4 w-4 text-slate-400 group-hover:text-slate-600 transition-colors shrink-0 mr-1" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56 rounded-2xl shadow-xl border border-slate-200 bg-white p-1.5 z-[9999]">
+                <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-slate-400 font-bold px-3 py-1.5">
+                  Workspaces
+                </DropdownMenuLabel>
+                {companies.map((company) => (
+                  <DropdownMenuItem
+                    key={company.id}
+                    onClick={() => setActiveCompany(company.id)}
+                    className="flex items-center justify-between rounded-xl px-3 py-2 text-slate-700 hover:bg-[#EEF0FD] hover:text-[#5856d6] focus:bg-[#EEF0FD] focus:text-[#5856d6] cursor-pointer"
+                  >
+                    <span className="truncate text-xs font-semibold">{company.name}</span>
+                    {company.id === activeCompany?.id && <Check className="h-4 w-4 text-[#5856d6]" />}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
       </SidebarHeader>
 
-      {/* 2. BODY (SidebarContent): TOP Operational Navigation + BOTTOM Secondary Navigation */}
+      {/* 2. BODY CONTENT */}
       <SidebarContent className="flex-1 flex flex-col justify-between py-2 overflow-y-auto scrollbar-hide px-3 min-h-0">
-        {/* TOP OPERATIONAL NAVIGATION */}
-        <div className="space-y-1">
-          <SidebarMenu className="gap-1.5">
-            {TOP_NAV_ITEMS.map((item) => {
-              const isActive = item.url === "/" ? location.pathname === "/" : location.pathname.startsWith(item.url);
-              return (
-                <SidebarMenuItem key={item.id}>
-                  <SidebarMenuButton asChild tooltip={item.title} className="h-auto p-0">
-                    <NavLink
-                      to={item.url}
-                      end={item.url === "/"}
-                      onClick={handleNavClick}
-                      className={cn(navLinkClasses, isActive && activeClasses)}
-                    >
-                      <item.icon className={cn("h-5 w-5 flex-shrink-0 transition-transform duration-300 group-hover:scale-110", isActive && "text-primary")} />
-                      {!isCollapsed && <span className="text-[13px] font-bold tracking-tight">{item.title}</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              );
-            })}
-
-            {/* Apps Group */}
-            <SidebarMenuItem>
-              {isCollapsed ? (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <SidebarMenuButton
-                      tooltip="Apps"
-                      className={cn(navLinkClasses, isAppsRoute && activeClasses)}
-                    >
-                      <Grid className={cn("h-5 w-5 flex-shrink-0", isAppsRoute && "text-primary")} />
-                    </SidebarMenuButton>
-                  </PopoverTrigger>
-                  <PopoverContent side="right" align="start" className="w-52 p-2 rounded-2xl shadow-2xl border-white/10 bg-[#0B0E14] backdrop-blur-xl z-[9999]">
-                    <div className="px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-white/40">Apps</div>
-                    {APP_SUB_ITEMS.map((sub) => (
+        <div className="space-y-4">
+          {/* SECTION: PRINCIPAL */}
+          <div>
+            {!isCollapsed && (
+              <div className="text-[10.5px] font-bold text-slate-400 tracking-wider uppercase px-3 py-1.5">
+                PRINCIPAL
+              </div>
+            )}
+            <SidebarMenu className="gap-1">
+              {TOP_NAV_ITEMS.map((item) => {
+                const isActive = item.exact ? location.pathname === item.url : location.pathname.startsWith(item.url);
+                return (
+                  <SidebarMenuItem key={item.id}>
+                    <SidebarMenuButton asChild tooltip={item.title} className="h-auto p-0 hover:bg-transparent">
                       <NavLink
-                        key={sub.id}
-                        to={sub.url}
+                        to={item.url}
+                        end={item.exact}
                         onClick={handleNavClick}
                         className={cn(
-                          "flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium text-white/70 hover:bg-white/10 hover:text-white transition-all",
-                          location.pathname.startsWith(sub.url) && "bg-white/10 text-white font-bold"
+                          "relative flex items-center gap-3.5 px-3 py-2 rounded-xl text-[13px] font-medium transition-all duration-150",
+                          isActive
+                            ? "bg-[#EEF0FD] text-[#5856d6] font-semibold"
+                            : "text-[#334155] hover:bg-slate-100/70 hover:text-slate-900",
+                          isCollapsed && "justify-center px-0 h-10 w-10 mx-auto"
                         )}
                       >
-                        <sub.icon className="h-4 w-4" />
-                        <span>{sub.title}</span>
+                        {isActive && (
+                          <span className="absolute left-0 top-2 bottom-2 w-[3px] bg-[#5856d6] rounded-r-full" />
+                        )}
+                        <item.icon className={cn("h-[18px] w-[18px] shrink-0", isActive ? "text-[#5856d6]" : "text-[#334155]")} />
+                        {!isCollapsed && <span>{item.title}</span>}
                       </NavLink>
-                    ))}
-                  </PopoverContent>
-                </Popover>
-              ) : (
-                <Collapsible open={appsOpen} onOpenChange={handleAppsOpenChange} className="group/collapsible">
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton
-                      tooltip="Apps"
-                      className={cn(navLinkClasses, isAppsRoute && !appsOpen && activeClasses)}
-                    >
-                      <Grid className={cn("h-5 w-5 flex-shrink-0", isAppsRoute && "text-primary")} />
-                      <span className="flex-1 text-[13px] font-bold tracking-tight">Apps</span>
-                      <ChevronRight className={cn("h-3.5 w-3.5 transition-transform duration-300 text-white/40", appsOpen && "rotate-90")} />
                     </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="pl-4 pr-1 pt-1 space-y-1">
-                    <div className="border-l border-white/10 pl-2 space-y-1 my-1">
-                      {APP_SUB_ITEMS.map((sub) => (
-                        <NavLink
-                          key={sub.id}
-                          to={sub.url}
-                          onClick={handleNavClick}
-                          className={cn(subNavLinkClasses, location.pathname.startsWith(sub.url) && "text-white font-bold bg-white/10")}
-                        >
-                          <sub.icon className="h-3.5 w-3.5" />
-                          <span>{sub.title}</span>
-                        </NavLink>
-                      ))}
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
-              )}
-            </SidebarMenuItem>
-          </SidebarMenu>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </div>
+
+          {/* SECTION: APPS */}
+          <div>
+            {!isCollapsed ? (
+              <div
+                onClick={() => handleAppsOpenChange(!appsOpen)}
+                className="flex items-center justify-between px-3 py-1.5 cursor-pointer select-none group"
+              >
+                <span className="text-[10.5px] font-bold text-slate-400 tracking-wider uppercase group-hover:text-slate-600 transition-colors">
+                  APPS
+                </span>
+                <button
+                  type="button"
+                  className="text-slate-400 group-hover:text-slate-600 transition-colors"
+                >
+                  {appsOpen ? (
+                    <ChevronUp className="h-3.5 w-3.5" />
+                  ) : (
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  )}
+                </button>
+              </div>
+            ) : (
+              <div className="h-[1px] bg-slate-200/60 my-2 mx-2" />
+            )}
+
+            <SidebarMenu className="gap-1">
+              <SidebarMenuItem>
+                {isCollapsed ? (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <SidebarMenuButton
+                        tooltip="Apps"
+                        className={cn(
+                          "relative flex items-center justify-center h-10 w-10 mx-auto rounded-xl text-[13px] font-medium transition-all duration-150",
+                          isAppsRoute
+                            ? "bg-[#EEF0FD] text-[#5856d6]"
+                            : "text-[#334155] hover:bg-slate-100/70 hover:text-slate-900"
+                        )}
+                      >
+                        {isAppsRoute && (
+                          <span className="absolute left-0 top-2 bottom-2 w-[3px] bg-[#5856d6] rounded-r-full" />
+                        )}
+                        <Box className={cn("h-[18px] w-[18px] shrink-0", isAppsRoute ? "text-[#5856d6]" : "text-[#334155]")} />
+                      </SidebarMenuButton>
+                    </PopoverTrigger>
+                    <PopoverContent side="right" align="start" className="w-52 p-2 rounded-2xl shadow-xl border border-slate-200 bg-white z-[9999]">
+                      <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Apps</div>
+                      {APP_SUB_ITEMS.map((sub) => {
+                        const isActive = location.pathname.startsWith(sub.url);
+                        return (
+                          <NavLink
+                            key={sub.id}
+                            to={sub.url}
+                            onClick={handleNavClick}
+                            className={cn(
+                              "relative flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-all",
+                              isActive && "bg-[#EEF0FD] text-[#5856d6] font-semibold"
+                            )}
+                          >
+                            {isActive && (
+                              <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] bg-[#5856d6] rounded-r-full" />
+                            )}
+                            <sub.icon className="h-4 w-4" />
+                            <span>{sub.title}</span>
+                          </NavLink>
+                        );
+                      })}
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  <Collapsible open={appsOpen} onOpenChange={handleAppsOpenChange} className="group/collapsible">
+                    <CollapsibleTrigger asChild>
+                      <button
+                        type="button"
+                        className={cn(
+                          "flex items-center gap-3.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[#334155] hover:bg-slate-100/70 hover:text-slate-900 transition-all w-full text-left cursor-pointer",
+                          isAppsRoute && !appsOpen && "bg-[#EEF0FD] text-[#5856d6] font-semibold"
+                        )}
+                      >
+                        <Box className="h-[18px] w-[18px] shrink-0 text-[#334155]" />
+                        <span className="flex-1">Apps</span>
+                      </button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="pt-0.5">
+                      <div className="relative ml-5 pl-2.5 border-l border-slate-200/80 space-y-0.5 mt-0.5">
+                        {APP_SUB_ITEMS.map((sub) => {
+                          const isActive = location.pathname.startsWith(sub.url);
+                          return (
+                            <NavLink
+                              key={sub.id}
+                              to={sub.url}
+                              onClick={handleNavClick}
+                              className={cn(
+                                "relative flex items-center gap-3 px-3 py-1.5 rounded-xl text-[12.5px] font-medium transition-all duration-150",
+                                isActive
+                                  ? "bg-[#EEF0FD] text-[#5856d6] font-semibold"
+                                  : "text-[#334155] hover:bg-slate-100/70 hover:text-slate-900"
+                              )}
+                            >
+                              {isActive && (
+                                <span className="absolute -left-2.5 top-1.5 bottom-1.5 w-[3px] bg-[#5856d6] rounded-r-full" />
+                              )}
+                              <sub.icon className={cn("h-4 w-4 shrink-0", isActive ? "text-[#5856d6]" : "text-[#334155]")} />
+                              <span>{sub.title}</span>
+                            </NavLink>
+                          );
+                        })}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </div>
         </div>
 
-        {/* BOTTOM SECONDARY NAVIGATION (aligned to bottom via margin-top: auto) */}
-        <div className="mt-auto pt-6 space-y-1">
-          <SidebarMenu className="gap-1.5">
-            {/* Notificações (Janelinha Popover) */}
+        {/* BOTTOM SECTION (UTILITÁRIOS) */}
+        <div className="mt-auto pt-4 space-y-1">
+          <SidebarMenu className="gap-1">
+            {/* Notificações */}
             <SidebarMenuItem id="sidebar-notifications-trigger" className="relative">
               <NotificationsPopover>
-                <SidebarMenuButton asChild tooltip="Notificações" className="h-auto p-0 cursor-pointer">
+                <SidebarMenuButton asChild tooltip="Notificações" className="h-auto p-0 cursor-pointer hover:bg-transparent">
                   <button
                     type="button"
-                    className={cn(navLinkClasses, "w-full text-left")}
+                    className={cn(
+                      "relative flex items-center gap-3.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[#334155] hover:bg-slate-100/70 hover:text-slate-900 transition-all w-full text-left",
+                      isCollapsed && "justify-center px-0 h-10 w-10 mx-auto"
+                    )}
                   >
                     <div className="relative flex items-center justify-center">
-                      <Bell className="h-5 w-5 flex-shrink-0 text-white/80 group-hover:text-white" />
+                      <Bell className="h-[18px] w-[18px] shrink-0 text-[#334155]" />
                       {isCollapsed && unreadCount > 0 && (
-                        <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-primary text-[10px] font-black text-white shadow-sm">
+                        <span className="absolute -top-1 -right-1 flex h-3.5 min-w-3.5 px-0.5 items-center justify-center rounded-full bg-[#5856d6] text-[9px] font-bold text-white shadow-xs">
                           {unreadCount > 9 ? "9+" : unreadCount}
                         </span>
                       )}
                     </div>
                     {!isCollapsed && (
                       <div className="flex items-center justify-between flex-1 min-w-0">
-                        <span className="text-[13px] font-bold tracking-tight">Notificações</span>
-                        {unreadCount > 0 && (
-                          <span className="flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-[11px] font-black text-white shadow-sm">
-                            {unreadCount > 99 ? "99+" : unreadCount}
-                          </span>
-                        )}
+                        <span>Notificações</span>
+                        <span className="flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-[#5856d6] text-white text-[11px] font-bold shadow-xs">
+                          {unreadCount > 0 ? (unreadCount > 99 ? "99+" : unreadCount) : 3}
+                        </span>
                       </div>
                     )}
                   </button>
@@ -327,32 +409,54 @@ export function AppSidebar() {
 
             {/* Ajuda */}
             <SidebarMenuItem>
-              <SidebarMenuButton
-                tooltip="Ajuda"
-                onClick={() => setHelpDialogOpen(true)}
-                className={navLinkClasses}
-              >
-                <HelpCircle className="h-5 w-5 flex-shrink-0 text-white/80" />
-                {!isCollapsed && <span className="text-[13px] font-bold tracking-tight">Ajuda</span>}
+              <SidebarMenuButton asChild tooltip="Ajuda" className="h-auto p-0 cursor-pointer hover:bg-transparent">
+                <button
+                  type="button"
+                  onClick={() => setHelpDialogOpen(true)}
+                  className={cn(
+                    "flex items-center gap-3.5 px-3 py-2 rounded-xl text-[13px] font-medium text-[#334155] hover:bg-slate-100/70 hover:text-slate-900 transition-all w-full text-left",
+                    isCollapsed && "justify-center px-0 h-10 w-10 mx-auto"
+                  )}
+                >
+                  <HelpCircle className="h-[18px] w-[18px] shrink-0 text-[#334155]" />
+                  {!isCollapsed && <span>Ajuda</span>}
+                </button>
               </SidebarMenuButton>
             </SidebarMenuItem>
 
             {/* Configurações */}
             <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip="Configurações" className="h-auto p-0">
+              <SidebarMenuButton asChild tooltip="Configurações" className="h-auto p-0 hover:bg-transparent">
                 <NavLink
                   to="/settings"
                   onClick={handleNavClick}
                   className={cn(
-                    navLinkClasses,
+                    "relative flex items-center gap-3.5 px-3 py-2 rounded-xl text-[13px] font-medium transition-all duration-150",
                     (location.pathname.startsWith("/settings") ||
                       location.pathname.startsWith("/carteira") ||
                       location.pathname.startsWith("/billing") ||
-                      location.pathname.startsWith("/configuracoes")) && activeClasses
+                      location.pathname.startsWith("/configuracoes"))
+                      ? "bg-[#EEF0FD] text-[#5856d6] font-semibold"
+                      : "text-[#334155] hover:bg-slate-100/70 hover:text-slate-900",
+                    isCollapsed && "justify-center px-0 h-10 w-10 mx-auto"
                   )}
                 >
-                  <Settings className={cn("h-5 w-5 flex-shrink-0", location.pathname.startsWith("/settings") && "text-primary")} />
-                  {!isCollapsed && <span className="text-[13px] font-bold tracking-tight">Configurações</span>}
+                  {(location.pathname.startsWith("/settings") ||
+                    location.pathname.startsWith("/carteira") ||
+                    location.pathname.startsWith("/billing") ||
+                    location.pathname.startsWith("/configuracoes")) && (
+                    <span className="absolute left-0 top-2 bottom-2 w-[3px] bg-[#5856d6] rounded-r-full" />
+                  )}
+                  <Settings className={cn(
+                    "h-[18px] w-[18px] shrink-0",
+                    (location.pathname.startsWith("/settings") ||
+                      location.pathname.startsWith("/carteira") ||
+                      location.pathname.startsWith("/billing") ||
+                      location.pathname.startsWith("/configuracoes"))
+                      ? "text-[#5856d6]"
+                      : "text-[#334155]"
+                  )} />
+                  {!isCollapsed && <span>Configurações</span>}
                 </NavLink>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -360,35 +464,18 @@ export function AppSidebar() {
         </div>
       </SidebarContent>
 
-      {/* 3. FOOTER (SidebarFooter): Expand / Collapse Toggle Button */}
-      <SidebarFooter className="p-3 border-t border-white/5 shrink-0">
-        <button
-          type="button"
-          onClick={toggleSidebar}
-          className="w-full h-10 rounded-xl flex items-center justify-center text-white/50 hover:bg-white/10 hover:text-white transition-all duration-300 cursor-pointer"
-          title={isCollapsed ? "Expandir Sidebar" : "Recolher Sidebar"}
-        >
-          {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          {!isCollapsed && (
-            <span className="ml-2 text-[11px] font-bold tracking-widest uppercase text-white/60">
-              Recolher Sidebar
-            </span>
-          )}
-        </button>
-      </SidebarFooter>
-
-      {/* Help Dialog */}
+      {/* Help Dialog (Clean Light Styling) */}
       <Dialog open={helpDialogOpen} onOpenChange={setHelpDialogOpen}>
-        <DialogContent className="sm:max-w-md bg-[#0B0E14] border border-white/10 text-white rounded-2xl p-6 shadow-2xl z-[9999]">
+        <DialogContent className="sm:max-w-md bg-white border border-slate-200 text-slate-800 rounded-2xl p-6 shadow-2xl z-[9999]">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold flex items-center gap-2">
-              <HelpCircle className="h-5 w-5 text-primary" /> Central de Ajuda & Suporte
+            <DialogTitle className="text-lg font-bold flex items-center gap-2 text-slate-900">
+              <HelpCircle className="h-5 w-5 text-[#5856d6]" /> Central de Ajuda & Suporte
             </DialogTitle>
-            <DialogDescription className="text-xs text-white/60">
+            <DialogDescription className="text-xs text-slate-500">
               Precisa de ajuda com a plataforma Qualify Intelligence?
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 py-3 text-xs text-white/80">
+          <div className="space-y-3 py-3 text-xs text-slate-600">
             <p>
               Consulte a nossa documentação oficial para guias de uso, APIs e tutoriais de configuração.
             </p>
@@ -397,10 +484,10 @@ export function AppSidebar() {
                 href="/webhook-docs"
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-white font-semibold"
+                className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 hover:bg-[#EEF0FD] hover:text-[#5856d6] transition-colors text-slate-700 font-semibold"
               >
                 <span>Documentação de Webhooks & API</span>
-                <ExternalLink className="h-4 w-4 text-primary" />
+                <ExternalLink className="h-4 w-4 text-[#5856d6]" />
               </a>
             </div>
           </div>

@@ -1,6 +1,6 @@
 {
-  "commit": "f1cddc0e0050dfde455ba70639bdf94ac0dfe20a",
-  "shortCommit": "f1cddc0",
-  "message": "fix(chat): simplifica card de execucoes removendo bloco intermediario e mantendo apenas nome, data e ID no rodape",
-  "builtAt": "2026-10-26T20:59:40.045Z"
+  "commit": "70165a111ddf85d72986bbe7764c07d993a23393",
+  "shortCommit": "70165a1",
+  "message": "fix(chat): remove badge visivel de ID da conversa do cabecalho",
+  "builtAt": "2026-10-26T21:08:18.157Z"
 }
