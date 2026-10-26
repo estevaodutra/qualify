@@ -512,6 +512,123 @@ export const useSprintStore = create<SprintState>((set, get) => ({
     await sprintService.updateChecklistItem(itemId, { title });
   },
 
+  updateChecklistItemNotes: async (checklistId, itemId, notes) => {
+    set((state) => {
+      const updateItemInCard = (c: SprintCard) => ({
+        ...c,
+        checklists: (c.checklists || []).map((ch) =>
+          ch.id === checklistId
+            ? {
+                ...ch,
+                items: (ch.items || []).map((it) =>
+                  it.id === itemId ? { ...it, notes } : it
+                ),
+              }
+            : ch
+        ),
+      });
+
+      return {
+        lists: state.lists.map((l) => ({
+          ...l,
+          cards: l.cards.map((c) =>
+            (c.checklists || []).some((ch) => ch.id === checklistId)
+              ? updateItemInCard(c)
+              : c
+          ),
+        })),
+        activeCard: state.activeCard ? updateItemInCard(state.activeCard) : null,
+      };
+    });
+
+    await sprintService.updateChecklistItemNotes(itemId, notes);
+  },
+
+  addChecklistItemComment: async (checklistId, itemId, cardId, content) => {
+    const { supabase } = await import("@/integrations/supabase/client");
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const newComment = await sprintService.addChecklistItemComment({
+      checklist_item_id: itemId,
+      card_id: cardId,
+      user_id: user.id,
+      content,
+    });
+
+    set((state) => {
+      const updateItemInCard = (c: SprintCard) => ({
+        ...c,
+        checklists: (c.checklists || []).map((ch) =>
+          ch.id === checklistId
+            ? {
+                ...ch,
+                items: (ch.items || []).map((it) => {
+                  if (it.id !== itemId) return it;
+                  const currentComments = it.comments || [];
+                  return {
+                    ...it,
+                    comments: [...currentComments, newComment],
+                    comments_count: currentComments.length + 1,
+                  };
+                }),
+              }
+            : ch
+        ),
+      });
+
+      return {
+        lists: state.lists.map((l) => ({
+          ...l,
+          cards: l.cards.map((c) =>
+            (c.checklists || []).some((ch) => ch.id === checklistId)
+              ? updateItemInCard(c)
+              : c
+          ),
+        })),
+        activeCard: state.activeCard ? updateItemInCard(state.activeCard) : null,
+      };
+    });
+  },
+
+  deleteChecklistItemComment: async (checklistId, itemId, commentId) => {
+    await sprintService.deleteChecklistItemComment(commentId);
+
+    set((state) => {
+      const updateItemInCard = (c: SprintCard) => ({
+        ...c,
+        checklists: (c.checklists || []).map((ch) =>
+          ch.id === checklistId
+            ? {
+                ...ch,
+                items: (ch.items || []).map((it) => {
+                  if (it.id !== itemId) return it;
+                  const filtered = (it.comments || []).filter((c) => c.id !== commentId);
+                  return {
+                    ...it,
+                    comments: filtered,
+                    comments_count: filtered.length,
+                  };
+                }),
+              }
+            : ch
+        ),
+      });
+
+      return {
+        lists: state.lists.map((l) => ({
+          ...l,
+          cards: l.cards.map((c) =>
+            (c.checklists || []).some((ch) => ch.id === checklistId)
+              ? updateItemInCard(c)
+              : c
+          ),
+        })),
+        activeCard: state.activeCard ? updateItemInCard(state.activeCard) : null,
+      };
+    });
+  },
+
   toggleChecklistItem: async (checklistId, itemId) => {
     let newCompleted = false;
 

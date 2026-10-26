@@ -25,6 +25,7 @@ interface SprintMentionTextareaProps {
   minHeight?: number;
   maxHeight?: number;
   showToolbar?: boolean;
+  onBlur?: (e: React.FocusEvent<HTMLTextAreaElement>) => void;
 }
 
 export const SprintMentionTextarea: React.FC<SprintMentionTextareaProps> = ({
@@ -37,6 +38,7 @@ export const SprintMentionTextarea: React.FC<SprintMentionTextareaProps> = ({
   minHeight = 84,
   maxHeight = 500,
   showToolbar = true,
+  onBlur,
 }) => {
   const { user } = useAuth();
   const { members = [] } = useCompanyMembers();
@@ -224,67 +226,51 @@ export const SprintMentionTextarea: React.FC<SprintMentionTextareaProps> = ({
       {showToolbar && (
         <div className="flex items-center justify-between flex-wrap gap-1 px-2 py-1 bg-muted/40 border border-border/60 rounded-t-lg text-xs">
           <div className="flex items-center gap-0.5">
-            <button
-              type="button"
-              onClick={() => applyFormatting("*", "*", "texto")}
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormatting("*", "*", "texto")}
               className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
               title="Negrito: *texto*"
             >
               <Bold className="h-3.5 w-3.5" />
             </button>
-            <button
-              type="button"
-              onClick={() => applyFormatting("_", "_", "texto")}
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormatting("_", "_", "texto")}
               className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
               title="Itálico: _texto_"
             >
               <Italic className="h-3.5 w-3.5" />
             </button>
-            <button
-              type="button"
-              onClick={() => applyFormatting("~", "~", "texto")}
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormatting("~", "~", "texto")}
               className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
               title="Tachado: ~texto~"
             >
               <Strikethrough className="h-3.5 w-3.5" />
             </button>
             <div className="h-3 w-[1px] bg-border mx-1" />
-            <button
-              type="button"
-              onClick={() => applyFormatting("`", "`", "código")}
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormatting("`", "`", "código")}
               className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors font-mono text-[11px]"
               title="Código inline: `código`"
             >
               <Code className="h-3.5 w-3.5" />
             </button>
-            <button
-              type="button"
-              onClick={() => applyFormatting("```\n", "\n```", "bloco")}
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormatting("```\n", "\n```", "bloco")}
               className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors font-mono text-[10px] px-1 font-semibold"
               title="Monoespaçado: ```bloco```"
             >
               {"{ }"}
             </button>
             <div className="h-3 w-[1px] bg-border mx-1" />
-            <button
-              type="button"
-              onClick={() => applyFormatting("> ", "", "citação")}
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormatting("> ", "", "citação")}
               className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
               title="Citação: > texto"
             >
               <Quote className="h-3.5 w-3.5" />
             </button>
-            <button
-              type="button"
-              onClick={() => applyFormatting("- ", "", "item")}
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormatting("- ", "", "item")}
               className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
               title="Lista com marcadores: - item"
             >
               <List className="h-3.5 w-3.5" />
             </button>
-            <button
-              type="button"
-              onClick={() => applyFormatting("1. ", "", "item")}
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormatting("1. ", "", "item")}
               className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
               title="Lista numerada: 1. item"
             >
@@ -317,6 +303,7 @@ export const SprintMentionTextarea: React.FC<SprintMentionTextareaProps> = ({
         value={value}
         onChange={handleInputChange}
         onKeyDown={handleCustomKeyDown}
+        onBlur={onBlur}
         placeholder={placeholder}
         className={cn(
           "w-full bg-background border border-input rounded-lg px-3 py-2 text-xs md:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all resize-none leading-relaxed",

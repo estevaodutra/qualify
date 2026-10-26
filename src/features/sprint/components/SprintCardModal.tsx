@@ -151,6 +151,8 @@ const ChecklistItemRow: React.FC<{
   const [notesText, setNotesText] = useState(item.notes || "");
   const [commentInput, setCommentInput] = useState("");
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const noteContainerRef = React.useRef<HTMLDivElement>(null);
+  const isSavingNoteRef = React.useRef(false);
 
   const {
     updateChecklistItemNotes,
@@ -179,8 +181,27 @@ const ChecklistItemRow: React.FC<{
   };
 
   const handleSaveNotes = async () => {
-    await updateChecklistItemNotes(checklistId, item.id, notesText.trim() || null);
-    setIsEditingNotes(false);
+    if (isSavingNoteRef.current) return;
+    try {
+      isSavingNoteRef.current = true;
+      await updateChecklistItemNotes(checklistId, item.id, notesText.trim() || null);
+      setIsEditingNotes(false);
+    } finally {
+      isSavingNoteRef.current = false;
+    }
+  };
+
+  const handleNoteContainerBlur = (e: React.FocusEvent) => {
+    // Se o foco mudou para outro elemento dentro do container da nota (ex: botões de formatação), não salva ainda
+    if (
+      noteContainerRef.current &&
+      e.relatedTarget &&
+      noteContainerRef.current.contains(e.relatedTarget as Node)
+    ) {
+      return;
+    }
+    // Clicou fora do editor: salva automaticamente
+    handleSaveNotes();
   };
 
   const handleAddComment = async (e: React.FormEvent) => {
@@ -348,7 +369,11 @@ const ChecklistItemRow: React.FC<{
             </div>
 
             {isEditingNotes ? (
-              <div className="space-y-2">
+              <div
+                ref={noteContainerRef}
+                onBlur={handleNoteContainerBlur}
+                className="space-y-2"
+              >
                 <SprintMentionTextarea
                   value={notesText}
                   onChange={setNotesText}
@@ -363,21 +388,26 @@ const ChecklistItemRow: React.FC<{
                     });
                   }}
                 />
-                <div className="flex items-center gap-1.5">
-                  <Button size="sm" className="h-7 text-xs px-3" onClick={handleSaveNotes}>
-                    Salvar Nota
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 text-xs"
-                    onClick={() => {
-                      setNotesText(item.notes || "");
-                      setIsEditingNotes(false);
-                    }}
-                  >
-                    Cancelar
-                  </Button>
+                <div className="flex items-center justify-between gap-1.5 pt-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <Button size="sm" className="h-7 text-xs px-3" onClick={handleSaveNotes}>
+                      Salvar Nota
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        setNotesText(item.notes || "");
+                        setIsEditingNotes(false);
+                      }}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground italic">
+                    Salva automaticamente ao clicar fora
+                  </span>
                 </div>
               </div>
             ) : item.notes ? (
