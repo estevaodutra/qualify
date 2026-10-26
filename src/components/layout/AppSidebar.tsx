@@ -100,7 +100,6 @@ export function AppSidebar() {
     <Sidebar
       collapsible="icon"
       className="border-r border-slate-200/80 bg-[#FBFBFD] h-screen flex flex-col select-none text-slate-800"
-      style={{ "--sidebar-width": "250px", "--sidebar-width-icon": "4.5rem" } as React.CSSProperties}
     >
       {/* 1. HEADER: Centered Logo + Top-Right Collapse Toggle Button */}
       <SidebarHeader className="p-0 shrink-0">
@@ -123,7 +122,7 @@ export function AppSidebar() {
             </button>
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center w-full pt-4 pb-2 px-2 gap-3">
+          <div className="flex flex-col items-center justify-center w-full pt-5 pb-3 px-2 gap-3">
             <button
               type="button"
               onClick={toggleSidebar}

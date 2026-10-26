@@ -1,6 +1,6 @@
 {
-  "commit": "96b3fba36ec4b7b07203a6e743d7de0976ef86be",
-  "shortCommit": "96b3fba",
-  "message": "feat(sidebar): atualizar asset da logo para brand/logo_sidebar_open.png",
-  "builtAt": "2026-10-26T21:20:53.112Z"
+  "commit": "c7bf548cf1dc81a040926329210b9d2d66b3a0da",
+  "shortCommit": "c7bf548",
+  "message": "feat(crm): agrupar pipelines por grupos nos seletores de condicoes, acoes e gatilhos",
+  "builtAt": "2026-10-26T21:24:54.898Z"
 }
