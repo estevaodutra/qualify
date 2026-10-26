@@ -1,3 +1,4 @@
+import { SprintCardTagPopover } from "./SprintCardTagPopover";
 import React, { useState, useEffect } from "react";
 import {
   Dialog,
@@ -716,9 +717,10 @@ export const SprintCardModal: React.FC = () => {
                 </PopoverContent>
               </Popover>
 
-              {/* Etiquetas */}
-              <Popover>
-                <PopoverTrigger asChild>
+              {/* Etiquetas com Suporte a Criar e Adicionar Tag */}
+              <SprintCardTagPopover
+                card={activeCard}
+                trigger={
                   <Button
                     variant="outline"
                     size="sm"
@@ -727,30 +729,8 @@ export const SprintCardModal: React.FC = () => {
                     <Tag className="h-3.5 w-3.5 text-muted-foreground" />
                     <span>Etiquetas</span>
                   </Button>
-                </PopoverTrigger>
-                <PopoverContent align="start" className="w-56 p-2 bg-popover border-border text-popover-foreground">
-                  <div className="text-xs font-semibold px-2 py-1 text-muted-foreground">Etiquetas do Quadro</div>
-                  <div className="space-y-1.5 mt-1.5 max-h-56 overflow-y-auto">
-                    {labels.map((label) => {
-                      const isAttached = (activeCard.labels || []).some((l) => l.id === label.id);
-                      return (
-                        <button
-                          key={label.id}
-                          onClick={() => toggleCardLabel(activeCard.id, label)}
-                          style={{ backgroundColor: label.color }}
-                          className={cn(
-                            "w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-semibold text-white shadow-2xs transition-transform active:scale-95 cursor-pointer",
-                            isAttached && "ring-2 ring-primary"
-                          )}
-                        >
-                          <span>{label.name}</span>
-                          {isAttached && <CheckCircle2 className="h-3.5 w-3.5" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </PopoverContent>
-              </Popover>
+                }
+              />
 
               {/* Checklist */}
               {isAddingChecklist ? (

@@ -402,6 +402,22 @@ export const sprintService = {
     if (error) throw error;
   },
 
+  async createLabel(params: { boardId: string; companyId: string; name: string; color: string }): Promise<SprintLabel> {
+    const { data, error } = await (supabase as any)
+      .from("sprint_labels")
+      .insert({
+        board_id: params.boardId,
+        company_id: params.companyId,
+        name: params.name.trim(),
+        color: params.color,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data as SprintLabel;
+  },
+
   // --- CARD LABELS & MEMBERS ---
   async toggleCardLabel(cardId: string, labelId: string): Promise<boolean> {
     // Check if relation exists

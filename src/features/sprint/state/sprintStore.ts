@@ -548,6 +548,31 @@ export const useSprintStore = create<SprintState>((set, get) => ({
     });
   },
 
+  createLabel: async (name, color) => {
+    const { currentBoard } = get();
+    if (!currentBoard || !name.trim()) return null;
+
+    try {
+      const newLabel = await sprintService.createLabel({
+        boardId: currentBoard.id,
+        companyId: currentBoard.company_id,
+        name: name.trim(),
+        color,
+      });
+
+      set((state) => ({
+        labels: [...state.labels, newLabel],
+      }));
+
+      toast.success(`Etiqueta "${newLabel.name}" criada com sucesso!`);
+      return newLabel;
+    } catch (error) {
+      console.error("Erro ao criar etiqueta:", error);
+      toast.error("Não foi possível criar a etiqueta.");
+      return null;
+    }
+  },
+
   toggleCardLabel: async (cardId, label) => {
     const isAdded = await sprintService.toggleCardLabel(cardId, label.id);
 
