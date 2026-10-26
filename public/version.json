@@ -1,6 +1,6 @@
 {
-  "commit": "36954857c270989482c0b9fd78889860ba90694f",
-  "shortCommit": "3695485",
-  "message": "feat(chat): exibe e permite copiar o ID da execução nos cards de automação do lead",
-  "builtAt": "2026-10-26T20:53:15.133Z"
+  "commit": "f1cddc0e0050dfde455ba70639bdf94ac0dfe20a",
+  "shortCommit": "f1cddc0",
+  "message": "fix(chat): simplifica card de execucoes removendo bloco intermediario e mantendo apenas nome, data e ID no rodape",
+  "builtAt": "2026-10-26T20:59:40.045Z"
 }

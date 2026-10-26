@@ -657,21 +657,6 @@ export default function Chat() {
                         </SelectContent>
                       </Select>
                     </div>
-
-                    {/* Unique Conversation ID Badge (Click to copy) */}
-                    <span className="text-muted-foreground/30 text-[10px] hidden sm:inline">•</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(selectedConv.id);
-                        toast.success("ID único da conversa copiado!");
-                      }}
-                      className="h-6 px-2 py-0.5 rounded-lg text-[10px] font-mono text-muted-foreground hover:text-foreground bg-muted/40 hover:bg-muted/80 border border-border/40 transition-colors flex items-center gap-1 cursor-pointer shrink-0"
-                      title={`ID único da conversa: ${selectedConv.id} (Clique para copiar)`}
-                    >
-                      <span className="text-[9px] font-sans font-bold text-primary uppercase">ID:</span>
-                      <span className="truncate max-w-[70px] sm:max-w-[100px]">{selectedConv.id.slice(0, 8)}...</span>
-                    </button>
                   </div>
 
                   {/* Permanent Tags Row (Option 2) */}
