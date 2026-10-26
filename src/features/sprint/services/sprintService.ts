@@ -288,19 +288,41 @@ export const sprintService = {
         });
       }
 
-      // Checklists
-      const { data: chkData } = await (supabase as any)
-        .from("sprint_checklists")
-        .select("*, items:sprint_checklist_items(*)")
-        .in("card_id", cardIds)
-        .order("position", { ascending: true });
+      // Checklists & Checklist Item Comments
+      const [chkRes, itemCommentsRes] = await Promise.all([
+        (supabase as any)
+          .from("sprint_checklists")
+          .select("*, items:sprint_checklist_items(*)")
+          .in("card_id", cardIds)
+          .order("position", { ascending: true }),
+        (supabase as any)
+          .from("sprint_checklist_item_comments")
+          .select("*")
+          .in("card_id", cardIds)
+          .order("created_at", { ascending: true }),
+      ]);
+
+      const chkData = chkRes.data;
+      const allItemComments = (itemCommentsRes.data || []) as SprintChecklistItemComment[];
+      const itemCommentsMap = new Map<string, SprintChecklistItemComment[]>();
+      allItemComments.forEach((c) => {
+        if (!itemCommentsMap.has(c.checklist_item_id)) itemCommentsMap.set(c.checklist_item_id, []);
+        itemCommentsMap.get(c.checklist_item_id)!.push(c);
+      });
 
       if (chkData) {
         chkData.forEach((chk: any) => {
           if (!cardChecklistsMap[chk.card_id]) cardChecklistsMap[chk.card_id] = [];
+          const sortedItems = (chk.items || [])
+            .sort((a: any, b: any) => a.position - b.position)
+            .map((item: any) => ({
+              ...item,
+              comments: itemCommentsMap.get(item.id) || [],
+              comments_count: (itemCommentsMap.get(item.id) || []).length,
+            }));
           cardChecklistsMap[chk.card_id].push({
             ...chk,
-            items: chk.items ? chk.items.sort((a: any, b: any) => a.position - b.position) : [],
+            items: sortedItems,
           });
         });
       }
@@ -349,7 +371,7 @@ export const sprintService = {
     if (error || !cardData) return null;
 
     try {
-      const [labelsRes, membersRes, chkRes, commentsCountRes] = await Promise.all([
+      const [labelsRes, membersRes, chkRes, commentsCountRes, itemCommentsRes] = await Promise.all([
         (supabase as any)
           .from("sprint_card_labels")
           .select("label:sprint_labels(*)")
@@ -367,13 +389,30 @@ export const sprintService = {
           .from("sprint_card_comments")
           .select("id", { count: "exact", head: true })
           .eq("card_id", cardId),
+        (supabase as any)
+          .from("sprint_checklist_item_comments")
+          .select("*")
+          .eq("card_id", cardId)
+          .order("created_at", { ascending: true }),
       ]);
+
+      const itemCommentsMap = new Map<string, SprintChecklistItemComment[]>();
+      ((itemCommentsRes.data || []) as SprintChecklistItemComment[]).forEach((c) => {
+        if (!itemCommentsMap.has(c.checklist_item_id)) itemCommentsMap.set(c.checklist_item_id, []);
+        itemCommentsMap.get(c.checklist_item_id)!.push(c);
+      });
 
       const labels = (labelsRes.data || []).map((r: any) => r.label).filter(Boolean);
       const members = (membersRes.data || []).map((r: any) => ({ user_id: r.user_id }));
       const checklists = (chkRes.data || []).map((chk: any) => ({
         ...chk,
-        items: chk.items ? chk.items.sort((a: any, b: any) => a.position - b.position) : [],
+        items: (chk.items || [])
+          .sort((a: any, b: any) => a.position - b.position)
+          .map((item: any) => ({
+            ...item,
+            comments: itemCommentsMap.get(item.id) || [],
+            comments_count: (itemCommentsMap.get(item.id) || []).length,
+          })),
       }));
       const comments_count = commentsCountRes.count || 0;
 
@@ -657,6 +696,56 @@ export const sprintService = {
       .from("sprint_checklist_items")
       .delete()
       .eq("id", itemId);
+
+    if (error) throw error;
+  },
+
+  async updateChecklistItemNotes(itemId: string, notes: string | null): Promise<void> {
+    const { error } = await (supabase as any)
+      .from("sprint_checklist_items")
+      .update({ notes })
+      .eq("id", itemId);
+
+    if (error) throw error;
+  },
+
+  async getChecklistItemComments(itemId: string): Promise<SprintChecklistItemComment[]> {
+    const { data, error } = await (supabase as any)
+      .from("sprint_checklist_item_comments")
+      .select("*")
+      .eq("checklist_item_id", itemId)
+      .order("created_at", { ascending: true });
+
+    if (error) throw error;
+    return (data || []) as SprintChecklistItemComment[];
+  },
+
+  async addChecklistItemComment(params: {
+    checklist_item_id: string;
+    card_id: string;
+    user_id: string;
+    content: string;
+  }): Promise<SprintChecklistItemComment> {
+    const { data, error } = await (supabase as any)
+      .from("sprint_checklist_item_comments")
+      .insert({
+        checklist_item_id: params.checklist_item_id,
+        card_id: params.card_id,
+        user_id: params.user_id,
+        content: params.content,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data as SprintChecklistItemComment;
+  },
+
+  async deleteChecklistItemComment(commentId: string): Promise<void> {
+    const { error } = await (supabase as any)
+      .from("sprint_checklist_item_comments")
+      .delete()
+      .eq("id", commentId);
 
     if (error) throw error;
   },

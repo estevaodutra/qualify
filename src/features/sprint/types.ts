@@ -35,6 +35,16 @@ export interface SprintLabel {
   created_at: string;
 }
 
+export interface SprintChecklistItemComment {
+  id: string;
+  checklist_item_id: string;
+  card_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface SprintChecklistItem {
   id: string;
   checklist_id: string;
@@ -44,6 +54,9 @@ export interface SprintChecklistItem {
   position: number;
   due_date: string | null;
   assigned_user_id: string | null;
+  notes?: string | null;
+  comments?: SprintChecklistItemComment[];
+  comments_count?: number;
   created_at: string;
 }
 

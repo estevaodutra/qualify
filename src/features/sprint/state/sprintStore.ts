@@ -85,6 +85,9 @@ interface SprintState {
   }) => Promise<void>;
   toggleChecklistItem: (checklistId: string, itemId: string) => Promise<void>;
   updateChecklistItemTitle: (checklistId: string, itemId: string, title: string) => Promise<void>;
+  updateChecklistItemNotes: (checklistId: string, itemId: string, notes: string | null) => Promise<void>;
+  addChecklistItemComment: (checklistId: string, itemId: string, cardId: string, content: string) => Promise<void>;
+  deleteChecklistItemComment: (checklistId: string, itemId: string, commentId: string) => Promise<void>;
   deleteChecklistItem: (checklistId: string, itemId: string) => Promise<void>;
 
   // Labels & Members

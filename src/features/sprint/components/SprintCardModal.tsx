@@ -18,6 +18,8 @@ import {
   Trash2,
   Plus,
   MessageSquare,
+  FileText,
+  StickyNote,
   AlignLeft,
   X,
   CheckCircle2,
@@ -98,16 +100,36 @@ const ChecklistTitleEditor: React.FC<ChecklistTitleEditorProps> = ({ title, onSa
 
 const ChecklistItemRow: React.FC<{
   item: SprintChecklistItem;
+  checklistId: string;
+  cardId: string;
   onToggle: () => void;
   onDelete: () => void;
   onUpdateTitle: (newTitle: string) => void;
-}> = ({ item, onToggle, onDelete, onUpdateTitle }) => {
+}> = ({ item, checklistId, cardId, onToggle, onDelete, onUpdateTitle }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(item.title);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [notesText, setNotesText] = useState(item.notes || "");
+  const [commentInput, setCommentInput] = useState("");
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+
+  const {
+    updateChecklistItemNotes,
+    addChecklistItemComment,
+    deleteChecklistItemComment,
+    autoAssignMemberMention,
+  } = useSprintStore();
+  const { user } = useAuth();
+  const { members = [] } = useCompanyMembers();
 
   useEffect(() => {
     setEditText(item.title);
   }, [item.title]);
+
+  useEffect(() => {
+    setNotesText(item.notes || "");
+  }, [item.notes]);
 
   const handleSave = () => {
     setIsEditing(false);
@@ -118,82 +140,293 @@ const ChecklistItemRow: React.FC<{
     }
   };
 
-  if (isEditing) {
-    return (
-      <div className="flex items-center gap-2 py-1 px-1.5 rounded-lg bg-muted/40">
-        <input
-          type="checkbox"
-          checked={item.is_completed}
-          onChange={onToggle}
-          className="h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary shrink-0"
-        />
-        <div className="flex-1 min-w-0">
-          <SprintMentionInput
-            value={editText}
-            onChange={setEditText}
-            onBlur={handleSave}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                handleSave();
-              }
-              if (e.key === "Escape") {
-                setIsEditing(false);
-                setEditText(item.title);
-              }
-            }}
-            autoFocus
-            className="text-sm bg-background border border-primary px-2 py-1 rounded w-full"
-          />
-        </div>
-      </div>
-    );
-  }
+  const handleSaveNotes = async () => {
+    await updateChecklistItemNotes(checklistId, item.id, notesText.trim() || null);
+    setIsEditingNotes(false);
+  };
+
+  const handleAddComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!commentInput.trim() || isSubmittingComment) return;
+    try {
+      setIsSubmittingComment(true);
+      await addChecklistItemComment(checklistId, item.id, cardId, commentInput.trim());
+      setCommentInput("");
+    } finally {
+      setIsSubmittingComment(false);
+    }
+  };
+
+  const commentsCount = item.comments?.length || item.comments_count || 0;
+  const hasInfo = commentsCount > 0 || !!item.notes;
 
   return (
-    <div className="group flex items-center justify-between gap-3 p-1.5 rounded-lg hover:bg-muted/40 transition-colors">
-      <div className="flex items-center gap-2.5 flex-1 min-w-0">
-        <input
-          type="checkbox"
-          checked={item.is_completed}
-          onChange={onToggle}
-          className="h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary"
-        />
-        <div
-          onClick={() => setIsEditing(true)}
-          className="flex-1 min-w-0 cursor-pointer"
-          title="Clique para editar item com menções (@)"
-        >
-          <SprintMentionRenderer
-            text={item.title}
-            isCompleted={item.is_completed}
-            className={cn(
-              "text-sm break-words",
-              item.is_completed ? "line-through text-muted-foreground" : "text-foreground"
-            )}
+    <div className="space-y-1">
+      <div className="group flex items-center justify-between gap-2 p-1.5 rounded-lg hover:bg-muted/40 transition-colors">
+        <div className="flex items-center gap-2.5 flex-1 min-w-0">
+          <input
+            type="checkbox"
+            checked={item.is_completed}
+            onChange={onToggle}
+            className="h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary shrink-0"
           />
+
+          {isEditing ? (
+            <div className="flex-1 min-w-0">
+              <SprintMentionInput
+                value={editText}
+                onChange={setEditText}
+                onBlur={handleSave}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleSave();
+                  }
+                  if (e.key === "Escape") {
+                    setIsEditing(false);
+                    setEditText(item.title);
+                  }
+                }}
+                autoFocus
+                className="text-sm bg-background border border-primary px-2 py-1 rounded w-full"
+              />
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div
+                onClick={() => setIsEditing(true)}
+                className="flex-1 min-w-0 cursor-pointer"
+                title="Clique para editar item com menções (@)"
+              >
+                <SprintMentionRenderer
+                  text={item.title}
+                  isCompleted={item.is_completed}
+                  className={cn(
+                    "text-sm break-words",
+                    item.is_completed ? "line-through text-muted-foreground" : "text-foreground"
+                  )}
+                />
+              </div>
+
+              {/* Indicador de Notas / Comentários na Atividade */}
+              {hasInfo && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsDetailsOpen((prev) => !prev);
+                  }}
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] bg-primary/10 text-primary font-medium hover:bg-primary/20 transition-colors shrink-0 cursor-pointer"
+                  title="Ver notas e comentários desta atividade"
+                >
+                  <MessageSquare className="h-2.5 w-2.5" />
+                  {commentsCount > 0 ? (
+                    <span>{commentsCount}</span>
+                  ) : (
+                    <span>Nota</span>
+                  )}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Botões de Ação na Atividade */}
+        <div className="flex items-center gap-0.5">
+          {/* Botão de Comentar / Nota */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "h-6 w-6 transition-all",
+              hasInfo || isDetailsOpen
+                ? "opacity-100 text-primary bg-primary/10"
+                : "opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary hover:bg-primary/10"
+            )}
+            onClick={() => setIsDetailsOpen((prev) => !prev)}
+            title="Comentar ou adicionar nota nesta atividade"
+          >
+            <MessageSquare className="h-3 w-3" />
+          </Button>
+
+          {/* Botão Editar Item */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground transition-opacity"
+            onClick={() => setIsEditing(true)}
+            title="Editar item com menção (@)"
+          >
+            <Pencil className="h-3 w-3" />
+          </Button>
+
+          {/* Botão Excluir Item */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+            onClick={onDelete}
+            title="Excluir item"
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
         </div>
       </div>
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6 text-muted-foreground hover:text-foreground"
-          onClick={() => setIsEditing(true)}
-          title="Editar item com menção (@)"
-        >
-          <Pencil className="h-3 w-3" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6 text-muted-foreground hover:text-destructive"
-          onClick={onDelete}
-          title="Excluir item"
-        >
-          <X className="h-3.5 w-3.5" />
-        </Button>
-      </div>
+
+      {/* Painel Expansível de Detalhes / Comentários da Atividade */}
+      {isDetailsOpen && (
+        <div className="ml-6 pl-3 border-l-2 border-primary/40 my-1.5 space-y-3 bg-muted/15 rounded-r-xl p-3 border border-border/50 animate-in fade-in-50 duration-150">
+          {/* Seção: Informações / Nota da Atividade */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-xs font-semibold text-foreground">
+              <span className="flex items-center gap-1.5 text-muted-foreground text-[11px]">
+                <StickyNote className="h-3 w-3 text-primary" />
+                <span>Nota / Informações da Atividade</span>
+              </span>
+              {!isEditingNotes && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingNotes(true)}
+                  className="text-[11px] text-primary hover:underline font-normal cursor-pointer"
+                >
+                  {item.notes ? "Editar nota" : "+ Adicionar nota"}
+                </button>
+              )}
+            </div>
+
+            {isEditingNotes ? (
+              <div className="space-y-2">
+                <SprintMentionTextarea
+                  value={notesText}
+                  onChange={setNotesText}
+                  minHeight={65}
+                  showToolbar={true}
+                  placeholder="Instruções detalhadas, links, notas sobre a atividade... (use @, *negrito*, _itálico_)"
+                  onMentionSelected={(m) => {
+                    autoAssignMemberMention(cardId, {
+                      user_id: m.user_id,
+                      full_name: m.full_name || undefined,
+                      email: m.email || undefined,
+                    });
+                  }}
+                />
+                <div className="flex items-center gap-1.5">
+                  <Button size="sm" className="h-7 text-xs px-3" onClick={handleSaveNotes}>
+                    Salvar Nota
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      setNotesText(item.notes || "");
+                      setIsEditingNotes(false);
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            ) : item.notes ? (
+              <div
+                onClick={() => setIsEditingNotes(true)}
+                className="p-2.5 rounded-lg bg-background border border-border/80 text-xs text-foreground cursor-pointer hover:border-primary/50 transition-colors"
+                title="Clique para editar a nota"
+              >
+                <SprintMentionRenderer text={item.notes} />
+              </div>
+            ) : (
+              <div
+                onClick={() => setIsEditingNotes(true)}
+                className="p-2 rounded-lg border border-dashed border-border text-[11px] text-muted-foreground italic cursor-pointer hover:border-primary/50 hover:text-foreground transition-colors"
+              >
+                Nenhuma nota adicionada. Clique para acrescentar informações ou observações a esta tarefa.
+              </div>
+            )}
+          </div>
+
+          {/* Seção: Comentários nesta atividade */}
+          <div className="space-y-2 pt-2 border-t border-border/40">
+            <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <MessageSquare className="h-3 w-3 text-primary" />
+                <span>Comentários ({commentsCount})</span>
+              </span>
+            </div>
+
+            {/* Lista de comentários da atividade */}
+            {(item.comments || []).length > 0 && (
+              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-0.5">
+                {item.comments?.map((comment) => {
+                  const author = members.find((m) => m.user_id === comment.user_id);
+                  const authorName = author?.full_name || author?.email || "Usuário";
+                  return (
+                    <div
+                      key={comment.id}
+                      className="flex gap-2 text-xs bg-background p-2 rounded-lg border border-border/70 shadow-2xs"
+                    >
+                      <Avatar className="h-5 w-5 mt-0.5 shrink-0">
+                        <AvatarFallback className="bg-secondary text-secondary-foreground font-bold text-[8px]">
+                          {authorName.slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1 mb-0.5">
+                          <span className="font-semibold text-foreground text-[11px] truncate">
+                            {authorName}
+                          </span>
+                          <span className="text-[9px] text-muted-foreground shrink-0">
+                            {format(new Date(comment.created_at), "dd/MM HH:mm")}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-foreground leading-normal">
+                          <SprintMentionRenderer text={comment.content} />
+                        </div>
+                        {user?.id === comment.user_id && (
+                          <div className="mt-1 text-right">
+                            <button
+                              type="button"
+                              onClick={() => deleteChecklistItemComment(checklistId, item.id, comment.id)}
+                              className="text-[9px] text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
+                            >
+                              Excluir
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Input para adicionar comentário */}
+            <form onSubmit={handleAddComment} className="flex items-center gap-1.5 pt-0.5">
+              <SprintMentionInput
+                value={commentInput}
+                onChange={setCommentInput}
+                placeholder="Comentar nesta atividade... (use @ para citar)"
+                className="h-7 text-xs bg-background flex-1"
+                onMentionSelected={(m) => {
+                  autoAssignMemberMention(cardId, {
+                    user_id: m.user_id,
+                    full_name: m.full_name || undefined,
+                    email: m.email || undefined,
+                  });
+                }}
+              />
+              <Button
+                type="submit"
+                size="sm"
+                disabled={!commentInput.trim() || isSubmittingComment}
+                className="h-7 px-2.5 text-xs shrink-0"
+              >
+                {isSubmittingComment ? "Enviando..." : "Comentar"}
+              </Button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -548,6 +781,8 @@ export const SprintCardModal: React.FC = () => {
                       <ChecklistItemRow
                         key={item.id}
                         item={item}
+                        checklistId={checklist.id}
+                        cardId={activeCard.id}
                         onToggle={() => toggleChecklistItem(checklist.id, item.id)}
                         onDelete={() => deleteChecklistItem(checklist.id, item.id)}
                         onUpdateTitle={(newTitle) =>
