@@ -4,6 +4,7 @@ import {
   PhoneCall,
   Users,
   MessagesSquare,
+  Radio,
   MessageSquare,
   GitBranch,
   Grid,
@@ -32,6 +33,7 @@ export const TOP_NAV_ITEMS: NavItem[] = [
   { id: "call-panel", title: "Call Panel", url: "/painel-ligacoes", icon: PhoneCall },
   { id: "leads", title: "Leads", url: "/leads", icon: Users },
   { id: "groups", title: "Groups", url: "/groups", icon: MessagesSquare },
+  { id: "disparos", title: "Disparos", url: "/disparos", icon: Radio },
   { id: "chat", title: "Chat", url: "/chat", icon: MessageSquare },
   { id: "workflows", title: "Workflows", url: "/workflows", icon: GitBranch },
 ];
