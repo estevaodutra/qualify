@@ -28,7 +28,7 @@ export function useBroadcastCampaigns() {
         .select(`
           *,
           workflow:message_sequences(id, name, description),
-          instance:instances(id, name, phone_number)
+          instance:instances(id, name, phone)
         `)
         .order("created_at", { ascending: false });
 

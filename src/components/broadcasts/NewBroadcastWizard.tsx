@@ -134,7 +134,7 @@ export function NewBroadcastWizard({
     queryFn: async () => {
       let query = supabase
         .from("instances")
-        .select("id, name, phone_number, status")
+        .select("id, name, phone, status")
         .order("name", { ascending: true });
 
       if (activeCompanyId) {
@@ -425,7 +425,7 @@ export function NewBroadcastWizard({
                     <SelectItem value="default">Usar conexão padrão da empresa</SelectItem>
                     {instances.map((inst) => (
                       <SelectItem key={inst.id} value={inst.id}>
-                        {inst.name} {inst.phone_number ? `(${inst.phone_number})` : ""}
+                        {inst.name} {inst.phone ? `(${inst.phone})` : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>

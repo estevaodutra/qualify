@@ -52,7 +52,7 @@ export interface BroadcastCampaign {
   instance?: {
     id: string;
     name: string;
-    phone_number: string | null;
+    phone: string | null;
   };
 }
 
