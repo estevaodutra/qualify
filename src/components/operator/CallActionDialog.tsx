@@ -1020,11 +1020,6 @@ export function CallActionDialog({
       const nextCall = await fetchNextQueueCall(realTaskId || currentData.callId);
 
       if (nextCall) {
-        toast({
-          title: "Chamada salva",
-          description: `Avançando para: ${nextCall.leadName} (${nextCall.leadPhone})`,
-        });
-
         resetState();
         useCallFloatingStore.getState().openCall(nextCall);
       } else {
@@ -1167,7 +1162,6 @@ export function CallActionDialog({
             console.warn("[handleManualDial] Failed to extract external_call_id:", e);
           }
 
-          toast({ title: "Ligação iniciada", description: "A chamada foi disparada para o webhook." });
           setCurrentData(prev => ({ 
             ...prev, 
             callStatus: "in_call",
@@ -1213,7 +1207,6 @@ export function CallActionDialog({
             console.warn("[handleManualDial] Failed to extract external_call_id:", e);
           }
 
-          toast({ title: "Ligação iniciada", description: "A chamada foi disparada para o webhook." });
           setCurrentData(prev => ({ 
             ...prev, 
             callStatus: "in_call",

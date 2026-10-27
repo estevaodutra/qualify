@@ -1149,7 +1149,6 @@ export default function CallPanel() {
           console.warn("[handleWorkflowDial] Failed to extract external_call_id:", e);
         }
 
-        toast({ title: "Ligação iniciada", description: `Disparo enviado para o webhook.` });
         setViewingQueueLead(prev => prev && prev.id === qe.id ? { ...prev, callStatus: "in_call", externalCallId } : prev);
         await supabase
           .from("workflow_call_tasks")
