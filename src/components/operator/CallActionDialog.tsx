@@ -140,7 +140,7 @@ export function CallActionDialog({
   const [forwardStack, setForwardStack] = useState<CallDialogData[]>([]);
   const [loadingPrevious, setLoadingPrevious] = useState(false);
 
-  // Keep currentData in sync with props when dialog reopens
+  // Keep currentData in sync with props when dialog reopens or lead changes
   useEffect(() => {
     if (open) {
       const activeCallId = callId?.startsWith("cl_") ? callId.replace("cl_", "") : (callId || "");
@@ -164,7 +164,7 @@ export function CallActionDialog({
       setForwardStack([]);
       autoDialTriggeredRef.current = false;
     }
-  }, [open, callId, userId]);
+  }, [open, callId, leadId, leadPhone, initialObservations, userId]);
 
   // Sync specific props that might change while dialog is open (like status or externalCallId)
   useEffect(() => {

@@ -12,7 +12,7 @@ import { useCallCampaigns } from "@/hooks/useCallCampaigns";
 import { useCallActions, CallAction } from "@/hooks/useCallActions";
 import { useCallQueue, QueueItem } from "@/hooks/useCallQueue";
 import { useCallOperators } from "@/hooks/useCallOperators";
-import { useCallFloatingStore } from "@/stores/callFloating.store";
+import { useCallFloatingStore, CallDialogData } from "@/stores/callFloating.store";
 import { OperatorsPanel } from "@/components/call-panel/OperatorsPanel";
 import { CallPopup } from "@/components/operator/CallPopup";
 import { CallPanelSidebar, CallPanelSection } from "@/components/call-panel/CallPanelSidebar";
@@ -1312,6 +1312,41 @@ export default function CallPanel() {
   ]);
 
 
+  const handleViewLeadDetails = (lead: any, overrideStatus?: string) => {
+    if (!lead) return;
+
+    let targetCallId = "";
+    if (lead.source === "workflow_call_task" || (typeof lead.id === "string" && lead.id.startsWith("wt_"))) {
+      targetCallId = lead.id?.startsWith("wt_") ? lead.id : `wt_${lead.realId || lead.id}`;
+    } else if (lead.source === "call_log" || (typeof lead.id === "string" && lead.id.startsWith("cl_"))) {
+      targetCallId = lead.id?.startsWith("cl_") ? lead.id : `cl_${lead.realId || lead.id}`;
+    } else {
+      targetCallId = lead.callLogId || lead.realId || lead.id || "";
+    }
+
+    const dialogData: CallDialogData = {
+      callId: targetCallId,
+      campaignId: lead.campaignId || "",
+      leadId: lead.leadId || "",
+      leadName: lead.leadName || lead.name || "Lead",
+      leadPhone: lead.phone || lead.leadPhone || "",
+      campaignName: lead.campaignName || "Fila",
+      duration: lead.durationSeconds || lead.duration || 0,
+      notes: lead.observations || lead.observation || lead.notes || "",
+      attemptNumber: lead.attemptNumber || 1,
+      maxAttempts: lead.maxAttempts || 3,
+      isPriority: !!lead.isPriority,
+      callStatus: overrideStatus || lead.callStatus || lead.status || "idle",
+      userId: lead.userId || user?.id,
+      audioUrl: lead.audioUrl || null,
+      externalCallId: lead.externalCallId || null,
+      autoDial: false,
+    };
+
+    setViewingQueueLead(lead);
+    useCallFloatingStore.getState().openCall(dialogData);
+  };
+
   const statusConfig: Record<string, { label: string; dotClass: string; className: string }> = {
     running: { label: "🟢 Fila Ativa", dotClass: "bg-emerald-500 animate-pulse", className: "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400" },
     paused: { label: "⏸️ Fila Pausada", dotClass: "bg-amber-500", className: "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400" },
@@ -1743,7 +1778,7 @@ export default function CallPanel() {
                                 variant="ghost"
                                 size="icon"
                                 className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                                onClick={() => setViewingQueueLead(qe)}
+                                onClick={() => handleViewLeadDetails(qe)}
                               >
                                 <Eye className="h-3.5 w-3.5" />
                               </Button>
@@ -1758,7 +1793,10 @@ export default function CallPanel() {
                                     variant="ghost"
                                     size="icon"
                                     className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                                    onClick={() => { setViewingQueueLead({ ...qe, autoDial: false }); handleWorkflowDial(qe); }}
+                                    onClick={() => {
+                                      handleViewLeadDetails(qe, "dialing");
+                                      handleWorkflowDial(qe);
+                                    }}
                                   >
                                     <Phone className="h-3.5 w-3.5" />
                                   </Button>
@@ -1986,18 +2024,7 @@ export default function CallPanel() {
                           variant="ghost"
                           size="sm"
                           className="h-7 gap-1.5 text-muted-foreground hover:text-foreground"
-                          onClick={() => setViewingQueueLead({
-                            id: entry.id,
-                            campaignId: entry.campaignId,
-                            leadId: entry.leadId,
-                            leadName: entry.leadName,
-                            phone: entry.leadPhone,
-                            campaignName: entry.campaignName,
-                            attemptNumber: entry.attemptNumber,
-                            maxAttempts: entry.maxAttempts,
-                            isPriority: entry.isPriority,
-                            observations: entry.observations,
-                          })}
+                          onClick={() => handleViewLeadDetails(entry)}
                         >
                           <Eye className="h-3.5 w-3.5" /> Detalhes
                         </Button>
@@ -2111,17 +2138,7 @@ export default function CallPanel() {
                       <div className="flex items-center gap-1">
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => setViewingQueueLead({
-                              id: entry.id,
-                              campaignId: entry.campaignId,
-                              leadId: entry.leadId,
-                              leadName: entry.leadName,
-                              phone: entry.leadPhone,
-                              campaignName: entry.campaignName,
-                              attemptNumber: 0,
-                              maxAttempts: 3,
-                              isPriority: entry.isPriority,
-                            })}>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => handleViewLeadDetails(entry)}>
                               <Eye className="h-3.5 w-3.5" />
                             </Button>
                           </TooltipTrigger>
@@ -2203,17 +2220,7 @@ export default function CallPanel() {
                       <div className="flex items-center gap-1">
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => setViewingQueueLead({
-                              id: entry.id,
-                              campaignId: entry.campaignId,
-                              leadId: entry.leadId,
-                              leadName: entry.leadName,
-                              phone: entry.leadPhone,
-                              campaignName: entry.campaignName,
-                              attemptNumber: 0,
-                              maxAttempts: 3,
-                              isPriority: entry.isPriority,
-                            })}>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => handleViewLeadDetails(entry)}>
                               <Eye className="h-3.5 w-3.5" />
                             </Button>
                           </TooltipTrigger>
