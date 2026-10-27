@@ -1,6 +1,6 @@
 {
-  "commit": "b14e6a83f97348b3d8362ad587f21ae5741e20f4",
-  "shortCommit": "b14e6a8",
-  "message": "fix(call-dialog): remove todas as notificacoes toast operacionais do card de ligacao",
-  "builtAt": "2026-10-27T21:28:02.479Z"
+  "commit": "816229a373ebe0be0f6b5fc184f2d31361c678c9",
+  "shortCommit": "816229a",
+  "message": "fix(call-panel): bloqueia auto-discagem quando operadores estao offline ou fila pausada",
+  "builtAt": "2026-10-27T22:05:44.165Z"
 }

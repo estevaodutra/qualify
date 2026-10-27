@@ -20,9 +20,10 @@ export function AppLayout({ children }: AppLayoutProps) {
   useCallQueue({ globalLoop: true });
   const location = useLocation();
 
-  // Check if current route is Quiz Editor or Chat
+  // Check if current route is Quiz Editor, Chat, or Criafy Hub
   const isQuizEditor = location.pathname.startsWith("/quiz/") && location.pathname !== "/quiz";
   const isChat = location.pathname.startsWith("/chat");
+  const isCriafyHub = location.pathname === "/criafy";
 
   return (
     <SidebarProvider defaultOpen>
@@ -38,6 +39,8 @@ export function AppLayout({ children }: AppLayoutProps) {
           <main className={
             isQuizEditor
               ? "flex-1 overflow-hidden p-0 h-[100dvh]"
+              : isCriafyHub
+              ? "flex-1 overflow-hidden p-0 h-[calc(100dvh-60px)]"
               : isChat
               ? "flex-1 overflow-hidden p-0 md:p-4 h-[calc(100dvh-60px)]"
               : "flex-1 overflow-auto p-3.5 md:p-8 scrollbar-thin pb-[env(safe-area-inset-bottom)]"
