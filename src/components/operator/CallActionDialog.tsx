@@ -1371,7 +1371,6 @@ const handleSave = async () => {
                 className="h-6 px-2 text-[11px] font-semibold gap-1 rounded-lg text-rose-600 border-rose-500/40 bg-rose-50/60 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300"
                 onClick={() => {
                   setCurrentData(prev => ({ ...prev, callStatus: "ended" }));
-                  toast({ title: "Chamada encerrada", description: "Selecione a ação de desfecho e clique em 'Salvar e Encerrar' para ir para a próxima ligação." });
                 }}
                 title="Marcar ligação como encerrada"
               >
