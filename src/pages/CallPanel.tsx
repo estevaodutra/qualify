@@ -1223,18 +1223,43 @@ export default function CallPanel() {
     };
   }, [user, queryClient]);
 
+  const isCallFloatingOpen = useCallFloatingStore((s) => s.isOpen);
+  const floatingActiveCall = useCallFloatingStore((s) => s.activeCall);
+  const lastDialedLeadIdRef = useRef<string | null>(null);
+
+  // Mantém viewingQueueLead e a trava de auto-dial sincronizados com o modal global de ligação
+  useEffect(() => {
+    if (!isCallFloatingOpen && !floatingActiveCall) {
+      setViewingQueueLead(null);
+      isAutoDialingRef.current = false;
+    }
+  }, [isCallFloatingOpen, floatingActiveCall]);
+
+  useEffect(() => {
+    // Se o lead discado anteriormente já saiu do topo da fila, limpa a referência
+    if (combinedQueue.length === 0 || (combinedQueue[0] && (combinedQueue[0].realId || combinedQueue[0].id) !== lastDialedLeadIdRef.current?.replace("wt_", ""))) {
+      lastDialedLeadIdRef.current = null;
+    }
+  }, [combinedQueue]);
+
   useEffect(() => {
     // Apenas disca automaticamente se a fila estiver explicitamente iniciada ('running')
     const isQueueRunning = queueGlobalStatus === "running";
     if (
       isQueueRunning &&
       isOperatorAvailable &&
-      inProgressEntries.length === 0 &&
+      !isCallFloatingOpen &&
       !viewingQueueLead &&
       combinedQueue.length > 0 &&
       !isAutoDialingRef.current
     ) {
       const nextLead = combinedQueue[0];
+      const targetCallId = nextLead.source === "workflow_call_task" ? `wt_${nextLead.realId || nextLead.id}` : (nextLead.realId || nextLead.id);
+
+      // Se for o mesmo lead que acabou de ser discado e ainda está sendo atualizado no cache do React Query, aguarda
+      if (lastDialedLeadIdRef.current === targetCallId) {
+        return;
+      }
       
       // Se for um agendamento futuro, não dispara auto-dial ainda
       const schedTime = nextLead.scheduledFor || nextLead.scheduledTo;
@@ -1248,11 +1273,11 @@ export default function CallPanel() {
       }
 
       isAutoDialingRef.current = true;
+      lastDialedLeadIdRef.current = targetCallId;
       console.log("[Auto-Dialer] Starting auto-dial for:", nextLead.leadName || nextLead.phone);
       
       // Define a view para abrir o popup e inicia o disparo
       setViewingQueueLead({ ...nextLead, autoDial: false });
-      const targetCallId = nextLead.source === "workflow_call_task" ? `wt_${nextLead.realId || nextLead.id}` : (nextLead.realId || nextLead.id);
       useCallFloatingStore.getState().openCall({
         callId: targetCallId,
         campaignId: nextLead.campaignId || "",
@@ -1279,19 +1304,12 @@ export default function CallPanel() {
   }, [
     queueGlobalStatus,
     isOperatorAvailable,
-    inProgressEntries.length,
+    isCallFloatingOpen,
     viewingQueueLead,
     combinedQueue,
     handleWorkflowDial,
     dialNow
   ]);
-
-  // Libera a trava do discador quando a chamada for concluída/fechada
-  useEffect(() => {
-    if (!viewingQueueLead && inProgressEntries.length === 0) {
-      isAutoDialingRef.current = false;
-    }
-  }, [viewingQueueLead, inProgressEntries.length]);
 
 
   const statusConfig: Record<string, { label: string; dotClass: string; className: string }> = {

@@ -1,6 +1,6 @@
 {
-  "commit": "9526fcb8bc5a1037aec35a82ab7deeef8c57631d",
-  "shortCommit": "9526fcb",
-  "message": "fix(broadcasts): processamento assincrono de lotes na edge function e tratamento de resposta sem timeout",
-  "builtAt": "2026-10-27T17:44:41.924Z"
+  "commit": "577b68551d0556ec9504e1672165b115119f396e",
+  "shortCommit": "577b685",
+  "message": "fix(broadcasts): aceitar tanto string quanto objeto como parametro no dispatchBatch",
+  "builtAt": "2026-10-27T18:35:49.458Z"
 }

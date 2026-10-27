@@ -11,7 +11,7 @@ import { useCallActions } from "@/hooks/useCallActions";
 import { InlineScriptRunner } from "@/components/call-campaigns/operator/InlineScriptRunner";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Calendar, Phone, PhoneMissed, ChevronDown, Clock, Copy, Check, History, ChevronLeft, ChevronRight, Pencil, X, Timer, FileText, CheckCircle2, RotateCcw, Target, PenLine, Maximize2, Minimize2, Minus, MessageSquare } from "lucide-react";
+import { Loader2, Calendar, Phone, PhoneOff, PhoneMissed, ChevronDown, Clock, Copy, Check, History, ChevronLeft, ChevronRight, Pencil, X, Timer, FileText, CheckCircle2, RotateCcw, Target, PenLine, Maximize2, Minimize2, Minus, MessageSquare } from "lucide-react";
 import { cn, formatPhone } from "@/lib/utils";
 import { useCallFloatingStore } from "@/stores/callFloating.store";
 import { useChatExpressStore } from "@/stores/chatExpress.store";
@@ -90,6 +90,9 @@ const statusStyles: Record<string, { label: string; className: string }> = {
   failed: { label: "❌ Falha", className: "bg-destructive/15 text-destructive dark:text-destructive-400" },
   cancelled: { label: "🚫 Cancelado", className: "bg-gray-500/15 text-gray-700 dark:text-gray-400" },
   in_progress: { label: "⚙️ Em Progresso", className: "bg-blue-500/15 text-blue-700 dark:text-blue-400" },
+  ended: { label: "⏹️ Chamada Encerrada", className: "bg-amber-500/15 text-amber-700 dark:text-amber-400" },
+  no_answer: { label: "📵 Não Atendeu", className: "bg-rose-500/15 text-rose-700 dark:text-rose-400" },
+  busy: { label: "🔴 Ocupado", className: "bg-rose-500/15 text-rose-700 dark:text-rose-400" },
 };
 
 const formatDuration = (s: number) => {
@@ -694,7 +697,67 @@ export function CallActionDialog({
     }
   };
 
-  const handleSave = async () => {
+    const handleQuickNoAnswer = async () => {
+    setIsSaving(true);
+    try {
+      const now = new Date().toISOString();
+      if (isWorkflowCall && realTaskId) {
+        await (supabase as any)
+          .from("workflow_call_tasks")
+          .update({
+            status: "completed",
+            observation: notes ? `${notes} (Não atendeu)` : "Não atendeu",
+            completed_at: now,
+          })
+          .eq("id", realTaskId);
+      } else if (currentData.callId) {
+        await (supabase as any)
+          .from("call_queue")
+          .update({
+            status: "completed",
+            observations: notes ? `${notes} (Não atendeu)` : "Não atendeu",
+          })
+          .eq("id", currentData.callId.replace("cq_", ""));
+      }
+
+      // Record in call_logs
+      const effectiveUserId = user?.id || currentData.userId || "95b89774-fba0-485b-b539-14cb2901befe";
+      try {
+        await (supabase as any)
+          .from("call_logs")
+          .insert({
+            user_id: effectiveUserId,
+            company_id: activeCompanyId || undefined,
+            call_status: "no_answer",
+            notes: notes ? `${notes} (Não atendeu)` : "Não atendeu",
+            operator_id: operatorId || undefined,
+            duration_seconds: currentData.duration || 0,
+            started_at: currentData.duration ? new Date(Date.now() - currentData.duration * 1000).toISOString() : now,
+            ended_at: now,
+            attempt_number: currentData.attemptNumber || 1,
+          });
+      } catch (logErr) {
+        console.warn("[CallActionDialog] Warning inserting call_log for no_answer:", logErr);
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["call_panel_history"] });
+      queryClient.invalidateQueries({ queryKey: ["call_panel_answered_today"] });
+      queryClient.invalidateQueries({ queryKey: ["workflow_call_tasks_queue"] });
+      queryClient.invalidateQueries({ queryKey: ["call_logs_queue"] });
+      queryClient.invalidateQueries({ queryKey: ["call_queue"] });
+      queryClient.invalidateQueries({ queryKey: ["mini-call-queue"] });
+
+      toast({ title: "📵 Não Atendeu", description: "Registrado como não atendido. Avançando para a próxima ligação..." });
+      onOpenChange(false);
+      useCallFloatingStore.getState().closeCallDialog();
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.message, variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+const handleSave = async () => {
     if (!selectedActionId) {
       toast({ title: "Selecione uma ação", variant: "destructive" });
       return;
@@ -752,6 +815,7 @@ export function CallActionDialog({
 
         toast({ title: "Ligação finalizada", description: "O resultado da ligação foi salvo e concluído com sucesso." });
         onOpenChange(false);
+        useCallFloatingStore.getState().closeCallDialog();
         return;
       }
 
@@ -812,7 +876,8 @@ export function CallActionDialog({
       queryClient.invalidateQueries({ queryKey: ["call_queue"] });
 
       toast({ title: "Ação registrada", description: "Resultado salvo. A ligação será encerrada pelo callback." });
-      setView("list");
+      onOpenChange(false);
+      useCallFloatingStore.getState().closeCallDialog();
     } catch (err: any) {
       toast({ title: "Erro", description: err.message, variant: "destructive" });
     } finally {
@@ -1232,6 +1297,23 @@ export function CallActionDialog({
               >
                 {isDialing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Phone className="h-3 w-3" />}
                 Discar Agora
+              </Button>
+            )}
+
+            {["dialing", "ringing", "in_call", "on_call", "answered"].includes(currentData.callStatus || "") && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-6 px-2 text-[11px] font-semibold gap-1 rounded-lg text-rose-600 border-rose-500/40 bg-rose-50/60 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300"
+                onClick={() => {
+                  setCurrentData(prev => ({ ...prev, callStatus: "ended" }));
+                  toast({ title: "Chamada encerrada", description: "Selecione a ação de desfecho e clique em 'Salvar e Encerrar' para ir para a próxima ligação." });
+                }}
+                title="Marcar ligação como encerrada"
+              >
+                <PhoneOff className="h-3 w-3" />
+                Encerrar
               </Button>
             )}
           </div>
@@ -1751,10 +1833,24 @@ export function CallActionDialog({
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => setView("list")}
+              onClick={() => {
+                onOpenChange(false);
+                useCallFloatingStore.getState().closeCallDialog();
+              }}
               className="rounded-lg px-3 h-8 text-xs font-semibold border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
             >
               Voltar à Fila
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleQuickNoAnswer}
+              disabled={isSaving}
+              className="rounded-lg px-3 h-8 text-xs font-semibold text-amber-700 dark:text-amber-300 border-amber-300/80 bg-amber-50/50 hover:bg-amber-100 dark:bg-amber-950/40 dark:border-amber-800"
+              title="Registrar que o lead não atendeu e avançar para o próximo"
+            >
+              Não Atendeu (Próxima)
             </Button>
             <Button
               type="button"
