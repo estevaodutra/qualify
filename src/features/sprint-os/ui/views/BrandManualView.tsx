@@ -43,6 +43,7 @@ import {
   Layers,
   Send,
   Wand2,
+  Share2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -132,6 +133,7 @@ export const BrandManualView: React.FC = () => {
     activeBrandManualModuleId,
     focusedBrandManualFieldId,
     setActiveTab,
+    setIsBrandManualShareModalOpen,
   } = useSprintOSStore();
   const { user } = useAuth();
 
@@ -898,6 +900,21 @@ export const BrandManualView: React.FC = () => {
             </div>
             <Progress value={progressPercent} className="h-1.5 bg-muted" />
           </div>
+
+          {/* Botão Link Público de Coleta do Cliente */}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setIsBrandManualShareModalOpen(true)}
+            className="h-8 px-2.5 text-xs rounded-xl flex items-center gap-1.5 border-primary/30 text-primary hover:bg-primary/10 font-bold"
+            title="Configurar e copiar o link público para o cliente preencher o briefing uma única vez"
+          >
+            <Share2 className="h-3.5 w-3.5" />
+            <span>Link Público</span>
+            {brandManual.publicShareConfig?.status === "completed" && (
+              <span className="h-2 w-2 rounded-full bg-emerald-500" title="Concluído pelo cliente" />
+            )}
+          </Button>
 
           {/* Botão Master Prompt Consolidado */}
           <Button

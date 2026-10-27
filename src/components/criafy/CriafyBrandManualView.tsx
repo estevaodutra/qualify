@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Plus,
   Rocket,
+  Share2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +29,7 @@ import { CreativesView } from "@/features/sprint-os/ui/views/CreativesView";
 import { ScriptsAndAudiosView } from "@/features/sprint-os/ui/views/ScriptsAndAudiosView";
 import { CreateScheduleModal } from "@/features/sprint-os/ui/modals/CreateScheduleModal";
 import { ShareLinkModal } from "@/features/sprint-os/ui/modals/ShareLinkModal";
+import { BrandManualShareModal } from "@/features/sprint-os/ui/modals/BrandManualShareModal";
 import { TaskDetailModal } from "@/features/sprint-os/ui/modals/TaskDetailModal";
 import { ReportsModal } from "@/features/sprint-os/ui/modals/ReportsModal";
 import { toast } from "sonner";
@@ -48,6 +50,7 @@ export const CriafyBrandManualView: React.FC = () => {
     autosaveStatus,
     saveAndPublishAction,
     setIsCreateModalOpen,
+    setIsBrandManualShareModalOpen,
   } = useSprintOSStore();
 
   // Sub-aba ativa dentro do Manual da Marca no Criafy: "brand_manual" | "creatives" | "scripts_and_audios"
@@ -303,6 +306,17 @@ export const CriafyBrandManualView: React.FC = () => {
 
           <Button
             size="sm"
+            variant="outline"
+            onClick={() => setIsBrandManualShareModalOpen(true)}
+            className="h-8 px-3 text-xs font-bold border-primary/30 text-primary hover:bg-primary/10 rounded-xl gap-1.5"
+            title="Configurar link público para o cliente preencher o briefing"
+          >
+            <Share2 className="h-3.5 w-3.5" />
+            <span>Link Público</span>
+          </Button>
+
+          <Button
+            size="sm"
             onClick={() => saveAndPublishAction(user?.email || "Operador")}
             className="h-8 px-3 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl shadow-xs gap-1.5"
             title="Salvar alterações e sincronizar com Supabase"
@@ -345,6 +359,7 @@ export const CriafyBrandManualView: React.FC = () => {
       {/* Modais Globais de Apoio */}
       <CreateScheduleModal />
       <ShareLinkModal />
+      <BrandManualShareModal />
       <TaskDetailModal />
       <ReportsModal />
     </div>

@@ -1,6 +1,6 @@
 {
-  "commit": "80273456cdbee47325d7266b3590af8ad816a50d",
-  "shortCommit": "8027345",
-  "message": "feat(brand-manual): enable editing and deleting questions in Raio X do ICP",
-  "builtAt": "2026-10-26T23:59:15.513Z"
+  "commit": "2bc9f1160838827b857e588b894d584276d44599",
+  "shortCommit": "2bc9f11",
+  "message": "feat(brand-manual): standardize question card layout and page organization across all modules",
+  "builtAt": "2026-10-27T00:20:46.364Z"
 }

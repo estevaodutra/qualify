@@ -1038,7 +1038,25 @@ export interface BrandManualModule {
   analysisUpdatedAt?: string;
 }
 
+export interface BrandManualPublicShareConfig {
+  enabled: boolean;
+  token: string;
+  url: string;
+  allowedModuleIds: string[];
+  customTitle?: string;
+  customDescription?: string;
+  clientName?: string;
+  status: 'pending' | 'completed';
+  completedAt?: string;
+  submittedBy?: string;
+  lastAnsweredAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  allowReopen?: boolean;
+}
+
 export interface BrandManualData {
+  publicShareConfig?: BrandManualPublicShareConfig;
   modules: BrandManualModule[];
   fields: BrandManualField[];
   copyAds: CopyAdVariant[];

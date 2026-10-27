@@ -66,6 +66,7 @@ import AccountStrategyPage from "./pages/criafy/AccountStrategyPage";
 import SprintOSPage from "./features/sprint-os/ui/SprintOSPage";
 import SprintAppPage from "./features/sprint/SprintAppPage";
 import SprintOSSharedPage from "./features/sprint-os/ui/SprintOSSharedPage";
+import CriafyPublicBriefingPage from "./features/sprint-os/ui/CriafyPublicBriefingPage";
 import { AdminRoute } from "@/components/auth/AdminRoute";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -102,6 +103,8 @@ const App = () => {
                     <Route path="/webhook-docs" element={<WebhookDocs />} />
                     <Route path="/q/:slug" element={<QuizPublicPage />} />
                     <Route path="/sprint-os/shared/:token" element={<SprintOSSharedPage />} />
+                    <Route path="/briefing/:token" element={<CriafyPublicBriefingPage />} />
+                    <Route path="/criafy/briefing/:token" element={<CriafyPublicBriefingPage />} />
 
                     {/* Awaiting access — authenticated but no company */}
                     <Route

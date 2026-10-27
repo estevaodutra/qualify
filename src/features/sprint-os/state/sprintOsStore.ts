@@ -157,6 +157,7 @@ interface SprintOSState {
   isDeadlineModalOpen: boolean;
   isActivateModalOpen: boolean;
   isShareModalOpen: boolean;
+  isBrandManualShareModalOpen: boolean;
   isTemplatesModalOpen: boolean;
   isReportModalOpen: boolean;
   isCreateModalOpen: boolean;
@@ -202,6 +203,7 @@ interface SprintOSState {
   setIsDeadlineModalOpen: (open: boolean) => void;
   setIsActivateModalOpen: (open: boolean) => void;
   setIsShareModalOpen: (open: boolean) => void;
+  setIsBrandManualShareModalOpen: (open: boolean) => void;
   setIsTemplatesModalOpen: (open: boolean) => void;
   setIsReportModalOpen: (open: boolean) => void;
   setIsCreateModalOpen: (open: boolean) => void;
@@ -306,6 +308,7 @@ export const useSprintOSStore = create<SprintOSState>((set, get) => ({
   isDeadlineModalOpen: false,
   isActivateModalOpen: false,
   isShareModalOpen: false,
+  isBrandManualShareModalOpen: false,
   isTemplatesModalOpen: false,
   isReportModalOpen: false,
   isCreateModalOpen: false,
@@ -597,6 +600,7 @@ export const useSprintOSStore = create<SprintOSState>((set, get) => ({
   setIsDeadlineModalOpen: (open) => set({ isDeadlineModalOpen: open }),
   setIsActivateModalOpen: (open) => set({ isActivateModalOpen: open }),
   setIsShareModalOpen: (open) => set({ isShareModalOpen: open }),
+  setIsBrandManualShareModalOpen: (open) => set({ isBrandManualShareModalOpen: open }),
   setIsTemplatesModalOpen: (open) => set({ isTemplatesModalOpen: open }),
   setIsReportModalOpen: (open) => set({ isReportModalOpen: open }),
   setIsCreateModalOpen: (open) => set({ isCreateModalOpen: open }),

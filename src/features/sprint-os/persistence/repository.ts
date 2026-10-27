@@ -848,4 +848,100 @@ export class SprintOSRepository {
 
     return null;
   }
+
+  /**
+   * Registra ou atualiza o token do link público do Manual de Marca no Supabase.
+   */
+  static async upsertBrandManualShareLink(params: {
+    token: string;
+    workspaceId: string;
+    companyId: string;
+    label?: string;
+    enabled?: boolean;
+  }): Promise<void> {
+    const { token, workspaceId, companyId, label, enabled = true } = params;
+
+    if (companyId) {
+      try {
+        await (supabase as any).from("sprint_os_share_links").upsert(
+          {
+            token,
+            workspace_id: workspaceId,
+            company_id: companyId,
+            label: label || "Briefing Público do Cliente",
+            revoked_at: enabled ? null : new Date().toISOString(),
+          },
+          { onConflict: "token" }
+        );
+      } catch (e) {
+        console.warn("[SprintOSRepository] Erro ao registrar link do Manual de Marca:", e);
+      }
+    }
+
+    try {
+      const wsRaw = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}${workspaceId}`);
+      if (wsRaw) {
+        localStorage.setItem(`sprint_os_public_share_${token}`, wsRaw);
+      }
+    } catch {}
+  }
+
+  /**
+   * Envia respostas do formulário público do cliente diretamente para o banco de dados.
+   */
+  static async submitPublicBriefing(params: {
+    token: string;
+    responses: Record<string, string>;
+    markCompleted?: boolean;
+    clientName?: string;
+  }): Promise<{
+    success: boolean;
+    updatedFieldsCount?: number;
+    status?: string;
+    completedAt?: string;
+    error?: string;
+  }> {
+    const { token, responses, markCompleted = false, clientName } = params;
+
+    try {
+      const { data, error } = await (supabase as any).rpc("sprint_os_submit_briefing", {
+        p_token: token,
+        p_responses: responses,
+        p_mark_completed: markCompleted,
+        p_client_name: clientName || null,
+      });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      if (data && data.success) {
+        // Atualizar cache local de teste se existir
+        try {
+          const raw = localStorage.getItem(`sprint_os_public_share_${token}`);
+          if (raw) {
+            const ws = JSON.parse(raw);
+            if (ws?.brandManual?.fields) {
+              ws.brandManual.fields = ws.brandManual.fields.map((f: any) =>
+                responses[f.id] !== undefined
+                  ? { ...f, response: responses[f.id], status: responses[f.id].trim() ? "completed" : "pending" }
+                  : f
+              );
+              if (markCompleted && ws.brandManual.publicShareConfig) {
+                ws.brandManual.publicShareConfig.status = "completed";
+                ws.brandManual.publicShareConfig.completedAt = new Date().toISOString();
+              }
+              localStorage.setItem(`sprint_os_public_share_${token}`, JSON.stringify(ws));
+            }
+          }
+        } catch {}
+
+        return data;
+      }
+
+      return { success: false, error: data?.error || "Erro ao salvar respostas." };
+    } catch (e: any) {
+      return { success: false, error: e?.message || "Erro inesperado ao enviar briefing." };
+    }
+  }
 }

@@ -35,6 +35,7 @@ import { ActivateSprintModal } from "./modals/ActivateSprintModal";
 import { TaskDetailModal } from "./modals/TaskDetailModal";
 import { ReportsModal } from "./modals/ReportsModal";
 import { ShareLinkModal } from "./modals/ShareLinkModal";
+import { BrandManualShareModal } from "./modals/BrandManualShareModal";
 import { TemplatesModal } from "./modals/TemplatesModal";
 import { CreateScheduleModal } from "./modals/CreateScheduleModal";
 import { EditTemplateModal } from "./modals/EditTemplateModal";
@@ -306,6 +307,7 @@ export const SprintOSPage: React.FC = () => {
       <TaskDetailModal />
       <ReportsModal />
       <ShareLinkModal />
+      <BrandManualShareModal />
       <TemplatesModal />
     </div>
   );
