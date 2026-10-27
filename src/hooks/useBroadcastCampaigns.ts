@@ -169,7 +169,12 @@ export function useBroadcastCampaigns() {
 
   // 3. Trigger immediate batch execution
   const dispatchBatchMutation = useMutation({
-    mutationFn: async ({ broadcastId, explicitLimit }: { broadcastId: string; explicitLimit?: number }) => {
+    mutationFn: async (args: string | { broadcastId: string; explicitLimit?: number }) => {
+      const broadcastId = typeof args === "string" ? args : args?.broadcastId;
+      const explicitLimit = typeof args === "object" ? args?.explicitLimit : undefined;
+
+      if (!broadcastId) throw new Error("ID do disparo não informado");
+
       const { data, error } = await supabase.functions.invoke("process-broadcast-campaign", {
         body: {
           broadcastId,

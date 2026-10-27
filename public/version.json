@@ -1,6 +1,6 @@
 {
-  "commit": "9e05e90adabbfd4155bec986a3cfd606247d5f6b",
-  "shortCommit": "9e05e90",
-  "message": "fix(broadcasts): corrigir nome da coluna phone na relacao de instances para listar campanhas salvas",
-  "builtAt": "2026-10-27T17:41:19.816Z"
+  "commit": "9526fcb8bc5a1037aec35a82ab7deeef8c57631d",
+  "shortCommit": "9526fcb",
+  "message": "fix(broadcasts): processamento assincrono de lotes na edge function e tratamento de resposta sem timeout",
+  "builtAt": "2026-10-27T17:44:41.924Z"
 }
