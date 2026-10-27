@@ -158,8 +158,6 @@ export const ConditionEditors: React.FC<ConditionEditorsProps> = ({
               <PipelineSelect
                 value={pipelineId}
                 onValueChange={(v) => updateParam("pipelineId", v)}
-                pipelines={pipelines}
-                pipelineGroups={pipelineGroups}
                 activeCompanyId={activeCompanyId}
               />
               {isInvalid && (
@@ -197,8 +195,6 @@ export const ConditionEditors: React.FC<ConditionEditorsProps> = ({
                     },
                   });
                 }}
-                pipelines={pipelines}
-                pipelineGroups={pipelineGroups}
                 activeCompanyId={activeCompanyId}
               />
             </div>

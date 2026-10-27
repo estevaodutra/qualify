@@ -25,7 +25,7 @@ interface CompanyContextType {
 
 const CompanyContext = createContext<CompanyContextType | undefined>(undefined);
 
-const STORAGE_KEY = "dispatch_active_company";
+const STORAGE_KEY = "qualify_active_company_v2";
 
 export function CompanyProvider({ children }: { children: ReactNode }) {
   const { user, isLoading: authLoading } = useAuth();
@@ -58,8 +58,8 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         // Superadmin fetches ALL companies
         const { data: allCompanies, error: compError } = await (supabase as any)
           .from("companies")
-          .select("id, name, owner_id, is_deleted")
-          .order("name");
+          .select("id, name, owner_id, is_deleted, created_at")
+          .order("created_at", { ascending: true });
 
         if (compError) throw compError;
         companyRows = (allCompanies || []).filter((c: any) => !c.is_deleted);
@@ -92,12 +92,30 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
 
         const { data, error: compError } = await (supabase as any)
           .from("companies")
-          .select("id, name, owner_id, is_deleted")
-          .in("id", companyIds);
+          .select("id, name, owner_id, is_deleted, created_at")
+          .in("id", companyIds)
+          .order("created_at", { ascending: true });
 
         if (compError) throw compError;
         companyRows = (data || []).filter((c: any) => !c.is_deleted);
       }
+
+      const roleWeight = (c: any) => {
+        const r = roleMap.get(c.id);
+        if (r === "owner") return 0;
+        if (r === "admin") return 1;
+        if (r === "operator") return 2;
+        if (c.owner_id === user.id) return 3;
+        return 4;
+      };
+
+      companyRows.sort((a: any, b: any) => {
+        const wDiff = roleWeight(a) - roleWeight(b);
+        if (wDiff !== 0) return wDiff;
+        const tA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const tB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return tA - tB;
+      });
 
       const mapped: Company[] = companyRows.map((c: any) => ({
         id: c.id,
@@ -171,34 +189,35 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     ensureMembership();
   }, [user, isSuperadmin, impersonatedCompanyId, fetchCompanies]);
 
-  const setActiveCompany = (id: string) => {
-    if (isSuperadmin) {
-      // For superadmin, switching through the dropdown also triggers impersonation
-      impersonateCompany(id);
-    } else {
-      setActiveCompanyId(id);
-      localStorage.setItem(STORAGE_KEY, id);
+  const setActiveCompany = useCallback((id: string) => {
+    setActiveCompanyId(id);
+    localStorage.setItem(STORAGE_KEY, id);
+    if (impersonatedCompanyId) {
+      setImpersonatedCompanyId(null);
+      localStorage.removeItem("dispatch_impersonated_company");
     }
-  };
+  }, [impersonatedCompanyId]);
 
-  const impersonateCompany = (id: string | null) => {
+  const impersonateCompany = useCallback((id: string | null) => {
     if (!isSuperadmin && id !== null) return;
     setImpersonatedCompanyId(id);
     if (id) {
       localStorage.setItem("dispatch_impersonated_company", id);
+      setActiveCompanyId(id);
+      localStorage.setItem(STORAGE_KEY, id);
     } else {
       localStorage.removeItem("dispatch_impersonated_company");
     }
-  };
+  }, [isSuperadmin]);
 
-  const stopImpersonating = () => {
+  const stopImpersonating = useCallback(() => {
     setImpersonatedCompanyId(null);
     localStorage.removeItem("dispatch_impersonated_company");
-  };
+  }, []);
 
-  const effectiveCompanyId = (isSuperadmin && impersonatedCompanyId) ? impersonatedCompanyId : activeCompanyId;
+  const effectiveCompanyId = impersonatedCompanyId || activeCompanyId;
   const activeCompany = companies.find((c) => c.id === effectiveCompanyId) || null;
-  const isAdmin = activeCompany?.role === "admin" || isSuperadmin;
+  const isAdmin = activeCompany?.role === "owner" || activeCompany?.role === "admin" || isSuperadmin;
 
   return (
     <CompanyContext.Provider

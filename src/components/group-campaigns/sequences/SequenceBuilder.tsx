@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { MessageSequence, useSequenceNodes } from "@/hooks/useSequences";
 import { UnifiedSequenceBuilder } from "@/components/sequences/UnifiedSequenceBuilder";
 import { UnifiedNodeConfigPanel } from "@/components/sequences/UnifiedNodeConfigPanel";
@@ -11,6 +12,7 @@ import { PollActionDialog, PollActionConfig, getActionIconColor, getActionLabel 
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Play } from "lucide-react";
+import { useCompany } from "@/contexts/CompanyContext";
 
 const TRIGGER_NODE_TYPE = "trigger";
 
@@ -47,7 +49,23 @@ const getDefaultConfig = (nodeType: string): Record<string, unknown> => {
 };
 
 export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderProps) {
+  const { activeCompanyId, setActiveCompany } = useCompany();
   const { nodes, connections, saveNodes, saveConnections, isSaving, isLoading } = useSequenceNodes(sequence.id);
+
+  useEffect(() => {
+    if (!sequence?.id) return;
+    supabase
+      .from("message_sequences")
+      .select("company_id")
+      .eq("id", sequence.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        const seqCompanyId = (data as any)?.company_id;
+        if (seqCompanyId && seqCompanyId !== activeCompanyId) {
+          setActiveCompany(seqCompanyId);
+        }
+      });
+  }, [sequence?.id, activeCompanyId, setActiveCompany]);
 
   const persistedTrigger = nodes.find(n => n.nodeType === TRIGGER_NODE_TYPE);
 

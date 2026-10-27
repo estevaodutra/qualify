@@ -59,14 +59,17 @@ export function PipelineSelect({
   const { activeCompanyId: contextCompanyId } = useCompany();
   const effectiveCompanyId = propCompanyId || contextCompanyId;
 
-  // Fallback query for pipelines if not passed as props
+  const hasPropPipelines = Array.isArray(propPipelines) && propPipelines.length > 0;
+  const hasPropGroups = Array.isArray(propGroups) && propGroups.length > 0;
+
+  // Query pipelines using the same query key & structure as PipelineSidebar
   const { data: fetchedPipelines, isLoading: loadingPipelines } = useQuery({
     queryKey: ["pipeline-select-pipelines", effectiveCompanyId],
     queryFn: async () => {
       if (!effectiveCompanyId) return [];
       const { data, error } = await supabase
         .from("pipelines")
-        .select("id, name, status, group_id, order_index, pipeline_groups(id, name, order_index)")
+        .select("*")
         .eq("company_id", effectiveCompanyId)
         .eq("status", "active")
         .order("order_index", { ascending: true });
@@ -76,17 +79,17 @@ export function PipelineSelect({
       }
       return data as PipelineItem[];
     },
-    enabled: !propPipelines && !!effectiveCompanyId,
+    enabled: !hasPropPipelines && !!effectiveCompanyId,
   });
 
-  // Fallback query for pipeline_groups if not passed as props
-  const { data: fetchedGroups } = useQuery({
+  // Query pipeline_groups using the same query structure as PipelineSidebar
+  const { data: fetchedGroups, isLoading: loadingGroups } = useQuery({
     queryKey: ["pipeline-select-groups", effectiveCompanyId],
     queryFn: async () => {
       if (!effectiveCompanyId) return [];
       const { data, error } = await supabase
         .from("pipeline_groups")
-        .select("id, name, order_index")
+        .select("*")
         .eq("company_id", effectiveCompanyId)
         .order("order_index", { ascending: true });
       if (error) {
@@ -95,11 +98,11 @@ export function PipelineSelect({
       }
       return data as PipelineGroupItem[];
     },
-    enabled: !propGroups && !!effectiveCompanyId,
+    enabled: !hasPropGroups && !!effectiveCompanyId,
   });
 
-  const allPipelines = propPipelines || fetchedPipelines || [];
-  const allGroups = propGroups || fetchedGroups || [];
+  const allPipelines = hasPropPipelines ? propPipelines! : (fetchedPipelines || []);
+  const allGroups = hasPropGroups ? propGroups! : (fetchedGroups || []);
 
   // Group Map for fast lookups
   const groupMap = useMemo(() => {
@@ -175,7 +178,7 @@ export function PipelineSelect({
     return null;
   }, [selectedPipeline, groupMap]);
 
-  const isLoading = !propPipelines && loadingPipelines;
+  const isLoading = (!hasPropPipelines && loadingPipelines) || (!hasPropGroups && loadingGroups);
 
   return (
     <div className={cn("w-full", className)}>

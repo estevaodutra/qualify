@@ -549,8 +549,6 @@ export const ActionEditors: React.FC<ActionEditorsProps> = ({
                     },
                   });
                 }}
-                pipelines={pipelines}
-                pipelineGroups={pipelineGroups}
                 activeCompanyId={activeCompanyId}
                 triggerClassName="h-8"
               />
@@ -639,8 +637,6 @@ export const ActionEditors: React.FC<ActionEditorsProps> = ({
                     },
                   });
                 }}
-                pipelines={pipelines}
-                pipelineGroups={pipelineGroups}
                 activeCompanyId={activeCompanyId}
                 triggerClassName="h-8"
               />

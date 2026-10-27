@@ -1,6 +1,6 @@
 {
-  "commit": "2bc9f1160838827b857e588b894d584276d44599",
-  "shortCommit": "2bc9f11",
-  "message": "feat(brand-manual): standardize question card layout and page organization across all modules",
-  "builtAt": "2026-10-27T00:20:46.364Z"
+  "commit": "b098a364a2ec07cc8b08bf1842712d2f4f6a58f5",
+  "shortCommit": "b098a36",
+  "message": "feat(brand): atualizar favicon e icones PWA para logo-favicon-page.png",
+  "builtAt": "2026-10-27T15:46:00.434Z"
 }

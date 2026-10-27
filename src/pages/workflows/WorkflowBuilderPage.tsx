@@ -1,9 +1,11 @@
+import { useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import { SequenceBuilder } from "@/components/group-campaigns/sequences/SequenceBuilder";
 import type { MessageSequence } from "@/hooks/useSequences";
+import { useCompany } from "@/contexts/CompanyContext";
 
 // Dedicated, fullscreen "Builder Mode" route — deliberately rendered outside
 // AppLayout (no sidebar/header/breadcrumb/tabs) so the canvas gets the whole
@@ -13,6 +15,7 @@ export default function WorkflowBuilderPage() {
   const { workflowId } = useParams<{ workflowId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { activeCompanyId, setActiveCompany } = useCompany();
 
   const { data: definition, isLoading: loadingDefinition } = useQuery({
     queryKey: ["workflow_definition", workflowId],
@@ -27,6 +30,12 @@ export default function WorkflowBuilderPage() {
     },
     enabled: !!workflowId,
   });
+
+  useEffect(() => {
+    if (definition?.company_id && definition.company_id !== activeCompanyId) {
+      setActiveCompany(definition.company_id);
+    }
+  }, [definition?.company_id, activeCompanyId, setActiveCompany]);
 
   const { data: groupSequence, isLoading: loadingGroup } = useQuery({
     queryKey: ["group_sequence_raw", definition?.source_id],
