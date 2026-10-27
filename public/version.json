@@ -1,6 +1,6 @@
 {
-  "commit": "ebaf8e3ffaee9d05b2fb172bf4369c5fae1ed9d3",
-  "shortCommit": "ebaf8e3",
-  "message": "fix(crm): sincronizar empresa ativa nos editores de fluxo e corrigir carregamento de pipelines/grupos",
-  "builtAt": "2026-10-27T17:33:26.980Z"
+  "commit": "9e05e90adabbfd4155bec986a3cfd606247d5f6b",
+  "shortCommit": "9e05e90",
+  "message": "fix(broadcasts): corrigir nome da coluna phone na relacao de instances para listar campanhas salvas",
+  "builtAt": "2026-10-27T17:41:19.816Z"
 }

@@ -5,6 +5,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+declare const EdgeRuntime: {
+  waitUntil: (promise: Promise<any>) => void;
+} | undefined;
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -125,7 +129,7 @@ Deno.serve(async (req) => {
     }
 
     if (!recipients || recipients.length === 0) {
-      // Check if there are ANY pending recipients left
+      // Check if there are ANY pending recipients left (ignoring date)
       const { count: pendingCount } = await supabase
         .from("broadcast_recipients")
         .select("*", { count: "exact", head: true })
@@ -154,138 +158,172 @@ Deno.serve(async (req) => {
         );
       }
 
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: "Nenhum disparo agendado para a data de hoje. Aguarde o próximo lote.",
-          dispatchedCount: 0,
-          pendingTotal: pendingCount,
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Set campaign status to running if it was scheduled/draft
-    if (campaign.status !== "running") {
-      await supabase
-        .from("broadcast_campaigns")
-        .update({
-          status: "running",
-          started_at: campaign.started_at || new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", broadcastId);
-    }
-
-    // Extract lead IDs
-    const leadIds = recipients.map((r: any) => r.lead_id);
-    const recipientIds = recipients.map((r: any) => r.id);
-
-    // Call start-workflow-for-leads edge function
-    const startWorkflowUrl = `${supabaseUrl}/functions/v1/start-workflow-for-leads`;
-    let successCount = 0;
-    let failCount = 0;
-    let executionError = null;
-
-    try {
-      const response = await fetch(startWorkflowUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${supabaseServiceKey}`,
-        },
-        body: JSON.stringify({
-          workflowId: campaign.workflow_id,
-          leadIds,
-          instanceId: campaign.instance_id || undefined,
-        }),
-      });
-
-      const result = await response.json().catch(() => ({}));
-      if (response.ok) {
-        successCount = result.successCount ?? recipients.length;
-        failCount = result.failCount ?? 0;
-      } else {
-        executionError = result.error || "Falha ao executar fluxo";
-        failCount = recipients.length;
-      }
-    } catch (err: any) {
-      executionError = err.message || "Erro de rede ao disparar";
-      failCount = recipients.length;
-    }
-
-    const nowIso = new Date().toISOString();
-
-    // Mark recipients as sent or failed
-    if (successCount > 0 && failCount === 0) {
-      await supabase
+      // If user clicked "Disparar Lote" manually, but scheduled_date > today, take next pending batch!
+      const { data: nextRecipients } = await supabase
         .from("broadcast_recipients")
-        .update({
-          status: "sent",
-          dispatched_at: nowIso,
-          updated_at: nowIso,
-        })
-        .in("id", recipientIds);
-    } else if (failCount > 0 && successCount === 0) {
-      await supabase
-        .from("broadcast_recipients")
-        .update({
-          status: "failed",
-          error_message: executionError || "Falha no disparo do fluxo",
-          dispatched_at: nowIso,
-          updated_at: nowIso,
-        })
-        .in("id", recipientIds);
-    } else {
-      // Partial: mark first successCount as sent, remainder as failed
-      const sentIds = recipientIds.slice(0, successCount);
-      const failedIds = recipientIds.slice(successCount);
+        .select("id, lead_id, batch_index, scheduled_date")
+        .eq("broadcast_id", broadcastId)
+        .eq("status", "pending")
+        .order("batch_index", { ascending: true })
+        .order("created_at", { ascending: true })
+        .limit(batchLimit);
 
-      if (sentIds.length > 0) {
-        await supabase
-          .from("broadcast_recipients")
-          .update({ status: "sent", dispatched_at: nowIso, updated_at: nowIso })
-          .in("id", sentIds);
+      if (!nextRecipients || nextRecipients.length === 0) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "Nenhum disparo pendente na fila.",
+            dispatchedCount: 0,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
-      if (failedIds.length > 0) {
-        await supabase
-          .from("broadcast_recipients")
-          .update({ status: "failed", error_message: "Erro no envio do lote", dispatched_at: nowIso, updated_at: nowIso })
-          .in("id", failedIds);
-      }
+
+      // Use nextRecipients instead
+      recipients.push(...nextRecipients);
     }
 
-    // Refresh counts on broadcast_campaigns
-    const { count: currentPending } = await supabase
-      .from("broadcast_recipients")
-      .select("*", { count: "exact", head: true })
-      .eq("broadcast_id", broadcastId)
-      .eq("status", "pending");
-
-    const newSentCount = (campaign.sent_count || 0) + successCount;
-    const newFailedCount = (campaign.failed_count || 0) + failCount;
-    const isNowCompleted = (currentPending ?? 0) === 0;
-
+    // Set campaign status to running
     await supabase
       .from("broadcast_campaigns")
       .update({
-        sent_count: newSentCount,
-        failed_count: newFailedCount,
-        pending_count: currentPending ?? 0,
-        status: isNowCompleted ? "completed" : "running",
-        completed_at: isNowCompleted ? nowIso : null,
-        updated_at: nowIso,
+        status: "running",
+        started_at: campaign.started_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
       .eq("id", broadcastId);
 
+    // Extract lead IDs and recipient IDs
+    const leadIds = recipients.map((r: any) => r.lead_id);
+    const recipientIds = recipients.map((r: any) => r.id);
+
+    // Mark these recipients as 'processing' so they aren't picked up multiple times
+    const processingIso = new Date().toISOString();
+    await supabase
+      .from("broadcast_recipients")
+      .update({ status: "processing", updated_at: processingIso })
+      .in("id", recipientIds);
+
+    // Background Dispatch Worker
+    const backgroundTask = async () => {
+      console.log(`[BroadcastRunner] Starting dispatch of ${leadIds.length} leads for campaign ${broadcastId}`);
+      const startWorkflowUrl = `${supabaseUrl}/functions/v1/start-workflow-for-leads`;
+      let successCount = 0;
+      let failCount = 0;
+      let executionError = null;
+
+      try {
+        const response = await fetch(startWorkflowUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            workflowId: campaign.workflow_id,
+            leadIds,
+            instanceId: campaign.instance_id || undefined,
+          }),
+        });
+
+        const result = await response.json().catch(() => ({}));
+        if (response.ok) {
+          successCount = result.successCount ?? recipients.length;
+          failCount = result.failCount ?? 0;
+        } else {
+          executionError = result.error || "Falha ao executar fluxo";
+          failCount = recipients.length;
+        }
+      } catch (err: any) {
+        executionError = err.message || "Erro de rede ao disparar";
+        failCount = recipients.length;
+      }
+
+      const nowIso = new Date().toISOString();
+
+      // Update recipients status
+      if (successCount > 0 && failCount === 0) {
+        await supabase
+          .from("broadcast_recipients")
+          .update({
+            status: "sent",
+            dispatched_at: nowIso,
+            updated_at: nowIso,
+          })
+          .in("id", recipientIds);
+      } else if (failCount > 0 && successCount === 0) {
+        await supabase
+          .from("broadcast_recipients")
+          .update({
+            status: "failed",
+            error_message: executionError || "Falha no disparo do fluxo",
+            dispatched_at: nowIso,
+            updated_at: nowIso,
+          })
+          .in("id", recipientIds);
+      } else {
+        const sentIds = recipientIds.slice(0, successCount);
+        const failedIds = recipientIds.slice(successCount);
+
+        if (sentIds.length > 0) {
+          await supabase
+            .from("broadcast_recipients")
+            .update({ status: "sent", dispatched_at: nowIso, updated_at: nowIso })
+            .in("id", sentIds);
+        }
+        if (failedIds.length > 0) {
+          await supabase
+            .from("broadcast_recipients")
+            .update({ status: "failed", error_message: "Erro no envio do lote", dispatched_at: nowIso, updated_at: nowIso })
+            .in("id", failedIds);
+        }
+      }
+
+      // Refresh final counts
+      const { count: currentPending } = await supabase
+        .from("broadcast_recipients")
+        .select("*", { count: "exact", head: true })
+        .eq("broadcast_id", broadcastId)
+        .in("status", ["pending", "processing"]);
+
+      const { data: freshCamp } = await supabase
+        .from("broadcast_campaigns")
+        .select("sent_count, failed_count")
+        .eq("id", broadcastId)
+        .single();
+
+      const newSentCount = (freshCamp?.sent_count || 0) + successCount;
+      const newFailedCount = (freshCamp?.failed_count || 0) + failCount;
+      const isNowCompleted = (currentPending ?? 0) === 0;
+
+      await supabase
+        .from("broadcast_campaigns")
+        .update({
+          sent_count: newSentCount,
+          failed_count: newFailedCount,
+          pending_count: currentPending ?? 0,
+          status: isNowCompleted ? "completed" : "running",
+          completed_at: isNowCompleted ? nowIso : null,
+          updated_at: nowIso,
+        })
+        .eq("id", broadcastId);
+
+      console.log(`[BroadcastRunner] Finished batch for ${broadcastId}: ${successCount} sent, ${failCount} failed.`);
+    };
+
+    // Execute background worker without blocking response
+    if (typeof EdgeRuntime !== "undefined" && typeof EdgeRuntime.waitUntil === "function") {
+      EdgeRuntime.waitUntil(backgroundTask());
+    } else {
+      backgroundTask().catch((e) => console.error("[BroadcastRunner] Background task error:", e));
+    }
+
+    // Respond immediately to browser in < 300ms!
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Lote processado: ${successCount} enviados com sucesso, ${failCount} com falha.`,
-        dispatchedCount: successCount,
-        failedCount: failCount,
-        pendingRemaining: currentPending ?? 0,
-        isCompleted: isNowCompleted,
+        message: `Lote de ${recipients.length} disparos iniciado com sucesso!`,
+        batchCount: recipients.length,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

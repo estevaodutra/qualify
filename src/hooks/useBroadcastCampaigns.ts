@@ -177,7 +177,16 @@ export function useBroadcastCampaigns() {
           limit: explicitLimit,
         },
       });
-      if (error) throw error;
+      if (error) {
+        let msg = error.message;
+        try {
+          if (error.context && typeof error.context.json === "function") {
+            const body = await error.context.json();
+            if (body?.error) msg = body.error;
+          }
+        } catch {}
+        throw new Error(msg);
+      }
       return data;
     },
     onSuccess: (data) => {
@@ -196,7 +205,16 @@ export function useBroadcastCampaigns() {
       const { data, error } = await supabase.functions.invoke("process-broadcast-campaign", {
         body: { broadcastId, action },
       });
-      if (error) throw error;
+      if (error) {
+        let msg = error.message;
+        try {
+          if (error.context && typeof error.context.json === "function") {
+            const body = await error.context.json();
+            if (body?.error) msg = body.error;
+          }
+        } catch {}
+        throw new Error(msg);
+      }
       return data;
     },
     onSuccess: (data) => {
