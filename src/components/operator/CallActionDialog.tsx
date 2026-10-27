@@ -760,67 +760,137 @@ export function CallActionDialog({
     }
   };
 
-    const handleQuickNoAnswer = async () => {
-    setIsSaving(true);
+  const fetchNextQueueCall = async (excludeTaskId?: string): Promise<CallDialogData | null> => {
     try {
-      const now = new Date().toISOString();
-      if (isWorkflowCall && realTaskId) {
-        await (supabase as any)
-          .from("workflow_call_tasks")
-          .update({
-            status: "completed",
-            observation: notes ? `${notes} (Não atendeu)` : "Não atendeu",
-            completed_at: now,
-          })
-          .eq("id", realTaskId);
-      } else if (currentData.callId) {
-        await (supabase as any)
-          .from("call_queue")
-          .update({
-            status: "completed",
-            observations: notes ? `${notes} (Não atendeu)` : "Não atendeu",
-          })
-          .eq("id", currentData.callId.replace("cq_", ""));
+      const cleanExcludeId = excludeTaskId
+        ? excludeTaskId.replace("wt_", "").replace("cq_", "").replace("cl_", "")
+        : null;
+
+      // 1. Check pending/queued workflow call tasks
+      let wfQuery = (supabase as any)
+        .from("workflow_call_tasks")
+        .select("*, leads(name, phone)")
+        .in("status", ["queued", "pending", "assigned", "retry_scheduled"])
+        .order("created_at", { ascending: true })
+        .limit(10);
+
+      if (activeCompanyId) {
+        wfQuery = wfQuery.eq("company_id", activeCompanyId);
       }
 
-      // Record in call_logs
-      const effectiveUserId = user?.id || currentData.userId || "95b89774-fba0-485b-b539-14cb2901befe";
-      try {
-        await (supabase as any)
-          .from("call_logs")
-          .insert({
-            user_id: effectiveUserId,
-            company_id: activeCompanyId || undefined,
-            call_status: "no_answer",
-            notes: notes ? `${notes} (Não atendeu)` : "Não atendeu",
-            operator_id: operatorId || undefined,
-            duration_seconds: currentData.duration || 0,
-            started_at: currentData.duration ? new Date(Date.now() - currentData.duration * 1000).toISOString() : now,
-            ended_at: now,
-            attempt_number: currentData.attemptNumber || 1,
-          });
-      } catch (logErr) {
-        console.warn("[CallActionDialog] Warning inserting call_log for no_answer:", logErr);
+      const { data: wfTasks, error: wfErr } = await wfQuery;
+      if (!wfErr && wfTasks && wfTasks.length > 0) {
+        const nextWf = wfTasks.find((t: any) => t.id !== cleanExcludeId && t.status !== "completed" && t.status !== "failed");
+        if (nextWf) {
+          let wfName = "Workflow";
+          if (nextWf.workflow_id) {
+            const { data: wfData } = await (supabase as any)
+              .from("workflows")
+              .select("name")
+              .eq("id", nextWf.workflow_id)
+              .maybeSingle();
+            if (wfData?.name) wfName = wfData.name;
+          }
+
+          return {
+            callId: `wt_${nextWf.id}`,
+            campaignId: nextWf.workflow_id || "",
+            leadId: nextWf.lead_id || "",
+            leadName: nextWf.leads?.name || nextWf.lead_name || "Lead",
+            leadPhone: nextWf.phone || nextWf.leads?.phone || "",
+            campaignName: wfName,
+            duration: 0,
+            notes: nextWf.observation || "",
+            attemptNumber: (nextWf.attempt_count || 0) + 1,
+            maxAttempts: nextWf.max_attempts || 3,
+            isPriority: true,
+            callStatus: "dialing",
+            userId: nextWf.user_id || user?.id,
+            autoDial: true,
+          };
+        }
       }
 
-      queryClient.invalidateQueries({ queryKey: ["call_panel_history"] });
-      queryClient.invalidateQueries({ queryKey: ["call_panel_answered_today"] });
-      queryClient.invalidateQueries({ queryKey: ["workflow_call_tasks_queue"] });
-      queryClient.invalidateQueries({ queryKey: ["call_logs_queue"] });
-      queryClient.invalidateQueries({ queryKey: ["call_queue"] });
-      queryClient.invalidateQueries({ queryKey: ["mini-call-queue"] });
+      // 2. Check call_queue
+      let qQuery = (supabase as any)
+        .from("call_queue")
+        .select("*, call_campaigns(name, is_priority), call_leads(name, phone)")
+        .eq("status", "waiting")
+        .order("is_priority", { ascending: false })
+        .order("position", { ascending: true })
+        .limit(10);
 
-      toast({ title: "📵 Não Atendeu", description: "Registrado como não atendido. Avançando para a próxima ligação..." });
-      onOpenChange(false);
-      useCallFloatingStore.getState().closeCallDialog();
-    } catch (err: any) {
-      toast({ title: "Erro", description: err.message, variant: "destructive" });
-    } finally {
-      setIsSaving(false);
+      if (activeCompanyId) {
+        qQuery = qQuery.or(`company_id.eq.${activeCompanyId},company_id.is.null`);
+      }
+
+      const { data: qTasks, error: qErr } = await qQuery;
+      if (!qErr && qTasks && qTasks.length > 0) {
+        const nextQ = qTasks.find((q: any) => q.id !== cleanExcludeId && q.status !== "completed");
+        if (nextQ) {
+          return {
+            callId: `cq_${nextQ.id}`,
+            campaignId: nextQ.campaign_id || "",
+            leadId: nextQ.lead_id || "",
+            leadName: nextQ.call_leads?.name || "Lead",
+            leadPhone: nextQ.phone || nextQ.call_leads?.phone || "",
+            campaignName: nextQ.call_campaigns?.name || "Fila",
+            duration: 0,
+            notes: nextQ.observations || "",
+            attemptNumber: (nextQ.attempt_number || 0) + 1,
+            maxAttempts: nextQ.max_attempts || 3,
+            isPriority: nextQ.is_priority || false,
+            callStatus: "dialing",
+            userId: nextQ.user_id || user?.id,
+            autoDial: true,
+          };
+        }
+      }
+
+      // 3. Check call_logs (scheduled/ready)
+      let logsQuery = (supabase as any)
+        .from("call_logs")
+        .select("*, call_leads(name, phone), call_campaigns(name, is_priority)")
+        .in("call_status", ["scheduled", "ready"])
+        .lte("scheduled_for", new Date().toISOString())
+        .order("scheduled_for", { ascending: true })
+        .limit(10);
+
+      if (activeCompanyId) {
+        logsQuery = logsQuery.eq("company_id", activeCompanyId);
+      }
+
+      const { data: logTasks, error: logErr } = await logsQuery;
+      if (!logErr && logTasks && logTasks.length > 0) {
+        const nextLog = logTasks.find((l: any) => l.id !== cleanExcludeId && l.call_status !== "completed");
+        if (nextLog) {
+          return {
+            callId: `cl_${nextLog.id}`,
+            campaignId: nextLog.campaign_id || "",
+            leadId: nextLog.lead_id || "",
+            leadName: nextLog.call_leads?.name || "Lead",
+            leadPhone: nextLog.call_leads?.phone || "",
+            campaignName: nextLog.call_campaigns?.name || "Agendada",
+            duration: 0,
+            notes: nextLog.notes || "",
+            attemptNumber: nextLog.attempt_number || 1,
+            maxAttempts: nextLog.max_attempts || 3,
+            isPriority: nextLog.call_campaigns?.is_priority || false,
+            callStatus: "dialing",
+            userId: nextLog.user_id || user?.id,
+            autoDial: true,
+          };
+        }
+      }
+
+      return null;
+    } catch (e) {
+      console.error("[CallActionDialog] Error fetching next queue call:", e);
+      return null;
     }
   };
 
-const handleSave = async () => {
+  const handleSave = async () => {
     if (!selectedActionId) {
       toast({ title: "Selecione uma ação", variant: "destructive" });
       return;
@@ -828,6 +898,8 @@ const handleSave = async () => {
 
     setIsSaving(true);
     try {
+      const now = new Date().toISOString();
+
       if (isWorkflowCall && realTaskId) {
         // If not already executed during the call, execute it now
         if (!executedActionIds.includes(selectedActionId)) {
@@ -837,9 +909,7 @@ const handleSave = async () => {
           }
         }
 
-        const now = new Date().toISOString();
-
-        // Finalize the task in workflow_call_tasks
+        // Finalize the task in workflow_call_tasks - ALWAYS completed with NO retry
         await (supabase as any)
           .from("workflow_call_tasks")
           .update({
@@ -864,83 +934,108 @@ const handleSave = async () => {
               started_at: currentData.duration ? new Date(Date.now() - currentData.duration * 1000).toISOString() : now,
               ended_at: now,
               attempt_number: currentData.attemptNumber || 1,
+              action_id: selectedActionId || null,
             });
         } catch (logErr) {
           console.warn("[CallActionDialog] Warning inserting call_log:", logErr);
         }
+      } else {
+        // Regular call / campaign queue
+        let targetCallId = currentData.callId;
 
-        // Invalidate queries so history and queue refresh immediately
-        queryClient.invalidateQueries({ queryKey: ["call_panel_history"] });
-        queryClient.invalidateQueries({ queryKey: ["call_panel_answered_today"] });
-        queryClient.invalidateQueries({ queryKey: ["workflow_call_tasks_queue"] });
-        queryClient.invalidateQueries({ queryKey: ["call_logs_queue"] });
-        queryClient.invalidateQueries({ queryKey: ["call_queue"] });
+        if (!targetCallId && currentData.leadId && currentData.campaignId) {
+          const { data: latestLog } = await (supabase as any)
+            .from("call_logs")
+            .select("id")
+            .eq("lead_id", currentData.leadId)
+            .eq("campaign_id", currentData.campaignId)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .single();
 
-        toast({ title: "Ligação finalizada", description: "O resultado da ligação foi salvo e concluído com sucesso." });
-        onOpenChange(false);
-        useCallFloatingStore.getState().closeCallDialog();
-        return;
-      }
+          if (latestLog) targetCallId = latestLog.id;
+        }
 
-      // Resolve targetCallId — fallback to latest log if callId is empty
-      let targetCallId = currentData.callId;
+        if (targetCallId) {
+          const cleanCallId = targetCallId.replace("cl_", "").replace("cq_", "");
+          const updates: Record<string, unknown> = {
+            notes: notes || null,
+            call_status: "completed",
+          };
 
-      if (!targetCallId && currentData.leadId && currentData.campaignId) {
-        const { data: latestLog } = await (supabase as any)
-          .from("call_logs")
-          .select("id")
-          .eq("lead_id", currentData.leadId)
-          .eq("campaign_id", currentData.campaignId)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .single();
+          if (selectedActionId && !selectedActionId.startsWith("__")) {
+            updates.action_id = selectedActionId;
+          }
 
-        if (latestLog) targetCallId = latestLog.id;
-      }
+          if (selectedAction?.actionType === "custom_message") {
+            updates.custom_message = customMessage || null;
+            if (!customMessage.trim()) {
+              toast({ title: "⚠️ Mensagem personalizada vazia", description: "A mensagem será enviada em branco." });
+            }
+          }
 
-      if (!targetCallId) {
-        toast({ title: "Erro", description: "Nenhum registro de ligação encontrado para este lead", variant: "destructive" });
-        setIsSaving(false);
-        return;
-      }
+          if (isScheduleType && scheduledDate && scheduledTime) {
+            updates.scheduled_for = `${scheduledDate}T${scheduledTime}:00`;
+          }
 
-      const updates: Record<string, unknown> = {
-        notes: notes || null,
-      };
+          await (supabase as any)
+            .from("call_logs")
+            .update(updates)
+            .eq("id", cleanCallId);
 
-      if (selectedActionId && !selectedActionId.startsWith("__")) {
-        updates.action_id = selectedActionId;
-      }
+          await executeAutomation(selectedActionId);
+        }
 
-      // Save custom_message if the selected action is custom_message type
-      if (selectedAction?.actionType === "custom_message") {
-        updates.custom_message = customMessage || null;
-        if (!customMessage.trim()) {
-          toast({ title: "⚠️ Mensagem personalizada vazia", description: "A mensagem será enviada em branco." });
+        // Finalize in call_queue if this was a queued call
+        if (currentData.callId) {
+          const cleanQueueId = currentData.callId.replace("cq_", "");
+          await (supabase as any)
+            .from("call_queue")
+            .update({
+              status: "completed",
+              observations: notes || null,
+            })
+            .eq("id", cleanQueueId);
+        }
+
+        // Mark lead as completed so no retry occurs
+        if (currentData.leadId) {
+          await (supabase as any)
+            .from("call_leads")
+            .update({ status: "completed" })
+            .eq("id", currentData.leadId);
         }
       }
 
-      if (isScheduleType && scheduledDate && scheduledTime) {
-        updates.scheduled_for = `${scheduledDate}T${scheduledTime}:00`;
-      }
-
-      await (supabase as any)
-        .from("call_logs")
-        .update(updates)
-        .eq("id", targetCallId);
-
-      await executeAutomation(selectedActionId);
-
-      // Refresh history after save
+      // Refresh history and queues
       setHistoryVersion(v => v + 1);
       queryClient.invalidateQueries({ queryKey: ["call_panel_history"] });
       queryClient.invalidateQueries({ queryKey: ["call_panel_answered_today"] });
+      queryClient.invalidateQueries({ queryKey: ["workflow_call_tasks_queue"] });
       queryClient.invalidateQueries({ queryKey: ["call_logs_queue"] });
       queryClient.invalidateQueries({ queryKey: ["call_queue"] });
+      queryClient.invalidateQueries({ queryKey: ["mini-call-queue"] });
 
-      toast({ title: "Ação registrada", description: "Resultado salvo. A ligação será encerrada pelo callback." });
-      onOpenChange(false);
-      useCallFloatingStore.getState().closeCallDialog();
+      // Search for next call in queue
+      const nextCall = await fetchNextQueueCall(realTaskId || currentData.callId);
+
+      if (nextCall) {
+        toast({
+          title: "Chamada salva",
+          description: `Avançando para: ${nextCall.leadName} (${nextCall.leadPhone})`,
+        });
+
+        resetState();
+        useCallFloatingStore.getState().openCall(nextCall);
+      } else {
+        toast({
+          title: "Fila concluída",
+          description: "Resultado salvo com sucesso. Todas as chamadas da fila foram concluídas!",
+        });
+        resetState();
+        onOpenChange(false);
+        useCallFloatingStore.getState().closeCallDialog();
+      }
     } catch (err: any) {
       toast({ title: "Erro", description: err.message, variant: "destructive" });
     } finally {
@@ -1160,6 +1255,9 @@ const handleSave = async () => {
     setScheduledDate("");
     setScheduledTime("");
     setForwardStack([]);
+    setExecutedActionIds([]);
+    setConfirmingActionId(null);
+    autoDialTriggeredRef.current = false;
   };
 
   if (!open) return null;
@@ -1902,17 +2000,6 @@ const handleSave = async () => {
               className="rounded-lg px-3 h-8 text-xs font-semibold border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
             >
               Voltar à Fila
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleQuickNoAnswer}
-              disabled={isSaving}
-              className="rounded-lg px-3 h-8 text-xs font-semibold text-amber-700 dark:text-amber-300 border-amber-300/80 bg-amber-50/50 hover:bg-amber-100 dark:bg-amber-950/40 dark:border-amber-800"
-              title="Registrar que o lead não atendeu e avançar para o próximo"
-            >
-              Não Atendeu (Próxima)
             </Button>
             <Button
               type="button"

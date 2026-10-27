@@ -293,6 +293,17 @@ Deno.serve(async (req) => {
 
       if (workflowTask) {
         console.log('[call-status] Found matching workflow_call_task:', workflowTask.id);
+
+        // If workflow task was already completed by operator action, DO NOT overwrite with failure or retry
+        if (workflowTask.status === 'completed') {
+          console.log('[call-status] Workflow task already completed by operator action, ignoring status:', status);
+          const responseBody = { success: true, message: 'Workflow task already completed' };
+          return new Response(JSON.stringify(responseBody), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
         let mappedStatus = status;
         if (status === 'answered') {
           mappedStatus = 'in_call';
@@ -751,7 +762,7 @@ Deno.serve(async (req) => {
 
       const { data: currentLog } = await supabase
         .from('call_logs')
-        .select('attempt_number, max_attempts')
+        .select('attempt_number, max_attempts, action_id, call_status')
         .eq('id', callLog.id)
         .single();
 
@@ -761,7 +772,10 @@ Deno.serve(async (req) => {
       const retryExceededActionId = campaignData?.retry_exceeded_action_id ?? null;
       const currentAttempt = currentLog?.attempt_number ?? 1;
 
-      if (retryCount > 0 && currentAttempt < retryCount) {
+      // When an action is executed or the call was completed, no retry is needed
+      if (currentLog?.action_id || callLog.action_id || currentLog?.call_status === 'completed') {
+        console.log('[call-status] Action already executed or call completed, skipping retry');
+      } else if (retryCount > 0 && currentAttempt < retryCount) {
         // Schedule next attempt
         const nextRetryAt = new Date(Date.now() + retryIntervalMinutes * 60 * 1000);
 

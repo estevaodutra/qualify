@@ -48,7 +48,8 @@ Deno.serve(async (req) => {
 
     const currentAttempt = (task.attempt_count || 0) + 1;
     const maxAttempts = task.max_attempts || 3;
-    const shouldRetry = action.output === "no_answer" && currentAttempt < maxAttempts;
+    // When an action is executed, no retry is needed
+    const shouldRetry = false;
 
     let finalStatus = "completed";
 
