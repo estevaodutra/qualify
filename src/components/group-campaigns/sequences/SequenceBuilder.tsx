@@ -148,6 +148,23 @@ export function SequenceBuilder({ sequence, onBack, onUpdate }: SequenceBuilderP
       localId: node.id, nodeType: node.nodeType, positionX: node.positionX || 0, positionY: node.positionY || 0, nodeOrder: node.nodeOrder, config: node.config,
     })));
     await saveConnections({ connectionsToSave: localConnections, idMapping });
+
+    // Sync updated phone_call actions & script to pending workflow_call_tasks immediately
+    const phoneCallNode = localNodes.find(n => n.nodeType === "phone_call");
+    if (phoneCallNode?.config?.actions) {
+      try {
+        await supabase
+          .from("workflow_call_tasks")
+          .update({
+            actions: phoneCallNode.config.actions,
+            script: typeof phoneCallNode.config.script === "string" ? phoneCallNode.config.script : JSON.stringify(phoneCallNode.config.script || {}),
+          })
+          .eq("workflow_id", sequence.id)
+          .in("status", ["queued", "assigned", "in_call", "dialing"]);
+      } catch (syncErr) {
+        console.warn("Failed to sync workflow_call_tasks on save:", syncErr);
+      }
+    }
   };
 
   const handleToggleActive = async () => {

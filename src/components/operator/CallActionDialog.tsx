@@ -243,19 +243,82 @@ export function CallActionDialog({
   useEffect(() => {
     if (isWorkflowCall && realTaskId && open) {
       setWorkflowTaskLoading(true);
-      supabase
-        .from("workflow_call_tasks")
-        .select("script, actions")
-        .eq("id", realTaskId)
-        .single()
-        .then(({ data, error }) => {
-          if (error) {
-            console.error("Error fetching workflow task script/actions:", error);
-          } else if (data) {
-            setWorkflowTask(data);
+      (async () => {
+        try {
+          const { data: taskData, error: taskErr } = await (supabase as any)
+            .from("workflow_call_tasks")
+            .select("script, actions, workflow_id, node_id")
+            .eq("id", realTaskId)
+            .single();
+
+          if (taskErr || !taskData) {
+            setWorkflowTaskLoading(false);
+            return;
           }
+
+          let finalActions = taskData.actions || [];
+          let finalScript = taskData.script || "";
+
+          // Fetch the live sequence_nodes config so changes in Workflow Builder show up immediately
+          if (taskData.workflow_id) {
+            let activeNode: any = null;
+            if (taskData.node_id) {
+              const { data: nodeById } = await (supabase as any)
+                .from("sequence_nodes")
+                .select("id, config")
+                .eq("id", taskData.node_id)
+                .maybeSingle();
+              if (nodeById?.config) {
+                activeNode = nodeById;
+              }
+            }
+
+            if (!activeNode) {
+              const { data: phoneNodes } = await (supabase as any)
+                .from("sequence_nodes")
+                .select("id, config")
+                .eq("sequence_id", taskData.workflow_id)
+                .eq("node_type", "phone_call")
+                .limit(1);
+              if (phoneNodes && phoneNodes.length > 0) {
+                activeNode = phoneNodes[0];
+              }
+            }
+
+            if (activeNode?.config) {
+              if (Array.isArray(activeNode.config.actions) && activeNode.config.actions.length > 0) {
+                finalActions = activeNode.config.actions;
+              }
+              if (activeNode.config.script) {
+                finalScript = typeof activeNode.config.script === "string"
+                  ? activeNode.config.script
+                  : JSON.stringify(activeNode.config.script);
+              }
+
+              // Synchronize tasks for this workflow in background so queued tasks have latest actions
+              (supabase as any)
+                .from("workflow_call_tasks")
+                .update({
+                  actions: finalActions,
+                  script: finalScript,
+                  node_id: activeNode.id,
+                })
+                .eq("workflow_id", taskData.workflow_id)
+                .in("status", ["queued", "assigned", "in_call", "dialing"])
+                .then(() => {});
+            }
+          }
+
+          setWorkflowTask({
+            script: finalScript,
+            actions: finalActions,
+          });
+        } catch (err) {
+          console.error("Error fetching live workflow task script/actions:", err);
+        } finally {
           setWorkflowTaskLoading(false);
-        });
+        }
+      })();
     } else {
       setWorkflowTask(null);
     }
