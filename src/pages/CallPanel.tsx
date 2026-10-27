@@ -1197,6 +1197,7 @@ export default function CallPanel() {
 
   // Operator is available if user's own operator is available, or if queue has available operators
   const isOperatorAvailable = useMemo(() => {
+    if (availableOps === 0) return false;
     if (myOperator) return myOperator.status === "available";
     return availableOps > 0;
   }, [myOperator, availableOps]);
@@ -1242,11 +1243,18 @@ export default function CallPanel() {
   }, [combinedQueue]);
 
   useEffect(() => {
+    let isPausedLocal = false;
+    try {
+      isPausedLocal = typeof window !== "undefined" && localStorage.getItem("call_queue_paused") === "true";
+    } catch {}
+
     // Apenas disca automaticamente se a fila estiver explicitamente iniciada ('running')
-    const isQueueRunning = queueGlobalStatus === "running";
+    // e NÃO estiver pausada localmente, e HOUVER operador disponível
+    const isQueueRunning = queueGlobalStatus === "running" && !isPausedLocal;
     if (
       isQueueRunning &&
       isOperatorAvailable &&
+      availableOps > 0 &&
       !isCallFloatingOpen &&
       !viewingQueueLead &&
       combinedQueue.length > 0 &&
@@ -1483,7 +1491,24 @@ export default function CallPanel() {
             <div className="flex items-center gap-2 flex-wrap">
               {/* Start / Pause / Resume / Stop */}
               {queueGlobalStatus === "stopped" && combinedQueueCount > 0 && (
-                <Button size="sm" onClick={() => { const first = combinedQueue[0]; if (first) callQueue.startQueue(first.campaignId); }} disabled={callQueue.isStarting} className="gap-1.5">
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      if (typeof window !== "undefined") {
+                        localStorage.removeItem("call_queue_paused");
+                      }
+                    } catch {}
+                    const first = combinedQueue[0];
+                    if (first?.campaignId && first.campaignId !== "open") {
+                      await callQueue.startQueue(first.campaignId);
+                    } else {
+                      await callQueue.resumeAll();
+                    }
+                  }}
+                  disabled={callQueue.isStarting || callQueue.isResumingAll}
+                  className="gap-1.5"
+                >
                   <Play className="h-3.5 w-3.5" />
                   {callQueue.isStarting ? "Iniciando..." : "Iniciar Fila"}
                 </Button>
@@ -1494,9 +1519,9 @@ export default function CallPanel() {
                     <Pause className="h-3.5 w-3.5" />
                     {callQueue.isPausingAll ? "Pausando..." : "Pausar"}
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => { const first = combinedQueue[0]; if (first) callQueue.stopQueue(first.campaignId); }} disabled={callQueue.isStopping} className="gap-1.5">
+                  <Button variant="outline" size="sm" onClick={() => callQueue.stopAll()} disabled={callQueue.isStoppingAll} className="gap-1.5">
                     <Square className="h-3.5 w-3.5" />
-                    Parar
+                    {callQueue.isStoppingAll ? "Parando..." : "Parar"}
                   </Button>
                 </>
               )}
@@ -1506,9 +1531,9 @@ export default function CallPanel() {
                     <Play className="h-3.5 w-3.5" />
                     {callQueue.isResumingAll ? "Retomando..." : "Retomar"}
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => { const first = combinedQueue[0]; if (first) callQueue.stopQueue(first.campaignId); }} disabled={callQueue.isStopping} className="gap-1.5">
+                  <Button variant="outline" size="sm" onClick={() => callQueue.stopAll()} disabled={callQueue.isStoppingAll} className="gap-1.5">
                     <Square className="h-3.5 w-3.5" />
-                    Parar
+                    {callQueue.isStoppingAll ? "Parando..." : "Parar"}
                   </Button>
                 </>
               )}

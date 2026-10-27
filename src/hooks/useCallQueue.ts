@@ -167,9 +167,18 @@ export function useCallQueue(options: UseCallQueueOptions = {}) {
     waiting_cooldown: states.filter((s: QueueExecutionState) => s.status === "waiting_cooldown").length,
   };
 
+  const isLocallyPaused = (() => {
+    try {
+      return typeof window !== "undefined" && localStorage.getItem("call_queue_paused") === "true";
+    } catch {
+      return false;
+    }
+  })();
+
   const activeCount = summary.running + summary.waiting_operator + summary.waiting_cooldown;
   const globalStatus: "running" | "paused" | "stopped" | "mixed" =
-    activeCount > 0 && summary.paused > 0 ? "mixed"
+    isLocallyPaused ? "paused"
+    : activeCount > 0 && summary.paused > 0 ? "mixed"
     : activeCount > 0 ? "running"
     : summary.paused > 0 ? "paused"
     : "stopped";
@@ -189,6 +198,10 @@ export function useCallQueue(options: UseCallQueueOptions = {}) {
 
   const tickAll = useCallback(async () => {
     if (tickInFlightRef.current) return;
+    try {
+      if (typeof window !== "undefined" && localStorage.getItem("call_queue_paused") === "true") return;
+    } catch {}
+    if (availableOperators.length === 0) return;
     const ids = activeIdsRef.current;
     if (ids.length === 0) return;
 
@@ -453,6 +466,11 @@ export function useCallQueue(options: UseCallQueueOptions = {}) {
 
   const startQueue = useMutation({
     mutationFn: async (cId: string) => {
+      try {
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("call_queue_paused");
+        }
+      } catch {}
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) throw new Error("Não autenticado");
 
@@ -495,6 +513,11 @@ export function useCallQueue(options: UseCallQueueOptions = {}) {
 
   const resumeQueue = useMutation({
     mutationFn: async (cId: string) => {
+      try {
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("call_queue_paused");
+        }
+      } catch {}
       await (supabase as any).from("queue_execution_state")
         .update({ status: "running" })
         .eq("campaign_id", cId);
@@ -520,28 +543,106 @@ export function useCallQueue(options: UseCallQueueOptions = {}) {
 
   const pauseAll = useMutation({
     mutationFn: async () => {
-      const active = states.filter((s: QueueExecutionState) =>
-        ["running", "waiting_operator", "waiting_cooldown"].includes(s.status)
-      );
-      for (const s of active) {
-        await (supabase as any).from("queue_execution_state")
-          .update({ status: "paused" })
-          .eq("campaign_id", s.campaignId);
+      try {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("call_queue_paused", "true");
+        }
+      } catch {}
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+
+      let query = (supabase as any)
+        .from("queue_execution_state")
+        .update({ status: "paused" });
+      if (activeCompanyId) {
+        query = query.eq("company_id", activeCompanyId);
+      }
+      await query;
+
+      for (const s of states) {
+        if (s.campaignId) {
+          await (supabase as any)
+            .from("queue_execution_state")
+            .update({ status: "paused" })
+            .eq("campaign_id", s.campaignId);
+        }
+      }
+
+      if (states.length === 0 && authUser) {
+        await (supabase as any)
+          .from("queue_execution_state")
+          .upsert({
+            campaign_id: null,
+            user_id: authUser.id,
+            company_id: activeCompanyId || null,
+            status: "paused",
+          });
       }
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["queue_execution_state_all"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["queue_execution_state_all"] });
+      toast({ title: "Fila pausada" });
+    },
   });
 
   const resumeAll = useMutation({
     mutationFn: async () => {
-      const paused = states.filter((s: QueueExecutionState) => s.status === "paused");
-      for (const s of paused) {
-        await (supabase as any).from("queue_execution_state")
-          .update({ status: "running" })
-          .eq("campaign_id", s.campaignId);
+      try {
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("call_queue_paused");
+        }
+      } catch {}
+      let query = (supabase as any)
+        .from("queue_execution_state")
+        .update({ status: "running" });
+      if (activeCompanyId) {
+        query = query.eq("company_id", activeCompanyId);
+      }
+      await query;
+
+      for (const s of states) {
+        if (s.campaignId) {
+          await (supabase as any)
+            .from("queue_execution_state")
+            .update({ status: "running" })
+            .eq("campaign_id", s.campaignId);
+        }
       }
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["queue_execution_state_all"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["queue_execution_state_all"] });
+      toast({ title: "Fila retomada" });
+      setTimeout(() => tickAllRef.current(), 500);
+    },
+  });
+
+  const stopAll = useMutation({
+    mutationFn: async () => {
+      try {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("call_queue_paused", "true");
+        }
+      } catch {}
+      let query = (supabase as any)
+        .from("queue_execution_state")
+        .update({ status: "stopped", current_position: 0 });
+      if (activeCompanyId) {
+        query = query.eq("company_id", activeCompanyId);
+      }
+      await query;
+
+      for (const s of states) {
+        if (s.campaignId) {
+          await (supabase as any)
+            .from("queue_execution_state")
+            .update({ status: "stopped", current_position: 0 })
+            .eq("campaign_id", s.campaignId);
+        }
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["queue_execution_state_all"] });
+      toast({ title: "Fila parada" });
+    },
   });
 
   return {
@@ -584,7 +685,9 @@ export function useCallQueue(options: UseCallQueueOptions = {}) {
     // Global control
     pauseAll: pauseAll.mutateAsync,
     resumeAll: resumeAll.mutateAsync,
+    stopAll: stopAll.mutateAsync,
     isPausingAll: pauseAll.isPending,
     isResumingAll: resumeAll.isPending,
+    isStoppingAll: stopAll.isPending,
   };
 }

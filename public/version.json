@@ -1,6 +1,6 @@
 {
-  "commit": "b66604cb8b187be047065ae0cfedc1ed069f754b",
-  "shortCommit": "b66604c",
-  "message": "feat(workflow): sincroniza acoes atualizadas do fluxo com os cards de ligacao dinamicamente",
-  "builtAt": "2026-10-27T18:54:38.353Z"
+  "commit": "b14e6a83f97348b3d8362ad587f21ae5741e20f4",
+  "shortCommit": "b14e6a8",
+  "message": "fix(call-dialog): remove todas as notificacoes toast operacionais do card de ligacao",
+  "builtAt": "2026-10-27T21:28:02.479Z"
 }

@@ -28,7 +28,9 @@ export function CallPanelSidebar({
   isAdmin,
 }: CallPanelSidebarProps) {
   const statusLabel =
-    queueGlobalStatus === "running"
+    queueGlobalStatus === "running" && availableOps === 0
+      ? "Aguardando Op."
+      : queueGlobalStatus === "running"
       ? "Fila Ativa"
       : queueGlobalStatus === "paused"
       ? "Fila Pausada"
@@ -37,7 +39,9 @@ export function CallPanelSidebar({
       : "Fila Parada";
 
   const statusDot =
-    queueGlobalStatus === "running"
+    queueGlobalStatus === "running" && availableOps === 0
+      ? "bg-amber-500 animate-pulse"
+      : queueGlobalStatus === "running"
       ? "bg-emerald-500 animate-pulse"
       : queueGlobalStatus === "paused"
       ? "bg-amber-500"

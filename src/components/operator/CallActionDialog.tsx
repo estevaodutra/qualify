@@ -750,6 +750,64 @@ export function CallActionDialog({
 
   const fetchNextQueueCall = async (excludeTaskId?: string): Promise<CallDialogData | null> => {
     try {
+      // 0. Safety Checks: If queue is manually paused or operators are offline, DO NOT fetch next call
+      try {
+        if (typeof window !== "undefined" && localStorage.getItem("call_queue_paused") === "true") {
+          console.log("[fetchNextQueueCall] Queue is paused locally. Halting auto-advance.");
+          return null;
+        }
+      } catch {}
+
+      // Check if any operators are available in DB
+      let opQuery = (supabase as any)
+        .from("call_operators")
+        .select("id, user_id, status, is_active")
+        .eq("is_active", true)
+        .eq("status", "available");
+
+      if (activeCompanyId) {
+        opQuery = opQuery.eq("company_id", activeCompanyId);
+      }
+
+      const { data: activeOps } = await opQuery;
+      if (!activeOps || activeOps.length === 0) {
+        console.log("[fetchNextQueueCall] Zero active operators available. Halting auto-advance.");
+        return null;
+      }
+
+      // If current user is registered as an operator, check if their operator is available
+      if (user?.id) {
+        const { data: myOp } = await (supabase as any)
+          .from("call_operators")
+          .select("id, status, is_active")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (myOp && (!myOp.is_active || myOp.status !== "available")) {
+          console.log("[fetchNextQueueCall] Current operator is offline/busy. Halting auto-advance.");
+          return null;
+        }
+      }
+
+      // Check if queue execution is paused or stopped in database
+      let stateQuery = (supabase as any)
+        .from("queue_execution_state")
+        .select("status");
+
+      if (activeCompanyId) {
+        stateQuery = stateQuery.eq("company_id", activeCompanyId);
+      }
+
+      const { data: qStates } = await stateQuery;
+      if (qStates && qStates.length > 0) {
+        const anyRunning = qStates.some((s: any) => s.status === "running");
+        const anyPaused = qStates.some((s: any) => s.status === "paused");
+        if (anyPaused || !anyRunning) {
+          console.log("[fetchNextQueueCall] Queue is paused or not running in DB. Halting auto-advance.");
+          return null;
+        }
+      }
+
       const cleanExcludeId = excludeTaskId
         ? excludeTaskId.replace("wt_", "").replace("cq_", "").replace("cl_", "")
         : null;
@@ -1217,6 +1275,12 @@ export function CallActionDialog({
   // Trigger autoDial on mount if requested
   useEffect(() => {
     if (open && autoDial && currentData.callId && !autoDialTriggeredRef.current) {
+      try {
+        if (typeof window !== "undefined" && localStorage.getItem("call_queue_paused") === "true") {
+          return;
+        }
+      } catch {}
+
       const alreadyConnected = ["on_call", "in_call", "answered", "completed", "ended"].includes(currentData.callStatus || "");
       if (!alreadyConnected) {
         autoDialTriggeredRef.current = true;
