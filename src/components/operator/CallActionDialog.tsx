@@ -456,10 +456,6 @@ export function CallActionDialog({
           leadName: targetLeadName || matchedLead?.name || targetPhone || "Lead",
           phone: targetPhone || matchedLead?.phone || null,
         });
-        toast({
-          title: "Chat aberto",
-          description: `Conversa com ${targetLeadName || "Lead"} aberta no chat express.`,
-        });
       } else {
         toast({
           title: "Não foi possível abrir o chat",
@@ -735,18 +731,10 @@ export function CallActionDialog({
 
         setExecutedActionIds(prev => [...prev, action.id]);
         setConfirmingActionId(null);
-        toast({
-          title: "✅ Mensagem enviada!",
-          description: `Ação "${action.name}" disparada no workflow. A ligação continua ativa.`,
-        });
       } else {
         await executeAutomation(action.id);
         setExecutedActionIds(prev => [...prev, action.id]);
         setConfirmingActionId(null);
-        toast({
-          title: "✅ Ação disparada!",
-          description: `Ação "${action.name}" executada com sucesso. A ligação continua ativa.`,
-        });
       }
     } catch (err: any) {
       console.error("[CallActionDialog] Error executing action now:", err);
@@ -1023,10 +1011,6 @@ export function CallActionDialog({
         resetState();
         useCallFloatingStore.getState().openCall(nextCall);
       } else {
-        toast({
-          title: "Fila concluída",
-          description: "Resultado salvo com sucesso. Todas as chamadas da fila foram concluídas!",
-        });
         resetState();
         onOpenChange(false);
         useCallFloatingStore.getState().closeCallDialog();
@@ -1293,7 +1277,6 @@ export function CallActionDialog({
                     if (trimmed && trimmed !== currentData.leadName) {
                       await (supabase as any).from("call_leads").update({ name: trimmed }).eq("id", currentData.leadId);
                       setCurrentData(prev => ({ ...prev, leadName: trimmed }));
-                      toast({ title: "Nome atualizado" });
                     } else {
                       setEditName(currentData.leadName);
                     }
