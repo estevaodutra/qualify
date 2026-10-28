@@ -8,6 +8,7 @@ import { useSprintStore } from "@/features/sprint/state/sprintStore";
 import { parseNotificationTarget } from "@/services/notificationService";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
+import { CriafySidebarIcon } from "@/components/criafy/CriafyBrandIcons";
 
 export interface ActivePopupNotification {
   id: string;
@@ -272,10 +273,24 @@ export const NotificationPopupManager: React.FC = () => {
   // Renderiza a notificação mais recente no formato sutil do print
   const latestPopup = popups[0];
 
-  // Extrai o nome do autor e do card para formatar o texto limpo: "Admin mencionou você no card 'Card'."
-  const author = latestPopup.authorName || "Um membro";
-  const cardName = latestPopup.cardTitle || (latestPopup.title.match(/card\s+["']?([^"']+)["']?/i)?.[1]) || "Card";
-  const bodyText = `${author} mencionou você no card "${cardName}".`;
+  const isCriafy =
+    latestPopup.entity?.startsWith("criafy_publication") ||
+    latestPopup.title?.toLowerCase().includes("instagram") ||
+    latestPopup.title?.toLowerCase().includes("criafy") ||
+    latestPopup.title?.toLowerCase().includes("reels") ||
+    latestPopup.title?.toLowerCase().includes("story");
+
+  let popupHeader = "Menção no sprint";
+  let bodyText = "";
+
+  if (isCriafy) {
+    popupHeader = "Criafy • Publicação";
+    bodyText = `${latestPopup.title}. ${latestPopup.description || ""}`.trim();
+  } else {
+    const author = latestPopup.authorName || "Um membro";
+    const cardName = latestPopup.cardTitle || (latestPopup.title.match(/card\s+["']?([^"']+)["']?/i)?.[1]) || "Card";
+    bodyText = `${author} mencionou você no card "${cardName}".`;
+  }
 
   return (
     <div
@@ -291,12 +306,16 @@ export const NotificationPopupManager: React.FC = () => {
         {/* Triângulo / seta do balão apontando para o item Notificações */}
         <div className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rotate-45 bg-white dark:bg-[#18181b] border-l border-b border-border/80 dark:border-white/10" />
 
-        {/* Topo do balãozinho: bolinha azul + 'Menção no sprint' + X */}
+        {/* Topo do balãozinho: ícone + header + X */}
         <div className="flex items-center justify-between pb-1">
           <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-primary shrink-0" />
+            {isCriafy ? (
+              <CriafySidebarIcon className="h-4 w-4 shrink-0" />
+            ) : (
+              <span className="h-2 w-2 rounded-full bg-primary shrink-0" />
+            )}
             <span className="text-[12px] font-semibold text-foreground">
-              Menção no sprint
+              {popupHeader}
             </span>
           </div>
           <button

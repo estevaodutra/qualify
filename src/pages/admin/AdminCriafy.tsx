@@ -30,6 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { CriafyLogo } from "@/components/criafy/CriafyBrandIcons";
 
 interface MetaUrlItem {
   id: string;
@@ -246,8 +247,8 @@ export default function AdminCriafy() {
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b pb-5">
         <div>
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-gradient-to-tr from-pink-500 via-rose-500 to-purple-600 text-white shadow-sm">
-              <Sparkles className="h-6 w-6" />
+            <div className="h-10 w-10 rounded-xl overflow-hidden shadow-sm flex items-center justify-center p-1 bg-card border border-border/70 shrink-0">
+              <CriafyLogo className="h-full w-full object-contain" />
             </div>
             <div>
               <h1 className="text-2xl font-bold tracking-tight">Criafy — Painel de URLs & Meta Developers</h1>

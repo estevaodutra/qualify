@@ -38,13 +38,14 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useState } from "react";
+import { CriafySidebarIcon } from "@/components/criafy/CriafyBrandIcons";
 
 const mainItems = [
   { title: "Dashboard", url: "/admin", icon: LayoutDashboard, end: true },
   { title: "Empresas", url: "/admin/empresas", icon: Building2 },
   { title: "Usuários", url: "/admin/usuarios", icon: Users },
   { title: "Instâncias", url: "/admin/instancias", icon: Smartphone },
-  { title: "Criafy (Meta URLs)", url: "/admin/criafy", icon: Sparkles },
+  { title: "Criafy (Meta URLs)", url: "/admin/criafy", icon: CriafySidebarIcon },
 ];
 
 const financialItems = [

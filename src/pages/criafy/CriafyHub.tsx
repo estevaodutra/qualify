@@ -47,6 +47,7 @@ import { InstagramFeedModal } from "@/components/criafy/InstagramFeedModal";
 import { AccountCompactCard } from "@/components/criafy/AccountCompactCard";
 import { AccountInsightsModal } from "@/components/criafy/AccountInsightsModal";
 import { useCriafyAutoScheduler } from "@/hooks/useCriafyAutoScheduler";
+import { CriafySidebarIcon, CriafyLogo } from "@/components/criafy/CriafyBrandIcons";
 
 type CriafyTabId =
   | "contas"
@@ -482,8 +483,8 @@ export default function CriafyHub() {
         >
           {!sidebarCollapsed ? (
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="p-2 rounded-xl bg-gradient-to-tr from-purple-600 via-pink-600 to-amber-500 text-white shadow-sm shrink-0">
-                <Sparkles className="w-4 h-4" />
+              <div className="h-9 w-9 rounded-xl overflow-hidden shadow-xs shrink-0 flex items-center justify-center p-1 bg-card border border-border/70">
+                <CriafyLogo className="h-full w-full object-contain" />
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
@@ -504,11 +505,11 @@ export default function CriafyHub() {
             </div>
           ) : (
             <div
-              className="p-2 rounded-xl bg-gradient-to-tr from-purple-600 via-pink-600 to-amber-500 text-white shadow-sm cursor-pointer"
+              className="h-10 w-10 rounded-xl cursor-pointer flex items-center justify-center shadow-xs hover:opacity-90 transition-opacity p-1.5 bg-card border border-border/70"
               onClick={toggleSidebarCollapsed}
               title="Expandir menu Criafy"
             >
-              <Sparkles className="w-4 h-4" />
+              <CriafySidebarIcon className="h-6 w-6 object-contain" />
             </div>
           )}
 
@@ -709,8 +710,8 @@ export default function CriafyHub() {
       <div className="lg:hidden border-b border-border/70 bg-card/80 backdrop-blur-md px-4 py-3 shrink-0 space-y-2.5">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-gradient-to-tr from-purple-600 via-pink-600 to-amber-500 text-white shadow-xs">
-              <Sparkles className="w-4 h-4" />
+            <div className="h-7 w-7 rounded-lg overflow-hidden flex items-center justify-center shadow-xs p-0.5 bg-card border border-border/70">
+              <CriafyLogo className="h-full w-full object-contain" />
             </div>
             <span className="font-bold text-base">Criafy</span>
           </div>

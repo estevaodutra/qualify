@@ -29,24 +29,31 @@ import { parseNotificationTarget } from "@/services/notificationService";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { CriafySidebarIcon } from "@/components/criafy/CriafyBrandIcons";
 
 interface NotificationsPopoverProps {
   children: React.ReactNode;
+}
+
+function isCriafyAlert(alert: Alert) {
+  const entity = alert.entity || "";
+  const title = (alert.title || "").toLowerCase();
+  return (
+    entity.startsWith("criafy_publication") ||
+    title.includes("instagram") ||
+    title.includes("criafy") ||
+    title.includes("story") ||
+    title.includes("reels") ||
+    title.includes("post no feed")
+  );
 }
 
 function getNotificationIcon(alert: Alert) {
   const entity = alert.entity || "";
   const title = (alert.title || "").toLowerCase();
 
-  if (
-    entity.startsWith("criafy_publication") ||
-    title.includes("instagram") ||
-    title.includes("post") ||
-    title.includes("stories") ||
-    title.includes("story") ||
-    title.includes("reels")
-  ) {
-    return <Share2 className="h-4 w-4 text-pink-500" />;
+  if (isCriafyAlert(alert)) {
+    return <CriafySidebarIcon className="h-4.5 w-4.5" />;
   }
   if (entity.startsWith("sprint_card") || title.includes("card") || title.includes("sprint")) {
     return <ListTodo className="h-4 w-4 text-primary" />;
@@ -181,6 +188,7 @@ export const NotificationsPopover: React.FC<NotificationsPopoverProps> = ({ chil
             alerts.map((alert) => {
               const target = parseNotificationTarget(alert.entity, alert.link);
               const isActionable = target.type === "sprint_card" || !!target.url || !!alert.link;
+              const isCriafy = isCriafyAlert(alert);
 
               return (
                 <div
@@ -203,14 +211,24 @@ export const NotificationsPopover: React.FC<NotificationsPopoverProps> = ({ chil
                   </div>
 
                   {/* Ícone contextual */}
-                  <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                  <div
+                    className={cn(
+                      "h-8 w-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5",
+                      isCriafy
+                        ? "bg-slate-100 dark:bg-zinc-800 border border-slate-200/80 dark:border-zinc-700/60 p-1"
+                        : "bg-primary/10"
+                    )}
+                  >
                     {getNotificationIcon(alert)}
                   </div>
 
                   {/* Detalhes da notificação */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
-                      <h5 className="text-[12.5px] font-bold text-foreground leading-snug truncate">
+                      <h5
+                        className="text-[12.5px] font-bold text-foreground leading-snug line-clamp-2 break-words"
+                        title={alert.title}
+                      >
                         {alert.title}
                       </h5>
                       <span className="text-[11px] text-muted-foreground/70 whitespace-nowrap tabular-nums">
