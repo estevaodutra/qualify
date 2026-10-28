@@ -58,32 +58,6 @@ export default function InboxList({
   const [selectedConvIds, setSelectedConvIds] = useState<Set<string>>(new Set());
   const [isBatchDialogOpen, setIsBatchDialogOpen] = useState(false);
 
-  const toggleSelectConversation = (id: string) => {
-    setSelectedConvIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const handleToggleSelectAll = () => {
-    if (selectedConvIds.size === sortedConversations.length) {
-      setSelectedConvIds(new Set());
-    } else {
-      setSelectedConvIds(new Set(sortedConversations.map((c) => c.id)));
-    }
-  };
-
-  const handleCancelSelection = () => {
-    setIsSelectionMode(false);
-    setSelectedConvIds(new Set());
-  };
-
-  const selectedConversations = useMemo(() => {
-    return sortedConversations.filter((c) => selectedConvIds.has(c.id));
-  }, [sortedConversations, selectedConvIds]);
-
   const activeCategoryCount = getActiveCategoryCount(filters as AdvancedChatFilters);
   
   // Debounce search
@@ -188,6 +162,33 @@ export default function InboxList({
       return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
     });
   }, [conversations, sortBy]);
+
+  // Bulk Selection Helpers & Memos
+  const toggleSelectConversation = (id: string) => {
+    setSelectedConvIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleToggleSelectAll = () => {
+    if (selectedConvIds.size === sortedConversations.length) {
+      setSelectedConvIds(new Set());
+    } else {
+      setSelectedConvIds(new Set(sortedConversations.map((c) => c.id)));
+    }
+  };
+
+  const handleCancelSelection = () => {
+    setIsSelectionMode(false);
+    setSelectedConvIds(new Set());
+  };
+
+  const selectedConversations = useMemo(() => {
+    return sortedConversations.filter((c) => selectedConvIds.has(c.id));
+  }, [sortedConversations, selectedConvIds]);
 
   // Compute total counts for type tabs
   const { totalGroupsCount, totalIndividualCount } = useMemo(() => {
