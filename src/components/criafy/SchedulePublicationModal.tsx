@@ -301,6 +301,7 @@ export function SchedulePublicationModal({
   const [bulkPostStories, setBulkPostStories] = useState<boolean>(true);
   const [shuffleSeed, setShuffleSeed] = useState<number>(1);
   const [bulkProgressText, setBulkProgressText] = useState<string>("");
+  const uploadedContentMapRef = useRef<Map<string, string>>(new Map());
 
   const getMediaDuration = (content?: CriafyContent): number | undefined => {
     if (!content) return undefined;
@@ -1081,49 +1082,82 @@ export function SchedulePublicationModal({
 
       setSubmitting(true);
       try {
-        const uploadedContentIdMap = new Map<string, string>();
+        const uploadedContentIdMap = uploadedContentMapRef.current;
         const uploadSlots = plannedBulkSlots.filter(
           (s) => s.item.source === "UPLOAD" && s.item.file
         );
+        const failedUploadItems: string[] = [];
 
         for (let i = 0; i < uploadSlots.length; i++) {
           const slot = uploadSlots[i];
           const file = slot.item.file!;
+
+          // Se já foi enviado com sucesso nesta sessão, reutiliza diretamente sem re-upload
+          if (uploadedContentIdMap.has(slot.item.key)) {
+            continue;
+          }
+
+          // Se já existe na biblioteca com o mesmo nome e tamanho de arquivo, reutiliza
+          const existingInLib = contents.find(
+            (c) => c.title === file.name && Number(c.file_size_bytes) === file.size
+          );
+          if (existingInLib) {
+            uploadedContentIdMap.set(slot.item.key, existingInLib.id);
+            continue;
+          }
+
+          const durStr = formatDurationCompact(slot.item.durationSeconds);
+          const sizeStr = `${Math.round((file.size / (1024 * 1024)) * 10) / 10}MB`;
           setBulkProgressText(
-            `Subindo mídia ${i + 1} de ${uploadSlots.length}: ${file.name}...`
+            `Subindo mídia ${i + 1} de ${uploadSlots.length}: ${file.name} (${sizeStr}${durStr ? ` • ${durStr}` : ""})...`
           );
 
-          const validation = await extractAndValidateMedia(file);
-          const { mediaUrl, mediaType, mimeType } =
-            await criafyService.uploadMediaFile(activeCompanyId, file);
+          try {
+            const validation = await extractAndValidateMedia(file);
+            const { mediaUrl, mediaType, mimeType } =
+              await criafyService.uploadMediaFile(activeCompanyId, file);
 
-          const createdContent = await criafyService.createContent(
-            {
-              company_id: activeCompanyId,
-              title: file.name,
-              media_url: mediaUrl,
-              media_type: mediaType,
-              mime_type: mimeType,
-              file_size_bytes: file.size,
-              width: validation.width || undefined,
-              height: validation.height || undefined,
-              duration_seconds: validation.durationSeconds || undefined,
-              aspect_ratio: validation.aspectRatio,
-              meta_validation_status: validation.isValid ? "VALID" : "INVALID",
-              meta_validation_errors: validation.errors,
-            },
-            [targetAccountId]
-          );
+            const createdContent = await criafyService.createContent(
+              {
+                company_id: activeCompanyId,
+                title: file.name,
+                media_url: mediaUrl,
+                media_type: mediaType,
+                mime_type: mimeType,
+                file_size_bytes: file.size,
+                width: validation.width || undefined,
+                height: validation.height || undefined,
+                duration_seconds: validation.durationSeconds || undefined,
+                aspect_ratio: validation.aspectRatio,
+                meta_validation_status: validation.isValid ? "VALID" : "INVALID",
+                meta_validation_errors: validation.errors,
+              },
+              [targetAccountId]
+            );
 
-          uploadedContentIdMap.set(slot.item.key, createdContent.id);
+            uploadedContentIdMap.set(slot.item.key, createdContent.id);
+          } catch (fileErr: any) {
+            console.error(`Erro no upload do arquivo ${file.name}:`, fileErr);
+            failedUploadItems.push(file.name);
+          }
+        }
+
+        // Filtra apenas os slots cujo conteúdo foi obtido com sucesso
+        const validSlots = plannedBulkSlots.filter((slot) => {
+          if (slot.item.source === "LIBRARY") return !!slot.item.contentId;
+          return uploadedContentIdMap.has(slot.item.key);
+        });
+
+        if (validSlots.length === 0) {
+          throw new Error("Nenhum arquivo pôde ser enviado para o agendamento. Verifique sua conexão e tente novamente.");
         }
 
         setBulkProgressText(
-          `Agendando ${bulkSummaryStats.totalPublications} publicações (Reels & Stories) no calendário...`
+          `Agendando publicações de ${validSlots.length} mídias no calendário...`
         );
 
         const pubPayloads: Array<any> = [];
-        plannedBulkSlots.forEach((slot) => {
+        validSlots.forEach((slot) => {
           const contentId =
             slot.item.source === "LIBRARY"
               ? slot.item.contentId!
@@ -1157,22 +1191,30 @@ export function SchedulePublicationModal({
 
         await criafyService.createPublicationSequence(pubPayloads);
 
-        toast.success(
-          `${plannedBulkSlots.length} mídias (${pubPayloads.length} publicações no total) programadas em Bulk!`,
-          {
-            description:
-              bulkSummaryStats.onlyReelsLongCount > 0
-                ? `${bulkSummaryStats.bothCount} em Reels+Stories (≤60s) e ${bulkSummaryStats.onlyReelsLongCount} apenas em Reels (>60s, protegidos contra erro).`
-                : `Distribuídas em ${groupedPreviewByDay.length} dia(s) (${postsPerDay} por dia — Manhã, Tarde e Noite).`,
-            duration: 6000,
-          }
-        );
+        if (failedUploadItems.length > 0) {
+          toast.warning(
+            `${failedUploadItems.length} arquivo(s) não puderam ser enviados (${failedUploadItems.slice(0, 2).join(", ")}...), mas os outros ${validSlots.length} foram agendados com sucesso!`,
+            { duration: 8000 }
+          );
+        } else {
+          toast.success(
+            `${validSlots.length} mídias (${pubPayloads.length} publicações no total) programadas em Bulk com sucesso!`,
+            {
+              description:
+                bulkSummaryStats.onlyReelsLongCount > 0
+                  ? `${bulkSummaryStats.bothCount} em Reels+Stories (≤60s) e ${bulkSummaryStats.onlyReelsLongCount} apenas em Reels (>60s, protegidos contra erro).`
+                  : `Distribuídas em ${groupedPreviewByDay.length} dia(s) (${postsPerDay} por dia — Manhã, Tarde e Noite).`,
+              duration: 6000,
+            }
+          );
+        }
 
         pendingFiles.forEach((p) => URL.revokeObjectURL(p.previewUrl));
         setPendingFiles([]);
         setSelectedBulkLibraryIds([]);
         setCustomOrderedKeys(null);
         setSlotFormatOverrides({});
+        uploadedContentMapRef.current.clear();
         setBulkProgressText("");
         onOpenChange(false);
         onSuccess?.();

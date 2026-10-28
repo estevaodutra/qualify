@@ -432,22 +432,90 @@ export const criafyService = {
     const isVideo = file.type.startsWith("video/");
     const mediaType: CriafyMediaType = isVideo ? "VIDEO" : "IMAGE";
     const fileExt = file.name.split(".").pop() || "bin";
-    const fileName = `${companyId}/${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
-
     const bucketName = "media"; // Public bucket in Qualify
+    const CHUNK_SIZE = 35 * 1024 * 1024; // 35MB por parte (abaixo do limite de 50MB do Supabase)
 
-    const { error: uploadError } = await supabase.storage
+    // Se o arquivo for menor ou igual a 45MB, tenta o upload direto comum
+    if (file.size <= 45 * 1024 * 1024) {
+      const fileName = `${companyId}/${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage
+        .from(bucketName)
+        .upload(fileName, file, { cacheControl: "3600", upsert: true });
+
+      if (!uploadError) {
+        const { data: publicUrlData } = supabase.storage.from(bucketName).getPublicUrl(fileName);
+        return {
+          mediaUrl: publicUrlData.publicUrl,
+          mediaType,
+          mimeType: file.type || (isVideo ? "video/mp4" : "image/jpeg"),
+        };
+      }
+
+      if (!uploadError.message?.toLowerCase().includes("exceeded the maximum allowed size")) {
+        throw uploadError;
+      }
+    }
+
+    // ========================================================
+    // UPLOAD EM CHUNKS (PARTES) PARA ARQUIVOS > 45MB
+    // ========================================================
+    const uploadId = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const folderPath = `${companyId}/chunked_${uploadId}`;
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    const chunkInfoList = [];
+
+    for (let idx = 0; idx < totalChunks; idx++) {
+      const start = idx * CHUNK_SIZE;
+      const end = Math.min(file.size, start + CHUNK_SIZE);
+      const chunkBlob = file.slice(start, end, file.type || "application/octet-stream");
+      const chunkPath = `${folderPath}/part_${idx}.${fileExt}`;
+
+      const { error: chunkErr } = await supabase.storage
+        .from(bucketName)
+        .upload(chunkPath, chunkBlob, { cacheControl: "3600", upsert: true });
+
+      if (chunkErr) {
+        throw new Error(`Falha ao subir parte ${idx + 1}/${totalChunks} do vídeo (${file.name}): ${chunkErr.message}`);
+      }
+
+      const { data: chunkUrlData } = supabase.storage.from(bucketName).getPublicUrl(chunkPath);
+      chunkInfoList.push({
+        index: idx,
+        size: end - start,
+        url: chunkUrlData.publicUrl,
+      });
+    }
+
+    // Manifesto com metadados e ponteiros das partes
+    const manifestPath = `${folderPath}/manifest.json`;
+    const manifestData = {
+      uploadId,
+      fileName: file.name,
+      totalSize: file.size,
+      mimeType: file.type || "video/mp4",
+      createdAt: new Date().toISOString(),
+      chunks: chunkInfoList,
+    };
+
+    const manifestBlob = new Blob([JSON.stringify(manifestData)], { type: "application/json" });
+    const { error: manifestErr } = await supabase.storage
       .from(bucketName)
-      .upload(fileName, file, { cacheControl: "3600", upsert: true });
+      .upload(manifestPath, manifestBlob, { cacheControl: "3600", upsert: true });
 
-    if (uploadError) throw uploadError;
+    if (manifestErr) {
+      throw new Error(`Falha ao registrar manifesto do vídeo (${file.name}): ${manifestErr.message}`);
+    }
 
-    const { data: publicUrlData } = supabase.storage.from(bucketName).getPublicUrl(fileName);
+    const appOrigin = typeof window !== "undefined" && window.location.origin
+      ? window.location.origin
+      : "https://qualify.app";
+
+    const mediaUrl = `${appOrigin}/api/criafy-media-stream?manifest=${encodeURIComponent(manifestPath)}`;
 
     return {
-      mediaUrl: publicUrlData.publicUrl,
+      mediaUrl,
       mediaType,
-      mimeType: file.type,
+      mimeType: file.type || "video/mp4",
     };
   },
 

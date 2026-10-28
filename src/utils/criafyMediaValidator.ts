@@ -37,9 +37,9 @@ export async function extractAndValidateMedia(file: File): Promise<MediaValidati
         const errors: string[] = [];
         const supportedPlacements: ("FEED" | "REEL" | "STORY_VIDEO")[] = [];
 
-        // Tamanho máximo Meta (geralmente até 100MB para graph API direta)
-        if (fileSizeBytes > 100 * 1024 * 1024) {
-          errors.push("Arquivo de vídeo excede o limite recomendado de 100MB da Meta Graph API.");
+        // Tamanho máximo Meta (geralmente até 300MB para Reels via Graph API)
+        if (fileSizeBytes > 300 * 1024 * 1024) {
+          errors.push("Arquivo de vídeo excede o limite recomendado de 300MB da Meta Graph API.");
         }
 
         // Reels validation: ideal 9:16 (0.5625), duração máx 90s

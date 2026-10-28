@@ -1,6 +1,6 @@
 {
-  "commit": "e0b8919b72895692037e926bc4f0e1631896be25",
-  "shortCommit": "e0b8919",
-  "message": "feat(criafy): allow simultaneous Reels and Stories scheduling for media up to 60s",
-  "builtAt": "2026-10-28T01:18:00.007Z"
+  "commit": "42d04a2ce14bc6eaef71777dbdb077423ce8d778",
+  "shortCommit": "42d04a2",
+  "message": "feat(criafy): add visual Reels+Stories vs Reels-only (>60s) icons, smart reordering, and 1-click Bulk from unpublished library",
+  "builtAt": "2026-10-28T02:04:05.613Z"
 }

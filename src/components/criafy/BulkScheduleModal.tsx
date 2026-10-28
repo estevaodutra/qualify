@@ -189,6 +189,7 @@ export function BulkScheduleModal({
   // Execution state
   const [submitting, setSubmitting] = useState(false);
   const [progressText, setProgressText] = useState<string>("");
+  const uploadedContentMapRef = useRef<Map<string, string>>(new Map());
 
   // Initialize target account & initial items when modal opens
   useEffect(() => {
@@ -586,51 +587,81 @@ export function BulkScheduleModal({
 
     setSubmitting(true);
     try {
-      // 1. Upload any pending local files first and map temp key -> content_id
-      const uploadedContentIdMap = new Map<string, string>();
+      // 1. Upload any pending local files with caching and resilience
+      const uploadedContentIdMap = uploadedContentMapRef.current;
       const uploadSlots = plannedSlots.filter(
         (s) => s.item.source === "UPLOAD" && s.item.file
       );
+      const failedUploadItems: string[] = [];
 
       for (let i = 0; i < uploadSlots.length; i++) {
         const slot = uploadSlots[i];
         const file = slot.item.file!;
+
+        if (uploadedContentIdMap.has(slot.item.key)) {
+          continue;
+        }
+
+        const existingInLib = libraryContents.find(
+          (c) => c.title === file.name && Number(c.file_size_bytes) === file.size
+        );
+        if (existingInLib) {
+          uploadedContentIdMap.set(slot.item.key, existingInLib.id);
+          continue;
+        }
+
+        const durStr = slot.item.durationSeconds ? `${Math.round(slot.item.durationSeconds)}s` : "";
+        const sizeStr = `${Math.round((file.size / (1024 * 1024)) * 10) / 10}MB`;
         setProgressText(
-          `Subindo mídia ${i + 1} de ${uploadSlots.length}: ${file.name}...`
+          `Subindo mídia ${i + 1} de ${uploadSlots.length}: ${file.name} (${sizeStr}${durStr ? ` • ${durStr}` : ""})...`
         );
 
-        const validation = await extractAndValidateMedia(file);
-        const { mediaUrl, mediaType, mimeType } =
-          await criafyService.uploadMediaFile(activeCompanyId, file);
+        try {
+          const validation = await extractAndValidateMedia(file);
+          const { mediaUrl, mediaType, mimeType } =
+            await criafyService.uploadMediaFile(activeCompanyId, file);
 
-        const createdContent = await criafyService.createContent(
-          {
-            company_id: activeCompanyId,
-            title: file.name,
-            media_url: mediaUrl,
-            media_type: mediaType,
-            mime_type: mimeType,
-            file_size_bytes: file.size,
-            width: validation.width || undefined,
-            height: validation.height || undefined,
-            duration_seconds: validation.durationSeconds || undefined,
-            aspect_ratio: validation.aspectRatio,
-            meta_validation_status: validation.isValid ? "VALID" : "INVALID",
-            meta_validation_errors: validation.errors,
-          },
-          [targetAccountId]
-        );
+          const createdContent = await criafyService.createContent(
+            {
+              company_id: activeCompanyId,
+              title: file.name,
+              media_url: mediaUrl,
+              media_type: mediaType,
+              mime_type: mimeType,
+              file_size_bytes: file.size,
+              width: validation.width || undefined,
+              height: validation.height || undefined,
+              duration_seconds: validation.durationSeconds || undefined,
+              aspect_ratio: validation.aspectRatio,
+              meta_validation_status: validation.isValid ? "VALID" : "INVALID",
+              meta_validation_errors: validation.errors,
+            },
+            [targetAccountId]
+          );
 
-        uploadedContentIdMap.set(slot.item.key, createdContent.id);
+          uploadedContentIdMap.set(slot.item.key, createdContent.id);
+        } catch (fileErr: any) {
+          console.error(`Erro ao subir arquivo ${file.name}:`, fileErr);
+          failedUploadItems.push(file.name);
+        }
+      }
+
+      const validSlots = plannedSlots.filter((slot) => {
+        if (slot.item.source === "LIBRARY") return !!slot.item.contentId;
+        return uploadedContentIdMap.has(slot.item.key);
+      });
+
+      if (validSlots.length === 0) {
+        throw new Error("Nenhum arquivo pôde ser enviado para o agendamento. Verifique sua conexão e tente novamente.");
       }
 
       // 2. Build all publication records (Reels + Stories simultaneously when <= 60s)
       setProgressText(
-        `Agendando ${totalBulkPublicationsCount} publicações (${plannedSlots.length} conteúdos) no calendário...`
+        `Agendando publicações de ${validSlots.length} mídias no calendário...`
       );
 
       const pubPayloads: Array<Partial<CriafyPublication>> = [];
-      for (const slot of plannedSlots) {
+      for (const slot of validSlots) {
         const contentId =
           slot.item.source === "LIBRARY"
             ? slot.item.contentId!
@@ -655,18 +686,26 @@ export function BulkScheduleModal({
 
       await criafyService.createPublicationSequence(pubPayloads);
 
-      toast.success(
-        `${pubPayloads.length} publicações (${plannedSlots.length} mídias) programadas em bulk com sucesso!`,
-        {
-          description: `Distribuídas em ${groupedPreviewByDay.length} dia(s) (${postsPerDay} horários/dia — Reels + Stories ≤ 60s).`,
-          duration: 6000,
-        }
-      );
+      if (failedUploadItems.length > 0) {
+        toast.warning(
+          `${failedUploadItems.length} arquivo(s) não puderam ser enviados (${failedUploadItems.slice(0, 2).join(", ")}...), mas os outros ${validSlots.length} foram agendados com sucesso!`,
+          { duration: 8000 }
+        );
+      } else {
+        toast.success(
+          `${pubPayloads.length} publicações (${validSlots.length} mídias) programadas em bulk com sucesso!`,
+          {
+            description: `Distribuídas em ${groupedPreviewByDay.length} dia(s) (${postsPerDay} horários/dia — Reels + Stories ≤ 60s).`,
+            duration: 6000,
+          }
+        );
+      }
 
       // Clear state
       pendingFiles.forEach((p) => URL.revokeObjectURL(p.previewUrl));
       setPendingFiles([]);
       setSelectedLibraryIds([]);
+      uploadedContentMapRef.current.clear();
       setProgressText("");
       onOpenChange(false);
       onSuccess?.();
