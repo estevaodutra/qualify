@@ -214,14 +214,17 @@ export const criafyService = {
     publicationType?: string;
     customInstruction?: string;
   }): Promise<string> {
-    const { data, error } = await supabase.functions.invoke("criafy-ai-generator", {
-      body: params,
+    const { AIExecutionService } = await import("@/services/ai/aiExecutionService");
+    const execution = await AIExecutionService.generate({
+      companyId: params.companyId,
+      accountId: params.accountId,
+      contentId: params.contentId,
+      promptType: params.promptType,
+      publicationType: params.publicationType,
+      customInstruction: params.customInstruction,
+      format: params.publicationType,
     });
-
-    if (error || !data?.success) {
-      throw new Error(data?.error || error?.message || "Erro ao gerar copy com a IA.");
-    }
-    return data.result;
+    return execution.result;
   },
 
   // ==========================================

@@ -42,6 +42,7 @@ import { CriafySidebarIcon } from "@/components/criafy/CriafyBrandIcons";
 
 const mainItems = [
   { title: "Dashboard", url: "/admin", icon: LayoutDashboard, end: true },
+  { title: "Central de IA (Skills)", url: "/admin/ia", icon: Sparkles },
   { title: "Empresas", url: "/admin/empresas", icon: Building2 },
   { title: "Usuários", url: "/admin/usuarios", icon: Users },
   { title: "Instâncias", url: "/admin/instancias", icon: Smartphone },

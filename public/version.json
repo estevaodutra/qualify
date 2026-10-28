@@ -1,6 +1,6 @@
 {
-  "commit": "b09d8a83c15b56ad553e4c5fa1bdf447dc50432f",
-  "shortCommit": "b09d8a8",
-  "message": "fix(criafy): declare activeBrandSubId and subsidebar change handler in CriafyBrandManualView",
-  "builtAt": "2026-10-28T22:19:08.941Z"
+  "commit": "09da2f5fbc97307a5637bed451ddbe298d5f094a",
+  "shortCommit": "09da2f5",
+  "message": "fix(chat): fix variable initialization order for selectedConversations in InboxList",
+  "builtAt": "2026-10-28T23:06:03.797Z"
 }

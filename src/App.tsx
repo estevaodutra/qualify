@@ -80,6 +80,14 @@ import AdminSettings from "./pages/admin/AdminSettings";
 import AdminSystemWebhooks from "./pages/admin/AdminSystemWebhooks";
 import AdminUras from "./pages/admin/AdminUras";
 import AdminCriafy from "./pages/admin/AdminCriafy";
+import { AdminAiLayout } from "./components/admin/ai/AdminAiLayout";
+import AdminAiOverview from "./pages/admin/ai/AdminAiOverview";
+import AdminAiSkills from "./pages/admin/ai/AdminAiSkills";
+import AdminAiSkillDetail from "./pages/admin/ai/AdminAiSkillDetail";
+import AdminAiModels from "./pages/admin/ai/AdminAiModels";
+import AdminAiPlayground from "./pages/admin/ai/AdminAiPlayground";
+import AdminAiExecutions from "./pages/admin/ai/AdminAiExecutions";
+import AdminAiSettings from "./pages/admin/ai/AdminAiSettings";
 
 const App = () => {
   const [queryClient] = useState(() => new QueryClient());
@@ -265,6 +273,19 @@ const App = () => {
                       <Route path="notificacoes" element={<AdminSystemWebhooks />} />
                       <Route path="uras" element={<AdminUras />} />
                       <Route path="criafy" element={<AdminCriafy />} />
+
+                      {/* Super Admin - Central de IA (OpenAI Skills) */}
+                      <Route path="ia" element={<AdminAiLayout />}>
+                        <Route index element={<AdminAiOverview />} />
+                        <Route path="skills" element={<AdminAiSkills />} />
+                        <Route path="skills/:id" element={<AdminAiSkillDetail />} />
+                        <Route path="modelos" element={<AdminAiModels />} />
+                        <Route path="playground" element={<AdminAiPlayground />} />
+                        <Route path="execucoes" element={<AdminAiExecutions />} />
+                        <Route path="configuracoes" element={<AdminAiSettings />} />
+                      </Route>
+                      <Route path="ai" element={<Navigate to="/admin/ia" replace />} />
+                      <Route path="ai/*" element={<Navigate to="/admin/ia" replace />} />
                     </Route>
 
                     <Route path="*" element={<NotFound />} />
