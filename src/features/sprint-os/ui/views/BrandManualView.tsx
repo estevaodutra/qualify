@@ -44,6 +44,7 @@ import {
   Send,
   Wand2,
   Share2,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -73,6 +74,8 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { downloadBrandManualMarkdown } from "../../utils/exportBrandManualMarkdown";
 
 import { useSprintOSStore } from "../../state/sprintOsStore";
 import { useAuth } from "@/contexts/AuthContext";
@@ -926,6 +929,39 @@ export const BrandManualView: React.FC = () => {
           >
             <Brain className="h-3.5 w-3.5 text-primary" />
             <span className="hidden sm:inline">Master Prompt</span>
+          </Button>
+
+          {/* Botão Exportar Manual da Marca em Markdown (.md) */}
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={completedFieldsCount === 0}
+            onClick={() =>
+              downloadBrandManualMarkdown(
+                workspace.project.name || "manual-da-marca",
+                brandManual,
+                user?.email || "Estrategista"
+              )
+            }
+            className={cn(
+              "h-8 px-2.5 text-xs rounded-xl flex items-center gap-1.5 transition-all font-semibold cursor-pointer",
+              completedFieldsCount > 0
+                ? progressPercent === 100
+                  ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 shadow-2xs font-bold"
+                  : "border-primary/40 text-primary hover:bg-primary/10"
+                : "opacity-40 cursor-not-allowed"
+            )}
+            title={
+              completedFieldsCount > 0
+                ? `Exportar o Manual da Marca em arquivo Markdown (.md) com todas as ${completedFieldsCount} respostas`
+                : "Preencha as perguntas do manual para habilitar a exportação em .md"
+            }
+          >
+            <Download className="h-3.5 w-3.5" />
+            <span>Exportar .md</span>
+            {progressPercent === 100 && (
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            )}
           </Button>
 
           {/* Botão Arquivados (Acesso discreto) */}
@@ -1834,7 +1870,7 @@ export const BrandManualView: React.FC = () => {
             </pre>
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t border-border">
+          <DialogFooter className="gap-2 sm:gap-2 pt-2 border-t border-border flex-wrap sm:flex-nowrap">
             <Button
               variant="outline"
               size="sm"
@@ -1842,6 +1878,22 @@ export const BrandManualView: React.FC = () => {
               className="text-xs rounded-xl"
             >
               Fechar
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                downloadBrandManualMarkdown(
+                  workspace.project.name || "manual-da-marca",
+                  brandManual,
+                  user?.email || "Estrategista"
+                )
+              }
+              className="text-xs rounded-xl flex items-center gap-1.5 border-border hover:bg-muted font-medium"
+              title="Baixar arquivo Markdown completo"
+            >
+              <Download className="h-3.5 w-3.5 text-primary" />
+              <span>Baixar Arquivo .md</span>
             </Button>
             <Button
               size="sm"

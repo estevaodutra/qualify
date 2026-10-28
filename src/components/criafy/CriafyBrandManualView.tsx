@@ -7,6 +7,7 @@ import {
   CheckCheck,
   ChevronDown,
   Download,
+  FileText,
   RefreshCw,
   Plus,
   Rocket,
@@ -32,6 +33,7 @@ import { ShareLinkModal } from "@/features/sprint-os/ui/modals/ShareLinkModal";
 import { BrandManualShareModal } from "@/features/sprint-os/ui/modals/BrandManualShareModal";
 import { TaskDetailModal } from "@/features/sprint-os/ui/modals/TaskDetailModal";
 import { ReportsModal } from "@/features/sprint-os/ui/modals/ReportsModal";
+import { downloadBrandManualMarkdown } from "@/features/sprint-os/utils/exportBrandManualMarkdown";
 import { toast } from "sonner";
 
 export const CriafyBrandManualView: React.FC = () => {
@@ -71,6 +73,18 @@ export const CriafyBrandManualView: React.FC = () => {
       openWorkspace(workspacesList[0].id, activeCompanyId, user?.email || "Operador");
     }
   }, [isLoading, activeWorkspaceId, workspacesList, activeCompanyId, openWorkspace, user?.email]);
+
+  const handleExportMarkdown = () => {
+    if (!workspace?.brandManual) {
+      toast.error("Manual da Marca não encontrado.");
+      return;
+    }
+    downloadBrandManualMarkdown(
+      workspace.project.name || "manual-da-marca",
+      workspace.brandManual,
+      user?.email || "Estrategista"
+    );
+  };
 
   const handleExportJson = () => {
     if (!workspace) return;
@@ -337,6 +351,13 @@ export const CriafyBrandManualView: React.FC = () => {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52 p-1.5 rounded-2xl shadow-xl border-border bg-card">
+              <DropdownMenuItem
+                onClick={handleExportMarkdown}
+                className="gap-2 text-xs cursor-pointer rounded-xl p-2 font-medium"
+              >
+                <FileText className="h-3.5 w-3.5 text-primary" />
+                <span>Exportar Markdown (.md)</span>
+              </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={handleExportJson}
                 className="gap-2 text-xs cursor-pointer rounded-xl p-2"

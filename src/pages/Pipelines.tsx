@@ -313,6 +313,38 @@ export default function Pipelines() {
     }
   });
 
+  // Delete pipeline permanently mutation
+  const deletePipelinePermanentlyMutation = useMutation({
+    mutationFn: async (pipelineId: string) => {
+      const { data: stages } = await supabase
+        .from("pipeline_stages")
+        .select("id")
+        .eq("pipeline_id", pipelineId);
+
+      if (stages && stages.length > 0) {
+        const stageIds = stages.map(s => s.id);
+        await supabase.from("deals").delete().in("stage_id", stageIds);
+        await supabase.from("pipeline_stages").delete().eq("pipeline_id", pipelineId);
+      }
+
+      const { error } = await supabase
+        .from("pipelines")
+        .delete()
+        .eq("id", pipelineId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Pipeline excluída definitivamente!");
+      queryClient.invalidateQueries({ queryKey: ["pipelines"] });
+      queryClient.invalidateQueries({ queryKey: ["pipeline"] });
+      const remaining = (pipelines || []).filter(p => p.id !== activePipelineId && p.status !== "archived");
+      setActivePipelineId(remaining[0]?.id || "");
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Erro ao excluir pipeline definitivamente");
+    }
+  });
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over) return;
@@ -375,6 +407,15 @@ export default function Pipelines() {
               setSearch={setSearch}
               onOpenSettings={() => setEditPipelineOpen(true)}
               onUnarchive={() => activePipeline && unarchivePipelineMutation.mutate(activePipeline.id)}
+              onDeletePermanently={() => {
+                if (!activePipeline) return;
+                const confirm = window.confirm(
+                  `Tem certeza que deseja excluir a pipeline "${activePipeline.name}" definitivamente? Esta ação não pode ser desfeita.`
+                );
+                if (confirm) {
+                  deletePipelinePermanentlyMutation.mutate(activePipeline.id);
+                }
+              }}
               isSidebarCollapsed={sidebarCollapsed}
               onToggleSidebar={toggleSidebar}
             />

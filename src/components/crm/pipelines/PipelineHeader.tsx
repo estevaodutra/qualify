@@ -1,6 +1,6 @@
 import { Pipeline, PipelineGroup } from "@/types/crm.types";
 import { Button } from "@/components/ui/button";
-import { Settings, Search, Filter, PanelLeft, Archive, ArchiveRestore } from "lucide-react";
+import { Settings, Search, Filter, PanelLeft, Archive, ArchiveRestore, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 
@@ -11,6 +11,7 @@ interface PipelineHeaderProps {
   setSearch: (val: string) => void;
   onOpenSettings: () => void;
   onUnarchive?: () => void;
+  onDeletePermanently?: () => void;
   isSidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
 }
@@ -22,6 +23,7 @@ export function PipelineHeader({
   setSearch,
   onOpenSettings,
   onUnarchive,
+  onDeletePermanently,
   isSidebarCollapsed,
   onToggleSidebar,
 }: PipelineHeaderProps) {
@@ -84,6 +86,18 @@ export function PipelineHeader({
           >
             <ArchiveRestore className="w-4 h-4" />
             <span className="hidden sm:inline">Desarquivar</span>
+          </Button>
+        )}
+
+        {isArchived && onDeletePermanently && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onDeletePermanently}
+            className="h-9 gap-1.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span className="hidden sm:inline">Excluir</span>
           </Button>
         )}
         

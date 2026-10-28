@@ -357,6 +357,51 @@ export function PipelineSidebar({
     }
   };
 
+  // Delete Multiple Archived Pipelines Mutation
+  const deleteArchivedMutation = useMutation({
+    mutationFn: async ({ onlyEmpty = false }: { onlyEmpty?: boolean } = {}) => {
+      if (!archivedPipelines.length) return;
+
+      for (const pipe of archivedPipelines) {
+        if (onlyEmpty) {
+          const { count } = await supabase
+            .from("deals")
+            .select("id", { count: "exact", head: true })
+            .eq("pipeline_id", pipe.id);
+
+          if (count && count > 0) {
+            continue;
+          }
+        }
+
+        const { data: stages } = await supabase
+          .from("pipeline_stages")
+          .select("id")
+          .eq("pipeline_id", pipe.id);
+
+        if (stages && stages.length > 0) {
+          const stageIds = stages.map(s => s.id);
+          await supabase.from("deals").delete().in("stage_id", stageIds);
+          await supabase.from("pipeline_stages").delete().eq("pipeline_id", pipe.id);
+        }
+
+        await supabase.from("pipelines").delete().eq("id", pipe.id);
+      }
+    },
+    onSuccess: () => {
+      toast.success("Pipelines arquivadas excluídas com sucesso!");
+      queryClient.invalidateQueries({ queryKey: ["pipelines"] });
+      queryClient.invalidateQueries({ queryKey: ["pipeline"] });
+      if (activePipelineId && archivedPipelines.some(p => p.id === activePipelineId)) {
+        const remaining = activePipelines.filter(p => p.id !== activePipelineId);
+        onSelectPipeline(remaining[0]?.id || "");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Erro ao excluir pipelines arquivadas");
+    }
+  });
+
   // Duplicate Pipeline Mutation
   const duplicatePipelineMutation = useMutation({
     mutationFn: async (pipeline: Pipeline) => {
@@ -758,25 +803,65 @@ export function PipelineSidebar({
 
         {/* Archived Pipelines Section */}
         <div className="pt-3 border-t mt-4 px-2 space-y-1">
-          <button
-            type="button"
-            onClick={() => setShowArchived(prev => !prev)}
-            className="w-full px-2 py-1.5 flex items-center justify-between text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md transition-colors"
-          >
-            <div className="flex items-center gap-1.5 truncate">
-              <Archive className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">Pipelines Arquivadas</span>
-              <span className="px-1.5 py-0.2 rounded-full bg-muted text-[10px] font-semibold text-muted-foreground shrink-0">
-                {archivedPipelines.length}
-              </span>
-            </div>
-            <ChevronDown
-              className={cn(
-                "w-3.5 h-3.5 shrink-0 transition-transform duration-200",
-                showArchived ? "rotate-0" : "-rotate-90"
-              )}
-            />
-          </button>
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setShowArchived(prev => !prev)}
+              className="flex-1 px-2 py-1.5 flex items-center justify-between text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md transition-colors"
+            >
+              <div className="flex items-center gap-1.5 truncate">
+                <Archive className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">Pipelines Arquivadas</span>
+                <span className="px-1.5 py-0.2 rounded-full bg-muted text-[10px] font-semibold text-muted-foreground shrink-0">
+                  {archivedPipelines.length}
+                </span>
+              </div>
+              <ChevronDown
+                className={cn(
+                  "w-3.5 h-3.5 shrink-0 transition-transform duration-200",
+                  showArchived ? "rotate-0" : "-rotate-90"
+                )}
+              />
+            </button>
+            {archivedPipelines.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0 ml-1"
+                    title="Excluir pipelines arquivadas"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive cursor-pointer"
+                    onClick={() => {
+                      if (window.confirm("Deseja excluir definitivamente todas as pipelines arquivadas que não possuem negócios?")) {
+                        deleteArchivedMutation.mutate({ onlyEmpty: true });
+                      }
+                    }}
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-2" />
+                    Excluir arquivadas vazias
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive cursor-pointer"
+                    onClick={() => {
+                      if (window.confirm(`Tem certeza que deseja excluir TODAS as ${archivedPipelines.length} pipelines arquivadas? Esta ação é irreversível.`)) {
+                        deleteArchivedMutation.mutate({ onlyEmpty: false });
+                      }
+                    }}
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-2" />
+                    Excluir todas as arquivadas
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
 
           {showArchived && (
             <div className="space-y-0.5 pt-1">
@@ -790,13 +875,13 @@ export function PipelineSidebar({
                     key={pipeline.id}
                     onClick={() => handleSelectPipeline(pipeline.id)}
                     className={cn(
-                      "group flex items-center justify-between px-3 py-1.5 rounded-md text-xs cursor-pointer transition-all",
+                      "group flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs cursor-pointer transition-all",
                       activePipelineId === pipeline.id
                         ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 font-medium"
                         : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                     )}
                   >
-                    <div className="flex items-center gap-2 truncate flex-1 min-w-0">
+                    <div className="flex items-center gap-2 truncate flex-1 min-w-0 pr-1">
                       <div
                         className="w-2 h-2 rounded-full flex-shrink-0 opacity-60"
                         style={{ backgroundColor: pipeline.color || "#6b7280" }}
@@ -804,30 +889,32 @@ export function PipelineSidebar({
                       <span className="truncate">{pipeline.name}</span>
                     </div>
 
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                        >
-                          <MoreHorizontal className="w-3.5 h-3.5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuItem onClick={() => unarchivePipelineMutation.mutate(pipeline.id)}>
-                          <ArchiveRestore className="w-4 h-4 mr-2 text-primary" />
-                          Desarquivar
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => handleDeletePermanently(pipeline)}
-                          className="text-destructive focus:text-destructive"
-                        >
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Excluir definitivamente
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                        title="Desarquivar pipeline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          unarchivePipelineMutation.mutate(pipeline.id);
+                        }}
+                      >
+                        <ArchiveRestore className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                        title="Excluir definitivamente"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeletePermanently(pipeline);
+                        }}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </div>
                 ))
               )}

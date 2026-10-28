@@ -14,9 +14,13 @@ CREATE POLICY "Company members can view pipelines" ON public.pipelines
 CREATE POLICY "Company admins can manage pipelines" ON public.pipelines 
   FOR ALL TO authenticated USING (public.is_company_admin(company_id, auth.uid())) WITH CHECK (public.is_company_admin(company_id, auth.uid()));
 
--- Insert default pipeline for existing companies
+-- Insert default pipeline for existing companies only if no pipeline exists
 INSERT INTO public.pipelines (company_id, name)
-SELECT id, 'Pipeline Padrão' FROM public.companies ON CONFLICT DO NOTHING;
+SELECT c.id, 'Pipeline Padrão' 
+FROM public.companies c
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.pipelines p WHERE p.company_id = c.id
+);
 
 -- 2. Alter pipeline_stages to add pipeline_id
 ALTER TABLE public.pipeline_stages ADD COLUMN IF NOT EXISTS pipeline_id UUID REFERENCES public.pipelines(id) ON DELETE CASCADE;
