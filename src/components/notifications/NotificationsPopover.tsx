@@ -10,6 +10,7 @@ import {
   Users,
   MoreHorizontal,
   Trash2,
+  Share2,
 } from "lucide-react";
 import {
   Popover,
@@ -37,6 +38,16 @@ function getNotificationIcon(alert: Alert) {
   const entity = alert.entity || "";
   const title = (alert.title || "").toLowerCase();
 
+  if (
+    entity.startsWith("criafy_publication") ||
+    title.includes("instagram") ||
+    title.includes("post") ||
+    title.includes("stories") ||
+    title.includes("story") ||
+    title.includes("reels")
+  ) {
+    return <Share2 className="h-4 w-4 text-pink-500" />;
+  }
   if (entity.startsWith("sprint_card") || title.includes("card") || title.includes("sprint")) {
     return <ListTodo className="h-4 w-4 text-primary" />;
   }
@@ -90,8 +101,15 @@ export const NotificationsPopover: React.FC<NotificationsPopoverProps> = ({ chil
         }
         navigate(`/sprint`);
       }
-    } else if (target.url) {
-      navigate(target.url);
+    } else {
+      const url = alert.link || target.url;
+      if (url) {
+        if (url.startsWith("http://") || url.startsWith("https://")) {
+          window.open(url, "_blank", "noopener,noreferrer");
+        } else {
+          navigate(url);
+        }
+      }
     }
   };
 
@@ -162,7 +180,7 @@ export const NotificationsPopover: React.FC<NotificationsPopoverProps> = ({ chil
           ) : (
             alerts.map((alert) => {
               const target = parseNotificationTarget(alert.entity, alert.link);
-              const isActionable = target.type === "sprint_card" || !!target.url;
+              const isActionable = target.type === "sprint_card" || !!target.url || !!alert.link;
 
               return (
                 <div

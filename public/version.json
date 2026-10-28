@@ -1,6 +1,6 @@
 {
-  "commit": "59081ddfbc8fdffa52ca7b16f443d6d0f5a5e373",
-  "shortCommit": "59081dd",
-  "message": "fix(criafy): auto scheduler worker, background trigger and immediate publish button",
-  "builtAt": "2026-10-28T15:48:20.375Z"
+  "commit": "9bf4d1be489ff7a3b2d7275da9821fd55111dba0",
+  "shortCommit": "9bf4d1b",
+  "message": "feat(criafy): multiple caption variations with rotation and specific reel custom description in bulk schedule",
+  "builtAt": "2026-10-28T16:32:40.270Z"
 }

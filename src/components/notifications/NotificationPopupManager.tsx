@@ -135,8 +135,15 @@ export const NotificationPopupManager: React.FC = () => {
           }
           navigate(`/sprint`);
         }
-      } else if (target.url) {
-        navigate(target.url);
+      } else {
+        const url = popup.link || target.url;
+        if (url) {
+          if (url.startsWith("http://") || url.startsWith("https://")) {
+            window.open(url, "_blank", "noopener,noreferrer");
+          } else {
+            navigate(url);
+          }
+        }
       }
     },
     [dismissPopup, navigate, openCardModal, queryClient]

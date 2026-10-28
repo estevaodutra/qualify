@@ -15,7 +15,7 @@ export interface CardMentionNotificationParams {
 }
 
 export interface ParsedNotificationTarget {
-  type: "sprint_card" | "unknown";
+  type: "sprint_card" | "criafy_publication" | "external" | "unknown";
   boardId?: string;
   cardId?: string;
   url?: string;
@@ -49,6 +49,21 @@ export function parseNotificationTarget(
       boardId,
       cardId,
       url: `/sprint/b/${boardId}?cardId=${cardId}`,
+    };
+  }
+
+  if (entity && entity.startsWith("criafy_publication:")) {
+    return {
+      type: "criafy_publication",
+      url: link || "/criafy",
+    };
+  }
+
+  if (link) {
+    const isHttp = link.startsWith("http://") || link.startsWith("https://");
+    return {
+      type: isHttp ? "external" : "unknown",
+      url: link,
     };
   }
 
