@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -34,6 +35,9 @@ import {
   CheckCircle2,
   Layers,
   FolderOpen,
+  Plus,
+  FileText,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -190,6 +194,65 @@ export function BulkScheduleModal({
   const [submitting, setSubmitting] = useState(false);
   const [progressText, setProgressText] = useState<string>("");
   const uploadedContentMapRef = useRef<Map<string, string>>(new Map());
+
+  // Variações de Legenda / Copy para os Reels no Bulk
+  const [bulkCaptionVariations, setBulkCaptionVariations] = useState<string[]>([
+    "",
+  ]);
+  // Legendas específicas por item.key
+  const [specificItemCaptions, setSpecificItemCaptions] = useState<
+    Record<string, string>
+  >({});
+  // Item sendo editado no modal de legenda específica
+  const [editingCaptionSlotKey, setEditingCaptionSlotKey] = useState<string | null>(
+    null
+  );
+  const [generatingBulkAiIdx, setGeneratingBulkAiIdx] = useState<number | null>(
+    null
+  );
+
+  const handleAddCaptionVariation = () => {
+    setBulkCaptionVariations((prev) => [...prev, ""]);
+  };
+
+  const handleUpdateCaptionVariation = (index: number, text: string) => {
+    setBulkCaptionVariations((prev) => {
+      const next = [...prev];
+      next[index] = text;
+      return next;
+    });
+  };
+
+  const handleRemoveCaptionVariation = (index: number) => {
+    setBulkCaptionVariations((prev) => {
+      if (prev.length <= 1) return [""];
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  const handleGenerateBulkAi = async (index: number) => {
+    if (!activeCompanyId || !targetAccountId) {
+      toast.error("Selecione uma conta do Instagram primeiro.");
+      return;
+    }
+    setGeneratingBulkAiIdx(index);
+    try {
+      const currentText = bulkCaptionVariations[index]?.trim();
+      const generated = await criafyService.generateAiCopy({
+        companyId: activeCompanyId,
+        accountId: targetAccountId,
+        promptType: "CAPTION",
+        publicationType: "REEL",
+        customInstruction: currentText || undefined,
+      });
+      handleUpdateCaptionVariation(index, generated);
+      toast.success(`Copy gerada para a Variação #${index + 1}!`);
+    } catch (err: any) {
+      toast.error(`Falha ao gerar copy com a IA: ${err.message}`);
+    } finally {
+      setGeneratingBulkAiIdx(null);
+    }
+  };
 
   // Initialize target account & initial items when modal opens
   useEffect(() => {
@@ -561,6 +624,17 @@ export function BulkScheduleModal({
     return Array.from(map.entries());
   }, [plannedSlots]);
 
+  const validBulkCaptionVariationsCount = useMemo(() => {
+    return bulkCaptionVariations.map((c) => c.trim()).filter(Boolean).length;
+  }, [bulkCaptionVariations]);
+
+  const editingCaptionSlot = useMemo(() => {
+    if (!editingCaptionSlotKey) return null;
+    return (
+      plannedSlots.find((s) => s.item.key === editingCaptionSlotKey) || null
+    );
+  }, [editingCaptionSlotKey, plannedSlots]);
+
   const toggleShift = (shiftKey: "MANHA" | "TARDE" | "NOITE") => {
     setEnabledShifts((prev) => {
       const next = { ...prev, [shiftKey]: !prev[shiftKey] };
@@ -661,6 +735,11 @@ export function BulkScheduleModal({
       );
 
       const pubPayloads: Array<Partial<CriafyPublication>> = [];
+      let reelCounter = 0;
+      const validVariations = bulkCaptionVariations
+        .map((c) => c.trim())
+        .filter(Boolean);
+
       for (const slot of validSlots) {
         const contentId =
           slot.item.source === "LIBRARY"
@@ -671,12 +750,28 @@ export function BulkScheduleModal({
           const scheduledTime = new Date(
             slot.scheduledAt.getTime() + idx * 60000
           );
+
+          let resolvedCaption: string | undefined = undefined;
+
+          // Legenda apenas para REEL / FEED (Stories não suportam legendas na Graph API da Meta)
+          if (pubType === "REEL" || pubType === "FEED") {
+            const specific = specificItemCaptions[slot.item.key]?.trim();
+            if (specific) {
+              resolvedCaption = specific;
+            } else if (validVariations.length > 0) {
+              // Se tiver só 1, usa ela. Se tiver várias, rotaciona entre os posts!
+              resolvedCaption =
+                validVariations[reelCounter % validVariations.length];
+            }
+            reelCounter++;
+          }
+
           pubPayloads.push({
             company_id: activeCompanyId,
             account_id: targetAccountId,
             content_id: contentId,
             publication_type: pubType,
-            caption: undefined,
+            caption: resolvedCaption,
             scheduled_at: scheduledTime.toISOString(),
             status: "SCHEDULED" as const,
             is_auto_queued: true,
@@ -705,6 +800,9 @@ export function BulkScheduleModal({
       pendingFiles.forEach((p) => URL.revokeObjectURL(p.previewUrl));
       setPendingFiles([]);
       setSelectedLibraryIds([]);
+      setBulkCaptionVariations([""]);
+      setSpecificItemCaptions({});
+      setEditingCaptionSlotKey(null);
       uploadedContentMapRef.current.clear();
       setProgressText("");
       onOpenChange(false);
@@ -719,7 +817,8 @@ export function BulkScheduleModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[900px] max-h-[92vh] overflow-y-auto p-0 gap-0">
         <DialogHeader className="p-5 border-b border-border/70 bg-muted/20">
           <div className="flex items-center justify-between gap-3">
@@ -1165,6 +1264,91 @@ export function BulkScheduleModal({
                 </div>
               )}
             </div>
+
+            {/* 4. Variações de Descrição / Copy dos Reels */}
+            <div className="space-y-2 bg-card p-3 rounded-xl border border-border/80 shadow-2xs">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <Label className="text-xs font-bold flex items-center gap-1.5 text-foreground">
+                    <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                    Variações de Descrição / Legenda ({bulkCaptionVariations.length})
+                  </Label>
+                  <p className="text-[10px] text-muted-foreground truncate">
+                    {bulkCaptionVariations.length <= 1
+                      ? "1 descrição cadastrada: usada em todos os Reels agendados."
+                      : `${bulkCaptionVariations.length} versões cadastradas: alternadas entre os posts para não sobrepor nem ficar tudo igual.`}
+                  </p>
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddCaptionVariation}
+                  className="h-7 text-[10px] font-bold gap-1 border-purple-500/40 text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 cursor-pointer shrink-0"
+                >
+                  <Plus className="w-3 h-3" />
+                  Adicionar Variação
+                </Button>
+              </div>
+
+              <div className="space-y-2 max-h-[190px] overflow-y-auto pr-1 scrollbar-thin">
+                {bulkCaptionVariations.map((val, idx) => (
+                  <div
+                    key={idx}
+                    className="rounded-lg border border-border/70 bg-muted/20 p-2 space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-foreground flex items-center gap-1">
+                        <span className="w-4 h-4 rounded-full bg-purple-600/15 text-purple-600 dark:text-purple-400 flex items-center justify-center text-[9px] font-mono font-bold">
+                          {idx + 1}
+                        </span>
+                        {idx === 0 ? "Variação Principal (Padrão)" : `Variação #${idx + 1}`}
+                      </span>
+
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={generatingBulkAiIdx === idx}
+                          onClick={() => handleGenerateBulkAi(idx)}
+                          className="h-6 text-[10px] gap-1 px-1.5 text-purple-600 dark:text-purple-400 hover:bg-purple-500/10"
+                        >
+                          {generatingBulkAiIdx === idx ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Sparkles className="w-3 h-3 text-purple-500" />
+                          )}
+                          IA Copy
+                        </Button>
+
+                        {bulkCaptionVariations.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCaptionVariation(idx)}
+                            title="Remover variação"
+                            className="p-1 text-muted-foreground hover:text-rose-600 cursor-pointer"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <Textarea
+                      placeholder={`Escreva o texto do post #${idx + 1}, chamadas e hashtags (#empreendedorismo, etc.)...`}
+                      value={val}
+                      onChange={(e) =>
+                        handleUpdateCaptionVariation(idx, e.target.value)
+                      }
+                      rows={2}
+                      className="text-xs bg-background resize-none"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* =========================================================
@@ -1297,6 +1481,75 @@ export function BulkScheduleModal({
                                         {formatLabel}
                                       </span>
                                     </div>
+
+                                    {/* Botão de Legenda Específica para este Reel / Variação Atribuída */}
+                                    {slot.publicationTypes.some(
+                                      (t) => t === "REEL" || t === "FEED"
+                                    ) && (
+                                      <div className="mt-1">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setEditingCaptionSlotKey(
+                                              slot.item.key
+                                            )
+                                          }
+                                          title="Clique para adicionar ou editar uma descrição específica para este Reel"
+                                          className={`inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
+                                            specificItemCaptions[
+                                              slot.item.key
+                                            ]?.trim()
+                                              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-bold"
+                                              : "bg-muted/40 hover:bg-muted border-border/60 text-muted-foreground hover:text-foreground"
+                                          }`}
+                                        >
+                                          {specificItemCaptions[
+                                            slot.item.key
+                                          ]?.trim() ? (
+                                            <>
+                                              <Check className="w-2.5 h-2.5 text-emerald-500" />
+                                              <span className="truncate max-w-[110px]">
+                                                Legenda própria: "
+                                                {specificItemCaptions[
+                                                  slot.item.key
+                                                ]
+                                                  .trim()
+                                                  .slice(0, 16)}
+                                                ..."
+                                              </span>
+                                            </>
+                                          ) : validBulkCaptionVariationsCount >
+                                            1 ? (
+                                            <>
+                                              <FileText className="w-2.5 h-2.5 text-purple-500" />
+                                              <span>
+                                                Variação #
+                                                {(idx %
+                                                  validBulkCaptionVariationsCount) +
+                                                  1}
+                                              </span>
+                                              <span className="text-[8px] text-purple-600 dark:text-purple-400 font-semibold underline ml-0.5">
+                                                (personalizar)
+                                              </span>
+                                            </>
+                                          ) : validBulkCaptionVariationsCount ===
+                                            1 ? (
+                                            <>
+                                              <FileText className="w-2.5 h-2.5 text-purple-500" />
+                                              <span>Variação Padrão</span>
+                                              <span className="text-[8px] text-purple-600 dark:text-purple-400 font-semibold underline ml-0.5">
+                                                (personalizar)
+                                              </span>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <Plus className="w-2.5 h-2.5 text-purple-500" />
+                                              <span>+ Legenda específica</span>
+                                            </>
+                                          )}
+                                        </button>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
 
@@ -1378,5 +1631,122 @@ export function BulkScheduleModal({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Modal para Editar Legenda Específica de um Reel */}
+    <Dialog
+      open={!!editingCaptionSlotKey}
+      onOpenChange={(open) => !open && setEditingCaptionSlotKey(null)}
+    >
+      <DialogContent className="sm:max-w-[500px]">
+        {editingCaptionSlot && (
+          <div className="space-y-4">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold flex items-center gap-2">
+                <FileText className="w-4 h-4 text-purple-600" />
+                Legenda Específica do Reel
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                Defina uma legenda exclusiva com hashtags para este post. Se preenchida, ela substitui a rotação de variações apenas para este vídeo.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex items-center gap-3 p-2 rounded-lg bg-muted/30 border border-border/60">
+              <div className="w-12 h-12 rounded bg-black/10 overflow-hidden shrink-0">
+                {editingCaptionSlot.item.mediaType === "VIDEO" ? (
+                  <video
+                    src={editingCaptionSlot.item.previewUrl}
+                    className="w-full h-full object-cover"
+                    muted
+                  />
+                ) : (
+                  <img
+                    src={editingCaptionSlot.item.previewUrl}
+                    alt={editingCaptionSlot.item.title}
+                    className="w-full h-full object-cover"
+                  />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold text-xs truncate text-foreground">
+                  {editingCaptionSlot.item.title}
+                </div>
+                <div className="text-[10px] text-muted-foreground flex items-center gap-2 mt-0.5">
+                  <span>
+                    {editingCaptionSlot.scheduledAt.toLocaleString("pt-BR", {
+                      dateStyle: "short",
+                      timeStyle: "short",
+                    })}
+                  </span>
+                  {editingCaptionSlot.item.durationSeconds && (
+                    <span>
+                      • {Math.round(editingCaptionSlot.item.durationSeconds)}s
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <Label className="font-semibold text-foreground">
+                  Texto da Legenda / Copy com Hashtags:
+                </Label>
+                <span className="text-[10px] text-muted-foreground">
+                  {(specificItemCaptions[editingCaptionSlot.item.key] || "").length} caracteres
+                </span>
+              </div>
+              <Textarea
+                placeholder="Digite a legenda específica para este post com hashtags (#exemplo #marketing)..."
+                value={specificItemCaptions[editingCaptionSlot.item.key] || ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSpecificItemCaptions((prev) => ({
+                    ...prev,
+                    [editingCaptionSlot.item.key]: val,
+                  }));
+                }}
+                rows={5}
+                className="text-xs"
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-border">
+              {specificItemCaptions[editingCaptionSlot.item.key]?.trim() ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setSpecificItemCaptions((prev) => {
+                      const next = { ...prev };
+                      delete next[editingCaptionSlot.item.key];
+                      return next;
+                    });
+                    setEditingCaptionSlotKey(null);
+                    toast.info(
+                      "Legenda específica removida! O post voltará a usar as variações automáticas."
+                    );
+                  }}
+                  className="text-xs text-rose-600 hover:text-rose-700 h-8"
+                >
+                  Remover (Voltar para Variação Geral)
+                </Button>
+              ) : (
+                <div />
+              )}
+
+              <Button
+                type="button"
+                onClick={() => setEditingCaptionSlotKey(null)}
+                className="bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs h-8 px-4"
+              >
+                Salvar Legenda Deste Post
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

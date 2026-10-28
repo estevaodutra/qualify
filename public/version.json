@@ -1,6 +1,6 @@
 {
-  "commit": "b8918ba900713961b12ad1e2e444b593ee6da020",
-  "shortCommit": "b8918ba",
-  "message": "feat(chat): habilita botao de envio durante a gravacao para disparar audio instantaneamente",
-  "builtAt": "2026-10-28T15:24:11.730Z"
+  "commit": "59081ddfbc8fdffa52ca7b16f443d6d0f5a5e373",
+  "shortCommit": "59081dd",
+  "message": "fix(criafy): auto scheduler worker, background trigger and immediate publish button",
+  "builtAt": "2026-10-28T15:48:20.375Z"
 }
