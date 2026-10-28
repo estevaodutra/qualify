@@ -20,6 +20,11 @@ import {
   CheckCircle2,
   RefreshCw,
   CalendarDays,
+  LayoutDashboard,
+  Brain,
+  TrendingUp,
+  ListTodo,
+  Layers,
   Search,
   LayoutGrid,
   List,
@@ -36,6 +41,11 @@ import { CriafyInstagramAccount } from "@/types/criafy";
 import { useSprintOSStore } from "@/features/sprint-os/state/sprintOsStore";
 
 // Sub-views
+import { CriafyOverviewView } from "@/components/criafy/CriafyOverviewView";
+import { CriafyDemandsView } from "@/components/criafy/CriafyDemandsView";
+import { CriafyPlannerView } from "@/components/criafy/CriafyPlannerView";
+import { CriafyStrategistView } from "@/components/criafy/CriafyStrategistView";
+import { CriafyInsightsView } from "@/components/criafy/CriafyInsightsView";
 import { MediaLibraryView } from "@/components/criafy/MediaLibraryView";
 import { PublicationsView } from "@/components/criafy/PublicationsView";
 import { QueueRulesView } from "@/components/criafy/QueueRulesView";
@@ -50,12 +60,17 @@ import { useCriafyAutoScheduler } from "@/hooks/useCriafyAutoScheduler";
 import { CriafySidebarIcon, CriafyLogo } from "@/components/criafy/CriafyBrandIcons";
 
 type CriafyTabId =
-  | "contas"
+  | "visao-geral"
+  | "demandas"
+  | "planner"
   | "calendario"
   | "conteudos"
   | "publicacoes"
-  | "fila"
-  | "manual-marca";
+  | "estrategista"
+  | "manual-marca"
+  | "insights"
+  | "contas"
+  | "fila";
 
 export default function CriafyHub() {
   const { activeCompany, activeCompanyId } = useCompany();
@@ -77,13 +92,26 @@ export default function CriafyHub() {
 
   // Sidebar collapse state
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
-    return localStorage.getItem("criafy_sidebar_collapsed") === "true";
+    try {
+      if (typeof window !== "undefined" && typeof localStorage !== "undefined") {
+        return localStorage.getItem("criafy_sidebar_collapsed") === "true";
+      }
+    } catch {
+      // ignore
+    }
+    return false;
   });
 
   const toggleSidebarCollapsed = () => {
     setSidebarCollapsed((prev) => {
       const next = !prev;
-      localStorage.setItem("criafy_sidebar_collapsed", String(next));
+      try {
+        if (typeof window !== "undefined" && typeof localStorage !== "undefined") {
+          localStorage.setItem("criafy_sidebar_collapsed", String(next));
+        }
+      } catch {
+        // ignore
+      }
       return next;
     });
   };
@@ -99,13 +127,27 @@ export default function CriafyHub() {
     ) {
       return "manual-marca";
     }
+    if (tabParam === "fila") {
+      return "publicacoes";
+    }
     if (
       tabParam &&
-      ["contas", "calendario", "conteudos", "publicacoes", "fila"].includes(tabParam)
+      [
+        "visao-geral",
+        "demandas",
+        "planner",
+        "calendario",
+        "conteudos",
+        "publicacoes",
+        "estrategista",
+        "manual-marca",
+        "insights",
+        "contas",
+      ].includes(tabParam)
     ) {
       return tabParam as CriafyTabId;
     }
-    return "contas";
+    return "visao-geral";
   });
 
   useEffect(() => {
@@ -117,9 +159,22 @@ export default function CriafyHub() {
       tabParam === "manual"
     ) {
       setActiveModuleTab("manual-marca");
+    } else if (tabParam === "fila") {
+      setActiveModuleTab("publicacoes");
     } else if (
       tabParam &&
-      ["contas", "calendario", "conteudos", "publicacoes", "fila"].includes(tabParam)
+      [
+        "visao-geral",
+        "demandas",
+        "planner",
+        "calendario",
+        "conteudos",
+        "publicacoes",
+        "estrategista",
+        "manual-marca",
+        "insights",
+        "contas",
+      ].includes(tabParam)
     ) {
       setActiveModuleTab(tabParam as CriafyTabId);
     }
@@ -406,40 +461,46 @@ export default function CriafyHub() {
       title: "OPERAÇÃO",
       items: [
         {
-          id: "contas" as CriafyTabId,
-          label: "Contas Conectadas",
-          icon: Instagram,
-          badge: accounts.length > 0 ? String(accounts.length) : undefined,
+          id: "visao-geral" as CriafyTabId,
+          label: "Visão Geral",
+          icon: LayoutDashboard,
           description:
-            "Gerencie perfis do Instagram conectados, veja o feed, insights e estratégia.",
+            "Cockpit operacional: demandas do dia, conteúdos no planner e próximas publicações.",
+        },
+        {
+          id: "demandas" as CriafyTabId,
+          label: "Minhas Demandas",
+          icon: ListTodo,
+          description:
+            "Central de demandas e execuções: gravações, aprovações, revisões e Stories Lite.",
+        },
+        {
+          id: "planner" as CriafyTabId,
+          label: "Planner",
+          icon: Layers,
+          description:
+            "O que vamos produzir? Planejamento editorial, roteiros e campanhas.",
         },
         {
           id: "calendario" as CriafyTabId,
-          label: "Calendário Editorial",
+          label: "Calendário",
           icon: CalendarDays,
           description:
-            "Planeje, agende e acompanhe as publicações semanais e mensais.",
+            "Quando vai ao ar? Agenda e horários de publicação.",
         },
         {
           id: "conteudos" as CriafyTabId,
-          label: "Biblioteca de Conteúdos",
+          label: "Conteúdos",
           icon: Film,
           description:
-            "Estoque de criativos, vídeos, carrosséis e mídias prontas para postagem.",
+            "Biblioteca e estoque de materiais produzidos: vídeos, carrosséis e fotos.",
         },
         {
           id: "publicacoes" as CriafyTabId,
-          label: "Publicações & Histórico",
+          label: "Publicações",
           icon: Send,
           description:
-            "Acompanhe o status de envio e o histórico completo de postagens.",
-        },
-        {
-          id: "fila" as CriafyTabId,
-          label: "Fila Automática & Cadência",
-          icon: Clock,
-          description:
-            "Regras de distribuição automática e horários de postagem recorrentes.",
+            "O que foi ou será publicado: agendadas, histórico, fila automática e cadências.",
         },
       ],
     },
@@ -447,11 +508,38 @@ export default function CriafyHub() {
       title: "ESTRATÉGIA & IA",
       items: [
         {
+          id: "estrategista" as CriafyTabId,
+          label: "Estrategista IA",
+          icon: Brain,
+          description:
+            "Diagnóstico + Decisão + Plano de Ação conectado ao seu Manual da Marca.",
+        },
+        {
           id: "manual-marca" as CriafyTabId,
           label: "Manual da Marca",
           icon: BookOpen,
           description:
-            "Posicionamento 7D, Alma da Copy, Raio X do ICP, Criativos e Scripts.",
+            "Memória estratégica geral: Posicionamento 7D, Alma da Copy, ICP e Personalidade.",
+        },
+        {
+          id: "insights" as CriafyTabId,
+          label: "Insights",
+          icon: TrendingUp,
+          description:
+            "Performance e aprendizados acionáveis reais da sua audiência.",
+        },
+      ],
+    },
+    {
+      title: "CONFIGURAÇÃO",
+      items: [
+        {
+          id: "contas" as CriafyTabId,
+          label: "Contas Conectadas",
+          icon: Instagram,
+          badge: accounts.length > 0 ? String(accounts.length) : undefined,
+          description:
+            "Gerencie perfis do Instagram conectados e integrações com a Meta.",
         },
       ],
     },
@@ -813,6 +901,34 @@ export default function CriafyHub() {
             </div>
           </div>
 
+          {/* 0. ABA: VISÃO GERAL (COCKPIT OPERACIONAL) */}
+          {activeModuleTab === "visao-geral" && (
+            <CriafyOverviewView
+              accounts={accounts}
+              onNavigateTab={(tab) => handleTabChange(tab as CriafyTabId)}
+              onOpenAddAccount={() => setAddAccountOpen(true)}
+            />
+          )}
+
+          {/* 0.1 ABA: MINHAS DEMANDAS */}
+          {activeModuleTab === "demandas" && (
+            <CriafyDemandsView
+              accounts={accounts}
+              selectedAccountId={selectedAccountId}
+              onNavigateToPlanner={() => handleTabChange("planner")}
+            />
+          )}
+
+          {/* 0.2 ABA: PLANNER EDITORIAL */}
+          {activeModuleTab === "planner" && (
+            <CriafyPlannerView
+              accounts={accounts}
+              selectedAccountId={selectedAccountId}
+              onNavigateToCalendar={() => handleTabChange("calendario")}
+              onNavigateToDemands={() => handleTabChange("demandas")}
+            />
+          )}
+
           {/* 1. ABA: CONTAS CONECTADAS */}
           {activeModuleTab === "contas" && (
             <div className="space-y-4">
@@ -955,7 +1071,7 @@ export default function CriafyHub() {
           )}
 
           {/* 4. ABA: PUBLICAÇÕES & HISTÓRICO */}
-          {activeModuleTab === "publicacoes" && (
+          {(activeModuleTab === "publicacoes" || activeModuleTab === "fila") && (
             <PublicationsView
               accounts={accounts}
               selectedAccountId={selectedAccountId}
@@ -974,6 +1090,25 @@ export default function CriafyHub() {
 
           {/* 6. ABA: MANUAL DA MARCA */}
           {activeModuleTab === "manual-marca" && <CriafyBrandManualView />}
+
+          {/* 7. ABA: ESTRATEGISTA IA */}
+          {activeModuleTab === "estrategista" && (
+            <CriafyStrategistView
+              accounts={accounts}
+              selectedAccountId={selectedAccountId}
+              onNavigateToPlanner={() => handleTabChange("planner")}
+              onNavigateToDemands={() => handleTabChange("demandas")}
+            />
+          )}
+
+          {/* 8. ABA: INSIGHTS & APRENDIZADOS */}
+          {activeModuleTab === "insights" && (
+            <CriafyInsightsView
+              accounts={accounts}
+              selectedAccountId={selectedAccountId}
+              onOpenFeedModal={openFeedModal}
+            />
+          )}
         </div>
       </div>
 

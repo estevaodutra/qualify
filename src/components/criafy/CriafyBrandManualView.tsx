@@ -34,6 +34,8 @@ import { BrandManualShareModal } from "@/features/sprint-os/ui/modals/BrandManua
 import { TaskDetailModal } from "@/features/sprint-os/ui/modals/TaskDetailModal";
 import { ReportsModal } from "@/features/sprint-os/ui/modals/ReportsModal";
 import { downloadBrandManualMarkdown } from "@/features/sprint-os/utils/exportBrandManualMarkdown";
+import { CriafySubsidebar, CriafySubsidebarGroup } from "./CriafySubsidebar";
+import { Target, Users, User } from "lucide-react";
 import { toast } from "sonner";
 
 export const CriafyBrandManualView: React.FC = () => {
@@ -160,6 +162,31 @@ export const CriafyBrandManualView: React.FC = () => {
     );
   }
 
+  const brandSubsidebarGroups: CriafySubsidebarGroup[] = [
+    {
+      title: "Manual de Marca 7D",
+      items: [
+        { id: "posicionamento", label: "Posicionamento & Mecanismo", icon: Target },
+        { id: "alma_copy", label: "Alma da Copy", icon: Sparkles },
+        { id: "raio_x_icp", label: "Raio-X do ICP", icon: Users },
+        { id: "personalidade", label: "Personalidade do Expert", icon: User },
+        { id: "copy_ads", label: "Copy Ads (10 Variantes)", icon: Palette },
+      ],
+    },
+    {
+      title: "Recursos & Execução",
+      items: [
+        { id: "creatives", label: "Criativos da Marca", icon: Palette },
+        {
+          id: "scripts_and_audios",
+          label: "Scripts e Áudios",
+          icon: Mic,
+          count: audioStats.total > 0 ? `${audioStats.completed}/${audioStats.total}` : undefined,
+        },
+      ],
+    },
+  ];
+
   const sprints = Object.values(workspace.sprints || {}).filter((s) => !s.archivedAt);
   const activeSprint = sprints[0];
   const isActivated = !!activeSprint?.activatedAt;
@@ -241,63 +268,7 @@ export const CriafyBrandManualView: React.FC = () => {
           </button>
         </div>
 
-        {/* 3 Abas Específicas do Manual da Marca */}
-        <div className="flex items-center p-0.5 bg-muted/70 border border-border/80 rounded-2xl gap-1 overflow-x-auto self-start sm:self-center">
-          {/* Aba 1: Manual de Marca */}
-          <button
-            type="button"
-            onClick={() => setActiveTab("brand_manual")}
-            className={`h-8 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
-              currentSubTab === "brand_manual"
-                ? "bg-background text-primary shadow-xs font-bold"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-            title="Manual de Marca 7D (Posicionamento, Alma da Copy, Raio X do ICP, Personalidade, Copy Ads)"
-          >
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
-            <span>Manual de Marca</span>
-            {brandManualStats.total > 0 && (
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-primary/10 text-primary font-bold">
-                {brandManualStats.answered}/{brandManualStats.total}
-              </span>
-            )}
-          </button>
 
-          {/* Aba 2: Criativos */}
-          <button
-            type="button"
-            onClick={() => setActiveTab("creatives")}
-            className={`h-8 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
-              currentSubTab === "creatives"
-                ? "bg-background text-primary shadow-xs font-bold"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-            title="Criativos — Biblioteca de Ângulos, Ganchos e Formatos"
-          >
-            <Palette className="h-3.5 w-3.5 text-primary" />
-            <span>Criativos</span>
-          </button>
-
-          {/* Aba 3: Scripts e Áudios */}
-          <button
-            type="button"
-            onClick={() => setActiveTab("scripts_and_audios")}
-            className={`h-8 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
-              currentSubTab === "scripts_and_audios"
-                ? "bg-background text-primary shadow-xs font-bold"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-            title="Scripts e Áudios — Solicitações e Gravações de Voz"
-          >
-            <Mic className="h-3.5 w-3.5 text-primary" />
-            <span>Scripts e Áudios</span>
-            {audioStats.total > 0 && (
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-primary/10 text-primary font-bold">
-                {audioStats.completed}/{audioStats.total}
-              </span>
-            )}
-          </button>
-        </div>
 
         {/* Ações: Status, Salvar e Exportar */}
         <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
@@ -370,11 +341,22 @@ export const CriafyBrandManualView: React.FC = () => {
         </div>
       </div>
 
-      {/* Conteúdo da Sub-Aba Selecionada */}
-      <div className="pt-2">
-        {currentSubTab === "brand_manual" && <BrandManualView />}
-        {currentSubTab === "creatives" && <CreativesView />}
-        {currentSubTab === "scripts_and_audios" && <ScriptsAndAudiosView />}
+      {/* Layout com Subsidebar Contextual (Sem Tabs Horizontais) */}
+      <div className="flex flex-col lg:flex-row gap-5 items-start pt-2">
+        <CriafySubsidebar
+          groups={brandSubsidebarGroups}
+          activeId={activeBrandSubId}
+          onChange={handleSubsidebarChange}
+          title="Manual 7D"
+        />
+
+        <div className="flex-1 w-full min-w-0">
+          {["posicionamento", "alma_copy", "raio_x_icp", "personalidade", "copy_ads"].includes(activeBrandSubId) && (
+            <BrandManualView forcedModuleId={activeBrandSubId} hideTopTabs />
+          )}
+          {activeBrandSubId === "creatives" && <CreativesView />}
+          {activeBrandSubId === "scripts_and_audios" && <ScriptsAndAudiosView />}
+        </div>
       </div>
 
       {/* Modais Globais de Apoio */}

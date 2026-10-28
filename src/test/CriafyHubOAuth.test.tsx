@@ -27,6 +27,7 @@ vi.mock("react-router-dom", () => ({
     new URLSearchParams("code=oauth-code&state=signed-state"),
     mocks.setSearchParams,
   ],
+  useNavigate: () => vi.fn(),
 }));
 
 vi.mock("sonner", () => ({
@@ -37,6 +38,11 @@ vi.mock("sonner", () => ({
   },
 }));
 
+vi.mock("@/components/criafy/CriafyOverviewView", () => ({ CriafyOverviewView: () => null }));
+vi.mock("@/components/criafy/CriafyDemandsView", () => ({ CriafyDemandsView: () => null }));
+vi.mock("@/components/criafy/CriafyPlannerView", () => ({ CriafyPlannerView: () => null }));
+vi.mock("@/components/criafy/CriafyStrategistView", () => ({ CriafyStrategistView: () => null }));
+vi.mock("@/components/criafy/CriafyInsightsView", () => ({ CriafyInsightsView: () => null }));
 vi.mock("@/components/criafy/MediaLibraryView", () => ({ MediaLibraryView: () => null }));
 vi.mock("@/components/criafy/PublicationsView", () => ({ PublicationsView: () => null }));
 vi.mock("@/components/criafy/QueueRulesView", () => ({ QueueRulesView: () => null }));

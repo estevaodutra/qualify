@@ -1,6 +1,6 @@
 {
-  "commit": "5c859606e49b24dca9b6915145891150741b0591",
-  "shortCommit": "5c85960",
-  "message": "feat(brand): set official Criafy sidebar icon and logo across navigation and views",
-  "builtAt": "2026-10-28T19:32:16.191Z"
+  "commit": "5a49c3a09198115b5ecb05e0e870a36f28fd516b",
+  "shortCommit": "5a49c3a",
+  "message": "feat(brand-manual): add export filled brand manual to markdown .md",
+  "builtAt": "2026-10-28T21:44:48.711Z"
 }

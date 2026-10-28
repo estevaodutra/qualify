@@ -39,6 +39,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import { toast } from "sonner";
+import { CriafySubsidebar, CriafySubsidebarGroup } from "./CriafySubsidebar";
 import { useCompany } from "@/contexts/CompanyContext";
 import { criafyService } from "@/services/criafy/criafyService";
 import { CriafyContent, CriafyInstagramAccount } from "@/types/criafy";
@@ -65,9 +66,7 @@ export function MediaLibraryView({
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<
-    "all" | "published" | "unpublished" | "scheduled"
-  >("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   // Auto-probed durations for videos without duration_seconds stored in DB
   const [probedDurations, setProbedDurations] = useState<
@@ -272,11 +271,52 @@ export function MediaLibraryView({
     if (statusFilter === "unpublished")
       return !c.is_published && !c.is_scheduled;
     if (statusFilter === "scheduled") return !!c.is_scheduled;
+    if (statusFilter === "fmt_videos") return c.media_type === "VIDEO";
+    if (statusFilter === "fmt_images") return c.media_type === "IMAGE";
     return true;
   });
 
+  const mediaSubsidebarGroups: CriafySubsidebarGroup[] = [
+    {
+      title: "Status dos Materiais",
+      items: [
+        { id: "all", label: "Todos os Materiais", icon: Layers, count: contents.length },
+        { id: "unpublished", label: "Inéditos / Rascunhos", icon: Sparkles, count: unpublishedCount },
+        { id: "scheduled", label: "Agendados", icon: Clock, count: scheduledCount },
+        { id: "published", label: "Já Publicados", icon: CheckCircle2, count: publishedCount },
+      ],
+    },
+    {
+      title: "Formatos de Mídia",
+      items: [
+        {
+          id: "fmt_videos",
+          label: "Vídeos & Reels",
+          icon: Video,
+          count: contents.filter((c) => c.media_type === "VIDEO").length,
+        },
+        {
+          id: "fmt_images",
+          label: "Imagens & Fotos",
+          icon: ImageIcon,
+          count: contents.filter((c) => c.media_type === "IMAGE").length,
+        },
+      ],
+    },
+  ];
+
   return (
     <div className="space-y-4">
+      {/* Layout com Subsidebar Contextual */}
+      <div className="flex flex-col lg:flex-row gap-5 items-start">
+        <CriafySubsidebar
+          groups={mediaSubsidebarGroups}
+          activeId={statusFilter}
+          onChange={setStatusFilter}
+          title="Conteúdos"
+        />
+
+        <div className="flex-1 w-full min-w-0 space-y-4">
       {/* Header Actions */}
       <div className="flex flex-col gap-3 bg-muted/30 p-4 rounded-xl border border-muted">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -671,6 +711,8 @@ export function MediaLibraryView({
           })}
         </div>
       )}
+        </div>
+      </div>
 
       {/* Account Bindings Modal */}
       <Dialog open={linkModalOpen} onOpenChange={setLinkModalOpen}>

@@ -34,6 +34,8 @@ import {
   Layers,
 } from "lucide-react";
 import { toast } from "sonner";
+import { CriafySubsidebar, CriafySubsidebarGroup } from "./CriafySubsidebar";
+import { QueueRulesView } from "./QueueRulesView";
 import { useCompany } from "@/contexts/CompanyContext";
 import { criafyService } from "@/services/criafy/criafyService";
 import {
@@ -58,6 +60,7 @@ export function PublicationsView({
   const [publications, setPublications] = useState<CriafyPublication[]>([]);
   const [contents, setContents] = useState<CriafyContent[]>([]);
   const [loading, setLoading] = useState(false);
+  const [activeSubTab, setActiveSubTab] = useState<string>("agendadas");
 
   // New Publication Modal State
   const [modalOpen, setModalOpen] = useState(false);
@@ -291,6 +294,33 @@ export function PublicationsView({
       });
   };
 
+  const scheduledCount = publications.filter((p) => p.status === "SCHEDULED").length;
+  const publishedCount = publications.filter((p) => p.status === "PUBLISHED").length;
+
+  const pubSubsidebarGroups: CriafySubsidebarGroup[] = [
+    {
+      title: "Publicações",
+      items: [
+        { id: "agendadas", label: "Agendadas", icon: Clock, count: scheduledCount },
+        { id: "publicadas", label: "Publicadas", icon: CheckCircle2, count: publishedCount },
+        { id: "historico", label: "Histórico Completo", icon: Send, count: publications.length },
+      ],
+    },
+    {
+      title: "Automação & Fila",
+      items: [
+        { id: "fila", label: "Fila Automática & Horários", icon: Sparkles },
+        { id: "cadencias", label: "Cadências por Conta", icon: Repeat },
+      ],
+    },
+  ];
+
+  const displayedPublications = publications.filter((p) => {
+    if (activeSubTab === "agendadas") return p.status === "SCHEDULED" || p.status === "PUBLISHING";
+    if (activeSubTab === "publicadas") return p.status === "PUBLISHED";
+    return true; // historico
+  });
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "PUBLISHED":
@@ -324,6 +354,23 @@ export function PublicationsView({
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-col lg:flex-row gap-5 items-start">
+        <CriafySubsidebar
+          groups={pubSubsidebarGroups}
+          activeId={activeSubTab}
+          onChange={setActiveSubTab}
+          title="Publicações"
+        />
+
+        <div className="flex-1 w-full min-w-0 space-y-4">
+          {activeSubTab === "fila" || activeSubTab === "cadencias" ? (
+            <QueueRulesView
+              accounts={accounts}
+              selectedAccountId={selectedAccountId}
+              onSelectAccountFilter={onSelectAccountFilter}
+            />
+          ) : (
+            <>
       {/* Action Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-muted/30 p-4 rounded-xl border border-muted">
         <div className="flex items-center gap-3">
@@ -355,7 +402,7 @@ export function PublicationsView({
         <div className="flex justify-center p-12">
           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
         </div>
-      ) : publications.length === 0 ? (
+      ) : displayedPublications.length === 0 ? (
         <div className="text-center py-16 px-4 border border-dashed rounded-xl bg-card">
           <div className="w-12 h-12 rounded-full bg-pink-500/10 text-pink-500 flex items-center justify-center mx-auto mb-3">
             <Instagram className="w-6 h-6" />
@@ -367,7 +414,7 @@ export function PublicationsView({
         </div>
       ) : (
         <div className="space-y-3">
-          {publications.map((pub) => (
+          {displayedPublications.map((pub) => (
             <div
               key={pub.id}
               className="p-4 rounded-xl border border-muted bg-card flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-muted-foreground/30 transition-all"
@@ -445,6 +492,10 @@ export function PublicationsView({
           ))}
         </div>
       )}
+            </>
+          )}
+        </div>
+      </div>
 
       {/* Create Publication Modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>

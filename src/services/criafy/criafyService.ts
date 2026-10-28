@@ -14,6 +14,8 @@ import {
   InstagramPost,
   InstagramComment,
   InstagramInsightsOverview,
+  CriafyDemand,
+  CriafyPlannerItem,
 } from "@/types/criafy";
 import {
   CriafyOAuthExchangeResult,
@@ -1192,4 +1194,276 @@ export const criafyService = {
 
     return result;
   },
+  // ==========================================
+  // CENTRAL DE DEMANDAS
+  // ==========================================
+  async getDemands(companyId: string, filters?: { accountId?: string; status?: string; type?: string }): Promise<CriafyDemand[]> {
+    try {
+      let query = (supabase as any)
+        .from("criafy_demands")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("created_at", { ascending: false });
+
+      if (filters?.accountId && filters.accountId !== "all") {
+        query = query.eq("account_id", filters.accountId);
+      }
+      if (filters?.status && filters.status !== "all") {
+        query = query.eq("status", filters.status);
+      }
+      if (filters?.type && filters.type !== "all") {
+        query = query.eq("type", filters.type);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []) as CriafyDemand[];
+    } catch (err: any) {
+      // Fallback gracioso com cache local caso tabela ainda esteja sendo criada
+      const localKey = `criafy_demands_${companyId}`;
+      const cached = localStorage.getItem(localKey);
+      if (cached) {
+        try {
+          let list: CriafyDemand[] = JSON.parse(cached);
+          if (filters?.accountId && filters.accountId !== "all") {
+            list = list.filter((d) => d.account_id === filters.accountId);
+          }
+          if (filters?.status && filters.status !== "all") {
+            list = list.filter((d) => d.status === filters.status);
+          }
+          if (filters?.type && filters.type !== "all") {
+            list = list.filter((d) => d.type === filters.type);
+          }
+          return list;
+        } catch {
+          // ignore
+        }
+      }
+      return [];
+    }
+  },
+
+  async createDemand(demand: Partial<CriafyDemand> & { company_id: string; title: string; type: string }): Promise<CriafyDemand> {
+    const payload = {
+      ...demand,
+      status: demand.status || "pending",
+      priority: demand.priority || "media",
+      origin: demand.origin || "usuario",
+      attachments: demand.attachments || [],
+      updated_at: new Date().toISOString(),
+    };
+
+    try {
+      const { data, error } = await (supabase as any)
+        .from("criafy_demands")
+        .insert(payload)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as CriafyDemand;
+    } catch (err) {
+      // Local fallback
+      const localKey = `criafy_demands_${demand.company_id}`;
+      const cached = localStorage.getItem(localKey);
+      const list: CriafyDemand[] = cached ? JSON.parse(cached) : [];
+      const newDemand: CriafyDemand = {
+        id: "loc-" + Date.now() + "-" + Math.random().toString(36).substring(2, 7),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        ...(payload as any),
+      };
+      list.unshift(newDemand);
+      localStorage.setItem(localKey, JSON.stringify(list));
+      return newDemand;
+    }
+  },
+
+  async updateDemand(demandId: string, updates: Partial<CriafyDemand>, companyId?: string): Promise<CriafyDemand> {
+    const payload = {
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+
+    try {
+      const { data, error } = await (supabase as any)
+        .from("criafy_demands")
+        .update(payload)
+        .eq("id", demandId)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as CriafyDemand;
+    } catch (err) {
+      if (companyId) {
+        const localKey = `criafy_demands_${companyId}`;
+        const cached = localStorage.getItem(localKey);
+        if (cached) {
+          const list: CriafyDemand[] = JSON.parse(cached);
+          const idx = list.findIndex((d) => d.id === demandId);
+          if (idx >= 0) {
+            list[idx] = { ...list[idx], ...payload };
+            localStorage.setItem(localKey, JSON.stringify(list));
+            return list[idx];
+          }
+        }
+      }
+      throw err;
+    }
+  },
+
+  async deleteDemand(demandId: string, companyId?: string): Promise<void> {
+    try {
+      const { error } = await (supabase as any)
+        .from("criafy_demands")
+        .delete()
+        .eq("id", demandId);
+      if (error) throw error;
+    } catch (err) {
+      if (companyId) {
+        const localKey = `criafy_demands_${companyId}`;
+        const cached = localStorage.getItem(localKey);
+        if (cached) {
+          let list: CriafyDemand[] = JSON.parse(cached);
+          list = list.filter((d) => d.id !== demandId);
+          localStorage.setItem(localKey, JSON.stringify(list));
+          return;
+        }
+      }
+      throw err;
+    }
+  },
+
+  // ==========================================
+  // PLANNER EDITORIAL
+  // ==========================================
+  async getPlannerItems(companyId: string, filters?: { accountId?: string; status?: string; campaign?: string }): Promise<CriafyPlannerItem[]> {
+    try {
+      let query = (supabase as any)
+        .from("criafy_planner_items")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("desired_date", { ascending: true, nullsFirst: false });
+
+      if (filters?.accountId && filters.accountId !== "all") {
+        query = query.eq("account_id", filters.accountId);
+      }
+      if (filters?.status && filters.status !== "all") {
+        query = query.eq("status", filters.status);
+      }
+      if (filters?.campaign && filters.campaign !== "all") {
+        query = query.eq("campaign", filters.campaign);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []) as CriafyPlannerItem[];
+    } catch (err: any) {
+      // Fallback local
+      const localKey = `criafy_planner_${companyId}`;
+      const cached = localStorage.getItem(localKey);
+      if (cached) {
+        try {
+          let list: CriafyPlannerItem[] = JSON.parse(cached);
+          if (filters?.accountId && filters.accountId !== "all") {
+            list = list.filter((p) => p.account_id === filters.accountId);
+          }
+          if (filters?.status && filters.status !== "all") {
+            list = list.filter((p) => p.status === filters.status);
+          }
+          return list;
+        } catch {
+          // ignore
+        }
+      }
+      return [];
+    }
+  },
+
+  async createPlannerItem(item: Partial<CriafyPlannerItem> & { company_id: string; theme: string; format: any }): Promise<CriafyPlannerItem> {
+    const payload = {
+      ...item,
+      status: item.status || "ideia",
+      priority: item.priority || "media",
+      updated_at: new Date().toISOString(),
+    };
+
+    try {
+      const { data, error } = await (supabase as any)
+        .from("criafy_planner_items")
+        .insert(payload)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as CriafyPlannerItem;
+    } catch (err) {
+      const localKey = `criafy_planner_${item.company_id}`;
+      const cached = localStorage.getItem(localKey);
+      const list: CriafyPlannerItem[] = cached ? JSON.parse(cached) : [];
+      const newItem: CriafyPlannerItem = {
+        id: "plan-" + Date.now() + "-" + Math.random().toString(36).substring(2, 7),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        ...(payload as any),
+      };
+      list.push(newItem);
+      localStorage.setItem(localKey, JSON.stringify(list));
+      return newItem;
+    }
+  },
+
+  async updatePlannerItem(itemId: string, updates: Partial<CriafyPlannerItem>, companyId?: string): Promise<CriafyPlannerItem> {
+    const payload = {
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+
+    try {
+      const { data, error } = await (supabase as any)
+        .from("criafy_planner_items")
+        .update(payload)
+        .eq("id", itemId)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as CriafyPlannerItem;
+    } catch (err) {
+      if (companyId) {
+        const localKey = `criafy_planner_${companyId}`;
+        const cached = localStorage.getItem(localKey);
+        if (cached) {
+          const list: CriafyPlannerItem[] = JSON.parse(cached);
+          const idx = list.findIndex((p) => p.id === itemId);
+          if (idx >= 0) {
+            list[idx] = { ...list[idx], ...payload };
+            localStorage.setItem(localKey, JSON.stringify(list));
+            return list[idx];
+          }
+        }
+      }
+      throw err;
+    }
+  },
+
+  async deletePlannerItem(itemId: string, companyId?: string): Promise<void> {
+    try {
+      const { error } = await (supabase as any)
+        .from("criafy_planner_items")
+        .delete()
+        .eq("id", itemId);
+      if (error) throw error;
+    } catch (err) {
+      if (companyId) {
+        const localKey = `criafy_planner_${companyId}`;
+        const cached = localStorage.getItem(localKey);
+        if (cached) {
+          let list: CriafyPlannerItem[] = JSON.parse(cached);
+          list = list.filter((p) => p.id !== itemId);
+          localStorage.setItem(localKey, JSON.stringify(list));
+          return;
+        }
+      }
+      throw err;
+    }
+  },
 };
+

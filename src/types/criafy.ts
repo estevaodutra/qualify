@@ -260,3 +260,131 @@ export interface InstagramInsightsOverview {
     peakActivityText: string;
   };
 }
+
+// ==========================================
+// CENTRAL DE DEMANDAS (CRIAFY)
+// ==========================================
+export type CriafyDemandType =
+  | "gravar_video"
+  | "gravar_audio"
+  | "tirar_foto"
+  | "revisar_copy"
+  | "aprovar_conteudo"
+  | "enviar_material"
+  | "editar"
+  | "publicar"
+  | "responder"
+  | "coletar_depoimento"
+  | "stories_lite"
+  | "tarefa_generica";
+
+export type CriafyDemandStatus =
+  | "pending"
+  | "in_progress"
+  | "completed"
+  | "not_occurred"
+  | "cancelled";
+
+export type CriafyDemandPriority = "baixa" | "media" | "alta" | "urgente";
+
+export type CriafyDemandOrigin =
+  | "ia"
+  | "usuario"
+  | "equipe"
+  | "gestor"
+  | "automacao";
+
+export interface StoriesLitePayload {
+  context: "cafe" | "carro" | "trabalho" | "casa" | "final_do_dia" | "bastidor" | string;
+  contextLabel: string;
+  hook: string;
+  bridge: string;
+  coreMessage: string;
+  connectionToMethod: string;
+  cta?: string;
+  script?: string;
+}
+
+export interface CriafyDemand {
+  id: string;
+  company_id: string;
+  account_id?: string | null;
+  planner_item_id?: string | null;
+  related_content_id?: string | null;
+  title: string;
+  description?: string;
+  type: CriafyDemandType;
+  priority: CriafyDemandPriority;
+  status: CriafyDemandStatus;
+  origin: CriafyDemandOrigin;
+  responsible_id?: string | null;
+  responsible_name?: string | null;
+  created_by?: string | null;
+  due_date?: string | null;
+  completed_at?: string | null;
+  attachments?: Array<{
+    name: string;
+    url: string;
+    type?: string;
+  }>;
+  stories_lite?: StoriesLitePayload | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ==========================================
+// PLANNER EDITORIAL (CRIAFY)
+// ==========================================
+export type CriafyPlannerFormat =
+  | "REEL"
+  | "CAROUSEL"
+  | "POST"
+  | "STORY"
+  | "STORIES_LITE"
+  | "SCRIPT"
+  | "AUDIO"
+  | "VIDEO_LONGO";
+
+export type CriafyPlannerStatus =
+  | "ideia"
+  | "pauta"
+  | "roteirizado"
+  | "aguardando_gravacao"
+  | "em_edicao"
+  | "pronto"
+  | "agendado"
+  | "publicado";
+
+export type CriafyPlannerObjective =
+  | "identificacao"
+  | "autoridade"
+  | "vendas"
+  | "conexao"
+  | "educacao"
+  | "retencao";
+
+export interface CriafyPlannerItem {
+  id: string;
+  company_id: string;
+  account_id?: string | null;
+  format: CriafyPlannerFormat;
+  theme: string;
+  objective?: CriafyPlannerObjective | string;
+  pillar?: string;
+  angle?: string;
+  responsible_id?: string | null;
+  responsible_name?: string | null;
+  campaign?: string | null;
+  priority: CriafyDemandPriority;
+  status: CriafyPlannerStatus;
+  desired_date?: string | null;
+  hook?: string | null;
+  script?: string | null;
+  caption?: string | null;
+  content_id?: string | null;
+  publication_id?: string | null;
+  demands?: CriafyDemand[];
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+}

@@ -85,9 +85,9 @@ describe("Sprint OS — Dependências e Detecção de Ciclos", () => {
 describe("Sprint OS — Seed Matriz Percurso da Vida", () => {
   const seed = createPercursoDaVidaSeed();
 
-  it("inicializa com exatamente 8 etapas e 26 tarefas canônicas", () => {
-    expect(Object.keys(seed.stages).length).toBe(8);
-    expect(Object.keys(seed.tasks).length).toBe(26);
+  it("inicializa com exatamente 9 etapas e 39 tarefas canônicas", () => {
+    expect(Object.keys(seed.stages).length).toBe(9);
+    expect(Object.keys(seed.tasks).length).toBe(39);
     expect(Object.keys(seed.milestones).length).toBe(5);
     expect(Object.keys(seed.routines).length).toBe(8);
     expect(Object.keys(seed.funnel).length).toBe(11);
@@ -95,7 +95,7 @@ describe("Sprint OS — Seed Matriz Percurso da Vida", () => {
 
   it("calcula métricas de progresso com 3 medidas distintas", () => {
     const progress = computeProgressMetrics(seed, "sprint-01");
-    expect(progress.tasksTotal).toBe(26);
+    expect(progress.tasksTotal).toBe(39);
     expect(progress.tasksDone).toBe(0);
     expect(progress.taskProgressPct).toBe(0);
     expect(progress.effortTotalMinutes).toBeGreaterThan(0);
@@ -113,9 +113,8 @@ describe("Sprint OS — Seed Matriz Percurso da Vida", () => {
 
   it("identifica a Missão Agora e o estado inicial da Bússola", () => {
     const mission = computeMissionNow(seed, "sprint-01");
-    // Tarefa 01 deve ser a primeira executável (desbloqueada, sem preds)
     expect(mission.task).not.toBeNull();
-    expect(mission.task?.id).toBe("task-01");
+    expect(mission.task?.id).toBe("task-10");
 
     const compass = computeOperationalCompass(seed, "sprint-01");
     // Estado inicial antes de homologar acessos e CRM é ESTRUTURAR

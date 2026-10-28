@@ -129,7 +129,17 @@ const ICP_22_OUTPUT_KEYS = [
   { key: "gatilho_x1", label: "22. Gatilho de Fechamento Comercial X1", desc: "A pergunta ou argumento que fecha a venda na conversa direta" },
 ];
 
-export const BrandManualView: React.FC = () => {
+export interface BrandManualViewProps {
+  forcedModuleId?: string;
+  onModuleChange?: (id: string) => void;
+  hideTopTabs?: boolean;
+}
+
+export const BrandManualView: React.FC<BrandManualViewProps> = ({
+  forcedModuleId,
+  onModuleChange,
+  hideTopTabs = false,
+}) => {
   const {
     workspace,
     mutate,
@@ -146,6 +156,12 @@ export const BrandManualView: React.FC = () => {
   // Módulo 03 - Navegação guiada do Raio X do ICP
   const [icpStepIndex, setIcpStepIndex] = useState<number>(0);
   const [icpMode, setIcpMode] = useState<"guided" | "all">("guided");
+
+  useEffect(() => {
+    if (forcedModuleId) {
+      setActiveModuleId(forcedModuleId);
+    }
+  }, [forcedModuleId]);
 
   // Sincronização e rolagem direta para a pergunta selecionada (AJ-019)
   useEffect(() => {
@@ -993,7 +1009,8 @@ export const BrandManualView: React.FC = () => {
       </div>
 
       {/* 2. NAVEGAÇÃO ENTRE OS 4 MÓDULOS OBRIGATÓRIOS (Seção 13) */}
-      <div className="flex items-center gap-2 border-b border-border pb-2 overflow-x-auto scrollbar-hide">
+      {!hideTopTabs && (
+        <div className="flex items-center gap-2 border-b border-border pb-2 overflow-x-auto scrollbar-hide">
         {brandManual.modules.map((m) => {
           const isActive = m.id === activeModuleId;
           const moduleFields = brandManual.fields.filter((f) => f.moduleId === m.id && !f.archived && !f.removed);
@@ -1030,7 +1047,8 @@ export const BrandManualView: React.FC = () => {
             </button>
           );
         })}
-      </div>
+        </div>
+      )}
 
       {/* 3. CONTEÚDO DO MÓDULO SELECIONADO */}
       <div className="space-y-5">
