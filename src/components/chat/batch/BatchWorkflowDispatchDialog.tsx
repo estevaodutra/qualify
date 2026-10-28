@@ -72,8 +72,8 @@ export default function BatchWorkflowDispatchDialog({
 
   // Settings State
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>("");
-  const [intervalSeconds, setIntervalSeconds] = useState<number>(15);
-  const [useJitter, setUseJitter] = useState<boolean>(true);
+  const [minMinutes, setMinMinutes] = useState<number>(3);
+  const [maxMinutes, setMaxMinutes] = useState<number>(5);
   const [instanceMode, setInstanceMode] = useState<string>("original"); // "original" or specific instance_id
 
   // Execution State
@@ -212,6 +212,15 @@ export default function BatchWorkflowDispatchDialog({
     setCountdownRemaining(0);
   };
 
+  const formatTimeRemaining = (totalSeconds: number) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    if (mins > 0) {
+      return `${mins}m ${secs.toString().padStart(2, "0")}s`;
+    }
+    return `${secs}s`;
+  };
+
   // Run the batch execution
   const handleStartDispatch = async () => {
     if (!selectedWorkflowId) {
@@ -312,12 +321,11 @@ export default function BatchWorkflowDispatchDialog({
           prev.map((item, idx) => (idx === i + 1 ? { ...item, status: "waiting_delay" } : item))
         );
 
-        let delaySec = intervalSeconds;
-        if (useJitter) {
-          // Add random jitter of -3 to +3 seconds (minimum 3s)
-          const jitter = Math.floor(Math.random() * 7) - 3;
-          delaySec = Math.max(3, intervalSeconds + jitter);
-        }
+        const safeMin = Math.max(1, Math.min(minMinutes, maxMinutes));
+        const safeMax = Math.max(safeMin, Math.max(minMinutes, maxMinutes));
+        const minSec = safeMin * 60;
+        const maxSec = safeMax * 60;
+        const delaySec = Math.floor(Math.random() * (maxSec - minSec + 1)) + minSec;
 
         await waitCadence(delaySec);
       }
@@ -437,65 +445,97 @@ export default function BatchWorkflowDispatchDialog({
                 <div className="flex items-center justify-between">
                   <Label className="text-xs font-bold flex items-center gap-1.5 text-foreground">
                     <Clock className="h-3.5 w-3.5 text-primary" />
-                    <span>Intervalo entre disparos (Cadência)</span>
+                    <span>Intervalo entre disparos (Cadência em Minutos)</span>
                   </Label>
-                  <span className="text-xs font-extrabold text-primary px-2 py-0.5 rounded-full bg-primary/10">
-                    {intervalSeconds} segundos
+                  <span className="text-xs font-extrabold text-primary px-2.5 py-0.5 rounded-full bg-primary/10">
+                    De {minMinutes} a {maxMinutes} minutos
                   </span>
                 </div>
 
-                {/* Interval Input & Quick Presets */}
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min={3}
-                    max={300}
-                    value={intervalSeconds}
-                    onChange={(e) => setIntervalSeconds(Math.max(3, Math.min(300, Number(e.target.value) || 3)))}
-                    className="h-9 w-24 text-center font-bold text-xs rounded-xl bg-background"
-                  />
-                  <div className="flex items-center gap-1 flex-1 overflow-x-auto">
-                    {[5, 10, 15, 25, 45, 60].map((sec) => (
-                      <button
-                        key={sec}
-                        type="button"
-                        onClick={() => setIntervalSeconds(sec)}
-                        className={cn(
-                          "px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all border shrink-0 cursor-pointer",
-                          intervalSeconds === sec
-                            ? "bg-primary text-primary-foreground border-primary shadow-xs"
-                            : "bg-background hover:bg-muted text-muted-foreground border-border/40"
-                        )}
-                      >
-                        {sec}s
-                      </button>
-                    ))}
+                {/* Range inputs: De X a Y minutos */}
+                <div className="space-y-1.5">
+                  <span className="text-[11px] font-semibold text-muted-foreground">
+                    Definir intervalo personalizado:
+                  </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 bg-background border border-border/60 rounded-xl px-3 py-1.5 shadow-xs">
+                      <span className="text-xs text-muted-foreground font-semibold">De</span>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={180}
+                        value={minMinutes}
+                        onChange={(e) => {
+                          const val = Math.max(1, Number(e.target.value) || 1);
+                          setMinMinutes(val);
+                          if (val > maxMinutes) setMaxMinutes(val);
+                        }}
+                        className="h-7 w-16 text-center font-bold text-xs p-0 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                      />
+                      <span className="text-xs text-muted-foreground font-semibold">min</span>
+                    </div>
+
+                    <div className="flex items-center gap-2 bg-background border border-border/60 rounded-xl px-3 py-1.5 shadow-xs">
+                      <span className="text-xs text-muted-foreground font-semibold">Até</span>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={180}
+                        value={maxMinutes}
+                        onChange={(e) => {
+                          const val = Math.max(1, Number(e.target.value) || 1);
+                          setMaxMinutes(val);
+                          if (val < minMinutes) setMinMinutes(val);
+                        }}
+                        className="h-7 w-16 text-center font-bold text-xs p-0 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                      />
+                      <span className="text-xs text-muted-foreground font-semibold">minutos</span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Humanized Jitter Switch */}
-                <div className="flex items-center justify-between pt-1 border-t border-border/30">
-                  <div className="space-y-0.5 pr-4">
-                    <Label htmlFor="jitter-switch" className="text-xs font-medium cursor-pointer text-foreground flex items-center gap-1">
-                      <Sparkles className="h-3 w-3 text-amber-500" />
-                      <span>Variação humanizada aleatória (Jitter ±3s)</span>
-                    </Label>
-                    <p className="text-[11px] text-muted-foreground">
-                      Evita intervalos exatos e repetitivos para prevenir detecção por filtros do WhatsApp.
-                    </p>
+                {/* Quick Presets Requested by User: 3 a 5 min, 6 a 10 min, etc. */}
+                <div className="space-y-1.5 pt-1 border-t border-border/30">
+                  <span className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
+                    <Sparkles className="h-3 w-3 text-amber-500" />
+                    <span>Intervalos sugeridos (Anti-ban WhatsApp):</span>
+                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {[
+                      { label: "3 a 5 min", min: 3, max: 5 },
+                      { label: "5 a 8 min", min: 5, max: 8 },
+                      { label: "6 a 10 min", min: 6, max: 10 },
+                      { label: "10 a 15 min", min: 10, max: 15 },
+                      { label: "15 a 20 min", min: 15, max: 20 },
+                    ].map((p) => {
+                      const isSelected = minMinutes === p.min && maxMinutes === p.max;
+                      return (
+                        <button
+                          key={p.label}
+                          type="button"
+                          onClick={() => {
+                            setMinMinutes(p.min);
+                            setMaxMinutes(p.max);
+                          }}
+                          className={cn(
+                            "px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all border shrink-0 cursor-pointer",
+                            isSelected
+                              ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                              : "bg-background hover:bg-muted text-muted-foreground border-border/40"
+                          )}
+                        >
+                          {p.label}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <Switch
-                    id="jitter-switch"
-                    checked={useJitter}
-                    onCheckedChange={setUseJitter}
-                  />
                 </div>
 
                 {/* Anti-ban Safe Note */}
                 <div className="flex items-start gap-2 p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-[11px]">
                   <ShieldCheck className="h-4 w-4 shrink-0 mt-0.5" />
                   <span>
-                    A cadência sequencial reduz o risco de bloqueio e garante que cada lead receba as mensagens no ritmo apropriado.
+                    Intervalo longo e dinâmico sorteado aleatoriamente entre {minMinutes} e {maxMinutes} minutos para cada lead. Essa alternância protege seus números contra bloqueios e banimentos do WhatsApp.
                   </span>
                 </div>
               </div>
@@ -557,9 +597,9 @@ export default function BatchWorkflowDispatchDialog({
                   </div>
 
                   {countdownRemaining > 0 && !isPaused && !isCancelled && (
-                    <div className="flex items-center gap-1.5 font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full text-[11px] animate-pulse">
+                    <div className="flex items-center gap-1.5 font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full text-[11px] animate-pulse">
                       <Clock className="h-3 w-3" />
-                      <span>Próximo disparo em {countdownRemaining}s...</span>
+                      <span>Próximo disparo em {formatTimeRemaining(countdownRemaining)}...</span>
                     </div>
                   )}
                 </div>
