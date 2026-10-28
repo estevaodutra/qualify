@@ -46,6 +46,7 @@ import { AccountBriefingModal } from "@/components/criafy/AccountBriefingModal";
 import { InstagramFeedModal } from "@/components/criafy/InstagramFeedModal";
 import { AccountCompactCard } from "@/components/criafy/AccountCompactCard";
 import { AccountInsightsModal } from "@/components/criafy/AccountInsightsModal";
+import { useCriafyAutoScheduler } from "@/hooks/useCriafyAutoScheduler";
 
 type CriafyTabId =
   | "contas"
@@ -60,6 +61,9 @@ export default function CriafyHub() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate =
     typeof RouterDom.useNavigate === "function" ? RouterDom.useNavigate() : () => {};
+
+  // Auto-scheduler em segundo plano para publicações que atingiram o horário
+  useCriafyAutoScheduler(activeCompanyId);
 
   const { activeTab: sprintActiveTab, setActiveTab: setSprintActiveTab } =
     useSprintOSStore();

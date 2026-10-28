@@ -86,7 +86,11 @@ export default function Pipelines() {
     queryKey: ["pipelines", activeCompany?.id],
     queryFn: async () => {
       if (!activeCompany?.id) return [];
-      const { data, error } = await supabase.from("pipelines").select("*").eq("company_id", activeCompany.id).eq("status", "active").order("order_index", { ascending: true });
+      const { data, error } = await supabase
+        .from("pipelines")
+        .select("*")
+        .eq("company_id", activeCompany.id)
+        .order("order_index", { ascending: true });
       if (error) throw error;
       return data as Pipeline[];
     },
@@ -95,7 +99,8 @@ export default function Pipelines() {
 
   useEffect(() => {
     if (pipelines && pipelines.length > 0 && !activePipelineId) {
-      setActivePipelineId(pipelines[0].id);
+      const firstActive = pipelines.find(p => p.status !== "archived") || pipelines[0];
+      setActivePipelineId(firstActive.id);
     }
   }, [pipelines, activePipelineId]);
 
@@ -289,6 +294,25 @@ export default function Pipelines() {
     }
   });
 
+  // Unarchive pipeline mutation
+  const unarchivePipelineMutation = useMutation({
+    mutationFn: async (pipelineId: string) => {
+      const { error } = await supabase
+        .from("pipelines")
+        .update({ status: "active", updated_at: new Date().toISOString() })
+        .eq("id", pipelineId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Pipeline desarquivada com sucesso!");
+      queryClient.invalidateQueries({ queryKey: ["pipelines"] });
+      queryClient.invalidateQueries({ queryKey: ["pipeline", activePipelineId] });
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Erro ao desarquivar pipeline");
+    }
+  });
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over) return;
@@ -350,6 +374,7 @@ export default function Pipelines() {
               search={search}
               setSearch={setSearch}
               onOpenSettings={() => setEditPipelineOpen(true)}
+              onUnarchive={() => activePipeline && unarchivePipelineMutation.mutate(activePipeline.id)}
               isSidebarCollapsed={sidebarCollapsed}
               onToggleSidebar={toggleSidebar}
             />

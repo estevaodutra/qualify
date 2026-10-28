@@ -4,12 +4,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Pipeline, PipelineGroup } from "@/types/crm.types";
 import { Button } from "@/components/ui/button";
-import { Plus, ChevronDown, ChevronRight, MoreHorizontal, Kanban, GripVertical, PanelLeft } from "lucide-react";
+import { Plus, ChevronDown, ChevronRight, MoreHorizontal, Kanban, GripVertical, PanelLeft, Archive, ArchiveRestore, Trash2, FolderPlus } from "lucide-react";
 import { CreatePipelineGroupDialog } from "./CreatePipelineGroupDialog";
 import { EditPipelineGroupDialog } from "./EditPipelineGroupDialog";
 import { CreatePipelineDialog } from "./CreatePipelineDialog";
 import { EditPipelineDialog } from "./EditPipelineDialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -118,7 +118,8 @@ function SortablePipelineItem({
         <DropdownMenuContent align="end" className="w-40">
           <DropdownMenuItem onClick={onEdit}>Editar</DropdownMenuItem>
           <DropdownMenuItem onClick={onDuplicate}>Duplicar</DropdownMenuItem>
-          <DropdownMenuItem onClick={onArchive} className="text-destructive">
+          <DropdownMenuItem onClick={onArchive} className="text-amber-600 focus:text-amber-600">
+            <Archive className="w-3.5 h-3.5 mr-2" />
             Arquivar
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -198,7 +199,6 @@ export function PipelineSidebar({
         .from("pipelines")
         .select("*")
         .eq("company_id", activeCompany.id)
-        .eq("status", "active")
         .order("order_index", { ascending: true });
       if (error) throw error;
       return data as Pipeline[];
@@ -206,13 +206,23 @@ export function PipelineSidebar({
     enabled: !!activeCompany?.id,
   });
 
+  const activePipelines = (pipelines || []).filter(p => p.status !== "archived");
+  const archivedPipelines = (pipelines || []).filter(p => p.status === "archived");
+
   const [localPipelines, setLocalPipelines] = useState<Pipeline[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
     if (pipelines) {
-      setLocalPipelines(pipelines);
+      setLocalPipelines(pipelines.filter(p => p.status !== "archived"));
     }
   }, [pipelines]);
+
+  useEffect(() => {
+    if (activePipelineId && archivedPipelines.some(p => p.id === activePipelineId)) {
+      setShowArchived(true);
+    }
+  }, [activePipelineId, archivedPipelines]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -278,11 +288,74 @@ export function PipelineSidebar({
     onSuccess: () => {
       toast.success("Pipeline arquivada!");
       queryClient.invalidateQueries({ queryKey: ["pipelines"] });
+      queryClient.invalidateQueries({ queryKey: ["pipeline"] });
     },
     onError: (err: any) => {
       toast.error(err.message || "Erro ao arquivar pipeline");
     }
   });
+
+  // Unarchive Pipeline Mutation
+  const unarchivePipelineMutation = useMutation({
+    mutationFn: async (pipelineId: string) => {
+      const { error } = await supabase
+        .from("pipelines")
+        .update({ status: "active", updated_at: new Date().toISOString() })
+        .eq("id", pipelineId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Pipeline restaurada com sucesso!");
+      queryClient.invalidateQueries({ queryKey: ["pipelines"] });
+      queryClient.invalidateQueries({ queryKey: ["pipeline"] });
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Erro ao desarquivar pipeline");
+    }
+  });
+
+  // Delete Pipeline Permanently Mutation
+  const deletePipelinePermanentlyMutation = useMutation({
+    mutationFn: async (pipeline: Pipeline) => {
+      const { data: stages } = await supabase
+        .from("pipeline_stages")
+        .select("id")
+        .eq("pipeline_id", pipeline.id);
+
+      if (stages && stages.length > 0) {
+        const stageIds = stages.map(s => s.id);
+        await supabase.from("deals").delete().in("stage_id", stageIds);
+        await supabase.from("pipeline_stages").delete().eq("pipeline_id", pipeline.id);
+      }
+
+      const { error } = await supabase
+        .from("pipelines")
+        .delete()
+        .eq("id", pipeline.id);
+      if (error) throw error;
+    },
+    onSuccess: (_, deletedPipeline) => {
+      toast.success("Pipeline excluída definitivamente!");
+      queryClient.invalidateQueries({ queryKey: ["pipelines"] });
+      queryClient.invalidateQueries({ queryKey: ["pipeline"] });
+      if (activePipelineId === deletedPipeline.id) {
+        const remaining = activePipelines.filter(p => p.id !== deletedPipeline.id);
+        onSelectPipeline(remaining[0]?.id || "");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Erro ao excluir pipeline definitivamente");
+    }
+  });
+
+  const handleDeletePermanently = (pipeline: Pipeline) => {
+    const confirm = window.confirm(
+      `Tem certeza que deseja excluir a pipeline "${pipeline.name}" definitivamente? Todas as etapas e negócios associados serão removidos permanentemente.`
+    );
+    if (confirm) {
+      deletePipelinePermanentlyMutation.mutate(pipeline);
+    }
+  };
 
   // Duplicate Pipeline Mutation
   const duplicatePipelineMutation = useMutation({
@@ -517,16 +590,23 @@ export function PipelineSidebar({
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8" title="Nova Pipeline ou Grupo">
+                <Button variant="ghost" size="icon" className="h-8 w-8" title="Opções de Pipelines">
                   <Plus className="w-4 h-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="w-52">
                 <DropdownMenuItem onClick={() => handleCreatePipelineInGroup()}>
+                  <Plus className="w-4 h-4 mr-2" />
                   Nova Pipeline
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setCreateGroupOpen(true)}>
+                  <FolderPlus className="w-4 h-4 mr-2" />
                   Novo Grupo
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setShowArchived(prev => !prev)}>
+                  <Archive className="w-4 h-4 mr-2 text-muted-foreground" />
+                  {showArchived ? "Ocultar arquivadas" : `Ver arquivadas (${archivedPipelines.length})`}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -675,6 +755,85 @@ export function PipelineSidebar({
             </DragOverlay>
           </DndContext>
         )}
+
+        {/* Archived Pipelines Section */}
+        <div className="pt-3 border-t mt-4 px-2 space-y-1">
+          <button
+            type="button"
+            onClick={() => setShowArchived(prev => !prev)}
+            className="w-full px-2 py-1.5 flex items-center justify-between text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md transition-colors"
+          >
+            <div className="flex items-center gap-1.5 truncate">
+              <Archive className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Pipelines Arquivadas</span>
+              <span className="px-1.5 py-0.2 rounded-full bg-muted text-[10px] font-semibold text-muted-foreground shrink-0">
+                {archivedPipelines.length}
+              </span>
+            </div>
+            <ChevronDown
+              className={cn(
+                "w-3.5 h-3.5 shrink-0 transition-transform duration-200",
+                showArchived ? "rotate-0" : "-rotate-90"
+              )}
+            />
+          </button>
+
+          {showArchived && (
+            <div className="space-y-0.5 pt-1">
+              {archivedPipelines.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-muted-foreground/70 italic text-center">
+                  Nenhuma pipeline arquivada
+                </div>
+              ) : (
+                archivedPipelines.map(pipeline => (
+                  <div
+                    key={pipeline.id}
+                    onClick={() => handleSelectPipeline(pipeline.id)}
+                    className={cn(
+                      "group flex items-center justify-between px-3 py-1.5 rounded-md text-xs cursor-pointer transition-all",
+                      activePipelineId === pipeline.id
+                        ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 font-medium"
+                        : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                    )}
+                  >
+                    <div className="flex items-center gap-2 truncate flex-1 min-w-0">
+                      <div
+                        className="w-2 h-2 rounded-full flex-shrink-0 opacity-60"
+                        style={{ backgroundColor: pipeline.color || "#6b7280" }}
+                      />
+                      <span className="truncate">{pipeline.name}</span>
+                    </div>
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                        >
+                          <MoreHorizontal className="w-3.5 h-3.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem onClick={() => unarchivePipelineMutation.mutate(pipeline.id)}>
+                          <ArchiveRestore className="w-4 h-4 mr-2 text-primary" />
+                          Desarquivar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleDeletePermanently(pipeline)}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Excluir definitivamente
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       <CreatePipelineGroupDialog 

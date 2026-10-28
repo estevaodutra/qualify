@@ -1,7 +1,8 @@
 import { Pipeline, PipelineGroup } from "@/types/crm.types";
 import { Button } from "@/components/ui/button";
-import { Settings, Search, Filter, PanelLeft } from "lucide-react";
+import { Settings, Search, Filter, PanelLeft, Archive, ArchiveRestore } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 
 interface PipelineHeaderProps {
   pipeline: Pipeline;
@@ -9,6 +10,7 @@ interface PipelineHeaderProps {
   search: string;
   setSearch: (val: string) => void;
   onOpenSettings: () => void;
+  onUnarchive?: () => void;
   isSidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
 }
@@ -19,10 +21,12 @@ export function PipelineHeader({
   search,
   setSearch,
   onOpenSettings,
+  onUnarchive,
   isSidebarCollapsed,
   onToggleSidebar,
 }: PipelineHeaderProps) {
   const color = pipeline.color || group?.color || "#3b82f6";
+  const isArchived = pipeline.status === "archived";
 
   return (
     <div className="flex-none flex items-center justify-between p-4 border-b bg-background h-16">
@@ -46,9 +50,17 @@ export function PipelineHeader({
           <div className="text-xs text-muted-foreground font-medium truncate">
             {group?.name || "Geral"}
           </div>
-          <h1 className="text-lg font-bold leading-tight truncate">
-            {pipeline.name}
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-bold leading-tight truncate">
+              {pipeline.name}
+            </h1>
+            {isArchived && (
+              <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[11px] gap-1 px-2 py-0.5 font-medium shrink-0">
+                <Archive className="w-3 h-3" />
+                Arquivada
+              </Badge>
+            )}
+          </div>
         </div>
       </div>
       
@@ -62,6 +74,18 @@ export function PipelineHeader({
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+
+        {isArchived && onUnarchive && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onUnarchive}
+            className="h-9 gap-1.5 text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-500/10 border-amber-500/30"
+          >
+            <ArchiveRestore className="w-4 h-4" />
+            <span className="hidden sm:inline">Desarquivar</span>
+          </Button>
+        )}
         
         <Button variant="outline" size="sm" className="h-9 hidden sm:flex">
           <Filter className="w-4 h-4 mr-2" />

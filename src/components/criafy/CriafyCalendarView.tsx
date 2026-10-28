@@ -32,7 +32,9 @@ import {
   RefreshCw,
   Layers,
   Sparkles,
+  Zap,
 } from "lucide-react";
+import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { criafyService } from "@/services/criafy/criafyService";
 import {
@@ -68,6 +70,34 @@ export function CriafyCalendarView({
   const [selectedPub, setSelectedPub] = useState<CriafyPublication | null>(null);
   const [attempts, setAttempts] = useState<CriafyPublicationAttempt[]>([]);
   const [loadingAttempts, setLoadingAttempts] = useState(false);
+  const [isPublishingNow, setIsPublishingNow] = useState(false);
+
+  const handlePublishNow = async () => {
+    if (!selectedPub) return;
+    setIsPublishingNow(true);
+    try {
+      const result = await criafyService.publishNow(selectedPub.id);
+      toast.success("Publicação enviada com sucesso para o Instagram!");
+      setSelectedPub((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: "PUBLISHED",
+              ig_permalink: result.igPermalink || prev.ig_permalink,
+            }
+          : null
+      );
+      loadPublications();
+      const atts = await criafyService.getPublicationAttempts(selectedPub.id);
+      setAttempts(atts);
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao publicar no Instagram.");
+      const atts = await criafyService.getPublicationAttempts(selectedPub.id);
+      setAttempts(atts);
+    } finally {
+      setIsPublishingNow(false);
+    }
+  };
 
   // Schedule Modal state
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
@@ -845,6 +875,30 @@ export function CriafyCalendarView({
                   </div>
                 )}
               </div>
+
+              {/* Action Button: Publish Now for Scheduled or Failed */}
+              {(selectedPub.status === "SCHEDULED" || selectedPub.status === "FAILED") && (
+                <div className="pt-1">
+                  <Button
+                    type="button"
+                    onClick={handlePublishNow}
+                    disabled={isPublishingNow}
+                    className="w-full bg-gradient-to-r from-pink-600 via-rose-600 to-purple-600 hover:from-pink-700 hover:via-rose-700 hover:to-purple-700 text-white font-semibold shadow-md gap-2 h-10"
+                  >
+                    {isPublishingNow ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Disparando no Instagram agora...
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="w-4 h-4 fill-current text-amber-300" />
+                        Publicar Imediatamente na Meta
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
 
               {/* Audit Log / Publication Attempts */}
               <div className="space-y-2 pt-2 border-t border-muted">

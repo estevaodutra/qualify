@@ -1,6 +1,6 @@
 {
-  "commit": "4fcb555fef7ba09d4e5ac7e67ccbb2c0c98b3e3e",
-  "shortCommit": "4fcb555",
-  "message": "fix(chat): remove barra de rolagem padrao do Windows na barra lateral do dock e aplica scrollbar ultrafina no hover",
-  "builtAt": "2026-10-28T14:16:15.957Z"
+  "commit": "b8918ba900713961b12ad1e2e444b593ee6da020",
+  "shortCommit": "b8918ba",
+  "message": "feat(chat): habilita botao de envio durante a gravacao para disparar audio instantaneamente",
+  "builtAt": "2026-10-28T15:24:11.730Z"
 }

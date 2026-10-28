@@ -1,4 +1,10 @@
 {
+  "crons": [
+    {
+      "path": "/api/criafy-scheduler-worker",
+      "schedule": "* * * * *"
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/(.*)",
