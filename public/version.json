@@ -1,6 +1,6 @@
 {
-  "commit": "816229a373ebe0be0f6b5fc184f2d31361c678c9",
-  "shortCommit": "816229a",
-  "message": "fix(call-panel): bloqueia auto-discagem quando operadores estao offline ou fila pausada",
-  "builtAt": "2026-10-27T22:05:44.165Z"
+  "commit": "3fa3164259dc0234e7644dcf786966396090d306",
+  "shortCommit": "3fa3164",
+  "message": "feat(criafy): convert Criafy navigation tabs into a collapsible sidebar",
+  "builtAt": "2026-10-28T00:01:59.536Z"
 }

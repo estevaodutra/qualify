@@ -19,7 +19,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   ChevronLeft,
   ChevronRight,
-  Calendar as CalendarIcon,
   Clock,
   Instagram,
   CheckCircle2,
@@ -42,6 +41,7 @@ import {
   CriafyPublicationAttempt,
 } from "@/types/criafy";
 import { SchedulePublicationModal } from "@/components/criafy/SchedulePublicationModal";
+import { BulkScheduleModal } from "@/components/criafy/BulkScheduleModal";
 
 interface CriafyCalendarViewProps {
   accounts: CriafyInstagramAccount[];
@@ -72,6 +72,7 @@ export function CriafyCalendarView({
   // Schedule Modal state
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [scheduleModalDate, setScheduleModalDate] = useState<Date | null>(null);
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
 
   useEffect(() => {
     if (activeCompanyId) {
@@ -83,7 +84,10 @@ export function CriafyCalendarView({
     if (!activeCompanyId) return;
     setLoading(true);
     try {
-      const data = await criafyService.getPublications(activeCompanyId, selectedAccountId);
+      const data = await criafyService.getPublications(
+        activeCompanyId,
+        selectedAccountId
+      );
       setPublications(data);
     } catch (err) {
       console.error("Erro ao carregar publicações no calendário:", err);
@@ -113,7 +117,9 @@ export function CriafyCalendarView({
   // Navigation handlers
   const handleNext = () => {
     if (viewMode === "MONTH") {
-      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+      setCurrentDate(
+        new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1)
+      );
     } else {
       const next = new Date(currentDate);
       next.setDate(next.getDate() + 7);
@@ -123,7 +129,9 @@ export function CriafyCalendarView({
 
   const handlePrev = () => {
     if (viewMode === "MONTH") {
-      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+      setCurrentDate(
+        new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1)
+      );
     } else {
       const prev = new Date(currentDate);
       prev.setDate(prev.getDate() - 7);
@@ -136,17 +144,31 @@ export function CriafyCalendarView({
   };
 
   const monthNames = [
-    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+    "Janeiro",
+    "Fevereiro",
+    "Março",
+    "Abril",
+    "Maio",
+    "Junho",
+    "Julho",
+    "Agosto",
+    "Setembro",
+    "Outubro",
+    "Novembro",
+    "Dezembro",
   ];
 
   const weekDayNames = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
-  // Group publications by Date YYYY-MM-DD
+  // Group publications by Date YYYY-MM-DD (using local date)
   const pubsByDate = new Map<string, CriafyPublication[]>();
   publications.forEach((pub) => {
     if (!pub.scheduled_at) return;
-    const dateKey = pub.scheduled_at.split("T")[0];
+    const d = new Date(pub.scheduled_at);
+    const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}-${String(d.getDate()).padStart(2, "0")}`;
     const existing = pubsByDate.get(dateKey) || [];
     existing.push(pub);
     pubsByDate.set(dateKey, existing);
@@ -169,7 +191,11 @@ export function CriafyCalendarView({
 
   // Week computations (Google Calendar Week starts on Sunday)
   const currentDayOfWeek = currentDate.getDay();
-  const weekStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() - currentDayOfWeek);
+  const weekStart = new Date(
+    currentDate.getFullYear(),
+    currentDate.getMonth(),
+    currentDate.getDate() - currentDayOfWeek
+  );
   const weekDays = Array.from({ length: 7 }).map((_, i) => {
     const d = new Date(weekStart);
     d.setDate(weekStart.getDate() + i);
@@ -183,29 +209,47 @@ export function CriafyCalendarView({
   if (viewMode === "MONTH") {
     headerTitle = `${monthNames[month]} de ${year}`;
   } else {
-    const startStr = `${weekStart.getDate()} de ${monthNames[weekStart.getMonth()]}`;
+    const startStr = `${weekStart.getDate()} de ${
+      monthNames[weekStart.getMonth()]
+    }`;
     const endStr = `${weekEnd.getDate()} de ${monthNames[weekEnd.getMonth()]}`;
     if (weekStart.getMonth() === weekEnd.getMonth()) {
-      headerTitle = `${weekStart.getDate()} a ${weekEnd.getDate()} de ${monthNames[weekStart.getMonth()]} de ${year}`;
+      headerTitle = `${weekStart.getDate()} a ${weekEnd.getDate()} de ${
+        monthNames[weekStart.getMonth()]
+      } de ${year}`;
     } else {
       headerTitle = `${startStr} - ${endStr} de ${year}`;
     }
   }
 
-  const todayIso = new Date().toISOString().split("T")[0];
+  const nowLocal = new Date();
+  const todayIso = `${nowLocal.getFullYear()}-${String(
+    nowLocal.getMonth() + 1
+  ).padStart(2, "0")}-${String(nowLocal.getDate()).padStart(2, "0")}`;
 
   return (
     <div className="space-y-4">
       {/* Google Calendar Style Header Toolbar */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-muted/40 p-3.5 rounded-2xl border border-muted/80 backdrop-blur-sm">
-        {/* Left: Quick Create + Today + Navigation + Title */}
-        <div className="flex items-center flex-wrap gap-2.5">
+        {/* Left: Quick Create + Bulk + Today + Navigation + Title */}
+        <div className="flex items-center flex-wrap gap-2">
           <Button
             onClick={() => handleOpenSchedule()}
             size="sm"
-            className="h-9 px-4 gap-2 bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 text-white font-bold text-xs hover:opacity-90 shadow-md transition-all rounded-xl border-0"
+            className="h-9 px-3.5 gap-1.5 bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 text-white font-bold text-xs hover:opacity-90 shadow-md transition-all rounded-xl border-0 cursor-pointer"
           >
             <Plus className="w-4 h-4" /> Programar Publicação
+          </Button>
+
+          <Button
+            onClick={() => setBulkModalOpen(true)}
+            variant="outline"
+            size="sm"
+            className="h-9 px-3.5 gap-1.5 text-xs font-bold rounded-xl border-purple-500/30 text-purple-600 dark:text-purple-300 hover:bg-purple-500/10 cursor-pointer"
+            title="Subir várias mídias e distribuir automaticamente (ex: 3 por dia — Manhã, Tarde e Noite)"
+          >
+            <Layers className="w-4 h-4 text-purple-500" />
+            Upload & Programar em Bulk
           </Button>
 
           <Button
@@ -271,7 +315,10 @@ export function CriafyCalendarView({
 
           {/* Account Filter */}
           <div className="w-44 sm:w-48">
-            <Select value={selectedAccountId} onValueChange={onSelectAccountFilter}>
+            <Select
+              value={selectedAccountId}
+              onValueChange={onSelectAccountFilter}
+            >
               <SelectTrigger className="h-9 text-xs bg-background rounded-xl">
                 <SelectValue placeholder="Todas as contas" />
               </SelectTrigger>
@@ -293,7 +340,9 @@ export function CriafyCalendarView({
             className="h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground shrink-0"
             title="Recarregar eventos"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`}
+            />
           </Button>
         </div>
       </div>
@@ -302,7 +351,9 @@ export function CriafyCalendarView({
       {loading ? (
         <div className="flex flex-col items-center justify-center p-20 gap-3 border rounded-2xl bg-card">
           <Loader2 className="w-7 h-7 animate-spin text-pink-500" />
-          <p className="text-xs text-muted-foreground">Carregando cronograma editorial...</p>
+          <p className="text-xs text-muted-foreground">
+            Carregando cronograma editorial...
+          </p>
         </div>
       ) : viewMode === "MONTH" ? (
         /* ======================================================== */
@@ -322,13 +373,19 @@ export function CriafyCalendarView({
           <div className="grid grid-cols-7 auto-rows-fr divide-x divide-y divide-muted">
             {/* Blank leading days from previous month */}
             {Array.from({ length: firstDayIndex }).map((_, i) => (
-              <div key={`blank-${i}`} className="min-h-[120px] bg-muted/10 p-1.5 opacity-40" />
+              <div
+                key={`blank-${i}`}
+                className="min-h-[120px] bg-muted/10 p-1.5 opacity-40"
+              />
             ))}
 
             {/* Days of current month */}
             {Array.from({ length: daysInMonth }).map((_, i) => {
               const dayNum = i + 1;
-              const formattedDateKey = `${year}-${String(month + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+              const formattedDateKey = `${year}-${String(month + 1).padStart(
+                2,
+                "0"
+              )}-${String(dayNum).padStart(2, "0")}`;
               const dayPubs = pubsByDate.get(formattedDateKey) || [];
               const isToday = todayIso === formattedDateKey;
               const cellDate = new Date(year, month, dayNum);
@@ -338,7 +395,9 @@ export function CriafyCalendarView({
                   key={`day-${dayNum}`}
                   onClick={() => handleOpenSchedule(cellDate)}
                   className={`min-h-[120px] p-2 space-y-1.5 transition-all cursor-pointer group flex flex-col justify-between ${
-                    isToday ? "bg-primary/5 font-semibold" : "hover:bg-muted/30"
+                    isToday
+                      ? "bg-primary/5 font-semibold"
+                      : "hover:bg-muted/30"
                   }`}
                 >
                   <div className="flex items-center justify-between text-xs">
@@ -366,13 +425,18 @@ export function CriafyCalendarView({
                   >
                     {dayPubs.map((pub) => {
                       const timeStr = pub.scheduled_at
-                        ? new Date(pub.scheduled_at).toLocaleTimeString("pt-BR", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
+                        ? new Date(pub.scheduled_at).toLocaleTimeString(
+                            "pt-BR",
+                            {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            }
+                          )
                         : "";
 
-                      const isStorySeq = !!pub.story_sequence_id || (pub.sequence_total && pub.sequence_total > 1);
+                      const isStorySeq =
+                        !!pub.story_sequence_id ||
+                        (pub.sequence_total && pub.sequence_total > 1);
                       const isReel = pub.publication_type === "REEL";
                       const isFeed = pub.publication_type === "FEED";
 
@@ -402,7 +466,9 @@ export function CriafyCalendarView({
                             <span className="font-bold">{timeStr}</span>
                             <span className="truncate">
                               {isStorySeq
-                                ? `Story ${pub.sequence_order || 1}/${pub.sequence_total || 1}`
+                                ? `Story ${pub.sequence_order || 1}/${
+                                    pub.sequence_total || 1
+                                  }`
                                 : pub.publication_type === "REEL"
                                 ? "Reel"
                                 : pub.publication_type === "FEED"
@@ -442,7 +508,9 @@ export function CriafyCalendarView({
           {/* Weekday Columns Headers */}
           <div className="grid grid-cols-7 border-b border-muted bg-muted/40 divide-x divide-muted">
             {weekDays.map((d, idx) => {
-              const formattedDateKey = d.toISOString().split("T")[0];
+              const formattedDateKey = `${d.getFullYear()}-${String(
+                d.getMonth() + 1
+              ).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
               const isToday = todayIso === formattedDateKey;
               const dayPubs = pubsByDate.get(formattedDateKey) || [];
 
@@ -478,7 +546,9 @@ export function CriafyCalendarView({
           {/* 7 Columns for the week contents */}
           <div className="grid grid-cols-7 divide-x divide-muted min-h-[500px] auto-rows-fr">
             {weekDays.map((d, colIdx) => {
-              const formattedDateKey = d.toISOString().split("T")[0];
+              const formattedDateKey = `${d.getFullYear()}-${String(
+                d.getMonth() + 1
+              ).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
               const isToday = todayIso === formattedDateKey;
               const dayPubs = pubsByDate.get(formattedDateKey) || [];
 
@@ -486,7 +556,9 @@ export function CriafyCalendarView({
                 <div
                   key={`week-col-${colIdx}`}
                   className={`p-2 space-y-2 flex flex-col justify-between ${
-                    isToday ? "bg-primary/5" : "bg-card hover:bg-muted/10 transition-colors"
+                    isToday
+                      ? "bg-primary/5"
+                      : "bg-card hover:bg-muted/10 transition-colors"
                   }`}
                 >
                   {/* List of contents for this day */}
@@ -506,14 +578,18 @@ export function CriafyCalendarView({
                     ) : (
                       dayPubs.map((pub) => {
                         const timeStr = pub.scheduled_at
-                          ? new Date(pub.scheduled_at).toLocaleTimeString("pt-BR", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })
+                          ? new Date(pub.scheduled_at).toLocaleTimeString(
+                              "pt-BR",
+                              {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }
+                            )
                           : "";
 
                         const isStorySeq =
-                          !!pub.story_sequence_id || (pub.sequence_total && pub.sequence_total > 1);
+                          !!pub.story_sequence_id ||
+                          (pub.sequence_total && pub.sequence_total > 1);
                         const isReel = pub.publication_type === "REEL";
                         const isFeed = pub.publication_type === "FEED";
 
@@ -549,7 +625,9 @@ export function CriafyCalendarView({
                                       <ImageIcon className="w-2.5 h-2.5 mr-0.5 text-emerald-400" />
                                     )}
                                     {pub.content.duration_seconds
-                                      ? `${Math.round(pub.content.duration_seconds)}s`
+                                      ? `${Math.round(
+                                          pub.content.duration_seconds
+                                        )}s`
                                       : pub.content.media_type}
                                   </Badge>
                                 </div>
@@ -558,11 +636,13 @@ export function CriafyCalendarView({
                                 <div className="absolute top-1 right-1">
                                   {pub.status === "PUBLISHED" ? (
                                     <Badge className="bg-emerald-600 text-white text-[9px] px-1 py-0 h-4 border-0 shadow-sm flex items-center gap-0.5">
-                                      <CheckCircle2 className="w-2.5 h-2.5" /> Postado
+                                      <CheckCircle2 className="w-2.5 h-2.5" />{" "}
+                                      Postado
                                     </Badge>
                                   ) : pub.status === "FAILED" ? (
                                     <Badge className="bg-rose-600 text-white text-[9px] px-1 py-0 h-4 border-0 shadow-sm flex items-center gap-0.5">
-                                      <AlertCircle className="w-2.5 h-2.5" /> Falha
+                                      <AlertCircle className="w-2.5 h-2.5" />{" "}
+                                      Falha
                                     </Badge>
                                   ) : (
                                     <Badge className="bg-sky-600 text-white text-[9px] px-1 py-0 h-4 border-0 shadow-sm flex items-center gap-0.5">
@@ -577,7 +657,8 @@ export function CriafyCalendarView({
                             <div className="space-y-1">
                               <div className="flex items-center justify-between gap-1 text-[11px]">
                                 <span className="font-bold text-foreground flex items-center gap-1">
-                                  <Clock className="w-3 h-3 text-pink-500" /> {timeStr}
+                                  <Clock className="w-3 h-3 text-pink-500" />{" "}
+                                  {timeStr}
                                 </span>
 
                                 {isStorySeq ? (
@@ -585,7 +666,8 @@ export function CriafyCalendarView({
                                     variant="outline"
                                     className="bg-gradient-to-r from-pink-500/10 to-amber-500/10 text-pink-600 border-pink-500/30 text-[9px] px-1 py-0 font-bold"
                                   >
-                                    Story {pub.sequence_order || 1}/{pub.sequence_total || 1}
+                                    Story {pub.sequence_order || 1}/
+                                    {pub.sequence_total || 1}
                                   </Badge>
                                 ) : (
                                   <Badge
@@ -606,10 +688,19 @@ export function CriafyCalendarView({
                               {/* Account handle */}
                               <div className="flex items-center gap-1 text-[10px] text-muted-foreground truncate font-medium">
                                 <Avatar className="w-3.5 h-3.5">
-                                  <AvatarImage src={pub.account?.profile_picture_url || undefined} />
-                                  <AvatarFallback className="text-[7px]">@</AvatarFallback>
+                                  <AvatarImage
+                                    src={
+                                      pub.account?.profile_picture_url ||
+                                      undefined
+                                    }
+                                  />
+                                  <AvatarFallback className="text-[7px]">
+                                    @
+                                  </AvatarFallback>
                                 </Avatar>
-                                <span className="truncate">@{pub.account?.username}</span>
+                                <span className="truncate">
+                                  @{pub.account?.username}
+                                </span>
                               </div>
 
                               {/* Caption snippet */}
@@ -628,7 +719,8 @@ export function CriafyCalendarView({
                                   onClick={(e) => e.stopPropagation()}
                                   className="inline-flex items-center gap-1 text-[10px] text-pink-600 hover:text-pink-700 font-semibold hover:underline pt-0.5"
                                 >
-                                  Ver no Instagram <ExternalLink className="w-2.5 h-2.5" />
+                                  Ver no Instagram{" "}
+                                  <ExternalLink className="w-2.5 h-2.5" />
                                 </a>
                               )}
                             </div>
@@ -655,7 +747,10 @@ export function CriafyCalendarView({
       )}
 
       {/* Post Detail & Audit Log Modal */}
-      <Dialog open={!!selectedPub} onOpenChange={(open) => !open && setSelectedPub(null)}>
+      <Dialog
+        open={!!selectedPub}
+        onOpenChange={(open) => !open && setSelectedPub(null)}
+      >
         <DialogContent className="sm:max-w-[550px] max-h-[85vh] overflow-y-auto">
           {selectedPub && (
             <div className="space-y-4">
@@ -665,7 +760,10 @@ export function CriafyCalendarView({
                     <Instagram className="w-4 h-4 text-pink-500" />
                     Publicação @{selectedPub.account?.username}
                   </DialogTitle>
-                  <Badge variant="outline" className="text-xs uppercase font-bold">
+                  <Badge
+                    variant="outline"
+                    className="text-xs uppercase font-bold"
+                  >
                     {selectedPub.publication_type}
                   </Badge>
                 </div>
@@ -684,8 +782,12 @@ export function CriafyCalendarView({
                     <Layers className="w-4 h-4" />
                     Parte de uma Sequência de Stories
                   </span>
-                  <Badge variant="outline" className="border-pink-500/40 text-[10px]">
-                    Story {selectedPub.sequence_order || 1} de {selectedPub.sequence_total || 1}
+                  <Badge
+                    variant="outline"
+                    className="border-pink-500/40 text-[10px]"
+                  >
+                    Story {selectedPub.sequence_order || 1} de{" "}
+                    {selectedPub.sequence_total || 1}
                   </Badge>
                 </div>
               )}
@@ -729,7 +831,9 @@ export function CriafyCalendarView({
 
                 {selectedPub.ig_permalink && (
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Link no Instagram:</span>
+                    <span className="text-muted-foreground">
+                      Link no Instagram:
+                    </span>
                     <a
                       href={selectedPub.ig_permalink}
                       target="_blank"
@@ -743,7 +847,9 @@ export function CriafyCalendarView({
 
                 {selectedPub.caption && (
                   <div className="space-y-1 pt-1">
-                    <span className="text-xs font-semibold text-muted-foreground">Legenda:</span>
+                    <span className="text-xs font-semibold text-muted-foreground">
+                      Legenda:
+                    </span>
                     <div className="p-3 rounded-lg bg-muted/40 text-xs text-foreground whitespace-pre-wrap max-h-36 overflow-y-auto">
                       {selectedPub.caption}
                     </div>
@@ -754,7 +860,8 @@ export function CriafyCalendarView({
               {/* Audit Log / Publication Attempts */}
               <div className="space-y-2 pt-2 border-t border-muted">
                 <h4 className="text-xs font-bold text-muted-foreground flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-primary" /> Histórico de Disparos e Auditoria Meta
+                  <ShieldCheck className="w-3.5 h-3.5 text-primary" /> Histórico
+                  de Disparos e Auditoria Meta
                 </h4>
 
                 {loadingAttempts ? (
@@ -812,6 +919,18 @@ export function CriafyCalendarView({
         accounts={accounts}
         selectedAccountId={selectedAccountId}
         initialDate={scheduleModalDate}
+        onOpenBulk={() => setBulkModalOpen(true)}
+        onSuccess={() => {
+          loadPublications();
+        }}
+      />
+
+      {/* Bulk Upload & Random Distribution Modal */}
+      <BulkScheduleModal
+        open={bulkModalOpen}
+        onOpenChange={setBulkModalOpen}
+        accounts={accounts}
+        selectedAccountId={selectedAccountId}
         onSuccess={() => {
           loadPublications();
         }}

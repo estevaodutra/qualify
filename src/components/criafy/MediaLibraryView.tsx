@@ -28,21 +28,21 @@ import {
   Sparkles,
   Loader2,
   CheckCircle2,
-  AlertTriangle,
   Instagram,
-  Plus,
   Trash2,
   Search,
   Clock,
   ExternalLink,
-  Repeat,
   Filter,
+  Layers,
+  CalendarDays,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { criafyService } from "@/services/criafy/criafyService";
 import { CriafyContent, CriafyInstagramAccount } from "@/types/criafy";
 import { extractAndValidateMedia } from "@/utils/criafyMediaValidator";
+import { BulkScheduleModal } from "@/components/criafy/BulkScheduleModal";
 
 interface MediaLibraryViewProps {
   accounts: CriafyInstagramAccount[];
@@ -60,11 +60,20 @@ export function MediaLibraryView({
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "published" | "unpublished" | "scheduled">("all");
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "published" | "unpublished" | "scheduled"
+  >("all");
+
+  // Multi-select for bulk scheduling from library
+  const [selectedContentIds, setSelectedContentIds] = useState<string[]>([]);
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const [bulkInitialIds, setBulkInitialIds] = useState<string[]>([]);
 
   // Account linkage modal state
   const [linkModalOpen, setLinkModalOpen] = useState(false);
-  const [selectedContent, setSelectedContent] = useState<CriafyContent | null>(null);
+  const [selectedContent, setSelectedContent] = useState<CriafyContent | null>(
+    null
+  );
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
   const [savingBindings, setSavingBindings] = useState(false);
 
@@ -78,7 +87,10 @@ export function MediaLibraryView({
     if (!activeCompanyId) return;
     setLoading(true);
     try {
-      const data = await criafyService.getContents(activeCompanyId, selectedAccountId);
+      const data = await criafyService.getContents(
+        activeCompanyId,
+        selectedAccountId
+      );
       setContents(data);
     } catch (err: any) {
       toast.error(`Erro ao carregar conteúdos: ${err.message}`);
@@ -94,6 +106,7 @@ export function MediaLibraryView({
     setUploading(true);
     let successCount = 0;
     let failCount = 0;
+    const newlyCreatedIds: string[] = [];
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -102,16 +115,16 @@ export function MediaLibraryView({
         const validation = await extractAndValidateMedia(file);
 
         // Upload to storage
-        const { mediaUrl, mediaType, mimeType } = await criafyService.uploadMediaFile(
-          activeCompanyId,
-          file
-        );
+        const { mediaUrl, mediaType, mimeType } =
+          await criafyService.uploadMediaFile(activeCompanyId, file);
 
         // Bind automatically to current account filter if selected, or all accounts
         const defaultAccounts =
-          selectedAccountId !== "all" ? [selectedAccountId] : accounts.map((a) => a.id);
+          selectedAccountId !== "all"
+            ? [selectedAccountId]
+            : accounts.map((a) => a.id);
 
-        await criafyService.createContent(
+        const created = await criafyService.createContent(
           {
             company_id: activeCompanyId,
             title: file.name,
@@ -129,6 +142,7 @@ export function MediaLibraryView({
           defaultAccounts
         );
 
+        newlyCreatedIds.push(created.id);
         successCount++;
       } catch (err) {
         console.error("Erro no upload do arquivo:", file.name, err);
@@ -138,14 +152,42 @@ export function MediaLibraryView({
 
     setUploading(false);
     if (successCount > 0) {
-      toast.success(`${successCount} arquivo(s) adicionado(s) à biblioteca de mídias!`);
-      loadContents();
+      toast.success(
+        `${successCount} arquivo(s) adicionado(s)! Abrindo programação em Bulk...`
+      );
+      await loadContents();
+      // Abre automaticamente o modal de programação em bulk com os arquivos recém-enviados pré-selecionados!
+      setBulkInitialIds(newlyCreatedIds);
+      setSelectedContentIds(newlyCreatedIds);
+      setBulkModalOpen(true);
     }
     if (failCount > 0) {
       toast.error(`Falha no upload de ${failCount} arquivo(s).`);
     }
     // Reset file input
     e.target.value = "";
+  };
+
+  const toggleSelectCard = (contentId: string) => {
+    setSelectedContentIds((prev) =>
+      prev.includes(contentId)
+        ? prev.filter((id) => id !== contentId)
+        : [...prev, contentId]
+    );
+  };
+
+  const handleOpenBulkModal = (ids?: string[]) => {
+    if (ids && ids.length > 0) {
+      setBulkInitialIds(ids);
+    } else if (selectedContentIds.length > 0) {
+      setBulkInitialIds(selectedContentIds);
+    } else {
+      const unpubIds = contents
+        .filter((c) => !c.is_published && !c.is_scheduled)
+        .map((c) => c.id);
+      setBulkInitialIds(unpubIds);
+    }
+    setBulkModalOpen(true);
   };
 
   const openLinkModal = (content: CriafyContent) => {
@@ -184,14 +226,19 @@ export function MediaLibraryView({
   };
 
   const publishedCount = contents.filter((c) => !!c.is_published).length;
-  const unpublishedCount = contents.filter((c) => !c.is_published && !c.is_scheduled).length;
+  const unpublishedCount = contents.filter(
+    (c) => !c.is_published && !c.is_scheduled
+  ).length;
   const scheduledCount = contents.filter((c) => !!c.is_scheduled).length;
 
   const filteredContents = contents.filter((c) => {
-    const matchesSearch = (c.title || "").toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = (c.title || "")
+      .toLowerCase()
+      .includes(search.toLowerCase());
     if (!matchesSearch) return false;
     if (statusFilter === "published") return !!c.is_published;
-    if (statusFilter === "unpublished") return !c.is_published && !c.is_scheduled;
+    if (statusFilter === "unpublished")
+      return !c.is_published && !c.is_scheduled;
     if (statusFilter === "scheduled") return !!c.is_scheduled;
     return true;
   });
@@ -213,7 +260,10 @@ export function MediaLibraryView({
             </div>
 
             <div className="w-48">
-              <Select value={selectedAccountId} onValueChange={onSelectAccountFilter}>
+              <Select
+                value={selectedAccountId}
+                onValueChange={onSelectAccountFilter}
+              >
                 <SelectTrigger className="h-9 text-xs bg-background">
                   <SelectValue placeholder="Filtrar por Conta" />
                 </SelectTrigger>
@@ -229,10 +279,21 @@ export function MediaLibraryView({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              onClick={() => handleOpenBulkModal()}
+              className="h-9 px-3.5 text-xs font-bold gap-1.5 bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 text-white hover:opacity-90 border-0 shadow-sm rounded-lg cursor-pointer"
+            >
+              <Layers className="w-4 h-4" />
+              {selectedContentIds.length > 0
+                ? `Programar Selecionados em Bulk (${selectedContentIds.length})`
+                : "Upload & Programar em Bulk"}
+            </Button>
+
             <Label
               htmlFor="batch-upload"
-              className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium text-xs shadow-sm hover:opacity-90 transition-all"
+              className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 h-9 rounded-lg bg-primary text-primary-foreground font-medium text-xs shadow-sm hover:opacity-90 transition-all"
             >
               {uploading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -254,55 +315,84 @@ export function MediaLibraryView({
         </div>
 
         {/* Filter Pills: Todos, Inéditos, Publicados, Agendados */}
-        <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-muted/50">
-          <span className="text-[11px] font-medium text-muted-foreground mr-1 flex items-center gap-1">
-            <Filter className="w-3 h-3" /> Filtrar:
-          </span>
-          <button
-            type="button"
-            onClick={() => setStatusFilter("all")}
-            className={`px-2.5 py-1 rounded-md text-xs transition-all font-medium ${
-              statusFilter === "all"
-                ? "bg-foreground text-background shadow-xs font-semibold"
-                : "bg-background/80 text-muted-foreground hover:text-foreground border border-muted"
-            }`}
-          >
-            Todos ({contents.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter("unpublished")}
-            className={`px-2.5 py-1 rounded-md text-xs transition-all font-medium flex items-center gap-1 ${
-              statusFilter === "unpublished"
-                ? "bg-amber-500 text-white shadow-xs font-semibold"
-                : "bg-background/80 text-muted-foreground hover:text-amber-600 border border-muted"
-            }`}
-          >
-            <Sparkles className="w-3 h-3 text-amber-400" /> Inéditos ({unpublishedCount})
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter("published")}
-            className={`px-2.5 py-1 rounded-md text-xs transition-all font-medium flex items-center gap-1 ${
-              statusFilter === "published"
-                ? "bg-emerald-600 text-white shadow-xs font-semibold"
-                : "bg-background/80 text-muted-foreground hover:text-emerald-600 border border-muted"
-            }`}
-          >
-            <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Já Publicados ({publishedCount})
-          </button>
-          {scheduledCount > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-muted/50">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] font-medium text-muted-foreground mr-1 flex items-center gap-1">
+              <Filter className="w-3 h-3" /> Filtrar:
+            </span>
             <button
               type="button"
-              onClick={() => setStatusFilter("scheduled")}
-              className={`px-2.5 py-1 rounded-md text-xs transition-all font-medium flex items-center gap-1 ${
-                statusFilter === "scheduled"
-                  ? "bg-sky-600 text-white shadow-xs font-semibold"
-                  : "bg-background/80 text-muted-foreground hover:text-sky-600 border border-muted"
+              onClick={() => setStatusFilter("all")}
+              className={`px-2.5 py-1 rounded-md text-xs transition-all font-medium ${
+                statusFilter === "all"
+                  ? "bg-foreground text-background shadow-xs font-semibold"
+                  : "bg-background/80 text-muted-foreground hover:text-foreground border border-muted"
               }`}
             >
-              <Clock className="w-3 h-3 text-sky-400" /> Agendados ({scheduledCount})
+              Todos ({contents.length})
             </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter("unpublished")}
+              className={`px-2.5 py-1 rounded-md text-xs transition-all font-medium flex items-center gap-1 ${
+                statusFilter === "unpublished"
+                  ? "bg-amber-500 text-white shadow-xs font-semibold"
+                  : "bg-background/80 text-muted-foreground hover:text-amber-600 border border-muted"
+              }`}
+            >
+              <Sparkles className="w-3 h-3 text-amber-400" /> Inéditos (
+              {unpublishedCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter("published")}
+              className={`px-2.5 py-1 rounded-md text-xs transition-all font-medium flex items-center gap-1 ${
+                statusFilter === "published"
+                  ? "bg-emerald-600 text-white shadow-xs font-semibold"
+                  : "bg-background/80 text-muted-foreground hover:text-emerald-600 border border-muted"
+              }`}
+            >
+              <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Já
+              Publicados ({publishedCount})
+            </button>
+            {scheduledCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setStatusFilter("scheduled")}
+                className={`px-2.5 py-1 rounded-md text-xs transition-all font-medium flex items-center gap-1 ${
+                  statusFilter === "scheduled"
+                    ? "bg-sky-600 text-white shadow-xs font-semibold"
+                    : "bg-background/80 text-muted-foreground hover:text-sky-600 border border-muted"
+                }`}
+              >
+                <Clock className="w-3 h-3 text-sky-400" /> Agendados (
+                {scheduledCount})
+              </button>
+            )}
+          </div>
+
+          {filteredContents.length > 0 && (
+            <div className="flex items-center gap-2">
+              {selectedContentIds.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setSelectedContentIds([])}
+                  className="text-[11px] text-muted-foreground hover:text-foreground underline cursor-pointer"
+                >
+                  Limpar seleção ({selectedContentIds.length})
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelectedContentIds(filteredContents.map((c) => c.id))
+                  }
+                  className="text-[11px] text-primary hover:underline font-semibold cursor-pointer"
+                >
+                  Selecionar todos visíveis ({filteredContents.length})
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -317,25 +407,39 @@ export function MediaLibraryView({
           <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto mb-3">
             <Upload className="w-6 h-6" />
           </div>
-          <h3 className="font-semibold text-base mb-1">Nenhum conteúdo encontrado</h3>
+          <h3 className="font-semibold text-base mb-1">
+            Nenhum conteúdo encontrado
+          </h3>
           <p className="text-xs text-muted-foreground max-w-md mx-auto mb-4">
             {statusFilter !== "all"
               ? "Nenhuma mídia corresponde ao filtro selecionado. Tente alterar o filtro acima."
-              : "Faça upload em lote de vídeos e imagens para começar a alimentar a biblioteca da sua empresa no Criafy."}
+              : "Faça upload em lote de vídeos e imagens para começar a alimentar a biblioteca e programar tudo de uma vez no Criafy."}
           </p>
+          <Button
+            onClick={() => handleOpenBulkModal()}
+            className="gap-1.5 text-xs bg-gradient-to-r from-purple-600 to-pink-600 text-white border-0"
+          >
+            <Layers className="w-4 h-4" /> Subir e Programar em Bulk
+          </Button>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {filteredContents.map((content) => {
             const isPub = !!content.is_published;
             const isSched = !!content.is_scheduled;
-            const lastPub = content.publications?.find((p) => p.status === "PUBLISHED");
+            const isCardSelected = selectedContentIds.includes(content.id);
+            const lastPub = content.publications?.find(
+              (p) => p.status === "PUBLISHED"
+            );
 
             return (
               <Card
                 key={content.id}
-                className={`overflow-hidden group hover:shadow-md transition-all border ${
-                  isPub
+                onClick={() => toggleSelectCard(content.id)}
+                className={`overflow-hidden group hover:shadow-md transition-all border cursor-pointer ${
+                  isCardSelected
+                    ? "ring-2 ring-purple-600 border-purple-600 bg-purple-500/[0.04]"
+                    : isPub
                     ? "border-emerald-500/50 shadow-xs bg-emerald-500/[0.03]"
                     : isSched
                     ? "border-sky-500/50 shadow-xs bg-sky-500/[0.03]"
@@ -357,16 +461,30 @@ export function MediaLibraryView({
                     />
                   )}
 
-                  {/* Top-left: Media Type Badge */}
-                  <div className="absolute top-2 left-2 flex items-center gap-1">
-                    <Badge variant="secondary" className="bg-black/70 text-white text-[10px] backdrop-blur-sm border-0 font-medium">
+                  {/* Top-left: Selection Checkbox + Media Type Badge */}
+                  <div className="absolute top-2 left-2 flex items-center gap-1.5">
+                    <div
+                      className={`w-5 h-5 rounded-md flex items-center justify-center text-xs font-bold shadow-sm transition-colors ${
+                        isCardSelected
+                          ? "bg-purple-600 text-white"
+                          : "bg-black/60 text-white/80 border border-white/40"
+                      }`}
+                    >
+                      {isCardSelected ? "✓" : ""}
+                    </div>
+                    <Badge
+                      variant="secondary"
+                      className="bg-black/70 text-white text-[10px] backdrop-blur-sm border-0 font-medium"
+                    >
                       {content.media_type === "VIDEO" ? (
                         <Video className="w-3 h-3 mr-1 text-sky-400" />
                       ) : (
                         <ImageIcon className="w-3 h-3 mr-1 text-emerald-400" />
                       )}
                       {content.media_type}
-                      {content.duration_seconds ? ` • ${Math.round(content.duration_seconds)}s` : ""}
+                      {content.duration_seconds
+                        ? ` • ${Math.round(content.duration_seconds)}s`
+                        : ""}
                     </Badge>
                   </div>
 
@@ -381,9 +499,7 @@ export function MediaLibraryView({
                         Publicado ({content.publish_count}x)
                       </Badge>
                     ) : isSched ? (
-                      <Badge
-                        className="bg-sky-600 text-white border-0 text-[10px] backdrop-blur-sm font-semibold shadow-md flex items-center gap-1"
-                      >
+                      <Badge className="bg-sky-600 text-white border-0 text-[10px] backdrop-blur-sm font-semibold shadow-md flex items-center gap-1">
                         <Clock className="w-3 h-3 text-white" />
                         Agendado
                       </Badge>
@@ -399,8 +515,14 @@ export function MediaLibraryView({
                   </div>
                 </div>
 
-                <CardContent className="p-3 space-y-2.5">
-                  <div className="truncate font-medium text-xs" title={content.title}>
+                <CardContent
+                  className="p-3 space-y-2.5"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div
+                    className="truncate font-medium text-xs"
+                    title={content.title}
+                  >
                     {content.title || "Conteúdo sem título"}
                   </div>
 
@@ -409,7 +531,9 @@ export function MediaLibraryView({
                     <div className="flex items-center justify-between text-[11px] bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 px-2.5 py-1.5 rounded-lg border border-emerald-500/20 font-medium">
                       <span className="flex items-center gap-1.5 truncate">
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                        <span className="truncate">Publicado ({content.publish_count}x)</span>
+                        <span className="truncate">
+                          Publicado ({content.publish_count}x)
+                        </span>
                       </span>
                       {lastPub?.ig_permalink ? (
                         <a
@@ -423,7 +547,9 @@ export function MediaLibraryView({
                         </a>
                       ) : content.last_published_at ? (
                         <span className="text-[10px] text-muted-foreground shrink-0 font-normal">
-                          {new Date(content.last_published_at).toLocaleDateString("pt-BR")}
+                          {new Date(content.last_published_at).toLocaleDateString(
+                            "pt-BR"
+                          )}
                         </span>
                       ) : null}
                     </div>
@@ -469,9 +595,12 @@ export function MediaLibraryView({
       <Dialog open={linkModalOpen} onOpenChange={setLinkModalOpen}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold">Vincular Conteúdo às Contas</DialogTitle>
+            <DialogTitle className="text-base font-bold">
+              Vincular Conteúdo às Contas
+            </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Selecione quais contas do Instagram poderão utilizar esta mídia para publicações.
+              Selecione quais contas do Instagram poderão utilizar esta mídia
+              para publicações.
             </DialogDescription>
           </DialogHeader>
 
@@ -489,7 +618,9 @@ export function MediaLibraryView({
                     className="flex items-center justify-between p-2.5 rounded-lg border border-muted hover:bg-muted/30 cursor-pointer"
                     onClick={() => {
                       if (isChecked) {
-                        setSelectedAccountIds(selectedAccountIds.filter((id) => id !== acc.id));
+                        setSelectedAccountIds(
+                          selectedAccountIds.filter((id) => id !== acc.id)
+                        );
                       } else {
                         setSelectedAccountIds([...selectedAccountIds, acc.id]);
                       }
@@ -498,7 +629,11 @@ export function MediaLibraryView({
                     <div className="flex items-center gap-2.5">
                       <Avatar className="w-7 h-7 border border-border shadow-sm">
                         {acc.profile_picture_url ? (
-                          <AvatarImage src={acc.profile_picture_url} alt={acc.username} className="object-cover" />
+                          <AvatarImage
+                            src={acc.profile_picture_url}
+                            alt={acc.username}
+                            className="object-cover"
+                          />
                         ) : null}
                         <AvatarFallback className="bg-pink-500/10 text-pink-500 text-[10px] font-bold">
                           @{acc.username.charAt(0).toUpperCase()}
@@ -506,7 +641,9 @@ export function MediaLibraryView({
                       </Avatar>
                       <div>
                         <p className="text-xs font-semibold">@{acc.username}</p>
-                        <p className="text-[10px] text-muted-foreground">{acc.name || "Conta Instagram"}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {acc.name || "Conta Instagram"}
+                        </p>
                       </div>
                     </div>
                     <Checkbox checked={isChecked} />
@@ -521,12 +658,27 @@ export function MediaLibraryView({
               Cancelar
             </Button>
             <Button onClick={handleSaveBindings} disabled={savingBindings}>
-              {savingBindings && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              {savingBindings && (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              )}
               Salvar Vínculos
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Bulk Schedule Modal */}
+      <BulkScheduleModal
+        open={bulkModalOpen}
+        onOpenChange={setBulkModalOpen}
+        accounts={accounts}
+        selectedAccountId={selectedAccountId}
+        initialLibraryContentIds={bulkInitialIds}
+        onSuccess={() => {
+          setSelectedContentIds([]);
+          loadContents();
+        }}
+      />
     </div>
   );
 }

@@ -55,6 +55,7 @@ interface SchedulePublicationModalProps {
   initialContentId?: string;
   initialPublicationType?: CriafyPublicationType;
   onSuccess?: () => void;
+  onOpenBulk?: () => void;
 }
 
 export function SchedulePublicationModal({
@@ -66,6 +67,7 @@ export function SchedulePublicationModal({
   initialContentId,
   initialPublicationType,
   onSuccess,
+  onOpenBulk,
 }: SchedulePublicationModalProps) {
   const { activeCompanyId } = useCompany();
   const [contents, setContents] = useState<CriafyContent[]>([]);
@@ -420,8 +422,8 @@ export function SchedulePublicationModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-          {/* Top Toggle: Post Individual vs Sequência de Stories */}
-          <div className="flex bg-muted/60 p-1 rounded-xl">
+          {/* Top Toggle: Post Individual vs Sequência de Stories vs Programação em Bulk */}
+          <div className="flex flex-wrap bg-muted/60 p-1 rounded-xl gap-1">
             <button
               type="button"
               onClick={() => setMode("SINGLE")}
@@ -432,7 +434,7 @@ export function SchedulePublicationModal({
               }`}
             >
               <Send className="w-3.5 h-3.5 text-sky-500" />
-              Post Individual (Reel, Feed, Story)
+              Post Individual
             </button>
             <button
               type="button"
@@ -444,8 +446,21 @@ export function SchedulePublicationModal({
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
-              Sequência de Stories ({sequenceContentIds.length} selecionados)
+              Sequência de Stories ({sequenceContentIds.length})
             </button>
+            {onOpenBulk && (
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenChange(false);
+                  onOpenBulk();
+                }}
+                className="flex-1 py-1.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all bg-purple-500/10 text-purple-600 dark:text-purple-300 hover:bg-purple-500/20 border border-purple-500/20 cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+                Upload & Programar em Bulk
+              </button>
+            )}
           </div>
 
           {/* Account Selection */}
