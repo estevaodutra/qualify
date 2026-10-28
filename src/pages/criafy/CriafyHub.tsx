@@ -30,15 +30,12 @@ import {
   List,
   ChevronLeft,
   ChevronRight,
-  Palette,
-  Mic,
   ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { criafyService } from "@/services/criafy/criafyService";
 import { CriafyInstagramAccount } from "@/types/criafy";
-import { useSprintOSStore } from "@/features/sprint-os/state/sprintOsStore";
 
 // Sub-views
 import { CriafyOverviewView } from "@/components/criafy/CriafyOverviewView";
@@ -80,15 +77,6 @@ export default function CriafyHub() {
 
   // Auto-scheduler em segundo plano para publicações que atingiram o horário
   useCriafyAutoScheduler(activeCompanyId);
-
-  const { activeTab: sprintActiveTab, setActiveTab: setSprintActiveTab } =
-    useSprintOSStore();
-
-  const currentBrandManualSubTab = (
-    ["brand_manual", "creatives", "scripts_and_audios"].includes(sprintActiveTab)
-      ? sprintActiveTab
-      : "brand_manual"
-  ) as "brand_manual" | "creatives" | "scripts_and_audios";
 
   // Sidebar collapse state
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
@@ -185,15 +173,6 @@ export default function CriafyHub() {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set("tab", value);
     setSearchParams(nextParams, { replace: true });
-  };
-
-  const handleBrandManualSubTabChange = (
-    subTab: "brand_manual" | "creatives" | "scripts_and_audios"
-  ) => {
-    setSprintActiveTab(subTab);
-    if (activeModuleTab !== "manual-marca") {
-      handleTabChange("manual-marca");
-    }
   };
 
   const [accounts, setAccounts] = useState<CriafyInstagramAccount[]>([]);
@@ -673,53 +652,6 @@ export default function CriafyHub() {
                           </>
                         )}
                       </button>
-
-                      {/* Sub-itens do Manual da Marca quando expandido */}
-                      {!sidebarCollapsed &&
-                        item.id === "manual-marca" &&
-                        isActive && (
-                          <div className="relative ml-5 pl-2.5 border-l border-slate-200/80 dark:border-border/70 space-y-0.5 mt-1">
-                            {[
-                              {
-                                id: "brand_manual" as const,
-                                label: "Manual de Marca 7D",
-                                icon: Sparkles,
-                              },
-                              {
-                                id: "creatives" as const,
-                                label: "Criativos",
-                                icon: Palette,
-                              },
-                              {
-                                id: "scripts_and_audios" as const,
-                                label: "Scripts e Áudios",
-                                icon: Mic,
-                              },
-                            ].map((sub) => {
-                              const isSubActive =
-                                currentBrandManualSubTab === sub.id;
-                              const SubIcon = sub.icon;
-                              return (
-                                <button
-                                  key={sub.id}
-                                  type="button"
-                                  onClick={() =>
-                                    handleBrandManualSubTabChange(sub.id)
-                                  }
-                                  className={cn(
-                                    "relative flex items-center gap-2.5 w-full px-3 py-1.5 rounded-xl text-[12px] font-medium transition-all cursor-pointer text-left",
-                                    isSubActive
-                                      ? "bg-[#EEF0FD]/70 dark:bg-primary/10 text-[#5856d6] dark:text-primary font-semibold"
-                                      : "text-slate-500 dark:text-muted-foreground hover:bg-slate-100/60 dark:hover:bg-muted/40 hover:text-slate-900"
-                                  )}
-                                >
-                                  <SubIcon className="h-3.5 w-3.5 shrink-0" />
-                                  <span className="truncate">{sub.label}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
                     </div>
                   );
                 })}

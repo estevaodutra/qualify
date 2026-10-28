@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   Sparkles,
   Palette,
-  Mic,
   Check,
   CheckCheck,
   ChevronDown,
@@ -26,8 +25,6 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSprintOSStore } from "@/features/sprint-os/state/sprintOsStore";
 import { BrandManualView } from "@/features/sprint-os/ui/views/BrandManualView";
-import { CreativesView } from "@/features/sprint-os/ui/views/CreativesView";
-import { ScriptsAndAudiosView } from "@/features/sprint-os/ui/views/ScriptsAndAudiosView";
 import { CreateScheduleModal } from "@/features/sprint-os/ui/modals/CreateScheduleModal";
 import { ShareLinkModal } from "@/features/sprint-os/ui/modals/ShareLinkModal";
 import { BrandManualShareModal } from "@/features/sprint-os/ui/modals/BrandManualShareModal";
@@ -57,27 +54,19 @@ export const CriafyBrandManualView: React.FC = () => {
     setIsBrandManualShareModalOpen,
   } = useSprintOSStore();
 
-  // Sub-aba ativa dentro da Subsidebar do Manual da Marca no Criafy
+  // Sub-aba ativa dentro da Subsidebar do Manual da Marca no Criafy (Módulos 7D)
   const [activeBrandSubId, setActiveBrandSubId] = useState<string>("posicionamento");
 
   const handleSubsidebarChange = (id: string) => {
     setActiveBrandSubId(id);
-    if (id === "creatives") {
-      setActiveTab("creatives");
-    } else if (id === "scripts_and_audios") {
-      setActiveTab("scripts_and_audios");
-    } else {
-      setActiveTab("brand_manual");
-    }
+    setActiveTab("brand_manual");
   };
 
   useEffect(() => {
-    if (activeTab === "creatives" && activeBrandSubId !== "creatives") {
-      setActiveBrandSubId("creatives");
-    } else if (activeTab === "scripts_and_audios" && activeBrandSubId !== "scripts_and_audios") {
-      setActiveBrandSubId("scripts_and_audios");
+    if (activeTab !== "brand_manual") {
+      setActiveTab("brand_manual");
     }
-  }, [activeTab]);
+  }, [activeTab, setActiveTab]);
 
   // Inicialização do workspace para a empresa ativa
   useEffect(() => {
@@ -132,16 +121,6 @@ export const CriafyBrandManualView: React.FC = () => {
     };
   }, [workspace?.brandManual?.fields]);
 
-  // Contagem de pedidos de áudio / scripts
-  const audioStats = useMemo(() => {
-    const list = Object.values(workspace?.audioRequests || {}).filter((a) => !a.archivedAt);
-    const completed = list.filter((a) => a.status === "gravado" || (a.recordings && a.recordings.length > 0)).length;
-    return {
-      total: list.length,
-      completed,
-    };
-  }, [workspace?.audioRequests]);
-
   if (isLoading) {
     return (
       <div className="h-64 w-full flex items-center justify-center bg-card/50 rounded-2xl border border-border">
@@ -188,18 +167,6 @@ export const CriafyBrandManualView: React.FC = () => {
         { id: "raio_x_icp", label: "Raio-X do ICP", icon: Users },
         { id: "personalidade", label: "Personalidade do Expert", icon: User },
         { id: "copy_ads", label: "Copy Ads (10 Variantes)", icon: Palette },
-      ],
-    },
-    {
-      title: "Recursos & Execução",
-      items: [
-        { id: "creatives", label: "Criativos da Marca", icon: Palette },
-        {
-          id: "scripts_and_audios",
-          label: "Scripts e Áudios",
-          icon: Mic,
-          count: audioStats.total > 0 ? `${audioStats.completed}/${audioStats.total}` : undefined,
-        },
       ],
     },
   ];
@@ -368,11 +335,7 @@ export const CriafyBrandManualView: React.FC = () => {
         />
 
         <div className="flex-1 w-full min-w-0">
-          {["posicionamento", "alma_copy", "raio_x_icp", "personalidade", "copy_ads"].includes(activeBrandSubId) && (
-            <BrandManualView forcedModuleId={activeBrandSubId} hideTopTabs />
-          )}
-          {activeBrandSubId === "creatives" && <CreativesView />}
-          {activeBrandSubId === "scripts_and_audios" && <ScriptsAndAudiosView />}
+          <BrandManualView forcedModuleId={activeBrandSubId} hideTopTabs />
         </div>
       </div>
 

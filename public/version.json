@@ -1,6 +1,6 @@
 {
-  "commit": "b969b1a4c9cd67f3de8671213735edb6b78ee6d6",
-  "shortCommit": "b969b1a",
-  "message": "feat(criafy): rearchitect navigation with new sidebar, contextual subsidebars, overview, demands, planner, strategist and insights",
-  "builtAt": "2026-10-28T21:57:32.963Z"
+  "commit": "b09d8a83c15b56ad553e4c5fa1bdf447dc50432f",
+  "shortCommit": "b09d8a8",
+  "message": "fix(criafy): declare activeBrandSubId and subsidebar change handler in CriafyBrandManualView",
+  "builtAt": "2026-10-28T22:19:08.941Z"
 }
