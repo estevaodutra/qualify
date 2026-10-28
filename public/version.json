@@ -1,6 +1,6 @@
 {
-  "commit": "837df4f50eb53a96ed29be760608d1cc42141c91",
-  "shortCommit": "837df4f",
-  "message": "feat(criafy): implement Super Admin AI Hub with native OpenAI Skills, versioning, playground and multitenant execution",
-  "builtAt": "2026-10-28T23:23:30.426Z"
+  "commit": "68ab343398dd7984ffd24a80247b0ea507564dfb",
+  "shortCommit": "68ab343",
+  "message": "feat(chat): change batch workflow cadence to customizable minute ranges for anti-ban",
+  "builtAt": "2026-10-28T23:54:03.452Z"
 }

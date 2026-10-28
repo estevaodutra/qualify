@@ -8,61 +8,55 @@ export interface ActionDefinition {
 }
 
 export const ACTION_REGISTRY: Record<string, ActionDefinition> = {
-  generate_reel: {
-    action: "generate_reel",
-    skillSlug: "reel-scriptwriter",
-    label: "Roteiro de Reel",
-    category: "CONTEÚDO",
-    description: "Criação de roteiro completo em vídeo vertical com retenção de 3s e chamada para ação.",
-    defaultFormat: "REEL",
-  },
-  generate_stories_lite: {
-    action: "generate_stories_lite",
-    skillSlug: "stories-lite",
-    label: "Stories Lite",
-    category: "CONTEÚDO",
-    description: "Narrativas curtas e naturais de rotina conectadas ao método e produto da marca.",
-    defaultFormat: "STORY",
-  },
-  generate_carousel: {
-    action: "generate_carousel",
-    skillSlug: "carousel-writer",
-    label: "Carrossel Educativo",
-    category: "CONTEÚDO",
-    description: "Carrossel de 5 a 10 lâminas focado em retenção, quebra de crenças e salvamentos.",
-    defaultFormat: "CAROUSEL",
-  },
-  generate_static_post: {
-    action: "generate_static_post",
-    skillSlug: "static-post-writer",
-    label: "Post Estático",
-    category: "CONTEÚDO",
-    description: "Conceito visual de alta densidade e legenda persuasiva para postagem única.",
-    defaultFormat: "POST",
-  },
-  plan_week: {
-    action: "plan_week",
-    skillSlug: "editorial-planner",
-    label: "Planejamento Semanal",
+  strategy_plan: {
+    action: "strategy_plan",
+    skillSlug: "estrategista-digital",
+    label: "Planejamento Estratégico",
     category: "ESTRATÉGIA",
-    description: "Estruturação de grade semanal de publicações balanceadas por pilares e metas.",
-    defaultFormat: "PLANNER",
-  },
-  strategist_chat: {
-    action: "strategist_chat",
-    skillSlug: "digital-strategist",
-    label: "Consultoria Estratégica",
-    category: "ESTRATÉGIA",
-    description: "Diagnóstico de posicionamento, diferenciais de mercado e recomendações táticas.",
+    description: "Analisa contexto da marca e conta para decidir o que comunicar, por que comunicar e direcionar pautas.",
     defaultFormat: "STRATEGY",
   },
+  generate_reel: {
+    action: "generate_reel",
+    skillSlug: "roteirista-reels",
+    label: "Roteiro de Reels",
+    category: "CONTEÚDO",
+    description: "Criação de roteiro em vídeo curto com gancho rápido, retenção e chamada para ação contextual.",
+    defaultFormat: "REEL",
+  },
+  generate_creative_direction: {
+    action: "generate_creative_direction",
+    skillSlug: "designer-criativos",
+    label: "Direção Visual de Criativos",
+    category: "CONTEÚDO",
+    description: "Conceito visual, hierarquia, composição, direção de arte e prompts para posts, capas e carrosséis.",
+    defaultFormat: "DESIGN",
+  },
+};
+
+// Mapeamento complementar de compatibilidade
+const ACTION_FALLBACK_MAP: Record<string, string> = {
+  plan_week: "estrategista-digital",
+  strategist_chat: "estrategista-digital",
+  generate_stories_lite: "estrategista-digital",
+  generate_carousel: "designer-criativos",
+  generate_static_post: "designer-criativos",
+  "reel-scriptwriter": "roteirista-reels",
+  "stories-lite": "estrategista-digital",
+  "carousel-writer": "designer-criativos",
+  "static-post-writer": "designer-criativos",
+  "editorial-planner": "estrategista-digital",
+  "digital-strategist": "estrategista-digital",
 };
 
 export function resolveSkillSlugForAction(action: string): string {
   if (ACTION_REGISTRY[action]) {
     return ACTION_REGISTRY[action].skillSlug;
   }
-  return action; // se já for o slug da skill, repassa diretamente
+  if (ACTION_FALLBACK_MAP[action]) {
+    return ACTION_FALLBACK_MAP[action];
+  }
+  return action;
 }
 
 export function getAllActions(): ActionDefinition[] {

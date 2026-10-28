@@ -21,11 +21,13 @@ import {
   Eye,
   AlertCircle,
   Loader2,
+  Sliders,
+  Send,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,7 +48,10 @@ export default function AdminAiSkillDetail() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeSection, setActiveSection] = useState<
+    "overview" | "instructions" | "documents" | "output" | "versions" | "tests" | "executions"
+  >("overview");
+
   const [selectedFile, setSelectedFile] = useState<AiSkillFile | null>(null);
 
   // Modal para Criar Nova Versão
@@ -54,6 +59,12 @@ export default function AdminAiSkillDetail() {
   const [newManifest, setNewManifest] = useState("");
   const [newChangelog, setNewChangelog] = useState("");
   const [submittingVersion, setSubmittingVersion] = useState(false);
+
+  // Estado para teste rápido in-page
+  const [testTheme, setTestTheme] = useState("Conteúdo estratégico de teste");
+  const [testInstruction, setTestInstruction] = useState("");
+  const [testingInPage, setTestingInPage] = useState(false);
+  const [testOutput, setTestOutput] = useState<any>(null);
 
   // Buscar Skill
   const { data: skill, isLoading: skillLoading } = useQuery({
@@ -65,19 +76,21 @@ export default function AdminAiSkillDetail() {
   // Buscar Versões
   const { data: versions = [], isLoading: versionsLoading } = useQuery({
     queryKey: ["admin_ai_skill_versions", id],
-    queryFn: () => AIExecutionService.getSkillVersions(id!),
+    queryFn: () => (id ? AIExecutionService.getSkillVersions(id) : []),
     enabled: !!id,
   });
 
   // Buscar Execuções desta Skill
   const { data: executionsData } = useQuery({
     queryKey: ["admin_ai_skill_executions", skill?.slug],
-    queryFn: () => AIExecutionService.getExecutions({ skillSlug: skill?.slug, limit: 10 }),
+    queryFn: () => AIExecutionService.getExecutions({ skillSlug: skill?.slug, limit: 15 }),
     enabled: !!skill?.slug,
   });
 
   const activeVersion =
     versions.find((v) => v.id === skill?.active_version_id) || versions[0];
+
+  const filesList = Array.isArray(activeVersion?.files) ? activeVersion.files : [];
 
   // Mutação para Publicar / Tornar Ativa Versão
   const publishMutation = useMutation({
@@ -109,7 +122,7 @@ export default function AdminAiSkillDetail() {
     }
   };
 
-  // Abrir modal de nova versão copiando os arquivos da versão atual
+  // Abrir modal de nova versão
   const handleOpenNewVersionModal = () => {
     if (!activeVersion) return;
     setNewManifest(activeVersion.manifest_content || skill?.main_instructions || "");
@@ -138,6 +151,28 @@ export default function AdminAiSkillDetail() {
     }
   };
 
+  // Testar in-page
+  const handleQuickTest = async () => {
+    if (!skill) return;
+    try {
+      setTestingInPage(true);
+      setTestOutput(null);
+      const res = await AIExecutionService.generate({
+        skillSlug: skill.slug,
+        skillVersion: activeVersion?.version,
+        theme: testTheme,
+        customInstruction: testInstruction || undefined,
+      });
+      setTestOutput(res);
+      toast.success("Execução de teste finalizada com sucesso!");
+      queryClient.invalidateQueries({ queryKey: ["admin_ai_skill_executions", skill.slug] });
+    } catch (err: any) {
+      toast.error(err.message || "Falha no teste.");
+    } finally {
+      setTestingInPage(false);
+    }
+  };
+
   if (skillLoading) {
     return (
       <div className="p-8 text-center text-xs text-muted-foreground">
@@ -157,7 +192,15 @@ export default function AdminAiSkillDetail() {
     );
   }
 
-  const filesList = Array.isArray(activeVersion?.files) ? activeVersion.files : [];
+  const navSections = [
+    { id: "overview", label: "Visão Geral", icon: Layers },
+    { id: "instructions", label: "Instruções", icon: FileCode },
+    { id: "documents", label: "Documentos", icon: FileText, badge: filesList.length },
+    { id: "output", label: "Output", icon: Sliders },
+    { id: "versions", label: "Versões", icon: History, badge: versions.length },
+    { id: "tests", label: "Testes", icon: PlayCircle },
+    { id: "executions", label: "Execuções", icon: Activity, badge: executionsData?.total || 0 },
+  ];
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
@@ -216,7 +259,7 @@ export default function AdminAiSkillDetail() {
               className="text-xs"
             >
               <PlayCircle className="h-4 w-4 mr-1.5 text-primary-foreground" />
-              Testar no Playground
+              Playground Completo
             </Button>
             <Button
               variant="outline"
@@ -240,112 +283,136 @@ export default function AdminAiSkillDetail() {
         </div>
       </div>
 
-      {/* Tabs / Subseções da Skill */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="bg-muted/40 p-1 border">
-          <TabsTrigger value="overview" className="text-xs">Visão Geral</TabsTrigger>
-          <TabsTrigger value="instructions" className="text-xs">Instruções (SKILL.md)</TabsTrigger>
-          <TabsTrigger value="documents" className="text-xs">
-            Documentos & Referências ({filesList.length})
-          </TabsTrigger>
-          <TabsTrigger value="output" className="text-xs">Contrato de Saída</TabsTrigger>
-          <TabsTrigger value="versions" className="text-xs">
-            Versões ({versions.length})
-          </TabsTrigger>
-          <TabsTrigger value="executions" className="text-xs">
-            Execuções ({executionsData?.total || 0})
-          </TabsTrigger>
-        </TabsList>
-
-        {/* 1. VISÃO GERAL */}
-        <TabsContent value="overview" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card className="shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold">Quando Usar</CardTitle>
-                <CardDescription className="text-xs">Gatilho de acionamento pelo sistema</CardDescription>
-              </CardHeader>
-              <CardContent className="text-xs text-muted-foreground leading-relaxed">
-                {skill.when_to_use || "Nenhuma regra de quando usar informada."}
-              </CardContent>
-            </Card>
-
-            <Card className="shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold">Objetivo Mensurável</CardTitle>
-                <CardDescription className="text-xs">Resultado esperado da execução</CardDescription>
-              </CardHeader>
-              <CardContent className="text-xs text-muted-foreground leading-relaxed">
-                {skill.target_objective || "Nenhum objetivo informado."}
-              </CardContent>
-            </Card>
+      {/* Layout com SUBSIDEBAR Contextual no Detalhe da Skill (Sem tabs horizontais) */}
+      <div className="rounded-xl border bg-card shadow-sm overflow-hidden flex flex-col md:flex-row min-h-[580px]">
+        {/* Subsidebar vertical da Skill */}
+        <aside className="w-full md:w-56 border-r bg-muted/20 p-3 space-y-1 shrink-0">
+          <div className="px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+            Navegação da Skill
           </div>
+          {navSections.map((item) => {
+            const isActive = activeSection === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveSection(item.id as any)}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  isActive
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                }`}
+              >
+                <span className="flex items-center gap-2.5">
+                  <item.icon className={`h-4 w-4 ${isActive ? "text-primary-foreground" : "text-muted-foreground"}`} />
+                  {item.label}
+                </span>
+                {item.badge !== undefined && (
+                  <Badge
+                    variant={isActive ? "secondary" : "outline"}
+                    className={`text-[9px] py-0 px-1.5 ${isActive ? "bg-primary-foreground/20 text-primary-foreground" : ""}`}
+                  >
+                    {item.badge}
+                  </Badge>
+                )}
+              </button>
+            );
+          })}
+        </aside>
 
-          <Card className="shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-semibold">Descrição da Skill</CardTitle>
-            </CardHeader>
-            <CardContent className="text-xs text-muted-foreground leading-relaxed">
-              {skill.description || "Sem descrição."}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* 2. INSTRUÇÕES (SKILL.md) */}
-        <TabsContent value="instructions" className="space-y-4">
-          <Card className="shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between pb-3">
-              <div>
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <FileCode className="h-4 w-4 text-primary" />
-                  Manifesto SKILL.md — Versão {activeVersion?.version}
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  {activeVersion?.status === "published"
-                    ? "Esta versão está publicada e é imutável. Para alterar, crie uma nova versão."
-                    : "Esta versão está em rascunho ou testes."}
-                </CardDescription>
+        {/* Conteúdo Central / Editor */}
+        <main className="flex-1 p-6 overflow-y-auto">
+          {/* 1. VISÃO GERAL */}
+          {activeSection === "overview" && (
+            <div className="space-y-4">
+              <div className="border-b pb-3">
+                <h3 className="text-base font-semibold text-foreground">Visão Geral da Skill</h3>
+                <p className="text-xs text-muted-foreground">
+                  Informações conceituais e diretrizes operacionais.
+                </p>
               </div>
-              {activeVersion?.status === "published" && (
-                <Badge variant="outline" className="text-[10px] text-muted-foreground flex items-center gap-1">
-                  <Lock className="h-3 w-3" /> Imutável
-                </Badge>
-              )}
-            </CardHeader>
-            <CardContent>
-              <div className="bg-muted/40 p-4 rounded-lg font-mono text-xs whitespace-pre-wrap leading-relaxed border max-h-[500px] overflow-y-auto">
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card className="shadow-none border">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-xs font-semibold text-foreground">Quando Usar</CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-xs text-muted-foreground leading-relaxed">
+                    {skill.when_to_use || "Nenhuma regra de quando usar informada."}
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-none border">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-xs font-semibold text-foreground">Objetivo Estratégico</CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-xs text-muted-foreground leading-relaxed">
+                    {skill.target_objective || "Nenhum objetivo informado."}
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card className="shadow-none border">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-semibold text-foreground">Descrição da Competência</CardTitle>
+                </CardHeader>
+                <CardContent className="text-xs text-muted-foreground leading-relaxed">
+                  {skill.description || "Sem descrição cadastrada."}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* 2. INSTRUÇÕES (SKILL.md) */}
+          {activeSection === "instructions" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b pb-3">
+                <div>
+                  <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+                    <FileCode className="h-4 w-4 text-primary" />
+                    Manifesto SKILL.md — Versão {activeVersion?.version}
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Instruções operacionais fornecidas ao modelo para execução da Skill.
+                  </p>
+                </div>
+                {activeVersion?.status === "published" && (
+                  <Badge variant="outline" className="text-[10px] text-muted-foreground flex items-center gap-1">
+                    <Lock className="h-3 w-3" /> Imutável (Publicada)
+                  </Badge>
+                )}
+              </div>
+
+              <div className="bg-muted/40 p-4 rounded-lg font-mono text-xs whitespace-pre-wrap leading-relaxed border max-h-[480px] overflow-y-auto">
                 {activeVersion?.manifest_content || skill.main_instructions}
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </div>
+          )}
 
-        {/* 3. DOCUMENTOS & REFERÊNCIAS */}
-        <TabsContent value="documents" className="space-y-4">
-          <Card className="shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between pb-3">
-              <div>
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-primary" />
-                  Arquivos do Bundle da Skill (v{activeVersion?.version})
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  Documentos organizados em references/, assets/ e templates que o modelo consulta durante a execução.
-                </CardDescription>
+          {/* 3. DOCUMENTOS */}
+          {activeSection === "documents" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b pb-3">
+                <div>
+                  <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-primary" />
+                    Arquivos em references/ e assets/ (v{activeVersion?.version})
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Materiais permanentes que o modelo consulta durante a geração.
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={handleOpenNewVersionModal} className="text-xs">
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                  Nova Versão para Adicionar
+                </Button>
               </div>
-              <Button size="sm" variant="outline" onClick={handleOpenNewVersionModal} className="text-xs">
-                <Plus className="h-3.5 w-3.5 mr-1" />
-                Nova Versão para Adicionar Arquivos
-              </Button>
-            </CardHeader>
-            <CardContent>
+
               {filesList.length === 0 ? (
-                <div className="py-8 text-center text-xs text-muted-foreground">
-                  Nenhum arquivo adicional nesta versão.
+                <div className="py-12 text-center text-xs text-muted-foreground">
+                  Nenhum arquivo de referência adicional nesta versão.
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Lista de Arquivos */}
                   <div className="md:col-span-1 border rounded-lg divide-y text-xs">
                     {filesList.map((f, i) => (
                       <button
@@ -365,7 +432,6 @@ export default function AdminAiSkillDetail() {
                     ))}
                   </div>
 
-                  {/* Visualizador do Arquivo Selecionado */}
                   <div className="md:col-span-2 border rounded-lg p-4 bg-muted/20">
                     {selectedFile ? (
                       <div className="space-y-2">
@@ -379,52 +445,53 @@ export default function AdminAiSkillDetail() {
                       </div>
                     ) : (
                       <div className="py-20 text-center text-xs text-muted-foreground">
-                        Selecione um arquivo ao lado para visualizar seu conteúdo.
+                        Selecione um arquivo ao lado para inspecionar.
                       </div>
                     )}
                   </div>
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </div>
+          )}
 
-        {/* 4. CONTRATO DE SAÍDA */}
-        <TabsContent value="output" className="space-y-4">
-          <Card className="shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-semibold">Contrato de Saída Estruturado</CardTitle>
-              <CardDescription className="text-xs">
-                Formato exigido: {skill.output_format.toUpperCase()}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="bg-muted/40 p-4 rounded-lg font-mono text-xs border">
+          {/* 4. OUTPUT */}
+          {activeSection === "output" && (
+            <div className="space-y-4">
+              <div className="border-b pb-3">
+                <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+                  <Sliders className="h-4 w-4 text-primary" />
+                  Contrato de Saída Estruturado (Structured Outputs)
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  A aplicação exige este contrato estritamente no backend. Formato: {skill.output_format.toUpperCase()}.
+                </p>
+              </div>
+
+              <div className="bg-muted/40 p-4 rounded-lg font-mono text-xs border max-h-[460px] overflow-y-auto">
                 <pre>{JSON.stringify(skill.output_schema || {}, null, 2)}</pre>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </div>
+          )}
 
-        {/* 5. VERSÕES */}
-        <TabsContent value="versions" className="space-y-4">
-          <Card className="shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between pb-3">
-              <div>
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <History className="h-4 w-4 text-primary" />
-                  Histórico de Versões
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  Versões publicadas são imutáveis. Você pode publicar ou fazer rollback a qualquer momento.
-                </CardDescription>
+          {/* 5. VERSÕES */}
+          {activeSection === "versions" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b pb-3">
+                <div>
+                  <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+                    <History className="h-4 w-4 text-primary" />
+                    Histórico de Versões
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Versões publicadas são imutáveis. Edições criam uma nova versão em rascunho.
+                  </p>
+                </div>
+                <Button size="sm" onClick={handleOpenNewVersionModal} className="text-xs">
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                  Criar Nova Versão
+                </Button>
               </div>
-              <Button size="sm" onClick={handleOpenNewVersionModal} className="text-xs">
-                <Plus className="h-3.5 w-3.5 mr-1" />
-                Criar Nova Versão
-              </Button>
-            </CardHeader>
-            <CardContent>
+
               <div className="divide-y text-xs">
                 {versions.map((ver) => {
                   const isCurrentActive = ver.id === skill.active_version_id;
@@ -467,25 +534,108 @@ export default function AdminAiSkillDetail() {
                   );
                 })}
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </div>
+          )}
 
-        {/* 6. EXECUÇÕES */}
-        <TabsContent value="executions" className="space-y-4">
-          <Card className="shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <Activity className="h-4 w-4 text-primary" />
-                Execuções Recentes da Skill "{skill.name}"
-              </CardTitle>
-              <CardDescription className="text-xs">
-                Logs de geração com tokens, latência e custo estimado.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+          {/* 6. TESTES (TEST RUNNER IN-PAGE) */}
+          {activeSection === "tests" && (
+            <div className="space-y-4">
+              <div className="border-b pb-3">
+                <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+                  <PlayCircle className="h-4 w-4 text-primary" />
+                  Teste Rápido da Skill "{skill.name}"
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Execute uma chamada de validação direta para conferir o contrato de saída.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-3 text-xs">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Tema / Briefing do Teste</Label>
+                    <Input
+                      value={testTheme}
+                      onChange={(e) => setTestTheme(e.target.value)}
+                      placeholder="Ex: Quebrando mitos sobre posicionamento"
+                      className="h-8 text-xs"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs">Instrução Específica (Opcional)</Label>
+                    <Textarea
+                      value={testInstruction}
+                      onChange={(e) => setTestInstruction(e.target.value)}
+                      placeholder="Instruções particulares para este teste..."
+                      className="text-xs min-h-[80px]"
+                    />
+                  </div>
+
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="w-full text-xs"
+                    onClick={handleQuickTest}
+                    disabled={testingInPage}
+                  >
+                    {testingInPage ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                        Executando Skill...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-3.5 w-3.5 mr-1.5" />
+                        Disparar Teste In-Page
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {/* Saída do Teste In-Page */}
+                <div className="border rounded-lg p-3 bg-muted/20 text-xs flex flex-col justify-between min-h-[220px]">
+                  <div className="font-semibold text-foreground border-b pb-1.5 mb-2">
+                    Resultado da Execução
+                  </div>
+                  {testOutput ? (
+                    <div className="space-y-2 flex-1 overflow-y-auto max-h-[300px]">
+                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                        <span>Tokens: {testOutput.tokens.total}</span>
+                        <span>•</span>
+                        <span>Latência: {testOutput.latency_ms}ms</span>
+                        <span>•</span>
+                        <span>Custo: ${Number(testOutput.estimated_cost).toFixed(5)}</span>
+                      </div>
+                      <pre className="p-2 bg-background border rounded font-mono text-[11px] leading-relaxed">
+                        {JSON.stringify(testOutput.structured_output || testOutput.result, null, 2)}
+                      </pre>
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 text-muted-foreground text-xs">
+                      Clique em "Disparar Teste In-Page" para visualizar o output estruturado gerado pela OpenAI.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 7. EXECUÇÕES */}
+          {activeSection === "executions" && (
+            <div className="space-y-4">
+              <div className="border-b pb-3">
+                <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-primary" />
+                  Histórico de Execuções da Skill
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Últimos disparos realizados com tokens consumidos e status.
+                </p>
+              </div>
+
               {executionsData?.executions?.length === 0 ? (
-                <div className="py-8 text-center text-xs text-muted-foreground">
+                <div className="py-12 text-center text-xs text-muted-foreground">
                   Nenhuma execução registrada para esta Skill ainda.
                 </div>
               ) : (
@@ -519,10 +669,10 @@ export default function AdminAiSkillDetail() {
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            </div>
+          )}
+        </main>
+      </div>
 
       {/* Modal: Criar Nova Versão */}
       <Dialog open={newVersionModalOpen} onOpenChange={setNewVersionModalOpen}>

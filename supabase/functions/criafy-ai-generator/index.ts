@@ -6,12 +6,20 @@ const corsHeaders = {
 };
 
 const ACTION_SKILL_MAP: Record<string, string> = {
-  generate_reel: "reel-scriptwriter",
-  generate_stories_lite: "stories-lite",
-  generate_carousel: "carousel-writer",
-  generate_static_post: "static-post-writer",
-  plan_week: "editorial-planner",
-  strategist_chat: "digital-strategist",
+  strategy_plan: "estrategista-digital",
+  generate_reel: "roteirista-reels",
+  generate_creative_direction: "designer-criativos",
+  plan_week: "estrategista-digital",
+  strategist_chat: "estrategista-digital",
+  generate_stories_lite: "estrategista-digital",
+  generate_carousel: "designer-criativos",
+  generate_static_post: "designer-criativos",
+  "reel-scriptwriter": "roteirista-reels",
+  "stories-lite": "estrategista-digital",
+  "carousel-writer": "designer-criativos",
+  "static-post-writer": "designer-criativos",
+  "editorial-planner": "estrategista-digital",
+  "digital-strategist": "estrategista-digital",
 };
 
 // Estimativa de custo por 1k tokens em dólares
@@ -214,11 +222,11 @@ ${promptDocText || "Nenhum documento adicional. Crie com base nas melhores prát
     } else if (!targetSlug && !skillId) {
       // Fallback para publicação clássica Criafy se nenhum slug foi passado
       if (publicationType === "REEL" || promptType === "HOOKS") {
-        targetSlug = "reel-scriptwriter";
-      } else if (publicationType === "STORY") {
-        targetSlug = "stories-lite";
+        targetSlug = "roteirista-reels";
+      } else if (publicationType === "CAROUSEL" || publicationType === "IMAGE") {
+        targetSlug = "designer-criativos";
       } else {
-        targetSlug = "static-post-writer";
+        targetSlug = "estrategista-digital";
       }
     }
 

@@ -6,12 +6,14 @@ import JSZip from "jszip";
 
 describe("Criafy AI Skills & Action Registry", () => {
   it("resolves all defined actions to the expected global skill slugs", () => {
-    expect(resolveSkillSlugForAction("generate_reel")).toBe("reel-scriptwriter");
-    expect(resolveSkillSlugForAction("generate_stories_lite")).toBe("stories-lite");
-    expect(resolveSkillSlugForAction("generate_carousel")).toBe("carousel-writer");
-    expect(resolveSkillSlugForAction("generate_static_post")).toBe("static-post-writer");
-    expect(resolveSkillSlugForAction("plan_week")).toBe("editorial-planner");
-    expect(resolveSkillSlugForAction("strategist_chat")).toBe("digital-strategist");
+    expect(resolveSkillSlugForAction("strategy_plan")).toBe("estrategista-digital");
+    expect(resolveSkillSlugForAction("generate_reel")).toBe("roteirista-reels");
+    expect(resolveSkillSlugForAction("generate_creative_direction")).toBe("designer-criativos");
+
+    // Aliases
+    expect(resolveSkillSlugForAction("strategist_chat")).toBe("estrategista-digital");
+    expect(resolveSkillSlugForAction("generate_carousel")).toBe("designer-criativos");
+    expect(resolveSkillSlugForAction("generate_static_post")).toBe("designer-criativos");
   });
 
   it("returns the input string if action is already a skill slug", () => {
@@ -20,9 +22,10 @@ describe("Criafy AI Skills & Action Registry", () => {
 
   it("lists all available registered actions with categories and descriptions", () => {
     const actions = getAllActions();
-    expect(actions.length).toBeGreaterThanOrEqual(6);
+    expect(actions.length).toBe(3);
+    expect(actions.some((a) => a.action === "strategy_plan")).toBe(true);
     expect(actions.some((a) => a.action === "generate_reel")).toBe(true);
-    expect(actions.some((a) => a.action === "generate_stories_lite")).toBe(true);
+    expect(actions.some((a) => a.action === "generate_creative_direction")).toBe(true);
   });
 });
 
