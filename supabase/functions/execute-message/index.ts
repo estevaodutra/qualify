@@ -662,6 +662,9 @@ const evaluateExtensibleCondition = async (
 
     case "lead_has_pipeline_deal": {
       const pipelineId = params.pipelineId as string;
+      const pipelineIds = (Array.isArray(params.pipelineIds) && params.pipelineIds.length > 0)
+        ? (params.pipelineIds as string[])
+        : (pipelineId ? [pipelineId] : []);
       let targetLeadId = leadData?.id || triggerContext?.leadId || null;
 
       if (!targetLeadId) {
@@ -694,19 +697,26 @@ const evaluateExtensibleCondition = async (
         }
       }
 
-      console.log(`[ExecuteMessage DEBUG lead_has_pipeline_deal] pipelineId=${pipelineId}, targetLeadId=${targetLeadId}, companyId=${companyId}`);
+      console.log(`[ExecuteMessage DEBUG lead_has_pipeline_deal] pipelineIds=${pipelineIds.join(",")}, targetLeadId=${targetLeadId}, companyId=${companyId}`);
 
-      if (!pipelineId || !targetLeadId) {
+      if (pipelineIds.length === 0 || !targetLeadId) {
         return { matched: false, branch: "no" };
       }
 
-      const { data: deals } = await supabase
+      let dealsQuery = supabase
         .from("deals")
-        .select("id")
+        .select("id, pipeline_id")
         .eq("company_id", companyId)
         .eq("lead_id", targetLeadId)
-        .eq("pipeline_id", pipelineId)
-        .limit(1);
+        .eq("status", "open");
+
+      if (pipelineIds.length === 1) {
+        dealsQuery = dealsQuery.eq("pipeline_id", pipelineIds[0]);
+      } else {
+        dealsQuery = dealsQuery.in("pipeline_id", pipelineIds);
+      }
+
+      const { data: deals } = await dealsQuery.limit(1);
 
       const hasDeal = Array.isArray(deals) && deals.length > 0;
       console.log(`[ExecuteMessage DEBUG lead_has_pipeline_deal RESULT] hasDeal=${hasDeal}`);
@@ -2873,6 +2883,7 @@ Deno.serve(async (req) => {
               } else if (actionType === "move_deal_stage") {
                 const targetStageId = params.stageId || params.stage_id;
                 const targetPipelineId = params.pipelineId;
+                const unifyDeals = params.unify_deals !== false;
                 let targetLeadId = leadData?.id || triggerContext?.leadId || null;
 
                 if (!targetLeadId && phoneClean) {
@@ -2886,27 +2897,36 @@ Deno.serve(async (req) => {
                 }
 
                 if (targetLeadId && targetStageId) {
-                  const { data: deals } = await supabase
+                  // Buscar todos os negócios abertos do lead, ordenados pelo MAIS ANTIGO primeiro (created_at ASC)
+                  const { data: allDeals } = await supabase
                     .from("deals")
-                    .select("id, pipeline_id")
+                    .select("id, pipeline_id, created_at")
                     .eq("company_id", companyId)
                     .eq("lead_id", targetLeadId)
                     .eq("status", "open")
-                    .order("created_at", { ascending: false })
-                    .limit(1);
+                    .order("created_at", { ascending: true });
 
-                  const existingDeal = deals && deals[0];
+                  if (allDeals && allDeals.length > 0) {
+                    const oldestDeal = allDeals[0]; // Mantém o negócio original mais antigo
+                    const duplicateDeals = allDeals.slice(1); // Negócios mais novos/recentes a excluir
 
-                  if (existingDeal) {
                     const updatePayload: Record<string, any> = { stage_id: targetStageId };
                     if (targetPipelineId) updatePayload.pipeline_id = targetPipelineId;
-                    await supabase.from("deals").update(updatePayload).eq("id", existingDeal.id);
-                    affectedDealIds.push(existingDeal.id);
-                    console.log(`[ExecuteMessage] 🔄 Deal ${existingDeal.id} moved to stage ${targetStageId}`);
+                    await supabase.from("deals").update(updatePayload).eq("id", oldestDeal.id);
+                    affectedDealIds.push(oldestDeal.id);
+                    console.log(`[ExecuteMessage] 🔄 Deal mais antigo ${oldestDeal.id} movido para etapa ${targetStageId}`);
+
+                    // Se unificação estiver ativa e houver múltiplos negócios abertos, exclui os mais recentes
+                    if (unifyDeals && duplicateDeals.length > 0) {
+                      const dupIds = duplicateDeals.map((d: any) => d.id);
+                      await supabase.from("deals").delete().in("id", dupIds);
+                      console.log(`[ExecuteMessage] 🗑️ Unificação: excluídos ${dupIds.length} negócios mais recentes duplicados:`, dupIds);
+                    }
+
                     // Auto-dispatch downstream workflows listening to pipeline_changed
                     dispatchDealWorkflows(supabase, supabaseUrl, supabaseServiceKey, {
-                      dealId: existingDeal.id,
-                      pipelineId: targetPipelineId || existingDeal.pipeline_id,
+                      dealId: oldestDeal.id,
+                      pipelineId: targetPipelineId || oldestDeal.pipeline_id,
                       stageId: targetStageId,
                       leadId: targetLeadId,
                       leadName: leadData?.name || triggerContext?.respondentName,

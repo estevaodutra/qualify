@@ -55,13 +55,14 @@ export const CONDITION_REGISTRY: Record<string, ConditionDefinition> = {
     type: 'lead_has_pipeline_deal',
     category: 'lead',
     label: 'Lead possui negócio na pipeline',
-    description: 'Verifica se o lead possui um negócio na pipeline selecionada',
+    description: 'Verifica se o lead possui um negócio na pipeline selecionada (ou em múltiplas pipelines)',
     outputs: [
       { id: 'yes', label: 'Sim', color: 'emerald' },
       { id: 'no', label: 'Não', color: 'destructive' },
     ],
     defaultParameters: {
       pipelineId: '',
+      pipelineIds: [],
     },
   },
   lead_has_stage_deal: {

@@ -161,6 +161,7 @@ export const ACTION_REGISTRY: Record<string, ActionDefinition> = {
     defaultParameters: {
       pipelineId: '',
       stageId: '',
+      unify_deals: true,
     },
   },
   win_deal: {

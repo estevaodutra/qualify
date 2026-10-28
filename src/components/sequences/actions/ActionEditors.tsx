@@ -4,6 +4,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AlertCircle, AlertTriangle, Info, Search, X, Check, ChevronsUpDown, Tag as TagIcon, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -618,11 +620,12 @@ export const ActionEditors: React.FC<ActionEditorsProps> = ({
       case "move_deal_stage": {
         const pipelineId = (parameters.pipelineId as string) || "";
         const stageId = (parameters.stageId as string) || "";
+        const unifyDeals = parameters.unify_deals !== false;
 
         const availableStages = pipelineStages.filter((s) => s.pipeline_id === pipelineId);
 
         return (
-          <div className="space-y-3 text-xs">
+          <div className="space-y-3.5 text-xs">
             <div className="space-y-1">
               <Label className="text-[11px] font-semibold text-slate-700">Pipeline Destino</Label>
               <PipelineSelect
@@ -660,6 +663,48 @@ export const ActionEditors: React.FC<ActionEditorsProps> = ({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Unificar Negócios em Múltiplas Pipelines */}
+            <div className="pt-2.5 border-t border-slate-100 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5 pr-2">
+                  <div className="flex items-center gap-1.5">
+                    <Label className="text-[11px] font-semibold text-slate-700 cursor-pointer">
+                      Unificar negócios em múltiplas pipelines
+                    </Label>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs text-xs p-2.5">
+                          Se o lead possuir oportunidades abertas em múltiplas pipelines, o sistema unificará tudo para esta pipeline de destino: manterá o negócio original (mais antigo) movendo-o para a etapa escolhida e excluirá os negócios mais recentes duplicados.
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                  <p className="text-[10px] text-slate-500">
+                    Mantém o negócio mais antigo e exclui os mais recentes duplicados
+                  </p>
+                </div>
+                <Switch
+                  checked={unifyDeals}
+                  onCheckedChange={(checked) => updateParam("unify_deals", checked)}
+                />
+              </div>
+
+              {unifyDeals && (
+                <div className="flex items-start gap-2 p-2.5 rounded-lg bg-purple-50/70 border border-purple-200/60 text-purple-900 text-[11px]">
+                  <Info className="h-4 w-4 text-purple-600 shrink-0 mt-0.5" />
+                  <div className="leading-snug">
+                    <p className="font-semibold text-purple-800">Unificação Automática Ativa</p>
+                    <p className="text-purple-700/90 text-[10.5px] mt-0.5">
+                      Se o lead possuir oportunidades abertas em múltiplas pipelines (ex: Filtro e Qualificação), o sistema moverá o <strong>negócio mais antigo</strong> para esta pipeline e <strong>excluirá os negócios mais recentes</strong>, deixando apenas 1 negócio ativo unificado.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         );

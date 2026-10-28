@@ -5,11 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AlertCircle, Tag as TagIcon, Layers, Users, FileText, CheckCircle2, XCircle } from "lucide-react";
+import { AlertCircle, Tag as TagIcon, Layers, Users, FileText, CheckCircle2, XCircle, Info } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ConditionDefinition, getConditionOutputs } from "./conditionRegistry";
 import { fetchAllTagsWithAutoSync } from "@/lib/tags/tagService";
 import { PipelineSelect } from "@/components/crm/pipelines/PipelineSelect";
+import { MultiPipelineSelect } from "@/components/crm/pipelines/MultiPipelineSelect";
 
 interface ConditionEditorsProps {
   conditionDef: ConditionDefinition;
@@ -150,20 +151,49 @@ export const ConditionEditors: React.FC<ConditionEditorsProps> = ({
 
       case "lead_has_pipeline_deal": {
         const pipelineId = (parameters.pipelineId as string) || "";
-        const isInvalid = !pipelineId;
+        const pipelineIds = (Array.isArray(parameters.pipelineIds) && parameters.pipelineIds.length > 0)
+          ? (parameters.pipelineIds as string[])
+          : (pipelineId ? [pipelineId] : []);
+        const isInvalid = pipelineIds.length === 0;
+
         return (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-xs font-semibold text-slate-700">Pipeline</Label>
-              <PipelineSelect
-                value={pipelineId}
-                onValueChange={(v) => updateParam("pipelineId", v)}
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold text-slate-700">Pipelines para verificação</Label>
+                {pipelineIds.length > 1 && (
+                  <Badge variant="outline" className="text-[10px] bg-purple-50 text-purple-700 border-purple-200">
+                    {pipelineIds.length} selecionadas
+                  </Badge>
+                )}
+              </div>
+              <MultiPipelineSelect
+                value={pipelineIds}
+                onValueChange={(selected) => {
+                  onChangeConfig({
+                    ...config,
+                    parameters: {
+                      ...parameters,
+                      pipelineIds: selected,
+                      pipelineId: selected[0] || "",
+                    },
+                  });
+                }}
                 activeCompanyId={activeCompanyId}
+                placeholder="Selecione uma ou mais pipelines..."
               />
+              {pipelineIds.length > 1 && (
+                <div className="flex items-start gap-1.5 text-slate-600 text-[11px] mt-1 bg-purple-50/50 p-2.5 rounded-lg border border-purple-100">
+                  <Info className="h-3.5 w-3.5 text-purple-600 shrink-0 mt-0.5" />
+                  <span className="leading-relaxed">
+                    Esta condição será verdadeira se o lead possuir negócio aberto em <strong>qualquer uma</strong> das {pipelineIds.length} pipelines selecionadas.
+                  </span>
+                </div>
+              )}
               {isInvalid && (
                 <div className="flex items-center gap-1.5 text-amber-600 text-[11px] mt-1">
                   <AlertCircle className="h-3.5 w-3.5" />
-                  <span>Selecione uma pipeline válida.</span>
+                  <span>Selecione ao menos uma pipeline para verificar.</span>
                 </div>
               )}
             </div>
