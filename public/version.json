@@ -1,6 +1,6 @@
 {
-  "commit": "42d04a2ce14bc6eaef71777dbdb077423ce8d778",
-  "shortCommit": "42d04a2",
-  "message": "feat(criafy): add visual Reels+Stories vs Reels-only (>60s) icons, smart reordering, and 1-click Bulk from unpublished library",
-  "builtAt": "2026-10-28T02:04:05.613Z"
+  "commit": "56eb5d21a995f3f4890df22687f752195734465d",
+  "shortCommit": "56eb5d2",
+  "message": "fix(criafy): resolve bulk upload size limit with chunked uploads, edge stream proxy, and resume caching",
+  "builtAt": "2026-10-28T13:52:45.174Z"
 }

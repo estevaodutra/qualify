@@ -46,6 +46,7 @@ interface LeadContextPanelProps {
   conversation: ChatConversation;
   stages: PipelineStage[];
   onClose?: () => void;
+  className?: string;
 }
 
 interface CustomFieldMetadata {
@@ -59,7 +60,7 @@ interface CustomFieldMetadata {
   is_visible: boolean;
 }
 
-export default function LeadContextPanel({ conversation, stages, onClose }: LeadContextPanelProps) {
+export default function LeadContextPanel({ conversation, stages, onClose, className }: LeadContextPanelProps) {
   const { lead } = conversation;
   const { createLeadFromConversation, isCreatingLead } = useConversationActions();
   const { getTagColor } = useTagColors();
@@ -290,7 +291,7 @@ export default function LeadContextPanel({ conversation, stages, onClose }: Lead
   });
 
   return (
-    <div className="w-[340px] shrink-0 border-l border-border/40 bg-card/20 flex flex-col h-full overflow-hidden">
+    <div className={cn("w-[340px] shrink-0 border-l border-border/40 bg-card/20 flex flex-col h-full overflow-hidden", className)}>
       {/* Contact Profile Header */}
       <div className="flex flex-col items-center text-center p-4 space-y-2 border-b border-border/20 shrink-0 bg-background/30 backdrop-blur-md relative">
         {onClose && (
@@ -298,7 +299,7 @@ export default function LeadContextPanel({ conversation, stages, onClose }: Lead
             type="button"
             onClick={onClose}
             className="absolute top-3 right-3 p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-            title="Voltar para Respostas Rápidas"
+            title="Voltar ao chat"
           >
             <X className="h-4 w-4" />
           </button>

@@ -60,9 +60,10 @@ interface GroupContextPanelProps {
   conversation: ChatConversation;
   onClose?: () => void;
   onSelectConversation?: (id: string) => void;
+  className?: string;
 }
 
-export default function GroupContextPanel({ conversation, onClose, onSelectConversation }: GroupContextPanelProps) {
+export default function GroupContextPanel({ conversation, onClose, onSelectConversation, className }: GroupContextPanelProps) {
   const navigate = useNavigate();
   const { activeCompanyId } = useCompany();
   const queryClient = useQueryClient();
@@ -339,7 +340,7 @@ export default function GroupContextPanel({ conversation, onClose, onSelectConve
   })();
 
   return (
-    <div className="h-full w-full flex flex-col bg-background/95 border-l border-border/40 overflow-y-auto select-none">
+    <div className={cn("h-full w-full flex flex-col bg-background/95 border-l border-border/40 overflow-y-auto select-none", className)}>
       {/* 1. Header do Painel */}
       <div className="sticky top-0 z-20 flex items-center justify-between px-3.5 py-2.5 bg-background/95 backdrop-blur-md border-b border-border/40">
         <div className="flex items-center gap-2.5">
