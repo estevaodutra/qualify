@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { resolveSkillSlugForAction, getAllActions, ACTION_REGISTRY } from "@/services/ai/actionRegistry";
 import { AIExecutionService } from "@/services/ai/aiExecutionService";
+import { SkillAutoDetector } from "@/services/ai/skillAutoDetector";
 import JSZip from "jszip";
 
 describe("Criafy AI Skills & Action Registry", () => {
@@ -87,5 +88,58 @@ Conteúdo das instruções.`
     const contents = await reloaded.loadAsync(blob);
     expect(contents.files["SKILL.md"]).toBeDefined();
     expect(contents.files["references/hooks.md"]).toBeDefined();
+  });
+});
+
+describe("SkillAutoDetector Automatic Identification", () => {
+  it("automatically identifies a Carousel when input is a single .md with carousel cues", async () => {
+    const mdContent = `---
+title: Mestre do Carrossel
+description: Skill para criação de carrosséis de 7 lâminas educativas
+---
+# Mestre do Carrossel
+
+## Objetivo
+Criar slides educativos e dinâmicos para carrossel do Instagram.
+Instruções para estruturar cada slide com retenção slide a slide.
+
+## Hooks
+Ganchos de capa para fazer a pessoa arrastar para o lado.`;
+
+    const file = new File([mdContent], "carrossel-viral.md", { type: "text/markdown" });
+
+    const result = await SkillAutoDetector.detectFromInput({ singleFile: file });
+    expect(result.sourceType).toBe("SINGLE_MD");
+    expect(result.detectedFormat).toBe("CARROSSEL");
+    expect(result.category).toBe("CONTEÚDO");
+    expect(result.default_model_profile).toBe("CONTENT_ADVANCED");
+    expect(result.output_schema.slides).toBeDefined();
+    expect(result.output_schema.cover_headline).toBeDefined();
+    expect(result.files.some((f) => f.name === "SKILL.md")).toBe(true);
+  });
+
+  it("automatically identifies a folder of files and parses bundle structure", async () => {
+    const file1 = new File(["# Manifesto"], "skill.md", { type: "text/markdown" });
+    const file2 = new File(["# Referência de Hooks"], "references/hooks.md", { type: "text/markdown" });
+    Object.defineProperty(file1, "webkitRelativePath", { value: "minha-skill/skill.md" });
+    Object.defineProperty(file2, "webkitRelativePath", { value: "minha-skill/references/hooks.md" });
+
+    const result = await SkillAutoDetector.detectFromInput({ fileList: [file1, file2] });
+    expect(result.sourceType).toBe("FOLDER");
+    expect(result.files.length).toBe(2);
+    expect(result.files.some((f) => f.type === "manifest")).toBe(true);
+  });
+
+  it("automatically identifies a simple markdown file and builds complete setup", async () => {
+    const mdContent = `# Roteiro de Vídeo Curto
+Roteirize vídeos no formato Reels de 30 segundos com gancho provocativo e CTA.`;
+
+    const file = new File([mdContent], "reels.md", { type: "text/markdown" });
+
+    const result = await SkillAutoDetector.detectFromInput({ singleFile: file });
+    expect(result.sourceType).toBe("SINGLE_MD");
+    expect(result.detectedFormat).toBe("REEL");
+    expect(result.output_schema.hook).toBeDefined();
+    expect(result.output_schema.script).toBeDefined();
   });
 });

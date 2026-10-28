@@ -1,6 +1,6 @@
 {
-  "commit": "09da2f5fbc97307a5637bed451ddbe298d5f094a",
-  "shortCommit": "09da2f5",
-  "message": "fix(chat): fix variable initialization order for selectedConversations in InboxList",
-  "builtAt": "2026-10-28T23:06:03.797Z"
+  "commit": "837df4f50eb53a96ed29be760608d1cc42141c91",
+  "shortCommit": "837df4f",
+  "message": "feat(criafy): implement Super Admin AI Hub with native OpenAI Skills, versioning, playground and multitenant execution",
+  "builtAt": "2026-10-28T23:23:30.426Z"
 }

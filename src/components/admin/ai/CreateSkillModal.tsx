@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { AIExecutionService } from "@/services/ai/aiExecutionService";
+import { SkillAutoDetector, SkillAutoDetectionResult } from "@/services/ai/skillAutoDetector";
 import { AiSkillCategory, AiSkillFile, AiSkillStatus } from "@/types/aiSkills";
 
 interface CreateSkillModalProps {
@@ -112,28 +113,30 @@ export function CreateSkillModal({ open, onOpenChange, onSuccess }: CreateSkillM
     toast.success(`${uploaded.length} documento(s) adicionado(s).`);
   };
 
-  // Upload e Análise de ZIP (Modo B)
+  // Upload e Análise Automática (Modo B - ZIP, Pasta ou .md)
   const handleZipUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     try {
-      const parsed = await AIExecutionService.importZipSkill(file);
+      const parsed = await SkillAutoDetector.detectFromInput({ singleFile: file });
       setZipFile(file);
-      setZipAnalysis(parsed);
+      setZipAnalysis({
+        name: parsed.name,
+        description: parsed.description,
+        manifest_content: parsed.manifest_content,
+        files: parsed.files,
+      });
       setName(parsed.name);
       setDescription(parsed.description);
-      setSlug(
-        parsed.name
-          .toLowerCase()
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-|-$/g, "")
-      );
-      toast.success("Arquivo .zip validado com sucesso! Contém SKILL.md válido.");
+      setSlug(parsed.slug);
+      setCategory(parsed.category);
+      setDefaultProfile(parsed.default_model_profile);
+      setWhenToUse(parsed.when_to_use);
+      setTargetObjective(parsed.target_objective);
+      toast.success(`Identificado automaticamente: ${parsed.formatLabel}!`);
     } catch (err: any) {
-      toast.error(err.message || "Erro ao processar arquivo .zip.");
+      toast.error(err.message || "Erro ao processar arquivo.");
       setZipFile(null);
       setZipAnalysis(null);
     }
@@ -478,22 +481,22 @@ export function CreateSkillModal({ open, onOpenChange, onSuccess }: CreateSkillM
                 <FileArchive className="h-6 w-6" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold">Importar Bundle de Skill (.zip)</h3>
+                <h3 className="text-sm font-semibold">Importar Skill (.zip ou .md)</h3>
                 <p className="text-xs text-muted-foreground max-w-sm mx-auto mt-1">
-                  O arquivo .zip deve conter obrigatoriamente um <code className="text-xs">SKILL.md</code> na raiz, e opcionalmente as pastas <code className="text-xs">references/</code> e <code className="text-xs">assets/</code>.
+                  Selecione um arquivo <strong>.zip</strong> ou um arquivo avulso <strong>.md</strong>. O sistema identifica automaticamente se é Carrossel, Reels ou Estratégia e monta todo o setup.
                 </p>
               </div>
               <label className="inline-block cursor-pointer">
                 <input
                   type="file"
-                  accept=".zip"
+                  accept=".zip,.md,.markdown,.txt"
                   onChange={handleZipUpload}
                   className="hidden"
                 />
                 <Button type="button" variant="outline" size="sm" className="text-xs" asChild>
                   <span>
                     <Upload className="h-3.5 w-3.5 mr-2" />
-                    Selecionar Arquivo .zip
+                    Selecionar Arquivo (.zip ou .md)
                   </span>
                 </Button>
               </label>

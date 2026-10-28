@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   Clock,
   Archive,
+  UploadCloud,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +38,7 @@ import { toast } from "sonner";
 import { AIExecutionService } from "@/services/ai/aiExecutionService";
 import { AiSkill, AiSkillCategory, AiSkillStatus } from "@/types/aiSkills";
 import { CreateSkillModal } from "@/components/admin/ai/CreateSkillModal";
+import { ImportSkillModal } from "@/components/admin/ai/ImportSkillModal";
 
 export default function AdminAiSkills() {
   const navigate = useNavigate();
@@ -45,6 +47,7 @@ export default function AdminAiSkills() {
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
 
   // Buscar skills
   const { data: skills = [], isLoading } = useQuery({
@@ -130,10 +133,20 @@ export default function AdminAiSkills() {
             As Skills definem como a inteligência artificial executa tarefas. Elas pertencem à plataforma Criafy e são orquestradas para todas as contas.
           </p>
         </div>
-        <Button onClick={() => setCreateModalOpen(true)} className="shrink-0">
-          <Plus className="h-4 w-4 mr-2" />
-          Nova Skill
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setImportModalOpen(true)}
+            className="shrink-0 text-xs font-semibold"
+          >
+            <UploadCloud className="h-4 w-4 mr-1.5 text-primary" />
+            Importar Skill
+          </Button>
+          <Button onClick={() => setCreateModalOpen(true)} className="shrink-0 text-xs font-semibold">
+            <Plus className="h-4 w-4 mr-1.5" />
+            Nova Skill
+          </Button>
+        </div>
       </div>
 
       {/* Barra de Filtros */}
@@ -307,6 +320,12 @@ export default function AdminAiSkills() {
       <CreateSkillModal
         open={createModalOpen}
         onOpenChange={setCreateModalOpen}
+        onSuccess={() => queryClient.invalidateQueries({ queryKey: ["admin_ai_skills"] })}
+      />
+
+      <ImportSkillModal
+        open={importModalOpen}
+        onOpenChange={setImportModalOpen}
         onSuccess={() => queryClient.invalidateQueries({ queryKey: ["admin_ai_skills"] })}
       />
     </div>
