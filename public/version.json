@@ -1,6 +1,6 @@
 {
-  "commit": "81a01c21d64f88be953152395e3530e194ff5af7",
-  "shortCommit": "81a01c2",
-  "message": "feat(chat): adiciona botao para visualizacao do card do usuario dentro da janela de chat",
-  "builtAt": "2026-10-28T14:12:08.408Z"
+  "commit": "4fcb555fef7ba09d4e5ac7e67ccbb2c0c98b3e3e",
+  "shortCommit": "4fcb555",
+  "message": "fix(chat): remove barra de rolagem padrao do Windows na barra lateral do dock e aplica scrollbar ultrafina no hover",
+  "builtAt": "2026-10-28T14:16:15.957Z"
 }

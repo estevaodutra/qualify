@@ -222,6 +222,31 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, con
     }
   };
 
+  const finishRecordingAndGetBlob = (): Promise<Blob | null> => {
+    return new Promise((resolve) => {
+      const recorder = mediaRecorderRef.current;
+      if (!recorder || recorder.state === 'inactive') {
+        resolve(audioBlob);
+        return;
+      }
+
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+
+      recorder.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        setAudioBlob(blob);
+        try {
+          recorder.stream?.getTracks().forEach(track => track.stop());
+        } catch (e) {
+          console.warn("Error stopping audio tracks", e);
+        }
+        resolve(blob);
+      };
+
+      recorder.stop();
+    });
+  };
+
   const cancelRecording = () => {
     if (mediaRecorderRef.current) {
       if (mediaRecorderRef.current.state !== 'inactive') mediaRecorderRef.current.stop();
@@ -623,7 +648,12 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, con
   };
 
   const handleSend = async () => {
-    if (!text.trim() && !attachedFile && !audioBlob) return;
+    let finalAudioBlob = audioBlob;
+    if (recordingState === 'recording' || recordingState === 'paused') {
+      finalAudioBlob = await finishRecordingAndGetBlob();
+    }
+
+    if (!text.trim() && !attachedFile && !finalAudioBlob) return;
 
     try {
       let mediaUrl = attachedFile?.url;
@@ -633,14 +663,14 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, con
         mediaType = 'ptv';
       }
 
-      if (audioBlob) {
+      if (finalAudioBlob) {
         setIsUploading(true);
         const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.webm`;
         const filePath = `chat/${activeCompanyId}/${fileName}`;
 
         const { error: uploadError } = await supabase.storage
           .from("media")
-          .upload(filePath, audioBlob);
+          .upload(filePath, finalAudioBlob);
 
         if (uploadError) throw uploadError;
 
@@ -1003,14 +1033,23 @@ export default function ChatComposer({ onSend, isSending, templates, leadId, con
         {/* Send Button */}
         <Button
           onClick={handleSend}
-          disabled={isSending || isUploading || (!text.trim() && !attachedFile && !audioBlob) || recordingState === 'recording' || recordingState === 'paused'}
+          disabled={
+            isSending ||
+            isUploading ||
+            (!text.trim() && !attachedFile && !audioBlob && recordingState === 'idle')
+          }
           className={cn(
             "h-10 w-10 rounded-xl shrink-0 shadow-lg cursor-pointer transition-all duration-300",
             isInternal
               ? "bg-yellow-500 hover:bg-yellow-600 text-white shadow-yellow-500/20"
               : "bg-primary hover:bg-primary/90 text-primary-foreground shadow-primary/20",
-            (!text.trim() && !attachedFile && !audioBlob) && "opacity-50 scale-95 shadow-none"
+            (!text.trim() && !attachedFile && !audioBlob && recordingState === 'idle') && "opacity-50 scale-95 shadow-none"
           )}
+          title={
+            recordingState === 'recording' || recordingState === 'paused'
+              ? "Enviar áudio agora"
+              : "Enviar mensagem"
+          }
         >
           {isSending ? (
             <Loader2 className="h-4.5 w-4.5 animate-spin" />
