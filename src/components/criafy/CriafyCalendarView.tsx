@@ -231,25 +231,14 @@ export function CriafyCalendarView({
     <div className="space-y-4">
       {/* Google Calendar Style Header Toolbar */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-muted/40 p-3.5 rounded-2xl border border-muted/80 backdrop-blur-sm">
-        {/* Left: Quick Create + Bulk + Today + Navigation + Title */}
-        <div className="flex items-center flex-wrap gap-2">
+        {/* Left: Quick Create + Today + Navigation + Title */}
+        <div className="flex items-center flex-wrap gap-2.5">
           <Button
             onClick={() => handleOpenSchedule()}
             size="sm"
-            className="h-9 px-3.5 gap-1.5 bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 text-white font-bold text-xs hover:opacity-90 shadow-md transition-all rounded-xl border-0 cursor-pointer"
+            className="h-9 px-4 gap-2 bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 text-white font-bold text-xs hover:opacity-90 shadow-md transition-all rounded-xl border-0 cursor-pointer"
           >
             <Plus className="w-4 h-4" /> Programar Publicação
-          </Button>
-
-          <Button
-            onClick={() => setBulkModalOpen(true)}
-            variant="outline"
-            size="sm"
-            className="h-9 px-3.5 gap-1.5 text-xs font-bold rounded-xl border-purple-500/30 text-purple-600 dark:text-purple-300 hover:bg-purple-500/10 cursor-pointer"
-            title="Subir várias mídias e distribuir automaticamente (ex: 3 por dia — Manhã, Tarde e Noite)"
-          >
-            <Layers className="w-4 h-4 text-purple-500" />
-            Upload & Programar em Bulk
           </Button>
 
           <Button
@@ -912,25 +901,13 @@ export function CriafyCalendarView({
         </DialogContent>
       </Dialog>
 
-      {/* Schedule / Sequence Publication Modal */}
+      {/* Schedule / Bulk / Sequence Publication Modal */}
       <SchedulePublicationModal
         open={scheduleModalOpen}
         onOpenChange={setScheduleModalOpen}
         accounts={accounts}
         selectedAccountId={selectedAccountId}
         initialDate={scheduleModalDate}
-        onOpenBulk={() => setBulkModalOpen(true)}
-        onSuccess={() => {
-          loadPublications();
-        }}
-      />
-
-      {/* Bulk Upload & Random Distribution Modal */}
-      <BulkScheduleModal
-        open={bulkModalOpen}
-        onOpenChange={setBulkModalOpen}
-        accounts={accounts}
-        selectedAccountId={selectedAccountId}
         onSuccess={() => {
           loadPublications();
         }}

@@ -1,6 +1,6 @@
 {
-  "commit": "3fa3164259dc0234e7644dcf786966396090d306",
-  "shortCommit": "3fa3164",
-  "message": "feat(criafy): convert Criafy navigation tabs into a collapsible sidebar",
-  "builtAt": "2026-10-28T00:01:59.536Z"
+  "commit": "92e5dfc1709aa97367974498144fe764c5b83468",
+  "shortCommit": "92e5dfc",
+  "message": "feat(criafy): add bulk upload and randomized morning/afternoon/evening scheduling",
+  "builtAt": "2026-10-28T00:14:50.814Z"
 }

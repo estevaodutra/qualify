@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -18,7 +20,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   CalendarDays,
@@ -28,14 +29,17 @@ import {
   Video,
   Image as ImageIcon,
   CheckCircle2,
-  AlertCircle,
   Loader2,
-  Plus,
   Trash2,
   ArrowUp,
   ArrowDown,
   Layers,
-  HelpCircle,
+  Upload,
+  Shuffle,
+  Sun,
+  Sunset,
+  Moon,
+  FolderOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -45,6 +49,80 @@ import {
   CriafyContent,
   CriafyPublicationType,
 } from "@/types/criafy";
+import { extractAndValidateMedia } from "@/utils/criafyMediaValidator";
+
+interface PendingUploadItem {
+  tempId: string;
+  file: File;
+  previewUrl: string;
+  mediaType: "VIDEO" | "IMAGE";
+  title: string;
+  durationSeconds?: number;
+}
+
+interface UnifiedScheduleItem {
+  key: string;
+  source: "UPLOAD" | "LIBRARY";
+  title: string;
+  previewUrl: string;
+  mediaType: "VIDEO" | "IMAGE";
+  durationSeconds?: number;
+  file?: File;
+  contentId?: string;
+}
+
+interface PlannedSlot {
+  item: UnifiedScheduleItem;
+  scheduledAt: Date;
+  shift: "MANHA" | "TARDE" | "NOITE";
+  publicationType: CriafyPublicationType;
+}
+
+const SHIFT_CONFIG = {
+  MANHA: {
+    label: "Manhã",
+    rangeLabel: "08:00 – 11:50",
+    startMinutes: 8 * 60,
+    endMinutes: 11 * 60 + 50,
+    icon: Sun,
+    badgeClass:
+      "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+  },
+  TARDE: {
+    label: "Tarde",
+    rangeLabel: "13:00 – 17:50",
+    startMinutes: 13 * 60,
+    endMinutes: 17 * 60 + 50,
+    icon: Sunset,
+    badgeClass:
+      "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20",
+  },
+  NOITE: {
+    label: "Noite",
+    rangeLabel: "18:30 – 21:50",
+    startMinutes: 18 * 60 + 30,
+    endMinutes: 21 * 60 + 50,
+    icon: Moon,
+    badgeClass:
+      "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20",
+  },
+};
+
+function shuffleArray<T>(arr: T[]): T[] {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = copy[i];
+    copy[i] = copy[j];
+    copy[j] = tmp;
+  }
+  return copy;
+}
+
+function randomIntBetween(min: number, max: number): number {
+  if (max <= min) return min;
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
 
 interface SchedulePublicationModalProps {
   open: boolean;
@@ -54,8 +132,8 @@ interface SchedulePublicationModalProps {
   initialDate?: Date | string | null;
   initialContentId?: string;
   initialPublicationType?: CriafyPublicationType;
+  initialMode?: "SINGLE" | "BULK" | "STORY_SEQUENCE";
   onSuccess?: () => void;
-  onOpenBulk?: () => void;
 }
 
 export function SchedulePublicationModal({
@@ -66,15 +144,17 @@ export function SchedulePublicationModal({
   initialDate,
   initialContentId,
   initialPublicationType,
+  initialMode,
   onSuccess,
-  onOpenBulk,
 }: SchedulePublicationModalProps) {
   const { activeCompanyId } = useCompany();
   const [contents, setContents] = useState<CriafyContent[]>([]);
   const [loadingMedia, setLoadingMedia] = useState(false);
 
-  // Form Mode: Single post vs Story Sequence
-  const [mode, setMode] = useState<"SINGLE" | "STORY_SEQUENCE">("SINGLE");
+  // Form Mode: Single post vs Bulk Schedule vs Story Sequence
+  const [mode, setMode] = useState<"SINGLE" | "BULK" | "STORY_SEQUENCE">(
+    initialMode || "SINGLE"
+  );
 
   // Common fields
   const [targetAccountId, setTargetAccountId] = useState<string>("");
@@ -84,13 +164,51 @@ export function SchedulePublicationModal({
 
   // Single post fields
   const [selectedContentId, setSelectedContentId] = useState<string>("");
-  const [publicationType, setPublicationType] = useState<CriafyPublicationType>("REEL");
+  const [publicationType, setPublicationType] =
+    useState<CriafyPublicationType>("REEL");
   const [caption, setCaption] = useState<string>("");
   const [generatingAi, setGeneratingAi] = useState(false);
 
   // Story Sequence fields
   const [sequenceContentIds, setSequenceContentIds] = useState<string[]>([]);
-  const [sequenceIntervalMinutes, setSequenceIntervalMinutes] = useState<number>(1);
+  const [sequenceIntervalMinutes, setSequenceIntervalMinutes] =
+    useState<number>(1);
+
+  // =========================================================
+  // BULK SCHEDULE STATE (Embedded directly inside this modal)
+  // =========================================================
+  const bulkFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [bulkSourceTab, setBulkSourceTab] = useState<"UPLOAD" | "LIBRARY">(
+    "UPLOAD"
+  );
+  const [pendingFiles, setPendingFiles] = useState<PendingUploadItem[]>([]);
+  const [selectedBulkLibraryIds, setSelectedBulkLibraryIds] = useState<
+    string[]
+  >([]);
+  const [postsPerDay, setPostsPerDay] = useState<number>(3);
+  const [bulkStartDate, setBulkStartDate] = useState<string>(() => {
+    const now = new Date();
+    const tzOffset = now.getTimezoneOffset() * 60000;
+    return new Date(now.getTime() - tzOffset).toISOString().split("T")[0];
+  });
+  const [enabledShifts, setEnabledShifts] = useState<{
+    MANHA: boolean;
+    TARDE: boolean;
+    NOITE: boolean;
+  }>({
+    MANHA: true,
+    TARDE: true,
+    NOITE: true,
+  });
+  const [randomizeContentOrder, setRandomizeContentOrder] =
+    useState<boolean>(true);
+  const [randomizeTimesInShift, setRandomizeTimesInShift] =
+    useState<boolean>(true);
+  const [bulkFormatMode, setBulkFormatMode] = useState<"AUTO" | "STORIES">(
+    "AUTO"
+  );
+  const [shuffleSeed, setShuffleSeed] = useState<number>(1);
+  const [bulkProgressText, setBulkProgressText] = useState<string>("");
 
   // Load contents when modal opens
   useEffect(() => {
@@ -99,9 +217,19 @@ export function SchedulePublicationModal({
     }
   }, [open, activeCompanyId]);
 
+  // Cleanup object URLs on unmount
+  useEffect(() => {
+    return () => {
+      pendingFiles.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+    };
+  }, []);
+
   // Set initial values
   useEffect(() => {
     if (open) {
+      if (initialMode) {
+        setMode(initialMode);
+      }
       // Target account
       if (selectedAccountId && selectedAccountId !== "all") {
         setTargetAccountId(selectedAccountId);
@@ -113,20 +241,24 @@ export function SchedulePublicationModal({
       if (initialDate) {
         const d = new Date(initialDate);
         if (!isNaN(d.getTime())) {
-          // If no specific hour (e.g. 00:00:00), default to 18:00
           if (d.getHours() === 0 && d.getMinutes() === 0) {
             d.setHours(18, 0, 0, 0);
           }
           const tzOffset = d.getTimezoneOffset() * 60000;
-          const localISOTime = new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
+          const localISOTime = new Date(d.getTime() - tzOffset)
+            .toISOString()
+            .slice(0, 16);
           setScheduledAt(localISOTime);
+          setBulkStartDate(localISOTime.split("T")[0]);
           setIsPublishNow(false);
         }
       } else {
         const d = new Date();
         d.setHours(d.getHours() + 1, 0, 0, 0);
         const tzOffset = d.getTimezoneOffset() * 60000;
-        const localISOTime = new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
+        const localISOTime = new Date(d.getTime() - tzOffset)
+          .toISOString()
+          .slice(0, 16);
         setScheduledAt(localISOTime);
         setIsPublishNow(false);
       }
@@ -138,12 +270,17 @@ export function SchedulePublicationModal({
       }
       if (initialPublicationType) {
         setPublicationType(initialPublicationType);
-        if (initialPublicationType === "STORY_VIDEO" || initialPublicationType === "STORY_IMAGE") {
-          // Keep single by default, user can switch to sequence tab
-        }
       }
     }
-  }, [open, selectedAccountId, accounts, initialDate, initialContentId, initialPublicationType]);
+  }, [
+    open,
+    selectedAccountId,
+    accounts,
+    initialDate,
+    initialContentId,
+    initialPublicationType,
+    initialMode,
+  ]);
 
   const loadContents = async () => {
     if (!activeCompanyId) return;
@@ -166,6 +303,323 @@ export function SchedulePublicationModal({
     }
   };
 
+  // =========================================================
+  // BULK HELPERS & PLANNED SLOTS COMPUTATION
+  // =========================================================
+  const addFilesToPending = async (filesList: FileList | File[]) => {
+    const filesArray = Array.from(filesList);
+    if (filesArray.length === 0) return;
+
+    const newItems: PendingUploadItem[] = [];
+    for (const file of filesArray) {
+      const isVideo = file.type.startsWith("video/");
+      const previewUrl = URL.createObjectURL(file);
+      let durationSeconds: number | undefined = undefined;
+      try {
+        const meta = await extractAndValidateMedia(file);
+        durationSeconds = meta.durationSeconds || undefined;
+      } catch {
+        // Ignore validation error on preview
+      }
+
+      newItems.push({
+        tempId: `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+        file,
+        previewUrl,
+        mediaType: isVideo ? "VIDEO" : "IMAGE",
+        title: file.name.replace(/\.[^/.]+$/, ""),
+        durationSeconds,
+      });
+    }
+
+    setPendingFiles((prev) => [...prev, ...newItems]);
+    setShuffleSeed((s) => s + 1);
+  };
+
+  const handleBulkFileInputChange = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    if (e.target.files && e.target.files.length > 0) {
+      await addFilesToPending(e.target.files);
+      e.target.value = "";
+    }
+  };
+
+  const handleBulkDropFiles = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      await addFilesToPending(e.dataTransfer.files);
+    }
+  };
+
+  const removePendingFile = (tempId: string) => {
+    setPendingFiles((prev) => {
+      const target = prev.find((p) => p.tempId === tempId);
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((p) => p.tempId !== tempId);
+    });
+  };
+
+  const toggleBulkLibraryItem = (id: string) => {
+    setSelectedBulkLibraryIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+    setShuffleSeed((s) => s + 1);
+  };
+
+  const selectAllUnpublishedLibrary = () => {
+    const unpub = contents
+      .filter((c) => !c.is_published && !c.is_scheduled)
+      .map((c) => c.id);
+    if (unpub.length === 0) {
+      toast.info("Não há mídias inéditas disponíveis na biblioteca.");
+      return;
+    }
+    setSelectedBulkLibraryIds(unpub);
+    setShuffleSeed((s) => s + 1);
+    toast.success(`${unpub.length} mídia(s) inédita(s) selecionada(s)!`);
+  };
+
+  const toggleShift = (shiftKey: "MANHA" | "TARDE" | "NOITE") => {
+    setEnabledShifts((prev) => {
+      const next = { ...prev, [shiftKey]: !prev[shiftKey] };
+      if (!next.MANHA && !next.TARDE && !next.NOITE) {
+        toast.info("Pelo menos um turno do dia deve ficar ativo.");
+        return prev;
+      }
+      return next;
+    });
+  };
+
+  const unifiedBulkItems = useMemo<UnifiedScheduleItem[]>(() => {
+    const fromUploads: UnifiedScheduleItem[] = pendingFiles.map((pf) => ({
+      key: `upload_${pf.tempId}`,
+      source: "UPLOAD",
+      title: pf.title,
+      previewUrl: pf.previewUrl,
+      mediaType: pf.mediaType,
+      durationSeconds: pf.durationSeconds,
+      file: pf.file,
+    }));
+
+    const fromLibrary: UnifiedScheduleItem[] = selectedBulkLibraryIds
+      .map((id) => contents.find((c) => c.id === id))
+      .filter((c): c is CriafyContent => !!c)
+      .map((c) => ({
+        key: `lib_${c.id}`,
+        source: "LIBRARY",
+        title: c.title || "Mídia da Biblioteca",
+        previewUrl: c.media_url,
+        mediaType: c.media_type === "VIDEO" ? "VIDEO" : "IMAGE",
+        durationSeconds: c.duration_seconds,
+        contentId: c.id,
+      }));
+
+    return [...fromUploads, ...fromLibrary];
+  }, [pendingFiles, selectedBulkLibraryIds, contents]);
+
+  const plannedBulkSlots = useMemo<PlannedSlot[]>(() => {
+    if (unifiedBulkItems.length === 0) return [];
+
+    const activeShifts = (["MANHA", "TARDE", "NOITE"] as const).filter(
+      (s) => enabledShifts[s]
+    );
+    const effectiveShifts: Array<"MANHA" | "TARDE" | "NOITE"> =
+      activeShifts.length > 0 ? activeShifts : ["MANHA", "TARDE", "NOITE"];
+
+    const orderedItems = randomizeContentOrder
+      ? shuffleArray(unifiedBulkItems)
+      : [...unifiedBulkItems];
+
+    const [y, m, d] = bulkStartDate.split("-").map(Number);
+    const baseDay = new Date(
+      y || new Date().getFullYear(),
+      (m || 1) - 1,
+      d || 1
+    );
+    const now = new Date();
+
+    const isSameDay =
+      baseDay.getFullYear() === now.getFullYear() &&
+      baseDay.getMonth() === now.getMonth() &&
+      baseDay.getDate() === now.getDate();
+
+    const currentMinutesOfDay = now.getHours() * 60 + now.getMinutes();
+    let dayOffset = 0;
+
+    if (isSameDay && currentMinutesOfDay >= 21 * 60 + 30) {
+      dayOffset = 1;
+    }
+
+    const result: PlannedSlot[] = [];
+    let itemIdx = 0;
+
+    while (itemIdx < orderedItems.length) {
+      const slotDay = new Date(
+        baseDay.getFullYear(),
+        baseDay.getMonth(),
+        baseDay.getDate() + dayOffset
+      );
+
+      const isSlotToday =
+        slotDay.getFullYear() === now.getFullYear() &&
+        slotDay.getMonth() === now.getMonth() &&
+        slotDay.getDate() === now.getDate();
+
+      const availableShiftsForDay = effectiveShifts.filter((shiftKey) => {
+        if (!isSlotToday) return true;
+        return SHIFT_CONFIG[shiftKey].endMinutes > currentMinutesOfDay + 15;
+      });
+
+      if (availableShiftsForDay.length === 0) {
+        dayOffset++;
+        continue;
+      }
+
+      const countForThisDay = Math.min(
+        Math.max(1, postsPerDay),
+        orderedItems.length - itemIdx
+      );
+
+      const dayShiftAssignments: Array<"MANHA" | "TARDE" | "NOITE"> = [];
+      for (let s = 0; s < countForThisDay; s++) {
+        dayShiftAssignments.push(
+          availableShiftsForDay[s % availableShiftsForDay.length]
+        );
+      }
+
+      const shiftOrder = { MANHA: 1, TARDE: 2, NOITE: 3 };
+      dayShiftAssignments.sort((a, b) => shiftOrder[a] - shiftOrder[b]);
+
+      const shiftCounts: Record<"MANHA" | "TARDE" | "NOITE", number> = {
+        MANHA: 0,
+        TARDE: 0,
+        NOITE: 0,
+      };
+      dayShiftAssignments.forEach((sh) => {
+        shiftCounts[sh]++;
+      });
+
+      const generatedMinutesByShift: Record<
+        "MANHA" | "TARDE" | "NOITE",
+        number[]
+      > = {
+        MANHA: [],
+        TARDE: [],
+        NOITE: [],
+      };
+
+      (["MANHA", "TARDE", "NOITE"] as const).forEach((sh) => {
+        const totalInShift = shiftCounts[sh];
+        if (totalInShift === 0) return;
+
+        const cfg = SHIFT_CONFIG[sh];
+        const minStart = isSlotToday
+          ? Math.max(cfg.startMinutes, currentMinutesOfDay + 15)
+          : cfg.startMinutes;
+        const maxEnd = cfg.endMinutes;
+
+        if (!randomizeTimesInShift) {
+          const step = Math.max(
+            15,
+            Math.floor((maxEnd - minStart) / (totalInShift + 1))
+          );
+          for (let k = 0; k < totalInShift; k++) {
+            generatedMinutesByShift[sh].push(minStart + step * (k + 1));
+          }
+        } else {
+          const span = Math.max(10, maxEnd - minStart);
+          const segmentLength = Math.floor(span / totalInShift);
+          const mins: number[] = [];
+          for (let k = 0; k < totalInShift; k++) {
+            const segStart = minStart + k * segmentLength;
+            const segEnd =
+              k === totalInShift - 1
+                ? maxEnd
+                : minStart + (k + 1) * segmentLength - 5;
+            mins.push(randomIntBetween(segStart, Math.max(segStart, segEnd)));
+          }
+          mins.sort((a, b) => a - b);
+          generatedMinutesByShift[sh] = mins;
+        }
+      });
+
+      const shiftUsedCursor: Record<"MANHA" | "TARDE" | "NOITE", number> = {
+        MANHA: 0,
+        TARDE: 0,
+        NOITE: 0,
+      };
+
+      for (let s = 0; s < countForThisDay; s++) {
+        const item = orderedItems[itemIdx];
+        const shiftKey = dayShiftAssignments[s];
+        const idxInShift = shiftUsedCursor[shiftKey]++;
+        const totalMinutes =
+          generatedMinutesByShift[shiftKey][idxInShift] ||
+          SHIFT_CONFIG[shiftKey].startMinutes;
+
+        const hours = Math.floor(totalMinutes / 60);
+        const mins = totalMinutes % 60;
+
+        const scheduledDate = new Date(
+          slotDay.getFullYear(),
+          slotDay.getMonth(),
+          slotDay.getDate(),
+          hours,
+          mins,
+          0,
+          0
+        );
+
+        let pubType: CriafyPublicationType = "REEL";
+        if (bulkFormatMode === "STORIES") {
+          pubType = item.mediaType === "VIDEO" ? "STORY_VIDEO" : "STORY_IMAGE";
+        } else {
+          pubType = item.mediaType === "VIDEO" ? "REEL" : "FEED";
+        }
+
+        result.push({
+          item,
+          scheduledAt: scheduledDate,
+          shift: shiftKey,
+          publicationType: pubType,
+        });
+
+        itemIdx++;
+      }
+
+      dayOffset++;
+    }
+
+    return result;
+  }, [
+    unifiedBulkItems,
+    postsPerDay,
+    bulkStartDate,
+    enabledShifts,
+    randomizeContentOrder,
+    randomizeTimesInShift,
+    bulkFormatMode,
+    shuffleSeed,
+  ]);
+
+  const groupedPreviewByDay = useMemo(() => {
+    const map = new Map<string, PlannedSlot[]>();
+    plannedBulkSlots.forEach((slot) => {
+      const y = slot.scheduledAt.getFullYear();
+      const m = String(slot.scheduledAt.getMonth() + 1).padStart(2, "0");
+      const d = String(slot.scheduledAt.getDate()).padStart(2, "0");
+      const key = `${y}-${m}-${d}`;
+      const list = map.get(key) || [];
+      list.push(slot);
+      map.set(key, list);
+    });
+    return Array.from(map.entries());
+  }, [plannedBulkSlots]);
+
+  // =========================================================
+  // SINGLE & STORY SEQUENCE HANDLERS
+  // =========================================================
   const handleSingleContentSelect = (contentId: string) => {
     setSelectedContentId(contentId);
     const media = contents.find((c) => c.id === contentId);
@@ -174,9 +628,14 @@ export function SchedulePublicationModal({
     if (media.media_type === "VIDEO") {
       const isOver60s = media.duration_seconds && media.duration_seconds > 60;
       if (isOver60s) {
-        if (publicationType === "STORY_VIDEO" || publicationType === "STORY_IMAGE") {
+        if (
+          publicationType === "STORY_VIDEO" ||
+          publicationType === "STORY_IMAGE"
+        ) {
           setPublicationType("REEL");
-          toast.info("Vídeo com mais de 60s: Stories desabilitado. Formato alterado para Reel.");
+          toast.info(
+            "Vídeo com mais de 60s: Stories desabilitado. Formato alterado para Reel."
+          );
         }
       } else if (publicationType === "STORY_IMAGE") {
         setPublicationType("STORY_VIDEO");
@@ -191,9 +650,15 @@ export function SchedulePublicationModal({
 
   const handleToggleSequenceItem = (contentId: string) => {
     const media = contents.find((c) => c.id === contentId);
-    if (media?.media_type === "VIDEO" && media.duration_seconds && media.duration_seconds > 60) {
+    if (
+      media?.media_type === "VIDEO" &&
+      media.duration_seconds &&
+      media.duration_seconds > 60
+    ) {
       toast.error(
-        `O Instagram não aceita vídeos em Stories acima de 60s (este vídeo possui ${Math.round(media.duration_seconds)}s). Utilize vídeos de até 60s para sequências de Stories.`
+        `O Instagram não aceita vídeos em Stories acima de 60s (este vídeo possui ${Math.round(
+          media.duration_seconds
+        )}s). Utilize vídeos de até 60s para sequências de Stories.`
       );
       return;
     }
@@ -254,6 +719,106 @@ export function SchedulePublicationModal({
       return;
     }
 
+    // =========================================================
+    // BULK MODE SUBMISSION
+    // =========================================================
+    if (mode === "BULK") {
+      if (plannedBulkSlots.length === 0) {
+        toast.error(
+          "Suba arquivos ou selecione mídias da biblioteca para programar em Bulk."
+        );
+        return;
+      }
+
+      setSubmitting(true);
+      try {
+        const uploadedContentIdMap = new Map<string, string>();
+        const uploadSlots = plannedBulkSlots.filter(
+          (s) => s.item.source === "UPLOAD" && s.item.file
+        );
+
+        for (let i = 0; i < uploadSlots.length; i++) {
+          const slot = uploadSlots[i];
+          const file = slot.item.file!;
+          setBulkProgressText(
+            `Subindo mídia ${i + 1} de ${uploadSlots.length}: ${file.name}...`
+          );
+
+          const validation = await extractAndValidateMedia(file);
+          const { mediaUrl, mediaType, mimeType } =
+            await criafyService.uploadMediaFile(activeCompanyId, file);
+
+          const createdContent = await criafyService.createContent(
+            {
+              company_id: activeCompanyId,
+              title: file.name,
+              media_url: mediaUrl,
+              media_type: mediaType,
+              mime_type: mimeType,
+              file_size_bytes: file.size,
+              width: validation.width || undefined,
+              height: validation.height || undefined,
+              duration_seconds: validation.durationSeconds || undefined,
+              aspect_ratio: validation.aspectRatio,
+              meta_validation_status: validation.isValid ? "VALID" : "INVALID",
+              meta_validation_errors: validation.errors,
+            },
+            [targetAccountId]
+          );
+
+          uploadedContentIdMap.set(slot.item.key, createdContent.id);
+        }
+
+        setBulkProgressText(
+          `Agendando ${plannedBulkSlots.length} publicações no calendário...`
+        );
+
+        const pubPayloads = plannedBulkSlots.map((slot) => {
+          const contentId =
+            slot.item.source === "LIBRARY"
+              ? slot.item.contentId!
+              : uploadedContentIdMap.get(slot.item.key)!;
+
+          return {
+            company_id: activeCompanyId,
+            account_id: targetAccountId,
+            content_id: contentId,
+            publication_type: slot.publicationType,
+            caption: undefined,
+            scheduled_at: slot.scheduledAt.toISOString(),
+            status: "SCHEDULED" as const,
+            is_auto_queued: true,
+          };
+        });
+
+        await criafyService.createPublicationSequence(pubPayloads);
+
+        toast.success(
+          `${plannedBulkSlots.length} conteúdos programados em Bulk com sucesso!`,
+          {
+            description: `Distribuídos em ${groupedPreviewByDay.length} dia(s) (${postsPerDay} por dia — Manhã, Tarde e Noite).`,
+            duration: 6000,
+          }
+        );
+
+        pendingFiles.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+        setPendingFiles([]);
+        setSelectedBulkLibraryIds([]);
+        setBulkProgressText("");
+        onOpenChange(false);
+        onSuccess?.();
+      } catch (err: any) {
+        toast.error(`Erro ao programar em Bulk: ${err.message}`);
+      } finally {
+        setSubmitting(false);
+        setBulkProgressText("");
+      }
+      return;
+    }
+
+    // =========================================================
+    // SINGLE & STORY_SEQUENCE SUBMISSION
+    // =========================================================
     if (!isPublishNow && !scheduledAt) {
       toast.error("Informe a data e o horário do agendamento.");
       return;
@@ -282,7 +847,9 @@ export function SchedulePublicationModal({
           selectedContent.duration_seconds > 60
         ) {
           toast.error(
-            `O Instagram permite no máximo 60s para Stories (este vídeo tem ${Math.round(selectedContent.duration_seconds)}s). Altere para "Reel".`
+            `O Instagram permite no máximo 60s para Stories (este vídeo tem ${Math.round(
+              selectedContent.duration_seconds
+            )}s). Altere para "Reel".`
           );
           setSubmitting(false);
           return;
@@ -301,10 +868,13 @@ export function SchedulePublicationModal({
 
         if (isPublishNow) {
           onOpenChange(false);
-          toast.info("Publicação iniciada em segundo plano! Acompanhe o status no calendário.", {
-            id: `pub-${pub.id}`,
-            duration: 4000,
-          });
+          toast.info(
+            "Publicação iniciada em segundo plano! Acompanhe o status no calendário.",
+            {
+              id: `pub-${pub.id}`,
+              duration: 4000,
+            }
+          );
 
           criafyService
             .publishNow(pub.id)
@@ -336,7 +906,9 @@ export function SchedulePublicationModal({
       } else {
         // STORY SEQUENCE MODE
         if (sequenceContentIds.length < 2) {
-          toast.error("Uma sequência de stories precisa de no mínimo 2 conteúdos selecionados.");
+          toast.error(
+            "Uma sequência de stories precisa de no mínimo 2 conteúdos selecionados."
+          );
           setSubmitting(false);
           return;
         }
@@ -346,26 +918,33 @@ export function SchedulePublicationModal({
         const pubItems = sequenceContentIds.map((cId, idx) => {
           const itemMedia = contents.find((c) => c.id === cId);
           const isVid = itemMedia?.media_type === "VIDEO";
-          const pType: CriafyPublicationType = isVid ? "STORY_VIDEO" : "STORY_IMAGE";
+          const pType: CriafyPublicationType = isVid
+            ? "STORY_VIDEO"
+            : "STORY_IMAGE";
 
-          // Calculate offset time
-          const itemDate = new Date(baseScheduledDate.getTime() + idx * sequenceIntervalMinutes * 60000);
+          const itemDate = new Date(
+            baseScheduledDate.getTime() + idx * sequenceIntervalMinutes * 60000
+          );
 
           return {
             company_id: activeCompanyId,
             account_id: targetAccountId,
             content_id: cId,
             publication_type: pType,
-            caption: undefined, // Stories typically don't take caption in graph api media container
+            caption: undefined,
             scheduled_at: itemDate.toISOString(),
-            status: (isPublishNow && idx === 0 ? "PUBLISHING" : "SCHEDULED") as any,
+            status: (isPublishNow && idx === 0
+              ? "PUBLISHING"
+              : "SCHEDULED") as any,
             story_sequence_id: sequenceId,
             sequence_order: idx + 1,
             sequence_total: total,
           };
         });
 
-        const createdPubs = await criafyService.createPublicationSequence(pubItems);
+        const createdPubs = await criafyService.createPublicationSequence(
+          pubItems
+        );
         toast.success(`Sequência de ${total} stories programada com sucesso!`);
         onOpenChange(false);
 
@@ -379,10 +958,13 @@ export function SchedulePublicationModal({
           criafyService
             .publishNow(firstPub.id)
             .then(() => {
-              toast.success("1º Story publicado! Os próximos serão disparados em sequência.", {
-                id: `seq-${firstPub.id}`,
-                duration: 8000,
-              });
+              toast.success(
+                "1º Story publicado! Os próximos serão disparados em sequência.",
+                {
+                  id: `seq-${firstPub.id}`,
+                  duration: 8000,
+                }
+              );
               onSuccess?.();
             })
             .catch((err: any) => {
@@ -404,11 +986,14 @@ export function SchedulePublicationModal({
   };
 
   const selectedSingleMedia = contents.find((c) => c.id === selectedContentId);
-  const targetAccountObj = accounts.find((a) => a.id === targetAccountId);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] max-h-[92vh] overflow-y-auto">
+      <DialogContent
+        className={`${
+          mode === "BULK" ? "sm:max-w-[880px]" : "sm:max-w-[700px]"
+        } max-h-[92vh] overflow-y-auto transition-all`}
+      >
         <DialogHeader className="pb-2 border-b border-muted">
           <div className="flex items-center justify-between">
             <DialogTitle className="text-lg font-bold flex items-center gap-2">
@@ -417,29 +1002,45 @@ export function SchedulePublicationModal({
             </DialogTitle>
           </div>
           <DialogDescription className="text-xs text-muted-foreground">
-            Defina o formato, selecione os conteúdos da biblioteca e escolha o horário de publicação ou agendamento.
+            Escolha entre agendar um post único, subir e distribuir vários
+            conteúdos em Bulk (Manhã, Tarde e Noite) ou criar uma sequência de
+            Stories.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-          {/* Top Toggle: Post Individual vs Sequência de Stories vs Programação em Bulk */}
-          <div className="flex flex-wrap bg-muted/60 p-1 rounded-xl gap-1">
+          {/* Top Toggle: Post Individual vs Programação em Bulk vs Sequência de Stories */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 bg-muted/60 p-1 rounded-xl gap-1">
             <button
               type="button"
               onClick={() => setMode("SINGLE")}
-              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+              className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 mode === "SINGLE"
-                  ? "bg-background text-foreground shadow-sm"
+                  ? "bg-background text-foreground shadow-sm font-bold"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
               <Send className="w-3.5 h-3.5 text-sky-500" />
               Post Individual
             </button>
+
+            <button
+              type="button"
+              onClick={() => setMode("BULK")}
+              className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                mode === "BULK"
+                  ? "bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 text-white shadow-sm font-bold"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              Programar em Bulk ({plannedBulkSlots.length || "3/dia"})
+            </button>
+
             <button
               type="button"
               onClick={() => setMode("STORY_SEQUENCE")}
-              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+              className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 mode === "STORY_SEQUENCE"
                   ? "bg-gradient-to-r from-pink-500 to-amber-500 text-white shadow-sm font-bold"
                   : "text-muted-foreground hover:text-foreground"
@@ -448,24 +1049,13 @@ export function SchedulePublicationModal({
               <Layers className="w-3.5 h-3.5" />
               Sequência de Stories ({sequenceContentIds.length})
             </button>
-            {onOpenBulk && (
-              <button
-                type="button"
-                onClick={() => {
-                  onOpenChange(false);
-                  onOpenBulk();
-                }}
-                className="flex-1 py-1.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all bg-purple-500/10 text-purple-600 dark:text-purple-300 hover:bg-purple-500/20 border border-purple-500/20 cursor-pointer"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-purple-500" />
-                Upload & Programar em Bulk
-              </button>
-            )}
           </div>
 
           {/* Account Selection */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">Conta de Destino do Instagram</Label>
+            <Label className="text-xs font-semibold">
+              Conta de Destino do Instagram
+            </Label>
             <Select value={targetAccountId} onValueChange={setTargetAccountId}>
               <SelectTrigger className="h-10 text-xs">
                 <SelectValue placeholder="Selecione a conta" />
@@ -475,11 +1065,17 @@ export function SchedulePublicationModal({
                   <SelectItem key={acc.id} value={acc.id}>
                     <div className="flex items-center gap-2">
                       <Avatar className="w-5 h-5">
-                        <AvatarImage src={acc.profile_picture_url || undefined} />
-                        <AvatarFallback className="text-[9px]">@{acc.username[0]}</AvatarFallback>
+                        <AvatarImage
+                          src={acc.profile_picture_url || undefined}
+                        />
+                        <AvatarFallback className="text-[9px]">
+                          @{acc.username[0]}
+                        </AvatarFallback>
                       </Avatar>
                       <span className="font-semibold">@{acc.username}</span>
-                      <span className="text-muted-foreground text-[10px]">({acc.name || "Instagram"})</span>
+                      <span className="text-muted-foreground text-[10px]">
+                        ({acc.name || "Instagram"})
+                      </span>
                     </div>
                   </SelectItem>
                 ))}
@@ -487,17 +1083,23 @@ export function SchedulePublicationModal({
             </Select>
           </div>
 
-          {/* SINGLE POST CONFIGURATION */}
+          {/* =========================================================
+              MODE 1: SINGLE POST CONFIGURATION
+             ========================================================= */}
           {mode === "SINGLE" && (
             <div className="space-y-4">
               {/* Publication Format Selector */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Formato no Instagram</Label>
+                <Label className="text-xs font-semibold">
+                  Formato no Instagram
+                </Label>
                 <div className="grid grid-cols-3 gap-2">
                   <div
                     onClick={() => {
                       if (selectedSingleMedia?.media_type === "IMAGE") {
-                        toast.info("Imagens não podem ser publicadas como Reel.");
+                        toast.info(
+                          "Imagens não podem ser publicadas como Reel."
+                        );
                         return;
                       }
                       setPublicationType("REEL");
@@ -540,16 +1142,21 @@ export function SchedulePublicationModal({
                         selectedSingleMedia.duration_seconds > 60
                       ) {
                         toast.error(
-                          `Vídeo com ${Math.round(selectedSingleMedia.duration_seconds)}s ultrapassa o limite de 60s da Meta para Stories. Escolha "Reel".`
+                          `Vídeo com ${Math.round(
+                            selectedSingleMedia.duration_seconds
+                          )}s ultrapassa o limite de 60s da Meta para Stories. Escolha "Reel".`
                         );
                         return;
                       }
                       setPublicationType(
-                        selectedSingleMedia?.media_type === "IMAGE" ? "STORY_IMAGE" : "STORY_VIDEO"
+                        selectedSingleMedia?.media_type === "IMAGE"
+                          ? "STORY_IMAGE"
+                          : "STORY_VIDEO"
                       );
                     }}
                     className={`p-2.5 rounded-xl border text-center cursor-pointer transition-all ${
-                      publicationType === "STORY_VIDEO" || publicationType === "STORY_IMAGE"
+                      publicationType === "STORY_VIDEO" ||
+                      publicationType === "STORY_IMAGE"
                         ? "border-pink-500 bg-pink-500/10 text-pink-700 dark:text-pink-300 font-bold shadow-sm"
                         : "border-muted hover:bg-muted/40 text-muted-foreground"
                     }`}
@@ -567,7 +1174,9 @@ export function SchedulePublicationModal({
               {/* Single Media Selector */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <Label className="text-xs font-semibold">Selecione a Mídia da Biblioteca</Label>
+                  <Label className="text-xs font-semibold">
+                    Selecione a Mídia da Biblioteca
+                  </Label>
                   <span className="text-[11px] text-muted-foreground">
                     {contents.length} arquivo(s) disponível(is)
                   </span>
@@ -579,16 +1188,13 @@ export function SchedulePublicationModal({
                   </div>
                 ) : contents.length === 0 ? (
                   <p className="text-xs text-muted-foreground p-4 bg-muted/20 rounded-lg text-center">
-                    Nenhuma mídia encontrada na biblioteca. Faça o upload na aba Biblioteca primeiro.
+                    Nenhuma mídia encontrada na biblioteca. Use a aba "Programar
+                    em Bulk" acima para subir novos arquivos agora.
                   </p>
                 ) : (
                   <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-48 overflow-y-auto p-1.5 border border-muted rounded-xl bg-card">
                     {contents.map((item) => {
                       const isSelected = selectedContentId === item.id;
-                      const isOver60s =
-                        item.media_type === "VIDEO" &&
-                        item.duration_seconds &&
-                        item.duration_seconds > 60;
 
                       return (
                         <div
@@ -621,7 +1227,9 @@ export function SchedulePublicationModal({
                               ) : (
                                 <ImageIcon className="w-2.5 h-2.5 mr-0.5 text-emerald-400" />
                               )}
-                              {item.duration_seconds ? `${Math.round(item.duration_seconds)}s` : ""}
+                              {item.duration_seconds
+                                ? `${Math.round(item.duration_seconds)}s`
+                                : ""}
                             </Badge>
                           </div>
 
@@ -651,7 +1259,9 @@ export function SchedulePublicationModal({
               {(publicationType === "FEED" || publicationType === "REEL") && (
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs font-semibold">Legenda / Copy do Post</Label>
+                    <Label className="text-xs font-semibold">
+                      Legenda / Copy do Post
+                    </Label>
                     <Button
                       type="button"
                       variant="outline"
@@ -680,16 +1290,495 @@ export function SchedulePublicationModal({
             </div>
           )}
 
-          {/* STORY SEQUENCE CONFIGURATION */}
+          {/* =========================================================
+              MODE 2: BULK UPLOAD & RANDOM DISTRIBUTION (MANHÃ/TARDE/NOITE)
+             ========================================================= */}
+          {mode === "BULK" && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 pt-1">
+              {/* Left 7 cols: Settings + Upload/Library Picker */}
+              <div className="lg:col-span-7 space-y-3.5">
+                {/* Cadence & Start Date */}
+                <div className="grid grid-cols-2 gap-3 bg-muted/30 p-3 rounded-xl border border-border/60">
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Quantidade por Dia
+                    </Label>
+                    <Select
+                      value={String(postsPerDay)}
+                      onValueChange={(v) => setPostsPerDay(Number(v) || 3)}
+                    >
+                      <SelectTrigger className="h-9 text-xs bg-background rounded-lg font-semibold">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">1 por dia</SelectItem>
+                        <SelectItem value="2">2 por dia</SelectItem>
+                        <SelectItem value="3">
+                          3 por dia (Manhã, Tarde e Noite)
+                        </SelectItem>
+                        <SelectItem value="4">4 por dia</SelectItem>
+                        <SelectItem value="5">5 por dia</SelectItem>
+                        <SelectItem value="6">6 por dia</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Data de Início
+                    </Label>
+                    <Input
+                      type="date"
+                      value={bulkStartDate}
+                      onChange={(e) => setBulkStartDate(e.target.value)}
+                      className="h-9 text-xs bg-background rounded-lg"
+                    />
+                  </div>
+                </div>
+
+                {/* Shifts: Manhã, Tarde e Noite */}
+                <div className="space-y-2.5 bg-card p-3 rounded-xl border border-border/70">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-pink-500" />
+                      Turnos do Horário Normal
+                    </Label>
+                    <span className="text-[10px] text-muted-foreground">
+                      Manhã, Tarde e Noite
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    {(["MANHA", "TARDE", "NOITE"] as const).map((shiftKey) => {
+                      const cfg = SHIFT_CONFIG[shiftKey];
+                      const Icon = cfg.icon;
+                      const active = enabledShifts[shiftKey];
+                      return (
+                        <button
+                          key={shiftKey}
+                          type="button"
+                          onClick={() => toggleShift(shiftKey)}
+                          className={`p-2 rounded-xl border text-left transition-all cursor-pointer flex flex-col gap-0.5 ${
+                            active
+                              ? "bg-primary/5 border-primary/40 shadow-2xs"
+                              : "bg-muted/20 border-border/50 opacity-50"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold flex items-center gap-1">
+                              <Icon className="w-3.5 h-3.5 text-amber-500" />
+                              {cfg.label}
+                            </span>
+                            <Checkbox checked={active} />
+                          </div>
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            {cfg.rangeLabel}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border/50">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={randomizeContentOrder}
+                        onCheckedChange={setRandomizeContentOrder}
+                        id="bulk-shuffle-contents"
+                      />
+                      <Label
+                        htmlFor="bulk-shuffle-contents"
+                        className="text-xs font-medium cursor-pointer flex items-center gap-1"
+                      >
+                        <Shuffle className="w-3.5 h-3.5 text-purple-500" />
+                        Ordem aleatória entre conteúdos
+                      </Label>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={randomizeTimesInShift}
+                        onCheckedChange={setRandomizeTimesInShift}
+                        id="bulk-random-times"
+                      />
+                      <Label
+                        htmlFor="bulk-random-times"
+                        className="text-xs font-medium cursor-pointer"
+                      >
+                        Horários aleatórios
+                      </Label>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/50">
+                    <Label className="text-xs font-medium text-muted-foreground">
+                      Formato das publicações:
+                    </Label>
+                    <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-lg">
+                      {[
+                        {
+                          id: "AUTO" as const,
+                          label: "Automático (Reel / Feed)",
+                        },
+                        { id: "STORIES" as const, label: "Stories" },
+                      ].map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setBulkFormatMode(opt.id)}
+                          className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                            bulkFormatMode === opt.id
+                              ? "bg-background text-foreground shadow-2xs"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Upload or Library Selector */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => setBulkSourceTab("UPLOAD")}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                          bulkSourceTab === "UPLOAD"
+                            ? "bg-background text-foreground shadow-xs"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <Upload className="w-3.5 h-3.5 text-purple-500" />
+                        Subir Mídias ({pendingFiles.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBulkSourceTab("LIBRARY")}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                          bulkSourceTab === "LIBRARY"
+                            ? "bg-background text-foreground shadow-xs"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <FolderOpen className="w-3.5 h-3.5 text-pink-500" />
+                        Da Biblioteca ({selectedBulkLibraryIds.length})
+                      </button>
+                    </div>
+
+                    {bulkSourceTab === "LIBRARY" && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={selectAllUnpublishedLibrary}
+                        className="h-7 text-[11px] gap-1 rounded-lg cursor-pointer"
+                      >
+                        <Sparkles className="w-3 h-3 text-amber-500" />
+                        Selecionar Inéditos
+                      </Button>
+                    )}
+                  </div>
+
+                  {bulkSourceTab === "UPLOAD" ? (
+                    <div className="space-y-2.5">
+                      <div
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={handleBulkDropFiles}
+                        onClick={() => bulkFileInputRef.current?.click()}
+                        className="border-2 border-dashed border-purple-500/30 hover:border-purple-500/60 bg-purple-500/[0.02] hover:bg-purple-500/[0.05] transition-all rounded-xl p-5 text-center cursor-pointer"
+                      >
+                        <input
+                          ref={bulkFileInputRef}
+                          type="file"
+                          multiple
+                          accept="image/*,video/*"
+                          onChange={handleBulkFileInputChange}
+                          className="hidden"
+                        />
+                        <div className="w-9 h-9 rounded-full bg-purple-500/10 text-purple-600 flex items-center justify-center mx-auto mb-1.5">
+                          <Upload className="w-4 h-4" />
+                        </div>
+                        <p className="text-xs font-bold text-foreground">
+                          Clique para selecionar ou arraste vários vídeos e
+                          imagens
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Suba tudo de uma vez e o sistema distribuirá
+                          automaticamente
+                        </p>
+                      </div>
+
+                      {pendingFiles.length > 0 && (
+                        <div className="grid grid-cols-4 gap-2 max-h-[160px] overflow-y-auto p-1">
+                          {pendingFiles.map((pf) => (
+                            <div
+                              key={pf.tempId}
+                              className="relative group rounded-lg overflow-hidden border border-border bg-muted/40 aspect-square"
+                            >
+                              {pf.mediaType === "VIDEO" ? (
+                                <video
+                                  src={pf.previewUrl}
+                                  className="w-full h-full object-cover"
+                                  muted
+                                />
+                              ) : (
+                                <img
+                                  src={pf.previewUrl}
+                                  alt={pf.title}
+                                  className="w-full h-full object-cover"
+                                />
+                              )}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  removePendingFile(pf.tempId);
+                                }}
+                                className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/70 text-white hover:bg-rose-600 flex items-center justify-center transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                              <div className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] px-1 py-0.5 truncate">
+                                {pf.title}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="border border-border/70 rounded-xl p-2.5 bg-muted/10 max-h-[200px] overflow-y-auto">
+                      {loadingMedia ? (
+                        <div className="flex justify-center py-6">
+                          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : contents.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-6">
+                          Nenhuma mídia na biblioteca. Use "Subir Mídias" ao
+                          lado.
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-4 gap-2">
+                          {contents.map((content) => {
+                            const isSelected = selectedBulkLibraryIds.includes(
+                              content.id
+                            );
+                            return (
+                              <div
+                                key={content.id}
+                                onClick={() =>
+                                  toggleBulkLibraryItem(content.id)
+                                }
+                                className={`relative rounded-lg overflow-hidden border aspect-square cursor-pointer transition-all ${
+                                  isSelected
+                                    ? "ring-2 ring-purple-600 border-purple-600 scale-[0.98]"
+                                    : "border-border/60 opacity-85 hover:opacity-100"
+                                }`}
+                              >
+                                {content.media_type === "VIDEO" ? (
+                                  <video
+                                    src={content.media_url}
+                                    className="w-full h-full object-cover"
+                                    muted
+                                  />
+                                ) : (
+                                  <img
+                                    src={content.media_url}
+                                    alt={content.title}
+                                    className="w-full h-full object-cover"
+                                  />
+                                )}
+                                <div className="absolute top-1 right-1">
+                                  <div
+                                    className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                                      isSelected
+                                        ? "bg-purple-600 text-white"
+                                        : "bg-black/50 text-white/70 border border-white/40"
+                                    }`}
+                                  >
+                                    {isSelected ? "✓" : ""}
+                                  </div>
+                                </div>
+                                <div className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] px-1 py-0.5 truncate">
+                                  {content.title || "Sem título"}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Right 5 cols: Live Preview of Scheduled Days & Shifts */}
+              <div className="lg:col-span-5 bg-muted/20 border border-border/70 rounded-xl p-3.5 flex flex-col justify-between space-y-3">
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                        <CalendarDays className="w-3.5 h-3.5 text-purple-600" />
+                        Distribuição ({plannedBulkSlots.length})
+                      </h4>
+                      <p className="text-[10px] text-muted-foreground">
+                        {plannedBulkSlots.length > 0
+                          ? `${plannedBulkSlots.length} post(s) em ${groupedPreviewByDay.length} dia(s)`
+                          : "Suba ou selecione mídias ao lado"}
+                      </p>
+                    </div>
+
+                    {plannedBulkSlots.length > 0 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShuffleSeed((s) => s + 1)}
+                        className="h-7 text-[11px] gap-1 rounded-lg cursor-pointer"
+                        title="Sortear novamente a ordem e os horários"
+                      >
+                        <Shuffle className="w-3 h-3 text-purple-600" />
+                        Sortear
+                      </Button>
+                    )}
+                  </div>
+
+                  {plannedBulkSlots.length === 0 ? (
+                    <div className="border border-dashed border-border rounded-xl p-6 text-center my-4 space-y-1.5">
+                      <CalendarDays className="w-7 h-7 text-muted-foreground/50 mx-auto" />
+                      <p className="text-xs font-medium text-muted-foreground">
+                        Nenhuma mídia selecionada
+                      </p>
+                      <p className="text-[10px] text-muted-foreground/80">
+                        Ao subir seus vídeos/imagens, eles serão distribuídos
+                        aleatoriamente nos turnos da manhã, tarde e noite.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5 max-h-[320px] overflow-y-auto pr-1 scrollbar-thin">
+                      {groupedPreviewByDay.map(([dateKey, daySlots]) => {
+                        const [yy, mm, dd] = dateKey.split("-").map(Number);
+                        const dateObj = new Date(yy, mm - 1, dd);
+                        const formattedDate = dateObj.toLocaleDateString(
+                          "pt-BR",
+                          {
+                            weekday: "short",
+                            day: "2-digit",
+                            month: "short",
+                          }
+                        );
+
+                        return (
+                          <div
+                            key={dateKey}
+                            className="rounded-xl border border-border/80 bg-card p-2.5 space-y-1.5 shadow-2xs"
+                          >
+                            <div className="flex items-center justify-between border-b border-border/50 pb-1">
+                              <span className="text-[11px] font-bold capitalize text-foreground">
+                                {formattedDate}
+                              </span>
+                              <Badge
+                                variant="outline"
+                                className="text-[9px] px-1.5 py-0"
+                              >
+                                {daySlots.length} post(s)
+                              </Badge>
+                            </div>
+
+                            <div className="space-y-1">
+                              {daySlots.map((slot, idx) => {
+                                const shiftCfg = SHIFT_CONFIG[slot.shift];
+                                const ShiftIcon = shiftCfg.icon;
+                                const timeStr =
+                                  slot.scheduledAt.toLocaleTimeString("pt-BR", {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  });
+
+                                return (
+                                  <div
+                                    key={`${slot.item.key}_${idx}`}
+                                    className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-muted/40 text-xs"
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <div className="w-7 h-7 rounded overflow-hidden bg-muted shrink-0 border border-border/60">
+                                        {slot.item.mediaType === "VIDEO" ? (
+                                          <video
+                                            src={slot.item.previewUrl}
+                                            className="w-full h-full object-cover"
+                                            muted
+                                          />
+                                        ) : (
+                                          <img
+                                            src={slot.item.previewUrl}
+                                            alt={slot.item.title}
+                                            className="w-full h-full object-cover"
+                                          />
+                                        )}
+                                      </div>
+                                      <div className="min-w-0">
+                                        <div className="font-semibold text-[11px] truncate max-w-[115px]">
+                                          {slot.item.title}
+                                        </div>
+                                        <div className="text-[9px] text-muted-foreground">
+                                          {slot.publicationType}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <Badge
+                                        variant="outline"
+                                        className={`text-[9px] px-1.5 py-0 font-semibold flex items-center gap-0.5 ${shiftCfg.badgeClass}`}
+                                      >
+                                        <ShiftIcon className="w-2.5 h-2.5" />
+                                        {shiftCfg.label}
+                                      </Badge>
+                                      <span className="font-mono font-bold text-[11px] bg-background px-1.5 py-0.5 rounded border border-border">
+                                        {timeStr}
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {bulkProgressText && (
+                  <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center gap-2 text-xs text-purple-700 dark:text-purple-300 font-medium">
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                    <span className="truncate">{bulkProgressText}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* =========================================================
+              MODE 3: STORY SEQUENCE CONFIGURATION
+             ========================================================= */}
           {mode === "STORY_SEQUENCE" && (
             <div className="space-y-4">
               <div className="p-3 rounded-xl bg-gradient-to-r from-pink-500/10 via-purple-500/10 to-amber-500/10 border border-pink-500/20 space-y-1">
                 <div className="flex items-center gap-2">
                   <Layers className="w-4 h-4 text-pink-500" />
-                  <span className="font-bold text-xs">Criador de Sequência de Stories</span>
+                  <span className="font-bold text-xs">
+                    Criador de Sequência de Stories
+                  </span>
                 </div>
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  Selecione múltiplos stories para serem postados em sequência encadeada no Instagram. O sistema publicará ou agendará cada story na ordem definida com o intervalo de tempo escolhido.
+                  Selecione múltiplos stories para serem postados em sequência
+                  encadeada no Instagram. O sistema publicará ou agendará cada
+                  story na ordem definida com o intervalo de tempo escolhido.
                 </p>
               </div>
 
@@ -697,7 +1786,8 @@ export function SchedulePublicationModal({
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label className="text-xs font-semibold">
-                    Ordem dos Stories na Sequência ({sequenceContentIds.length} selecionados)
+                    Ordem dos Stories na Sequência ({sequenceContentIds.length}{" "}
+                    selecionados)
                   </Label>
                   {sequenceContentIds.length > 0 && (
                     <button
@@ -713,9 +1803,12 @@ export function SchedulePublicationModal({
                 {sequenceContentIds.length === 0 ? (
                   <div className="p-6 border border-dashed rounded-xl text-center space-y-1 text-muted-foreground bg-muted/10">
                     <Layers className="w-6 h-6 mx-auto text-muted-foreground/60" />
-                    <p className="text-xs font-medium">Nenhum story selecionado ainda</p>
+                    <p className="text-xs font-medium">
+                      Nenhum story selecionado ainda
+                    </p>
                     <p className="text-[11px]">
-                      Clique nas mídias abaixo para adicionar à sequência na ordem desejada.
+                      Clique nas mídias abaixo para adicionar à sequência na
+                      ordem desejada.
                     </p>
                   </div>
                 ) : (
@@ -755,7 +1848,9 @@ export function SchedulePublicationModal({
                               <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                                 <span>{item.media_type}</span>
                                 {item.duration_seconds && (
-                                  <span>• {Math.round(item.duration_seconds)}s</span>
+                                  <span>
+                                    • {Math.round(item.duration_seconds)}s
+                                  </span>
                                 )}
                               </div>
                             </div>
@@ -777,7 +1872,9 @@ export function SchedulePublicationModal({
                               type="button"
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleMoveSequenceItem(idx, "DOWN")}
+                              onClick={() =>
+                                handleMoveSequenceItem(idx, "DOWN")
+                              }
                               disabled={idx === sequenceContentIds.length - 1}
                               className="w-6 h-6"
                               title="Mover para baixo"
@@ -805,16 +1902,22 @@ export function SchedulePublicationModal({
               {/* Interval / Cadence Between Stories */}
               <div className="grid grid-cols-2 gap-3 p-3 rounded-xl border border-muted bg-muted/20">
                 <div className="space-y-1">
-                  <Label className="text-xs font-semibold">Intervalo entre cada Story</Label>
+                  <Label className="text-xs font-semibold">
+                    Intervalo entre cada Story
+                  </Label>
                   <Select
                     value={String(sequenceIntervalMinutes)}
-                    onValueChange={(val) => setSequenceIntervalMinutes(Number(val))}
+                    onValueChange={(val) =>
+                      setSequenceIntervalMinutes(Number(val))
+                    }
                   >
                     <SelectTrigger className="h-9 text-xs bg-background">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="0">Simultâneo / Mesmo minuto (0 min)</SelectItem>
+                      <SelectItem value="0">
+                        Simultâneo / Mesmo minuto (0 min)
+                      </SelectItem>
                       <SelectItem value="1">1 minuto de intervalo</SelectItem>
                       <SelectItem value="2">2 minutos de intervalo</SelectItem>
                       <SelectItem value="5">5 minutos de intervalo</SelectItem>
@@ -824,10 +1927,15 @@ export function SchedulePublicationModal({
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs font-semibold">Duração Total da Sequência</Label>
+                  <Label className="text-xs font-semibold">
+                    Duração Total da Sequência
+                  </Label>
                   <div className="h-9 rounded-md bg-background px-3 flex items-center border border-input text-xs text-muted-foreground font-medium">
                     {sequenceContentIds.length > 0
-                      ? `${sequenceContentIds.length} stories (~${(sequenceContentIds.length - 1) * sequenceIntervalMinutes} min)`
+                      ? `${sequenceContentIds.length} stories (~${
+                          (sequenceContentIds.length - 1) *
+                          sequenceIntervalMinutes
+                        } min)`
                       : "Selecione stories"}
                   </div>
                 </div>
@@ -880,7 +1988,9 @@ export function SchedulePublicationModal({
 
                         <div className="absolute top-1 left-1">
                           <Badge className="bg-black/70 text-white text-[9px] px-1 py-0 h-4 border-0">
-                            {item.duration_seconds ? `${Math.round(item.duration_seconds)}s` : item.media_type}
+                            {item.duration_seconds
+                              ? `${Math.round(item.duration_seconds)}s`
+                              : item.media_type}
                           </Badge>
                         </div>
 
@@ -899,92 +2009,115 @@ export function SchedulePublicationModal({
             </div>
           )}
 
-          {/* Timing & Schedule Options */}
-          <div className="p-3.5 rounded-xl border border-muted bg-muted/20 space-y-3">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs font-bold flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-pink-500" />
-                Momento da Publicação
-              </Label>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setIsPublishNow(true)}
-                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
-                    isPublishNow
-                      ? "bg-pink-600 text-white shadow-sm"
-                      : "bg-muted text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Publicar Imediatamente
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsPublishNow(false)}
-                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
-                    !isPublishNow
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "bg-muted text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Agendar Data & Hora
-                </button>
-              </div>
-            </div>
-
-            {!isPublishNow && (
-              <div className="space-y-1 pt-1">
-                <Label className="text-[11px] text-muted-foreground">
-                  Data e Horário de Início
+          {/* Timing & Schedule Options (Only for SINGLE and STORY_SEQUENCE) */}
+          {mode !== "BULK" && (
+            <div className="p-3.5 rounded-xl border border-muted bg-muted/20 space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-pink-500" />
+                  Momento da Publicação
                 </Label>
-                <Input
-                  type="datetime-local"
-                  value={scheduledAt}
-                  onChange={(e) => setScheduledAt(e.target.value)}
-                  className="h-9 text-xs bg-background"
-                />
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsPublishNow(true)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                      isPublishNow
+                        ? "bg-pink-600 text-white shadow-sm"
+                        : "bg-muted text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Publicar Imediatamente
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsPublishNow(false)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                      !isPublishNow
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "bg-muted text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Agendar Data & Hora
+                  </button>
+                </div>
               </div>
-            )}
-          </div>
+
+              {!isPublishNow && (
+                <div className="space-y-1 pt-1">
+                  <Label className="text-[11px] text-muted-foreground">
+                    Data e Horário de Início
+                  </Label>
+                  <Input
+                    type="datetime-local"
+                    value={scheduledAt}
+                    onChange={(e) => setScheduledAt(e.target.value)}
+                    className="h-9 text-xs bg-background"
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-muted">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => onOpenChange(false)}
-              className="text-xs h-9"
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="submit"
-              size="sm"
-              disabled={submitting}
-              className="text-xs h-9 bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 text-white hover:opacity-90 transition-all font-semibold shadow-sm"
-            >
-              {submitting ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                  Salvando Programação...
-                </>
-              ) : isPublishNow ? (
-                <>
-                  <Send className="w-3.5 h-3.5 mr-1.5" />
-                  {mode === "STORY_SEQUENCE"
-                    ? `Publicar Sequência Agora (${sequenceContentIds.length})`
-                    : "Publicar Imediatamente"}
-                </>
-              ) : (
-                <>
-                  <CalendarDays className="w-3.5 h-3.5 mr-1.5" />
-                  {mode === "STORY_SEQUENCE"
-                    ? `Agendar Sequência (${sequenceContentIds.length} Stories)`
-                    : "Confirmar Agendamento"}
-                </>
+          <div className="flex items-center justify-between gap-2 pt-2 border-t border-muted">
+            <div className="text-xs text-muted-foreground">
+              {mode === "BULK" && plannedBulkSlots.length > 0 && (
+                <span>
+                  <strong>{plannedBulkSlots.length} conteúdos</strong> •{" "}
+                  <strong>{postsPerDay}/dia</strong> (Manhã, Tarde e Noite)
+                </span>
               )}
-            </Button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onOpenChange(false)}
+                className="text-xs h-9"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={
+                  submitting ||
+                  (mode === "BULK" && plannedBulkSlots.length === 0)
+                }
+                className="text-xs h-9 bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 text-white hover:opacity-90 transition-all font-semibold shadow-sm cursor-pointer"
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                    {mode === "BULK"
+                      ? "Subindo e Programando..."
+                      : "Salvando Programação..."}
+                  </>
+                ) : mode === "BULK" ? (
+                  <>
+                    <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
+                    Subir e Programar Tudo ({plannedBulkSlots.length})
+                  </>
+                ) : isPublishNow ? (
+                  <>
+                    <Send className="w-3.5 h-3.5 mr-1.5" />
+                    {mode === "STORY_SEQUENCE"
+                      ? `Publicar Sequência Agora (${sequenceContentIds.length})`
+                      : "Publicar Imediatamente"}
+                  </>
+                ) : (
+                  <>
+                    <CalendarDays className="w-3.5 h-3.5 mr-1.5" />
+                    {mode === "STORY_SEQUENCE"
+                      ? `Agendar Sequência (${sequenceContentIds.length} Stories)`
+                      : "Confirmar Agendamento"}
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </form>
       </DialogContent>
