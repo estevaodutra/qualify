@@ -9,7 +9,7 @@ export function ChatExpressSidebar() {
   const { sessions, activeLeadId, activateSession, closeSession } = useChatExpressStore();
 
   return (
-    <div className="w-[72px] bg-card border-r border-border/40 flex flex-col items-center py-4 gap-4 overflow-y-auto overflow-x-hidden scrollbar-none shrink-0 relative z-20">
+    <div className="w-[72px] bg-card border-r border-border/40 flex flex-col items-center py-4 gap-4 overflow-y-auto overflow-x-hidden scrollbar-dock shrink-0 relative z-20 select-none">
       <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary mb-2 shadow-sm">
         <MessageCircle className="w-5 h-5" />
       </div>

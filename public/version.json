@@ -1,6 +1,6 @@
 {
-  "commit": "56eb5d21a995f3f4890df22687f752195734465d",
-  "shortCommit": "56eb5d2",
-  "message": "fix(criafy): resolve bulk upload size limit with chunked uploads, edge stream proxy, and resume caching",
-  "builtAt": "2026-10-28T13:52:45.174Z"
+  "commit": "81a01c21d64f88be953152395e3530e194ff5af7",
+  "shortCommit": "81a01c2",
+  "message": "feat(chat): adiciona botao para visualizacao do card do usuario dentro da janela de chat",
+  "builtAt": "2026-10-28T14:12:08.408Z"
 }
