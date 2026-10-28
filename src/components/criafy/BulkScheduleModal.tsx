@@ -25,8 +25,6 @@ import {
   CalendarDays,
   Clock,
   Sparkles,
-  Video,
-  Image as ImageIcon,
   Loader2,
   Trash2,
   Shuffle,
@@ -35,7 +33,6 @@ import {
   Moon,
   CheckCircle2,
   Layers,
-  Plus,
   FolderOpen,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -44,6 +41,7 @@ import { criafyService } from "@/services/criafy/criafyService";
 import {
   CriafyInstagramAccount,
   CriafyContent,
+  CriafyPublication,
   CriafyPublicationType,
 } from "@/types/criafy";
 import { extractAndValidateMedia } from "@/utils/criafyMediaValidator";
@@ -72,7 +70,7 @@ interface PlannedSlot {
   item: UnifiedScheduleItem;
   scheduledAt: Date;
   shift: "MANHA" | "TARDE" | "NOITE";
-  publicationType: CriafyPublicationType;
+  publicationTypes: CriafyPublicationType[];
 }
 
 interface BulkScheduleModalProps {
@@ -131,6 +129,15 @@ function randomIntBetween(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+function isEligibleForStories(
+  mediaType: "VIDEO" | "IMAGE",
+  durationSeconds?: number
+): boolean {
+  if (mediaType === "IMAGE") return true;
+  if (!durationSeconds || durationSeconds <= 0) return true;
+  return durationSeconds <= 60;
+}
+
 export function BulkScheduleModal({
   open,
   onOpenChange,
@@ -175,9 +182,8 @@ export function BulkScheduleModal({
     useState<boolean>(true);
   const [randomizeTimesInShift, setRandomizeTimesInShift] =
     useState<boolean>(true);
-  const [formatMode, setFormatMode] = useState<
-    "AUTO" | "REEL_FEED" | "STORIES"
-  >("AUTO");
+  const [bulkPostReelsFeed, setBulkPostReelsFeed] = useState<boolean>(true);
+  const [bulkPostStories, setBulkPostStories] = useState<boolean>(true);
   const [shuffleSeed, setShuffleSeed] = useState<number>(1);
 
   // Execution state
@@ -349,10 +355,13 @@ export function BulkScheduleModal({
 
     // 2. Parse startDate in local time
     const [y, m, d] = startDate.split("-").map(Number);
-    const baseDay = new Date(y || new Date().getFullYear(), (m || 1) - 1, d || 1);
+    const baseDay = new Date(
+      y || new Date().getFullYear(),
+      (m || 1) - 1,
+      d || 1
+    );
     const now = new Date();
 
-    // Check if baseDay is today and current time has already passed all shifts
     const isSameDay =
       baseDay.getFullYear() === now.getFullYear() &&
       baseDay.getMonth() === now.getMonth() &&
@@ -361,7 +370,6 @@ export function BulkScheduleModal({
     const currentMinutesOfDay = now.getHours() * 60 + now.getMinutes();
     let dayOffset = 0;
 
-    // If today and it's already past 21:30, start tomorrow automatically
     if (isSameDay && currentMinutesOfDay >= 21 * 60 + 30) {
       dayOffset = 1;
     }
@@ -381,8 +389,7 @@ export function BulkScheduleModal({
         slotDay.getMonth() === now.getMonth() &&
         slotDay.getDate() === now.getDate();
 
-      // Filter shifts that are still available on this day
-      let availableShiftsForDay = effectiveShifts.filter((shiftKey) => {
+      const availableShiftsForDay = effectiveShifts.filter((shiftKey) => {
         if (!isSlotToday) return true;
         return SHIFT_CONFIG[shiftKey].endMinutes > currentMinutesOfDay + 15;
       });
@@ -392,14 +399,11 @@ export function BulkScheduleModal({
         continue;
       }
 
-      // How many posts on this day
       const countForThisDay = Math.min(
         Math.max(1, postsPerDay),
         orderedItems.length - itemIdx
       );
 
-      // Assign shifts for each post of the day
-      // E.g. if 3 posts/day and Manhã, Tarde, Noite enabled -> 1 Manhã, 1 Tarde, 1 Noite
       const dayShiftAssignments: Array<"MANHA" | "TARDE" | "NOITE"> = [];
       for (let s = 0; s < countForThisDay; s++) {
         dayShiftAssignments.push(
@@ -407,11 +411,9 @@ export function BulkScheduleModal({
         );
       }
 
-      // Sort shifts in chronological order: MANHA -> TARDE -> NOITE
       const shiftOrder = { MANHA: 1, TARDE: 2, NOITE: 3 };
       dayShiftAssignments.sort((a, b) => shiftOrder[a] - shiftOrder[b]);
 
-      // Group by shift to pick non-overlapping random times within each shift
       const shiftCounts: Record<"MANHA" | "TARDE" | "NOITE", number> = {
         MANHA: 0,
         TARDE: 0,
@@ -441,7 +443,6 @@ export function BulkScheduleModal({
         const maxEnd = cfg.endMinutes;
 
         if (!randomizeTimesInShift) {
-          // Fixed middle time if random is disabled
           const step = Math.max(
             15,
             Math.floor((maxEnd - minStart) / (totalInShift + 1))
@@ -450,7 +451,6 @@ export function BulkScheduleModal({
             generatedMinutesByShift[sh].push(minStart + step * (k + 1));
           }
         } else {
-          // Divide shift window into `totalInShift` sub-segments and pick a random minute inside each sub-segment
           const span = Math.max(10, maxEnd - minStart);
           const segmentLength = Math.floor(span / totalInShift);
           const mins: number[] = [];
@@ -494,19 +494,29 @@ export function BulkScheduleModal({
           0
         );
 
-        // Determine publication_type
-        let pubType: CriafyPublicationType = "REEL";
-        if (formatMode === "STORIES") {
-          pubType = item.mediaType === "VIDEO" ? "STORY_VIDEO" : "STORY_IMAGE";
-        } else {
-          pubType = item.mediaType === "VIDEO" ? "REEL" : "FEED";
+        const canPostStory = isEligibleForStories(
+          item.mediaType,
+          item.durationSeconds
+        );
+        const pubTypes: CriafyPublicationType[] = [];
+
+        if (bulkPostReelsFeed) {
+          pubTypes.push(item.mediaType === "VIDEO" ? "REEL" : "FEED");
+        }
+        if (bulkPostStories && canPostStory) {
+          pubTypes.push(
+            item.mediaType === "VIDEO" ? "STORY_VIDEO" : "STORY_IMAGE"
+          );
+        }
+        if (pubTypes.length === 0) {
+          pubTypes.push(item.mediaType === "VIDEO" ? "REEL" : "FEED");
         }
 
         result.push({
           item,
           scheduledAt: scheduledDate,
           shift: shiftKey,
-          publicationType: pubType,
+          publicationTypes: pubTypes,
         });
 
         itemIdx++;
@@ -523,9 +533,17 @@ export function BulkScheduleModal({
     enabledShifts,
     randomizeContentOrder,
     randomizeTimesInShift,
-    formatMode,
+    bulkPostReelsFeed,
+    bulkPostStories,
     shuffleSeed,
   ]);
+
+  const totalBulkPublicationsCount = useMemo(() => {
+    return plannedSlots.reduce(
+      (acc, slot) => acc + slot.publicationTypes.length,
+      0
+    );
+  }, [plannedSlots]);
 
   // Group plannedSlots by date key for clean preview
   const groupedPreviewByDay = useMemo(() => {
@@ -606,35 +624,41 @@ export function BulkScheduleModal({
         uploadedContentIdMap.set(slot.item.key, createdContent.id);
       }
 
-      // 2. Build all publication records
+      // 2. Build all publication records (Reels + Stories simultaneously when <= 60s)
       setProgressText(
-        `Agendando ${plannedSlots.length} publicações no calendário...`
+        `Agendando ${totalBulkPublicationsCount} publicações (${plannedSlots.length} conteúdos) no calendário...`
       );
 
-      const pubPayloads = plannedSlots.map((slot) => {
+      const pubPayloads: Array<Partial<CriafyPublication>> = [];
+      for (const slot of plannedSlots) {
         const contentId =
           slot.item.source === "LIBRARY"
             ? slot.item.contentId!
             : uploadedContentIdMap.get(slot.item.key)!;
 
-        return {
-          company_id: activeCompanyId,
-          account_id: targetAccountId,
-          content_id: contentId,
-          publication_type: slot.publicationType,
-          caption: undefined,
-          scheduled_at: slot.scheduledAt.toISOString(),
-          status: "SCHEDULED" as const,
-          is_auto_queued: true,
-        };
-      });
+        slot.publicationTypes.forEach((pubType, idx) => {
+          const scheduledTime = new Date(
+            slot.scheduledAt.getTime() + idx * 60000
+          );
+          pubPayloads.push({
+            company_id: activeCompanyId,
+            account_id: targetAccountId,
+            content_id: contentId,
+            publication_type: pubType,
+            caption: undefined,
+            scheduled_at: scheduledTime.toISOString(),
+            status: "SCHEDULED" as const,
+            is_auto_queued: true,
+          });
+        });
+      }
 
       await criafyService.createPublicationSequence(pubPayloads);
 
       toast.success(
-        `${plannedSlots.length} conteúdos programados em bulk com sucesso!`,
+        `${pubPayloads.length} publicações (${plannedSlots.length} mídias) programadas em bulk com sucesso!`,
         {
-          description: `Distribuídos em ${groupedPreviewByDay.length} dia(s) (${postsPerDay} por dia — Manhã, Tarde e Noite).`,
+          description: `Distribuídas em ${groupedPreviewByDay.length} dia(s) (${postsPerDay} horários/dia — Reels + Stories ≤ 60s).`,
           duration: 6000,
         }
       );
@@ -672,7 +696,7 @@ export function BulkScheduleModal({
                   </Badge>
                 </DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                  Suba várias mídias de uma vez e distribua automaticamente nos horários de manhã, tarde e noite com ordem aleatória.
+                  Suba várias mídias de uma vez e distribua automaticamente nos horários de manhã, tarde e noite (Reels + Stories ≤ 60s).
                 </DialogDescription>
               </div>
             </div>
@@ -816,28 +840,85 @@ export function BulkScheduleModal({
                 </div>
               </div>
 
-              <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/50">
-                <Label className="text-xs font-medium text-muted-foreground">
-                  Formato das publicações:
-                </Label>
-                <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-xl">
-                  {[
-                    { id: "AUTO" as const, label: "Automático (Reel / Feed)" },
-                    { id: "STORIES" as const, label: "Stories" },
-                  ].map((opt) => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => setFormatMode(opt.id)}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
-                        formatMode === opt.id
-                          ? "bg-background text-foreground shadow-2xs"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+              <div className="space-y-2 pt-2 border-t border-border/50">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-bold text-foreground">
+                    Formato das publicações (Reels & Stories):
+                  </Label>
+                  <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px]">
+                    Vídeos ≤ 60s postam nos DOIS
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBulkPostReelsFeed(true);
+                      setBulkPostStories(true);
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      bulkPostReelsFeed && bulkPostStories
+                        ? "bg-purple-500/10 border-purple-500/50 text-foreground ring-1 ring-purple-500/30"
+                        : "bg-muted/30 border-border/60 text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <div className="text-xs font-bold flex items-center justify-between">
+                      <span>🔥 Reels + Stories (Os dois)</span>
+                      {bulkPostReelsFeed && bulkPostStories && (
+                        <span className="text-purple-600 font-bold">✓</span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      Se ≤ 60s, posta como Reels e também nos Stories
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBulkPostReelsFeed(true);
+                      setBulkPostStories(false);
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      bulkPostReelsFeed && !bulkPostStories
+                        ? "bg-primary/10 border-primary/50 text-foreground ring-1 ring-primary/30"
+                        : "bg-muted/30 border-border/60 text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <div className="text-xs font-bold flex items-center justify-between">
+                      <span>🎬 Apenas Reels / Feed</span>
+                      {bulkPostReelsFeed && !bulkPostStories && (
+                        <span className="text-primary font-bold">✓</span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      Publica somente no Feed/Reels
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBulkPostReelsFeed(false);
+                      setBulkPostStories(true);
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      !bulkPostReelsFeed && bulkPostStories
+                        ? "bg-pink-500/10 border-pink-500/50 text-foreground ring-1 ring-pink-500/30"
+                        : "bg-muted/30 border-border/60 text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <div className="text-xs font-bold flex items-center justify-between">
+                      <span>📖 Apenas Stories (≤ 60s)</span>
+                      {!bulkPostReelsFeed && bulkPostStories && (
+                        <span className="text-pink-600 font-bold">✓</span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      Publica nos Stories (se &gt; 60s, vai p/ Reels)
+                    </p>
+                  </button>
                 </div>
               </div>
             </div>
@@ -917,45 +998,60 @@ export function BulkScheduleModal({
                   {/* Lista de arquivos prontos para subir */}
                   {pendingFiles.length > 0 && (
                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 max-h-[210px] overflow-y-auto p-1">
-                      {pendingFiles.map((pf) => (
-                        <div
-                          key={pf.tempId}
-                          className="relative group rounded-xl overflow-hidden border border-border bg-muted/40 aspect-square"
-                        >
-                          {pf.mediaType === "VIDEO" ? (
-                            <video
-                              src={pf.previewUrl}
-                              className="w-full h-full object-cover"
-                              muted
-                            />
-                          ) : (
-                            <img
-                              src={pf.previewUrl}
-                              alt={pf.title}
-                              className="w-full h-full object-cover"
-                            />
-                          )}
-                          <div className="absolute top-1.5 left-1.5">
-                            <Badge className="bg-black/70 text-white border-0 text-[9px] px-1.5 py-0">
-                              {pf.mediaType === "VIDEO" ? "Vídeo" : "Img"}
-                            </Badge>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removePendingFile(pf.tempId);
-                            }}
-                            className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-black/70 text-white hover:bg-rose-600 flex items-center justify-center transition-colors cursor-pointer"
-                            title="Remover arquivo"
+                      {pendingFiles.map((pf) => {
+                        const storyOk = isEligibleForStories(
+                          pf.mediaType,
+                          pf.durationSeconds
+                        );
+                        return (
+                          <div
+                            key={pf.tempId}
+                            className="relative group rounded-xl overflow-hidden border border-border bg-muted/40 aspect-square"
                           >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                          <div className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[10px] px-1.5 py-1 truncate">
-                            {pf.title}
+                            {pf.mediaType === "VIDEO" ? (
+                              <video
+                                src={pf.previewUrl}
+                                className="w-full h-full object-cover"
+                                muted
+                              />
+                            ) : (
+                              <img
+                                src={pf.previewUrl}
+                                alt={pf.title}
+                                className="w-full h-full object-cover"
+                              />
+                            )}
+                            <div className="absolute top-1.5 left-1.5 flex flex-col gap-0.5">
+                              <Badge className="bg-black/70 text-white border-0 text-[9px] px-1.5 py-0">
+                                {pf.mediaType === "VIDEO"
+                                  ? pf.durationSeconds
+                                    ? `${Math.round(pf.durationSeconds)}s`
+                                    : "Vídeo"
+                                  : "Img"}
+                              </Badge>
+                              {storyOk && (
+                                <Badge className="bg-purple-600/90 text-white border-0 text-[8px] px-1 py-0">
+                                  Reels + Story
+                                </Badge>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removePendingFile(pf.tempId);
+                              }}
+                              className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-black/70 text-white hover:bg-rose-600 flex items-center justify-center transition-colors cursor-pointer"
+                              title="Remover arquivo"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                            <div className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[10px] px-1.5 py-1 truncate">
+                              {pf.title}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -1002,7 +1098,9 @@ export function BulkScheduleModal({
                             <div className="absolute top-1.5 left-1.5">
                               <Badge className="bg-black/70 text-white border-0 text-[9px] px-1.5 py-0">
                                 {content.media_type === "VIDEO"
-                                  ? "Vídeo"
+                                  ? content.duration_seconds
+                                    ? `${Math.round(content.duration_seconds)}s`
+                                    : "Vídeo"
                                   : "Img"}
                               </Badge>
                             </div>
@@ -1039,11 +1137,12 @@ export function BulkScheduleModal({
                 <div>
                   <h3 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
                     <CalendarDays className="w-3.5 h-3.5 text-purple-600" />
-                    Prévia da Distribuição ({plannedSlots.length})
+                    Prévia da Distribuição ({plannedSlots.length} mídias •{" "}
+                    {totalBulkPublicationsCount} posts)
                   </h3>
                   <p className="text-[11px] text-muted-foreground">
                     {plannedSlots.length > 0
-                      ? `${plannedSlots.length} post(s) distribuídos em ${groupedPreviewByDay.length} dia(s)`
+                      ? `${plannedSlots.length} mídia(s) em ${groupedPreviewByDay.length} dia(s) (${totalBulkPublicationsCount} publicações com Reels + Stories)`
                       : "Adicione mídias para visualizar o cronograma automático"}
                   </p>
                 </div>
@@ -1097,7 +1196,7 @@ export function BulkScheduleModal({
                             variant="outline"
                             className="text-[10px] px-1.5 py-0"
                           >
-                            {daySlots.length} publicação(ões)
+                            {daySlots.length} horário(s)
                           </Badge>
                         </div>
 
@@ -1112,6 +1211,16 @@ export function BulkScheduleModal({
                                 minute: "2-digit",
                               }
                             );
+                            const hasBoth = slot.publicationTypes.length > 1;
+                            const formatLabel = slot.publicationTypes
+                              .map((t) =>
+                                t === "REEL"
+                                  ? "REEL"
+                                  : t === "FEED"
+                                  ? "FEED"
+                                  : "STORY"
+                              )
+                              .join(" + ");
 
                             return (
                               <div
@@ -1139,7 +1248,15 @@ export function BulkScheduleModal({
                                       {slot.item.title}
                                     </div>
                                     <div className="text-[10px] text-muted-foreground flex items-center gap-1">
-                                      <span>{slot.publicationType}</span>
+                                      <span
+                                        className={
+                                          hasBoth
+                                            ? "font-bold text-purple-600 dark:text-purple-400"
+                                            : ""
+                                        }
+                                      >
+                                        {formatLabel}
+                                      </span>
                                     </div>
                                   </div>
                                 </div>
@@ -1180,11 +1297,14 @@ export function BulkScheduleModal({
           <div className="text-xs text-muted-foreground">
             {plannedSlots.length > 0 ? (
               <span>
-                Total: <strong>{plannedSlots.length} mídias</strong> •{" "}
+                Total: <strong>{plannedSlots.length} mídias</strong> (
+                <strong>{totalBulkPublicationsCount} publicações</strong>) •{" "}
                 <strong>{postsPerDay} por dia</strong> (Manhã, Tarde e Noite)
               </span>
             ) : (
-              <span>Selecione ou suba múltiplos arquivos para agendar de uma vez.</span>
+              <span>
+                Selecione ou suba múltiplos arquivos para agendar de uma vez.
+              </span>
             )}
           </div>
 
@@ -1211,7 +1331,7 @@ export function BulkScheduleModal({
               ) : (
                 <>
                   <CheckCircle2 className="w-4 h-4" />
-                  Subir e Programar Tudo ({plannedSlots.length})
+                  Subir e Programar Tudo ({totalBulkPublicationsCount} posts)
                 </>
               )}
             </Button>

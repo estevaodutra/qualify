@@ -75,7 +75,7 @@ interface PlannedSlot {
   item: UnifiedScheduleItem;
   scheduledAt: Date;
   shift: "MANHA" | "TARDE" | "NOITE";
-  publicationType: CriafyPublicationType;
+  publicationTypes: CriafyPublicationType[];
 }
 
 const SHIFT_CONFIG = {
@@ -124,6 +124,14 @@ function randomIntBetween(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+function isEligibleForStories(
+  mediaType: "VIDEO" | "IMAGE",
+  durationSeconds?: number
+): boolean {
+  if (mediaType === "IMAGE") return true;
+  return !durationSeconds || durationSeconds <= 60;
+}
+
 interface SchedulePublicationModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -162,10 +170,11 @@ export function SchedulePublicationModal({
   const [scheduledAt, setScheduledAt] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Single post fields
+  // Single post fields (now supports selecting BOTH Reel + Story simultaneously when <= 60s!)
   const [selectedContentId, setSelectedContentId] = useState<string>("");
-  const [publicationType, setPublicationType] =
-    useState<CriafyPublicationType>("REEL");
+  const [selectedSingleFormats, setSelectedSingleFormats] = useState<
+    CriafyPublicationType[]
+  >(["REEL", "STORY_VIDEO"]);
   const [caption, setCaption] = useState<string>("");
   const [generatingAi, setGeneratingAi] = useState(false);
 
@@ -204,9 +213,9 @@ export function SchedulePublicationModal({
     useState<boolean>(true);
   const [randomizeTimesInShift, setRandomizeTimesInShift] =
     useState<boolean>(true);
-  const [bulkFormatMode, setBulkFormatMode] = useState<"AUTO" | "STORIES">(
-    "AUTO"
-  );
+  // Format selection for Bulk: BOTH (Reels + Stories when <= 60s) is the default!
+  const [bulkPostReelsFeed, setBulkPostReelsFeed] = useState<boolean>(true);
+  const [bulkPostStories, setBulkPostStories] = useState<boolean>(true);
   const [shuffleSeed, setShuffleSeed] = useState<number>(1);
   const [bulkProgressText, setBulkProgressText] = useState<string>("");
 
@@ -223,6 +232,24 @@ export function SchedulePublicationModal({
       pendingFiles.forEach((p) => URL.revokeObjectURL(p.previewUrl));
     };
   }, []);
+
+  const applyDefaultFormatsForMedia = (media?: CriafyContent) => {
+    if (!media) return;
+    const canStory = isEligibleForStories(
+      media.media_type === "VIDEO" ? "VIDEO" : "IMAGE",
+      media.duration_seconds
+    );
+    if (media.media_type === "VIDEO") {
+      if (canStory) {
+        // Menos de 60 segundos: já habilita os dois (Reel + Story)!
+        setSelectedSingleFormats(["REEL", "STORY_VIDEO"]);
+      } else {
+        setSelectedSingleFormats(["REEL"]);
+      }
+    } else {
+      setSelectedSingleFormats(["FEED", "STORY_IMAGE"]);
+    }
+  };
 
   // Set initial values
   useEffect(() => {
@@ -263,13 +290,12 @@ export function SchedulePublicationModal({
         setIsPublishNow(false);
       }
 
-      // Initial content & type
       if (initialContentId) {
         setSelectedContentId(initialContentId);
         setSequenceContentIds([initialContentId]);
       }
       if (initialPublicationType) {
-        setPublicationType(initialPublicationType);
+        setSelectedSingleFormats([initialPublicationType]);
       }
     }
   }, [
@@ -290,10 +316,11 @@ export function SchedulePublicationModal({
       setContents(data);
       if (!selectedContentId && data.length > 0) {
         setSelectedContentId(data[0].id);
-        if (data[0].media_type === "VIDEO") {
-          setPublicationType("REEL");
-        } else {
-          setPublicationType("FEED");
+        applyDefaultFormatsForMedia(data[0]);
+      } else if (selectedContentId) {
+        const found = data.find((c) => c.id === selectedContentId);
+        if (found && !initialPublicationType) {
+          applyDefaultFormatsForMedia(found);
         }
       }
     } catch (err: any) {
@@ -571,18 +598,31 @@ export function SchedulePublicationModal({
           0
         );
 
-        let pubType: CriafyPublicationType = "REEL";
-        if (bulkFormatMode === "STORIES") {
-          pubType = item.mediaType === "VIDEO" ? "STORY_VIDEO" : "STORY_IMAGE";
-        } else {
-          pubType = item.mediaType === "VIDEO" ? "REEL" : "FEED";
+        // Determine publicationTypes (can be BOTH Reel/Feed + Story when <= 60s!)
+        const canStory = isEligibleForStories(
+          item.mediaType,
+          item.durationSeconds
+        );
+        const pubTypes: CriafyPublicationType[] = [];
+
+        if (bulkPostReelsFeed) {
+          pubTypes.push(item.mediaType === "VIDEO" ? "REEL" : "FEED");
+        }
+        if (bulkPostStories && canStory) {
+          pubTypes.push(
+            item.mediaType === "VIDEO" ? "STORY_VIDEO" : "STORY_IMAGE"
+          );
+        }
+        // Fallback if video > 60s and only Stories was checked
+        if (pubTypes.length === 0) {
+          pubTypes.push(item.mediaType === "VIDEO" ? "REEL" : "FEED");
         }
 
         result.push({
           item,
           scheduledAt: scheduledDate,
           shift: shiftKey,
-          publicationType: pubType,
+          publicationTypes: pubTypes,
         });
 
         itemIdx++;
@@ -599,9 +639,17 @@ export function SchedulePublicationModal({
     enabledShifts,
     randomizeContentOrder,
     randomizeTimesInShift,
-    bulkFormatMode,
+    bulkPostReelsFeed,
+    bulkPostStories,
     shuffleSeed,
   ]);
+
+  const totalBulkPublicationsCount = useMemo(() => {
+    return plannedBulkSlots.reduce(
+      (acc, slot) => acc + slot.publicationTypes.length,
+      0
+    );
+  }, [plannedBulkSlots]);
 
   const groupedPreviewByDay = useMemo(() => {
     const map = new Map<string, PlannedSlot[]>();
@@ -624,27 +672,89 @@ export function SchedulePublicationModal({
     setSelectedContentId(contentId);
     const media = contents.find((c) => c.id === contentId);
     if (!media) return;
+    applyDefaultFormatsForMedia(media);
+  };
 
-    if (media.media_type === "VIDEO") {
-      const isOver60s = media.duration_seconds && media.duration_seconds > 60;
-      if (isOver60s) {
-        if (
-          publicationType === "STORY_VIDEO" ||
-          publicationType === "STORY_IMAGE"
-        ) {
-          setPublicationType("REEL");
-          toast.info(
-            "Vídeo com mais de 60s: Stories desabilitado. Formato alterado para Reel."
-          );
+  const toggleSingleFormat = (fmt: "REEL" | "FEED" | "STORY") => {
+    const media = contents.find((c) => c.id === selectedContentId);
+    const isVideo = !media || media.media_type === "VIDEO";
+    const isOver60s =
+      isVideo && media?.duration_seconds && media.duration_seconds > 60;
+
+    if (fmt === "REEL") {
+      if (!isVideo) {
+        toast.info("Imagens são publicadas no Feed e/ou Stories.");
+        return;
+      }
+      setSelectedSingleFormats((prev) => {
+        const has = prev.includes("REEL");
+        if (has) {
+          const next = prev.filter((p) => p !== "REEL");
+          return next.length > 0
+            ? next
+            : isOver60s
+            ? ["REEL"]
+            : ["STORY_VIDEO"];
         }
-      } else if (publicationType === "STORY_IMAGE") {
-        setPublicationType("STORY_VIDEO");
+        return [...prev.filter((p) => p !== "FEED"), "REEL"];
+      });
+    } else if (fmt === "FEED") {
+      setSelectedSingleFormats((prev) => {
+        const has = prev.includes("FEED");
+        if (has) {
+          const next = prev.filter((p) => p !== "FEED");
+          return next.length > 0
+            ? next
+            : isVideo
+            ? ["REEL"]
+            : ["STORY_IMAGE"];
+        }
+        return [...prev.filter((p) => p !== "REEL"), "FEED"];
+      });
+    } else if (fmt === "STORY") {
+      if (isOver60s) {
+        toast.error(
+          `Vídeo com ${Math.round(
+            media!.duration_seconds!
+          )}s ultrapassa o limite de 60s da Meta para Stories.`
+        );
+        return;
       }
-    } else if (media.media_type === "IMAGE") {
-      if (publicationType === "REEL" || publicationType === "STORY_VIDEO") {
-        setPublicationType("FEED");
-        toast.info("Imagem selecionada: formato ajustado para Feed.");
-      }
+      const storyType: CriafyPublicationType = isVideo
+        ? "STORY_VIDEO"
+        : "STORY_IMAGE";
+      setSelectedSingleFormats((prev) => {
+        const hasStory =
+          prev.includes("STORY_VIDEO") || prev.includes("STORY_IMAGE");
+        if (hasStory) {
+          const next = prev.filter(
+            (p) => p !== "STORY_VIDEO" && p !== "STORY_IMAGE"
+          );
+          return next.length > 0 ? next : [isVideo ? "REEL" : "FEED"];
+        }
+        return [
+          ...prev.filter((p) => p !== "STORY_VIDEO" && p !== "STORY_IMAGE"),
+          storyType,
+        ];
+      });
+    }
+  };
+
+  const selectBothReelAndStory = () => {
+    const media = contents.find((c) => c.id === selectedContentId);
+    const isVideo = !media || media.media_type === "VIDEO";
+    if (isVideo && media?.duration_seconds && media.duration_seconds > 60) {
+      toast.error(
+        `Este vídeo possui ${Math.round(
+          media.duration_seconds
+        )}s (acima do limite de 60s para Stories).`
+      );
+      return;
+    }
+    if (isVideo) {
+      setSelectedSingleFormats(["REEL", "STORY_VIDEO"]);
+    } else {
+      setSelectedSingleFormats(["FEED", "STORY_IMAGE"]);
     }
   };
 
@@ -694,12 +804,13 @@ export function SchedulePublicationModal({
 
     setGeneratingAi(true);
     try {
+      const primaryFmt = selectedSingleFormats[0] || "REEL";
       const generated = await criafyService.generateAiCopy({
         companyId: activeCompanyId,
         accountId: targetAccountId,
         contentId: selectedContentId || undefined,
         promptType: "CAPTION",
-        publicationType,
+        publicationType: primaryFmt,
         customInstruction: caption.trim() || undefined,
       });
 
@@ -770,33 +881,41 @@ export function SchedulePublicationModal({
         }
 
         setBulkProgressText(
-          `Agendando ${plannedBulkSlots.length} publicações no calendário...`
+          `Agendando ${totalBulkPublicationsCount} publicações (Reels & Stories) no calendário...`
         );
 
-        const pubPayloads = plannedBulkSlots.map((slot) => {
+        const pubPayloads: Array<any> = [];
+        plannedBulkSlots.forEach((slot) => {
           const contentId =
             slot.item.source === "LIBRARY"
               ? slot.item.contentId!
               : uploadedContentIdMap.get(slot.item.key)!;
 
-          return {
-            company_id: activeCompanyId,
-            account_id: targetAccountId,
-            content_id: contentId,
-            publication_type: slot.publicationType,
-            caption: undefined,
-            scheduled_at: slot.scheduledAt.toISOString(),
-            status: "SCHEDULED" as const,
-            is_auto_queued: true,
-          };
+          // Se tiver Reels + Stories (os dois), cria as duas publicações para o mesmo conteúdo!
+          slot.publicationTypes.forEach((pubType, idx) => {
+            // Pequeno offset de 1 minuto para o Story quando postado junto com o Reel para evitar colisão de container na API
+            const scheduledDate = new Date(
+              slot.scheduledAt.getTime() + idx * 60000
+            );
+            pubPayloads.push({
+              company_id: activeCompanyId,
+              account_id: targetAccountId,
+              content_id: contentId,
+              publication_type: pubType,
+              caption: undefined,
+              scheduled_at: scheduledDate.toISOString(),
+              status: "SCHEDULED" as const,
+              is_auto_queued: true,
+            });
+          });
         });
 
         await criafyService.createPublicationSequence(pubPayloads);
 
         toast.success(
-          `${plannedBulkSlots.length} conteúdos programados em Bulk com sucesso!`,
+          `${plannedBulkSlots.length} mídias (${totalBulkPublicationsCount} publicações no total) programadas em Bulk!`,
           {
-            description: `Distribuídos em ${groupedPreviewByDay.length} dia(s) (${postsPerDay} por dia — Manhã, Tarde e Noite).`,
+            description: `Distribuídas em ${groupedPreviewByDay.length} dia(s) (${postsPerDay} por dia — Manhã, Tarde e Noite).`,
             duration: 6000,
           }
         );
@@ -840,66 +959,96 @@ export function SchedulePublicationModal({
           return;
         }
 
-        const selectedContent = contents.find((c) => c.id === selectedContentId);
-        if (
-          publicationType === "STORY_VIDEO" &&
-          selectedContent?.duration_seconds &&
-          selectedContent.duration_seconds > 60
-        ) {
-          toast.error(
-            `O Instagram permite no máximo 60s para Stories (este vídeo tem ${Math.round(
-              selectedContent.duration_seconds
-            )}s). Altere para "Reel".`
-          );
-          setSubmitting(false);
-          return;
+        const selectedContent = contents.find(
+          (c) => c.id === selectedContentId
+        );
+        const formatsToCreate =
+          selectedSingleFormats.length > 0 ? selectedSingleFormats : ["REEL"];
+
+        for (const fmt of formatsToCreate) {
+          if (
+            fmt === "STORY_VIDEO" &&
+            selectedContent?.duration_seconds &&
+            selectedContent.duration_seconds > 60
+          ) {
+            toast.error(
+              `O Instagram permite no máximo 60s para Stories (este vídeo tem ${Math.round(
+                selectedContent.duration_seconds
+              )}s).`
+            );
+            setSubmitting(false);
+            return;
+          }
         }
 
         const pubStatus = isPublishNow ? "PUBLISHING" : "SCHEDULED";
-        const pub = await criafyService.createPublication({
-          company_id: activeCompanyId,
-          account_id: targetAccountId,
-          content_id: selectedContentId,
-          publication_type: publicationType,
-          caption: caption.trim() || undefined,
-          scheduled_at: baseScheduledDate.toISOString(),
-          status: pubStatus,
-        });
+        const createdPubs = [];
+
+        for (let i = 0; i < formatsToCreate.length; i++) {
+          const fmt = formatsToCreate[i];
+          const itemScheduled = new Date(
+            baseScheduledDate.getTime() + i * 60000
+          );
+          const isStory = fmt === "STORY_VIDEO" || fmt === "STORY_IMAGE";
+
+          const pub = await criafyService.createPublication({
+            company_id: activeCompanyId,
+            account_id: targetAccountId,
+            content_id: selectedContentId,
+            publication_type: fmt,
+            caption: isStory ? undefined : caption.trim() || undefined,
+            scheduled_at: itemScheduled.toISOString(),
+            status: pubStatus,
+          });
+          createdPubs.push(pub);
+        }
 
         if (isPublishNow) {
           onOpenChange(false);
           toast.info(
-            "Publicação iniciada em segundo plano! Acompanhe o status no calendário.",
+            `Publicação (${formatsToCreate.join(
+              " + "
+            )}) iniciada em segundo plano!`,
             {
-              id: `pub-${pub.id}`,
+              id: `pub-${createdPubs[0].id}`,
               duration: 4000,
             }
           );
 
-          criafyService
-            .publishNow(pub.id)
-            .then((res) => {
-              toast.success("Publicação realizada com sucesso no Instagram!", {
-                id: `pub-${pub.id}`,
-                duration: 8000,
-                action: res?.igPermalink
-                  ? {
-                      label: "Ver no Instagram",
-                      onClick: () => window.open(res.igPermalink, "_blank"),
-                    }
-                  : undefined,
-              });
+          Promise.all(createdPubs.map((p) => criafyService.publishNow(p.id)))
+            .then((results) => {
+              const firstRes = results[0];
+              toast.success(
+                formatsToCreate.length > 1
+                  ? "Publicado como Reels e Stories com sucesso no Instagram!"
+                  : "Publicação realizada com sucesso no Instagram!",
+                {
+                  id: `pub-${createdPubs[0].id}`,
+                  duration: 8000,
+                  action: firstRes?.igPermalink
+                    ? {
+                        label: "Ver no Instagram",
+                        onClick: () =>
+                          window.open(firstRes.igPermalink, "_blank"),
+                      }
+                    : undefined,
+                }
+              );
               onSuccess?.();
             })
             .catch((err: any) => {
               toast.error(`Falha ao publicar na Meta: ${err.message}`, {
-                id: `pub-${pub.id}`,
+                id: `pub-${createdPubs[0].id}`,
                 duration: 10000,
               });
               onSuccess?.();
             });
         } else {
-          toast.success("Publicação agendada no calendário com sucesso!");
+          toast.success(
+            formatsToCreate.length > 1
+              ? "Agendado como Reels e Stories (os dois) no calendário!"
+              : "Publicação agendada no calendário com sucesso!"
+          );
           onOpenChange(false);
           onSuccess?.();
         }
@@ -986,6 +1135,19 @@ export function SchedulePublicationModal({
   };
 
   const selectedSingleMedia = contents.find((c) => c.id === selectedContentId);
+  const isSingleMediaEligibleForStory = selectedSingleMedia
+    ? isEligibleForStories(
+        selectedSingleMedia.media_type === "VIDEO" ? "VIDEO" : "IMAGE",
+        selectedSingleMedia.duration_seconds
+      )
+    : true;
+  const hasSingleReel = selectedSingleFormats.includes("REEL");
+  const hasSingleFeed = selectedSingleFormats.includes("FEED");
+  const hasSingleStory =
+    selectedSingleFormats.includes("STORY_VIDEO") ||
+    selectedSingleFormats.includes("STORY_IMAGE");
+  const isSingleBothSelected =
+    (hasSingleReel || hasSingleFeed) && hasSingleStory;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1002,9 +1164,8 @@ export function SchedulePublicationModal({
             </DialogTitle>
           </div>
           <DialogDescription className="text-xs text-muted-foreground">
-            Escolha entre agendar um post único, subir e distribuir vários
-            conteúdos em Bulk (Manhã, Tarde e Noite) ou criar uma sequência de
-            Stories.
+            Conteúdos com até 60s podem ser publicados simultaneamente como
+            Reels e Stories (os dois).
           </DialogDescription>
         </DialogHeader>
 
@@ -1088,84 +1249,93 @@ export function SchedulePublicationModal({
              ========================================================= */}
           {mode === "SINGLE" && (
             <div className="space-y-4">
-              {/* Publication Format Selector */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">
-                  Formato no Instagram
-                </Label>
-                <div className="grid grid-cols-3 gap-2">
+              {/* Publication Format Selector (Supports BOTH Reels + Stories when <= 60s!) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold">
+                    Formato no Instagram (selecione um ou os dois)
+                  </Label>
+                  {isSingleMediaEligibleForStory && (
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 font-semibold"
+                    >
+                      ✓ Tempo permitido para Stories (≤ 60s): pode postar nos
+                      dois!
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {/* Card 1: Reel + Story (Os Dois) */}
                   <div
-                    onClick={() => {
-                      if (selectedSingleMedia?.media_type === "IMAGE") {
-                        toast.info(
-                          "Imagens não podem ser publicadas como Reel."
-                        );
-                        return;
-                      }
-                      setPublicationType("REEL");
-                    }}
+                    onClick={selectBothReelAndStory}
                     className={`p-2.5 rounded-xl border text-center cursor-pointer transition-all ${
-                      publicationType === "REEL"
+                      isSingleBothSelected
+                        ? "border-purple-500 bg-gradient-to-r from-purple-500/15 via-pink-500/15 to-amber-500/15 text-purple-700 dark:text-purple-300 font-bold shadow-sm ring-1 ring-purple-500/30"
+                        : !isSingleMediaEligibleForStory
+                        ? "border-muted opacity-40 cursor-not-allowed"
+                        : "border-muted hover:bg-muted/40 text-muted-foreground"
+                    }`}
+                  >
+                    <div className="text-xs font-bold flex items-center justify-center gap-1">
+                      🔥 Reels + Stories
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">
+                      Postar os dois (≤ 60s)
+                    </div>
+                  </div>
+
+                  {/* Card 2: Reel */}
+                  <div
+                    onClick={() => toggleSingleFormat("REEL")}
+                    className={`p-2.5 rounded-xl border text-center cursor-pointer transition-all ${
+                      hasSingleReel
                         ? "border-purple-500 bg-purple-500/10 text-purple-700 dark:text-purple-300 font-bold shadow-sm"
                         : "border-muted hover:bg-muted/40 text-muted-foreground"
                     }`}
                   >
                     <div className="text-xs font-bold flex items-center justify-center gap-1">
-                      🎬 Reel
+                      🎬 Reel {hasSingleReel && "✓"}
                     </div>
                     <div className="text-[10px] text-muted-foreground mt-0.5">
                       Vídeo 9:16 até 15min
                     </div>
                   </div>
 
+                  {/* Card 3: Story */}
                   <div
-                    onClick={() => setPublicationType("FEED")}
+                    onClick={() => toggleSingleFormat("STORY")}
                     className={`p-2.5 rounded-xl border text-center cursor-pointer transition-all ${
-                      publicationType === "FEED"
+                      hasSingleStory
+                        ? "border-pink-500 bg-pink-500/10 text-pink-700 dark:text-pink-300 font-bold shadow-sm"
+                        : !isSingleMediaEligibleForStory
+                        ? "border-muted opacity-40 cursor-not-allowed"
+                        : "border-muted hover:bg-muted/40 text-muted-foreground"
+                    }`}
+                  >
+                    <div className="text-xs font-bold flex items-center justify-center gap-1">
+                      📖 Story {hasSingleStory && "✓"}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">
+                      9:16 (vídeo até 60s)
+                    </div>
+                  </div>
+
+                  {/* Card 4: Feed */}
+                  <div
+                    onClick={() => toggleSingleFormat("FEED")}
+                    className={`p-2.5 rounded-xl border text-center cursor-pointer transition-all ${
+                      hasSingleFeed
                         ? "border-sky-500 bg-sky-500/10 text-sky-700 dark:text-sky-300 font-bold shadow-sm"
                         : "border-muted hover:bg-muted/40 text-muted-foreground"
                     }`}
                   >
                     <div className="text-xs font-bold flex items-center justify-center gap-1">
-                      🖼️ Feed
+                      🖼️ Feed {hasSingleFeed && "✓"}
                     </div>
                     <div className="text-[10px] text-muted-foreground mt-0.5">
                       Imagem ou Vídeo
-                    </div>
-                  </div>
-
-                  <div
-                    onClick={() => {
-                      if (
-                        selectedSingleMedia?.media_type === "VIDEO" &&
-                        selectedSingleMedia.duration_seconds &&
-                        selectedSingleMedia.duration_seconds > 60
-                      ) {
-                        toast.error(
-                          `Vídeo com ${Math.round(
-                            selectedSingleMedia.duration_seconds
-                          )}s ultrapassa o limite de 60s da Meta para Stories. Escolha "Reel".`
-                        );
-                        return;
-                      }
-                      setPublicationType(
-                        selectedSingleMedia?.media_type === "IMAGE"
-                          ? "STORY_IMAGE"
-                          : "STORY_VIDEO"
-                      );
-                    }}
-                    className={`p-2.5 rounded-xl border text-center cursor-pointer transition-all ${
-                      publicationType === "STORY_VIDEO" ||
-                      publicationType === "STORY_IMAGE"
-                        ? "border-pink-500 bg-pink-500/10 text-pink-700 dark:text-pink-300 font-bold shadow-sm"
-                        : "border-muted hover:bg-muted/40 text-muted-foreground"
-                    }`}
-                  >
-                    <div className="text-xs font-bold flex items-center justify-center gap-1">
-                      📖 Story Único
-                    </div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">
-                      9:16 (vídeo até 60s)
                     </div>
                   </div>
                 </div>
@@ -1256,11 +1426,11 @@ export function SchedulePublicationModal({
               </div>
 
               {/* Caption & IA Assistant (for Feed/Reels) */}
-              {(publicationType === "FEED" || publicationType === "REEL") && (
+              {(hasSingleReel || hasSingleFeed) && (
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-semibold">
-                      Legenda / Copy do Post
+                      Legenda / Copy do Post (Reel / Feed)
                     </Label>
                     <Button
                       type="button"
@@ -1282,7 +1452,7 @@ export function SchedulePublicationModal({
                     placeholder="Escreva a legenda do Instagram ou use o assistente de IA..."
                     value={caption}
                     onChange={(e) => setCaption(e.target.value)}
-                    rows={4}
+                    rows={3}
                     className="text-xs resize-none"
                   />
                 </div>
@@ -1410,31 +1580,62 @@ export function SchedulePublicationModal({
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/50">
-                    <Label className="text-xs font-medium text-muted-foreground">
-                      Formato das publicações:
-                    </Label>
-                    <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-lg">
-                      {[
-                        {
-                          id: "AUTO" as const,
-                          label: "Automático (Reel / Feed)",
-                        },
-                        { id: "STORIES" as const, label: "Stories" },
-                      ].map((opt) => (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          onClick={() => setBulkFormatMode(opt.id)}
-                          className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
-                            bulkFormatMode === opt.id
-                              ? "bg-background text-foreground shadow-2xs"
-                              : "text-muted-foreground hover:text-foreground"
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
+                  {/* Format Multi-Select: Reels + Stories (Os Dois!) */}
+                  <div className="space-y-1.5 pt-2 border-t border-border/50">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-bold text-foreground">
+                        Onde publicar (Reels e Stories):
+                      </Label>
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                        ≤ 60s publica nos dois automaticamente!
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBulkPostReelsFeed(true);
+                          setBulkPostStories(true);
+                        }}
+                        className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
+                          bulkPostReelsFeed && bulkPostStories
+                            ? "bg-gradient-to-r from-purple-500/15 to-pink-500/15 border-purple-500 text-purple-700 dark:text-purple-300 shadow-2xs"
+                            : "bg-muted/30 border-border/60 text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        🔥 Reels + Stories (Os dois)
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBulkPostReelsFeed(true);
+                          setBulkPostStories(false);
+                        }}
+                        className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer ${
+                          bulkPostReelsFeed && !bulkPostStories
+                            ? "bg-purple-500/10 border-purple-500 text-purple-700 dark:text-purple-300 font-bold"
+                            : "bg-muted/30 border-border/60 text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        🎬 Apenas Reels / Feed
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBulkPostReelsFeed(false);
+                          setBulkPostStories(true);
+                        }}
+                        className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer ${
+                          !bulkPostReelsFeed && bulkPostStories
+                            ? "bg-pink-500/10 border-pink-500 text-pink-700 dark:text-pink-300 font-bold"
+                            : "bg-muted/30 border-border/60 text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        📖 Apenas Stories (≤ 60s)
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1507,8 +1708,8 @@ export function SchedulePublicationModal({
                           imagens
                         </p>
                         <p className="text-[11px] text-muted-foreground">
-                          Suba tudo de uma vez e o sistema distribuirá
-                          automaticamente
+                          Vídeos com menos de 60s serão programados como Reels e
+                          Stories (os dois)
                         </p>
                       </div>
 
@@ -1531,6 +1732,13 @@ export function SchedulePublicationModal({
                                   alt={pf.title}
                                   className="w-full h-full object-cover"
                                 />
+                              )}
+                              {pf.durationSeconds !== undefined && (
+                                <div className="absolute top-1 left-1">
+                                  <Badge className="bg-black/75 text-white border-0 text-[8px] px-1 py-0">
+                                    {Math.round(pf.durationSeconds)}s
+                                  </Badge>
+                                </div>
                               )}
                               <button
                                 type="button"
@@ -1592,6 +1800,13 @@ export function SchedulePublicationModal({
                                     className="w-full h-full object-cover"
                                   />
                                 )}
+                                {content.duration_seconds && (
+                                  <div className="absolute top-1 left-1">
+                                    <Badge className="bg-black/75 text-white border-0 text-[8px] px-1 py-0">
+                                      {Math.round(content.duration_seconds)}s
+                                    </Badge>
+                                  </div>
+                                )}
                                 <div className="absolute top-1 right-1">
                                   <div
                                     className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
@@ -1623,11 +1838,11 @@ export function SchedulePublicationModal({
                     <div>
                       <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
                         <CalendarDays className="w-3.5 h-3.5 text-purple-600" />
-                        Distribuição ({plannedBulkSlots.length})
+                        Distribuição ({plannedBulkSlots.length} mídias)
                       </h4>
                       <p className="text-[10px] text-muted-foreground">
                         {plannedBulkSlots.length > 0
-                          ? `${plannedBulkSlots.length} post(s) em ${groupedPreviewByDay.length} dia(s)`
+                          ? `${totalBulkPublicationsCount} envio(s) em ${groupedPreviewByDay.length} dia(s)`
                           : "Suba ou selecione mídias ao lado"}
                       </p>
                     </div>
@@ -1654,8 +1869,9 @@ export function SchedulePublicationModal({
                         Nenhuma mídia selecionada
                       </p>
                       <p className="text-[10px] text-muted-foreground/80">
-                        Ao subir seus vídeos/imagens, eles serão distribuídos
-                        aleatoriamente nos turnos da manhã, tarde e noite.
+                        Ao subir seus vídeos/imagens, conteúdos com ≤ 60s serão
+                        programados como Reels e Stories (os dois) nos turnos
+                        da manhã, tarde e noite.
                       </p>
                     </div>
                   ) : (
@@ -1685,7 +1901,7 @@ export function SchedulePublicationModal({
                                 variant="outline"
                                 className="text-[9px] px-1.5 py-0"
                               >
-                                {daySlots.length} post(s)
+                                {daySlots.length} horário(s)
                               </Badge>
                             </div>
 
@@ -1698,6 +1914,8 @@ export function SchedulePublicationModal({
                                     hour: "2-digit",
                                     minute: "2-digit",
                                   });
+                                const isBoth =
+                                  slot.publicationTypes.length > 1;
 
                                 return (
                                   <div
@@ -1721,11 +1939,22 @@ export function SchedulePublicationModal({
                                         )}
                                       </div>
                                       <div className="min-w-0">
-                                        <div className="font-semibold text-[11px] truncate max-w-[115px]">
+                                        <div className="font-semibold text-[11px] truncate max-w-[110px]">
                                           {slot.item.title}
                                         </div>
-                                        <div className="text-[9px] text-muted-foreground">
-                                          {slot.publicationType}
+                                        <div className="flex items-center gap-1 mt-0.5">
+                                          {isBoth ? (
+                                            <Badge className="bg-gradient-to-r from-purple-600 to-pink-600 text-white border-0 text-[8px] px-1.5 py-0 font-bold">
+                                              REEL + STORY
+                                            </Badge>
+                                          ) : (
+                                            <Badge
+                                              variant="outline"
+                                              className="text-[8px] px-1 py-0"
+                                            >
+                                              {slot.publicationTypes[0]}
+                                            </Badge>
+                                          )}
                                         </div>
                                       </div>
                                     </div>
@@ -2064,8 +2293,9 @@ export function SchedulePublicationModal({
             <div className="text-xs text-muted-foreground">
               {mode === "BULK" && plannedBulkSlots.length > 0 && (
                 <span>
-                  <strong>{plannedBulkSlots.length} conteúdos</strong> •{" "}
-                  <strong>{postsPerDay}/dia</strong> (Manhã, Tarde e Noite)
+                  <strong>{plannedBulkSlots.length} mídias</strong> (
+                  <strong>{totalBulkPublicationsCount} envios</strong>) •{" "}
+                  <strong>{postsPerDay}/dia</strong>
                 </span>
               )}
             </div>
@@ -2106,6 +2336,8 @@ export function SchedulePublicationModal({
                     <Send className="w-3.5 h-3.5 mr-1.5" />
                     {mode === "STORY_SEQUENCE"
                       ? `Publicar Sequência Agora (${sequenceContentIds.length})`
+                      : isSingleBothSelected
+                      ? "Publicar Reels + Stories Agora"
                       : "Publicar Imediatamente"}
                   </>
                 ) : (
@@ -2113,6 +2345,8 @@ export function SchedulePublicationModal({
                     <CalendarDays className="w-3.5 h-3.5 mr-1.5" />
                     {mode === "STORY_SEQUENCE"
                       ? `Agendar Sequência (${sequenceContentIds.length} Stories)`
+                      : isSingleBothSelected
+                      ? "Agendar Reels + Stories (Os dois)"
                       : "Confirmar Agendamento"}
                   </>
                 )}

@@ -1,6 +1,6 @@
 {
-  "commit": "92e5dfc1709aa97367974498144fe764c5b83468",
-  "shortCommit": "92e5dfc",
-  "message": "feat(criafy): add bulk upload and randomized morning/afternoon/evening scheduling",
-  "builtAt": "2026-10-28T00:14:50.814Z"
+  "commit": "1863ae330edf0cdd95e60c687b4c63dddba5bd6e",
+  "shortCommit": "1863ae3",
+  "message": "feat(criafy): embed bulk upload & scheduling directly inside SchedulePublicationModal",
+  "builtAt": "2026-10-28T00:33:57.690Z"
 }
