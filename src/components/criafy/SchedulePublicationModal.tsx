@@ -40,6 +40,10 @@ import {
   Sunset,
   Moon,
   FolderOpen,
+  Film,
+  BookOpen,
+  AlertTriangle,
+  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -72,10 +76,12 @@ interface UnifiedScheduleItem {
 }
 
 interface PlannedSlot {
+  globalIndex: number;
   item: UnifiedScheduleItem;
   scheduledAt: Date;
   shift: "MANHA" | "TARDE" | "NOITE";
   publicationTypes: CriafyPublicationType[];
+  isTooLongForStory: boolean;
 }
 
 const SHIFT_CONFIG = {
@@ -124,12 +130,70 @@ function randomIntBetween(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function isEligibleForStories(
+export function isEligibleForStories(
   mediaType: "VIDEO" | "IMAGE",
   durationSeconds?: number
 ): boolean {
   if (mediaType === "IMAGE") return true;
-  return !durationSeconds || durationSeconds <= 60;
+  if (!durationSeconds || durationSeconds <= 0) return true;
+  return durationSeconds <= 60;
+}
+
+export function formatDurationCompact(seconds?: number): string {
+  if (!seconds || seconds <= 0) return "";
+  const rounded = Math.round(seconds);
+  if (rounded <= 60) return `${rounded}s`;
+  const mins = Math.floor(rounded / 60);
+  const secs = rounded % 60;
+  return secs > 0 ? `${mins}m${secs}s` : `${mins}m`;
+}
+
+/**
+ * Intercala de forma inteligente vídeos curtos (≤ 60s, Reels + Stories) e vídeos longos (> 60s, Só Reels)
+ * para garantir que todos os dias tenham Stories ativos e que vídeos longos não fiquem todos agrupados no mesmo dia.
+ */
+function smartInterleaveItems(
+  items: UnifiedScheduleItem[],
+  shouldShuffle: boolean
+): UnifiedScheduleItem[] {
+  if (!shouldShuffle) return [...items];
+
+  const shortOrImage = shuffleArray(
+    items.filter((i) => isEligibleForStories(i.mediaType, i.durationSeconds))
+  );
+  const longVideos = shuffleArray(
+    items.filter((i) => !isEligibleForStories(i.mediaType, i.durationSeconds))
+  );
+
+  if (longVideos.length === 0) return shortOrImage;
+  if (shortOrImage.length === 0) return longVideos;
+
+  const total = items.length;
+  const result: UnifiedScheduleItem[] = [];
+  let sIdx = 0;
+  let lIdx = 0;
+
+  for (let i = 0; i < total; i++) {
+    const remainingTotal = total - i;
+    const remainingLong = longVideos.length - lIdx;
+    const remainingShort = shortOrImage.length - sIdx;
+
+    if (remainingLong === 0) {
+      result.push(shortOrImage[sIdx++]);
+    } else if (remainingShort === 0) {
+      result.push(longVideos[lIdx++]);
+    } else {
+      // Proporção equilibrada: coloca os vídeos curtos distribuídos regularmente com os longos
+      const idealLongRatio = remainingLong / remainingTotal;
+      if ((i + 1) % Math.max(2, Math.round(1 / idealLongRatio)) === 0) {
+        result.push(longVideos[lIdx++]);
+      } else {
+        result.push(shortOrImage[sIdx++]);
+      }
+    }
+  }
+
+  return result;
 }
 
 interface SchedulePublicationModalProps {
@@ -141,6 +205,7 @@ interface SchedulePublicationModalProps {
   initialContentId?: string;
   initialPublicationType?: CriafyPublicationType;
   initialMode?: "SINGLE" | "BULK" | "STORY_SEQUENCE";
+  initialBulkLibraryIds?: string[];
   onSuccess?: () => void;
 }
 
@@ -153,11 +218,17 @@ export function SchedulePublicationModal({
   initialContentId,
   initialPublicationType,
   initialMode,
+  initialBulkLibraryIds,
   onSuccess,
 }: SchedulePublicationModalProps) {
   const { activeCompanyId } = useCompany();
   const [contents, setContents] = useState<CriafyContent[]>([]);
   const [loadingMedia, setLoadingMedia] = useState(false);
+
+  // Durações lidas automaticamente via metadado de vídeo no navegador para mídias da biblioteca sem duration_seconds
+  const [probedDurations, setProbedDurations] = useState<
+    Record<string, number>
+  >({});
 
   // Form Mode: Single post vs Bulk Schedule vs Story Sequence
   const [mode, setMode] = useState<"SINGLE" | "BULK" | "STORY_SEQUENCE">(
@@ -170,7 +241,7 @@ export function SchedulePublicationModal({
   const [scheduledAt, setScheduledAt] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Single post fields (now supports selecting BOTH Reel + Story simultaneously when <= 60s!)
+  // Single post fields (supports BOTH Reel + Story simultaneously when <= 60s)
   const [selectedContentId, setSelectedContentId] = useState<string>("");
   const [selectedSingleFormats, setSelectedSingleFormats] = useState<
     CriafyPublicationType[]
@@ -190,10 +261,22 @@ export function SchedulePublicationModal({
   const [bulkSourceTab, setBulkSourceTab] = useState<"UPLOAD" | "LIBRARY">(
     "UPLOAD"
   );
+  const [bulkLibraryFilter, setBulkLibraryFilter] = useState<
+    "UNPUBLISHED" | "ALL" | "PUBLISHED"
+  >("UNPUBLISHED");
   const [pendingFiles, setPendingFiles] = useState<PendingUploadItem[]>([]);
   const [selectedBulkLibraryIds, setSelectedBulkLibraryIds] = useState<
     string[]
   >([]);
+  // Ordem customizada quando o usuário reordena manualmente (↑ / ↓) na prévia
+  const [customOrderedKeys, setCustomOrderedKeys] = useState<string[] | null>(
+    null
+  );
+  // Override opcional de formato por item (ex.: se o usuário quiser alternar um item ≤ 60s entre REEL+STORY e SÓ REEL)
+  const [slotFormatOverrides, setSlotFormatOverrides] = useState<
+    Record<string, CriafyPublicationType[]>
+  >({});
+
   const [postsPerDay, setPostsPerDay] = useState<number>(3);
   const [bulkStartDate, setBulkStartDate] = useState<string>(() => {
     const now = new Date();
@@ -219,6 +302,24 @@ export function SchedulePublicationModal({
   const [shuffleSeed, setShuffleSeed] = useState<number>(1);
   const [bulkProgressText, setBulkProgressText] = useState<string>("");
 
+  const getMediaDuration = (content?: CriafyContent): number | undefined => {
+    if (!content) return undefined;
+    return content.duration_seconds || probedDurations[content.id];
+  };
+
+  const handleVideoMetadataLoaded = (
+    contentId: string,
+    e: React.SyntheticEvent<HTMLVideoElement>
+  ) => {
+    const dur = e.currentTarget.duration;
+    if (dur && isFinite(dur) && dur > 0) {
+      const rounded = Math.round(dur * 10) / 10;
+      setProbedDurations((prev) =>
+        prev[contentId] === rounded ? prev : { ...prev, [contentId]: rounded }
+      );
+    }
+  };
+
   // Load contents when modal opens
   useEffect(() => {
     if (open && activeCompanyId) {
@@ -235,13 +336,13 @@ export function SchedulePublicationModal({
 
   const applyDefaultFormatsForMedia = (media?: CriafyContent) => {
     if (!media) return;
+    const dur = getMediaDuration(media);
     const canStory = isEligibleForStories(
       media.media_type === "VIDEO" ? "VIDEO" : "IMAGE",
-      media.duration_seconds
+      dur
     );
     if (media.media_type === "VIDEO") {
       if (canStory) {
-        // Menos de 60 segundos: já habilita os dois (Reel + Story)!
         setSelectedSingleFormats(["REEL", "STORY_VIDEO"]);
       } else {
         setSelectedSingleFormats(["REEL"]);
@@ -256,6 +357,12 @@ export function SchedulePublicationModal({
     if (open) {
       if (initialMode) {
         setMode(initialMode);
+      }
+      if (initialBulkLibraryIds && initialBulkLibraryIds.length > 0) {
+        setMode("BULK");
+        setBulkSourceTab("LIBRARY");
+        setSelectedBulkLibraryIds(initialBulkLibraryIds);
+        setCustomOrderedKeys(null);
       }
       // Target account
       if (selectedAccountId && selectedAccountId !== "all") {
@@ -306,6 +413,7 @@ export function SchedulePublicationModal({
     initialContentId,
     initialPublicationType,
     initialMode,
+    initialBulkLibraryIds,
   ]);
 
   const loadContents = async () => {
@@ -329,6 +437,21 @@ export function SchedulePublicationModal({
       setLoadingMedia(false);
     }
   };
+
+  // Mídias da biblioteca que nunca foram postadas nem agendadas
+  const unpublishedLibraryContents = useMemo(() => {
+    return contents.filter((c) => !c.is_published && !c.is_scheduled);
+  }, [contents]);
+
+  const filteredBulkLibraryContents = useMemo(() => {
+    if (bulkLibraryFilter === "UNPUBLISHED") {
+      return contents.filter((c) => !c.is_published && !c.is_scheduled);
+    }
+    if (bulkLibraryFilter === "PUBLISHED") {
+      return contents.filter((c) => !!c.is_published);
+    }
+    return contents;
+  }, [contents, bulkLibraryFilter]);
 
   // =========================================================
   // BULK HELPERS & PLANNED SLOTS COMPUTATION
@@ -360,6 +483,7 @@ export function SchedulePublicationModal({
     }
 
     setPendingFiles((prev) => [...prev, ...newItems]);
+    setCustomOrderedKeys(null);
     setShuffleSeed((s) => s + 1);
   };
 
@@ -385,26 +509,35 @@ export function SchedulePublicationModal({
       if (target) URL.revokeObjectURL(target.previewUrl);
       return prev.filter((p) => p.tempId !== tempId);
     });
+    setCustomOrderedKeys(null);
   };
 
   const toggleBulkLibraryItem = (id: string) => {
     setSelectedBulkLibraryIds((prev) =>
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
     );
+    setCustomOrderedKeys(null);
     setShuffleSeed((s) => s + 1);
   };
 
-  const selectAllUnpublishedLibrary = () => {
+  const handleLoadAllUnpublishedFromLibrary = () => {
     const unpub = contents
       .filter((c) => !c.is_published && !c.is_scheduled)
       .map((c) => c.id);
     if (unpub.length === 0) {
-      toast.info("Não há mídias inéditas disponíveis na biblioteca.");
+      toast.info(
+        "Todas as mídias da biblioteca já foram publicadas ou agendadas."
+      );
       return;
     }
+    setBulkSourceTab("LIBRARY");
+    setBulkLibraryFilter("UNPUBLISHED");
     setSelectedBulkLibraryIds(unpub);
+    setCustomOrderedKeys(null);
     setShuffleSeed((s) => s + 1);
-    toast.success(`${unpub.length} mídia(s) inédita(s) selecionada(s)!`);
+    toast.success(
+      `${unpub.length} mídia(s) nunca postada(s) carregada(s) da biblioteca para o Bulk!`
+    );
   };
 
   const toggleShift = (shiftKey: "MANHA" | "TARDE" | "NOITE") => {
@@ -438,12 +571,12 @@ export function SchedulePublicationModal({
         title: c.title || "Mídia da Biblioteca",
         previewUrl: c.media_url,
         mediaType: c.media_type === "VIDEO" ? "VIDEO" : "IMAGE",
-        durationSeconds: c.duration_seconds,
+        durationSeconds: c.duration_seconds || probedDurations[c.id],
         contentId: c.id,
       }));
 
     return [...fromUploads, ...fromLibrary];
-  }, [pendingFiles, selectedBulkLibraryIds, contents]);
+  }, [pendingFiles, selectedBulkLibraryIds, contents, probedDurations]);
 
   const plannedBulkSlots = useMemo<PlannedSlot[]>(() => {
     if (unifiedBulkItems.length === 0) return [];
@@ -454,9 +587,25 @@ export function SchedulePublicationModal({
     const effectiveShifts: Array<"MANHA" | "TARDE" | "NOITE"> =
       activeShifts.length > 0 ? activeShifts : ["MANHA", "TARDE", "NOITE"];
 
-    const orderedItems = randomizeContentOrder
-      ? shuffleArray(unifiedBulkItems)
-      : [...unifiedBulkItems];
+    // 1. Order items: use custom manual order if user clicked ↑/↓, otherwise smart interleave (short Reels+Story balanced with >60s Reels-only)
+    let orderedItems: UnifiedScheduleItem[] = [];
+    if (customOrderedKeys && customOrderedKeys.length > 0) {
+      const byKey = new Map(unifiedBulkItems.map((i) => [i.key, i]));
+      orderedItems = customOrderedKeys
+        .map((k) => byKey.get(k))
+        .filter((i): i is UnifiedScheduleItem => !!i);
+      // Append any newly added items not yet in customOrderedKeys
+      unifiedBulkItems.forEach((i) => {
+        if (!customOrderedKeys.includes(i.key)) {
+          orderedItems.push(i);
+        }
+      });
+    } else {
+      orderedItems = smartInterleaveItems(
+        unifiedBulkItems,
+        randomizeContentOrder
+      );
+    }
 
     const [y, m, d] = bulkStartDate.split("-").map(Number);
     const baseDay = new Date(
@@ -598,31 +747,45 @@ export function SchedulePublicationModal({
           0
         );
 
-        // Determine publicationTypes (can be BOTH Reel/Feed + Story when <= 60s!)
         const canStory = isEligibleForStories(
           item.mediaType,
           item.durationSeconds
         );
-        const pubTypes: CriafyPublicationType[] = [];
+        const isTooLongForStory = item.mediaType === "VIDEO" && !canStory;
 
-        if (bulkPostReelsFeed) {
-          pubTypes.push(item.mediaType === "VIDEO" ? "REEL" : "FEED");
-        }
-        if (bulkPostStories && canStory) {
-          pubTypes.push(
-            item.mediaType === "VIDEO" ? "STORY_VIDEO" : "STORY_IMAGE"
+        // Check if user manually toggled format for this item, otherwise apply global rule with >60s safety guard
+        const manualOverride = slotFormatOverrides[item.key];
+        let pubTypes: CriafyPublicationType[] = [];
+
+        if (manualOverride && manualOverride.length > 0) {
+          // Enforce safety guard even on manual overrides: never allow STORY_VIDEO if > 60s
+          pubTypes = manualOverride.filter((t) =>
+            isTooLongForStory ? t !== "STORY_VIDEO" : true
           );
         }
-        // Fallback if video > 60s and only Stories was checked
+
         if (pubTypes.length === 0) {
-          pubTypes.push(item.mediaType === "VIDEO" ? "REEL" : "FEED");
+          if (bulkPostReelsFeed) {
+            pubTypes.push(item.mediaType === "VIDEO" ? "REEL" : "FEED");
+          }
+          if (bulkPostStories && canStory) {
+            pubTypes.push(
+              item.mediaType === "VIDEO" ? "STORY_VIDEO" : "STORY_IMAGE"
+            );
+          }
+          // Safety Guard: if video is > 60s (too long for Stories), ALWAYS fall back to REEL only so it never errors
+          if (pubTypes.length === 0) {
+            pubTypes.push(item.mediaType === "VIDEO" ? "REEL" : "FEED");
+          }
         }
 
         result.push({
+          globalIndex: itemIdx,
           item,
           scheduledAt: scheduledDate,
           shift: shiftKey,
           publicationTypes: pubTypes,
+          isTooLongForStory,
         });
 
         itemIdx++;
@@ -634,6 +797,8 @@ export function SchedulePublicationModal({
     return result;
   }, [
     unifiedBulkItems,
+    customOrderedKeys,
+    slotFormatOverrides,
     postsPerDay,
     bulkStartDate,
     enabledShifts,
@@ -644,11 +809,86 @@ export function SchedulePublicationModal({
     shuffleSeed,
   ]);
 
-  const totalBulkPublicationsCount = useMemo(() => {
-    return plannedBulkSlots.reduce(
-      (acc, slot) => acc + slot.publicationTypes.length,
-      0
-    );
+  const handleMovePlannedSlot = (
+    globalIndex: number,
+    direction: "UP" | "DOWN"
+  ) => {
+    const currentKeys = plannedBulkSlots.map((s) => s.item.key);
+    const targetIndex = direction === "UP" ? globalIndex - 1 : globalIndex + 1;
+    if (targetIndex < 0 || targetIndex >= currentKeys.length) return;
+
+    const nextKeys = [...currentKeys];
+    const tmp = nextKeys[globalIndex];
+    nextKeys[globalIndex] = nextKeys[targetIndex];
+    nextKeys[targetIndex] = tmp;
+    setCustomOrderedKeys(nextKeys);
+  };
+
+  const handleToggleSlotFormat = (slot: PlannedSlot) => {
+    if (slot.isTooLongForStory) {
+      toast.info(
+        `Este vídeo tem ${formatDurationCompact(
+          slot.item.durationSeconds
+        )} (> 60s). Por segurança, ele será postado apenas no Reels para evitar erro nos Stories.`
+      );
+      return;
+    }
+    const primaryType: CriafyPublicationType =
+      slot.item.mediaType === "VIDEO" ? "REEL" : "FEED";
+    const storyType: CriafyPublicationType =
+      slot.item.mediaType === "VIDEO" ? "STORY_VIDEO" : "STORY_IMAGE";
+
+    const hasBoth = slot.publicationTypes.length > 1;
+    const hasOnlyPrimary =
+      slot.publicationTypes.length === 1 &&
+      slot.publicationTypes[0] === primaryType;
+
+    let nextTypes: CriafyPublicationType[];
+    if (hasBoth) {
+      nextTypes = [primaryType];
+    } else if (hasOnlyPrimary) {
+      nextTypes = [storyType];
+    } else {
+      nextTypes = [primaryType, storyType];
+    }
+
+    setSlotFormatOverrides((prev) => ({
+      ...prev,
+      [slot.item.key]: nextTypes,
+    }));
+  };
+
+  const bulkSummaryStats = useMemo(() => {
+    let bothCount = 0;
+    let onlyReelsLongCount = 0;
+    let onlyReelsNormalCount = 0;
+    let onlyStoryCount = 0;
+
+    plannedBulkSlots.forEach((slot) => {
+      if (slot.publicationTypes.length > 1) {
+        bothCount++;
+      } else if (slot.isTooLongForStory) {
+        onlyReelsLongCount++;
+      } else if (
+        slot.publicationTypes[0] === "STORY_VIDEO" ||
+        slot.publicationTypes[0] === "STORY_IMAGE"
+      ) {
+        onlyStoryCount++;
+      } else {
+        onlyReelsNormalCount++;
+      }
+    });
+
+    return {
+      bothCount,
+      onlyReelsLongCount,
+      onlyReelsNormalCount,
+      onlyStoryCount,
+      totalPublications: plannedBulkSlots.reduce(
+        (acc, s) => acc + s.publicationTypes.length,
+        0
+      ),
+    };
   }, [plannedBulkSlots]);
 
   const groupedPreviewByDay = useMemo(() => {
@@ -678,8 +918,8 @@ export function SchedulePublicationModal({
   const toggleSingleFormat = (fmt: "REEL" | "FEED" | "STORY") => {
     const media = contents.find((c) => c.id === selectedContentId);
     const isVideo = !media || media.media_type === "VIDEO";
-    const isOver60s =
-      isVideo && media?.duration_seconds && media.duration_seconds > 60;
+    const dur = getMediaDuration(media);
+    const isOver60s = isVideo && dur && dur > 60;
 
     if (fmt === "REEL") {
       if (!isVideo) {
@@ -714,9 +954,9 @@ export function SchedulePublicationModal({
     } else if (fmt === "STORY") {
       if (isOver60s) {
         toast.error(
-          `Vídeo com ${Math.round(
-            media!.duration_seconds!
-          )}s ultrapassa o limite de 60s da Meta para Stories.`
+          `Vídeo com ${formatDurationCompact(
+            dur
+          )} ultrapassa o limite de 60s da Meta para Stories. Será postado apenas no Reels.`
         );
         return;
       }
@@ -743,11 +983,12 @@ export function SchedulePublicationModal({
   const selectBothReelAndStory = () => {
     const media = contents.find((c) => c.id === selectedContentId);
     const isVideo = !media || media.media_type === "VIDEO";
-    if (isVideo && media?.duration_seconds && media.duration_seconds > 60) {
+    const dur = getMediaDuration(media);
+    if (isVideo && dur && dur > 60) {
       toast.error(
-        `Este vídeo possui ${Math.round(
-          media.duration_seconds
-        )}s (acima do limite de 60s para Stories).`
+        `Este vídeo possui ${formatDurationCompact(
+          dur
+        )} (acima do limite de 60s para Stories). Ele será postado apenas no Reels.`
       );
       return;
     }
@@ -760,15 +1001,12 @@ export function SchedulePublicationModal({
 
   const handleToggleSequenceItem = (contentId: string) => {
     const media = contents.find((c) => c.id === contentId);
-    if (
-      media?.media_type === "VIDEO" &&
-      media.duration_seconds &&
-      media.duration_seconds > 60
-    ) {
+    const dur = getMediaDuration(media);
+    if (media?.media_type === "VIDEO" && dur && dur > 60) {
       toast.error(
-        `O Instagram não aceita vídeos em Stories acima de 60s (este vídeo possui ${Math.round(
-          media.duration_seconds
-        )}s). Utilize vídeos de até 60s para sequências de Stories.`
+        `O Instagram não aceita vídeos em Stories acima de 60s (este vídeo possui ${formatDurationCompact(
+          dur
+        )}). Utilize vídeos de até 60s para sequências de Stories.`
       );
       return;
     }
@@ -881,7 +1119,7 @@ export function SchedulePublicationModal({
         }
 
         setBulkProgressText(
-          `Agendando ${totalBulkPublicationsCount} publicações (Reels & Stories) no calendário...`
+          `Agendando ${bulkSummaryStats.totalPublications} publicações (Reels & Stories) no calendário...`
         );
 
         const pubPayloads: Array<any> = [];
@@ -891,9 +1129,16 @@ export function SchedulePublicationModal({
               ? slot.item.contentId!
               : uploadedContentIdMap.get(slot.item.key)!;
 
-          // Se tiver Reels + Stories (os dois), cria as duas publicações para o mesmo conteúdo!
-          slot.publicationTypes.forEach((pubType, idx) => {
-            // Pequeno offset de 1 minuto para o Story quando postado junto com o Reel para evitar colisão de container na API
+          // Safety guard final: nunca enviar STORY_VIDEO se o vídeo tiver > 60s
+          const safeTypes = slot.publicationTypes.filter((t) =>
+            slot.isTooLongForStory ? t !== "STORY_VIDEO" : true
+          );
+          const finalTypes: CriafyPublicationType[] =
+            safeTypes.length > 0
+              ? safeTypes
+              : [slot.item.mediaType === "VIDEO" ? "REEL" : "FEED"];
+
+          finalTypes.forEach((pubType, idx) => {
             const scheduledDate = new Date(
               slot.scheduledAt.getTime() + idx * 60000
             );
@@ -913,9 +1158,12 @@ export function SchedulePublicationModal({
         await criafyService.createPublicationSequence(pubPayloads);
 
         toast.success(
-          `${plannedBulkSlots.length} mídias (${totalBulkPublicationsCount} publicações no total) programadas em Bulk!`,
+          `${plannedBulkSlots.length} mídias (${pubPayloads.length} publicações no total) programadas em Bulk!`,
           {
-            description: `Distribuídas em ${groupedPreviewByDay.length} dia(s) (${postsPerDay} por dia — Manhã, Tarde e Noite).`,
+            description:
+              bulkSummaryStats.onlyReelsLongCount > 0
+                ? `${bulkSummaryStats.bothCount} em Reels+Stories (≤60s) e ${bulkSummaryStats.onlyReelsLongCount} apenas em Reels (>60s, protegidos contra erro).`
+                : `Distribuídas em ${groupedPreviewByDay.length} dia(s) (${postsPerDay} por dia — Manhã, Tarde e Noite).`,
             duration: 6000,
           }
         );
@@ -923,6 +1171,8 @@ export function SchedulePublicationModal({
         pendingFiles.forEach((p) => URL.revokeObjectURL(p.previewUrl));
         setPendingFiles([]);
         setSelectedBulkLibraryIds([]);
+        setCustomOrderedKeys(null);
+        setSlotFormatOverrides({});
         setBulkProgressText("");
         onOpenChange(false);
         onSuccess?.();
@@ -946,7 +1196,6 @@ export function SchedulePublicationModal({
     const baseScheduledDate = isPublishNow ? new Date() : new Date(scheduledAt);
     if (isNaN(baseScheduledDate.getTime())) {
       toast.error("Data e horário inválidos.");
-      return;
     }
 
     setSubmitting(true);
@@ -962,23 +1211,16 @@ export function SchedulePublicationModal({
         const selectedContent = contents.find(
           (c) => c.id === selectedContentId
         );
-        const formatsToCreate =
-          selectedSingleFormats.length > 0 ? selectedSingleFormats : ["REEL"];
+        const dur = getMediaDuration(selectedContent);
+        const isTooLong =
+          selectedContent?.media_type === "VIDEO" && dur && dur > 60;
 
-        for (const fmt of formatsToCreate) {
-          if (
-            fmt === "STORY_VIDEO" &&
-            selectedContent?.duration_seconds &&
-            selectedContent.duration_seconds > 60
-          ) {
-            toast.error(
-              `O Instagram permite no máximo 60s para Stories (este vídeo tem ${Math.round(
-                selectedContent.duration_seconds
-              )}s).`
-            );
-            setSubmitting(false);
-            return;
-          }
+        // Filtra automaticamente STORY_VIDEO caso o vídeo tenha > 60s para evitar qualquer erro
+        let formatsToCreate =
+          selectedSingleFormats.length > 0 ? selectedSingleFormats : ["REEL"];
+        if (isTooLong) {
+          formatsToCreate = formatsToCreate.filter((f) => f !== "STORY_VIDEO");
+          if (formatsToCreate.length === 0) formatsToCreate = ["REEL"];
         }
 
         const pubStatus = isPublishNow ? "PUBLISHING" : "SCHEDULED";
@@ -1135,10 +1377,11 @@ export function SchedulePublicationModal({
   };
 
   const selectedSingleMedia = contents.find((c) => c.id === selectedContentId);
+  const selectedSingleDuration = getMediaDuration(selectedSingleMedia);
   const isSingleMediaEligibleForStory = selectedSingleMedia
     ? isEligibleForStories(
         selectedSingleMedia.media_type === "VIDEO" ? "VIDEO" : "IMAGE",
-        selectedSingleMedia.duration_seconds
+        selectedSingleDuration
       )
     : true;
   const hasSingleReel = selectedSingleFormats.includes("REEL");
@@ -1153,7 +1396,7 @@ export function SchedulePublicationModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={`${
-          mode === "BULK" ? "sm:max-w-[880px]" : "sm:max-w-[700px]"
+          mode === "BULK" ? "sm:max-w-[940px]" : "sm:max-w-[720px]"
         } max-h-[92vh] overflow-y-auto transition-all`}
       >
         <DialogHeader className="pb-2 border-b border-muted">
@@ -1164,8 +1407,9 @@ export function SchedulePublicationModal({
             </DialogTitle>
           </div>
           <DialogDescription className="text-xs text-muted-foreground">
-            Conteúdos com até 60s podem ser publicados simultaneamente como
-            Reels e Stories (os dois).
+            Vídeos com ≤ 60s recebem o ícone <strong>🎬+📖 Reels &amp; Stories</strong>{" "}
+            (publica nos dois). Vídeos &gt; 60s recebem{" "}
+            <strong>🎬⏱️ Só Reels</strong> automaticamente para evitar erros.
           </DialogDescription>
         </DialogHeader>
 
@@ -1249,19 +1493,30 @@ export function SchedulePublicationModal({
              ========================================================= */}
           {mode === "SINGLE" && (
             <div className="space-y-4">
-              {/* Publication Format Selector (Supports BOTH Reels + Stories when <= 60s!) */}
+              {/* Publication Format Selector */}
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-1">
                   <Label className="text-xs font-semibold">
                     Formato no Instagram (selecione um ou os dois)
                   </Label>
-                  {isSingleMediaEligibleForStory && (
+                  {isSingleMediaEligibleForStory ? (
                     <Badge
                       variant="outline"
-                      className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 font-semibold"
+                      className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 font-semibold flex items-center gap-1"
                     >
-                      ✓ Tempo permitido para Stories (≤ 60s): pode postar nos
-                      dois!
+                      <Film className="w-3 h-3" /> +{" "}
+                      <BookOpen className="w-3 h-3" /> ≤ 60s: publica no Reels e
+                      Stories!
+                    </Badge>
+                  ) : (
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 font-semibold flex items-center gap-1"
+                    >
+                      <Film className="w-3 h-3" />{" "}
+                      <AlertTriangle className="w-3 h-3" /> Vídeo longo (
+                      {formatDurationCompact(selectedSingleDuration)} &gt; 60s):
+                      postará Só no Reels
                     </Badge>
                   )}
                 </div>
@@ -1318,7 +1573,9 @@ export function SchedulePublicationModal({
                       📖 Story {hasSingleStory && "✓"}
                     </div>
                     <div className="text-[10px] text-muted-foreground mt-0.5">
-                      9:16 (vídeo até 60s)
+                      {!isSingleMediaEligibleForStory
+                        ? "Bloqueado (> 60s)"
+                        : "9:16 (vídeo até 60s)"}
                     </div>
                   </div>
 
@@ -1362,9 +1619,14 @@ export function SchedulePublicationModal({
                     em Bulk" acima para subir novos arquivos agora.
                   </p>
                 ) : (
-                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-48 overflow-y-auto p-1.5 border border-muted rounded-xl bg-card">
+                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-52 overflow-y-auto p-1.5 border border-muted rounded-xl bg-card">
                     {contents.map((item) => {
                       const isSelected = selectedContentId === item.id;
+                      const dur = getMediaDuration(item);
+                      const storyOk = isEligibleForStories(
+                        item.media_type === "VIDEO" ? "VIDEO" : "IMAGE",
+                        dur
+                      );
 
                       return (
                         <div
@@ -1373,7 +1635,7 @@ export function SchedulePublicationModal({
                           className={`relative aspect-[9/16] rounded-lg overflow-hidden border-2 cursor-pointer transition-all group ${
                             isSelected
                               ? "border-pink-500 ring-2 ring-pink-500/30 scale-[0.98]"
-                              : "border-transparent hover:border-muted-foreground/30 opacity-80 hover:opacity-100"
+                              : "border-transparent hover:border-muted-foreground/30 opacity-85 hover:opacity-100"
                           }`}
                         >
                           {item.media_type === "VIDEO" ? (
@@ -1381,6 +1643,10 @@ export function SchedulePublicationModal({
                               src={item.media_url}
                               className="w-full h-full object-cover pointer-events-none"
                               muted
+                              preload="metadata"
+                              onLoadedMetadata={(e) =>
+                                handleVideoMetadataLoaded(item.id, e)
+                              }
                             />
                           ) : (
                             <img
@@ -1390,26 +1656,51 @@ export function SchedulePublicationModal({
                             />
                           )}
 
+                          {/* Top-left duration badge */}
                           <div className="absolute top-1 left-1">
-                            <Badge className="bg-black/70 text-white text-[9px] px-1 py-0 h-4 border-0">
+                            <Badge className="bg-black/75 text-white text-[9px] px-1 py-0 h-4 border-0 flex items-center gap-0.5">
                               {item.media_type === "VIDEO" ? (
-                                <Video className="w-2.5 h-2.5 mr-0.5 text-sky-400" />
+                                <Video className="w-2.5 h-2.5 text-sky-400" />
                               ) : (
-                                <ImageIcon className="w-2.5 h-2.5 mr-0.5 text-emerald-400" />
+                                <ImageIcon className="w-2.5 h-2.5 text-emerald-400" />
                               )}
-                              {item.duration_seconds
-                                ? `${Math.round(item.duration_seconds)}s`
-                                : ""}
+                              {dur ? formatDurationCompact(dur) : ""}
                             </Badge>
                           </div>
 
-                          {item.is_published && (
-                            <div className="absolute top-1 right-1">
+                          {/* Top-right never-posted or published count */}
+                          <div className="absolute top-1 right-1">
+                            {item.is_published ? (
                               <Badge className="bg-emerald-600 text-white text-[8px] px-1 py-0 h-4 border-0">
                                 {item.publish_count}x
                               </Badge>
-                            </div>
-                          )}
+                            ) : !item.is_scheduled ? (
+                              <Badge className="bg-amber-500/90 text-white text-[8px] px-1 py-0 h-4 border-0">
+                                Inédito
+                              </Badge>
+                            ) : null}
+                          </div>
+
+                          {/* Bottom visual icon indicator: Reels+Stories vs Só Reels (>60s) */}
+                          <div className="absolute bottom-0 inset-x-0 p-1 bg-gradient-to-t from-black/85 via-black/60 to-transparent">
+                            {storyOk ? (
+                              <div className="flex items-center justify-center gap-1 rounded bg-purple-600/90 text-white text-[8px] font-bold py-0.5 px-1 shadow-xs">
+                                <Film className="w-2.5 h-2.5 shrink-0" />
+                                <span>+</span>
+                                <BookOpen className="w-2.5 h-2.5 shrink-0" />
+                                <span className="truncate">Reels+Story</span>
+                              </div>
+                            ) : (
+                              <div
+                                className="flex items-center justify-center gap-1 rounded bg-amber-600/95 text-white text-[8px] font-bold py-0.5 px-1 shadow-xs"
+                                title="Vídeo > 60s: será postado apenas no Reels"
+                              >
+                                <Film className="w-2.5 h-2.5 shrink-0" />
+                                <Clock className="w-2.5 h-2.5 shrink-0" />
+                                <span className="truncate">Só Reels &gt;60s</span>
+                              </div>
+                            )}
+                          </div>
 
                           {isSelected && (
                             <div className="absolute inset-0 bg-pink-500/20 flex items-center justify-center">
@@ -1461,7 +1752,7 @@ export function SchedulePublicationModal({
           )}
 
           {/* =========================================================
-              MODE 2: BULK UPLOAD & RANDOM DISTRIBUTION (MANHÃ/TARDE/NOITE)
+              MODE 2: BULK UPLOAD & LIBRARY UNPUBLISHED DISTRIBUTION
              ========================================================= */}
           {mode === "BULK" && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 pt-1">
@@ -1553,7 +1844,10 @@ export function SchedulePublicationModal({
                     <div className="flex items-center gap-2">
                       <Switch
                         checked={randomizeContentOrder}
-                        onCheckedChange={setRandomizeContentOrder}
+                        onCheckedChange={(checked) => {
+                          setRandomizeContentOrder(checked);
+                          setCustomOrderedKeys(null);
+                        }}
                         id="bulk-shuffle-contents"
                       />
                       <Label
@@ -1561,7 +1855,7 @@ export function SchedulePublicationModal({
                         className="text-xs font-medium cursor-pointer flex items-center gap-1"
                       >
                         <Shuffle className="w-3.5 h-3.5 text-purple-500" />
-                        Ordem aleatória entre conteúdos
+                        Ordem aleatória balanceada
                       </Label>
                     </div>
 
@@ -1582,12 +1876,13 @@ export function SchedulePublicationModal({
 
                   {/* Format Multi-Select: Reels + Stories (Os Dois!) */}
                   <div className="space-y-1.5 pt-2 border-t border-border/50">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between flex-wrap gap-1">
                       <Label className="text-xs font-bold text-foreground">
                         Onde publicar (Reels e Stories):
                       </Label>
-                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
-                        ≤ 60s publica nos dois automaticamente!
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                        <ShieldCheck className="w-3 h-3" /> ≤ 60s vai nos dois •
+                        &gt; 60s vai só no Reels (sem erro)
                       </span>
                     </div>
 
@@ -1597,6 +1892,7 @@ export function SchedulePublicationModal({
                         onClick={() => {
                           setBulkPostReelsFeed(true);
                           setBulkPostStories(true);
+                          setSlotFormatOverrides({});
                         }}
                         className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
                           bulkPostReelsFeed && bulkPostStories
@@ -1612,6 +1908,7 @@ export function SchedulePublicationModal({
                         onClick={() => {
                           setBulkPostReelsFeed(true);
                           setBulkPostStories(false);
+                          setSlotFormatOverrides({});
                         }}
                         className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer ${
                           bulkPostReelsFeed && !bulkPostStories
@@ -1627,6 +1924,7 @@ export function SchedulePublicationModal({
                         onClick={() => {
                           setBulkPostReelsFeed(false);
                           setBulkPostStories(true);
+                          setSlotFormatOverrides({});
                         }}
                         className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer ${
                           !bulkPostReelsFeed && bulkPostStories
@@ -1640,9 +1938,9 @@ export function SchedulePublicationModal({
                   </div>
                 </div>
 
-                {/* Upload or Library Selector */}
+                {/* Upload or Library Selector + 1-Click Bulk from Never Posted Library */}
                 <div className="space-y-2.5">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl">
                       <button
                         type="button"
@@ -1670,18 +1968,18 @@ export function SchedulePublicationModal({
                       </button>
                     </div>
 
-                    {bulkSourceTab === "LIBRARY" && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={selectAllUnpublishedLibrary}
-                        className="h-7 text-[11px] gap-1 rounded-lg cursor-pointer"
-                      >
-                        <Sparkles className="w-3 h-3 text-amber-500" />
-                        Selecionar Inéditos
-                      </Button>
-                    )}
+                    {/* Botão direto sempre visível para fazer Bulk de todas as mídias nunca postadas da biblioteca */}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleLoadAllUnpublishedFromLibrary}
+                      className="h-8 text-[11px] font-bold gap-1.5 rounded-xl border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 cursor-pointer"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                      Bulk das Nunca Postadas da Biblioteca (
+                      {unpublishedLibraryContents.length})
+                    </Button>
                   </div>
 
                   {bulkSourceTab === "UPLOAD" ? (
@@ -1690,7 +1988,7 @@ export function SchedulePublicationModal({
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={handleBulkDropFiles}
                         onClick={() => bulkFileInputRef.current?.click()}
-                        className="border-2 border-dashed border-purple-500/30 hover:border-purple-500/60 bg-purple-500/[0.02] hover:bg-purple-500/[0.05] transition-all rounded-xl p-5 text-center cursor-pointer"
+                        className="border-2 border-dashed border-purple-500/30 hover:border-purple-500/60 bg-purple-500/[0.02] hover:bg-purple-500/[0.05] transition-all rounded-xl p-4 text-center cursor-pointer"
                       >
                         <input
                           ref={bulkFileInputRef}
@@ -1700,7 +1998,7 @@ export function SchedulePublicationModal({
                           onChange={handleBulkFileInputChange}
                           className="hidden"
                         />
-                        <div className="w-9 h-9 rounded-full bg-purple-500/10 text-purple-600 flex items-center justify-center mx-auto mb-1.5">
+                        <div className="w-8 h-8 rounded-full bg-purple-500/10 text-purple-600 flex items-center justify-center mx-auto mb-1">
                           <Upload className="w-4 h-4" />
                         </div>
                         <p className="text-xs font-bold text-foreground">
@@ -1708,118 +2006,88 @@ export function SchedulePublicationModal({
                           imagens
                         </p>
                         <p className="text-[11px] text-muted-foreground">
-                          Vídeos com menos de 60s serão programados como Reels e
-                          Stories (os dois)
+                          Ou clique em{" "}
+                          <span
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleLoadAllUnpublishedFromLibrary();
+                            }}
+                            className="text-amber-600 dark:text-amber-400 font-bold underline"
+                          >
+                            Bulk das Nunca Postadas da Biblioteca (
+                            {unpublishedLibraryContents.length})
+                          </span>{" "}
+                          acima
                         </p>
                       </div>
 
                       {pendingFiles.length > 0 && (
-                        <div className="grid grid-cols-4 gap-2 max-h-[160px] overflow-y-auto p-1">
-                          {pendingFiles.map((pf) => (
-                            <div
-                              key={pf.tempId}
-                              className="relative group rounded-lg overflow-hidden border border-border bg-muted/40 aspect-square"
-                            >
-                              {pf.mediaType === "VIDEO" ? (
-                                <video
-                                  src={pf.previewUrl}
-                                  className="w-full h-full object-cover"
-                                  muted
-                                />
-                              ) : (
-                                <img
-                                  src={pf.previewUrl}
-                                  alt={pf.title}
-                                  className="w-full h-full object-cover"
-                                />
-                              )}
-                              {pf.durationSeconds !== undefined && (
-                                <div className="absolute top-1 left-1">
-                                  <Badge className="bg-black/75 text-white border-0 text-[8px] px-1 py-0">
-                                    {Math.round(pf.durationSeconds)}s
-                                  </Badge>
-                                </div>
-                              )}
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  removePendingFile(pf.tempId);
-                                }}
-                                className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/70 text-white hover:bg-rose-600 flex items-center justify-center transition-colors cursor-pointer"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                              <div className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] px-1 py-0.5 truncate">
-                                {pf.title}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="border border-border/70 rounded-xl p-2.5 bg-muted/10 max-h-[200px] overflow-y-auto">
-                      {loadingMedia ? (
-                        <div className="flex justify-center py-6">
-                          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-                        </div>
-                      ) : contents.length === 0 ? (
-                        <p className="text-xs text-muted-foreground text-center py-6">
-                          Nenhuma mídia na biblioteca. Use "Subir Mídias" ao
-                          lado.
-                        </p>
-                      ) : (
-                        <div className="grid grid-cols-4 gap-2">
-                          {contents.map((content) => {
-                            const isSelected = selectedBulkLibraryIds.includes(
-                              content.id
+                        <div className="grid grid-cols-4 gap-2 max-h-[175px] overflow-y-auto p-1">
+                          {pendingFiles.map((pf) => {
+                            const storyOk = isEligibleForStories(
+                              pf.mediaType,
+                              pf.durationSeconds
                             );
                             return (
                               <div
-                                key={content.id}
-                                onClick={() =>
-                                  toggleBulkLibraryItem(content.id)
-                                }
-                                className={`relative rounded-lg overflow-hidden border aspect-square cursor-pointer transition-all ${
-                                  isSelected
-                                    ? "ring-2 ring-purple-600 border-purple-600 scale-[0.98]"
-                                    : "border-border/60 opacity-85 hover:opacity-100"
-                                }`}
+                                key={pf.tempId}
+                                className="relative group rounded-lg overflow-hidden border border-border bg-muted/40 aspect-square"
                               >
-                                {content.media_type === "VIDEO" ? (
+                                {pf.mediaType === "VIDEO" ? (
                                   <video
-                                    src={content.media_url}
+                                    src={pf.previewUrl}
                                     className="w-full h-full object-cover"
                                     muted
                                   />
                                 ) : (
                                   <img
-                                    src={content.media_url}
-                                    alt={content.title}
+                                    src={pf.previewUrl}
+                                    alt={pf.title}
                                     className="w-full h-full object-cover"
                                   />
                                 )}
-                                {content.duration_seconds && (
-                                  <div className="absolute top-1 left-1">
-                                    <Badge className="bg-black/75 text-white border-0 text-[8px] px-1 py-0">
-                                      {Math.round(content.duration_seconds)}s
-                                    </Badge>
-                                  </div>
-                                )}
-                                <div className="absolute top-1 right-1">
-                                  <div
-                                    className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                                      isSelected
-                                        ? "bg-purple-600 text-white"
-                                        : "bg-black/50 text-white/70 border border-white/40"
-                                    }`}
-                                  >
-                                    {isSelected ? "✓" : ""}
-                                  </div>
+                                <div className="absolute top-1 left-1">
+                                  <Badge className="bg-black/75 text-white border-0 text-[8px] px-1 py-0">
+                                    {pf.durationSeconds
+                                      ? formatDurationCompact(
+                                          pf.durationSeconds
+                                        )
+                                      : pf.mediaType === "VIDEO"
+                                      ? "Vídeo"
+                                      : "Img"}
+                                  </Badge>
                                 </div>
-                                <div className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] px-1 py-0.5 truncate">
-                                  {content.title || "Sem título"}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    removePendingFile(pf.tempId);
+                                  }}
+                                  className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/70 text-white hover:bg-rose-600 flex items-center justify-center transition-colors cursor-pointer"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+
+                                {/* Visual Icon Indicator on each Upload Card */}
+                                <div className="absolute bottom-0 inset-x-0 p-1 bg-gradient-to-t from-black/90 via-black/60 to-transparent">
+                                  {storyOk ? (
+                                    <div className="flex items-center justify-center gap-1 rounded bg-purple-600/95 text-white text-[8px] font-bold py-0.5 px-1">
+                                      <Film className="w-2.5 h-2.5 shrink-0" />
+                                      <span>+</span>
+                                      <BookOpen className="w-2.5 h-2.5 shrink-0" />
+                                      <span className="truncate">
+                                        Reels + Story
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center justify-center gap-1 rounded bg-amber-600/95 text-white text-[8px] font-bold py-0.5 px-1">
+                                      <Film className="w-2.5 h-2.5 shrink-0" />
+                                      <Clock className="w-2.5 h-2.5 shrink-0" />
+                                      <span className="truncate">
+                                        Só Reels (&gt;60s)
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             );
@@ -1827,11 +2095,184 @@ export function SchedulePublicationModal({
                         </div>
                       )}
                     </div>
+                  ) : (
+                    /* Seleção da Biblioteca com filtro de Nunca Postadas (Inéditas) */
+                    <div className="border border-border/70 rounded-xl p-2.5 bg-muted/10 space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-border/50 pb-2">
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setBulkLibraryFilter("UNPUBLISHED")}
+                            className={`px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                              bulkLibraryFilter === "UNPUBLISHED"
+                                ? "bg-amber-500 text-white shadow-2xs"
+                                : "bg-background text-muted-foreground hover:text-foreground border border-border/60"
+                            }`}
+                          >
+                            <Sparkles className="w-2.5 h-2.5" />
+                            Nunca Postadas ({unpublishedLibraryContents.length})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setBulkLibraryFilter("ALL")}
+                            className={`px-2 py-1 rounded-md text-[10px] font-semibold transition-all cursor-pointer ${
+                              bulkLibraryFilter === "ALL"
+                                ? "bg-foreground text-background shadow-2xs"
+                                : "bg-background text-muted-foreground hover:text-foreground border border-border/60"
+                            }`}
+                          >
+                            Todas ({contents.length})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setBulkLibraryFilter("PUBLISHED")}
+                            className={`px-2 py-1 rounded-md text-[10px] font-semibold transition-all cursor-pointer ${
+                              bulkLibraryFilter === "PUBLISHED"
+                                ? "bg-emerald-600 text-white shadow-2xs"
+                                : "bg-background text-muted-foreground hover:text-foreground border border-border/60"
+                            }`}
+                          >
+                            Já Postadas (
+                            {contents.filter((c) => !!c.is_published).length})
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const ids = filteredBulkLibraryContents.map(
+                                (c) => c.id
+                              );
+                              setSelectedBulkLibraryIds(ids);
+                              setCustomOrderedKeys(null);
+                              setShuffleSeed((s) => s + 1);
+                            }}
+                            className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:underline cursor-pointer"
+                          >
+                            Selecionar todas ({filteredBulkLibraryContents.length}
+                            )
+                          </button>
+                          {selectedBulkLibraryIds.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedBulkLibraryIds([]);
+                                setCustomOrderedKeys(null);
+                              }}
+                              className="text-[10px] text-muted-foreground hover:text-destructive underline cursor-pointer"
+                            >
+                              Limpar
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="max-h-[185px] overflow-y-auto pr-1">
+                        {loadingMedia ? (
+                          <div className="flex justify-center py-6">
+                            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                          </div>
+                        ) : filteredBulkLibraryContents.length === 0 ? (
+                          <p className="text-xs text-muted-foreground text-center py-6">
+                            Nenhuma mídia encontrada neste filtro.
+                          </p>
+                        ) : (
+                          <div className="grid grid-cols-4 gap-2">
+                            {filteredBulkLibraryContents.map((content) => {
+                              const isSelected =
+                                selectedBulkLibraryIds.includes(content.id);
+                              const dur = getMediaDuration(content);
+                              const storyOk = isEligibleForStories(
+                                content.media_type === "VIDEO"
+                                  ? "VIDEO"
+                                  : "IMAGE",
+                                dur
+                              );
+
+                              return (
+                                <div
+                                  key={content.id}
+                                  onClick={() =>
+                                    toggleBulkLibraryItem(content.id)
+                                  }
+                                  className={`relative rounded-lg overflow-hidden border aspect-square cursor-pointer transition-all ${
+                                    isSelected
+                                      ? "ring-2 ring-purple-600 border-purple-600 scale-[0.98]"
+                                      : "border-border/60 opacity-85 hover:opacity-100"
+                                  }`}
+                                >
+                                  {content.media_type === "VIDEO" ? (
+                                    <video
+                                      src={content.media_url}
+                                      className="w-full h-full object-cover"
+                                      muted
+                                      preload="metadata"
+                                      onLoadedMetadata={(e) =>
+                                        handleVideoMetadataLoaded(content.id, e)
+                                      }
+                                    />
+                                  ) : (
+                                    <img
+                                      src={content.media_url}
+                                      alt={content.title}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  )}
+                                  <div className="absolute top-1 left-1">
+                                    <Badge className="bg-black/75 text-white border-0 text-[8px] px-1 py-0">
+                                      {dur
+                                        ? formatDurationCompact(dur)
+                                        : content.media_type === "VIDEO"
+                                        ? "Vídeo"
+                                        : "Img"}
+                                    </Badge>
+                                  </div>
+                                  <div className="absolute top-1 right-1">
+                                    <div
+                                      className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                                        isSelected
+                                          ? "bg-purple-600 text-white"
+                                          : "bg-black/50 text-white/70 border border-white/40"
+                                      }`}
+                                    >
+                                      {isSelected ? "✓" : ""}
+                                    </div>
+                                  </div>
+
+                                  {/* Visual Icon Indicator on each Library Card */}
+                                  <div className="absolute bottom-0 inset-x-0 p-1 bg-gradient-to-t from-black/90 via-black/60 to-transparent">
+                                    {storyOk ? (
+                                      <div className="flex items-center justify-center gap-1 rounded bg-purple-600/95 text-white text-[8px] font-bold py-0.5 px-1">
+                                        <Film className="w-2.5 h-2.5 shrink-0" />
+                                        <span>+</span>
+                                        <BookOpen className="w-2.5 h-2.5 shrink-0" />
+                                        <span className="truncate">
+                                          Reels + Story
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center justify-center gap-1 rounded bg-amber-600/95 text-white text-[8px] font-bold py-0.5 px-1">
+                                        <Film className="w-2.5 h-2.5 shrink-0" />
+                                        <Clock className="w-2.5 h-2.5 shrink-0" />
+                                        <span className="truncate">
+                                          Só Reels (&gt;60s)
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
 
-              {/* Right 5 cols: Live Preview of Scheduled Days & Shifts */}
+              {/* Right 5 cols: Live Preview of Scheduled Days, Visual Icons & Reordering */}
               <div className="lg:col-span-5 bg-muted/20 border border-border/70 rounded-xl p-3.5 flex flex-col justify-between space-y-3">
                 <div className="space-y-2.5">
                   <div className="flex items-center justify-between">
@@ -1842,8 +2283,8 @@ export function SchedulePublicationModal({
                       </h4>
                       <p className="text-[10px] text-muted-foreground">
                         {plannedBulkSlots.length > 0
-                          ? `${totalBulkPublicationsCount} envio(s) em ${groupedPreviewByDay.length} dia(s)`
-                          : "Suba ou selecione mídias ao lado"}
+                          ? `${bulkSummaryStats.totalPublications} envio(s) em ${groupedPreviewByDay.length} dia(s)`
+                          : "Suba arquivos ou puxe as inéditas da biblioteca"}
                       </p>
                     </div>
 
@@ -1852,30 +2293,88 @@ export function SchedulePublicationModal({
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => setShuffleSeed((s) => s + 1)}
+                        onClick={() => {
+                          setCustomOrderedKeys(null);
+                          setShuffleSeed((s) => s + 1);
+                        }}
                         className="h-7 text-[11px] gap-1 rounded-lg cursor-pointer"
-                        title="Sortear novamente a ordem e os horários"
+                        title="Sortear e balancear novamente entre os turnos"
                       >
                         <Shuffle className="w-3 h-3 text-purple-600" />
-                        Sortear
+                        Balancear
                       </Button>
                     )}
                   </div>
 
+                  {/* Summary Legend / Placar de Ícones (Reels+Stories vs Só Reels >60s) */}
+                  {plannedBulkSlots.length > 0 && (
+                    <div className="grid grid-cols-2 gap-1.5 p-2 rounded-xl bg-background/90 border border-border/70">
+                      <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                        <div className="flex items-center gap-0.5 text-purple-600 dark:text-purple-400 shrink-0">
+                          <Film className="w-3 h-3" />
+                          <span className="text-[9px] font-bold">+</span>
+                          <BookOpen className="w-3 h-3" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[10px] font-bold text-purple-700 dark:text-purple-300 leading-tight">
+                            {bulkSummaryStats.bothCount} Reels + Stories
+                          </div>
+                          <div className="text-[9px] text-muted-foreground truncate">
+                            Vídeos ≤ 60s / Imagens
+                          </div>
+                        </div>
+                      </div>
+
+                      <div
+                        className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border ${
+                          bulkSummaryStats.onlyReelsLongCount > 0
+                            ? "bg-amber-500/15 border-amber-500/30"
+                            : "bg-muted/40 border-border/50"
+                        }`}
+                      >
+                        <div className="flex items-center gap-0.5 text-amber-600 dark:text-amber-400 shrink-0">
+                          <Film className="w-3 h-3" />
+                          <Clock className="w-3 h-3" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[10px] font-bold text-amber-700 dark:text-amber-300 leading-tight">
+                            {bulkSummaryStats.onlyReelsLongCount} Só no Reels
+                            (&gt;60s)
+                          </div>
+                          <div className="text-[9px] text-muted-foreground truncate">
+                            Protegidos s/ erro Story
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {plannedBulkSlots.length === 0 ? (
-                    <div className="border border-dashed border-border rounded-xl p-6 text-center my-4 space-y-1.5">
+                    <div className="border border-dashed border-border rounded-xl p-6 text-center my-4 space-y-2">
                       <CalendarDays className="w-7 h-7 text-muted-foreground/50 mx-auto" />
                       <p className="text-xs font-medium text-muted-foreground">
                         Nenhuma mídia selecionada
                       </p>
                       <p className="text-[10px] text-muted-foreground/80">
-                        Ao subir seus vídeos/imagens, conteúdos com ≤ 60s serão
-                        programados como Reels e Stories (os dois) nos turnos
-                        da manhã, tarde e noite.
+                        Suba mídias ou clique no botão abaixo para carregar
+                        todas as mídias inéditas da biblioteca:
                       </p>
+                      {unpublishedLibraryContents.length > 0 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleLoadAllUnpublishedFromLibrary}
+                          className="h-7 text-[10px] font-bold gap-1 border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 cursor-pointer"
+                        >
+                          <Sparkles className="w-3 h-3 text-amber-500" />
+                          Carregar {unpublishedLibraryContents.length} Nunca
+                          Postadas da Biblioteca
+                        </Button>
+                      )}
                     </div>
                   ) : (
-                    <div className="space-y-2.5 max-h-[320px] overflow-y-auto pr-1 scrollbar-thin">
+                    <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1 scrollbar-thin">
                       {groupedPreviewByDay.map(([dateKey, daySlots]) => {
                         const [yy, mm, dd] = dateKey.split("-").map(Number);
                         const dateObj = new Date(yy, mm - 1, dd);
@@ -1905,8 +2404,8 @@ export function SchedulePublicationModal({
                               </Badge>
                             </div>
 
-                            <div className="space-y-1">
-                              {daySlots.map((slot, idx) => {
+                            <div className="space-y-1.5">
+                              {daySlots.map((slot) => {
                                 const shiftCfg = SHIFT_CONFIG[slot.shift];
                                 const ShiftIcon = shiftCfg.icon;
                                 const timeStr =
@@ -1916,14 +2415,17 @@ export function SchedulePublicationModal({
                                   });
                                 const isBoth =
                                   slot.publicationTypes.length > 1;
+                                const durLabel = formatDurationCompact(
+                                  slot.item.durationSeconds
+                                );
 
                                 return (
                                   <div
-                                    key={`${slot.item.key}_${idx}`}
-                                    className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-muted/40 text-xs"
+                                    key={`${slot.item.key}_${slot.globalIndex}`}
+                                    className="flex items-center justify-between gap-1.5 p-1.5 rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors text-xs"
                                   >
                                     <div className="flex items-center gap-2 min-w-0">
-                                      <div className="w-7 h-7 rounded overflow-hidden bg-muted shrink-0 border border-border/60">
+                                      <div className="w-8 h-8 rounded overflow-hidden bg-muted shrink-0 border border-border/60 relative">
                                         {slot.item.mediaType === "VIDEO" ? (
                                           <video
                                             src={slot.item.previewUrl}
@@ -1938,28 +2440,105 @@ export function SchedulePublicationModal({
                                           />
                                         )}
                                       </div>
+
                                       <div className="min-w-0">
-                                        <div className="font-semibold text-[11px] truncate max-w-[110px]">
+                                        <div className="font-semibold text-[11px] truncate max-w-[115px]">
                                           {slot.item.title}
                                         </div>
+
+                                        {/* Ícone Visual Claro: Reels+Stories vs Só Reels (>60s) */}
                                         <div className="flex items-center gap-1 mt-0.5">
                                           {isBoth ? (
-                                            <Badge className="bg-gradient-to-r from-purple-600 to-pink-600 text-white border-0 text-[8px] px-1.5 py-0 font-bold">
-                                              REEL + STORY
-                                            </Badge>
-                                          ) : (
-                                            <Badge
-                                              variant="outline"
-                                              className="text-[8px] px-1 py-0"
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                handleToggleSlotFormat(slot)
+                                              }
+                                              title="Clique para alternar formato deste item"
+                                              className="inline-flex items-center gap-1 rounded bg-gradient-to-r from-purple-600 to-pink-600 text-white text-[9px] px-1.5 py-0.5 font-bold cursor-pointer hover:opacity-90"
                                             >
-                                              {slot.publicationTypes[0]}
-                                            </Badge>
+                                              <Film className="w-2.5 h-2.5" />
+                                              <span>+</span>
+                                              <BookOpen className="w-2.5 h-2.5" />
+                                              <span>
+                                                Reels + Story
+                                                {durLabel
+                                                  ? ` (${durLabel})`
+                                                  : ""}
+                                              </span>
+                                            </button>
+                                          ) : slot.isTooLongForStory ? (
+                                            <span
+                                              title="Vídeo acima de 60s: agendado automaticamente apenas no Reels para evitar erro nos Stories"
+                                              className="inline-flex items-center gap-1 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40 text-[9px] px-1.5 py-0.5 font-bold"
+                                            >
+                                              <Film className="w-2.5 h-2.5" />
+                                              <Clock className="w-2.5 h-2.5" />
+                                              <span>
+                                                Só Reels &gt;60s
+                                                {durLabel
+                                                  ? ` (${durLabel})`
+                                                  : ""}
+                                              </span>
+                                            </span>
+                                          ) : (
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                handleToggleSlotFormat(slot)
+                                              }
+                                              title="Clique para incluir Stories também"
+                                              className="inline-flex items-center gap-1 rounded bg-background border border-border text-foreground text-[9px] px-1.5 py-0.5 font-semibold cursor-pointer hover:bg-muted"
+                                            >
+                                              <Film className="w-2.5 h-2.5 text-purple-500" />
+                                              <span>
+                                                {slot.publicationTypes[0]}
+                                                {durLabel
+                                                  ? ` (${durLabel})`
+                                                  : ""}
+                                              </span>
+                                            </button>
                                           )}
                                         </div>
                                       </div>
                                     </div>
 
+                                    {/* Right controls: Reorder ↑/↓ + Shift + Time */}
                                     <div className="flex items-center gap-1 shrink-0">
+                                      <div className="flex flex-col">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleMovePlannedSlot(
+                                              slot.globalIndex,
+                                              "UP"
+                                            )
+                                          }
+                                          disabled={slot.globalIndex === 0}
+                                          title="Subir vídeo na fila"
+                                          className="p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-25 cursor-pointer"
+                                        >
+                                          <ArrowUp className="w-2.5 h-2.5" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleMovePlannedSlot(
+                                              slot.globalIndex,
+                                              "DOWN"
+                                            )
+                                          }
+                                          disabled={
+                                            slot.globalIndex ===
+                                            plannedBulkSlots.length - 1
+                                          }
+                                          title="Descer vídeo na fila"
+                                          className="p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-25 cursor-pointer"
+                                        >
+                                          <ArrowDown className="w-2.5 h-2.5" />
+                                        </button>
+                                      </div>
+
                                       <Badge
                                         variant="outline"
                                         className={`text-[9px] px-1.5 py-0 font-semibold flex items-center gap-0.5 ${shiftCfg.badgeClass}`}
@@ -2045,6 +2624,7 @@ export function SchedulePublicationModal({
                     {sequenceContentIds.map((cId, idx) => {
                       const item = contents.find((c) => c.id === cId);
                       if (!item) return null;
+                      const dur = getMediaDuration(item);
 
                       return (
                         <div
@@ -2076,10 +2656,8 @@ export function SchedulePublicationModal({
                               </p>
                               <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                                 <span>{item.media_type}</span>
-                                {item.duration_seconds && (
-                                  <span>
-                                    • {Math.round(item.duration_seconds)}s
-                                  </span>
+                                {dur && (
+                                  <span>• {formatDurationCompact(dur)}</span>
                                 )}
                               </div>
                             </div>
@@ -2179,10 +2757,9 @@ export function SchedulePublicationModal({
                   {contents.map((item) => {
                     const seqIndex = sequenceContentIds.indexOf(item.id);
                     const isSelected = seqIndex !== -1;
+                    const dur = getMediaDuration(item);
                     const isOver60s =
-                      item.media_type === "VIDEO" &&
-                      item.duration_seconds &&
-                      item.duration_seconds > 60;
+                      item.media_type === "VIDEO" && dur && dur > 60;
 
                     return (
                       <div
@@ -2192,12 +2769,12 @@ export function SchedulePublicationModal({
                           isSelected
                             ? "border-pink-500 ring-2 ring-pink-500/30 scale-[0.98]"
                             : isOver60s
-                            ? "border-rose-500/30 opacity-40 cursor-not-allowed"
+                            ? "border-amber-500/40 opacity-45 cursor-not-allowed"
                             : "border-transparent hover:border-muted-foreground/30 opacity-80 hover:opacity-100"
                         }`}
                         title={
                           isOver60s
-                            ? "Vídeo com mais de 60s não pode ser Story"
+                            ? "Vídeo com mais de 60s não pode ser Story (Só Reels)"
                             : item.title || "Clique para alternar na sequência"
                         }
                       >
@@ -2206,6 +2783,10 @@ export function SchedulePublicationModal({
                             src={item.media_url}
                             className="w-full h-full object-cover pointer-events-none"
                             muted
+                            preload="metadata"
+                            onLoadedMetadata={(e) =>
+                              handleVideoMetadataLoaded(item.id, e)
+                            }
                           />
                         ) : (
                           <img
@@ -2217,11 +2798,15 @@ export function SchedulePublicationModal({
 
                         <div className="absolute top-1 left-1">
                           <Badge className="bg-black/70 text-white text-[9px] px-1 py-0 h-4 border-0">
-                            {item.duration_seconds
-                              ? `${Math.round(item.duration_seconds)}s`
-                              : item.media_type}
+                            {dur ? formatDurationCompact(dur) : item.media_type}
                           </Badge>
                         </div>
+
+                        {isOver60s && (
+                          <div className="absolute bottom-0 inset-x-0 p-1 bg-amber-600/95 text-white text-[8px] font-bold text-center">
+                            Só Reels (&gt;60s)
+                          </div>
+                        )}
 
                         {isSelected && (
                           <div className="absolute inset-0 bg-pink-500/30 flex items-center justify-center">
@@ -2267,7 +2852,7 @@ export function SchedulePublicationModal({
                         : "bg-muted text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    Agendar Data & Hora
+                    Agendar Data &amp; Hora
                   </button>
                 </div>
               </div>
@@ -2294,8 +2879,8 @@ export function SchedulePublicationModal({
               {mode === "BULK" && plannedBulkSlots.length > 0 && (
                 <span>
                   <strong>{plannedBulkSlots.length} mídias</strong> (
-                  <strong>{totalBulkPublicationsCount} envios</strong>) •{" "}
-                  <strong>{postsPerDay}/dia</strong>
+                  <strong>{bulkSummaryStats.totalPublications} envios</strong>)
+                  • <strong>{postsPerDay}/dia</strong>
                 </span>
               )}
             </div>
@@ -2329,7 +2914,7 @@ export function SchedulePublicationModal({
                 ) : mode === "BULK" ? (
                   <>
                     <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
-                    Subir e Programar Tudo ({plannedBulkSlots.length})
+                    Programar Tudo em Bulk ({plannedBulkSlots.length} mídias)
                   </>
                 ) : isPublishNow ? (
                   <>

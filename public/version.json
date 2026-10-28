@@ -1,6 +1,6 @@
 {
-  "commit": "1863ae330edf0cdd95e60c687b4c63dddba5bd6e",
-  "shortCommit": "1863ae3",
-  "message": "feat(criafy): embed bulk upload & scheduling directly inside SchedulePublicationModal",
-  "builtAt": "2026-10-28T00:33:57.690Z"
+  "commit": "e0b8919b72895692037e926bc4f0e1631896be25",
+  "shortCommit": "e0b8919",
+  "message": "feat(criafy): allow simultaneous Reels and Stories scheduling for media up to 60s",
+  "builtAt": "2026-10-28T01:18:00.007Z"
 }

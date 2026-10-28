@@ -35,14 +35,19 @@ import {
   ExternalLink,
   Filter,
   Layers,
-  CalendarDays,
+  Film,
+  BookOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { criafyService } from "@/services/criafy/criafyService";
 import { CriafyContent, CriafyInstagramAccount } from "@/types/criafy";
 import { extractAndValidateMedia } from "@/utils/criafyMediaValidator";
-import { BulkScheduleModal } from "@/components/criafy/BulkScheduleModal";
+import {
+  SchedulePublicationModal,
+  isEligibleForStories,
+  formatDurationCompact,
+} from "@/components/criafy/SchedulePublicationModal";
 
 interface MediaLibraryViewProps {
   accounts: CriafyInstagramAccount[];
@@ -64,9 +69,14 @@ export function MediaLibraryView({
     "all" | "published" | "unpublished" | "scheduled"
   >("all");
 
+  // Auto-probed durations for videos without duration_seconds stored in DB
+  const [probedDurations, setProbedDurations] = useState<
+    Record<string, number>
+  >({});
+
   // Multi-select for bulk scheduling from library
   const [selectedContentIds, setSelectedContentIds] = useState<string[]>([]);
-  const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [bulkInitialIds, setBulkInitialIds] = useState<string[]>([]);
 
   // Account linkage modal state
@@ -99,6 +109,19 @@ export function MediaLibraryView({
     }
   };
 
+  const handleVideoMetadataLoaded = (
+    contentId: string,
+    e: React.SyntheticEvent<HTMLVideoElement>
+  ) => {
+    const dur = e.currentTarget.duration;
+    if (dur && isFinite(dur) && dur > 0) {
+      const rounded = Math.round(dur * 10) / 10;
+      setProbedDurations((prev) =>
+        prev[contentId] === rounded ? prev : { ...prev, [contentId]: rounded }
+      );
+    }
+  };
+
   const handleBatchUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0 || !activeCompanyId) return;
@@ -111,14 +134,10 @@ export function MediaLibraryView({
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       try {
-        // Validação técnica prévia no client para Meta Instagram
         const validation = await extractAndValidateMedia(file);
-
-        // Upload to storage
         const { mediaUrl, mediaType, mimeType } =
           await criafyService.uploadMediaFile(activeCompanyId, file);
 
-        // Bind automatically to current account filter if selected, or all accounts
         const defaultAccounts =
           selectedAccountId !== "all"
             ? [selectedAccountId]
@@ -156,15 +175,13 @@ export function MediaLibraryView({
         `${successCount} arquivo(s) adicionado(s)! Abrindo programação em Bulk...`
       );
       await loadContents();
-      // Abre automaticamente o modal de programação em bulk com os arquivos recém-enviados pré-selecionados!
       setBulkInitialIds(newlyCreatedIds);
       setSelectedContentIds(newlyCreatedIds);
-      setBulkModalOpen(true);
+      setScheduleModalOpen(true);
     }
     if (failCount > 0) {
       toast.error(`Falha no upload de ${failCount} arquivo(s).`);
     }
-    // Reset file input
     e.target.value = "";
   };
 
@@ -174,6 +191,21 @@ export function MediaLibraryView({
         ? prev.filter((id) => id !== contentId)
         : [...prev, contentId]
     );
+  };
+
+  const handleOpenBulkAllUnpublished = () => {
+    const unpubIds = contents
+      .filter((c) => !c.is_published && !c.is_scheduled)
+      .map((c) => c.id);
+    if (unpubIds.length === 0) {
+      toast.info(
+        "Não há mídias inéditas (nunca postadas) na biblioteca no momento."
+      );
+      return;
+    }
+    setBulkInitialIds(unpubIds);
+    setSelectedContentIds(unpubIds);
+    setScheduleModalOpen(true);
   };
 
   const handleOpenBulkModal = (ids?: string[]) => {
@@ -187,7 +219,7 @@ export function MediaLibraryView({
         .map((c) => c.id);
       setBulkInitialIds(unpubIds);
     }
-    setBulkModalOpen(true);
+    setScheduleModalOpen(true);
   };
 
   const openLinkModal = (content: CriafyContent) => {
@@ -280,6 +312,17 @@ export function MediaLibraryView({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {/* Botão 1-Clique: Bulk de Todas as Mídias Nunca Postadas da Biblioteca */}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleOpenBulkAllUnpublished}
+              className="h-9 px-3.5 text-xs font-bold gap-1.5 border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 rounded-lg cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              Bulk das Nunca Postadas ({unpublishedCount})
+            </Button>
+
             <Button
               type="button"
               onClick={() => handleOpenBulkModal()}
@@ -287,8 +330,8 @@ export function MediaLibraryView({
             >
               <Layers className="w-4 h-4" />
               {selectedContentIds.length > 0
-                ? `Programar Selecionados em Bulk (${selectedContentIds.length})`
-                : "Upload & Programar em Bulk"}
+                ? `Programar Selecionadas em Bulk (${selectedContentIds.length})`
+                : "Programar em Bulk"}
             </Button>
 
             <Label
@@ -314,7 +357,7 @@ export function MediaLibraryView({
           </div>
         </div>
 
-        {/* Filter Pills: Todos, Inéditos, Publicados, Agendados */}
+        {/* Filter Pills: Todos, Inéditos (Nunca Postados), Publicados, Agendados */}
         <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-muted/50">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-[11px] font-medium text-muted-foreground mr-1 flex items-center gap-1">
@@ -340,8 +383,8 @@ export function MediaLibraryView({
                   : "bg-background/80 text-muted-foreground hover:text-amber-600 border border-muted"
               }`}
             >
-              <Sparkles className="w-3 h-3 text-amber-400" /> Inéditos (
-              {unpublishedCount})
+              <Sparkles className="w-3 h-3 text-amber-400" /> Nunca Postadas /
+              Inéditas ({unpublishedCount})
             </button>
             <button
               type="button"
@@ -353,7 +396,7 @@ export function MediaLibraryView({
               }`}
             >
               <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Já
-              Publicados ({publishedCount})
+              Publicadas ({publishedCount})
             </button>
             {scheduledCount > 0 && (
               <button
@@ -365,7 +408,7 @@ export function MediaLibraryView({
                     : "bg-background/80 text-muted-foreground hover:text-sky-600 border border-muted"
                 }`}
               >
-                <Clock className="w-3 h-3 text-sky-400" /> Agendados (
+                <Clock className="w-3 h-3 text-sky-400" /> Agendadas (
                 {scheduledCount})
               </button>
             )}
@@ -431,6 +474,12 @@ export function MediaLibraryView({
             const lastPub = content.publications?.find(
               (p) => p.status === "PUBLISHED"
             );
+            const dur =
+              content.duration_seconds || probedDurations[content.id];
+            const storyOk = isEligibleForStories(
+              content.media_type === "VIDEO" ? "VIDEO" : "IMAGE",
+              dur
+            );
 
             return (
               <Card
@@ -452,6 +501,10 @@ export function MediaLibraryView({
                       src={content.media_url}
                       className="w-full h-full object-cover"
                       controls={false}
+                      preload="metadata"
+                      onLoadedMetadata={(e) =>
+                        handleVideoMetadataLoaded(content.id, e)
+                      }
                     />
                   ) : (
                     <img
@@ -461,7 +514,7 @@ export function MediaLibraryView({
                     />
                   )}
 
-                  {/* Top-left: Selection Checkbox + Media Type Badge */}
+                  {/* Top-left: Selection Checkbox + Media Type & Duration Badge */}
                   <div className="absolute top-2 left-2 flex items-center gap-1.5">
                     <div
                       className={`w-5 h-5 rounded-md flex items-center justify-center text-xs font-bold shadow-sm transition-colors ${
@@ -474,7 +527,7 @@ export function MediaLibraryView({
                     </div>
                     <Badge
                       variant="secondary"
-                      className="bg-black/70 text-white text-[10px] backdrop-blur-sm border-0 font-medium"
+                      className="bg-black/75 text-white text-[10px] backdrop-blur-sm border-0 font-medium"
                     >
                       {content.media_type === "VIDEO" ? (
                         <Video className="w-3 h-3 mr-1 text-sky-400" />
@@ -482,9 +535,7 @@ export function MediaLibraryView({
                         <ImageIcon className="w-3 h-3 mr-1 text-emerald-400" />
                       )}
                       {content.media_type}
-                      {content.duration_seconds
-                        ? ` • ${Math.round(content.duration_seconds)}s`
-                        : ""}
+                      {dur ? ` • ${formatDurationCompact(dur)}` : ""}
                     </Badge>
                   </div>
 
@@ -506,10 +557,31 @@ export function MediaLibraryView({
                     ) : (
                       <Badge
                         variant="secondary"
-                        className="bg-black/60 text-amber-300 border-0 text-[10px] backdrop-blur-sm font-semibold shadow-sm flex items-center gap-1"
+                        className="bg-black/70 text-amber-300 border-0 text-[10px] backdrop-blur-sm font-semibold shadow-sm flex items-center gap-1"
                       >
                         <Sparkles className="w-2.5 h-2.5 text-amber-400" />
-                        Inédito
+                        Nunca Postado
+                      </Badge>
+                    )}
+                  </div>
+
+                  {/* Bottom Visual Indicator: Reels + Stories (≤60s) vs Só Reels (>60s) */}
+                  <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
+                    {storyOk ? (
+                      <Badge className="bg-gradient-to-r from-purple-600/95 to-pink-600/95 text-white border-0 text-[10px] font-bold shadow-sm flex items-center gap-1 px-2 py-0.5">
+                        <Film className="w-3 h-3" />
+                        <span>+</span>
+                        <BookOpen className="w-3 h-3" />
+                        <span>Reels + Stories (≤60s)</span>
+                      </Badge>
+                    ) : (
+                      <Badge
+                        className="bg-amber-600/95 text-white border-0 text-[10px] font-bold shadow-sm flex items-center gap-1 px-2 py-0.5"
+                        title="Vídeo acima de 60 segundos: será postado apenas no Reels para evitar erro nos Stories"
+                      >
+                        <Film className="w-3 h-3" />
+                        <Clock className="w-3 h-3" />
+                        <span>Só Reels (&gt;60s)</span>
                       </Badge>
                     )}
                   </div>
@@ -559,9 +631,18 @@ export function MediaLibraryView({
                       <span>Agendado na fila do Instagram</span>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-1.5 text-[11px] bg-muted/60 text-muted-foreground px-2.5 py-1.5 rounded-lg border border-muted font-normal">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                      <span>Mídia inédita (nunca publicada)</span>
+                    <div className="flex items-center justify-between gap-1.5 text-[11px] bg-amber-500/10 text-amber-800 dark:text-amber-300 px-2.5 py-1.5 rounded-lg border border-amber-500/20 font-medium">
+                      <span className="flex items-center gap-1.5 truncate">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                        <span>Nunca postada</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenBulkModal([content.id])}
+                        className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:underline shrink-0 cursor-pointer"
+                      >
+                        Agendar →
+                      </button>
                     </div>
                   )}
 
@@ -667,13 +748,14 @@ export function MediaLibraryView({
         </DialogContent>
       </Dialog>
 
-      {/* Bulk Schedule Modal */}
-      <BulkScheduleModal
-        open={bulkModalOpen}
-        onOpenChange={setBulkModalOpen}
+      {/* Unified Schedule Publication Modal (opens directly in BULK mode with selected/unpublished library medias) */}
+      <SchedulePublicationModal
+        open={scheduleModalOpen}
+        onOpenChange={setScheduleModalOpen}
         accounts={accounts}
         selectedAccountId={selectedAccountId}
-        initialLibraryContentIds={bulkInitialIds}
+        initialMode="BULK"
+        initialBulkLibraryIds={bulkInitialIds}
         onSuccess={() => {
           setSelectedContentIds([]);
           loadContents();
