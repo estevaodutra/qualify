@@ -1,6 +1,6 @@
 {
-  "commit": "5a49c3a09198115b5ecb05e0e870a36f28fd516b",
-  "shortCommit": "5a49c3a",
-  "message": "feat(brand-manual): add export filled brand manual to markdown .md",
-  "builtAt": "2026-10-28T21:44:48.711Z"
+  "commit": "b969b1a4c9cd67f3de8671213735edb6b78ee6d6",
+  "shortCommit": "b969b1a",
+  "message": "feat(criafy): rearchitect navigation with new sidebar, contextual subsidebars, overview, demands, planner, strategist and insights",
+  "builtAt": "2026-10-28T21:57:32.963Z"
 }

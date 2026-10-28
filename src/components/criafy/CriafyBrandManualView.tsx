@@ -57,10 +57,27 @@ export const CriafyBrandManualView: React.FC = () => {
     setIsBrandManualShareModalOpen,
   } = useSprintOSStore();
 
-  // Sub-aba ativa dentro do Manual da Marca no Criafy: "brand_manual" | "creatives" | "scripts_and_audios"
-  const currentSubTab = (["brand_manual", "creatives", "scripts_and_audios"].includes(activeTab)
-    ? activeTab
-    : "brand_manual") as "brand_manual" | "creatives" | "scripts_and_audios";
+  // Sub-aba ativa dentro da Subsidebar do Manual da Marca no Criafy
+  const [activeBrandSubId, setActiveBrandSubId] = useState<string>("posicionamento");
+
+  const handleSubsidebarChange = (id: string) => {
+    setActiveBrandSubId(id);
+    if (id === "creatives") {
+      setActiveTab("creatives");
+    } else if (id === "scripts_and_audios") {
+      setActiveTab("scripts_and_audios");
+    } else {
+      setActiveTab("brand_manual");
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "creatives" && activeBrandSubId !== "creatives") {
+      setActiveBrandSubId("creatives");
+    } else if (activeTab === "scripts_and_audios" && activeBrandSubId !== "scripts_and_audios") {
+      setActiveBrandSubId("scripts_and_audios");
+    }
+  }, [activeTab]);
 
   // Inicialização do workspace para a empresa ativa
   useEffect(() => {
