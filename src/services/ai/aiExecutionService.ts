@@ -38,6 +38,41 @@ export interface SystemStats {
   topModel: string;
 }
 
+function formatKnownError(msg: string): string {
+  const lower = String(msg || "").toLowerCase();
+  if (
+    lower.includes("credit_balance_exhausted") ||
+    lower.includes("no credits remaining") ||
+    lower.includes("insufficient_quota") ||
+    lower.includes("billing")
+  ) {
+    return "A conta OpenAI configurada na plataforma Criafy está sem créditos (Saldo esgotado). Adicione créditos em https://platform.openai.com/settings/organization/billing ou atualize sua API Key em Super Admin > IA > Configurações.";
+  }
+  if (lower.includes("invalid_api_key") || lower.includes("incorrect api key")) {
+    return "A API Key da OpenAI configurada na plataforma é inválida. Atualize-a em Super Admin > IA > Configurações.";
+  }
+  return msg;
+}
+
+async function extractErrorMessage(error: any, data?: any): Promise<string> {
+  let errMsg = data?.error;
+  if (!errMsg && error) {
+    try {
+      if ((error as any).context && typeof (error as any).context.json === "function") {
+        const body = await (error as any).context.json();
+        errMsg = body?.error || body?.message;
+      }
+    } catch {}
+    if (!errMsg) {
+      errMsg = error.message;
+    }
+  }
+  if (!errMsg) {
+    errMsg = "Erro desconhecido durante o processamento.";
+  }
+  return formatKnownError(errMsg);
+}
+
 export const AIExecutionService = {
   // ============================================================
   // 1. EXECUÇÃO CENTRALIZADA (Geração com OpenAI & Skills)
@@ -55,7 +90,7 @@ export const AIExecutionService = {
     });
 
     if (error || !data?.success) {
-      const errMsg = data?.error || error?.message || "Erro desconhecido na execução da Skill.";
+      const errMsg = await extractErrorMessage(error, data);
       throw new Error(errMsg);
     }
 
@@ -515,7 +550,8 @@ ${skillData.main_instructions || ""}`;
     });
 
     if (error || !data?.success) {
-      throw new Error(data?.error || error?.message || "Erro ao gerar scaffold da Skill.");
+      const errMsg = await extractErrorMessage(error, data);
+      throw new Error(errMsg);
     }
 
     return data.scaffold;
@@ -703,7 +739,8 @@ ${skillData.main_instructions || ""}`;
     });
 
     if (error || !data?.success) {
-      throw new Error(data?.error || error?.message || "Falha ao validar conexão com a OpenAI.");
+      const errMsg = await extractErrorMessage(error, data);
+      throw new Error(errMsg);
     }
 
     // Atualizar last_validated_at em platform_settings

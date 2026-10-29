@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   PlayCircle,
@@ -20,6 +20,7 @@ import {
   RefreshCw,
   Workflow,
   ArrowRight,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -506,12 +507,33 @@ export default function AdminAiPlayground() {
 
           {/* Erro */}
           {errorDetails && (
-            <div className="p-4 rounded-xl border border-destructive/30 bg-destructive/5 text-destructive text-xs space-y-1">
+            <div className="p-4 rounded-xl border border-destructive/30 bg-destructive/5 text-destructive text-xs space-y-2">
               <div className="font-semibold flex items-center gap-1.5">
-                <AlertCircle className="h-4 w-4" />
+                <AlertCircle className="h-4 w-4 shrink-0" />
                 Falha durante o processamento
               </div>
-              <p className="font-mono text-[11px] leading-relaxed">{errorDetails}</p>
+              <p className="font-mono text-[11px] leading-relaxed break-words">{errorDetails}</p>
+              {(errorDetails.toLowerCase().includes("crédito") ||
+                errorDetails.toLowerCase().includes("billing") ||
+                errorDetails.toLowerCase().includes("configurações")) && (
+                <div className="pt-1.5 flex flex-wrap items-center gap-2">
+                  <a
+                    href="https://platform.openai.com/settings/organization/billing"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs font-medium transition-colors"
+                  >
+                    Adicionar Créditos na OpenAI
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                  <Link
+                    to="/admin/ai/settings"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-destructive/30 bg-background hover:bg-muted text-destructive text-xs font-medium transition-colors"
+                  >
+                    Ir para IA &gt; Configurações
+                  </Link>
+                </div>
+              )}
             </div>
           )}
 

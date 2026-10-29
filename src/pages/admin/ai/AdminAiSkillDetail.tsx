@@ -24,6 +24,7 @@ import {
   Sliders,
   Send,
   Zap,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -65,6 +66,7 @@ export default function AdminAiSkillDetail() {
   const [testInstruction, setTestInstruction] = useState("");
   const [testingInPage, setTestingInPage] = useState(false);
   const [testOutput, setTestOutput] = useState<any>(null);
+  const [testError, setTestError] = useState<string | null>(null);
 
   // Buscar Skill
   const { data: skill, isLoading: skillLoading } = useQuery({
@@ -157,6 +159,7 @@ export default function AdminAiSkillDetail() {
     try {
       setTestingInPage(true);
       setTestOutput(null);
+      setTestError(null);
       const res = await AIExecutionService.generate({
         skillSlug: skill.slug,
         skillVersion: activeVersion?.version,
@@ -167,6 +170,7 @@ export default function AdminAiSkillDetail() {
       toast.success("Execução de teste finalizada com sucesso!");
       queryClient.invalidateQueries({ queryKey: ["admin_ai_skill_executions", skill.slug] });
     } catch (err: any) {
+      setTestError(err.message || "Falha no teste.");
       toast.error(err.message || "Falha no teste.");
     } finally {
       setTestingInPage(false);
@@ -598,7 +602,36 @@ export default function AdminAiSkillDetail() {
                   <div className="font-semibold text-foreground border-b pb-1.5 mb-2">
                     Resultado da Execução
                   </div>
-                  {testOutput ? (
+                  {testError ? (
+                    <div className="p-3 rounded-lg border border-destructive/30 bg-destructive/5 text-destructive text-xs space-y-2">
+                      <div className="font-semibold flex items-center gap-1.5">
+                        <AlertCircle className="h-4 w-4 shrink-0" />
+                        Falha no teste
+                      </div>
+                      <p className="font-mono text-[11px] leading-relaxed break-words">{testError}</p>
+                      {(testError.toLowerCase().includes("crédito") ||
+                        testError.toLowerCase().includes("billing") ||
+                        testError.toLowerCase().includes("configurações")) && (
+                        <div className="pt-1.5 flex flex-wrap items-center gap-2">
+                          <a
+                            href="https://platform.openai.com/settings/organization/billing"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs font-medium transition-colors"
+                          >
+                            Adicionar Créditos na OpenAI
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                          <Link
+                            to="/admin/ai/settings"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-destructive/30 bg-background hover:bg-muted text-destructive text-xs font-medium transition-colors"
+                          >
+                            Ir para IA &gt; Configurações
+                          </Link>
+                        </div>
+                      )}
+                    </div>
+                  ) : testOutput ? (
                     <div className="space-y-2 flex-1 overflow-y-auto max-h-[300px]">
                       <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                         <span>Tokens: {testOutput.tokens.total}</span>

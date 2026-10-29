@@ -456,11 +456,27 @@ Execute a Skill "${skill.name}" respeitando estritamente o Manual da Marca e o T
 
         openAiData = await resp.json();
         if (!resp.ok || openAiData.error) {
-          throw new Error(openAiData.error?.message || `OpenAI status ${resp.status}`);
+          const errCode = openAiData?.error?.code || "";
+          const errMsg = openAiData?.error?.message || `OpenAI status ${resp.status}`;
+          if (
+            errCode === "credit_balance_exhausted" ||
+            errMsg.toLowerCase().includes("no credits remaining") ||
+            errMsg.toLowerCase().includes("insufficient_quota")
+          ) {
+            throw new Error(
+              "A conta da OpenAI configurada na plataforma Criafy está sem créditos (Saldo esgotado). Adicione créditos em https://platform.openai.com/settings/organization/billing ou atualize sua API Key em Super Admin > IA > Configurações."
+            );
+          }
+          throw new Error(errMsg);
         }
         break; // Sucesso
       } catch (err: any) {
         lastError = err;
+        const msg = String(err?.message || "");
+        if (msg.includes("sem créditos") || msg.includes("credits remaining") || msg.includes("credit_balance_exhausted")) {
+          // Não adianta tentar novamente se o saldo está esgotado
+          break;
+        }
         attempt++;
         if (attempt <= maxAttempts) {
           await new Promise((r) => setTimeout(r, 1200)); // Pequena pausa antes de retentar
@@ -469,7 +485,7 @@ Execute a Skill "${skill.name}" respeitando estritamente o Manual da Marca e o T
     }
 
     if (!openAiData || openAiData.error) {
-      throw new Error(`Falha na OpenAI após ${maxAttempts} tentativas: ${lastError?.message}`);
+      throw new Error(lastError?.message || `Falha na OpenAI após ${maxAttempts} tentativas.`);
     }
 
     const latencyMs = Date.now() - startTime;
@@ -590,7 +606,7 @@ Execute a Skill "${skill.name}" respeitando estritamente o Manual da Marca e o T
         error: err.message,
       }),
       {
-        status: 400,
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
