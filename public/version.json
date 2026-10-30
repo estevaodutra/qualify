@@ -1,6 +1,6 @@
 {
-  "commit": "ff81bb5e9932d82c3565de1d2a009ddb9071bf85",
-  "shortCommit": "ff81bb5",
-  "message": "chore: update build version metadata",
-  "builtAt": "2026-10-30T20:07:22.590Z"
+  "commit": "ccc0c556e4ab6b2d697decead2b715f5646f622b",
+  "shortCommit": "ccc0c55",
+  "message": "fix(prospecting): resolve webhook URL fallback from webhook_configs and improve error reporting",
+  "builtAt": "2026-10-30T20:29:42.500Z"
 }

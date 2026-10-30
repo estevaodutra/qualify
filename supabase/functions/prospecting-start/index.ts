@@ -11,6 +11,8 @@ interface StartRequest {
   prospectingCampaignId: string;
 }
 
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -64,9 +66,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Defense in depth: RLS already governs the row the client could have
-    // inserted, but re-verify company membership here too since this
-    // function runs with the service-role client (bypasses RLS).
+    // Validação de acesso à empresa
     if (campaign.company_id) {
       const { data: membership } = await supabase
         .from("company_members")
@@ -88,6 +88,114 @@ Deno.serve(async (req) => {
       });
     }
 
+    // 1. Obter Token da Apify via variável de ambiente ou banco (company_credentials)
+    let apifyToken = Deno.env.get("APIFY_TOKEN");
+
+    if (!apifyToken && campaign.company_id) {
+      const { data: cred } = await supabase
+        .from("company_credentials")
+        .select("encrypted_key")
+        .eq("company_id", campaign.company_id)
+        .eq("service_name", "apify")
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (cred?.encrypted_key) {
+        apifyToken = cred.encrypted_key;
+      }
+    }
+
+    if (!apifyToken) {
+      const { data: globalCred } = await supabase
+        .from("company_credentials")
+        .select("encrypted_key")
+        .eq("service_name", "apify")
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (globalCred?.encrypted_key) {
+        apifyToken = globalCred.encrypted_key;
+      }
+    }
+
+    if (!apifyToken) {
+      throw new Error("Token da Apify não configurado nas credenciais da empresa.");
+    }
+
+    // 2. Preparar inputs para o crawler do Google Places da Apify (compass~crawler-google-places)
+    const searchQuery = campaign.search_terms || "";
+    const location = campaign.places || "";
+    const searchString = location ? `${searchQuery} in ${location}` : searchQuery;
+
+    const actorInput = {
+      searchStringsArray: [searchString],
+      locationQuery: location || undefined,
+      maxCrawledPlacesPerSearch: campaign.quantity || 50,
+      maxCrawledPlaces: campaign.quantity || 50,
+      language: "pt-BR",
+      exportPlaceUrls: false,
+      includeHistogram: false,
+      includeOpeningHours: false,
+      includePeopleAlsoSearch: false,
+      maxImages: 0,
+    };
+
+    // 3. Montar Webhook ad-hoc na Apify para chamar de volta a função prospecting-callback
+    const callbackUrl = `${supabaseUrl}/functions/v1/prospecting-callback?campaign_id=${campaign.id}&token=${encodeURIComponent(apifyToken)}`;
+    const webhooks = [
+      {
+        eventTypes: ["ACTOR.RUN.SUCCEEDED"],
+        requestUrl: callbackUrl,
+      },
+      {
+        eventTypes: ["ACTOR.RUN.FAILED", "ACTOR.RUN.TIMED_OUT", "ACTOR.RUN.ABORTED"],
+        requestUrl: `${callbackUrl}&status=failed`,
+      },
+    ];
+
+    const base64Webhooks = btoa(JSON.stringify(webhooks));
+    const apifyUrl = `https://api.apify.com/v2/acts/compass~crawler-google-places/runs?token=${encodeURIComponent(apifyToken)}&webhooks=${encodeURIComponent(base64Webhooks)}`;
+
+    console.log(`[ProspectingStart] Disparando Apify Actor para campanha ${campaign.id}...`);
+
+    const apifyRes = await fetch(apifyUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(actorInput),
+    });
+
+    if (!apifyRes.ok) {
+      const errText = await apifyRes.text();
+      console.error("[ProspectingStart] Falha no disparo Apify:", apifyRes.status, errText);
+
+      await supabase
+        .from("prospecting_campaigns")
+        .update({ status: "failed" })
+        .eq("id", campaign.id);
+
+      await logProspectingEvent(supabase, {
+        companyId: campaign.company_id,
+        campaignId: campaign.id,
+        eventType: "prospecting.failed",
+        payload: { reason: "apify_error", status: apifyRes.status, error: errText },
+      });
+
+      return new Response(
+        JSON.stringify({ error: `Erro no Apify (${apifyRes.status}): ${errText}` }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const runData = await apifyRes.json();
+    const runId = runData.data?.id;
+
+    console.log(`[ProspectingStart] Apify Run iniciada com sucesso. Run ID: ${runId}`);
+
+    // Atualizar status para extracting
     await supabase
       .from("prospecting_campaigns")
       .update({ status: "extracting" })
@@ -97,96 +205,27 @@ Deno.serve(async (req) => {
       companyId: campaign.company_id,
       campaignId: campaign.id,
       eventType: "prospecting.started",
+      payload: { apify_run_id: runId, search_terms: searchString, quantity: campaign.quantity },
     });
 
     await notifyProspecting(supabase, {
       companyId: campaign.company_id,
       userId: user.id,
       severity: "info",
-      title: "Prospecção iniciada",
-      description: "Estamos buscando empresas no Google Maps.",
+      title: "Prospecção iniciada no Google Maps",
+      description: `Buscando ${campaign.quantity} empresas para "${searchString}".`,
       entity: `prospecting_campaign:${campaign.id}`,
     });
 
-    let n8nWebhookUrl = Deno.env.get("N8N_PROSPECTING_WEBHOOK_URL");
-
-    if (!n8nWebhookUrl) {
-      // Buscar na tabela webhook_configs se configurado pelo painel
-      const { data: webConfig } = await supabase
-        .from("webhook_configs")
-        .select("url, is_active")
-        .eq("category", "prospecting")
-        .eq("is_active", true)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (webConfig?.url) {
-        n8nWebhookUrl = webConfig.url;
+    return new Response(
+      JSON.stringify({ success: true, campaignId: campaign.id, apifyRunId: runId }),
+      {
+        status: 202,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
-    }
-
-    if (!n8nWebhookUrl) {
-      n8nWebhookUrl = "https://n8n.d2x.site/webhook/prospecting";
-    }
-
-    const enrichmentLayers = Array.isArray(campaign.enrichment_layers)
-      ? campaign.enrichment_layers
-      : ["google_maps"];
-
-    const payload = {
-      event: "prospecting.started",
-      company_id: campaign.company_id,
-      user_id: campaign.user_id,
-      prospecting_campaign_id: campaign.id,
-      callback_url: `${supabaseUrl}/functions/v1/prospecting-callback`,
-      search: {
-        name: campaign.name,
-        query: campaign.search_terms,
-        location: campaign.places,
-        quantity: campaign.quantity,
-        category: campaign.category,
-        strict_match: campaign.exact_names,
-      },
-      enrichment_layers: enrichmentLayers,
-      destination: {
-        mode: campaign.destination_mode,
-        require_approval: campaign.destination_mode === "review_before_start",
-        automation_id: campaign.automation_sequence_id,
-        instance_id: campaign.instance_id,
-        pipeline_id: campaign.pipeline_id || (campaign.queue_policy as any)?.pipeline_id || null,
-        stage_id: campaign.stage_id || (campaign.queue_policy as any)?.stage_id || null,
-      },
-      queue_policy: campaign.queue_policy,
-    };
-
-    // Fire-and-forget: n8n is expected to acknowledge immediately and call
-    // prospecting-callback back when the scrape finishes, so this tab/request
-    // never has to stay open for the extraction itself.
-    fetch(n8nWebhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }).catch(async (err) => {
-      console.error("[ProspectingStart] Failed to reach n8n webhook:", err);
-      await supabase
-        .from("prospecting_campaigns")
-        .update({ status: "failed" })
-        .eq("id", campaign.id);
-      await logProspectingEvent(supabase, {
-        companyId: campaign.company_id,
-        campaignId: campaign.id,
-        eventType: "prospecting.failed",
-        payload: { reason: "webhook_unreachable", error: String(err) },
-      });
-    });
-
-    return new Response(JSON.stringify({ success: true, campaignId: campaign.id }), {
-      status: 202,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    );
   } catch (error) {
-    console.error("[ProspectingStart] Unhandled error:", error);
+    console.error("[ProspectingStart] Erro inesperado:", error);
     return new Response(JSON.stringify({ error: (error as Error).message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
