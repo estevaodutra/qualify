@@ -33,7 +33,8 @@ import ProspectingCampaignLeads from "./pages/prospecting/ProspectingCampaignLea
 import GroupSequenceBuilderPage from "./pages/campaigns/GroupSequenceBuilderPage";
 import DispatchSequenceBuilderPage from "./pages/campaigns/DispatchSequenceBuilderPage";
 import WorkflowLibrary from "./pages/workflows/WorkflowLibrary";
-import WorkflowBuilderPage from "./pages/workflows/WorkflowBuilderPage";import Logs from "./pages/Logs";
+import WorkflowBuilderPage from "./pages/workflows/WorkflowBuilderPage";
+import Logs from "./pages/Logs";
 import Instances from "./pages/Instances";
 import Alerts from "./pages/Alerts";
 import Billing from "./pages/Billing";
@@ -67,19 +68,19 @@ import SprintOSPage from "./features/sprint-os/ui/SprintOSPage";
 import SprintAppPage from "./features/sprint/SprintAppPage";
 import SprintOSSharedPage from "./features/sprint-os/ui/SprintOSSharedPage";
 import CriafyPublicBriefingPage from "./features/sprint-os/ui/CriafyPublicBriefingPage";
+
+// Super Admin Core
 import { AdminRoute } from "@/components/auth/AdminRoute";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminCompanies from "./pages/admin/AdminCompanies";
-import AdminInstances from "./pages/admin/AdminInstances";
+import AdminCompanyDetail from "./pages/admin/AdminCompanyDetail";
 import AdminUsers from "./pages/admin/AdminUsers";
-import AdminTransactions from "./pages/admin/AdminTransactions";
-import AdminEventDictionary from "./pages/admin/AdminEventDictionary";
-import AdminPlaceholder from "./components/admin/AdminPlaceholder";
-import AdminSettings from "./pages/admin/AdminSettings";
-import AdminSystemWebhooks from "./pages/admin/AdminSystemWebhooks";
-import AdminUras from "./pages/admin/AdminUras";
-import AdminCriafy from "./pages/admin/AdminCriafy";
+import AdminPlans from "./pages/admin/AdminPlans";
+import AdminPermissions from "./pages/admin/AdminPermissions";
+import AdminUsage from "./pages/admin/AdminUsage";
+
+// Super Admin - IA
 import { AdminAiLayout } from "./components/admin/ai/AdminAiLayout";
 import AdminAiOverview from "./pages/admin/ai/AdminAiOverview";
 import AdminAiSkills from "./pages/admin/ai/AdminAiSkills";
@@ -88,6 +89,40 @@ import AdminAiModels from "./pages/admin/ai/AdminAiModels";
 import AdminAiPlayground from "./pages/admin/ai/AdminAiPlayground";
 import AdminAiExecutions from "./pages/admin/ai/AdminAiExecutions";
 import AdminAiSettings from "./pages/admin/ai/AdminAiSettings";
+
+// Super Admin - Integrações
+import { AdminIntegrationsLayout } from "./components/admin/integrations/AdminIntegrationsLayout";
+import AdminOpenAiIntegration from "./pages/admin/integrations/AdminOpenAiIntegration";
+import AdminMetaIntegration from "./pages/admin/integrations/AdminMetaIntegration";
+import AdminWhatsAppIntegration from "./pages/admin/integrations/AdminWhatsAppIntegration";
+import AdminWebhooksIntegration from "./pages/admin/integrations/AdminWebhooksIntegration";
+import AdminOtherIntegrations from "./pages/admin/integrations/AdminOtherIntegrations";
+
+// Super Admin - Conteúdo & Operação
+import { AdminContentLayout } from "./components/admin/content/AdminContentLayout";
+import AdminGlobalTemplates from "./pages/admin/content/AdminGlobalTemplates";
+import AdminCategories from "./pages/admin/content/AdminCategories";
+import AdminGlobalAssets from "./pages/admin/content/AdminGlobalAssets";
+import AdminPlatformRules from "./pages/admin/content/AdminPlatformRules";
+
+// Super Admin - Sistema
+import { AdminSystemLayout } from "./components/admin/system/AdminSystemLayout";
+import AdminSystemLogs from "./pages/admin/system/AdminSystemLogs";
+import AdminSystemErrors from "./pages/admin/system/AdminSystemErrors";
+import AdminSystemJobs from "./pages/admin/system/AdminSystemJobs";
+import AdminSystemAudit from "./pages/admin/system/AdminSystemAudit";
+import AdminSystemFeatureFlags from "./pages/admin/system/AdminSystemFeatureFlags";
+import AdminSystemSettings from "./pages/admin/system/AdminSystemSettings";
+
+// Legacy components / Aliases
+import AdminInstances from "./pages/admin/AdminInstances";
+import AdminTransactions from "./pages/admin/AdminTransactions";
+import AdminEventDictionary from "./pages/admin/AdminEventDictionary";
+import AdminPlaceholder from "./components/admin/AdminPlaceholder";
+import AdminSettings from "./pages/admin/AdminSettings";
+import AdminSystemWebhooks from "./pages/admin/AdminSystemWebhooks";
+import AdminUras from "./pages/admin/AdminUras";
+import AdminCriafy from "./pages/admin/AdminCriafy";
 
 const App = () => {
   const [queryClient] = useState(() => new QueryClient());
@@ -162,8 +197,7 @@ const App = () => {
                       {/* Settings sub-routes */}
                       <Route path="/configuracoes/membros" element={<Settings />} />
 
-                      {/* Quiz / Funnel routes (inside AppLayout with sidebar support) */}
-                      {/* Sprint (Trello Clone) */}
+                      {/* Quiz / Funnel routes */}
                       <Route path="/sprint" element={<SprintAppPage />} />
                       <Route path="/sprint/b/:boardId" element={<SprintAppPage />} />
                       <Route path="/sprint-os" element={<SprintOSPage />} />
@@ -178,7 +212,6 @@ const App = () => {
                       <Route path="/manual-da-marca/:workspaceId" element={<Navigate to="/criafy?tab=manual-marca" replace />} />
                       <Route path="/quiz" element={<QuizFunnelsPage />} />
                       <Route path="/quiz/:id" element={<QuizEditorPage />} />
-
 
                       {/* Prospecting routes */}
                       <Route path="/prospeccao" element={<ProspectingCampaigns />} />
@@ -208,7 +241,7 @@ const App = () => {
                       </Route>
                     </Route>
 
-                    {/* Special Routes (No Sidebar or Admin) */}
+                    {/* Special Routes */}
                     <Route
                       path="/call/script/:campaignId/:leadId"
                       element={
@@ -217,8 +250,6 @@ const App = () => {
                         </ProtectedRoute>
                       }
                     />
-
-                    {/* Sequence Builder — fullscreen "Builder Mode", no sidebar/breadcrumb/tabs */}
                     <Route
                       path="/campaigns/whatsapp/grupos/:campaignId/sequences/:sequenceId/builder"
                       element={
@@ -244,7 +275,9 @@ const App = () => {
                       }
                     />
 
-                    {/* Superadmin routes */}
+                    {/* ============================================================ */}
+                    {/* SUPER ADMIN — CENTRO DE CONTROLE QUALIFY / CRIAFY */}
+                    {/* ============================================================ */}
                     <Route
                       path="/admin"
                       element={
@@ -255,26 +288,19 @@ const App = () => {
                         </ProtectedRoute>
                       }
                     >
+                      {/* 1. VISÃO GERAL */}
                       <Route index element={<AdminDashboard />} />
-                      <Route path="empresas" element={<AdminCompanies />} />
-                      <Route path="usuarios" element={<AdminUsers />} />
-                      <Route path="instancias" element={<AdminInstances />} />
-                      <Route path="financeiro/transacoes" element={<AdminTransactions />} />
-                      <Route path="financeiro/recargas" element={<AdminPlaceholder title="Recargas" description="Gerenciamento de recargas e faturas." />} />
-                      <Route path="financeiro/consumo" element={<AdminPlaceholder title="Consumo" description="Análise detalhada de consumo por empresa." />} />
-                      <Route path="precos" element={<AdminPlaceholder title="Tabela de Preços" description="Configuração de custos por serviço e provedor." />} />
-                      <Route path="provedores" element={<AdminPlaceholder title="Provedores" description="Monitoramento e configuração de gateways externos." />} />
-                      <Route path="relatorios" element={<AdminPlaceholder title="Relatórios" description="Extração de dados e BI administrativo." />} />
-                      <Route path="api" element={<ApiDocs />} />
-                      <Route path="logs" element={<Logs />} />
-                      <Route path="events" element={<WebhookEvents />} />
-                      <Route path="dicionario" element={<AdminEventDictionary />} />
-                       <Route path="configuracoes" element={<AdminSettings />} />
-                      <Route path="notificacoes" element={<AdminSystemWebhooks />} />
-                      <Route path="uras" element={<AdminUras />} />
-                      <Route path="criafy" element={<AdminCriafy />} />
+                      <Route path="dashboard" element={<Navigate to="/admin" replace />} />
 
-                      {/* Super Admin - Central de IA (OpenAI Skills) */}
+                      {/* 2. PLATAFORMA */}
+                      <Route path="empresas" element={<AdminCompanies />} />
+                      <Route path="empresas/:id" element={<AdminCompanyDetail />} />
+                      <Route path="usuarios" element={<AdminUsers />} />
+                      <Route path="planos" element={<AdminPlans />} />
+                      <Route path="permissoes" element={<AdminPermissions />} />
+                      <Route path="uso" element={<AdminUsage />} />
+
+                      {/* 3. IA */}
                       <Route path="ia" element={<AdminAiLayout />}>
                         <Route index element={<AdminAiOverview />} />
                         <Route path="skills" element={<AdminAiSkills />} />
@@ -286,6 +312,53 @@ const App = () => {
                       </Route>
                       <Route path="ai" element={<Navigate to="/admin/ia" replace />} />
                       <Route path="ai/*" element={<Navigate to="/admin/ia" replace />} />
+
+                      {/* 4. INTEGRAÇÕES */}
+                      <Route path="integracoes" element={<AdminIntegrationsLayout />}>
+                        <Route index element={<Navigate to="/admin/integracoes/openai" replace />} />
+                        <Route path="openai" element={<AdminOpenAiIntegration />} />
+                        <Route path="meta" element={<AdminMetaIntegration />} />
+                        <Route path="whatsapp" element={<AdminWhatsAppIntegration />} />
+                        <Route path="webhooks" element={<AdminWebhooksIntegration />} />
+                        <Route path="outras" element={<AdminOtherIntegrations />} />
+                      </Route>
+
+                      {/* 5. CONTEÚDO & OPERAÇÃO */}
+                      <Route path="conteudo" element={<AdminContentLayout />}>
+                        <Route index element={<Navigate to="/admin/conteudo/templates" replace />} />
+                        <Route path="templates" element={<AdminGlobalTemplates />} />
+                        <Route path="categorias" element={<AdminCategories />} />
+                        <Route path="assets" element={<AdminGlobalAssets />} />
+                        <Route path="regras" element={<AdminPlatformRules />} />
+                      </Route>
+
+                      {/* 6. SISTEMA */}
+                      <Route path="sistema" element={<AdminSystemLayout />}>
+                        <Route index element={<Navigate to="/admin/sistema/logs" replace />} />
+                        <Route path="logs" element={<AdminSystemLogs />} />
+                        <Route path="erros" element={<AdminSystemErrors />} />
+                        <Route path="jobs" element={<AdminSystemJobs />} />
+                        <Route path="auditoria" element={<AdminSystemAudit />} />
+                        <Route path="feature-flags" element={<AdminSystemFeatureFlags />} />
+                        <Route path="configuracoes" element={<AdminSystemSettings />} />
+                      </Route>
+
+                      {/* ALIASES / MIGRATION REDIRECTS PARA PRESERVAÇÃO DE ROTAS ANTIGAS */}
+                      <Route path="instancias" element={<Navigate to="/admin/integracoes/whatsapp" replace />} />
+                      <Route path="criafy" element={<Navigate to="/admin/integracoes/meta" replace />} />
+                      <Route path="logs" element={<Navigate to="/admin/sistema/logs" replace />} />
+                      <Route path="events" element={<Navigate to="/admin/integracoes/webhooks" replace />} />
+                      <Route path="dicionario" element={<AdminEventDictionary />} />
+                      <Route path="configuracoes" element={<Navigate to="/admin/sistema/configuracoes" replace />} />
+                      <Route path="notificacoes" element={<Navigate to="/admin/integracoes/webhooks" replace />} />
+                      <Route path="uras" element={<Navigate to="/admin/integracoes/outras" replace />} />
+                      <Route path="financeiro/transacoes" element={<AdminTransactions />} />
+                      <Route path="financeiro/recargas" element={<Navigate to="/admin/planos" replace />} />
+                      <Route path="financeiro/consumo" element={<Navigate to="/admin/uso" replace />} />
+                      <Route path="precos" element={<Navigate to="/admin/planos" replace />} />
+                      <Route path="provedores" element={<Navigate to="/admin/integracoes/outras" replace />} />
+                      <Route path="relatorios" element={<Navigate to="/admin" replace />} />
+                      <Route path="api" element={<ApiDocs />} />
                     </Route>
 
                     <Route path="*" element={<NotFound />} />

@@ -1,6 +1,6 @@
 {
-  "commit": "68ab343398dd7984ffd24a80247b0ea507564dfb",
-  "shortCommit": "68ab343",
-  "message": "feat(chat): change batch workflow cadence to customizable minute ranges for anti-ban",
-  "builtAt": "2026-10-28T23:54:03.452Z"
+  "commit": "131872f9c6066a8ec55915eadae198ac2c59fa5f",
+  "shortCommit": "131872f",
+  "message": "fix(ai): unwrap real OpenAI error message from Edge Function and handle credit balance exhausted",
+  "builtAt": "2026-10-30T16:13:32.137Z"
 }
