@@ -1,6 +1,6 @@
 {
-  "commit": "b8dd5186b3d2e2e1ed235c3021e3a72802e31618",
-  "shortCommit": "b8dd518",
-  "message": "feat(prospecting): integrar PipelineSelect completo com grupos, badges e pipelines organizadas",
-  "builtAt": "2026-10-30T19:55:26.226Z"
+  "commit": "ff81bb5e9932d82c3565de1d2a009ddb9071bf85",
+  "shortCommit": "ff81bb5",
+  "message": "chore: update build version metadata",
+  "builtAt": "2026-10-30T20:07:22.590Z"
 }

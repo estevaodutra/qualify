@@ -199,13 +199,22 @@ export function useProspectingCampaigns() {
 
       const created = transformDbToFrontend(data as DbProspectingCampaign);
 
-      const { error: invokeError } = await supabase.functions.invoke("prospecting-start", {
+      const { data: invokeData, error: invokeError } = await supabase.functions.invoke("prospecting-start", {
         body: { prospectingCampaignId: created.id },
       });
 
       if (invokeError) {
+        let detailedMsg = invokeError.message;
+        try {
+          if ((invokeError as any).context?.json) {
+            const body = await (invokeError as any).context.json();
+            if (body?.error) detailedMsg = body.error;
+          }
+        } catch {
+          // ignore
+        }
         await supabase.from("prospecting_campaigns").update({ status: "failed" }).eq("id", created.id);
-        throw invokeError;
+        throw new Error(detailedMsg || invokeError.message);
       }
 
       return created;

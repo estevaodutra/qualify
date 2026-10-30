@@ -108,23 +108,26 @@ Deno.serve(async (req) => {
       entity: `prospecting_campaign:${campaign.id}`,
     });
 
-    const n8nWebhookUrl = Deno.env.get("N8N_PROSPECTING_WEBHOOK_URL");
+    let n8nWebhookUrl = Deno.env.get("N8N_PROSPECTING_WEBHOOK_URL");
+
     if (!n8nWebhookUrl) {
-      console.error("[ProspectingStart] N8N_PROSPECTING_WEBHOOK_URL is not configured");
-      await supabase
-        .from("prospecting_campaigns")
-        .update({ status: "failed" })
-        .eq("id", campaign.id);
-      await logProspectingEvent(supabase, {
-        companyId: campaign.company_id,
-        campaignId: campaign.id,
-        eventType: "prospecting.failed",
-        payload: { reason: "missing_webhook_url" },
-      });
-      return new Response(
-        JSON.stringify({ error: "Webhook de prospecção não configurado" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      // Buscar na tabela webhook_configs se configurado pelo painel
+      const { data: webConfig } = await supabase
+        .from("webhook_configs")
+        .select("url, is_active")
+        .eq("category", "prospecting")
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (webConfig?.url) {
+        n8nWebhookUrl = webConfig.url;
+      }
+    }
+
+    if (!n8nWebhookUrl) {
+      n8nWebhookUrl = "https://n8n.d2x.site/webhook/prospecting";
     }
 
     const enrichmentLayers = Array.isArray(campaign.enrichment_layers)

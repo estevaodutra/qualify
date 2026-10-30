@@ -249,6 +249,16 @@ export const webhookCategories: WebhookCategory[] = [
       { id: "ura.completed", name: "ura.completed", description: "Chamada de URA finalizada", type: "event" },
     ],
   },
+  {
+    id: "prospecting",
+    name: "Prospecção (Google Maps)",
+    description: "Webhook do n8n para buscas e extração de empresas no Google Maps",
+    defaultUrl: "https://n8n.d2x.site/webhook/prospecting",
+    actions: [
+      { id: "prospecting.started", name: "prospecting.started", description: "Disparo da busca no Google Maps", type: "request" },
+      { id: "prospecting.callback", name: "prospecting.callback", description: "Retorno dos contatos e empresas", type: "event" },
+    ],
+  },
 ];
 
 // Helper to get all request actions for a category
