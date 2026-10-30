@@ -22,10 +22,12 @@ describe("Criafy AI Skills & Action Registry", () => {
 
   it("lists all available registered actions with categories and descriptions", () => {
     const actions = getAllActions();
-    expect(actions.length).toBe(3);
+    expect(actions.length).toBeGreaterThanOrEqual(3);
     expect(actions.some((a) => a.action === "strategy_plan")).toBe(true);
     expect(actions.some((a) => a.action === "generate_reel")).toBe(true);
     expect(actions.some((a) => a.action === "generate_creative_direction")).toBe(true);
+    expect(actions.some((a) => a.action === "generate_carousel")).toBe(true);
+    expect(actions.some((a) => a.action === "audit_profile")).toBe(true);
   });
 });
 
