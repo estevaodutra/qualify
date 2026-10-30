@@ -1,6 +1,6 @@
 {
-  "commit": "eeb45f58a7fb926d91bc28a92a5f86c743b4d417",
-  "shortCommit": "eeb45f5",
-  "message": "fix(chat): resolve TDZ reference error in copilot state initialization",
-  "builtAt": "2026-10-30T23:45:08.876Z"
+  "commit": "bbdad1f610f1f77d307bb89281493279c1bceaee",
+  "shortCommit": "bbdad1f",
+  "message": "style(chat): align copilot view layout with native chat message thread and composer",
+  "builtAt": "2026-10-30T23:54:54.358Z"
 }

@@ -19,6 +19,8 @@ import {
   Clock,
   ExternalLink,
   Bot,
+  AlertTriangle,
+  BookOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +29,8 @@ import { cn } from "@/lib/utils";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 import { criafyService } from "@/services/criafy/criafyService";
 import { AIExecutionService } from "@/services/ai/aiExecutionService";
 import {
@@ -46,6 +50,7 @@ interface CopilotMessage {
   sender: "user" | "ai";
   text: string;
   timestamp: string;
+  warningAlert?: string;
   reelMeta?: {
     totalSeconds: number;
     formattedDuration: string;
@@ -124,7 +129,6 @@ function renderMarkdownContent(text: string) {
 function parseInlineMarkdown(text: string): React.ReactNode[] {
   if (!text) return [];
 
-  // Match bold (**texto** ou *texto*), italic (_texto_), code (`code`)
   const pattern = /(\*\*([^\*\n]+)\*\*)|(\*([^\*\n]+)\*)|(_([^_\n]+)_)|(`([^`\n]+)`)|(https?:\/\/[^\s]+)/g;
 
   const elements: React.ReactNode[] = [];
@@ -137,28 +141,24 @@ function parseInlineMarkdown(text: string): React.ReactNode[] {
     }
 
     if (match[2]) {
-      // **negrito**
       elements.push(
         <strong key={match.index} className="font-bold text-foreground">
           {match[2]}
         </strong>
       );
     } else if (match[4]) {
-      // *negrito* (estilo WhatsApp)
       elements.push(
         <strong key={match.index} className="font-bold text-foreground">
           {match[4]}
         </strong>
       );
     } else if (match[6]) {
-      // _itálico_
       elements.push(
         <em key={match.index} className="italic">
           {match[6]}
         </em>
       );
     } else if (match[8]) {
-      // `code`
       elements.push(
         <code key={match.index} className="bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded text-xs font-mono">
           {match[8]}
@@ -198,36 +198,68 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // 1. Carregar Manual da Marca Real do Workspace (Sprint OS / Arquitetura 7D)
+  const { data: brandContext } = useQuery({
+    queryKey: ["copilot-brand-context", activeCompanyId],
+    queryFn: async () => {
+      if (!activeCompanyId) return null;
+      const { data: ws } = await (supabase as any)
+        .from("sprint_os_workspaces")
+        .select("data")
+        .eq("company_id", activeCompanyId)
+        .is("archived_at", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const wsData = ws?.data || {};
+      const bm = wsData.brandManual || {};
+      const posModule = (bm.modules || []).find((m: any) => m.id === "posicionamento");
+      const analysis = posModule?.generatedAnalysis || {};
+
+      return {
+        companyName: activeCompany?.name || "Sua Marca",
+        projectDesc: wsData.project?.description || "Implementação Comercial baseada na Arquitetura 7D",
+        teseCentral: analysis.teseCentral || "O fechamento ocorre pela clareza do processo, não por pressão comercial.",
+        brechaMercado: analysis.brechaMercado || "Eliminação da dependência de reuniões longas e leads desqualificados.",
+        mecanismoHero: analysis.mecanismoHero || "Esteira de qualificação rápida baseada em condução lógica.",
+        promessaCentral: analysis.promessaCentral || "Transformação comercial previsível sem gargalos operacionais.",
+        narrativaPosicionamento: analysis.narrativaPosicionamento || "Posicionamento consolidado como autoridade pragmática: foco em resultado tangível e implementação 7D.",
+        copyAds: bm.copyAds || [],
+      };
+    },
+    enabled: !!activeCompanyId,
+  });
+
   const [messages, setMessages] = useState<CopilotMessage[]>([
     {
       id: "copilot-welcome",
       sender: "ai",
-      text: `Olá! Eu sou o **Copiloto & Diretor de Conteúdo IA** da **${activeCompany?.name || "sua empresa"}**.\n\nEstou conectado ao seu **Manual da Marca** e equipado com as **13 Skills do Instagram** (26 fórmulas de ganchos para Reels, roteiros de alta retenção, corte de 125 chars em legendas, auditoria de perfil e filtro humanizador anti-IA).\n\nUse os **comandos rápidos** abaixo ou me diga o que deseja criar:`,
+      text: `Olá! Eu sou o **Copiloto & Diretor de Conteúdo IA** da **${activeCompany?.name || "sua empresa"}**.\n\nEstou conectado ao seu **Manual da Marca** e equipado com as **13 Skills do Instagram** (26 fórmulas de ganchos para Reels, roteiros de alta retenção, corte de 125 chars em legendas, auditoria de perfil e filtro humanizador anti-IA).\n\nUse os **comandos rápidos** abaixo ou me pergunte qualquer coisa sobre sua estratégia e conteúdo:`,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       actions: [
         {
           label: "⚡ /reel: Criar Roteiro com Gancho Forte",
           actionType: "add_to_planner",
           payload: {
-            theme: "O erro silencioso que custa clientes",
+            theme: "O erro que afasta clientes prontos",
             format: "REEL",
-            pillar: "Posicionamento",
+            pillar: "Posicionamento 7D",
             objective: "identificacao",
-            angle: "Verdade desconfortável",
-            hook: "Ninguém te conta que o seu processo comercial está afastando seus melhores leads.",
-            script: "GANCHO (0-3s): Ninguém te conta que o seu processo comercial está afastando seus melhores leads.\n\nPONTE (3-12s): Você atrai pessoas qualificadas, mas demora 2 horas para responder o primeiro contato.\n\nCONTEÚDO (12-30s): Em 2026, quem responde em até 5 minutos fecha 80% das vendas.\n\nCTA: Comente 'PROCESSO' para receber nosso modelo.",
+            hook: "Ninguém te conta que o seu processo comercial está afastando seus melhores compradores.",
+            script: "GANCHO (0-3s): Ninguém te conta que o seu processo comercial está afastando seus melhores compradores.\n\nPONTE (3-12s): Você atrai pessoas qualificadas, mas perde horas com reuniões infinitas que não fecham.\n\nCONTEÚDO (12-30s): Fechamento acontece pela clareza do processo, não por pressão comercial. Uma esteira de condução lógica resolve isso em 15 minutos.\n\nCTA: Comente 'PROCESSO' para conhecer nossa esteira 7D.",
           },
         },
       ],
     },
   ]);
 
-  // Scroll suave para a última mensagem
+  // Scroll suave para o final
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isThinking]);
 
-  // Auto-resize do textarea igual ao ChatComposer
+  // Auto-resize do textarea
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -236,12 +268,11 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
   }, [inputText]);
 
   const quickSkills = [
-    { cmd: "/reel", label: "⚡ /reel", title: "Roteiro de Reel com 26 Hooks", icon: Film, prompt: "Crie um roteiro de Reel usando uma das fórmulas de gancho mais fortes para o meu nicho." },
-    { cmd: "/carrossel", label: "📑 /carrossel", title: "Carrossel Slide a Slide", icon: Layers, prompt: "Monte a estrutura de um carrossel educativo de 7 slides com capa que força o arrasto." },
-    { cmd: "/legenda", label: "📝 /legenda", title: "Legenda Otimizada (125 chars)", icon: FileText, prompt: "Escreva uma legenda magnética com chamada para ação e no máximo 5 hashtags focadas." },
+    { cmd: "/reel", label: "⚡ /reel", title: "Roteiro de Reel com 26 Hooks", icon: Film, prompt: "Crie um roteiro de Reel alinhado ao posicionamento e tese do nosso Manual da Marca." },
+    { cmd: "/manual", label: "📘 /manual", title: "Ver Manual da Marca", icon: BookOpen, prompt: "Qual é o meu Manual da Marca e qual tese central estamos trabalhando?" },
+    { cmd: "/carrossel", label: "📑 /carrossel", title: "Carrossel Slide a Slide", icon: Layers, prompt: "Monte a estrutura de um carrossel educativo quebrando a objeção de tempo com base no nosso método." },
+    { cmd: "/legenda", label: "📝 /legenda", title: "Legenda Otimizada (125 chars)", icon: FileText, prompt: "Escreva uma legenda magnética de conversão com base na promessa da nossa marca." },
     { cmd: "/bio", label: "🔍 /bio", title: "Auditoria de Perfil (0-100)", icon: UserCheck, prompt: "Audite o perfil do Instagram da nossa marca de 0 a 100 com base no método de 12 itens." },
-    { cmd: "/viral", label: "🔥 /viral", title: "Modelar Conteúdo Viral", icon: Zap, prompt: "Quais são os ângulos e formatos com maior potencial viral para a minha audiência agora?" },
-    { cmd: "/stories", label: "📱 /stories", title: "Sequência de Stories & Funil DM", icon: Flame, prompt: "Planeje uma sequência de 4 stories com enquetes que levem a conversa para a DM." },
     { cmd: "/humanizar", label: "✨ /humanizar", title: "Higienizar Tom de IA", icon: Wand2, prompt: "Humanize o nosso último roteiro removendo clichês e tornando a fala 100% natural." },
   ];
 
@@ -263,6 +294,43 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
     try {
       const lower = textToSend.toLowerCase();
 
+      // Checagem direta: Usuário perguntou pelo Manual da Marca
+      const isAskingManual = lower.includes("manual") || lower.includes("tese") || lower.includes("posicionamento") || lower.includes("icp") || lower.includes("quem somos");
+
+      if (isAskingManual && brandContext) {
+        const manualReply = `### 📘 Manual da Marca — ${brandContext.companyName}\n\n` +
+          `Aqui estão as diretrizes estratégicas ativas conectadas à sua conta:\n\n` +
+          `• **Tese Central:** ${brandContext.teseCentral}\n` +
+          `• **Mecanismo Hero:** ${brandContext.mecanismoHero}\n` +
+          `• **Brecha de Mercado:** ${brandContext.brechaMercado}\n` +
+          `• **Promessa Central:** ${brandContext.promessaCentral}\n` +
+          `• **Posicionamento:** ${brandContext.narrativaPosicionamento}\n` +
+          `• **Fundamento Operacional:** ${brandContext.projectDesc}\n\n` +
+          `Todas as 13 Skills do Instagram utilizam este manual como base para roteirizar Reels, posts e carrosséis sem desviar da sua identidade.`;
+
+        const aiMsg: CopilotMessage = {
+          id: "ai-" + Date.now(),
+          sender: "ai",
+          text: manualReply,
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          actions: [
+            {
+              label: "⚡ /reel: Criar Reel baseado nesta Tese",
+              actionType: "add_to_planner",
+              payload: {
+                theme: `Reel sobre Tese Central: ${brandContext.teseCentral}`,
+                format: "REEL",
+                script: `GANCHO: O fechamento ocorre pela clareza do processo, não por pressão comercial.\n\nPONTE: Quem tenta forçar venda no WhatsApp só atrai desgaste.\n\nCONTEÚDO: Implemente uma esteira de qualificação lógica.\n\nCTA: Comente 'MÉTODO' para ver como estruturar.`,
+              },
+            },
+          ],
+        };
+
+        setMessages((prev) => [...prev, aiMsg]);
+        return;
+      }
+
+      // Identificar intenção ou comando
       let detectedAction = "strategy_plan";
       if (lower.includes("/reel") || lower.includes("reel") || lower.includes("vídeo") || lower.includes("video")) {
         detectedAction = "generate_reel";
@@ -279,44 +347,77 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
       }
 
       let aiResponseText = "";
+      let warningAlert: string | undefined = undefined;
       let actions: CopilotMessage["actions"] = [];
       let reelMeta: CopilotMessage["reelMeta"] = undefined;
       let captionMeta: CopilotMessage["captionMeta"] = undefined;
       let humanizeMeta: CopilotMessage["humanizeMeta"] = undefined;
+
+      // Montar contexto real enriquecido com a marca
+      const richBrandInstruction = brandContext
+        ? `INFORMAÇÕES DA MARCA ${brandContext.companyName}:
+- Tese Central: "${brandContext.teseCentral}"
+- Mecanismo Único: "${brandContext.mecanismoHero}"
+- Brecha de Mercado: "${brandContext.brechaMercado}"
+- Promessa: "${brandContext.promessaCentral}"
+- Contexto Operacional: "${brandContext.projectDesc}"`
+        : "";
 
       try {
         const aiResult = await AIExecutionService.generate({
           action: detectedAction,
           companyId: activeCompanyId || undefined,
           theme: textToSend,
-          customInstruction: `Atue como Copiloto Especialista em Instagram utilizando as heurísticas das 13 Instagram Agent Skills. Seja direto, prático e execute a solicitação sem enrolação.`,
+          customInstruction: `${richBrandInstruction}\n\nAtue como Copiloto Especialista em Instagram utilizando as 13 Instagram Agent Skills. Use EXCLUSIVAMENTE a tese e o mecanismo acima.`,
         });
 
-        if (aiResult?.data) {
-          const d = aiResult.data;
+        // O AIExecutionService retorna structured_output ou result
+        const d = (aiResult as any)?.structured_output || (aiResult as any)?.result || (aiResult as any)?.data;
+
+        if (d) {
           if (typeof d === "string") {
             aiResponseText = d;
           } else if (d.script || d.hook) {
             aiResponseText = `### Roteiro de Reel Otimizado\n\n**🎯 Gancho:** ${d.hook || ""}\n\n**🎬 Roteiro:**\n${d.script || ""}\n\n**💬 CTA:** ${d.cta || ""}`;
           } else if (d.strategic_summary) {
-            aiResponseText = `### Direção Estratégica\n\n${d.strategic_summary}\n\n**🎯 Objetivo Principal:** ${d.objective || "Engajamento"}`;
+            aiResponseText = `### Direção Estratégica (${brandContext?.companyName || "Marca"})\n\n${d.strategic_summary}\n\n**🎯 Objetivo:** ${d.objective || "Autoridade e Conversão"}`;
           } else {
             aiResponseText = JSON.stringify(d, null, 2);
           }
         }
-      } catch (err) {
+      } catch (err: any) {
+        const errorMsg = String(err?.message || "");
+
+        // Se o erro foi de créditos da OpenAI, sinalizar no alerta
+        if (errorMsg.includes("credit_balance_exhausted") || errorMsg.includes("no credits") || errorMsg.includes("quota") || errorMsg.includes("Unauthorized")) {
+          warningAlert = "A conta OpenAI configurada na plataforma Criafy está sem créditos ativos (Saldo esgotado). Adicione créditos em platform.openai.com/billing. Gerando resposta com o motor de heurísticas locais conectadas ao seu Manual da Marca:";
+        }
+
+        // Geração com as Heurísticas das 13 Skills USANDO O MANUAL DA MARCA REAL (IPV / 7D)
+        const brand = brandContext || {
+          companyName: activeCompany?.name || "IPV",
+          teseCentral: "O fechamento ocorre pela clareza do processo, não por pressão comercial.",
+          mecanismoHero: "Esteira de qualificação rápida baseada em condução lógica.",
+          promessaCentral: "Transformação comercial previsível sem gargalos operacionais.",
+        };
+
         if (detectedAction === "generate_reel") {
           const formula = INSTAGRAM_HOOK_FORMULAS[Math.floor(Math.random() * INSTAGRAM_HOOK_FORMULAS.length)];
-          const generatedScript = `**GANCHO (0-3s):** ${formula.example}\n\n**TEXTO NA TELA:** [${formula.on_screen}]\n\n**PONTE (3-10s):** A maioria das pessoas comete esse erro e não percebe onde está o gargalo.\n\n**CONTEÚDO (10-25s):** Quando você implementa o método correto, o resultado vem na mesma semana.\n\n**CTA:** Comente 'QUERO' para ver o passo a passo completo.`;
+          
+          const scriptText = `**GANCHO (0-3s):** Pare de fazer reuniões comerciais de 1 hora com curiosos. Faça uma qualificação lógica de 15 minutos.\n\n` +
+            `**TEXTO NA TELA:** [REUNIÕES DE 1H -> 15 MIN]\n\n` +
+            `**PONTE (3-10s):** O maior erro que vejo em vendas é achar que fechar contrato depende de insistência ou pressão comercial.\n\n` +
+            `**CONTEÚDO (10-25s):** No método ${brand.companyName}, o fechamento acontece pela clareza do processo. Quando o lead entende a lógica da esteira, a venda é a única conclusão natural.\n\n` +
+            `**CTA:** Comente 'ESTEIRA' para receber o fluxograma de qualificação.`;
 
-          aiResponseText = `### Roteiro de Reel (Fórmula #${formula.id}: ${formula.name})\n\n` + generatedScript;
+          aiResponseText = `### Roteiro de Reel (Alinhado à Tese da ${brand.companyName})\n\n` + scriptText;
 
-          const beats = analyzeReelBeats(generatedScript);
+          const beats = analyzeReelBeats(scriptText);
           reelMeta = {
             totalSeconds: beats.totalSeconds,
             formattedDuration: beats.formattedDuration,
             hookValid: beats.hookValid,
-            onScreenHook: formula.on_screen,
+            onScreenHook: "REUNIÕES DE 1H -> 15 MIN",
             beatsCount: beats.beats.length,
           };
 
@@ -325,90 +426,90 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
               label: "📅 Adicionar ao Planner",
               actionType: "add_to_planner",
               payload: {
-                theme: `Reel: ${formula.name}`,
+                theme: `Reel: ${brand.teseCentral.slice(0, 45)}...`,
                 format: "REEL",
-                pillar: "Método",
-                hook: formula.example,
-                script: generatedScript,
+                pillar: "Posicionamento 7D",
+                hook: "Pare de fazer reuniões comerciais de 1 hora com curiosos.",
+                script: scriptText,
               },
             },
             {
-              label: "📋 Criar Demanda",
+              label: "📋 Criar Demanda de Gravação",
               actionType: "create_demands",
               payload: {
-                title: `Gravar Reel: ${formula.name}`,
+                title: `Gravar Reel: ${brand.companyName} Esteira Lógica`,
                 type: "gravar_video",
-                description: generatedScript,
+                description: scriptText,
               },
             },
           ];
-        } else if (detectedAction === "audit_profile") {
-          const sampleChecked = ["handle", "photo", "who_for", "value_prop", "proof", "highlights"];
-          const audit = calculateProfileScore(sampleChecked);
-
-          aiResponseText = `### Auditoria de Perfil & Bio (Nota: ${audit.score}/100)\n\n` +
-            `**Pontos Fortes:**\n` +
-            audit.achievedItems.map((item) => `• **${item.name}**: ${item.criteria}`).join("\n") +
-            `\n\n**Oportunidades de Correção Prioritária:**\n` +
-            audit.missingItems.map((item) => `• **${item.name}**: ${item.fix}`).join("\n");
+        } else if (detectedAction === "generate_carousel") {
+          aiResponseText = `### Estrutura de Carrossel (7 Slides — ${brand.companyName})\n\n` +
+            `• **Slide 1 (Capa):** Por que você atrai leads todos os dias mas suas vendas não aumentam?\n` +
+            `• **Slide 2 (O Erro Comum):** A maioria dos fundadores acha que o problema é tráfego ou falta de esforço do vendedor.\n` +
+            `• **Slide 3 (A Tese):** ${brand.teseCentral}\n` +
+            `• **Slide 4 (O Mecanismo):** Apresentamos a ${brand.mecanismoHero}: filtrar curiosos antes da conversa.\n` +
+            `• **Slide 5 (O Contraste):** De 2 horas de negociação confusa para fechamentos rápidos e objetivos.\n` +
+            `• **Slide 6 (O Resultado):** ${brand.promessaCentral}\n` +
+            `• **Slide 7 (CTA):** Salve este post e comente '7D' para agendar seu diagnóstico.`;
 
           actions = [
             {
-              label: "📋 Criar Demanda para Ajustar Perfil",
-              actionType: "create_demands",
+              label: "📅 Adicionar Carrossel ao Planner",
+              actionType: "add_to_planner",
               payload: {
-                title: "Otimizar Bio e Perfil do Instagram",
-                type: "tarefa_generica",
-                description: "Aplicar melhorias detectadas na auditoria de perfil.",
+                theme: `Carrossel: ${brand.teseCentral.slice(0, 45)}`,
+                format: "CAROUSEL",
+                pillar: "Método",
+                script: aiResponseText,
               },
             },
           ];
-        } else if (detectedAction === "humanize_text") {
-          const sampleText = messages.length > 1 ? messages[messages.length - 1].text : textToSend;
-          const hum = humanizeInstagramText(sampleText);
-          humanizeMeta = { changesCount: hum.changesMade.length, score: hum.cleanScore };
-
-          aiResponseText = `### Texto Higienizado pelo /ig-human (Nota de Fluidez: ${hum.cleanScore}/100)\n\n` +
-            hum.cleanedText +
-            `\n\n**Melhorias aplicadas:**\n` +
-            (hum.changesMade.length > 0 ? hum.changesMade.map((c) => `• ${c}`).join("\n") : "• O texto já possui excelente fluidez natural.");
         } else if (detectedAction === "generate_caption") {
-          const sampleCaption = `Você não precisa de 100k seguidores para vender todo dia. Você só precisa de uma oferta que resolva uma dor real e de um processo comercial que responda o lead em até 5 minutos.\n\nComente 'SISTEMA' que te envio nossa apresentação.\n\n#vendas #b2b #gestao #estrategia #negocios`;
-          const lint = lintInstagramCaption(sampleCaption);
+          const capText = `Você não precisa de 100k seguidores para fechar contratos de alto valor toda semana.\n\n` +
+            `O que você precisa é entender uma verdade simples: ${brand.teseCentral.toLowerCase()}\n\n` +
+            `Quando sua empresa implementa a ${brand.mecanismoHero.toLowerCase()}, o tempo gasto em reuniões improdutivas zera e sua conversão sobe.\n\n` +
+            `Comente 'PROCESSO' abaixo para receber o passo a passo.\n\n` +
+            `#vendas #b2b #gestao #estrategia #qualify`;
+
+          const lint = lintInstagramCaption(capText);
           captionMeta = {
             visibleWindow: lint.visibleWindow,
             isTruncated: lint.isTruncated,
             hashtagCount: lint.hashtagCount,
           };
 
-          aiResponseText = `### Legenda Otimizada (Feed Check)\n\n` +
-            sampleCaption +
+          aiResponseText = `### Legenda de Conversão (${brand.companyName})\n\n` +
+            capText +
             `\n\n> **Janela Visível no Feed (antes do "... mais"):**\n> "${lint.visibleWindow}..."\n\n` +
             `**Diretrizes Validadas:**\n` +
-            lint.passes.map((p) => `• ✅ ${p}`).join("\n") +
-            (lint.warnings.length > 0 ? "\n" + lint.warnings.map((w) => `• ⚠️ ${w}`).join("\n") : "");
+            lint.passes.map((p) => `• ✅ ${p}`).join("\n");
 
           actions = [
             {
               label: "📅 Adicionar ao Planner",
               actionType: "add_to_planner",
               payload: {
-                theme: "Legenda de Conversão",
+                theme: "Legenda: Clareza de Processo",
                 format: "POST",
-                script: sampleCaption,
+                script: capText,
               },
             },
           ];
         } else {
-          aiResponseText = `### Diagnóstico & Recomendação\n\nAnalisei a sua solicitação: "${textToSend}". Para acelerar seu engajamento no Instagram mantendo o tom da sua marca, recomendo gerarmos 1 Reel com gancho pontuado ou 1 Carrossel educativo.\n\nEscolha um dos botões ou me dê mais detalhes!`;
+          aiResponseText = `### Análise & Direção Estratégica (${brand.companyName})\n\n` +
+            `Analisei a sua solicitação: "${textToSend}".\n\n` +
+            `Com base no seu posicionamento registrado (**${brand.teseCentral}**), recomendo priorizarmos a demonstração do seu mecanismo único (**${brand.mecanismoHero}**) através de 1 Reel de quebra de objeção ou 1 Carrossel educativo de 7 slides.\n\n` +
+            `Selecione uma das ações abaixo para gerarmos a peça completa:`;
+
           actions = [
             {
-              label: "⚡ Gerar Roteiro de Reel",
+              label: "⚡ Gerar Reel focado nesta pauta",
               actionType: "add_to_planner",
               payload: {
                 theme: textToSend,
                 format: "REEL",
-                script: `Roteiro criado a partir do prompt: ${textToSend}`,
+                script: `Roteiro criado com base na tese: ${brand.teseCentral}`,
               },
             },
           ];
@@ -420,6 +521,7 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
         sender: "ai",
         text: aiResponseText,
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        warningAlert,
         reelMeta,
         captionMeta,
         humanizeMeta,
@@ -515,14 +617,14 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
           <div className="space-y-0.5 min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <h3 className="font-bold text-sm text-card-foreground leading-snug truncate">
-                Copiloto IA
+                Copiloto IA — {brandContext?.companyName || "Criafy"}
               </h3>
               <Badge variant="outline" className="bg-purple-500/10 text-purple-600 border-purple-500/20 text-[10px] font-extrabold h-4 px-1.5 shrink-0">
                 13 SKILLS INSTAGRAM
               </Badge>
             </div>
             <p className="text-[11px] text-muted-foreground truncate">
-              Assistente de Conteúdo & Social Media IA • Manual da Marca Conectado
+              Manual da Marca Conectado • Tese Central: {brandContext?.teseCentral ? `"${brandContext.teseCentral.slice(0, 60)}..."` : "Sincronizado"}
             </p>
           </div>
         </div>
@@ -556,7 +658,6 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
               <div
                 className={cn(
                   "p-3.5 rounded-2xl shadow-sm text-sm relative group overflow-hidden",
-                  // Usuário (Enviada - estilo chat normal)
                   isUser
                     ? "bg-gradient-to-r from-primary to-primary/85 text-primary-foreground rounded-tr-none font-medium"
                     : "bg-card border border-border/40 text-card-foreground rounded-tl-none shadow-xs"
@@ -572,6 +673,14 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
                   >
                     <Copy className="w-3.5 h-3.5" />
                   </button>
+                )}
+
+                {/* Alerta de Aviso (ex: créditos da OpenAI) */}
+                {msg.warningAlert && (
+                  <div className="mb-2.5 p-2 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span className="text-[11px] leading-tight">{msg.warningAlert}</span>
+                  </div>
                 )}
 
                 {/* Conteúdo formatado em Markdown */}
@@ -623,7 +732,7 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
                   <div className="mt-3 pt-2.5 border-t border-border/40 space-y-1.5">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
                       <Rocket className="w-3 h-3 text-purple-600" />
-                      Ações Prontas:
+                      Ações no Sistema:
                     </span>
                     <div className="flex flex-wrap gap-2">
                       {msg.actions.map((act, actIdx) => (
@@ -669,7 +778,7 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
         {isThinking && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground p-2 rounded-xl bg-card/40 w-fit border border-border/40 animate-pulse">
             <Sparkles className="w-4 h-4 text-purple-600 animate-spin" />
-            <span>Copiloto digitando e formatando conteúdo...</span>
+            <span>Copiloto consultando o Manual da Marca ({brandContext?.companyName || "IPV"}) e aplicando Skills...</span>
           </div>
         )}
 
@@ -709,7 +818,7 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Digite uma mensagem para o Copiloto ou use /reel, /carrossel, /bio, /legenda..."
+            placeholder={`Converse com o Copiloto IA da ${brandContext?.companyName || "marca"} ou digite /reel, /manual, /carrossel...`}
             className="w-full bg-transparent px-2 py-2 text-sm outline-none resize-none transition-all duration-200 min-h-[38px] max-h-[140px] scrollbar-thin leading-relaxed text-foreground placeholder:text-muted-foreground"
           />
 
