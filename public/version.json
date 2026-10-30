@@ -1,6 +1,6 @@
 {
-  "commit": "88bbf8c8090689b4af69a158d3293021b72230f3",
-  "shortCommit": "88bbf8c",
-  "message": "refactor(admin): alinhar layout com usuario comum - logo e busca no header da sidebar, footer com notificacoes, ajuda e perfil, remocao da topbar",
-  "builtAt": "2026-10-30T16:41:02.125Z"
+  "commit": "656a1358de94c95fe0410279e52f8f207d165676",
+  "shortCommit": "656a135",
+  "message": "fix(admin): definir colapsos fechados por padrao, mantendo apenas visao geral e plataforma abertos",
+  "builtAt": "2026-10-30T16:48:17.881Z"
 }

@@ -29,7 +29,6 @@ import {
   Sliders,
   ArrowLeft,
   ChevronDown,
-  Shield,
   Search,
   Bell,
   HelpCircle,
@@ -177,7 +176,6 @@ export function AdminSidebar({ onNavigate }: AdminSidebarProps) {
     }
   };
 
-  const isProduction = import.meta.env.PROD;
   const userName = user?.user_metadata?.full_name || "Super Admin";
   const userEmail = user?.email || "";
   const initials = (userName || userEmail || "SA")
@@ -198,38 +196,19 @@ export function AdminSidebar({ onNavigate }: AdminSidebarProps) {
     <>
       <div className="w-64 border-r border-slate-200/80 bg-[#FBFBFD] flex flex-col h-full shrink-0 select-none overflow-hidden text-slate-800">
         {/* ============================================================ */}
-        {/* 1. HEADER DA SIDEBAR (Logo Oficial Qualify + Busca Global) */}
+        {/* 1. HEADER DA SIDEBAR (Logo Oficial Qualify Centralizada + Busca) */}
         {/* ============================================================ */}
-        <div className="p-4 border-b border-slate-200/80 shrink-0 bg-[#FBFBFD] space-y-3">
-          {/* Logo Oficial Qualify */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <img
-                src="/logo_sidebar_open.png"
-                alt="Qualify"
-                className="h-6 w-auto object-contain"
-              />
-              <Badge
-                variant="destructive"
-                className="text-[9px] font-bold px-1.5 py-0 uppercase tracking-wider h-4"
-              >
-                Super Admin
-              </Badge>
-            </div>
-
-            <Badge
-              variant="outline"
-              className={`text-[9px] font-mono px-1 py-0 h-4 ${
-                isProduction
-                  ? "border-emerald-500/30 text-emerald-600 bg-emerald-500/10"
-                  : "border-amber-500/30 text-amber-600 bg-amber-500/10"
-              }`}
-            >
-              {isProduction ? "PROD" : "DEV"}
-            </Badge>
+        <div className="px-3.5 pt-4 pb-3 border-b border-slate-200/80 shrink-0 bg-[#FBFBFD] space-y-3">
+          {/* Logo Oficial Qualify Centralizada */}
+          <div className="flex items-center justify-center w-full py-0.5">
+            <img
+              src="/logo_sidebar_open.png"
+              alt="Qualify"
+              className="h-7 w-auto object-contain"
+            />
           </div>
 
-          {/* Barra de Busca Global (⌘K) migrada da Topbar */}
+          {/* Barra de Busca Global (⌘K) */}
           <button
             type="button"
             onClick={() => setSearchOpen(true)}
