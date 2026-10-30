@@ -1,6 +1,6 @@
 {
-  "commit": "98f97db458374204a72606795d2cecee9e26a158",
-  "shortCommit": "98f97db",
-  "message": "feat(admin): integrar painel completo da Apify no super admin para prospecção",
-  "builtAt": "2026-10-30T21:51:20.047Z"
+  "commit": "9b34621532f4b6b5cce4cb96cdfd840c2761e7d6",
+  "shortCommit": "9b34621",
+  "message": "feat(chat): add Copilot IA directly in chat inbox, empty state and sidebar footer",
+  "builtAt": "2026-10-30T22:38:39.156Z"
 }

@@ -46,9 +46,8 @@ export default function Chat() {
   const leadIdParam = searchParams.get("leadId");
   const conversationIdParam = searchParams.get("conversationId");
   const copilotParam = searchParams.get("copilot");
-  const isCopilotActive = selectedConvId === "copilot-ia" || copilotParam === "true";
-
   const [selectedConvId, setSelectedConvId] = useState<string | null>(copilotParam === "true" ? "copilot-ia" : (routeConversationId || conversationIdParam || null));
+  const isCopilotActive = selectedConvId === "copilot-ia" || copilotParam === "true";
   const [sidebarMode, setSidebarMode] = useState<ChatSidebarMode>("quick_replies");
   const [selectedQuickReply, setSelectedQuickReply] = useState<QuickReply | null>(null);
 
