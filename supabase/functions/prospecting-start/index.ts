@@ -11,8 +11,6 @@ interface StartRequest {
   prospectingCampaignId: string;
 }
 
-
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -88,8 +86,24 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 1. Obter Token da Apify via variável de ambiente ou banco (company_credentials)
+    // 1. Obter Token e Ator da Apify via platform_settings (Super Admin), variável de ambiente ou company_credentials
     let apifyToken = Deno.env.get("APIFY_TOKEN");
+    let actorId = "compass~crawler-google-places";
+
+    const { data: platformSetting } = await supabase
+      .from("platform_settings")
+      .select("value")
+      .eq("key", "apify_config")
+      .maybeSingle();
+
+    if (platformSetting?.value?.api_key) {
+      if (!apifyToken) {
+        apifyToken = platformSetting.value.api_key;
+      }
+      if (platformSetting.value.actor_id) {
+        actorId = String(platformSetting.value.actor_id).replace("/", "~");
+      }
+    }
 
     if (!apifyToken && campaign.company_id) {
       const { data: cred } = await supabase
@@ -123,23 +137,25 @@ Deno.serve(async (req) => {
     }
 
     if (!apifyToken) {
-      throw new Error("Token da Apify não configurado nas credenciais da empresa.");
+      throw new Error("Token da Apify não configurado nas credenciais da plataforma (Super Admin > Integrações > Apify).");
     }
 
-    // 2. Preparar inputs para o crawler do Google Places da Apify (compass~crawler-google-places)
+    // 2. Preparar inputs para o crawler do Google Places da Apify
     const searchQuery = campaign.search_terms || "";
     const location = campaign.places || "";
     const searchString = location ? `${searchQuery} in ${location}` : searchQuery;
 
+    const defaultLang = platformSetting?.value?.default_language || "pt-BR";
+
     const actorInput = {
       searchStringsArray: [searchString],
       locationQuery: location || undefined,
-      maxCrawledPlacesPerSearch: campaign.quantity || 50,
-      maxCrawledPlaces: campaign.quantity || 50,
-      language: "pt-BR",
+      maxCrawledPlacesPerSearch: campaign.quantity || platformSetting?.value?.default_max_places || 50,
+      maxCrawledPlaces: campaign.quantity || platformSetting?.value?.default_max_places || 50,
+      language: defaultLang,
       exportPlaceUrls: false,
       includeHistogram: false,
-      includeOpeningHours: false,
+      includeOpeningHours: platformSetting?.value?.extract_hours ?? true,
       includePeopleAlsoSearch: false,
       maxImages: 0,
     };
@@ -163,9 +179,10 @@ Deno.serve(async (req) => {
     ];
 
     const base64Webhooks = btoa(JSON.stringify(webhooks));
-    const apifyUrl = `https://api.apify.com/v2/acts/compass~crawler-google-places/runs?token=${encodeURIComponent(apifyToken)}&webhooks=${encodeURIComponent(base64Webhooks)}`;
+    const normalizedActor = actorId.replace("/", "~");
+    const apifyUrl = `https://api.apify.com/v2/acts/${normalizedActor}/runs?token=${encodeURIComponent(apifyToken)}&webhooks=${encodeURIComponent(base64Webhooks)}`;
 
-    console.log(`[ProspectingStart] Disparando Apify Actor para campanha ${campaign.id}...`);
+    console.log(`[ProspectingStart] Disparando Apify Actor (${normalizedActor}) para campanha ${campaign.id}...`);
 
     const apifyRes = await fetch(apifyUrl, {
       method: "POST",
