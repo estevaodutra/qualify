@@ -1,6 +1,6 @@
 {
-  "commit": "5fa9690e9b5392352d39a5f698f049b565b55330",
-  "shortCommit": "5fa9690",
-  "message": "fix(admin): isolar scroll no body da sidebar, fixar header/footer e ajustar branding para Qualify",
-  "builtAt": "2026-10-30T16:36:45.308Z"
+  "commit": "88bbf8c8090689b4af69a158d3293021b72230f3",
+  "shortCommit": "88bbf8c",
+  "message": "refactor(admin): alinhar layout com usuario comum - logo e busca no header da sidebar, footer com notificacoes, ajuda e perfil, remocao da topbar",
+  "builtAt": "2026-10-30T16:41:02.125Z"
 }

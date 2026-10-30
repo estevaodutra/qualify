@@ -89,7 +89,7 @@ const sections: NavSection[] = [
   },
   {
     title: "IA",
-    defaultOpen: true,
+    defaultOpen: false,
     items: [
       { title: "Visão Geral", url: "/admin/ia", icon: Sparkles, end: true },
       { title: "Skills", url: "/admin/ia/skills", icon: Layers },
@@ -101,7 +101,7 @@ const sections: NavSection[] = [
   },
   {
     title: "INTEGRAÇÕES",
-    defaultOpen: true,
+    defaultOpen: false,
     items: [
       { title: "OpenAI", url: "/admin/integracoes/openai", icon: Sparkles },
       { title: "Meta / Instagram", url: "/admin/integracoes/meta", icon: Workflow },
@@ -122,7 +122,7 @@ const sections: NavSection[] = [
   },
   {
     title: "SISTEMA",
-    defaultOpen: true,
+    defaultOpen: false,
     items: [
       { title: "Logs", url: "/admin/sistema/logs", icon: ScrollText },
       { title: "Erros", url: "/admin/sistema/erros", icon: AlertTriangle },
@@ -155,7 +155,7 @@ export function AdminSidebar({ onNavigate }: AdminSidebarProps) {
       const isChildActive = sec.items.some((item) =>
         item.end ? pathname === item.url : pathname.startsWith(item.url)
       );
-      initial[sec.title] = isChildActive || (sec.defaultOpen ?? true);
+      initial[sec.title] = isChildActive || (sec.defaultOpen ?? false);
     });
     return initial;
   });
@@ -250,7 +250,7 @@ export function AdminSidebar({ onNavigate }: AdminSidebarProps) {
         {/* ============================================================ */}
         <nav className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0 overscroll-contain">
           {sections.map((sec) => {
-            const isOpen = openSections[sec.title] ?? true;
+            const isOpen = openSections[sec.title] ?? false;
             const isSectionActive = sec.items.some((item) =>
               item.end ? pathname === item.url : pathname.startsWith(item.url)
             );
