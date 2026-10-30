@@ -1,6 +1,6 @@
 {
-  "commit": "ccc0c556e4ab6b2d697decead2b715f5646f622b",
-  "shortCommit": "ccc0c55",
-  "message": "fix(prospecting): resolve webhook URL fallback from webhook_configs and improve error reporting",
-  "builtAt": "2026-10-30T20:29:42.500Z"
+  "commit": "85d3b21fd91f6474eafcda74465c0903514ef92e",
+  "shortCommit": "85d3b21",
+  "message": "feat(prospecting): direct integration with Apify crawler-google-places actor via company credentials",
+  "builtAt": "2026-10-30T20:37:20.369Z"
 }

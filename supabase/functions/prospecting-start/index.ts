@@ -145,7 +145,12 @@ Deno.serve(async (req) => {
     };
 
     // 3. Montar Webhook ad-hoc na Apify para chamar de volta a função prospecting-callback
-    const callbackUrl = `${supabaseUrl}/functions/v1/prospecting-callback?campaign_id=${campaign.id}&token=${encodeURIComponent(apifyToken)}`;
+    const publicSupabaseUrl =
+      Deno.env.get("PUBLIC_SUPABASE_URL") ||
+      Deno.env.get("API_EXTERNAL_URL") ||
+      "https://qualify-supabase.d2x.site";
+
+    const callbackUrl = `${publicSupabaseUrl}/functions/v1/prospecting-callback?campaign_id=${campaign.id}&token=${encodeURIComponent(apifyToken)}`;
     const webhooks = [
       {
         eventTypes: ["ACTOR.RUN.SUCCEEDED"],

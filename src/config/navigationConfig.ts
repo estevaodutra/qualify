@@ -60,7 +60,6 @@ export const TOP_NAV_ITEMS: NavItem[] = [
 
 export const APP_SUB_ITEMS: NavItem[] = [
   { id: "sprint", title: "Sprint", url: "/sprint", icon: Zap },
-  { id: "cronogramas", title: "Cronogramas", url: "/sprint-os", icon: Calendar },
   { id: "criafy", title: "Criafy", url: "/criafy", icon: CriafySidebarIcon },
   { id: "quiz", title: "Quiz", url: "/quiz", icon: SquareDot },
   { id: "prospeccao", title: "Prospecção", url: "/prospeccao", icon: Target },
