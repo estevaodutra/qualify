@@ -42,7 +42,7 @@ export function AdminSubSidebar({
   return (
     <>
       {/* Mobile Selector */}
-      <div className="md:hidden border-b bg-card p-3 sticky top-14 z-30 flex items-center justify-between gap-3">
+      <div className="md:hidden border-b bg-card p-3 sticky top-14 z-30 flex items-center justify-between gap-3 shrink-0">
         <div className="flex-1 min-w-0">
           <Select
             value={activeItem?.url}
@@ -63,9 +63,10 @@ export function AdminSubSidebar({
         {headerActions}
       </div>
 
-      {/* Desktop Subsidebar Contextual */}
-      <aside className="hidden md:flex w-64 border-r bg-muted/20 flex-col shrink-0">
-        <div className="p-4 border-b">
+      {/* Desktop Subsidebar Contextual com Header, Body (Scroll) e Footer Fixos */}
+      <aside className="hidden md:flex w-64 border-r bg-muted/20 flex-col shrink-0 h-full overflow-hidden select-none">
+        {/* Header da Subsidebar */}
+        <div className="p-4 border-b shrink-0 bg-muted/20">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5 min-w-0">
               {HeaderIcon && (
@@ -87,7 +88,8 @@ export function AdminSubSidebar({
           </div>
         </div>
 
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+        {/* Body da Subsidebar (Scroll isolado) */}
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto min-h-0 overscroll-contain">
           {items.map((item) => (
             <NavLink
               key={item.url}
@@ -145,7 +147,8 @@ export function AdminSubSidebar({
           ))}
         </nav>
 
-        {footer && <div className="border-t p-3">{footer}</div>}
+        {/* Footer da Subsidebar */}
+        {footer && <div className="border-t p-3 shrink-0">{footer}</div>}
       </aside>
     </>
   );

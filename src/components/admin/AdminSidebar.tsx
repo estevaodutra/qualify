@@ -149,9 +149,9 @@ export function AdminSidebar({ onNavigate }: AdminSidebarProps) {
     }`;
 
   return (
-    <div className="w-64 border-r bg-card flex flex-col h-full shrink-0 select-none">
-      {/* Brand Header */}
-      <div className="h-14 border-b flex items-center justify-between px-4">
+    <div className="w-64 border-r bg-card flex flex-col h-full shrink-0 select-none overflow-hidden">
+      {/* 1. HEADER DA SIDEBAR (Fixo no topo) */}
+      <div className="h-14 border-b flex items-center justify-between px-4 shrink-0 bg-card">
         <div className="flex items-center gap-2.5">
           <div className="h-8 w-8 rounded-lg bg-destructive/10 text-destructive flex items-center justify-center font-bold">
             <Shield className="h-4 w-4" />
@@ -160,13 +160,13 @@ export function AdminSidebar({ onNavigate }: AdminSidebarProps) {
             <div className="flex items-center gap-1.5">
               <span className="font-bold text-sm tracking-tight text-foreground">SUPER ADMIN</span>
             </div>
-            <p className="text-[11px] text-muted-foreground leading-none">Qualify / Criafy Hub</p>
+            <p className="text-[11px] text-muted-foreground leading-none">Qualify</p>
           </div>
         </div>
       </div>
 
-      {/* Navigation Sections */}
-      <nav className="flex-1 overflow-y-auto p-3 space-y-3">
+      {/* 2. BODY DA SIDEBAR (Scroll isolado e exclusivo dentro da navegação) */}
+      <nav className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0 overscroll-contain">
         {sections.map((sec) => {
           const isOpen = openSections[sec.title] ?? true;
           const isSectionActive = sec.items.some((item) =>
@@ -235,8 +235,8 @@ export function AdminSidebar({ onNavigate }: AdminSidebarProps) {
         })}
       </nav>
 
-      {/* Footer Back Button */}
-      <div className="border-t p-3 bg-muted/10">
+      {/* 3. FOOTER DA SIDEBAR (Fixo na base) */}
+      <div className="border-t p-3 bg-muted/10 shrink-0">
         <Button
           variant="outline"
           size="sm"
