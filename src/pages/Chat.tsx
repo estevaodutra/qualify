@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSearchParams, useParams, useNavigate, useLocation } from "react-router-dom";
-import { MessageSquare, RefreshCw, Loader2, Info, ChevronLeft, Smartphone, Radio, Eye, Zap, Pin, Archive, UserPlus, Users } from "lucide-react";
+import { MessageSquare, RefreshCw, Loader2, Info, ChevronLeft, Smartphone, Radio, Eye, Zap, Pin, Archive, UserPlus, Users, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -19,6 +20,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 
 import { toast } from "sonner";
 import InboxList from "@/components/chat/InboxList";
+import { ChatCopilotView } from "@/components/chat/ChatCopilotView";
 import MessageThread from "@/components/chat/MessageThread";
 import ChatComposer from "@/components/chat/ChatComposer";
 import ChatSidebar, { ChatSidebarMode } from "@/components/chat/ChatSidebar";
@@ -43,17 +45,21 @@ export default function Chat() {
   const phoneParam = searchParams.get("phone");
   const leadIdParam = searchParams.get("leadId");
   const conversationIdParam = searchParams.get("conversationId");
+  const copilotParam = searchParams.get("copilot");
+  const isCopilotActive = selectedConvId === "copilot-ia" || copilotParam === "true";
 
-  const [selectedConvId, setSelectedConvId] = useState<string | null>(routeConversationId || conversationIdParam || null);
+  const [selectedConvId, setSelectedConvId] = useState<string | null>(copilotParam === "true" ? "copilot-ia" : (routeConversationId || conversationIdParam || null));
   const [sidebarMode, setSidebarMode] = useState<ChatSidebarMode>("quick_replies");
   const [selectedQuickReply, setSelectedQuickReply] = useState<QuickReply | null>(null);
 
   // Sync selectedConvId whenever the route conversationId changes
   useEffect(() => {
-    if (routeConversationId && routeConversationId !== selectedConvId) {
+    if (copilotParam === "true") {
+      setSelectedConvId("copilot-ia");
+    } else if (routeConversationId && routeConversationId !== selectedConvId) {
       setSelectedConvId(routeConversationId);
     }
-  }, [routeConversationId]);
+  }, [routeConversationId, copilotParam]);
 
   // Mobile Sheet states
   const [mobileQuickRepliesOpen, setMobileQuickRepliesOpen] = useState(false);
@@ -62,12 +68,14 @@ export default function Chat() {
   // Handle selection with URL sync and browser history integration
   const handleSelectConv = (id: string | null) => {
     setSelectedConvId(id);
-    if (id) {
+    if (id === "copilot-ia") {
+      navigate("/chat?copilot=true", { replace: false });
+    } else if (id) {
       if (routeConversationId !== id) {
         navigate(`/chat/${id}`, { replace: false });
       }
     } else {
-      if (location.pathname !== "/chat") {
+      if (location.pathname !== "/chat" || location.search) {
         navigate("/chat", { replace: false });
       }
     }
@@ -452,7 +460,9 @@ export default function Chat() {
         "flex-1 flex flex-col h-full bg-card/5 overflow-hidden relative min-w-0",
         !selectedConvId ? "hidden md:flex" : "flex"
       )}>
-        {selectedConv ? (
+        {isCopilotActive ? (
+          <ChatCopilotView onBack={handleBackToInbox} />
+        ) : selectedConv ? (
           <>
             {/* Header info */}
             <div className="p-3 px-3.5 md:p-3.5 md:px-4 border-b border-border/40 bg-card/10 flex justify-between items-center shrink-0">
@@ -726,15 +736,22 @@ export default function Chat() {
             <div>
               <h3 className="text-base font-bold text-card-foreground">Nenhuma conversa ativa</h3>
               <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
-                Selecione um contato na lista ao lado para iniciar ou continuar o atendimento.
+                Selecione um contato na lista ao lado ou converse com seu assistente interno de IA.
               </p>
             </div>
+            <Button
+              onClick={() => handleSelectConv("copilot-ia")}
+              className="mt-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-xs gap-2 rounded-xl h-9 px-4 shadow-md shadow-purple-500/20 cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>Abrir Copiloto IA (13 Skills)</span>
+            </Button>
           </div>
         )}
       </div>
 
       {/* 3. Desktop Chat Sidebar Column (Right) */}
-      {selectedConv && (
+      {selectedConv && !isCopilotActive && (
         <div className="hidden lg:block h-full shrink-0">
           <ChatSidebar
             conversation={selectedConv}

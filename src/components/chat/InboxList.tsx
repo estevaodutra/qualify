@@ -14,7 +14,7 @@ import ActiveFilterChips from "./filters/ActiveFilterChips";
 import ConversationActionsMenu from "./actions/ConversationActionsMenu";
 import BatchWorkflowDispatchDialog from "./batch/BatchWorkflowDispatchDialog";
 import { Button } from "@/components/ui/button";
-import { Pin, Archive, Inbox, Users, Folder } from "lucide-react";
+import { Pin, Archive, Inbox, Users, Folder, Sparkles } from "lucide-react";
 import { useGroupFolders } from "@/hooks/useGroupFolders";
 
 interface InboxListProps {
@@ -501,6 +501,41 @@ export default function InboxList({
 
       {/* Conversations List */}
       <div className="flex-1 overflow-y-auto divide-y divide-border/20">
+        {/* Card Especial Fixo: Copiloto IA (Instagram & Criafy) */}
+        {!isSelectionMode && (
+          <div
+            onClick={() => onSelect("copilot-ia")}
+            className={cn(
+              "p-3 mx-2 my-2 rounded-xl cursor-pointer select-none transition-all duration-200 border flex items-center gap-3 relative group",
+              selectedId === "copilot-ia"
+                ? "bg-purple-500/15 border-purple-500/40 shadow-xs ring-1 ring-purple-500/30"
+                : "bg-gradient-to-r from-purple-500/5 via-indigo-500/5 to-transparent hover:bg-purple-500/10 border-purple-500/25"
+            )}
+          >
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="font-bold text-xs text-foreground truncate">
+                    Copiloto IA
+                  </span>
+                  <Badge className="bg-purple-600 text-white text-[9px] px-1 py-0 h-3.5 font-extrabold shrink-0">
+                    13 SKILLS
+                  </Badge>
+                </div>
+                <span className="text-[10px] text-purple-600 font-bold shrink-0">
+                  Online
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                Roteiros de Reels, Carrosséis e Criafy
+              </p>
+            </div>
+          </div>
+        )}
+
         {sortedConversations.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 px-4 text-center text-muted-foreground/60 space-y-2">
             <MessageSquare className="h-10 w-10 opacity-30 animate-pulse text-primary" />

@@ -15,6 +15,7 @@ import {
   Check,
   ExternalLink,
   LogOut,
+  Sparkles,
 } from "lucide-react";
 import {
   Sidebar,
@@ -389,6 +390,36 @@ export function AppSidebar() {
         {/* BOTTOM SECTION (UTILITÁRIOS) */}
         <div className="mt-auto pt-4 space-y-1">
           <SidebarMenu className="gap-1">
+            {/* Copilot IA */}
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip="Copilot IA" className="h-auto p-0 hover:bg-transparent">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleNavClick();
+                    navigate("/chat?copilot=true");
+                  }}
+                  className={cn(
+                    "relative flex items-center gap-3.5 px-3 py-2 rounded-xl text-[13px] font-semibold transition-all duration-150 cursor-pointer w-full text-left",
+                    (location.pathname === "/chat" && new URLSearchParams(location.search).get("copilot") === "true")
+                      ? "bg-purple-100 text-purple-700 font-bold"
+                      : "text-purple-600 hover:bg-purple-50/80 hover:text-purple-700",
+                    isCollapsed && "justify-center px-0 h-10 w-10 mx-auto"
+                  )}
+                >
+                  <Sparkles className="h-[18px] w-[18px] shrink-0 text-purple-600" />
+                  {!isCollapsed && (
+                    <div className="flex items-center justify-between flex-1 min-w-0">
+                      <span>Copilot IA</span>
+                      <span className="flex items-center justify-center px-1.5 h-4 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-[9px] font-extrabold shadow-2xs">
+                        13 SKILLS
+                      </span>
+                    </div>
+                  )}
+                </button>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+
             {/* Notificações */}
             <SidebarMenuItem id="sidebar-notifications-trigger" className="relative">
               <NotificationsPopover>
