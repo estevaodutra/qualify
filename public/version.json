@@ -1,6 +1,6 @@
 {
-  "commit": "9b34621532f4b6b5cce4cb96cdfd840c2761e7d6",
-  "shortCommit": "9b34621",
-  "message": "feat(chat): add Copilot IA directly in chat inbox, empty state and sidebar footer",
-  "builtAt": "2026-10-30T22:38:39.156Z"
+  "commit": "eeb45f58a7fb926d91bc28a92a5f86c743b4d417",
+  "shortCommit": "eeb45f5",
+  "message": "fix(chat): resolve TDZ reference error in copilot state initialization",
+  "builtAt": "2026-10-30T23:45:08.876Z"
 }
