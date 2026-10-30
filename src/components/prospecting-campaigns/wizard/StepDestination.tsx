@@ -8,6 +8,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { ArrowLeft, ArrowRight, Info, GitBranch, PhoneCall, CheckCircle2 } from "lucide-react";
 import { useAllSequences } from "@/hooks/useSequences";
 import { usePipelines } from "@/hooks/usePipelines";
+import { PipelineSelect } from "@/components/crm/pipelines/PipelineSelect";
 import type { DestinationMode, QueuePolicy } from "@/hooks/useProspectingCampaigns";
 
 const WEEKDAYS = [
@@ -39,7 +40,7 @@ interface StepDestinationProps {
 
 export function StepDestination({ data, onChange, onNext, onBack }: StepDestinationProps) {
   const { sequences } = useAllSequences();
-  const { pipelines, isLoading: loadingPipelines } = usePipelines();
+  const { pipelines, groups, isLoading: loadingPipelines } = usePipelines();
   const activeSequences = sequences.filter((s) => s.isActive !== false);
 
   const selectedPipeline = pipelines.find((p) => p.id === data.pipelineId);
@@ -92,27 +93,20 @@ export function StepDestination({ data, onChange, onNext, onBack }: StepDestinat
               <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                 Pipeline
               </Label>
-              <Select
+              <PipelineSelect
                 value={data.pipelineId || "none"}
                 onValueChange={handlePipelineChange}
-              >
-                <SelectTrigger className="h-10 rounded-xl bg-background border-border/50 text-xs">
-                  <SelectValue placeholder={loadingPipelines ? "Carregando..." : "Selecione uma pipeline"} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none" className="text-xs">
-                    Nenhuma (Apenas salvar lead no banco)
-                  </SelectItem>
-                  {pipelines.map((p) => (
-                    <SelectItem key={p.id} value={p.id} className="text-xs">
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                pipelines={pipelines as any}
+                pipelineGroups={groups as any}
+                allowNone={true}
+                noneLabel="Nenhuma (Apenas salvar lead no banco)"
+                placeholder="Selecione uma pipeline..."
+                triggerClassName="h-10 rounded-xl bg-background border-border/50 text-xs"
+                contentClassName="z-[10000]"
+              />
             </div>
 
-            {data.pipelineId && (
+            {data.pipelineId && data.pipelineId !== "none" && (
               <div className="space-y-1.5">
                 <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                   Etapa Inicial
@@ -124,10 +118,16 @@ export function StepDestination({ data, onChange, onNext, onBack }: StepDestinat
                   <SelectTrigger className="h-10 rounded-xl bg-background border-border/50 text-xs">
                     <SelectValue placeholder="Selecione a etapa" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="z-[10000]">
                     {availableStages.map((s) => (
                       <SelectItem key={s.id} value={s.id} className="text-xs">
-                        {s.name}
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="h-2 w-2 rounded-full shrink-0"
+                            style={{ backgroundColor: s.color || "#3b82f6" }}
+                          />
+                          <span>{s.name}</span>
+                        </div>
                       </SelectItem>
                     ))}
                     {availableStages.length === 0 && (

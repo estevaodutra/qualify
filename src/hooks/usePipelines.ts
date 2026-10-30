@@ -6,14 +6,14 @@ import type { Pipeline, PipelineStage } from "@/types/crm.types";
 export function usePipelines() {
   const { activeCompanyId } = useCompany();
 
-  const query = useQuery({
-    queryKey: ["pipelines_with_stages", activeCompanyId],
+  const pipelinesQuery = useQuery({
+    queryKey: ["pipelines_with_stages_and_groups", activeCompanyId],
     queryFn: async () => {
       if (!activeCompanyId) return [];
 
       const { data, error } = await supabase
         .from("pipelines")
-        .select("*, stages:pipeline_stages(*)")
+        .select("*, stages:pipeline_stages(*), pipeline_groups:pipeline_groups(id, name, order_index)")
         .eq("company_id", activeCompanyId)
         .order("order_index", { ascending: true });
 
@@ -29,9 +29,30 @@ export function usePipelines() {
     enabled: !!activeCompanyId,
   });
 
+  const groupsQuery = useQuery({
+    queryKey: ["pipeline_groups_list", activeCompanyId],
+    queryFn: async () => {
+      if (!activeCompanyId) return [];
+
+      const { data, error } = await supabase
+        .from("pipeline_groups")
+        .select("*")
+        .eq("company_id", activeCompanyId)
+        .order("order_index", { ascending: true });
+
+      if (error) throw error;
+      return (data || []) as any[];
+    },
+    enabled: !!activeCompanyId,
+  });
+
   return {
-    pipelines: query.data || [],
-    isLoading: query.isLoading,
-    refetch: query.refetch,
+    pipelines: pipelinesQuery.data || [],
+    groups: groupsQuery.data || [],
+    isLoading: pipelinesQuery.isLoading || groupsQuery.isLoading,
+    refetch: () => {
+      pipelinesQuery.refetch();
+      groupsQuery.refetch();
+    },
   };
 }

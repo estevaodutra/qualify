@@ -42,6 +42,8 @@ export interface PipelineSelectProps {
   className?: string;
   triggerClassName?: string;
   contentClassName?: string;
+  allowNone?: boolean;
+  noneLabel?: string;
 }
 
 export function PipelineSelect({
@@ -55,6 +57,8 @@ export function PipelineSelect({
   className,
   triggerClassName,
   contentClassName,
+  allowNone = false,
+  noneLabel = "Nenhuma (Apenas salvar no banco)",
 }: PipelineSelectProps) {
   const { activeCompanyId: contextCompanyId } = useCompany();
   const effectiveCompanyId = propCompanyId || contextCompanyId;
@@ -69,7 +73,7 @@ export function PipelineSelect({
       if (!effectiveCompanyId) return [];
       const { data, error } = await supabase
         .from("pipelines")
-        .select("*")
+        .select("*, pipeline_groups(id, name, order_index)")
         .eq("company_id", effectiveCompanyId)
         .eq("status", "active")
         .order("order_index", { ascending: true });
@@ -189,6 +193,10 @@ export function PipelineSelect({
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               <span>Carregando pipelines...</span>
             </div>
+          ) : value === "none" ? (
+            <span className="truncate font-medium text-muted-foreground text-left">
+              {noneLabel}
+            </span>
           ) : selectedPipeline ? (
             <div className="flex items-center justify-between gap-2 w-full pr-1 overflow-hidden">
               <span className="truncate font-semibold text-slate-800 text-left">
@@ -206,6 +214,17 @@ export function PipelineSelect({
         </SelectTrigger>
 
         <SelectContent className={cn("max-h-80 overflow-y-auto", contentClassName)}>
+          {allowNone && (
+            <>
+              <SelectItem
+                value="none"
+                className="text-xs py-2 cursor-pointer font-medium text-slate-600 hover:bg-slate-100"
+              >
+                {noneLabel}
+              </SelectItem>
+              <SelectSeparator className="my-1.5 opacity-60" />
+            </>
+          )}
           {groupedData.length === 0 ? (
             <div className="p-3 text-center text-xs text-muted-foreground">
               Nenhuma pipeline encontrada
