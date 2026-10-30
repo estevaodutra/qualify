@@ -106,6 +106,7 @@ import AdminMetaIntegration from "./pages/admin/integrations/AdminMetaIntegratio
 import AdminWhatsAppIntegration from "./pages/admin/integrations/AdminWhatsAppIntegration";
 import AdminWebhooksIntegration from "./pages/admin/integrations/AdminWebhooksIntegration";
 import AdminOtherIntegrations from "./pages/admin/integrations/AdminOtherIntegrations";
+import AdminApifyIntegration from "./pages/admin/integrations/AdminApifyIntegration";
 
 // Super Admin - Conteúdo & Operação
 import { AdminContentLayout } from "./components/admin/content/AdminContentLayout";
@@ -339,6 +340,7 @@ const App = () => {
                         <Route path="meta" element={<AdminMetaIntegration />} />
                         <Route path="whatsapp" element={<AdminWhatsAppIntegration />} />
                         <Route path="webhooks" element={<AdminWebhooksIntegration />} />
+                        <Route path="apify" element={<AdminApifyIntegration />} />
                         <Route path="outras" element={<AdminOtherIntegrations />} />
                       </Route>
 

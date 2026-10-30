@@ -1,6 +1,6 @@
 import { Outlet } from "react-router-dom";
 import { AdminSubSidebar, SubSidebarItem } from "@/components/admin/AdminSubSidebar";
-import { Sparkles, Workflow, Radio, Zap, Plug } from "lucide-react";
+import { Sparkles, Workflow, Radio, Zap, Plug, Compass } from "lucide-react";
 
 const integrationItems: SubSidebarItem[] = [
   {
@@ -26,6 +26,12 @@ const integrationItems: SubSidebarItem[] = [
     url: "/admin/integracoes/webhooks",
     icon: Zap,
     description: "Endpoints, eventos & retries",
+  },
+  {
+    title: "Apify (Google Maps)",
+    url: "/admin/integracoes/apify",
+    icon: Compass,
+    description: "Scraper, Ator & Chave de API",
   },
   {
     title: "Outras Integrações",
