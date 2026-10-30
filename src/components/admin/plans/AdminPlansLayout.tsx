@@ -81,10 +81,10 @@ export function AdminPlansLayout() {
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-sm tracking-tight text-foreground">Planos &amp; Billing</span>
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border-blue-200">
-                  R$ 197/mês
+                  Planos &amp; Trial
                 </Badge>
               </div>
-              <p className="text-xs text-muted-foreground">Plano Único + Créditos</p>
+              <p className="text-xs text-muted-foreground">Planos, Trial &amp; Créditos</p>
             </div>
           </div>
         </div>

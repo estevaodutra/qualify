@@ -6,6 +6,13 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -42,12 +49,14 @@ import { format } from "date-fns";
 export default function AdminPlanSignupOffers() {
   const { toast } = useToast();
   const [offers, setOffers] = useState<SignupOffer[]>(() => billingStore.getOffers());
+  const [plans, setPlans] = useState(() => billingStore.getPlans());
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formName, setFormName] = useState("");
   const [formToken, setFormToken] = useState("");
+  const [formPlanId, setFormPlanId] = useState(plans[0]?.id || "plan_qualify_standard");
   const [formTrialEnabled, setFormTrialEnabled] = useState(true);
   const [formTrialDays, setFormTrialDays] = useState("7");
   const [formBonus, setFormBonus] = useState<string>("5.00");
@@ -70,8 +79,9 @@ export default function AdminPlanSignupOffers() {
   const handleOpenCreate = () => {
     setFormName("");
     setFormToken("promo-" + Math.random().toString(36).substring(2, 7));
+    setFormPlanId(plans[0]?.id || "plan_qualify_standard");
     setFormTrialEnabled(true);
-    setFormTrialDays("7");
+    setFormTrialDays(String(plans[0]?.trial_days ?? 7));
     setFormBonus("5.00");
     setFormMaxRedemptions("");
     setFormExpiresAt("");
@@ -98,7 +108,7 @@ export default function AdminPlanSignupOffers() {
         {
           name: formName,
           token: formToken,
-          plan_id: "plan_qualify_standard",
+          plan_id: formPlanId,
           trial_enabled: formTrialEnabled,
           trial_days: trialDaysNum,
           bonus_credits: bonusNum,
@@ -307,6 +317,29 @@ export default function AdminPlanSignupOffers() {
                 placeholder="Ex: Campanha Black Friday ou Instagram Bio"
                 className="h-9"
               />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Plano Vinculado ao Cadastro</Label>
+              <Select
+                value={formPlanId}
+                onValueChange={(val) => {
+                  setFormPlanId(val);
+                  const p = plans.find((plan) => plan.id === val);
+                  if (p) setFormTrialDays(String(p.trial_days));
+                }}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {plans.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name} — R$ {p.price.toFixed(2)}/mês ({p.trial_days}d teste)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-1.5">

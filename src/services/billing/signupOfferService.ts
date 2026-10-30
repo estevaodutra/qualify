@@ -139,11 +139,15 @@ export const SignupOfferService = {
 
     const effectiveTrialDays = offer.trial_enabled ? offer.trial_days : 0;
 
+    const effectivePlan = offer.plan_id
+      ? billingStore.getPlan(offer.plan_id)
+      : plan;
+
     return {
       isValid: true,
       offer,
-      planName: plan.name,
-      planPrice: plan.price,
+      planName: effectivePlan.name,
+      planPrice: effectivePlan.price,
       trialDays: effectiveTrialDays,
       bonusAmount: effectiveBonus,
       requiresPaymentMethod: trialSettings.require_payment_method,
@@ -153,7 +157,7 @@ export const SignupOfferService = {
   /**
    * Executa o provisionamento atômico ao criar uma nova empresa via link de cadastro:
    * 1. Cria a wallet
-   * 2. Associa o Plano Qualify (R$ 197)
+   * 2. Associa o Plano Selecionado (ex: Qualify ou Qualify Pro)
    * 3. Aplica o bônus com lançamento no ledger
    * 4. Inicia o trial na assinatura (status 'trialing')
    * 5. Incrementa a contagem de resgates da oferta
@@ -164,7 +168,9 @@ export const SignupOfferService = {
     token?: string
   ): { subscription: Subscription; bonusGranted: number } {
     const benefits = this.resolveOffer(token);
-    const plan = billingStore.getPlan();
+    const plan = benefits.offer?.plan_id
+      ? billingStore.getPlan(benefits.offer.plan_id)
+      : billingStore.getPlan();
 
     // 1. Cria ou inicializa a carteira
     const wallet = CreditService.getWallet(companyId);

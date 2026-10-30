@@ -12,6 +12,7 @@ import {
 } from "./types";
 
 const STORAGE_KEYS = {
+  PLANS: "qualify_billing_plans_v2",
   PLAN: "qualify_billing_plan_v1",
   LIMITS: "qualify_billing_limits_v1",
   BONUS: "qualify_billing_bonus_v1",
@@ -24,20 +25,55 @@ const STORAGE_KEYS = {
   AUDIT: "qualify_billing_audit_v1",
 };
 
-// Initial Single Plan Qualify (R$ 197 / mês)
-const INITIAL_PLAN: Plan = {
-  id: "plan_qualify_standard",
-  name: "Qualify",
-  slug: "qualify",
-  description: "Plano único com acesso total à plataforma, disparos ilimitados e créditos sob demanda para recursos avançados.",
-  price: 197.0,
-  currency: "BRL",
-  billing_interval: "month",
-  status: "active",
-  is_default: true,
-  created_at: new Date(Date.now() - 90 * 86400000).toISOString(),
-  updated_at: new Date().toISOString(),
-};
+// Initial Plans (com suporte a múltiplos planos e tempo de teste customizado por plano)
+const INITIAL_PLANS: Plan[] = [
+  {
+    id: "plan_qualify_standard",
+    name: "Qualify",
+    slug: "qualify",
+    description: "Plano comercial completo com disparos ilimitados e créditos sob demanda para recursos avançados.",
+    price: 197.0,
+    currency: "BRL",
+    billing_interval: "month",
+    trial_days: 7,
+    status: "active",
+    is_default: true,
+    highlight_badge: "Plano Padrão",
+    features: [
+      "Disparos de mensagens ilimitados",
+      "Conversas e contatos ilimitados",
+      "Pipelines e automações sem limite",
+      "Instâncias WhatsApp configuráveis",
+      "Motor de IA e Mídia tarifados por crédito",
+    ],
+    created_at: new Date(Date.now() - 90 * 86400000).toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: "plan_qualify_pro",
+    name: "Qualify Pro",
+    slug: "qualify-pro",
+    description: "Para operações em escala com franquias estendidas e suporte prioritário dedicado.",
+    price: 497.0,
+    currency: "BRL",
+    billing_interval: "month",
+    trial_days: 14,
+    status: "active",
+    is_default: false,
+    highlight_badge: "Mais Popular",
+    features: [
+      "Tudo do Plano Qualify",
+      "14 dias de Trial gratuito",
+      "Até 5 conexões de WhatsApp inclusas",
+      "Fila dedicada de processamento de IA",
+      "Suporte técnico prioritário via SLA",
+    ],
+    created_at: new Date(Date.now() - 30 * 86400000).toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+];
+
+const INITIAL_PLAN: Plan = INITIAL_PLANS[0];
 
 // Initial Plan Limits (Disparos, conversas, contatos, pipelines, funis, workflows, conteúdos ilimitados)
 const INITIAL_LIMITS: PlanLimit[] = [
@@ -429,21 +465,81 @@ function writeStorage<T>(key: string, data: T): void {
 }
 
 export const billingStore = {
-  // Plan
-  getPlan(): Plan {
-    return readStorage<Plan>(STORAGE_KEYS.PLAN, INITIAL_PLAN);
+  // Plans
+  getPlans(): Plan[] {
+    const plans = readStorage<Plan[]>(STORAGE_KEYS.PLANS, INITIAL_PLANS);
+    if (!Array.isArray(plans) || plans.length === 0) {
+      return INITIAL_PLANS;
+    }
+    return plans;
   },
+
+  getPlan(planId?: string): Plan {
+    const plans = this.getPlans();
+    if (planId) {
+      const found = plans.find((p) => p.id === planId || p.slug === planId);
+      if (found) return found;
+    }
+    const defaultPlan = plans.find((p) => p.is_default && p.status === "active");
+    return defaultPlan || plans[0] || INITIAL_PLANS[0];
+  },
+
   savePlan(plan: Plan, actorName = "Super Admin"): Plan {
-    const updated = { ...plan, updated_at: new Date().toISOString() };
-    writeStorage(STORAGE_KEYS.PLAN, updated);
+    const plans = this.getPlans();
+    const isNew = !plans.some((p) => p.id === plan.id);
+    const now = new Date().toISOString();
+
+    const updatedPlan: Plan = {
+      ...plan,
+      trial_days: typeof plan.trial_days === "number" ? plan.trial_days : 7,
+      updated_at: now,
+      created_at: plan.created_at || now,
+    };
+
+    let updatedList: Plan[];
+    if (isNew) {
+      updatedList = [...plans, updatedPlan];
+    } else {
+      updatedList = plans.map((p) => (p.id === plan.id ? updatedPlan : p));
+    }
+
+    // Se este plano for default, remove default dos outros
+    if (updatedPlan.is_default) {
+      updatedList = updatedList.map((p) =>
+        p.id === updatedPlan.id ? p : { ...p, is_default: false }
+      );
+    }
+
+    writeStorage(STORAGE_KEYS.PLANS, updatedList);
+    writeStorage(STORAGE_KEYS.PLAN, updatedPlan);
+
     this.addAudit({
-      action: "PLAN_UPDATED",
+      action: isNew ? "PLAN_CREATED" : "PLAN_UPDATED",
       entity_type: "plan",
-      entity_id: plan.id,
+      entity_id: updatedPlan.id,
       actor_name: actorName,
-      details: `Plano alterado para R$ ${plan.price}/${plan.billing_interval} (${plan.status})`,
+      details: `${isNew ? "Criado" : "Atualizado"} plano '${updatedPlan.name}' (R$ ${updatedPlan.price}/${updatedPlan.billing_interval}, Trial: ${updatedPlan.trial_days} dias, Status: ${updatedPlan.status}).`,
     });
-    return updated;
+
+    return updatedPlan;
+  },
+
+  deletePlan(planId: string, actorName = "Super Admin"): void {
+    const plans = this.getPlans();
+    const target = plans.find((p) => p.id === planId);
+    if (!target) return;
+    if (target.is_default) {
+      throw new Error("Não é possível excluir o plano padrão da plataforma.");
+    }
+    const updated = plans.filter((p) => p.id !== planId);
+    writeStorage(STORAGE_KEYS.PLANS, updated);
+    this.addAudit({
+      action: "PLAN_DELETED",
+      entity_type: "plan",
+      entity_id: planId,
+      actor_name: actorName,
+      details: `Plano '${target.name}' excluído da plataforma.`,
+    });
   },
 
   // Limits

@@ -1,6 +1,6 @@
 export type PlanStatus = "active" | "inactive" | "archived";
 
-export type BillingInterval = "month" | "year" | "one_time";
+export type BillingInterval = "month" | "quarter" | "year" | "one_time";
 
 export type LimitType = "unlimited" | "fixed" | "credit_based" | "disabled";
 
@@ -40,8 +40,11 @@ export interface Plan {
   price: number;
   currency: string;
   billing_interval: BillingInterval;
+  trial_days: number;
   status: PlanStatus;
   is_default: boolean;
+  highlight_badge?: string;
+  features?: string[];
   created_at: string;
   updated_at: string;
 }

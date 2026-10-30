@@ -1,6 +1,6 @@
 {
-  "commit": "bc4e32e0c07ae8e7400e3eff1e8aecf486c9e66b",
-  "shortCommit": "bc4e32e",
-  "message": "feat(admin): add Apify Google Maps integration settings page",
-  "builtAt": "2026-10-30T21:42:52.035Z"
+  "commit": "98f97db458374204a72606795d2cecee9e26a158",
+  "shortCommit": "98f97db",
+  "message": "feat(admin): integrar painel completo da Apify no super admin para prospecção",
+  "builtAt": "2026-10-30T21:51:20.047Z"
 }
