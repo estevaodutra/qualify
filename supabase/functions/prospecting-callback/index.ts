@@ -129,12 +129,15 @@ Deno.serve(async (req) => {
     }
 
     // Resolver a etapa da pipeline se a campanha estiver configurada para enviar para CRM
-    let defaultPipelineStageId: string | null = campaign.stage_id || null;
-    if (campaign.pipeline_id && !defaultPipelineStageId) {
+    const targetPipelineId: string | null =
+      campaign.pipeline_id || (campaign.queue_policy as any)?.pipeline_id || null;
+    let defaultPipelineStageId: string | null =
+      campaign.stage_id || (campaign.queue_policy as any)?.stage_id || null;
+    if (targetPipelineId && !defaultPipelineStageId) {
       const { data: firstStage } = await supabase
         .from("pipeline_stages")
         .select("id")
-        .eq("pipeline_id", campaign.pipeline_id)
+        .eq("pipeline_id", targetPipelineId)
         .order("order_index", { ascending: true })
         .limit(1)
         .maybeSingle();
@@ -279,20 +282,20 @@ Deno.serve(async (req) => {
       });
 
       // ── Criação automática de Card na Pipeline do CRM ──
-      if (campaign.pipeline_id && defaultPipelineStageId) {
+      if (targetPipelineId && defaultPipelineStageId) {
         try {
           const { data: existingDeal } = await supabase
             .from("deals")
             .select("id")
             .eq("lead_id", leadId)
-            .eq("pipeline_id", campaign.pipeline_id)
+            .eq("pipeline_id", targetPipelineId)
             .maybeSingle();
 
           if (!existingDeal) {
             await supabase.from("deals").insert({
               company_id: campaign.company_id,
               lead_id: leadId,
-              pipeline_id: campaign.pipeline_id,
+              pipeline_id: targetPipelineId,
               stage_id: defaultPipelineStageId,
               title: rawLead.name || rawLead.title || "Novo Lead Prospectado",
               status: "open",
@@ -306,7 +309,7 @@ Deno.serve(async (req) => {
               campaignId: campaign.id,
               leadId,
               eventType: "prospecting.deal_created",
-              payload: { pipeline_id: campaign.pipeline_id, stage_id: defaultPipelineStageId },
+              payload: { pipeline_id: targetPipelineId, stage_id: defaultPipelineStageId },
             });
           }
         } catch (dealErr) {
@@ -405,7 +408,7 @@ Deno.serve(async (req) => {
         userId: campaign.user_id,
         severity: "success",
         title: "Prospecção concluída",
-        description: `Encontramos ${savedLeadIds.length} contatos válidos${campaign.pipeline_id ? " e adicionamos cards na Pipeline" : ""}.`,
+        description: `Encontramos ${savedLeadIds.length} contatos válidos${targetPipelineId ? " e adicionamos cards na Pipeline" : ""}.`,
         entity: `prospecting_campaign:${campaign.id}`,
       });
     } else if (campaign.destination_mode === "review_before_start") {

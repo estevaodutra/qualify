@@ -85,8 +85,8 @@ interface DbProspectingCampaign {
   enrichment_layers: string[] | null;
   destination_mode: string;
   automation_sequence_id: string | null;
-  pipeline_id: string | null;
-  stage_id: string | null;
+  pipeline_id?: string | null;
+  stage_id?: string | null;
   queue_policy: Record<string, unknown> | null;
   approved_at: string | null;
   created_at: string;
@@ -106,8 +106,8 @@ const transformDbToFrontend = (db: DbProspectingCampaign): ProspectingCampaign =
   enrichmentLayers: db.enrichment_layers || ["google_maps"],
   destinationMode: (db.destination_mode as DestinationMode) || "save_only",
   automationSequenceId: db.automation_sequence_id || undefined,
-  pipelineId: db.pipeline_id || undefined,
-  stageId: db.stage_id || undefined,
+  pipelineId: db.pipeline_id || (db.queue_policy as any)?.pipeline_id || undefined,
+  stageId: db.stage_id || (db.queue_policy as any)?.stage_id || undefined,
   queuePolicy: { ...DEFAULT_QUEUE_POLICY, ...(db.queue_policy || {}) } as QueuePolicy,
   approvedAt: db.approved_at || undefined,
   createdAt: db.created_at,
@@ -185,9 +185,7 @@ export function useProspectingCampaigns() {
         enrichment_layers: campaign.enrichmentLayers,
         destination_mode: campaign.destinationMode,
         automation_sequence_id: campaign.automationSequenceId || null,
-        pipeline_id: campaign.pipelineId || null,
-        stage_id: campaign.stageId || null,
-        queue_policy: { ...DEFAULT_QUEUE_POLICY, ...(campaign.queuePolicy || {}) },
+        queue_policy: { ...DEFAULT_QUEUE_POLICY, ...(campaign.queuePolicy || {}), pipeline_id: campaign.pipelineId || null, stage_id: campaign.stageId || null },
         status: "queued",
       };
 
@@ -300,7 +298,7 @@ export function useProspectingCampaigns() {
   const changeSendLimitsMutation = useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: Partial<QueuePolicy> }) => {
       const campaign = campaigns.find((c) => c.id === id);
-      const mergedPolicy = { ...(campaign?.queuePolicy || DEFAULT_QUEUE_POLICY), ...patch };
+      const mergedPolicy = { ...(campaign?.queuePolicy || DEFAULT_QUEUE_POLICY), ...patch, ...(campaign?.pipelineId ? { pipeline_id: campaign.pipelineId } : {}), ...(campaign?.stageId ? { stage_id: campaign.stageId } : {}) };
       const { error } = await supabase
         .from("prospecting_campaigns")
         .update({ queue_policy: mergedPolicy })
