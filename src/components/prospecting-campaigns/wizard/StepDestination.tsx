@@ -75,8 +75,8 @@ export function StepDestination({ data, onChange, onNext, onBack }: StepDestinat
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto space-y-4 px-1 pr-2">
+    <div className="flex flex-col h-full min-h-0">
+      <div className="flex-1 overflow-y-auto space-y-4 px-1 pr-2 min-h-0">
         {/* Bloco 1: Pipeline & CRM */}
         <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 space-y-3">
           <div className="flex items-center gap-2">
@@ -354,7 +354,7 @@ export function StepDestination({ data, onChange, onNext, onBack }: StepDestinat
         )}
       </div>
 
-      <div className="flex justify-between gap-2 pt-4 shrink-0 border-t border-border/40">
+      <div className="flex justify-between gap-2 pt-4 shrink-0 border-t border-border/40 mt-auto bg-background/95">
         <Button type="button" variant="ghost" onClick={onBack} className="rounded-xl font-semibold">
           <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
         </Button>

@@ -1,6 +1,6 @@
 {
-  "commit": "8f91fc8ecfc313c875baee0022a140ca6ce98078",
-  "shortCommit": "8f91fc8",
-  "message": "feat(billing): implementar modulo completo de planos, limites, creditos, bonus, trial, links e onboarding",
-  "builtAt": "2026-10-30T19:17:13.633Z"
+  "commit": "fa4858c9898887a176b2ac46314535776e0d60ec",
+  "shortCommit": "fa4858c",
+  "message": "feat(prospecting): integrar criacao automatica de cards em pipelines e classificacao automatica de fixo vs whatsapp",
+  "builtAt": "2026-10-30T19:31:01.162Z"
 }

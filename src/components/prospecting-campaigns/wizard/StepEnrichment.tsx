@@ -30,8 +30,8 @@ export function StepEnrichment({ selectedLayers, onChange, onNext, onBack }: Ste
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto space-y-3 px-1">
+    <div className="flex flex-col h-full min-h-0">
+      <div className="flex-1 overflow-y-auto space-y-3 px-1 pr-2 min-h-0">
         <p className="text-sm text-muted-foreground/80 -mt-1 mb-2">
           Quais informações deseja encontrar?
         </p>
@@ -89,7 +89,7 @@ export function StepEnrichment({ selectedLayers, onChange, onNext, onBack }: Ste
         })}
       </div>
 
-      <div className="flex justify-between gap-2 pt-4 shrink-0">
+      <div className="flex justify-between gap-2 pt-4 shrink-0 border-t border-border/40 mt-auto bg-background/95">
         <Button type="button" variant="ghost" onClick={onBack} className="rounded-xl font-semibold">
           <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
         </Button>

@@ -88,7 +88,7 @@ export function ProspectingWizard({ open, onOpenChange, onCreate, isCreating, in
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] p-0 flex flex-col rounded-2xl border-border/40 bg-background/95 backdrop-blur-xl shadow-2xl overflow-hidden">
+      <DialogContent className="sm:max-w-2xl h-[88vh] max-h-[88vh] p-0 flex flex-col rounded-2xl border-border/40 bg-background/95 backdrop-blur-xl shadow-2xl overflow-hidden">
         <div className="shrink-0 p-6 pb-4 border-b border-border/40">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold">Nova prospecção</DialogTitle>
