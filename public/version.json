@@ -1,6 +1,6 @@
 {
-  "commit": "dd4b9fea60e82f310a3f989738fe906e77aaf0e8",
-  "shortCommit": "dd4b9fe",
-  "message": "fix(prospecting): corrigir overflow e fixar rodape com botoes de navegacao no wizard",
-  "builtAt": "2026-10-30T19:38:51.382Z"
+  "commit": "b8dd5186b3d2e2e1ed235c3021e3a72802e31618",
+  "shortCommit": "b8dd518",
+  "message": "feat(prospecting): integrar PipelineSelect completo com grupos, badges e pipelines organizadas",
+  "builtAt": "2026-10-30T19:55:26.226Z"
 }
