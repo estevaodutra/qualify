@@ -8,20 +8,24 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  MoreVertical, Eye, Globe, MapPin, ListPlus, ListX, RefreshCw, Pause, XCircle, MessageSquare, Star,
+  MoreVertical, Eye, Globe, MapPin, ListPlus, ListX, RefreshCw, Pause, XCircle, MessageSquare, Star, PhoneCall,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
+import { formatPhone } from "@/lib/utils";
 import { QUALIFICATION_LABELS, QUALIFICATION_COLORS, QUEUE_STATUS_LABELS } from "@/lib/prospecting-status";
 import type { ProspectingEnrichmentJob } from "@/hooks/useProspectingEnrichmentJobs";
 import type { ProspectingQueueItem } from "@/hooks/useProspectingQueue";
 import type { ProspectingEvent } from "@/hooks/useProspectingEvents";
 
-interface LeadRow {
+export interface LeadRow {
   id: string;
   name: string | null;
+  company_name?: string | null;
   phone: string | null;
+  telefone_fixo?: string | null;
+  website?: string | null;
   custom_fields: Record<string, any> | null;
   qualification_label: string | null;
 }
@@ -51,17 +55,17 @@ export function MonitoringLeadsTable({
   const openConversation = (phone: string | null) => {
     if (!phone) return;
     navigate("/chat");
-    toast.info(`Procure pela conversa com ${phone} no Chat CRM.`);
+    toast.info(`Procure pela conversa com ${formatPhone(phone)} no Chat CRM.`);
   };
 
   return (
     <>
-      <div className="rounded-2xl border border-border/40 overflow-hidden">
+      <div className="rounded-2xl border border-border/40 overflow-hidden bg-card/40">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Empresa</TableHead>
-              <TableHead>Telefone</TableHead>
+              <TableHead>Contatos (WhatsApp / Fixo)</TableHead>
               <TableHead>Categoria</TableHead>
               <TableHead>Localização</TableHead>
               <TableHead>Avaliação</TableHead>
@@ -81,11 +85,39 @@ export function MonitoringLeadsTable({
               const queueItem = queueByLead.get(lead.id);
               const latestEvent = latestEventByLead(lead.id);
               const qualification = lead.qualification_label || "sem_analise";
+              const fixoNumber = lead.telefone_fixo || custom.telefone_fixo || null;
 
               return (
                 <TableRow key={lead.id}>
-                  <TableCell className="font-medium max-w-[180px] truncate">{lead.name || "Sem nome"}</TableCell>
-                  <TableCell className="whitespace-nowrap text-sm">{lead.phone || "—"}</TableCell>
+                  <TableCell className="font-medium max-w-[180px] truncate">
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-foreground truncate">{lead.name || "Sem nome"}</span>
+                      {lead.company_name && lead.company_name !== lead.name && (
+                        <span className="text-[11px] text-muted-foreground truncate">{lead.company_name}</span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm">
+                    <div className="flex flex-col gap-0.5">
+                      {lead.phone ? (
+                        <div className="flex items-center gap-1.5 font-medium text-foreground">
+                          <MessageSquare className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                          <span>{formatPhone(lead.phone)}</span>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      )}
+                      {fixoNumber && (
+                        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                          <PhoneCall className="h-3 w-3 text-slate-400 shrink-0" />
+                          <span>{formatPhone(fixoNumber)}</span>
+                          <span className="text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-1 py-0.2 rounded font-medium">
+                            Fixo
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-sm text-muted-foreground max-w-[140px] truncate">
                     {custom.categoryName || custom.category || "—"}
                   </TableCell>
@@ -128,10 +160,10 @@ export function MonitoringLeadsTable({
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-56">
                         <DropdownMenuItem onClick={() => setDetailLead(lead)}>
-                          <Eye className="h-4 w-4 mr-2" /> Visualizar
+                          <Eye className="h-4 w-4 mr-2" /> Visualizar detalhes
                         </DropdownMenuItem>
-                        {custom.website && (
-                          <DropdownMenuItem onClick={() => window.open(custom.website, "_blank")}>
+                        {(lead.website || custom.website) && (
+                          <DropdownMenuItem onClick={() => window.open(lead.website || custom.website, "_blank")}>
                             <Globe className="h-4 w-4 mr-2" /> Abrir site
                           </DropdownMenuItem>
                         )}
@@ -186,21 +218,46 @@ export function MonitoringLeadsTable({
       </div>
 
       <Sheet open={!!detailLead} onOpenChange={(open) => !open && setDetailLead(null)}>
-        <SheetContent className="overflow-y-auto">
+        <SheetContent className="overflow-y-auto sm:max-w-md">
           <SheetHeader>
-            <SheetTitle>{detailLead?.name || "Lead"}</SheetTitle>
+            <SheetTitle>{detailLead?.name || "Detalhes do Lead"}</SheetTitle>
           </SheetHeader>
           {detailLead && (
-            <div className="mt-4 space-y-3 text-sm">
-              <div><span className="font-semibold">Telefone:</span> {detailLead.phone || "—"}</div>
-              {Object.entries(detailLead.custom_fields || {}).map(([key, value]) => (
-                <div key={key} className="border-b border-border/20 pb-2">
-                  <span className="font-semibold capitalize">{key}:</span>{" "}
-                  <span className="text-muted-foreground break-words">
-                    {typeof value === "object" ? JSON.stringify(value) : String(value)}
-                  </span>
+            <div className="mt-4 space-y-4 text-sm">
+              <div className="p-3 bg-muted/30 rounded-xl space-y-2 border border-border/40">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-semibold text-muted-foreground">WhatsApp / Celular:</span>
+                  <span className="font-mono font-medium">{detailLead.phone ? formatPhone(detailLead.phone) : "—"}</span>
                 </div>
-              ))}
+                {(detailLead.telefone_fixo || detailLead.custom_fields?.telefone_fixo) && (
+                  <div className="flex justify-between items-center text-xs border-t border-border/30 pt-1.5">
+                    <span className="font-semibold text-muted-foreground">Telefone Fixo:</span>
+                    <span className="font-mono font-medium">
+                      {formatPhone(detailLead.telefone_fixo || detailLead.custom_fields?.telefone_fixo)}
+                    </span>
+                  </div>
+                )}
+                {detailLead.website && (
+                  <div className="flex justify-between items-center text-xs border-t border-border/30 pt-1.5">
+                    <span className="font-semibold text-muted-foreground">Site:</span>
+                    <a href={detailLead.website} target="_blank" rel="noreferrer" className="text-primary truncate max-w-[200px] hover:underline">
+                      {detailLead.website}
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <h5 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Campos Captados</h5>
+                {Object.entries(detailLead.custom_fields || {}).map(([key, value]) => (
+                  <div key={key} className="border-b border-border/20 pb-1.5 text-xs">
+                    <span className="font-semibold capitalize text-foreground">{key}:</span>{" "}
+                    <span className="text-muted-foreground break-words">
+                      {typeof value === "object" ? JSON.stringify(value) : String(value)}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </SheetContent>

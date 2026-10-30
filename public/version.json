@@ -1,6 +1,6 @@
 {
-  "commit": "3e30511b7b6946e4cfb3458abf613fef57030129",
-  "shortCommit": "3e30511",
-  "message": "style(admin): centralizar logo na header da sidebar e remover badges PROD e SUPER ADMIN",
-  "builtAt": "2026-10-30T17:33:42.638Z"
+  "commit": "8f91fc8ecfc313c875baee0022a140ca6ce98078",
+  "shortCommit": "8f91fc8",
+  "message": "feat(billing): implementar modulo completo de planos, limites, creditos, bonus, trial, links e onboarding",
+  "builtAt": "2026-10-30T19:17:13.633Z"
 }

@@ -11,8 +11,8 @@ const corsHeaders = {
 interface ApproveRequest {
   prospectingCampaignId: string;
   selectedLeadIds: string[];
-  automationCampaignId: string;
-  automationSequenceId: string;
+  automationCampaignId?: string;
+  automationSequenceId?: string;
   instanceId?: string;
   queuePolicy?: Record<string, unknown>;
 }
@@ -49,9 +49,10 @@ Deno.serve(async (req) => {
     }
 
     const body: ApproveRequest = await req.json();
-    if (!body.prospectingCampaignId || !body.automationCampaignId || !body.automationSequenceId) {
+    const effectiveSequenceId = body.automationSequenceId || body.automationCampaignId;
+    if (!body.prospectingCampaignId || !effectiveSequenceId) {
       return new Response(
-        JSON.stringify({ error: "prospectingCampaignId, automationCampaignId e automationSequenceId são obrigatórios" }),
+        JSON.stringify({ error: "prospectingCampaignId e automação (sequência) são obrigatórios" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -67,16 +68,6 @@ Deno.serve(async (req) => {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
-    }
-
-    // Also allowed on an already-dispatching campaign: this is how the
-    // monitoring page's "adicionar leads à fila" control enqueues newly
-    // selected leads into a campaign whose automation is already running.
-    if (!["awaiting_approval", "dispatching"].includes(campaign.status)) {
-      return new Response(
-        JSON.stringify({ error: "Esta campanha não está aguardando aprovação nem em automação" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
     }
 
     if (campaign.company_id) {
@@ -105,8 +96,8 @@ Deno.serve(async (req) => {
     const { data: updatedCampaign, error: updateError } = await supabase
       .from("prospecting_campaigns")
       .update({
-        automation_campaign_id: body.automationCampaignId,
-        automation_sequence_id: body.automationSequenceId,
+        automation_campaign_id: body.automationCampaignId || null,
+        automation_sequence_id: effectiveSequenceId,
         instance_id: body.instanceId ?? campaign.instance_id,
         queue_policy: mergedQueuePolicy,
         approved_at: new Date().toISOString(),
@@ -119,6 +110,56 @@ Deno.serve(async (req) => {
 
     if (updateError || !updatedCampaign) {
       throw updateError ?? new Error("Falha ao atualizar a campanha");
+    }
+
+    // Se a campanha tiver pipeline associada, garantir criação dos cards dos leads selecionados
+    if (campaign.pipeline_id) {
+      try {
+        let targetStageId = campaign.stage_id;
+        if (!targetStageId) {
+          const { data: firstStage } = await supabase
+            .from("pipeline_stages")
+            .select("id")
+            .eq("pipeline_id", campaign.pipeline_id)
+            .order("order_index", { ascending: true })
+            .limit(1)
+            .maybeSingle();
+          targetStageId = firstStage?.id || null;
+        }
+
+        if (targetStageId) {
+          for (const leadId of body.selectedLeadIds) {
+            const { data: existingDeal } = await supabase
+              .from("deals")
+              .select("id")
+              .eq("lead_id", leadId)
+              .eq("pipeline_id", campaign.pipeline_id)
+              .maybeSingle();
+
+            if (!existingDeal) {
+              const { data: leadData } = await supabase
+                .from("leads")
+                .select("name, phone, company_name")
+                .eq("id", leadId)
+                .maybeSingle();
+
+              await supabase.from("deals").insert({
+                company_id: campaign.company_id,
+                lead_id: leadId,
+                pipeline_id: campaign.pipeline_id,
+                stage_id: targetStageId,
+                title: leadData?.company_name || leadData?.name || "Novo Lead Prospectado",
+                status: "open",
+                priority: "medium",
+                value: 0,
+                currency: "BRL",
+              });
+            }
+          }
+        }
+      } catch (dealErr) {
+        console.error("[ProspectingApprove] Erro ao sincronizar cards na pipeline:", dealErr);
+      }
     }
 
     await logProspectingEvent(supabase, {

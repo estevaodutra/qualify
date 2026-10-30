@@ -15,12 +15,14 @@ import { useProspectingEnrichmentJobs } from "@/hooks/useProspectingEnrichmentJo
 import { useProspectingEvents } from "@/hooks/useProspectingEvents";
 import { useProspectingApproval } from "@/hooks/useProspectingApproval";
 import { useDispatchCampaigns } from "@/hooks/useDispatchCampaigns";
+import { useAllSequences } from "@/hooks/useSequences";
+import { usePipelines } from "@/hooks/usePipelines";
 import { useInstances } from "@/hooks/useInstances";
 
 import { MonitoringHeader } from "@/components/prospecting-campaigns/monitoring/MonitoringHeader";
 import { IndicatorTiles } from "@/components/prospecting-campaigns/monitoring/IndicatorTiles";
 import { StageProgressBar } from "@/components/prospecting-campaigns/monitoring/StageProgressBar";
-import { MonitoringLeadsTable } from "@/components/prospecting-campaigns/monitoring/MonitoringLeadsTable";
+import { MonitoringLeadsTable, type LeadRow } from "@/components/prospecting-campaigns/monitoring/MonitoringLeadsTable";
 
 export default function ProspectingCampaignLeads() {
   const { id } = useParams<{ id: string }>();
@@ -29,16 +31,16 @@ export default function ProspectingCampaignLeads() {
   const { campaigns, pauseProspecting, resumeProspecting, cancelPendingLeads, reprocessErrors } = useProspectingCampaigns();
   const campaign = campaigns.find((c) => c.id === id);
 
-  const { data: leads = [], isLoading: loadingLeads } = useQuery({
+  const { data: leads = [], isLoading: loadingLeads } = useQuery<LeadRow[]>({
     queryKey: ["prospecting_leads", id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("leads")
-        .select("id, name, phone, custom_fields, qualification_label")
+        .select("id, name, phone, telefone_fixo, company_name, website, custom_fields, qualification_label")
         .eq("source_campaign_id", id)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data as any[];
+      return (data || []) as unknown as LeadRow[];
     },
     enabled: !!id,
   });
@@ -48,6 +50,8 @@ export default function ProspectingCampaignLeads() {
   const { events, latestByLead } = useProspectingEvents(id);
   const { approve, isApproving } = useProspectingApproval();
   const { campaigns: dispatchCampaigns } = useDispatchCampaigns();
+  const { sequences } = useAllSequences();
+  const { pipelines } = usePipelines();
   const { instances } = useInstances();
 
   if (!campaign) {
@@ -60,8 +64,11 @@ export default function ProspectingCampaignLeads() {
     );
   }
 
-  const automationName = dispatchCampaigns.find((c) => c.id === campaign.automationCampaignId)?.name;
-  const instanceName = instances.find((i) => i.id === campaign.instanceId)?.name;
+  const sequenceName = sequences.find((s) => s.id === campaign.automationSequenceId)?.name;
+  const legacyCampaignName = dispatchCampaigns.find((c) => c.id === (campaign as any).automationCampaignId)?.name;
+  const automationName = sequenceName || legacyCampaignName;
+  const instanceName = instances.find((i) => i.id === (campaign as any).instanceId)?.name;
+  const pipelineName = pipelines.find((p) => p.id === campaign.pipelineId)?.name;
 
   const foundCount = events.filter((e) => e.eventType === "prospecting.lead_found").length || leads.length;
   const duplicatesCount = events.filter((e) => e.eventType === "prospecting.lead_deduplicated").length;
@@ -72,30 +79,32 @@ export default function ProspectingCampaignLeads() {
   const countByQueueStatus = (status: string) => queueItems.filter((q) => q.status === status).length;
 
   const handleApprove = async () => {
-    if (!campaign.automationCampaignId || !campaign.automationSequenceId) {
+    const seqId = campaign.automationSequenceId || (campaign as any).automationCampaignId;
+    if (!seqId) {
       toast.error("Selecione uma automação antes de aprovar.");
       return;
     }
     await approve({
       prospectingCampaignId: campaign.id,
       selectedLeadIds: leads.map((l) => l.id),
-      automationCampaignId: campaign.automationCampaignId,
-      automationSequenceId: campaign.automationSequenceId,
-      instanceId: campaign.instanceId,
+      automationSequenceId: seqId,
+      automationCampaignId: (campaign as any).automationCampaignId,
+      instanceId: (campaign as any).instanceId,
     });
   };
 
   const handleAddToQueue = async (leadId: string) => {
-    if (!campaign.automationCampaignId || !campaign.automationSequenceId) {
+    const seqId = campaign.automationSequenceId || (campaign as any).automationCampaignId;
+    if (!seqId) {
       toast.error("Esta campanha não tem automação configurada.");
       return;
     }
     await approve({
       prospectingCampaignId: campaign.id,
       selectedLeadIds: [leadId],
-      automationCampaignId: campaign.automationCampaignId,
-      automationSequenceId: campaign.automationSequenceId,
-      instanceId: campaign.instanceId,
+      automationSequenceId: seqId,
+      automationCampaignId: (campaign as any).automationCampaignId,
+      instanceId: (campaign as any).instanceId,
     });
   };
 
@@ -107,7 +116,12 @@ export default function ProspectingCampaignLeads() {
   return (
     <div className="flex flex-col gap-6 p-8 overflow-y-auto flex-1 min-h-0 bg-background/50 animate-fade-in">
       <div className="flex items-start justify-between gap-4 flex-wrap">
-        <MonitoringHeader campaign={campaign} automationName={automationName} instanceName={instanceName} />
+        <MonitoringHeader
+          campaign={campaign}
+          automationName={automationName}
+          instanceName={instanceName}
+          pipelineName={pipelineName}
+        />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -138,49 +152,51 @@ export default function ProspectingCampaignLeads() {
 
       <StageProgressBar status={campaign.status} />
 
-      {campaign.status === "awaiting_approval" && (
-        <div className="rounded-2xl border border-warning/30 bg-warning/5 p-4 flex items-center justify-between gap-4 flex-wrap">
-          <p className="text-sm font-medium">
-            Esta prospecção está aguardando aprovação. Revise os {leads.length} leads encontrados e aprove para iniciar a automação.
-          </p>
-          <Button onClick={handleApprove} disabled={isApproving} className="rounded-xl gradient-primary glow-primary font-bold shrink-0">
-            <CheckCircle2 className="h-4 w-4 mr-2" /> Aprovar e iniciar automação
-          </Button>
-        </div>
-      )}
-
       <IndicatorTiles
-        requested={campaign.quantity}
         found={foundCount}
-        validPhone={leads.length}
         duplicates={duplicatesCount}
         discarded={discardedCount}
         enriched={enrichedLeadIds.size}
         qualified={qualifiedCount}
-        queued={countByQueueStatus("pending") + countByQueueStatus("scheduled")}
+        pending={countByQueueStatus("pending")}
+        scheduled={countByQueueStatus("scheduled")}
         processing={countByQueueStatus("processing")}
-        contacted={countByQueueStatus("completed")}
-        replied={countByQueueStatus("replied")}
         completed={countByQueueStatus("completed")}
-        errors={countByQueueStatus("failed")}
+        failed={countByQueueStatus("failed")}
+        cancelled={countByQueueStatus("cancelled")}
       />
 
-      {loadingLeads ? (
-        <Skeleton className="h-96 w-full rounded-2xl" />
-      ) : (
-        <MonitoringLeadsTable
-          leads={leads}
-          jobsByLead={jobsByLead}
-          queueItems={queueItems}
-          latestEventByLead={latestByLead}
-          onAddToQueue={handleAddToQueue}
-          onRemoveFromQueue={removeFromQueue}
-          onReprocess={reprocessItem}
-          onPause={pauseItem}
-          onCancel={cancelItem}
-          hasAutomation={!!campaign.automationCampaignId && !!campaign.automationSequenceId}
-        />
+      {campaign.status === "awaiting_approval" && (
+        <div className="rounded-2xl border border-warning/30 bg-warning/10 p-4 flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <div className="font-semibold text-sm">Esta prospecção aguarda aprovação</div>
+            <p className="text-xs text-muted-foreground">
+              Revise os leads capturados na tabela abaixo e aprove o envio da automação.
+            </p>
+          </div>
+          <Button
+            onClick={handleApprove}
+            disabled={isApproving || leads.length === 0}
+            className="rounded-xl font-bold"
+          >
+            <CheckCircle2 className="h-4 w-4 mr-2" />
+            {isApproving ? "Aprovando..." : `Aprovar e Enviar (${leads.length} leads)`}
+          </Button>
+        </div>
       )}
+
+      <MonitoringLeadsTable
+        leads={leads}
+        jobsByLead={jobsByLead}
+        queueItems={queueItems}
+        latestEventByLead={latestByLead}
+        onAddToQueue={handleAddToQueue}
+        onRemoveFromQueue={async (qid) => { await removeFromQueue(qid); invalidateAll(); }}
+        onReprocess={async (qid) => { await reprocessItem(qid); invalidateAll(); }}
+        onPause={async (qid) => { await pauseItem(qid); invalidateAll(); }}
+        onCancel={async (qid) => { await cancelItem(qid); invalidateAll(); }}
+        hasAutomation={!!(campaign.automationSequenceId || (campaign as any).automationCampaignId)}
+      />
     </div>
   );
 }

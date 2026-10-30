@@ -90,6 +90,11 @@ export function LeadTableRow({
       <td className="px-4 py-3 align-middle text-[12px] font-mono text-muted-foreground">
         <div className="flex flex-col gap-0.5">
           <span>{lead.phone ? formatPhone(lead.phone) : "—"}</span>
+          {(lead.telefone_fixo || (lead.custom_fields as any)?.telefone_fixo) && (
+            <span className="text-[10px] text-slate-500 font-sans flex items-center gap-1">
+              Fixo: {formatPhone(lead.telefone_fixo || (lead.custom_fields as any)?.telefone_fixo)}
+            </span>
+          )}
           <span className="text-[10px] truncate max-w-[120px]">{lead.email || ""}</span>
         </div>
       </td>

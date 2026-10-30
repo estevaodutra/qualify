@@ -3,12 +3,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft, Loader2, Rocket } from "lucide-react";
 import { useAllSequences } from "@/hooks/useSequences";
+import { usePipelines } from "@/hooks/usePipelines";
 import { ENRICHMENT_LAYERS, type EnrichmentLayerId } from "./enrichmentLayers";
 import type { DestinationMode, QueuePolicy } from "@/hooks/useProspectingCampaigns";
 
 const DESTINATION_LABELS: Record<DestinationMode, string> = {
   save_only: "Apenas salvar os leads",
-  review_before_start: "Revisar antes de iniciar",
+  review_before_start: "Revisar antes de iniciar automação",
   auto_start: "Iniciar automação automaticamente",
 };
 
@@ -18,6 +19,8 @@ interface SummaryData {
   quantity: string;
   enrichmentLayers: EnrichmentLayerId[];
   automationSequenceId: string;
+  pipelineId?: string;
+  stageId?: string;
   destinationMode: DestinationMode;
   queuePolicy: QueuePolicy;
 }
@@ -42,25 +45,37 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 
 export function StepConfirm({ data, confirmed, onConfirmedChange, onBack, onSubmit, isSubmitting }: StepConfirmProps) {
   const { sequences } = useAllSequences();
+  const { pipelines } = usePipelines();
 
   const sequenceName = sequences.find((s) => s.id === data.automationSequenceId)?.name;
+  const selectedPipeline = pipelines.find((p) => p.id === data.pipelineId);
+  const selectedStage = selectedPipeline?.stages?.find((s) => s.id === data.stageId);
+
+  const pipelineDescription = selectedPipeline
+    ? `${selectedPipeline.name}${selectedStage ? ` › ${selectedStage.name}` : ""}`
+    : "Não vincular (Apenas salvar contatos)";
+
   const layerLabels = data.enrichmentLayers
     .map((id) => ENRICHMENT_LAYERS.find((l) => l.id === id)?.label || id)
     .join(", ");
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto space-y-1 px-1">
+      <div className="flex-1 overflow-y-auto space-y-1 px-1 pr-2">
         <p className="text-sm text-muted-foreground/80 mb-3">Revise as configurações antes de iniciar.</p>
 
         <SummaryRow label="Termo pesquisado" value={data.searchTerms} />
         <SummaryRow label="Localização" value={data.places || "—"} />
         <SummaryRow label="Quantidade solicitada" value={data.quantity} />
-        <SummaryRow label="Camadas selecionadas" value={layerLabels || "—"} />
-        <SummaryRow label="Destino dos leads" value={DESTINATION_LABELS[data.destinationMode]} />
+        <SummaryRow label="Camadas de busca" value={layerLabels || "—"} />
+        <SummaryRow label="Pipeline do CRM" value={pipelineDescription} />
+        <SummaryRow label="Filtro de Telefones" value="Automático (Fixo vs WhatsApp separados)" />
+        <SummaryRow label="Ação pós-busca" value={DESTINATION_LABELS[data.destinationMode]} />
+
         {data.destinationMode !== "save_only" && (
           <SummaryRow label="Sequência (Workflow)" value={sequenceName || "Nenhuma selecionada"} />
         )}
+
         {data.destinationMode === "auto_start" && (
           <>
             <SummaryRow
@@ -69,7 +84,7 @@ export function StepConfirm({ data, confirmed, onConfirmedChange, onBack, onSubm
             />
             <SummaryRow label="Limite diário" value={data.queuePolicy.daily_limit ? String(data.queuePolicy.daily_limit) : "Sem limite"} />
             <SummaryRow
-              label="Horário de execução"
+              label="Horário de envio"
               value={`${data.queuePolicy.start_time} às ${data.queuePolicy.end_time} (${data.queuePolicy.timezone})`}
             />
           </>
@@ -77,13 +92,13 @@ export function StepConfirm({ data, confirmed, onConfirmedChange, onBack, onSubm
 
         <div className="flex items-center space-x-2 pt-4">
           <Checkbox id="confirmReview" checked={confirmed} onCheckedChange={(c) => onConfirmedChange(c as boolean)} />
-          <Label htmlFor="confirmReview" className="text-sm font-medium leading-none">
+          <Label htmlFor="confirmReview" className="text-sm font-medium leading-none cursor-pointer">
             Confirmo que revisei as configurações da prospecção.
           </Label>
         </div>
       </div>
 
-      <div className="flex justify-between gap-2 pt-4 shrink-0">
+      <div className="flex justify-between gap-2 pt-4 shrink-0 border-t border-border/40">
         <Button type="button" variant="ghost" onClick={onBack} disabled={isSubmitting} className="rounded-xl font-semibold">
           <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
         </Button>

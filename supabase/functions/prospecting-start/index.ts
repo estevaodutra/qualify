@@ -151,6 +151,8 @@ Deno.serve(async (req) => {
         require_approval: campaign.destination_mode === "review_before_start",
         automation_id: campaign.automation_sequence_id,
         instance_id: campaign.instance_id,
+        pipeline_id: campaign.pipeline_id,
+        stage_id: campaign.stage_id,
       },
       queue_policy: campaign.queue_policy,
     };

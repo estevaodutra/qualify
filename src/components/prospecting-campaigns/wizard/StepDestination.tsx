@@ -5,8 +5,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { ArrowLeft, ArrowRight, Info } from "lucide-react";
+import { ArrowLeft, ArrowRight, Info, GitBranch, PhoneCall, CheckCircle2 } from "lucide-react";
 import { useAllSequences } from "@/hooks/useSequences";
+import { usePipelines } from "@/hooks/usePipelines";
 import type { DestinationMode, QueuePolicy } from "@/hooks/useProspectingCampaigns";
 
 const WEEKDAYS = [
@@ -24,6 +25,8 @@ export interface StepDestinationData {
   automationCampaignId: string;
   automationSequenceId: string;
   instanceId: string;
+  pipelineId?: string;
+  stageId?: string;
   queuePolicy: QueuePolicy;
 }
 
@@ -36,7 +39,11 @@ interface StepDestinationProps {
 
 export function StepDestination({ data, onChange, onNext, onBack }: StepDestinationProps) {
   const { sequences } = useAllSequences();
+  const { pipelines, isLoading: loadingPipelines } = usePipelines();
   const activeSequences = sequences.filter((s) => s.isActive !== false);
+
+  const selectedPipeline = pipelines.find((p) => p.id === data.pipelineId);
+  const availableStages = selectedPipeline?.stages || [];
 
   const needsAutomation = data.destinationMode === "review_before_start" || data.destinationMode === "auto_start";
   const isValid =
@@ -54,54 +61,142 @@ export function StepDestination({ data, onChange, onNext, onBack }: StepDestinat
     updatePolicy({ allowed_days: days });
   };
 
+  const handlePipelineChange = (pipelineId: string) => {
+    if (pipelineId === "none") {
+      onChange({ pipelineId: undefined, stageId: undefined });
+      return;
+    }
+    const targetPipeline = pipelines.find((p) => p.id === pipelineId);
+    const firstStage = targetPipeline?.stages?.[0];
+    onChange({
+      pipelineId,
+      stageId: firstStage?.id || undefined,
+    });
+  };
+
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto space-y-4 px-1">
-        <p className="text-sm text-muted-foreground/80 -mt-1 mb-2">
-          O que deve acontecer após a prospecção?
-        </p>
+      <div className="flex-1 overflow-y-auto space-y-4 px-1 pr-2">
+        {/* Bloco 1: Pipeline & CRM */}
+        <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <GitBranch className="h-4 w-4 text-primary" />
+            <h4 className="text-sm font-semibold text-foreground">Destino no CRM (Pipeline de Vendas)</h4>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Quando os leads retornarem da prospecção, crie automaticamente um card de negócio na pipeline selecionada.
+          </p>
 
-        <RadioGroup
-          value={data.destinationMode}
-          onValueChange={(v) => onChange({ destinationMode: v as DestinationMode })}
-          className="space-y-2"
-        >
-          <label className="flex items-start gap-3 rounded-2xl border border-border/40 bg-background/50 p-4 cursor-pointer hover:border-primary/40">
-            <RadioGroupItem value="save_only" className="mt-1" />
-            <div>
-              <div className="font-bold text-sm">Apenas salvar os leads</div>
-              <p className="text-xs text-muted-foreground/70">
-                Os leads válidos serão salvos na Central de Leads, vinculados a esta prospecção. Nenhuma automação será iniciada.
-              </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <div className="space-y-1.5">
+              <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                Pipeline
+              </Label>
+              <Select
+                value={data.pipelineId || "none"}
+                onValueChange={handlePipelineChange}
+              >
+                <SelectTrigger className="h-10 rounded-xl bg-background border-border/50 text-xs">
+                  <SelectValue placeholder={loadingPipelines ? "Carregando..." : "Selecione uma pipeline"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none" className="text-xs">
+                    Nenhuma (Apenas salvar lead no banco)
+                  </SelectItem>
+                  {pipelines.map((p) => (
+                    <SelectItem key={p.id} value={p.id} className="text-xs">
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          </label>
 
-          <label className="flex items-start gap-3 rounded-2xl border border-border/40 bg-background/50 p-4 cursor-pointer hover:border-primary/40">
-            <RadioGroupItem value="review_before_start" className="mt-1" />
-            <div>
-              <div className="font-bold text-sm">Revisar antes de iniciar</div>
-              <p className="text-xs text-muted-foreground/70">
-                A prospecção ficará "Aguardando aprovação". Você poderá selecionar os leads e aprovar o início da automação depois.
-              </p>
-            </div>
-          </label>
+            {data.pipelineId && (
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Etapa Inicial
+                </Label>
+                <Select
+                  value={data.stageId || ""}
+                  onValueChange={(v) => onChange({ stageId: v })}
+                >
+                  <SelectTrigger className="h-10 rounded-xl bg-background border-border/50 text-xs">
+                    <SelectValue placeholder="Selecione a etapa" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableStages.map((s) => (
+                      <SelectItem key={s.id} value={s.id} className="text-xs">
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                    {availableStages.length === 0 && (
+                      <SelectItem value="none" disabled className="text-xs">
+                        Nenhuma etapa cadastrada
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
 
-          <label className="flex items-start gap-3 rounded-2xl border border-border/40 bg-background/50 p-4 cursor-pointer hover:border-primary/40">
-            <RadioGroupItem value="auto_start" className="mt-1" />
-            <div>
-              <div className="font-bold text-sm">Iniciar uma automação automaticamente</div>
-              <p className="text-xs text-muted-foreground/70">
-                Os leads elegíveis são adicionados a uma fila e processados individualmente assim que a prospecção terminar.
-              </p>
-            </div>
-          </label>
-        </RadioGroup>
+          <div className="flex items-center gap-2 pt-1 text-[11px] text-muted-foreground border-t border-primary/10">
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+            <span>
+              Validação automática: fixos vs WhatsApp. Se houver ambos, o celular vira o WhatsApp principal e o fixo vai para "Telefone Fixo".
+            </span>
+          </div>
+        </div>
+
+        {/* Bloco 2: Ação Pós-Prospecção */}
+        <div>
+          <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 block">
+            Ação com os leads
+          </Label>
+
+          <RadioGroup
+            value={data.destinationMode}
+            onValueChange={(v) => onChange({ destinationMode: v as DestinationMode })}
+            className="space-y-2"
+          >
+            <label className="flex items-start gap-3 rounded-2xl border border-border/40 bg-background/50 p-3.5 cursor-pointer hover:border-primary/40 transition-colors">
+              <RadioGroupItem value="save_only" className="mt-1" />
+              <div>
+                <div className="font-bold text-xs">Apenas salvar os leads</div>
+                <p className="text-[11px] text-muted-foreground/80 mt-0.5">
+                  Os leads válidos serão salvos na base e inseridos na pipeline selecionada (se houver). Nenhuma mensagem será disparada.
+                </p>
+              </div>
+            </label>
+
+            <label className="flex items-start gap-3 rounded-2xl border border-border/40 bg-background/50 p-3.5 cursor-pointer hover:border-primary/40 transition-colors">
+              <RadioGroupItem value="review_before_start" className="mt-1" />
+              <div>
+                <div className="font-bold text-xs">Revisar antes de iniciar automação</div>
+                <p className="text-[11px] text-muted-foreground/80 mt-0.5">
+                  A prospecção ficará "Aguardando aprovação". Você poderá conferir a lista e aprovar os envios manualmente.
+                </p>
+              </div>
+            </label>
+
+            <label className="flex items-start gap-3 rounded-2xl border border-border/40 bg-background/50 p-3.5 cursor-pointer hover:border-primary/40 transition-colors">
+              <RadioGroupItem value="auto_start" className="mt-1" />
+              <div>
+                <div className="font-bold text-xs">Iniciar automação de mensagens automaticamente</div>
+                <p className="text-[11px] text-muted-foreground/80 mt-0.5">
+                  Os contatos elegíveis entrarão na fila de envio e receberão a sequência configurada automaticamente.
+                </p>
+              </div>
+            </label>
+          </RadioGroup>
+        </div>
 
         {needsAutomation && (
           <div className="space-y-4 pt-2 border-t border-border/30">
             <div className="space-y-2">
               <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Sequência (Workflow)
+                Sequência (Workflow) de Envio
               </Label>
               <Select
                 value={data.automationSequenceId}
@@ -128,14 +223,14 @@ export function StepDestination({ data, onChange, onNext, onBack }: StepDestinat
             <div className="rounded-xl bg-info/10 border border-info/20 p-3 flex gap-2">
               <Info className="h-4 w-4 text-info shrink-0 mt-0.5" />
               <p className="text-xs text-foreground/80">
-                Os leads serão adicionados a uma fila e processados individualmente, respeitando os intervalos e limites configurados.
+                Os leads serão adicionados à fila e processados individualmente, respeitando intervalos anti-bloqueio e limites da cadência.
               </p>
             </div>
 
             <Accordion type="single" collapsible className="border border-border/40 rounded-2xl px-2">
               <AccordionItem value="advanced" className="border-0">
                 <AccordionTrigger className="text-xs font-bold uppercase tracking-wider text-muted-foreground px-2">
-                  Configurações avançadas
+                  Configurações avançadas da fila
                 </AccordionTrigger>
                 <AccordionContent className="space-y-4 px-2 pt-2">
                   <div className="grid grid-cols-2 gap-4">
@@ -208,7 +303,7 @@ export function StepDestination({ data, onChange, onNext, onBack }: StepDestinat
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label className="text-xs font-semibold text-muted-foreground">Horário inicial</Label>
+                      <Label className="text-xs font-semibold text-muted-foreground">Horário início</Label>
                       <Input
                         type="time"
                         value={data.queuePolicy.start_time}
@@ -217,7 +312,7 @@ export function StepDestination({ data, onChange, onNext, onBack }: StepDestinat
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-xs font-semibold text-muted-foreground">Horário final</Label>
+                      <Label className="text-xs font-semibold text-muted-foreground">Horário fim</Label>
                       <Input
                         type="time"
                         value={data.queuePolicy.end_time}
@@ -259,7 +354,7 @@ export function StepDestination({ data, onChange, onNext, onBack }: StepDestinat
         )}
       </div>
 
-      <div className="flex justify-between gap-2 pt-4 shrink-0">
+      <div className="flex justify-between gap-2 pt-4 shrink-0 border-t border-border/40">
         <Button type="button" variant="ghost" onClick={onBack} className="rounded-xl font-semibold">
           <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
         </Button>

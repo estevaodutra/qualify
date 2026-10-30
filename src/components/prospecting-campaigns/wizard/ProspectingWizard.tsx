@@ -1,17 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Check } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { StepSearch, type StepSearchData } from "./StepSearch";
 import { StepEnrichment } from "./StepEnrichment";
 import { StepDestination, type StepDestinationData } from "./StepDestination";
 import { StepConfirm } from "./StepConfirm";
+import { DEFAULT_QUEUE_POLICY, type CreateProspectingInput, type ProspectingCampaign } from "@/hooks/useProspectingCampaigns";
 import type { EnrichmentLayerId } from "./enrichmentLayers";
-import {
-  DEFAULT_QUEUE_POLICY,
-  type CreateProspectingInput,
-  type ProspectingCampaign,
-} from "@/hooks/useProspectingCampaigns";
 
 type WizardStep = 1 | 2 | 3 | 4;
 
@@ -29,6 +23,8 @@ const emptyState = () => ({
   destination: {
     destinationMode: "save_only",
     automationSequenceId: "",
+    pipelineId: "",
+    stageId: "",
     queuePolicy: { ...DEFAULT_QUEUE_POLICY },
   } as StepDestinationData,
 });
@@ -57,6 +53,8 @@ export function ProspectingWizard({ open, onOpenChange, onCreate, isCreating, in
       setDestination({
         destinationMode: initialData.destinationMode || "save_only",
         automationSequenceId: initialData.automationSequenceId || "",
+        pipelineId: initialData.pipelineId || "",
+        stageId: initialData.stageId || "",
         queuePolicy: initialData.queuePolicy ? { ...DEFAULT_QUEUE_POLICY, ...initialData.queuePolicy } : DEFAULT_QUEUE_POLICY,
       });
     } else {
@@ -67,7 +65,7 @@ export function ProspectingWizard({ open, onOpenChange, onCreate, isCreating, in
     }
   }, [open, initialData]);
 
-  const stepLabels = ["Busca", "Enriquecimento", "Destino", "Confirmar"];
+  const stepLabels = ["Busca", "Enriquecimento", "Destino & Pipeline", "Confirmar"];
 
   const handleSubmit = async () => {
     const input: CreateProspectingInput = {
@@ -80,6 +78,8 @@ export function ProspectingWizard({ open, onOpenChange, onCreate, isCreating, in
       enrichmentLayers: layers,
       destinationMode: destination.destinationMode,
       automationSequenceId: destination.automationSequenceId || undefined,
+      pipelineId: destination.pipelineId || undefined,
+      stageId: destination.stageId || undefined,
       queuePolicy: destination.queuePolicy,
     };
     await onCreate(input);
@@ -93,46 +93,41 @@ export function ProspectingWizard({ open, onOpenChange, onCreate, isCreating, in
           <DialogHeader>
             <DialogTitle className="text-xl font-bold">Nova prospecção</DialogTitle>
             <DialogDescription className="text-sm font-medium text-muted-foreground/70">
-              Encontre empresas, enriqueça os dados e envie os contatos para uma automação.
+              Encontre empresas, separe fixos de WhatsApps e envie direto para a sua pipeline.
             </DialogDescription>
           </DialogHeader>
 
           <div className="flex items-center gap-2 mt-4">
             {stepLabels.map((label, idx) => {
-              const stepNumber = (idx + 1) as WizardStep;
-              const isDone = stepNumber < step;
-              const isCurrent = stepNumber === step;
+              const s = (idx + 1) as WizardStep;
+              const isActive = step === s;
+              const isDone = step > s;
               return (
-                <div key={label} className="flex items-center gap-2 flex-1 last:flex-none">
-                  <div className="flex items-center gap-1.5">
-                    <div
-                      className={cn(
-                        "h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0",
-                        isCurrent && "bg-primary text-primary-foreground",
-                        isDone && "bg-primary/20 text-primary",
-                        !isCurrent && !isDone && "bg-muted text-muted-foreground"
-                      )}
-                    >
-                      {isDone ? <Check className="h-3.5 w-3.5" /> : stepNumber}
-                    </div>
-                    <span className={cn("text-xs font-semibold hidden sm:inline", isCurrent ? "text-foreground" : "text-muted-foreground")}>
-                      {label}
-                    </span>
-                  </div>
-                  {idx < stepLabels.length - 1 && <div className="flex-1 h-px bg-border" />}
+                <div key={label} className="flex-1 flex flex-col gap-1">
+                  <div
+                    className={`h-1.5 rounded-full transition-all duration-300 ${
+                      isActive ? "bg-primary" : isDone ? "bg-primary/50" : "bg-muted"
+                    }`}
+                  />
+                  <span
+                    className={`text-[10px] font-bold uppercase tracking-wider ${
+                      isActive ? "text-primary" : isDone ? "text-foreground/70" : "text-muted-foreground/50"
+                    }`}
+                  >
+                    {label}
+                  </span>
                 </div>
               );
             })}
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 min-h-[360px]">
+        <div className="flex-1 overflow-hidden p-6 pt-4 flex flex-col min-h-0">
           {step === 1 && (
             <StepSearch
               data={search}
               onChange={(patch) => setSearch((prev) => ({ ...prev, ...patch }))}
               onNext={() => setStep(2)}
-              onCancel={() => onOpenChange(false)}
             />
           )}
           {step === 2 && (
@@ -160,6 +155,8 @@ export function ProspectingWizard({ open, onOpenChange, onCreate, isCreating, in
                 enrichmentLayers: layers,
                 destinationMode: destination.destinationMode,
                 automationSequenceId: destination.automationSequenceId,
+                pipelineId: destination.pipelineId,
+                stageId: destination.stageId,
                 queuePolicy: destination.queuePolicy,
               }}
               confirmed={confirmed}

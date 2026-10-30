@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { scoreLead } from "../_shared/prospecting-qualification.ts";
+import { classifyPhone } from "../_shared/prospecting-phone-parser.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -95,7 +96,7 @@ Deno.serve(async (req) => {
 
     const { data: lead } = await supabase
       .from("leads")
-      .select("id, company_id, custom_fields")
+      .select("id, company_id, phone, telefone_fixo, email, website, custom_fields")
       .eq("id", body.leadId)
       .maybeSingle();
 
@@ -149,8 +150,6 @@ Deno.serve(async (req) => {
       const html = await response.text();
       result = extractWebsiteData(html);
     } catch (fetchError) {
-      // A failed/timed-out site scrape never touches the google_maps job row
-      // for this lead -- each layer is an independent row.
       await supabase.from("prospecting_enrichment_jobs").upsert(
         { ...jobBase, status: "failed", last_error: String(fetchError), completed_at: new Date().toISOString() },
         { onConflict: "lead_id,layer_type,prospecting_campaign_id" }
@@ -166,7 +165,41 @@ Deno.serve(async (req) => {
       { onConflict: "lead_id,layer_type,prospecting_campaign_id" }
     );
 
-    // Recompute qualification now that both google_maps and website signals exist.
+    // ── Atualização dos dados do Lead no banco ──
+    const currentCustom = (lead?.custom_fields as Record<string, unknown>) || {};
+    const updateLeadData: Record<string, unknown> = {
+      website: lead?.website || body.url,
+      custom_fields: {
+        ...currentCustom,
+        website_email: result.email,
+        website_whatsapp: result.whatsapp,
+        redes_sociais: result.redes_sociais,
+        descricao: result.descricao,
+        servicos: result.servicos,
+      },
+    };
+
+    if (result.email && !lead?.email) {
+      updateLeadData.email = result.email;
+    }
+
+    // Se encontrou WhatsApp no site e o lead tinha telefone fixo
+    if (result.whatsapp) {
+      const classifiedWs = classifyPhone(result.whatsapp);
+      if (classifiedWs && (classifiedWs.type === "mobile" || classifiedWs.isWhatsapp)) {
+        const currentPhoneClassified = classifyPhone(lead?.phone);
+        // Se o lead atual estava com telefone fixo como principal
+        if (currentPhoneClassified?.type === "landline" || lead?.telefone_fixo) {
+          updateLeadData.telefone_fixo = lead?.telefone_fixo || lead?.phone;
+          updateLeadData.phone = classifiedWs.normalized;
+          (updateLeadData.custom_fields as Record<string, unknown>).telefone_fixo = updateLeadData.telefone_fixo;
+          (updateLeadData.custom_fields as Record<string, unknown>).whatsapp = classifiedWs.normalized;
+          (updateLeadData.custom_fields as Record<string, unknown>).is_whatsapp = true;
+        }
+      }
+    }
+
+    // Recomputar qualificação com os novos dados
     const { data: gmJob } = await supabase
       .from("prospecting_enrichment_jobs")
       .select("result_data")
@@ -175,10 +208,13 @@ Deno.serve(async (req) => {
       .eq("layer_type", "google_maps")
       .maybeSingle();
 
-    const qualification = scoreLead(gmJob?.result_data ?? lead?.custom_fields, result);
+    const qualification = scoreLead(gmJob?.result_data ?? currentCustom, result);
+    updateLeadData.qualification_score = qualification.score;
+    updateLeadData.qualification_label = qualification.label;
+
     await supabase
       .from("leads")
-      .update({ qualification_score: qualification.score, qualification_label: qualification.label })
+      .update(updateLeadData)
       .eq("id", body.leadId);
 
     return new Response(JSON.stringify({ success: true, status: "completed", result }), {

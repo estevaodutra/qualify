@@ -6,7 +6,7 @@ import type { QueuePolicy } from "./useProspectingCampaigns";
 export interface ApproveProspectingInput {
   prospectingCampaignId: string;
   selectedLeadIds: string[];
-  automationCampaignId: string;
+  automationCampaignId?: string;
   automationSequenceId: string;
   instanceId?: string;
   queuePolicy?: Partial<QueuePolicy>;

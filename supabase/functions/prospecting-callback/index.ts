@@ -3,6 +3,7 @@ import { logProspectingEvent } from "../_shared/prospecting-events.ts";
 import { notifyProspecting } from "../_shared/prospecting-alerts.ts";
 import { enqueueProspectingLeads } from "../_shared/prospecting-queue.ts";
 import { scoreLead } from "../_shared/prospecting-qualification.ts";
+import { resolveLeadPhones, cleanPhoneDigits } from "../_shared/prospecting-phone-parser.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,6 +15,9 @@ interface CallbackLead {
   title?: string;
   phone?: string;
   phoneUnformatted?: string;
+  whatsapp?: string;
+  mobile?: string;
+  phones?: string[];
   website?: string;
   categoryName?: string;
   category?: string;
@@ -46,7 +50,7 @@ const PAST_EXTRACTION_STATUSES = [
 
 const isValidPhone = (phone: string | null | undefined): boolean => {
   if (!phone) return false;
-  const digits = phone.replace(/\D/g, "");
+  const digits = cleanPhoneDigits(phone);
   return digits.length >= 8 && digits.length <= 15;
 };
 
@@ -124,6 +128,19 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Resolver a etapa da pipeline se a campanha estiver configurada para enviar para CRM
+    let defaultPipelineStageId: string | null = campaign.stage_id || null;
+    if (campaign.pipeline_id && !defaultPipelineStageId) {
+      const { data: firstStage } = await supabase
+        .from("pipeline_stages")
+        .select("id")
+        .eq("pipeline_id", campaign.pipeline_id)
+        .order("order_index", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      defaultPipelineStageId = firstStage?.id || null;
+    }
+
     const savedLeadIds: string[] = [];
     const enrichmentLayers: string[] = Array.isArray(campaign.enrichment_layers)
       ? campaign.enrichment_layers
@@ -131,8 +148,14 @@ Deno.serve(async (req) => {
     const websiteLayerEnabled = enrichmentLayers.includes("website");
 
     for (const rawLead of rawLeads) {
-      const phone = rawLead.phone || rawLead.phoneUnformatted || null;
-      if (!isValidPhone(phone)) {
+      // ── Classificação inteligente e automática de telefones (Fixo vs WhatsApp) ──
+      const resolved = resolveLeadPhones(rawLead);
+      const rawFallbackPhone = rawLead.phone || rawLead.phoneUnformatted || null;
+
+      const mainPhone = resolved.mainPhone || rawFallbackPhone;
+      const telefoneFixo = resolved.telefoneFixo || null;
+
+      if (!isValidPhone(mainPhone) && !isValidPhone(telefoneFixo)) {
         await logProspectingEvent(supabase, {
           companyId: campaign.company_id,
           campaignId: campaign.id,
@@ -146,29 +169,68 @@ Deno.serve(async (req) => {
         companyId: campaign.company_id,
         campaignId: campaign.id,
         eventType: "prospecting.lead_found",
-        payload: { name: rawLead.name || rawLead.title },
+        payload: { name: rawLead.name || rawLead.title, phone: mainPhone, telefone_fixo: telefoneFixo },
       });
 
       let leadId: string;
 
-      const { data: existingLead } = await supabase
-        .from("leads")
-        .select("id, custom_fields, active_campaign_id")
-        .eq("company_id", campaign.company_id)
-        .eq("phone", phone)
-        .maybeSingle();
+      // ── Busca de lead existente (deduplicação por telefone principal ou fixo) ──
+      let existingLead = null;
+      if (mainPhone) {
+        const { data: byMain } = await supabase
+          .from("leads")
+          .select("id, custom_fields, active_campaign_id, phone, telefone_fixo")
+          .eq("company_id", campaign.company_id)
+          .eq("phone", mainPhone)
+          .maybeSingle();
+        existingLead = byMain;
+      }
+
+      if (!existingLead && telefoneFixo) {
+        const { data: byFixo } = await supabase
+          .from("leads")
+          .select("id, custom_fields, active_campaign_id, phone, telefone_fixo")
+          .eq("company_id", campaign.company_id)
+          .eq("telefone_fixo", telefoneFixo)
+          .maybeSingle();
+        existingLead = byFixo;
+      }
+
+      const mergedCustomFields = {
+        ...(existingLead?.custom_fields || {}),
+        ...rawLead,
+        telefone_fixo: telefoneFixo || existingLead?.telefone_fixo || null,
+        is_whatsapp: resolved.isWhatsapp,
+        phone_type: resolved.type,
+      };
 
       if (existingLead) {
         leadId = existingLead.id;
-        const mergedCustomFields = { ...(existingLead.custom_fields || {}), ...rawLead };
+        const updatePayload: Record<string, unknown> = {
+          custom_fields: mergedCustomFields,
+          active_campaign_id: existingLead.active_campaign_id ?? campaign.id,
+          source_campaign_id: campaign.id,
+          company_name: rawLead.name || rawLead.title || null,
+          website: rawLead.website || null,
+        };
+
+        if (telefoneFixo && !existingLead.telefone_fixo) {
+          updatePayload.telefone_fixo = telefoneFixo;
+        }
+
+        // Se o lead existente só tinha telefone fixo e agora temos WhatsApp
+        if (resolved.isWhatsapp && existingLead.phone !== mainPhone) {
+          if (!existingLead.telefone_fixo) {
+            updatePayload.telefone_fixo = existingLead.phone;
+          }
+          updatePayload.phone = mainPhone;
+        }
+
         await supabase
           .from("leads")
-          .update({
-            custom_fields: mergedCustomFields,
-            active_campaign_id: existingLead.active_campaign_id ?? campaign.id,
-            source_campaign_id: campaign.id,
-          })
+          .update(updatePayload)
           .eq("id", leadId);
+
         await logProspectingEvent(supabase, {
           companyId: campaign.company_id,
           campaignId: campaign.id,
@@ -182,8 +244,11 @@ Deno.serve(async (req) => {
             user_id: campaign.user_id,
             company_id: campaign.company_id,
             name: rawLead.name || rawLead.title || "Sem nome",
-            phone,
-            custom_fields: rawLead,
+            company_name: rawLead.name || rawLead.title || null,
+            website: rawLead.website || null,
+            phone: mainPhone,
+            telefone_fixo: telefoneFixo,
+            custom_fields: mergedCustomFields,
             active_campaign_id: campaign.id,
             active_campaign_type: "prospecting",
             source_type: "prospecting",
@@ -213,7 +278,43 @@ Deno.serve(async (req) => {
         eventType: "prospecting.lead_validated",
       });
 
-      // Google Maps layer is already fully resolved by the extraction itself.
+      // ── Criação automática de Card na Pipeline do CRM ──
+      if (campaign.pipeline_id && defaultPipelineStageId) {
+        try {
+          const { data: existingDeal } = await supabase
+            .from("deals")
+            .select("id")
+            .eq("lead_id", leadId)
+            .eq("pipeline_id", campaign.pipeline_id)
+            .maybeSingle();
+
+          if (!existingDeal) {
+            await supabase.from("deals").insert({
+              company_id: campaign.company_id,
+              lead_id: leadId,
+              pipeline_id: campaign.pipeline_id,
+              stage_id: defaultPipelineStageId,
+              title: rawLead.name || rawLead.title || "Novo Lead Prospectado",
+              status: "open",
+              priority: "medium",
+              value: 0,
+              currency: "BRL",
+            });
+
+            await logProspectingEvent(supabase, {
+              companyId: campaign.company_id,
+              campaignId: campaign.id,
+              leadId,
+              eventType: "prospecting.deal_created",
+              payload: { pipeline_id: campaign.pipeline_id, stage_id: defaultPipelineStageId },
+            });
+          }
+        } catch (dealErr) {
+          console.error("[ProspectingCallback] Erro ao criar card de negócio:", dealErr);
+        }
+      }
+
+      // Registro do job de enriquecimento do Google Maps
       await supabase.from("prospecting_enrichment_jobs").upsert(
         {
           company_id: campaign.company_id,
@@ -227,9 +328,7 @@ Deno.serve(async (req) => {
         { onConflict: "lead_id,layer_type,prospecting_campaign_id" }
       );
 
-      // Initial qualification pass using only google_maps signals; the
-      // website enrichment function (if triggered below) recomputes this
-      // once its own layer completes, folding in email/whatsapp/social signals.
+      // Score inicial de qualificação
       const initialScore = scoreLead(rawLead, null);
       await supabase
         .from("leads")
@@ -238,9 +337,8 @@ Deno.serve(async (req) => {
 
       savedLeadIds.push(leadId);
 
+      // Disparo assíncrono para enriquecimento do site
       if (websiteLayerEnabled && rawLead.website) {
-        // Fire-and-forget: a failure enriching one lead's website must never
-        // block/invalidate the rest of the batch or the google_maps data.
         fetch(`${supabaseUrl}/functions/v1/prospecting-enrich-website`, {
           method: "POST",
           headers: {
@@ -307,7 +405,7 @@ Deno.serve(async (req) => {
         userId: campaign.user_id,
         severity: "success",
         title: "Prospecção concluída",
-        description: `Encontramos ${savedLeadIds.length} contatos válidos.`,
+        description: `Encontramos ${savedLeadIds.length} contatos válidos${campaign.pipeline_id ? " e adicionamos cards na Pipeline" : ""}.`,
         entity: `prospecting_campaign:${campaign.id}`,
       });
     } else if (campaign.destination_mode === "review_before_start") {
@@ -337,7 +435,7 @@ Deno.serve(async (req) => {
         userId: campaign.user_id,
         severity: "success",
         title: "Automação iniciada",
-        description: `${queued} leads foram adicionados à fila.`,
+        description: `${queued} leads foram adicionados à fila de envio.`,
         entity: `prospecting_campaign:${campaign.id}`,
       });
     }

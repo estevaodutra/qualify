@@ -41,6 +41,7 @@ export interface Lead {
   company_id: string;
   name: string | null;
   phone: string | null;
+  telefone_fixo?: string | null;
   lid: string | null;
   email: string | null;
   company_name: string | null;

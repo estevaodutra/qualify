@@ -1,4 +1,4 @@
-import { ArrowLeft, MapPin, Search, Calendar, Bot, Smartphone } from "lucide-react";
+import { ArrowLeft, MapPin, Search, Calendar, Bot, Smartphone, GitBranch } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
@@ -11,9 +11,10 @@ interface MonitoringHeaderProps {
   campaign: ProspectingCampaign;
   automationName?: string;
   instanceName?: string;
+  pipelineName?: string;
 }
 
-export function MonitoringHeader({ campaign, automationName, instanceName }: MonitoringHeaderProps) {
+export function MonitoringHeader({ campaign, automationName, instanceName, pipelineName }: MonitoringHeaderProps) {
   const navigate = useNavigate();
 
   return (
@@ -33,6 +34,11 @@ export function MonitoringHeader({ campaign, automationName, instanceName }: Mon
         <span className="flex items-center gap-1.5">
           <Calendar className="h-3.5 w-3.5" /> {format(new Date(campaign.createdAt), "dd MMM yyyy", { locale: ptBR })}
         </span>
+        {pipelineName && (
+          <span className="flex items-center gap-1.5 text-primary font-semibold">
+            <GitBranch className="h-3.5 w-3.5" /> Pipeline: {pipelineName}
+          </span>
+        )}
         {automationName && <span className="flex items-center gap-1.5"><Bot className="h-3.5 w-3.5" /> {automationName}</span>}
         {instanceName && <span className="flex items-center gap-1.5"><Smartphone className="h-3.5 w-3.5" /> {instanceName}</span>}
       </div>

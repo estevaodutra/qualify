@@ -3,7 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Lead } from "@/types/crm.types";
 import { LeadAvatar, LeadTags, LeadOwner } from "../shared";
 import { formatPhone } from "@/lib/utils";
-import { User, Phone, Mail, Award, Clock, Activity, FileText } from "lucide-react";
+import { User, Phone, Mail, Award, Clock, Activity, FileText, PhoneCall } from "lucide-react";
 
 interface LeadDrawerProps {
   lead: Lead | null;
@@ -35,6 +35,12 @@ export function LeadDrawer({ lead, open, onOpenChange }: LeadDrawerProps) {
                   <span className="flex items-center gap-1.5">
                     <Phone className="w-3.5 h-3.5" />
                     {formatPhone(lead.phone)}
+                  </span>
+                )}
+                {(lead.telefone_fixo || (lead.custom_fields as any)?.telefone_fixo) && (
+                  <span className="flex items-center gap-1.5 text-slate-500" title="Telefone Fixo">
+                    <PhoneCall className="w-3.5 h-3.5 text-slate-400" />
+                    {formatPhone(lead.telefone_fixo || (lead.custom_fields as any)?.telefone_fixo)} (Fixo)
                   </span>
                 )}
                 {lead.email && (
@@ -116,6 +122,12 @@ export function LeadDrawer({ lead, open, onOpenChange }: LeadDrawerProps) {
                     <div>
                       <span className="text-[11px] font-medium text-muted-foreground uppercase">Site</span>
                       <p className="text-[13px] font-medium mt-1 text-primary">{lead.website || "—"}</p>
+                    </div>
+                    <div>
+                      <span className="text-[11px] font-medium text-muted-foreground uppercase">Telefone Fixo</span>
+                      <p className="text-[13px] font-medium mt-1">
+                        {formatPhone(lead.telefone_fixo || (lead.custom_fields as any)?.telefone_fixo) || "—"}
+                      </p>
                     </div>
                   </div>
                 </div>
