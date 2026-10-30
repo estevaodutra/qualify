@@ -1,6 +1,6 @@
 {
-  "commit": "656a1358de94c95fe0410279e52f8f207d165676",
-  "shortCommit": "656a135",
-  "message": "fix(admin): definir colapsos fechados por padrao, mantendo apenas visao geral e plataforma abertos",
-  "builtAt": "2026-10-30T16:48:17.881Z"
+  "commit": "3e30511b7b6946e4cfb3458abf613fef57030129",
+  "shortCommit": "3e30511",
+  "message": "style(admin): centralizar logo na header da sidebar e remover badges PROD e SUPER ADMIN",
+  "builtAt": "2026-10-30T17:33:42.638Z"
 }

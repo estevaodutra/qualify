@@ -77,6 +77,15 @@ import AdminCompanies from "./pages/admin/AdminCompanies";
 import AdminCompanyDetail from "./pages/admin/AdminCompanyDetail";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminPlans from "./pages/admin/AdminPlans";
+import { AdminPlansLayout } from "./components/admin/plans/AdminPlansLayout";
+import AdminPlanOverview from "./pages/admin/plans/AdminPlanOverview";
+import AdminPlanLimits from "./pages/admin/plans/AdminPlanLimits";
+import AdminPlanCredits from "./pages/admin/plans/AdminPlanCredits";
+import AdminPlanBonus from "./pages/admin/plans/AdminPlanBonus";
+import AdminPlanTrial from "./pages/admin/plans/AdminPlanTrial";
+import AdminPlanSignupOffers from "./pages/admin/plans/AdminPlanSignupOffers";
+import AdminPlanSubscriptions from "./pages/admin/plans/AdminPlanSubscriptions";
+import AdminPlanHistory from "./pages/admin/plans/AdminPlanHistory";
 import AdminPermissions from "./pages/admin/AdminPermissions";
 import AdminUsage from "./pages/admin/AdminUsage";
 
@@ -296,7 +305,17 @@ const App = () => {
                       <Route path="empresas" element={<AdminCompanies />} />
                       <Route path="empresas/:id" element={<AdminCompanyDetail />} />
                       <Route path="usuarios" element={<AdminUsers />} />
-                      <Route path="planos" element={<AdminPlans />} />
+                      {/* Sub-módulo Planos & Assinaturas com Subsidebar Contextual */}
+                      <Route path="planos" element={<AdminPlansLayout />}>
+                        <Route index element={<AdminPlanOverview />} />
+                        <Route path="limites" element={<AdminPlanLimits />} />
+                        <Route path="creditos" element={<AdminPlanCredits />} />
+                        <Route path="bonus" element={<AdminPlanBonus />} />
+                        <Route path="trial" element={<AdminPlanTrial />} />
+                        <Route path="links" element={<AdminPlanSignupOffers />} />
+                        <Route path="assinaturas" element={<AdminPlanSubscriptions />} />
+                        <Route path="historico" element={<AdminPlanHistory />} />
+                      </Route>
                       <Route path="permissoes" element={<AdminPermissions />} />
                       <Route path="uso" element={<AdminUsage />} />
 
