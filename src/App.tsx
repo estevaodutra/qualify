@@ -106,6 +106,8 @@ import AdminMetaIntegration from "./pages/admin/integrations/AdminMetaIntegratio
 import AdminWhatsAppIntegration from "./pages/admin/integrations/AdminWhatsAppIntegration";
 import AdminWebhooksIntegration from "./pages/admin/integrations/AdminWebhooksIntegration";
 import AdminOtherIntegrations from "./pages/admin/integrations/AdminOtherIntegrations";
+import AdminAsaasIntegration from "./pages/admin/integrations/AdminAsaasIntegration";
+import AdminWallets from "./pages/admin/AdminWallets";
 import AdminApifyIntegration from "./pages/admin/integrations/AdminApifyIntegration";
 
 // Super Admin - Conteúdo & Operação
@@ -319,6 +321,7 @@ const App = () => {
                       </Route>
                       <Route path="permissoes" element={<AdminPermissions />} />
                       <Route path="uso" element={<AdminUsage />} />
+                      <Route path="carteiras" element={<AdminWallets />} />
 
                       {/* 3. IA */}
                       <Route path="ia" element={<AdminAiLayout />}>
@@ -342,6 +345,7 @@ const App = () => {
                         <Route path="webhooks" element={<AdminWebhooksIntegration />} />
                         <Route path="apify" element={<AdminApifyIntegration />} />
                         <Route path="outras" element={<AdminOtherIntegrations />} />
+                        <Route path="asaas" element={<AdminAsaasIntegration />} />
                       </Route>
 
                       {/* 5. CONTEÚDO & OPERAÇÃO */}

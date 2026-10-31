@@ -159,4 +159,11 @@ export interface AiExecutionResult<T = any> {
   };
   latency_ms: number;
   estimated_cost: number;
+  billing?: {
+    debited: boolean;
+    charged_amount: number;
+    currency: string;
+    transaction_id?: string | null;
+    new_balance?: number | null;
+  };
 }

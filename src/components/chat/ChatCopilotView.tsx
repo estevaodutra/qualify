@@ -51,6 +51,12 @@ interface CopilotMessage {
   text: string;
   timestamp: string;
   warningAlert?: string;
+  tokensMeta?: {
+    input: number;
+    output: number;
+    total: number;
+    chargedAmount?: number;
+  };
   reelMeta?: {
     totalSeconds: number;
     formattedDuration: string;
@@ -352,6 +358,7 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
       let reelMeta: CopilotMessage["reelMeta"] = undefined;
       let captionMeta: CopilotMessage["captionMeta"] = undefined;
       let humanizeMeta: CopilotMessage["humanizeMeta"] = undefined;
+      let tokensMeta: CopilotMessage["tokensMeta"] = undefined;
 
       // Montar contexto real enriquecido com a marca
       const richBrandInstruction = brandContext
@@ -372,6 +379,14 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
         });
 
         // O AIExecutionService retorna structured_output ou result
+        if (aiResult?.tokens) {
+          tokensMeta = {
+            input: aiResult.tokens.input,
+            output: aiResult.tokens.output,
+            total: aiResult.tokens.total,
+            chargedAmount: aiResult.billing?.charged_amount,
+          };
+        }
         const d = (aiResult as any)?.structured_output || (aiResult as any)?.result || (aiResult as any)?.data;
 
         if (d) {
@@ -389,7 +404,9 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
         const errorMsg = String(err?.message || "");
 
         // Se o erro foi de créditos da OpenAI, sinalizar no alerta
-        if (errorMsg.includes("credit_balance_exhausted") || errorMsg.includes("no credits") || errorMsg.includes("quota") || errorMsg.includes("Unauthorized")) {
+        if (errorMsg.includes("Saldo insuficiente") || errorMsg.includes("INSUFFICIENT_BALANCE")) {
+          warningAlert = "Saldo insuficiente na carteira para debitar tokens da IA. Adicione créditos no painel de carteiras para continuar.";
+        } else if (errorMsg.includes("credit_balance_exhausted") || errorMsg.includes("no credits") || errorMsg.includes("quota") || errorMsg.includes("Unauthorized")) {
           warningAlert = "A conta OpenAI configurada na plataforma Criafy está sem créditos ativos (Saldo esgotado). Adicione créditos em platform.openai.com/billing. Gerando resposta com o motor de heurísticas locais conectadas ao seu Manual da Marca:";
         }
 
@@ -526,6 +543,7 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
         captionMeta,
         humanizeMeta,
         actions,
+        tokensMeta,
       };
 
       setMessages((prev) => [...prev, aiMsg]);
@@ -710,6 +728,21 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
                       <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20 text-[10px]">
                         Gancho longo
                       </Badge>
+                    )}
+                  </div>
+                )}
+
+                {/* Consumo de Tokens de IA */}
+                {msg.tokensMeta && (
+                  <div className="mt-2.5 p-2 rounded-xl bg-purple-500/10 border border-purple-500/20 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono">
+                    <span className="flex items-center gap-1 font-semibold text-purple-700 dark:text-purple-300">
+                      <Zap className="w-3.5 h-3.5" />
+                      {msg.tokensMeta.total} tokens ({msg.tokensMeta.input} in / {msg.tokensMeta.output} out)
+                    </span>
+                    {msg.tokensMeta.chargedAmount !== undefined && (
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                        R$ {Number(msg.tokensMeta.chargedAmount).toFixed(3)} debitado
+                      </span>
                     )}
                   </div>
                 )}

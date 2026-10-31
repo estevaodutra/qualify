@@ -105,6 +105,7 @@ export const AIExecutionService = {
       tokens: data.tokens,
       latency_ms: data.latency_ms,
       estimated_cost: data.estimated_cost,
+      billing: data.billing,
     };
   },
 

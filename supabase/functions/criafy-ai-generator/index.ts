@@ -275,6 +275,42 @@ ${promptDocText || "Nenhum documento adicional. Crie com base nas melhores prát
     const selectedMaxTokens = Number(modelProfile?.max_output_tokens ?? 2000);
     const selectedReasoning = modelProfile?.reasoning_effort || undefined;
 
+    // 6.1 Buscar Regras de Tarifação de Tokens e Pré-validar Saldo da Carteira
+    const { data: pricingRow } = await adminClient
+      .from("platform_settings")
+      .select("value")
+      .eq("key", "ai_token_pricing")
+      .maybeSingle();
+
+    const pricingConfig = pricingRow?.value || {
+      usd_to_brl_rate: 6.0,
+      markup_multiplier: 2.0,
+      min_charge_brl: 0.01,
+      billing_enabled: true,
+      models: {
+        "gpt-4o-mini": { input_cost_per_m_usd: 0.15, output_cost_per_m_usd: 0.60 },
+        "gpt-4o": { input_cost_per_m_usd: 2.50, output_cost_per_m_usd: 10.00 },
+        default: { input_cost_per_m_usd: 0.15, output_cost_per_m_usd: 0.60 },
+      },
+    };
+
+    if (companyId && pricingConfig.billing_enabled !== false) {
+      const { data: walletData } = await adminClient
+        .from("wallets")
+        .select("balance, reserved_balance")
+        .eq("company_id", companyId)
+        .maybeSingle();
+
+      if (walletData) {
+        const available = Number(walletData.balance || 0) - Number(walletData.reserved_balance || 0);
+        if (available <= 0) {
+          throw new Error(
+            "Saldo insuficiente na carteira da empresa para gerar com IA. Recarregue seus créditos no painel para continuar."
+          );
+        }
+      }
+    }
+
     // 7. ContextBuilder — Montar CONTEXT PACKAGE com isolamento seguro de tenant
     let brandManualContext: any = {};
     let accountStrategyContext: any = {};
@@ -494,6 +530,23 @@ Execute a Skill "${skill.name}" respeitando estritamente o Manual da Marca e o T
     const outTokens = openAiData.usage?.completion_tokens || 0;
     const estimatedCost = calculateCost(selectedModel, inTokens, outTokens);
 
+    // Calcular Custo e Débito na Carteira (Cobrança por Token com Margem)
+    const modelRates = pricingConfig.models?.[selectedModel] || pricingConfig.models?.default || {
+      input_cost_per_m_usd: 0.15,
+      output_cost_per_m_usd: 0.60,
+    };
+    const usdInCost = (inTokens * (modelRates.input_cost_per_m_usd || 0.15)) / 1_000_000;
+    const usdOutCost = (outTokens * (modelRates.output_cost_per_m_usd || 0.60)) / 1_000_000;
+    const totalUsd = usdInCost + usdOutCost;
+    const usdRate = Number(pricingConfig.usd_to_brl_rate || 6.0);
+    const markup = Number(pricingConfig.markup_multiplier || 2.0);
+    const minCharge = Number(pricingConfig.min_charge_brl || 0.01);
+
+    let chargedBrl = Number((totalUsd * usdRate * markup).toFixed(4));
+    if (chargedBrl < minCharge && (inTokens > 0 || outTokens > 0)) {
+      chargedBrl = minCharge;
+    }
+
     // 10. Validar e Formatar Output
     let parsedOutput: any = rawContent;
     if (skill.output_format === "json") {
@@ -550,6 +603,46 @@ Execute a Skill "${skill.name}" respeitando estritamente o Manual da Marca e o T
 
     executionId = executionRow?.id || null;
 
+    // 11.1 Realizar Débito Transacional na Carteira por Token
+    let debitTxId: string | null = null;
+    let newWalletBalance: number | null = null;
+
+    if (companyId && chargedBrl > 0 && pricingConfig.billing_enabled !== false) {
+      try {
+        const { data: debitResult, error: debitError } = await adminClient.rpc("wallet_debit", {
+          p_company_id: companyId,
+          p_amount: chargedBrl,
+          p_category: "ai_generation",
+          p_description: `Consumo IA Copilot (${inTokens} in / ${outTokens} out tokens)`,
+          p_reference_type: "ai_execution",
+          p_reference_id: executionId,
+          p_metadata: {
+            model: selectedModel,
+            skill_slug: skill.slug,
+            tokens_input: inTokens,
+            tokens_output: outTokens,
+            total_tokens: inTokens + outTokens,
+            usd_cost: totalUsd,
+            charged_brl: chargedBrl,
+          },
+        });
+
+        if (!debitError) {
+          debitTxId = debitResult;
+          const { data: updatedWallet } = await adminClient
+            .from("wallets")
+            .select("balance")
+            .eq("company_id", companyId)
+            .maybeSingle();
+          newWalletBalance = updatedWallet?.balance != null ? Number(updatedWallet.balance) : null;
+        } else {
+          console.error("Erro ao executar wallet_debit:", debitError);
+        }
+      } catch (debitErr) {
+        console.error("Exceção ao debitar carteira:", debitErr);
+      }
+    }
+
     // 12. Retorno com suporte retrocompatível para generateAiCopy (result string ou json)
     const formattedResult =
       typeof parsedOutput === "string"
@@ -574,6 +667,13 @@ Execute a Skill "${skill.name}" respeitando estritamente o Manual da Marca e o T
           input: inTokens,
           output: outTokens,
           total: inTokens + outTokens,
+        },
+        billing: {
+          debited: !!debitTxId,
+          charged_amount: chargedBrl,
+          currency: "BRL",
+          transaction_id: debitTxId,
+          new_balance: newWalletBalance,
         },
         latency_ms: latencyMs,
         estimated_cost: estimatedCost,

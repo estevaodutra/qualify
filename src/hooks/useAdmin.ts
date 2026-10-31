@@ -210,6 +210,32 @@ export function useDeleteCompany() {
   });
 }
 
+export function useDebitManual() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: {
+      company_id: string;
+      amount: number;
+      reason: string;
+      description?: string;
+    }) => {
+      const { data, error } = await (supabase as any).rpc('wallet_debit_manual', {
+        p_company_id: params.company_id,
+        p_amount: params.amount,
+        p_reason: params.reason,
+        p_description: params.description ?? null,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin'] });
+      toast({ title: 'Saldo debitado com sucesso' });
+    },
+    onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
+  });
+}
+
 export function useCreditManual() {
   const qc = useQueryClient();
   return useMutation({

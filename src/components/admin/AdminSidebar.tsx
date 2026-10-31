@@ -35,6 +35,8 @@ import {
   HelpCircle,
   LogOut,
   ExternalLink,
+  Wallet,
+  Landmark,
   LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -85,6 +87,7 @@ const sections: NavSection[] = [
       { title: "Planos & Assinaturas", url: "/admin/planos", icon: CreditCard },
       { title: "Permissões", url: "/admin/permissoes", icon: ShieldCheck },
       { title: "Uso & Limites", url: "/admin/uso", icon: Gauge },
+      { title: "Gestão de Carteiras", url: "/admin/carteiras", icon: Wallet },
     ],
   },
   {
@@ -108,6 +111,7 @@ const sections: NavSection[] = [
       { title: "WhatsApp", url: "/admin/integracoes/whatsapp", icon: Radio },
       { title: "Webhooks", url: "/admin/integracoes/webhooks", icon: Zap },
       { title: "Apify (Google Maps)", url: "/admin/integracoes/apify", icon: Compass },
+      { title: "Gateway Asaas (PIX)", url: "/admin/integracoes/asaas", icon: Landmark },
       { title: "Outras Integrações", url: "/admin/integracoes/outras", icon: Plug },
     ],
   },

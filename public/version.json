@@ -1,6 +1,6 @@
 {
-  "commit": "bbdad1f610f1f77d307bb89281493279c1bceaee",
-  "shortCommit": "bbdad1f",
-  "message": "style(chat): align copilot view layout with native chat message thread and composer",
-  "builtAt": "2026-10-30T23:54:54.358Z"
+  "commit": "7f358e265340e6e34f35d767c3f7b5cc344ae530",
+  "shortCommit": "7f358e2",
+  "message": "feat(copilot): bind real brand manual context and explain OpenAI credit balance",
+  "builtAt": "2026-10-31T00:20:30.662Z"
 }
