@@ -2,7 +2,11 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   Sparkles,
   LayoutDashboard,
+  Bot,
   Layers,
+  Wrench,
+  Workflow,
+  Database,
   Cpu,
   PlayCircle,
   Activity,
@@ -17,13 +21,37 @@ const aiNavItems = [
     url: "/admin/ia",
     icon: LayoutDashboard,
     end: true,
-    description: "Métricas reais de consumo e catálogo",
+    description: "Métricas de consumo e infraestrutura",
+  },
+  {
+    title: "Agents",
+    url: "/admin/ia/agents",
+    icon: Bot,
+    description: "Agentes especializados e permissões",
   },
   {
     title: "Skills",
     url: "/admin/ia/skills",
     icon: Layers,
-    description: "Catálogo e versionamento global",
+    description: "Catálogo e versionamento de skills",
+  },
+  {
+    title: "Tools",
+    url: "/admin/ia/tools",
+    icon: Wrench,
+    description: "Funções executáveis e RBAC",
+  },
+  {
+    title: "Workflows",
+    url: "/admin/ia/workflows",
+    icon: Workflow,
+    description: "Orquestração com LangGraph",
+  },
+  {
+    title: "Context Providers",
+    url: "/admin/ia/context-providers",
+    icon: Database,
+    description: "Fontes de contexto multi-tenant",
   },
   {
     title: "Modelos",
@@ -35,19 +63,19 @@ const aiNavItems = [
     title: "Playground",
     url: "/admin/ia/playground",
     icon: PlayCircle,
-    description: "Testes com contexto dinâmico",
+    description: "Testes de Agents, Skills e Graphs",
   },
   {
     title: "Execuções",
     url: "/admin/ia/execucoes",
     icon: Activity,
-    description: "Logs, tokens e rastreabilidade",
+    description: "Traces, tokens, custos e auditoria",
   },
   {
     title: "Configurações",
     url: "/admin/ia/configuracoes",
     icon: Settings,
-    description: "Credencial única Criafy & status",
+    description: "Credenciais OpenAI e guardrails",
   },
 ];
 
@@ -65,12 +93,12 @@ export function AdminAiLayout() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-semibold text-sm tracking-tight text-foreground">Motor de IA</span>
+                <span className="font-semibold text-sm tracking-tight text-foreground">Central de IA</span>
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200">
-                  OpenAI
+                  LangGraph
                 </Badge>
               </div>
-              <p className="text-xs text-muted-foreground">Skills Globais da Criafy</p>
+              <p className="text-xs text-muted-foreground">OpenAI + LangChain Core</p>
             </div>
           </div>
         </div>
@@ -82,7 +110,7 @@ export function AdminAiLayout() {
               to={item.url}
               end={item.end}
               className={({ isActive }) =>
-                `group flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-all ${
+                `group flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-all ${
                   isActive
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
@@ -91,37 +119,34 @@ export function AdminAiLayout() {
             >
               {({ isActive }) => (
                 <>
-                  <div className="flex items-center gap-3">
-                    <item.icon className={`h-4 w-4 ${isActive ? "text-primary-foreground" : "text-muted-foreground group-hover:text-foreground"}`} />
-                    <div className="text-left">
-                      <div className="leading-none">{item.title}</div>
-                      <div className={`text-[11px] font-normal mt-0.5 ${isActive ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <item.icon className={`h-4 w-4 shrink-0 ${isActive ? "text-primary-foreground" : "text-muted-foreground group-hover:text-foreground"}`} />
+                    <div className="text-left truncate">
+                      <div className="leading-tight truncate">{item.title}</div>
+                      <div className={`text-[10px] font-normal truncate mt-0.5 ${isActive ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
                         {item.description}
                       </div>
                     </div>
                   </div>
-                  <ChevronRight className={`h-3.5 w-3.5 transition-transform ${isActive ? "opacity-100 translate-x-0.5" : "opacity-0 group-hover:opacity-40"}`} />
+                  {isActive && <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-70" />}
                 </>
               )}
             </NavLink>
           ))}
         </nav>
 
-        <div className="p-4 border-t bg-muted/40">
-          <div className="rounded-lg border bg-card p-3 text-xs space-y-1.5">
-            <div className="font-medium text-foreground flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              Credencial Criafy Única
-            </div>
-            <p className="text-muted-foreground text-[11px] leading-relaxed">
-              Todas as empresas geram conteúdo consumindo as Skills globais via backend seguro, sem expor chaves aos clientes.
-            </p>
+        <div className="p-3 border-t bg-muted/30">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>Stack Agêntica</span>
+            <span className="font-mono text-[10px] bg-background px-1.5 py-0.5 rounded border">
+              LangChain 0.3+
+            </span>
           </div>
         </div>
       </aside>
 
-      {/* Área Principal de Conteúdo */}
-      <main className="flex-1 overflow-y-auto bg-background">
+      {/* Conteúdo Principal */}
+      <main className="flex-1 overflow-y-auto">
         <Outlet />
       </main>
     </div>

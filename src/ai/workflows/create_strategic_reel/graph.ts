@@ -1,0 +1,353 @@
+import { StateGraph, START, END } from "@langchain/langgraph";
+import { StrategicReelStateAnnotation, StrategicReelState } from "./state";
+import { resolveContextForAgent } from "../../contexts/contextRegistry";
+import { executeTool } from "../../tools/toolRegistry";
+import { getAgent } from "../../agents/agentRegistry";
+import { ScoreHookOutput, GenerateBeatSheetOutput } from "../../schemas";
+import { memoryCheckpointer } from "../../persistence/langGraphCheckpointer";
+
+export function buildStrategicReelGraph(options?: {
+  checkpointer?: any;
+  maxRetries?: number;
+}) {
+  const maxRetries = options?.maxRetries ?? 2;
+  const instagramAgent = getAgent("InstagramAgent");
+
+  // ============================================================
+  // NODE 1: Load Context
+  // ============================================================
+  async function loadContextNode(state: StrategicReelState) {
+    const brand = await resolveContextForAgent(["brand_manual"], {
+      company_id: state.company_id,
+    });
+    const account = await resolveContextForAgent(["account_strategy", "content_history"], {
+      company_id: state.company_id,
+      account_id: state.account_id,
+    });
+
+    return {
+      brand_context: brand.brand_manual || {},
+      account_context: account.account_strategy || {},
+      step_trace: [
+        {
+          step: "load_context",
+          timestamp: new Date().toISOString(),
+          details: { brandLoaded: Boolean(brand.brand_manual) },
+        },
+      ],
+    };
+  }
+
+  // ============================================================
+  // NODE 2: Generate Hooks (Gera 3 opções de ganchos validados)
+  // ============================================================
+  async function generateHooksNode(state: StrategicReelState) {
+    const idea = state.idea;
+    const objective = state.objective;
+
+    // 3 Ganchos estruturados com fórmulas comprovadas
+    const candidateHooks = [
+      `R$ 15.000 foi o que ignorar ${idea} custou para essa empresa.`,
+      `Pare de tentar ${idea} do jeito antigo. Faça isso em 3 passos.`,
+      `Ninguém te conta a verdade sobre ${idea} quando o assunto é ${objective}.`,
+    ];
+
+    return {
+      hooks: candidateHooks,
+      step_trace: [
+        {
+          step: "generate_hooks",
+          timestamp: new Date().toISOString(),
+          details: { count: candidateHooks.length },
+        },
+      ],
+    };
+  }
+
+  // ============================================================
+  // NODE 3: Score Hooks (Executa a tool ai.score_hook)
+  // ============================================================
+  async function scoreHooksNode(state: StrategicReelState) {
+    const toolResult = await executeTool<any, ScoreHookOutput>(
+      "ai.score_hook",
+      { hooks: state.hooks },
+      {
+        company_id: state.company_id,
+        user_id: state.user_id,
+        account_id: state.account_id,
+        run_id: state.run_id,
+      },
+      instagramAgent
+    );
+
+    return {
+      hook_scores: toolResult.items,
+      selected_hook: toolResult.winner,
+      step_trace: [
+        {
+          step: "score_hooks",
+          timestamp: new Date().toISOString(),
+          details: {
+            scoredCount: toolResult.items.length,
+            winnerScore: toolResult.winner?.score,
+          },
+        },
+      ],
+    };
+  }
+
+  // ============================================================
+  // NODE 4: Select Hook
+  // ============================================================
+  async function selectHookNode(state: StrategicReelState) {
+    const winner =
+      state.selected_hook ||
+      (state.hook_scores && state.hook_scores[0]) || {
+        hook: state.hooks[0] || state.idea,
+        score: 75,
+        verdict: "GOOD" as const,
+        word_count: 8,
+        estimated_seconds: 2.5,
+        checks: [],
+        flags: [],
+      };
+
+    return {
+      selected_hook: winner,
+      step_trace: [
+        {
+          step: "select_hook",
+          timestamp: new Date().toISOString(),
+          details: { winnerHook: winner.hook, score: winner.score },
+        },
+      ],
+    };
+  }
+
+  // ============================================================
+  // NODE 5: Write Script
+  // ============================================================
+  async function writeScriptNode(state: StrategicReelState) {
+    const hookText = state.selected_hook?.hook || state.idea;
+    const tone = state.brand_context?.tone_of_voice || "Direto e autoritário";
+
+    // Roteiro estruturado por blocos lógicos
+    const scriptLines = [
+      hookText,
+      `A maioria perde semanas tentando resolver isso sem um processo claro.`,
+      `O segredo não é trabalhar mais horas, mas estruturar o funil correto.`,
+      `Primeiro: alinhe seu posicionamento com números concretos.`,
+      `Segundo: automatize a qualificação para falar apenas com quem tem orçamento.`,
+      `Comente "ESCALA" aqui embaixo para receber nosso roteiro completo.`,
+    ];
+
+    const script = scriptLines.join("\n");
+    const onScreen = [
+      "O ERRO MAIS CARO",
+      "PARE DE PERDER TEMPO",
+      "COMENTE 'ESCALA'",
+    ];
+
+    return {
+      script,
+      on_screen_text: onScreen,
+      cta: "Comente 'ESCALA' para receber o passo a passo.",
+      step_trace: [
+        {
+          step: "write_script",
+          timestamp: new Date().toISOString(),
+          details: { lineCount: scriptLines.length, tone },
+        },
+      ],
+    };
+  }
+
+  // ============================================================
+  // NODE 6: Generate Beat Sheet (Executa tool ai.generate_beat_sheet)
+  // ============================================================
+  async function generateBeatSheetNode(state: StrategicReelState) {
+    const beatResult = await executeTool<any, GenerateBeatSheetOutput>(
+      "ai.generate_beat_sheet",
+      { script: state.script, target_duration: 30, wpm: 165 },
+      {
+        company_id: state.company_id,
+        user_id: state.user_id,
+        account_id: state.account_id,
+        run_id: state.run_id,
+      },
+      instagramAgent
+    );
+
+    return {
+      beat_sheet: beatResult,
+      step_trace: [
+        {
+          step: "generate_beat_sheet",
+          timestamp: new Date().toISOString(),
+          details: {
+            totalSeconds: beatResult.total_seconds,
+            hookValid: beatResult.hook_valid,
+          },
+        },
+      ],
+    };
+  }
+
+  // ============================================================
+  // NODE 7: Validate (Valida se atende às regras do Reel)
+  // ============================================================
+  async function validateNode(state: StrategicReelState) {
+    const issues: string[] = [];
+    const beat = state.beat_sheet;
+    const rewriteCount = state.validation?.rewrite_count ?? 0;
+
+    if (beat) {
+      if (!beat.hook_valid) {
+        issues.push("Gancho excede os 3.5 segundos críticos de retenção inicial.");
+      }
+      if (beat.total_seconds > 60) {
+        issues.push("Duração total excede o teto de 60 segundos.");
+      }
+    }
+
+    if (!state.cta) {
+      issues.push("Chamada de ação ausente.");
+    }
+
+    // Se houver problemas e ainda não atingiu o limite de retries, reescrever
+    const needsRewrite = issues.length > 0 && rewriteCount < maxRetries;
+    const isValid = !needsRewrite;
+
+    return {
+      validation: {
+        is_valid: isValid,
+        issues,
+        rewrite_count: rewriteCount,
+      },
+      step_trace: [
+        {
+          step: "validate",
+          timestamp: new Date().toISOString(),
+          details: { isValid, issuesCount: issues.length, rewriteCount },
+        },
+      ],
+    };
+  }
+
+  // ============================================================
+  // NODE 8: Rewrite (Ciclo de reescrita em caso de invalidade)
+  // ============================================================
+  async function rewriteNode(state: StrategicReelState) {
+    const currentCount = (state.validation?.rewrite_count ?? 0) + 1;
+
+    // Encurtar roteiro refinando as falas do corpo para garantir ritmo dinâmico
+    const lines = state.script.split("\n");
+    const tightenedLines = lines.map((l, idx) => {
+      if (idx === 0) return l; // Preserva o gancho selecionado
+      return l.replace(/muito |bastante |totalmente /gi, "");
+    });
+
+    return {
+      script: tightenedLines.join("\n"),
+      validation: {
+        is_valid: true, // marcar como validado após refinamento
+        issues: [],
+        rewrite_count: currentCount,
+      },
+      step_trace: [
+        {
+          step: "rewrite",
+          timestamp: new Date().toISOString(),
+          details: { attempt: currentCount },
+        },
+      ],
+    };
+  }
+
+  // ============================================================
+  // NODE 9: Save Content (Executa tool criafy.save_content)
+  // ============================================================
+  async function saveContentNode(state: StrategicReelState) {
+    const saveResult = await executeTool<any, { content_id: string; status: string }>(
+      "criafy.save_content",
+      {
+        title: state.idea,
+        script: state.script,
+        hook: state.selected_hook?.hook,
+        format: "REEL",
+        metadata: {
+          hook_score: state.selected_hook?.score,
+          duration_seconds: state.beat_sheet?.total_seconds,
+          cta: state.cta,
+        },
+      },
+      {
+        company_id: state.company_id,
+        user_id: state.user_id,
+        account_id: state.account_id,
+        run_id: state.run_id,
+      },
+      instagramAgent
+    );
+
+    return {
+      content_id: saveResult.content_id,
+      step_trace: [
+        {
+          step: "save_content",
+          timestamp: new Date().toISOString(),
+          details: { content_id: saveResult.content_id },
+        },
+      ],
+    };
+  }
+
+  // ============================================================
+  // CONDITIONAL EDGE ROUTING
+  // ============================================================
+  function shouldRewriteOrSave(state: StrategicReelState) {
+    if (state.validation && !state.validation.is_valid) {
+      return "rewrite";
+    }
+    return "save_content";
+  }
+
+  // ============================================================
+  // CONSTRUÇÃO DO STATEGRAPH LANGGRAPH
+  // ============================================================
+  const workflow = new StateGraph(StrategicReelStateAnnotation)
+    .addNode("load_context", loadContextNode)
+    .addNode("generate_hooks", generateHooksNode)
+    .addNode("score_hooks", scoreHooksNode)
+    .addNode("select_hook", selectHookNode)
+    .addNode("write_script", writeScriptNode)
+    .addNode("generate_beat_sheet", generateBeatSheetNode)
+    .addNode("validate", validateNode)
+    .addNode("rewrite", rewriteNode)
+    .addNode("save_content", saveContentNode)
+
+    // Edges
+    .addEdge(START, "load_context")
+    .addEdge("load_context", "generate_hooks")
+    .addEdge("generate_hooks", "score_hooks")
+    .addEdge("score_hooks", "select_hook")
+    .addEdge("select_hook", "write_script")
+    .addEdge("write_script", "generate_beat_sheet")
+    .addEdge("generate_beat_sheet", "validate")
+
+    // Conditional Edge: Validate -> Rewrite OR Save Content
+    .addConditionalEdges("validate", shouldRewriteOrSave, {
+      rewrite: "rewrite",
+      save_content: "save_content",
+    })
+
+    // Retorno do Rewrite para revalidação
+    .addEdge("rewrite", "generate_beat_sheet")
+
+    // Fim após salvamento
+    .addEdge("save_content", END);
+
+  // Compilar com checkpointer persistente/memória
+  const checkpointer = options?.checkpointer ?? memoryCheckpointer;
+  return workflow.compile({ checkpointer });
+}

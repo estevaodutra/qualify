@@ -1,6 +1,6 @@
 {
-  "commit": "7f358e265340e6e34f35d767c3f7b5cc344ae530",
-  "shortCommit": "7f358e2",
-  "message": "feat(copilot): bind real brand manual context and explain OpenAI credit balance",
-  "builtAt": "2026-10-31T00:20:30.662Z"
+  "commit": "a671405959baf462606ce5100f40119ff802b8f9",
+  "shortCommit": "a671405",
+  "message": "feat(billing): implementar cobranca por token de IA, gestao de carteiras no super admin e integracao Asaas",
+  "builtAt": "2026-10-31T22:30:53.940Z"
 }

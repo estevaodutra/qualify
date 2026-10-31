@@ -13,6 +13,11 @@ import {
   Copy,
   ChevronLeft,
   ChevronRight,
+  Bot,
+  Workflow,
+  Wrench,
+  Layers,
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,15 +36,18 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { AIExecutionService } from "@/services/ai/aiExecutionService";
-import { AiExecution } from "@/types/aiSkills";
+import { PREPARED_AGENTS, ALL_TOOLS, WorkflowRegistry } from "@/ai";
 
 export default function AdminAiExecutions() {
   const [skillFilter, setSkillFilter] = useState<string>("ALL");
+  const [agentFilter, setAgentFilter] = useState<string>("ALL");
+  const [workflowFilter, setWorkflowFilter] = useState<string>("ALL");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [page, setPage] = useState(1);
-  const [selectedExecution, setSelectedExecution] = useState<AiExecution | null>(null);
+  const [selectedExecution, setSelectedExecution] = useState<any | null>(null);
 
   const limit = 20;
 
@@ -59,7 +67,12 @@ export default function AdminAiExecutions() {
     queryFn: () => AIExecutionService.getSkills(),
   });
 
-  const executions = data?.executions || [];
+  const executions = (data?.executions || []).filter((e: any) => {
+    if (agentFilter !== "ALL" && e.agent_slug !== agentFilter) return false;
+    if (workflowFilter !== "ALL" && e.workflow_slug !== workflowFilter && e.action !== workflowFilter) return false;
+    return true;
+  });
+
   const total = data?.total || 0;
   const totalPages = Math.ceil(total / limit) || 1;
 
@@ -77,15 +90,15 @@ export default function AdminAiExecutions() {
           <Badge variant="secondary" className="font-mono text-xs">{total} registros</Badge>
         </div>
         <p className="text-sm text-muted-foreground mt-1">
-          Rastreabilidade completa de todas as gerações: tokens consumidos, custos estimados, latência e integridade do contrato de saída.
+          Rastreabilidade completa de todas as execuções: LangGraph StateGraph, Agentes LangChain, tool calls, tokens e custos.
         </p>
       </div>
 
-      {/* Barra de Filtros */}
-      <div className="flex flex-col sm:flex-row items-center gap-3">
+      {/* Barra de Filtros (Regra #22 do Master Prompt) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
         <Select value={skillFilter} onValueChange={(v) => { setSkillFilter(v); setPage(1); }}>
-          <SelectTrigger className="h-9 text-xs w-full sm:w-[220px]">
-            <SelectValue placeholder="Filtrar por Skill..." />
+          <SelectTrigger className="h-9 text-xs">
+            <SelectValue placeholder="Skill..." />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="ALL">Todas as Skills</SelectItem>
@@ -97,14 +110,43 @@ export default function AdminAiExecutions() {
           </SelectContent>
         </Select>
 
+        <Select value={agentFilter} onValueChange={(v) => { setAgentFilter(v); setPage(1); }}>
+          <SelectTrigger className="h-9 text-xs">
+            <SelectValue placeholder="Agente..." />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Todos os Agentes</SelectItem>
+            {PREPARED_AGENTS.map((a) => (
+              <SelectItem key={a.slug} value={a.slug}>
+                {a.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={workflowFilter} onValueChange={(v) => { setWorkflowFilter(v); setPage(1); }}>
+          <SelectTrigger className="h-9 text-xs">
+            <SelectValue placeholder="Workflow..." />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Todos os Workflows</SelectItem>
+            {Object.values(WorkflowRegistry).map((w) => (
+              <SelectItem key={w.slug} value={w.slug}>
+                {w.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
-          <SelectTrigger className="h-9 text-xs w-full sm:w-[150px]">
+          <SelectTrigger className="h-9 text-xs">
             <SelectValue placeholder="Status..." />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="ALL">Todos Status</SelectItem>
+            <SelectItem value="ALL">Todos os Status</SelectItem>
             <SelectItem value="success">Sucesso</SelectItem>
             <SelectItem value="error">Erro</SelectItem>
+            <SelectItem value="retrying">Retentativa</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -118,7 +160,7 @@ export default function AdminAiExecutions() {
             <Activity className="h-10 w-10 text-muted-foreground/40 mx-auto" />
             <div className="text-sm font-medium text-foreground">Nenhuma execução encontrada</div>
             <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-              Realize testes no Playground ou aguarde as gerações dos usuários no Criafy.
+              Realize testes no Playground ou execute um workflow LangGraph para gerar registros de auditoria.
             </p>
           </div>
         ) : (
@@ -126,7 +168,7 @@ export default function AdminAiExecutions() {
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="border-b bg-muted/40 text-muted-foreground font-medium">
-                  <th className="py-3 px-4">Skill & Ação</th>
+                  <th className="py-3 px-4">Ação / Workflow / Agente</th>
                   <th className="py-3 px-3">Modelo</th>
                   <th className="py-3 px-3">Status</th>
                   <th className="py-3 px-3">Tokens</th>
@@ -137,38 +179,41 @@ export default function AdminAiExecutions() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {executions.map((e) => (
+                {executions.map((e: any) => (
                   <tr key={e.id} className="hover:bg-muted/30 transition-colors">
                     <td className="py-3 px-4">
-                      <div className="font-semibold text-foreground flex items-center gap-1.5">
-                        {e.skill_slug}
-                        <Badge variant="outline" className="text-[9px] py-0">v{e.skill_version}</Badge>
+                      <div className="font-medium text-foreground flex items-center gap-1.5">
+                        {e.workflow_slug || e.action === "create_strategic_reel" ? (
+                          <Workflow className="h-3.5 w-3.5 text-emerald-600" />
+                        ) : e.agent_slug ? (
+                          <Bot className="h-3.5 w-3.5 text-blue-600" />
+                        ) : (
+                          <Layers className="h-3.5 w-3.5 text-purple-600" />
+                        )}
+                        <span>{e.workflow_slug || e.agent_slug || e.skill_slug || e.action}</span>
                       </div>
-                      <div className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
-                        {e.input_summary?.theme || e.action}
+                      <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                        {e.id.slice(0, 16)}...
                       </div>
                     </td>
-                    <td className="py-3 px-3 font-mono text-[11px] text-muted-foreground">{e.model}</td>
+                    <td className="py-3 px-3 font-mono text-[11px]">{e.model || "gpt-4o-mini"}</td>
                     <td className="py-3 px-3">
                       {e.status === "success" ? (
-                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px]">
-                          Sucesso
+                        <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600 bg-emerald-500/5">
+                          <CheckCircle2 className="h-3 w-3 mr-1" /> Sucesso
                         </Badge>
                       ) : (
                         <Badge variant="destructive" className="text-[10px]">
-                          Erro
+                          <AlertCircle className="h-3 w-3 mr-1" /> Erro
                         </Badge>
                       )}
                     </td>
-                    <td className="py-3 px-3 font-mono text-[11px]">
-                      {e.tokens_input + e.tokens_output}
-                      <span className="text-[10px] text-muted-foreground ml-1">
-                        ({e.tokens_input}/{e.tokens_output})
-                      </span>
+                    <td className="py-3 px-3 font-mono text-muted-foreground">
+                      {(e.tokens_input || 0) + (e.tokens_output || 0)}
                     </td>
-                    <td className="py-3 px-3 text-muted-foreground font-mono text-[11px]">{e.latency_ms} ms</td>
-                    <td className="py-3 px-3 font-mono text-[11px] text-emerald-600 dark:text-emerald-400">
-                      ${Number(e.estimated_cost).toFixed(5)}
+                    <td className="py-3 px-3 font-mono text-muted-foreground">{e.latency_ms || 0}ms</td>
+                    <td className="py-3 px-3 font-mono text-emerald-600">
+                      ${Number(e.estimated_cost || 0).toFixed(4)}
                     </td>
                     <td className="py-3 px-3 text-muted-foreground text-[11px]">
                       {new Date(e.created_at).toLocaleString("pt-BR")}
@@ -177,11 +222,10 @@ export default function AdminAiExecutions() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 text-xs px-2"
+                        className="h-7 w-7 p-0"
                         onClick={() => setSelectedExecution(e)}
                       >
-                        <Eye className="h-3.5 w-3.5 mr-1" />
-                        Ver
+                        <Eye className="h-3.5 w-3.5" />
                       </Button>
                     </td>
                   </tr>
@@ -193,105 +237,144 @@ export default function AdminAiExecutions() {
 
         {/* Paginação */}
         {totalPages > 1 && (
-          <div className="p-3 border-t flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">
-              Página {page} de {totalPages} ({total} execuções no total)
-            </span>
-            <div className="flex items-center gap-1">
+          <div className="p-4 border-t flex items-center justify-between text-xs text-muted-foreground">
+            <span>Página {page} de {totalPages}</span>
+            <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                className="h-7 w-7 p-0"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="h-8 text-xs"
                 disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
               >
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="h-3.5 w-3.5 mr-1" /> Anterior
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                className="h-7 w-7 p-0"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="h-8 text-xs"
                 disabled={page >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               >
-                <ChevronRight className="h-4 w-4" />
+                Próxima <ChevronRight className="h-3.5 w-3.5 ml-1" />
               </Button>
             </div>
           </div>
         )}
       </div>
 
-      {/* Modal de Detalhes da Execução */}
-      <Dialog open={!!selectedExecution} onOpenChange={(open) => !open && setSelectedExecution(null)}>
+      {/* Modal de Detalhe e Auditoria da Execução (Regra #22 do Master Prompt) */}
+      <Dialog open={Boolean(selectedExecution)} onOpenChange={() => setSelectedExecution(null)}>
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           {selectedExecution && (
-            <>
+            <div className="space-y-4">
               <DialogHeader>
-                <DialogTitle className="text-base flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-primary" />
-                  Inspeção da Execução — {selectedExecution.skill_slug} (v{selectedExecution.skill_version})
-                </DialogTitle>
-                <DialogDescription className="text-xs">
-                  ID: <code className="font-mono text-foreground">{selectedExecution.id}</code> • {new Date(selectedExecution.created_at).toLocaleString("pt-BR")}
+                <div className="flex items-center justify-between">
+                  <DialogTitle className="text-base font-mono">
+                    {selectedExecution.workflow_slug || selectedExecution.skill_slug || selectedExecution.action}
+                  </DialogTitle>
+                  <Badge variant={selectedExecution.status === "success" ? "default" : "destructive"}>
+                    {selectedExecution.status}
+                  </Badge>
+                </div>
+                <DialogDescription className="text-xs font-mono">
+                  ID: {selectedExecution.id} | Iniciado em {new Date(selectedExecution.created_at).toLocaleString("pt-BR")}
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="space-y-4 pt-2 text-xs">
-                {/* Resumo de Métricas */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <div className="p-2.5 rounded-lg border bg-muted/20">
-                    <span className="text-muted-foreground text-[10px]">Modelo Utilizado</span>
-                    <div className="font-mono font-bold mt-0.5">{selectedExecution.model}</div>
-                  </div>
-                  <div className="p-2.5 rounded-lg border bg-muted/20">
-                    <span className="text-muted-foreground text-[10px]">Tokens Totais</span>
-                    <div className="font-mono font-bold mt-0.5">{selectedExecution.tokens_input + selectedExecution.tokens_output}</div>
-                  </div>
-                  <div className="p-2.5 rounded-lg border bg-muted/20">
-                    <span className="text-muted-foreground text-[10px]">Latência</span>
-                    <div className="font-mono font-bold mt-0.5">{selectedExecution.latency_ms} ms</div>
-                  </div>
-                  <div className="p-2.5 rounded-lg border bg-muted/20">
-                    <span className="text-muted-foreground text-[10px]">Custo Estimado</span>
-                    <div className="font-mono font-bold mt-0.5">${Number(selectedExecution.estimated_cost).toFixed(5)}</div>
+              {/* Métricas Rápidas */}
+              <div className="grid grid-cols-4 gap-3 text-xs">
+                <div className="p-2.5 bg-muted rounded-lg border">
+                  <div className="text-muted-foreground text-[10px]">Modelo</div>
+                  <div className="font-mono font-medium mt-0.5">{selectedExecution.model}</div>
+                </div>
+                <div className="p-2.5 bg-muted rounded-lg border">
+                  <div className="text-muted-foreground text-[10px]">Tokens Totais</div>
+                  <div className="font-mono font-medium mt-0.5">
+                    {(selectedExecution.tokens_input || 0) + (selectedExecution.tokens_output || 0)}
                   </div>
                 </div>
-
-                {/* Input Summary */}
-                <div className="space-y-1">
-                  <div className="font-semibold text-foreground">Sumário da Entrada</div>
-                  <pre className="p-3 bg-muted/40 border rounded-lg font-mono text-[11px]">
-                    {JSON.stringify(selectedExecution.input_summary || {}, null, 2)}
-                  </pre>
+                <div className="p-2.5 bg-muted rounded-lg border">
+                  <div className="text-muted-foreground text-[10px]">Latência</div>
+                  <div className="font-mono font-medium mt-0.5">{selectedExecution.latency_ms}ms</div>
                 </div>
-
-                {/* Output */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-foreground">Saída da Geração</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 text-[10px]"
-                      onClick={() => handleCopy(JSON.stringify(selectedExecution.output || {}, null, 2))}
-                    >
-                      <Copy className="h-3 w-3 mr-1" /> Copiar JSON
-                    </Button>
+                <div className="p-2.5 bg-muted rounded-lg border">
+                  <div className="text-muted-foreground text-[10px]">Custo Estimado</div>
+                  <div className="font-mono font-medium mt-0.5 text-emerald-600">
+                    ${Number(selectedExecution.estimated_cost || 0).toFixed(4)}
                   </div>
-                  <pre className="p-3 bg-muted/40 border rounded-lg font-mono text-[11px] leading-relaxed max-h-[250px] overflow-y-auto">
+                </div>
+              </div>
+
+              {/* Abas de Detalhes: Timeline, Output, Tool Calls, Context */}
+              <Tabs defaultValue="output" className="space-y-3">
+                <TabsList className="grid grid-cols-4 h-8 text-xs">
+                  <TabsTrigger value="output" className="text-xs">Output</TabsTrigger>
+                  <TabsTrigger value="tools" className="text-xs">Tool Calls</TabsTrigger>
+                  <TabsTrigger value="timeline" className="text-xs">Timeline</TabsTrigger>
+                  <TabsTrigger value="context" className="text-xs">Input & Tenant</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="output">
+                  <pre className="p-3 bg-muted rounded-lg font-mono text-xs whitespace-pre-wrap overflow-x-auto max-h-64">
                     {JSON.stringify(selectedExecution.output || {}, null, 2)}
                   </pre>
-                </div>
+                </TabsContent>
 
-                {/* Erro se houver */}
-                {selectedExecution.error && (
-                  <div className="p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-lg space-y-1">
-                    <span className="font-bold">Erro Registrado:</span>
-                    <p className="font-mono text-[11px]">{selectedExecution.error}</p>
+                <TabsContent value="tools">
+                  {selectedExecution.tool_calls && selectedExecution.tool_calls.length > 0 ? (
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {selectedExecution.tool_calls.map((tc: any, i: number) => (
+                        <div key={i} className="p-2.5 bg-muted rounded border text-xs">
+                          <div className="flex justify-between font-mono font-semibold text-primary">
+                            <span>{tc.tool}</span>
+                            <span>{tc.latency_ms}ms</span>
+                          </div>
+                          <pre className="mt-1 p-2 bg-background rounded text-[11px] overflow-x-auto">
+                            {JSON.stringify(tc.output, null, 2)}
+                          </pre>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-6 text-center text-xs text-muted-foreground">
+                      Nenhuma tool call direta registrada nesta execução.
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="timeline">
+                  <div className="p-4 bg-muted/40 rounded-lg border space-y-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-3.5 w-3.5 text-blue-500" />
+                      <span className="font-semibold">Início:</span>
+                      <span>{new Date(selectedExecution.created_at).toISOString()}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                      <span className="font-semibold">Conclusão:</span>
+                      <span>Duração total de {selectedExecution.latency_ms}ms</span>
+                    </div>
                   </div>
-                )}
-              </div>
-            </>
+                </TabsContent>
+
+                <TabsContent value="context">
+                  <div className="space-y-2 text-xs font-mono">
+                    <div className="p-2.5 bg-muted rounded">
+                      <span className="font-semibold text-muted-foreground">Company ID:</span>{" "}
+                      {selectedExecution.company_id || "Global"}
+                    </div>
+                    <div className="p-2.5 bg-muted rounded">
+                      <span className="font-semibold text-muted-foreground">Account ID:</span>{" "}
+                      {selectedExecution.account_id || "N/A"}
+                    </div>
+                    <pre className="p-3 bg-muted rounded-lg text-xs overflow-x-auto max-h-48">
+                      {JSON.stringify(selectedExecution.input_summary || {}, null, 2)}
+                    </pre>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </div>
           )}
         </DialogContent>
       </Dialog>

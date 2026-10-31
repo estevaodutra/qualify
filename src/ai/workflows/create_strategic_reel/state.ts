@@ -1,0 +1,75 @@
+import { Annotation } from "@langchain/langgraph";
+import { HookScoreItem, GenerateBeatSheetOutput } from "../../schemas";
+
+export const StrategicReelStateAnnotation = Annotation.Root({
+  company_id: Annotation<string>(),
+  user_id: Annotation<string | undefined>(),
+  account_id: Annotation<string | undefined>(),
+  run_id: Annotation<string | undefined>(),
+
+  idea: Annotation<string>(),
+  objective: Annotation<string>(),
+
+  brand_context: Annotation<Record<string, any>>({
+    reducer: (_, next) => next,
+    default: () => ({}),
+  }),
+  account_context: Annotation<Record<string, any>>({
+    reducer: (_, next) => next,
+    default: () => ({}),
+  }),
+
+  hooks: Annotation<string[]>({
+    reducer: (_, next) => next,
+    default: () => [],
+  }),
+  hook_scores: Annotation<HookScoreItem[]>({
+    reducer: (_, next) => next,
+    default: () => [],
+  }),
+  selected_hook: Annotation<HookScoreItem | null>({
+    reducer: (_, next) => next,
+    default: () => null,
+  }),
+
+  script: Annotation<string>({
+    reducer: (_, next) => next,
+    default: () => "",
+  }),
+  on_screen_text: Annotation<string[]>({
+    reducer: (_, next) => next,
+    default: () => [],
+  }),
+  cta: Annotation<string>({
+    reducer: (_, next) => next,
+    default: () => "",
+  }),
+  beat_sheet: Annotation<GenerateBeatSheetOutput | null>({
+    reducer: (_, next) => next,
+    default: () => null,
+  }),
+
+  validation: Annotation<{
+    is_valid: boolean;
+    issues: string[];
+    rewrite_count: number;
+  }>({
+    reducer: (_, next) => next,
+    default: () => ({ is_valid: true, issues: [], rewrite_count: 0 }),
+  }),
+
+  content_id: Annotation<string | null>({
+    reducer: (_, next) => next,
+    default: () => null,
+  }),
+  errors: Annotation<string[]>({
+    reducer: (prev, next) => (next ? prev.concat(next) : prev),
+    default: () => [],
+  }),
+  step_trace: Annotation<Array<{ step: string; timestamp: string; details?: any }>>({
+    reducer: (prev, next) => (next ? prev.concat(next) : prev),
+    default: () => [],
+  }),
+});
+
+export type StrategicReelState = typeof StrategicReelStateAnnotation.State;

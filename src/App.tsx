@@ -98,6 +98,10 @@ import AdminAiModels from "./pages/admin/ai/AdminAiModels";
 import AdminAiPlayground from "./pages/admin/ai/AdminAiPlayground";
 import AdminAiExecutions from "./pages/admin/ai/AdminAiExecutions";
 import AdminAiSettings from "./pages/admin/ai/AdminAiSettings";
+import AdminAiAgents from "./pages/admin/ai/AdminAiAgents";
+import AdminAiTools from "./pages/admin/ai/AdminAiTools";
+import AdminAiWorkflows from "./pages/admin/ai/AdminAiWorkflows";
+import AdminAiContextProviders from "./pages/admin/ai/AdminAiContextProviders";
 
 // Super Admin - Integrações
 import { AdminIntegrationsLayout } from "./components/admin/integrations/AdminIntegrationsLayout";
@@ -326,7 +330,11 @@ const App = () => {
                       {/* 3. IA */}
                       <Route path="ia" element={<AdminAiLayout />}>
                         <Route index element={<AdminAiOverview />} />
+                        <Route path="agents" element={<AdminAiAgents />} />
                         <Route path="skills" element={<AdminAiSkills />} />
+                        <Route path="tools" element={<AdminAiTools />} />
+                        <Route path="workflows" element={<AdminAiWorkflows />} />
+                        <Route path="context-providers" element={<AdminAiContextProviders />} />
                         <Route path="skills/:id" element={<AdminAiSkillDetail />} />
                         <Route path="modelos" element={<AdminAiModels />} />
                         <Route path="playground" element={<AdminAiPlayground />} />
@@ -399,3 +407,4 @@ const App = () => {
 };
 
 export default App;
+
