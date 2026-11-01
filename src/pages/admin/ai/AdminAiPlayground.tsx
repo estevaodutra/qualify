@@ -97,10 +97,24 @@ export default function AdminAiPlayground() {
   // Estado de Execução
   const [executing, setExecuting] = useState(false);
   const [executingSeed, setExecutingSeed] = useState(false);
+  const [savingKey, setSavingKey] = useState(false);
   const [resultData, setResultData] = useState<any>(null);
   const [traceData, setTraceData] = useState<any>(null);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
-  const [customApiKey, setCustomApiKey] = useState<string>("");
+  const [customApiKey, setCustomApiKey] = useState<string>(() => {
+    try {
+      return localStorage.getItem("qualify_openai_test_key") || "";
+    } catch {
+      return "";
+    }
+  });
+
+  const handleKeyChange = (val: string) => {
+    setCustomApiKey(val);
+    try {
+      localStorage.setItem("qualify_openai_test_key", val.trim());
+    } catch {}
+  };
 
   // Status da Chave OpenAI na Plataforma
   const { data: openAiConfig } = useQuery({
@@ -285,11 +299,40 @@ export default function AdminAiPlayground() {
     toast.success("Copiado para a área de transferência!");
   };
 
+  const handleSaveGlobalKey = async () => {
+    if (!customApiKey || customApiKey.trim().length < 10) {
+      toast.error("Insira uma chave OpenAI válida (sk-proj-...) para salvar.");
+      return;
+    }
+    setSavingKey(true);
+    try {
+      await AIExecutionService.saveOpenAiConfig({
+        apiKey: customApiKey.trim(),
+        defaultModel: "gpt-4o-mini",
+        organizationId: "",
+        maxDailySpend: 10,
+        enableFallback: true,
+      });
+      toast.success("Chave OpenAI salva como padrão global no sistema!");
+      queryClient.invalidateQueries({ queryKey: ["admin_ai_config_playground"] });
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao salvar chave.");
+    } finally {
+      setSavingKey(false);
+    }
+  };
+
   // Execução do Runtime (Agent / Workflow / Skill / Tool)
   const handleExecute = async () => {
     // REGRA DE NEGÓCIO: O Manual da Marca precisa estar preenchido para qualquer execução
     if (!brandManualCheck?.isFilled) {
       toast.error("Regra de Negócio: O Manual da Marca desta empresa precisa estar preenchido antes de realizar qualquer execução.");
+      return;
+    }
+
+    const effectiveKey = customApiKey.trim() || (openAiConfig?.status === "active" ? "system_configured" : "");
+    if (!effectiveKey) {
+      toast.error("Chave da OpenAI não informada. Insira sua chave (sk-proj-...) no campo 'Conexão OpenAI' para que a chamada real seja executada na OpenAI.");
       return;
     }
 
@@ -306,17 +349,17 @@ export default function AdminAiPlayground() {
           account_id: selectedAccountId !== "none" ? selectedAccountId : undefined,
           idea: ideaPrompt,
           objective,
-          apiKey: customApiKey || undefined,
+          apiKey: customApiKey.trim() || undefined,
           modelProfile: selectedModelProfile,
         });
         setResultData(res.data);
         setTraceData(res.trace);
-        toast.success("Workflow LangGraph executado com sucesso!");
+        toast.success("Workflow LangGraph executado com sucesso na OpenAI!");
       } else if (playMode === "agent") {
         const res = await QualifyAI.runAgent({
           agentSlug: selectedAgentSlug,
           prompt: ideaPrompt,
-          apiKey: customApiKey || undefined,
+          apiKey: customApiKey.trim() || undefined,
           context: {
             company_id: selectedCompanyId || "default-company",
             account_id: selectedAccountId !== "none" ? selectedAccountId : undefined,
@@ -324,7 +367,7 @@ export default function AdminAiPlayground() {
         });
         setResultData(res.data);
         setTraceData(res.trace);
-        toast.success("Agente LangChain executado com sucesso!");
+        toast.success(`Agente ${selectedAgentSlug} executado com sucesso na OpenAI!`);
       } else if (playMode === "tool") {
         let parsedInput: any;
         try {
@@ -382,6 +425,12 @@ export default function AdminAiPlayground() {
       return;
     }
 
+    const effectiveKey = customApiKey.trim() || (openAiConfig?.status === "active" ? "system_configured" : "");
+    if (!effectiveKey) {
+      toast.error("Chave da OpenAI não configurada. Por favor, insira sua chave (sk-proj-...) no campo 'Conexão OpenAI' abaixo para que a IA gere os ganchos e o roteiro em tempo real.");
+      return;
+    }
+
     let targetAccountId: string | null = (selectedAccountId && selectedAccountId !== "none") ? selectedAccountId : null;
     if (!targetAccountId && companyAccounts.length > 0) {
       targetAccountId = companyAccounts[0].id;
@@ -404,24 +453,26 @@ export default function AdminAiPlayground() {
         userId
       );
 
-      // 2. Gerar roteiro estratégico de IA para o Reel Semente
+      // 2. Gerar roteiro estratégico de IA para o Reel Semente com a OpenAI real
       let generatedReel: any = null;
+      let reelRes: any = null;
       try {
         const reelItem = seedResult.items.find((i) => i.format === "REEL");
         if (reelItem) {
-          const reelRes = await QualifyAI.createStrategicReel({
+          reelRes = await QualifyAI.createStrategicReel({
             company_id: selectedCompanyId,
-            account_id: targetAccountId,
+            account_id: targetAccountId || undefined,
             user_id: userId,
             idea: reelItem.theme || "Reel Semente — Método e Posicionamento",
             objective: "Apresentar o método e autoridade da marca",
-            apiKey: customApiKey || undefined,
+            apiKey: customApiKey.trim() || undefined,
             modelProfile: selectedModelProfile,
           });
           generatedReel = reelRes.data;
         }
-      } catch (reelErr) {
-        console.warn("[Playground] Não foi possível roteirizar o Reel via IA:", reelErr);
+      } catch (reelErr: any) {
+        console.error("[Playground] Erro ao roteirizar Reel com OpenAI:", reelErr);
+        throw reelErr;
       }
 
       setResultData({
@@ -437,15 +488,15 @@ export default function AdminAiPlayground() {
       });
 
       setTraceData({
-        run_id: `seed_content_${Date.now()}`,
+        run_id: reelRes?.trace?.run_id || `seed_content_${Date.now()}`,
         latency_ms: Date.now() - startTime,
         model: selectedModelProfile,
-        tokens_total: generatedReel ? 520 : 0,
-        estimated_cost: generatedReel ? 0.0002 : 0,
+        tokens_total: reelRes?.trace?.tokens_total || 0,
+        estimated_cost: reelRes?.trace?.estimated_cost || 0,
         status: "success",
       });
 
-      toast.success("Pacote de Conteúdo Semente gerado com sucesso!");
+      toast.success("Conteúdo Semente e Roteiro gerados com sucesso na OpenAI!");
     } catch (err: any) {
       console.error(err);
       setErrorDetails(err.message || "Erro ao gerar Conteúdo Semente.");
@@ -690,21 +741,34 @@ export default function AdminAiPlayground() {
                   </Badge>
                 )}
               </div>
-              <div className="space-y-1">
-                <Label className="text-[11px] text-muted-foreground">
-                  Chave OpenAI personalizada para teste (opcional):
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-muted-foreground flex items-center justify-between">
+                  <span>Chave OpenAI (sk-proj-...):</span>
+                  {customApiKey && customApiKey.trim().length > 10 && (
+                    <button
+                      type="button"
+                      onClick={handleSaveGlobalKey}
+                      disabled={savingKey}
+                      className="text-[10px] text-primary hover:underline font-medium cursor-pointer"
+                    >
+                      {savingKey ? "Salvando..." : "Salvar no sistema"}
+                    </button>
+                  )}
                 </Label>
                 <Input
                   type="password"
                   placeholder={
                     openAiConfig?.status === "active"
-                      ? "Deixe vazio para usar a chave configurada na plataforma"
-                      : "sk-proj-..."
+                      ? "Chave global ativa. Cole aqui caso queira usar outra chave..."
+                      : "Insira sua chave sk-proj-... para chamadas reais"
                   }
                   value={customApiKey}
-                  onChange={(e) => setCustomApiKey(e.target.value)}
+                  onChange={(e) => handleKeyChange(e.target.value)}
                   className="h-8 text-xs font-mono"
                 />
+                <p className="text-[10px] text-muted-foreground">
+                  * As requisições executadas com sua chave serão debitadas e visíveis em tempo real no seu painel da OpenAI (platform.openai.com/usage).
+                </p>
               </div>
             </div>
 

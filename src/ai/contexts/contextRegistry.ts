@@ -26,20 +26,41 @@ export const ContextProviderRegistry: Record<string, ContextProviderDefinition> 
     resolve: async ({ company_id }) => {
       if (!company_id) return {};
       try {
-        const { data: sprintWs } = await (supabase as any)
+        const { data: workspaces } = await (supabase as any)
           .from("sprint_os_workspaces")
-          .select("data")
+          .select("id, name, data, updated_at")
           .eq("company_id", company_id)
           .is("archived_at", null)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .order("updated_at", { ascending: false });
 
-        if (sprintWs?.data?.brandManual) {
-          return sprintWs.data.brandManual;
+        if (Array.isArray(workspaces)) {
+          for (const ws of workspaces) {
+            const bm = ws?.data?.brandManual;
+            if (bm) {
+              const activeFields = (bm.fields || []).filter((f: any) => !f.archived && !f.removed);
+              const answered = activeFields.filter((f: any) => {
+                const text = (f.response || f.value || "").trim();
+                return text.length > 5;
+              });
+
+              if (answered.length > 0 || bm.overallStatus === "completed" || bm.masterPrompt) {
+                const formattedAnswers = answered
+                  .map((f: any) => `• ${f.label || f.question || "Item"}: ${(f.response || f.value || "").trim()}`)
+                  .join("\n");
+
+                return {
+                  ...bm,
+                  workspace_name: ws.name,
+                  tone_of_voice: bm.toneOfVoice || bm.archetype || "Autoridade, clareza e ritmo dinâmico",
+                  summary_text: formattedAnswers,
+                  answered_count: answered.length,
+                };
+              }
+            }
+          }
         }
-      } catch {
-        // Fallback gracioso caso tabela não exista ou erro
+      } catch (err) {
+        console.warn("[contextRegistry] Erro ao resolver brand_manual:", err);
       }
       return {
         tone_of_voice: "Profissional, direto, pragmático e sem enrolação",

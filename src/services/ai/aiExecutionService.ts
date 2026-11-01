@@ -12,6 +12,7 @@ import {
 } from "@/types/aiSkills";
 import { resolveSkillSlugForAction } from "./actionRegistry";
 import { ContextBuilder } from "./contextBuilder";
+import { PREPARED_SKILLS } from "@/ai";
 
 export interface SkillFilter {
   category?: string;
@@ -133,9 +134,39 @@ export const AIExecutionService = {
       query = query.or(`name.ilike.%${filter.search}%,description.ilike.%${filter.search}%,slug.ilike.%${filter.search}%`);
     }
 
-    const { data, error } = await query;
-    if (error) throw error;
-    return data || [];
+    let dbSkills: any[] = [];
+    try {
+      const { data, error } = await query;
+      if (!error && Array.isArray(data)) {
+        dbSkills = data;
+      }
+    } catch (err) {
+      console.warn("[getSkills] Falha ao consultar ai_skills no banco:", err);
+    }
+
+    // Se o banco tiver menos skills que as 13 nativas, complementar com PREPARED_SKILLS
+    if (dbSkills.length < PREPARED_SKILLS.length) {
+      const existingSlugs = new Set(dbSkills.map((s: any) => s.slug));
+      const missing = PREPARED_SKILLS.filter((s) => !existingSlugs.has(s.slug)).map((s) => ({
+        id: `skill_${s.slug}`,
+        slug: s.slug,
+        name: s.name,
+        description: s.description,
+        category: s.category as any,
+        status: s.status as any,
+        default_model_profile: "CONTENT_STANDARD",
+        when_to_use: s.description,
+        target_objective: s.name,
+        output_format: "json",
+        main_instructions: s.instructions,
+        required_tools: s.required_tools,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }));
+      return [...dbSkills, ...missing] as any;
+    }
+
+    return dbSkills;
   },
 
   async getSkillById(id: string): Promise<AiSkill | null> {

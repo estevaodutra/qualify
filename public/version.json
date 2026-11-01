@@ -1,6 +1,6 @@
 {
-  "commit": "a0cf677dc004fff0c37cd549eaccda58797b2977",
-  "shortCommit": "a0cf677",
-  "message": "fix(playground): corrigir deteccao do manual da marca pelo campo response e busca em todos workspaces",
-  "builtAt": "2026-11-01T17:39:38.590Z"
+  "commit": "5cba102924d78d41e4dd00d875c557304c1467fa",
+  "shortCommit": "5cba102",
+  "message": "test(criafy): atualizar testes para permitir inicio do conteudo semente apenas com manual da marca preenchido",
+  "builtAt": "2026-11-01T18:14:10.294Z"
 }
