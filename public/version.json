@@ -1,6 +1,6 @@
 {
-  "commit": "3d5719340dae54cb4f16299bbda998d33284b303",
-  "shortCommit": "3d57193",
-  "message": "fix(criafy): adicionar importacao de CriafySeedContentCard no CriafyOverviewView",
-  "builtAt": "2026-11-01T16:41:23.984Z"
+  "commit": "741285a32a9f9af0f14669557dd6b1a8e71a9197",
+  "shortCommit": "741285a",
+  "message": "refactor(criafy): streamline AddAccountModal to direct Meta login and add copy connection link action",
+  "builtAt": "2026-11-01T16:45:42.835Z"
 }

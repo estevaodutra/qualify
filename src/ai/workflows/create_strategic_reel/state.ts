@@ -62,6 +62,18 @@ export const StrategicReelStateAnnotation = Annotation.Root({
     reducer: (_, next) => next,
     default: () => null,
   }),
+  tokens_used: Annotation<{
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+  }>({
+    reducer: (curr, next) => ({
+      input_tokens: (curr?.input_tokens || 0) + (next?.input_tokens || 0),
+      output_tokens: (curr?.output_tokens || 0) + (next?.output_tokens || 0),
+      total_tokens: (curr?.total_tokens || 0) + (next?.total_tokens || 0),
+    }),
+    default: () => ({ input_tokens: 0, output_tokens: 0, total_tokens: 0 }),
+  }),
   errors: Annotation<string[]>({
     reducer: (prev, next) => (next ? prev.concat(next) : prev),
     default: () => [],

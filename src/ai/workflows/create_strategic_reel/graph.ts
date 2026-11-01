@@ -1,17 +1,29 @@
 import { StateGraph, START, END } from "@langchain/langgraph";
+import { SystemMessage, HumanMessage } from "@langchain/core/messages";
 import { StrategicReelStateAnnotation, StrategicReelState } from "./state";
 import { resolveContextForAgent } from "../../contexts/contextRegistry";
 import { executeTool } from "../../tools/toolRegistry";
 import { getAgent } from "../../agents/agentRegistry";
 import { ScoreHookOutput, GenerateBeatSheetOutput } from "../../schemas";
 import { memoryCheckpointer } from "../../persistence/langGraphCheckpointer";
+import { createLangChainChatModel } from "../../models/modelFactory";
 
 export function buildStrategicReelGraph(options?: {
   checkpointer?: any;
   maxRetries?: number;
+  apiKey?: string;
+  modelProfile?: string;
 }) {
   const maxRetries = options?.maxRetries ?? 2;
   const instagramAgent = getAgent("InstagramAgent");
+
+  // Instancia modelo LangChain ChatOpenAI se houver API Key disponível
+  const chatModel = options?.apiKey
+    ? createLangChainChatModel({
+        profileCode: options.modelProfile || instagramAgent?.model_profile || "CONTENT_STANDARD",
+        apiKey: options.apiKey,
+      })
+    : null;
 
   // ============================================================
   // NODE 1: Load Context
@@ -44,21 +56,68 @@ export function buildStrategicReelGraph(options?: {
   async function generateHooksNode(state: StrategicReelState) {
     const idea = state.idea;
     const objective = state.objective;
+    let candidateHooks: string[] = [];
+    let tokensUsed = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
 
-    // 3 Ganchos estruturados com fórmulas comprovadas
-    const candidateHooks = [
-      `R$ 15.000 foi o que ignorar ${idea} custou para essa empresa.`,
-      `Pare de tentar ${idea} do jeito antigo. Faça isso em 3 passos.`,
-      `Ninguém te conta a verdade sobre ${idea} quando o assunto é ${objective}.`,
-    ];
+    if (chatModel) {
+      try {
+        const sysMsg = new SystemMessage(
+          instagramAgent?.system_prompt ||
+            "Você é um estrategista de conteúdo sênior no Instagram focado em alta retenção."
+        );
+        const userMsg = new HumanMessage(
+          `Gere exatamente 3 opções de ganchos (hooks) magnéticos para um Reel sobre:
+Tema: "${idea}"
+Objetivo: "${objective}"
+Tom da marca: "${state.brand_context?.tone_of_voice || "Direto e autoritário"}"
+
+Diretrizes obrigatórias de retenção:
+1. Máxima retenção nos primeiros 3 segundos (menos de 20 palavras por gancho).
+2. Sem clichês ("No vídeo de hoje", "Olá pessoal").
+3. Use contraste, números ou quebra de expectativa.
+4. Responda APENAS os 3 ganchos numerados de 1 a 3.`
+        );
+
+        const response = await chatModel.invoke([sysMsg, userMsg]);
+        const usage = (response as any).usage_metadata;
+        if (usage) {
+          tokensUsed = {
+            input_tokens: usage.input_tokens || 0,
+            output_tokens: usage.output_tokens || 0,
+            total_tokens: usage.total_tokens || 0,
+          };
+        }
+
+        const rawText = typeof response.content === "string" ? response.content : "";
+        const parsed = rawText
+          .split("\n")
+          .map((line) => line.replace(/^\d+[\.\)]\s*/, "").replace(/^["']|["']$/g, "").trim())
+          .filter((line) => line.length > 5);
+
+        if (parsed.length >= 3) {
+          candidateHooks = parsed.slice(0, 3);
+        }
+      } catch (err) {
+        console.warn("[generateHooksNode] Erro na chamada OpenAI LangChain, fallback ativado:", err);
+      }
+    }
+
+    if (candidateHooks.length < 3) {
+      candidateHooks = [
+        `R$ 15.000 foi o que ignorar ${idea} custou para essa empresa.`,
+        `Pare de tentar ${idea} do jeito antigo. Faça isso em 3 passos.`,
+        `Ninguém te conta a verdade sobre ${idea} quando o assunto é ${objective}.`,
+      ];
+    }
 
     return {
       hooks: candidateHooks,
+      tokens_used: tokensUsed,
       step_trace: [
         {
           step: "generate_hooks",
           timestamp: new Date().toISOString(),
-          details: { count: candidateHooks.length },
+          details: { count: candidateHooks.length, called_openai: Boolean(chatModel) },
         },
       ],
     };
@@ -131,32 +190,90 @@ export function buildStrategicReelGraph(options?: {
     const hookText = state.selected_hook?.hook || state.idea;
     const tone = state.brand_context?.tone_of_voice || "Direto e autoritário";
 
-    // Roteiro estruturado por blocos lógicos
-    const scriptLines = [
-      hookText,
-      `A maioria perde semanas tentando resolver isso sem um processo claro.`,
-      `O segredo não é trabalhar mais horas, mas estruturar o funil correto.`,
-      `Primeiro: alinhe seu posicionamento com números concretos.`,
-      `Segundo: automatize a qualificação para falar apenas com quem tem orçamento.`,
-      `Comente "ESCALA" aqui embaixo para receber nosso roteiro completo.`,
-    ];
-
-    const script = scriptLines.join("\n");
-    const onScreen = [
+    let script = "";
+    let onScreen: string[] = [
       "O ERRO MAIS CARO",
       "PARE DE PERDER TEMPO",
       "COMENTE 'ESCALA'",
     ];
+    let cta = "Comente 'ESCALA' para receber o passo a passo completo.";
+    let tokensUsed = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
+
+    if (chatModel) {
+      try {
+        const sysMsg = new SystemMessage(
+          instagramAgent?.system_prompt ||
+            "Você é um roteirista sênior de Reels de alta performance."
+        );
+        const userMsg = new HumanMessage(
+          `Com base no gancho vencedor: "${hookText}", escreva o roteiro completo para um Reel de até 45 segundos.
+Tema: "${state.idea}"
+Objetivo: "${state.objective}"
+Tom da marca: "${tone}"
+
+Diretrizes:
+- O roteiro deve ter entre 80 e 110 palavras (ritmo falado natural a 165 WPM).
+- Frases curtas e diretas, sem enrolação.
+- Uma chamada para ação (CTA) estratégica no final.
+- Sugira 3 textos curtos para aparecer na tela durante o vídeo.
+
+Responda ESTRITAMENTE em formato JSON com a estrutura:
+{
+  "script": "Texto de fala completo...",
+  "on_screen_text": ["TEXTO 1", "TEXTO 2", "TEXTO 3"],
+  "cta": "Chamada para ação final"
+}`
+        );
+
+        const response = await chatModel.invoke([sysMsg, userMsg]);
+        const usage = (response as any).usage_metadata;
+        if (usage) {
+          tokensUsed = {
+            input_tokens: usage.input_tokens || 0,
+            output_tokens: usage.output_tokens || 0,
+            total_tokens: usage.total_tokens || 0,
+          };
+        }
+
+        const rawText = typeof response.content === "string" ? response.content : "";
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed.script) script = parsed.script;
+          if (Array.isArray(parsed.on_screen_text) && parsed.on_screen_text.length > 0) {
+            onScreen = parsed.on_screen_text;
+          }
+          if (parsed.cta) cta = parsed.cta;
+        } else if (rawText.trim().length > 30) {
+          script = rawText.trim();
+        }
+      } catch (err) {
+        console.warn("[writeScriptNode] Erro na chamada OpenAI LangChain, fallback ativado:", err);
+      }
+    }
+
+    if (!script) {
+      const scriptLines = [
+        hookText,
+        `A maioria perde semanas tentando resolver isso sem um processo claro.`,
+        `O segredo não é trabalhar mais horas, mas estruturar o funil correto.`,
+        `Primeiro: alinhe seu posicionamento com números concretos.`,
+        `Segundo: automatize a qualificação para falar apenas com quem tem orçamento.`,
+        `Comente "ESCALA" aqui embaixo para receber nosso roteiro completo.`,
+      ];
+      script = scriptLines.join("\n");
+    }
 
     return {
       script,
       on_screen_text: onScreen,
-      cta: "Comente 'ESCALA' para receber o passo a passo.",
+      cta,
+      tokens_used: tokensUsed,
       step_trace: [
         {
           step: "write_script",
           timestamp: new Date().toISOString(),
-          details: { lineCount: scriptLines.length, tone },
+          details: { scriptLength: script.length, tone, called_openai: Boolean(chatModel) },
         },
       ],
     };

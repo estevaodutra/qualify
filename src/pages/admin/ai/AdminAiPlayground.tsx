@@ -40,6 +40,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { AIExecutionService } from "@/services/ai/aiExecutionService";
 import {
   QualifyAI,
   ALL_TOOLS,
@@ -87,6 +88,19 @@ export default function AdminAiPlayground() {
   const [resultData, setResultData] = useState<any>(null);
   const [traceData, setTraceData] = useState<any>(null);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
+  const [customApiKey, setCustomApiKey] = useState<string>("");
+
+  // Status da Chave OpenAI na Plataforma
+  const { data: openAiConfig } = useQuery({
+    queryKey: ["admin_ai_config_playground"],
+    queryFn: async () => {
+      try {
+        return await AIExecutionService.getOpenAiConfig();
+      } catch {
+        return null;
+      }
+    },
+  });
 
   // Carregar Empresas do Sistema
   const { data: companies = [] } = useQuery({
@@ -123,6 +137,8 @@ export default function AdminAiPlayground() {
           account_id: selectedAccountId !== "none" ? selectedAccountId : undefined,
           idea: ideaPrompt,
           objective,
+          apiKey: customApiKey || undefined,
+          modelProfile: selectedModelProfile,
         });
         setResultData(res.data);
         setTraceData(res.trace);
@@ -131,6 +147,7 @@ export default function AdminAiPlayground() {
         const res = await QualifyAI.runAgent({
           agentSlug: selectedAgentSlug,
           prompt: ideaPrompt,
+          apiKey: customApiKey || undefined,
           context: {
             company_id: selectedCompanyId || "default-company",
             account_id: selectedAccountId !== "none" ? selectedAccountId : undefined,
@@ -172,6 +189,8 @@ export default function AdminAiPlayground() {
           company_id: selectedCompanyId || "default-company",
           idea: ideaPrompt,
           objective,
+          apiKey: customApiKey || undefined,
+          modelProfile: selectedModelProfile,
         });
         setResultData(res.data);
         setTraceData(res.trace);
@@ -292,6 +311,40 @@ export default function AdminAiPlayground() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+
+            {/* Status da Conexão OpenAI Real */}
+            <div className="p-3 rounded-xl border bg-muted/30 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-foreground flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-primary" /> Conexão OpenAI
+                </span>
+                {openAiConfig?.status === "active" ? (
+                  <Badge variant="outline" className="text-[10px] text-emerald-600 bg-emerald-500/10 border-emerald-500/30 gap-1 font-mono">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Chave Ativa ({openAiConfig.maskedKey})
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[10px] text-amber-600 bg-amber-500/10 border-amber-500/30 gap-1 font-mono">
+                    <AlertCircle className="w-3 h-3 text-amber-600" /> Sem chave global salva
+                  </Badge>
+                )}
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[11px] text-muted-foreground">
+                  Chave OpenAI personalizada para teste (opcional):
+                </Label>
+                <Input
+                  type="password"
+                  placeholder={
+                    openAiConfig?.status === "active"
+                      ? "Deixe vazio para usar a chave configurada na plataforma"
+                      : "sk-proj-..."
+                  }
+                  value={customApiKey}
+                  onChange={(e) => setCustomApiKey(e.target.value)}
+                  className="h-8 text-xs font-mono"
+                />
               </div>
             </div>
 

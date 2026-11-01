@@ -14,6 +14,7 @@ import { getAgent, executeAgentWithLangChain } from "../agents/agentRegistry";
 import { executeTool } from "../tools/toolRegistry";
 import { ExecutionTracker } from "../observability/executionTracker";
 import { RBACEngine, SecurityError } from "../permissions/rbacEngine";
+import { resolveOpenAiApiKey } from "../models/modelFactory";
 import {
   ToolExecutionContext,
   QualifyAIResponse,
@@ -32,6 +33,8 @@ export interface RunWorkflowRequest {
     user_id?: string;
   };
   context?: Partial<ToolExecutionContext>;
+  apiKey?: string;
+  modelProfile?: string;
 }
 
 export interface RunAgentRequest {
@@ -74,8 +77,12 @@ export const QualifyAI = {
     });
 
     try {
-      // 3. Compilar StateGraph LangGraph nativo
-      const graph = workflowDef.createGraph();
+      // 3. Compilar StateGraph LangGraph nativo com credenciais resolvidas
+      const resolvedApiKey = await resolveOpenAiApiKey(req.apiKey);
+      const graph = workflowDef.createGraph({
+        apiKey: resolvedApiKey,
+        modelProfile: req.modelProfile,
+      });
 
       // 4. Preparar State Inicial
       const initialState = {
@@ -98,11 +105,18 @@ export const QualifyAI = {
 
       const resultState = await graph.invoke(initialState, threadConfig);
 
-      // 6. Contabilizar tokens aproximados
-      const scriptWords = resultState.script?.split(/\s+/).length || 0;
-      const inputTokens = 250;
-      const outputTokens = Math.max(150, scriptWords * 2);
-      tracker.addTokens(inputTokens, outputTokens);
+      // 6. Contabilizar tokens (reais da chamada OpenAI ou estimativa)
+      if (resultState.tokens_used?.total_tokens > 0) {
+        tracker.addTokens(
+          resultState.tokens_used.input_tokens,
+          resultState.tokens_used.output_tokens
+        );
+      } else {
+        const scriptWords = resultState.script?.split(/\s+/).length || 0;
+        const inputTokens = 250;
+        const outputTokens = Math.max(150, scriptWords * 2);
+        tracker.addTokens(inputTokens, outputTokens);
+      }
 
       tracker.finish("success");
       await tracker.persistToDatabase(resultState);
@@ -141,12 +155,18 @@ export const QualifyAI = {
     });
 
     try {
+      const resolvedApiKey = await resolveOpenAiApiKey(apiKey);
       const agentResult = await executeAgentWithLangChain(agentSlug, prompt, context, {
         overrideSkill,
-        apiKey,
+        apiKey: resolvedApiKey,
       });
 
-      tracker.addTokens(200, 300);
+      const usage = (agentResult.response as any)?.usage_metadata;
+      if (usage?.total_tokens > 0) {
+        tracker.addTokens(usage.input_tokens || 0, usage.output_tokens || 0);
+      } else {
+        tracker.addTokens(200, 300);
+      }
       tracker.finish("success");
       await tracker.persistToDatabase(agentResult);
 
@@ -238,9 +258,13 @@ export const QualifyAI = {
     user_id?: string;
     idea: string;
     objective?: string;
+    apiKey?: string;
+    modelProfile?: string;
   }): Promise<QualifyAIResponse<StrategicReelOutput>> {
     const res = await this.runWorkflow<any>({
       workflowSlug: "create_strategic_reel",
+      apiKey: params.apiKey,
+      modelProfile: params.modelProfile,
       input: {
         company_id: params.company_id,
         account_id: params.account_id,
