@@ -29,11 +29,13 @@ export function usePushNotifications() {
 
   // Sync current subscription status
   useEffect(() => {
+    setIsSubscribed(false);
     if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
       return;
     }
 
-    navigator.serviceWorker.ready.then(async (registration) => {
+    navigator.serviceWorker.getRegistration().then(async (registration) => {
+      if (!registration) return;
       const subscription = await registration.pushManager.getSubscription();
       setIsSubscribed(Boolean(subscription));
     }).catch(console.error);
@@ -110,9 +112,9 @@ export function usePushNotifications() {
       setIsSubscribed(true);
       toast.success("Notificações de novas mensagens ativadas com sucesso!");
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Push subscription error:", err);
-      toast.error(`Erro ao ativar notificações: ${err.message || err}`);
+      toast.error(`Erro ao ativar notificações: ${err instanceof Error ? err.message : String(err)}`);
       return false;
     } finally {
       setIsLoading(false);
@@ -143,7 +145,7 @@ export function usePushNotifications() {
 
       setIsSubscribed(false);
       toast.info("Notificações desativadas.");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Unsubscribe error:", err);
       toast.error("Erro ao desativar notificações.");
     } finally {

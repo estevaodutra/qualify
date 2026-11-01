@@ -39,6 +39,7 @@ export default function Pipelines() {
   
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window !== "undefined") {
+      if (window.innerWidth < 768) return true;
       const saved = localStorage.getItem("qualify-pipeline-sidebar-collapsed");
       if (saved !== null) return saved === "true";
       return window.innerWidth < 1024;
@@ -420,7 +421,7 @@ export default function Pipelines() {
               onToggleSidebar={toggleSidebar}
             />
             
-            <div className="flex-1 overflow-x-auto overflow-y-auto p-3 md:p-6 pb-24 md:pb-8 bg-muted/10">
+            <div className="flex-1 overflow-x-auto overflow-y-auto p-3 md:p-6 pb-8 bg-muted/10 overscroll-x-contain">
               <div className="flex h-full items-start gap-4" style={{ minWidth: "max-content" }}>
                 <DndContext
                   sensors={sensors}
@@ -482,7 +483,7 @@ export default function Pipelines() {
                   <button 
                     type="button"
                     onClick={() => setCreateStageOpen(true)}
-                    className="flex-shrink-0 w-[300px] h-[48px] rounded-xl border-2 border-dashed border-border/60 hover:border-primary/50 hover:bg-primary/5 text-muted-foreground flex items-center justify-center text-sm font-medium transition-colors cursor-pointer"
+                    className="flex-shrink-0 w-[min(300px,85vw)] h-[48px] rounded-xl border-2 border-dashed border-border/60 hover:border-primary/50 hover:bg-primary/5 text-muted-foreground flex items-center justify-center text-sm font-medium transition-colors cursor-pointer"
                   >
                     + Nova Etapa
                   </button>

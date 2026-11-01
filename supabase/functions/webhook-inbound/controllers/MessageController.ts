@@ -790,11 +790,24 @@ export async function processMessageEvent(
   // 4. ==========================================
   // WEB PUSH NOTIFICATION DISPATCHER (INBOUND REAL MESSAGES)
   // ==========================================
-  if (isInbound && context.chatType !== "group" && instance?.user_id) {
+  if (isInbound && context.chatType !== "group" && instance?.user_id && instance?.company_id && context.messageId) {
     try {
-      const senderTitle = context.senderName || context.senderPhone || "Nova mensagem";
+      const phone = (context.senderPhone || "").replace(/\D/g, "");
+      if (!phone) return;
+      const { data: conversations } = await supabase.from("chat_conversations")
+        .select("id, operator_id, contact_name, contact_phone")
+        .eq("company_id", instance.company_id).eq("instance_id", instance.id)
+        .eq("contact_phone", phone).order("updated_at", { ascending: false }).limit(1);
+      const conversation = conversations?.[0];
+      if (!conversation) return;
+      const { data: message } = await supabase.from("chat_messages")
+        .select("id, body, message_type").eq("conversation_id", conversation.id)
+        .eq("message_id", context.messageId).eq("sender_type", "lead").maybeSingle();
+      if (!message) return;
+      const senderTitle = conversation.contact_name || context.senderName || context.senderPhone || "Nova mensagem";
       const rawMsgObj = rawEvent.body || rawEvent.payload || rawEvent;
-      const bodyText = (typeof rawMsgObj === "string" ? rawMsgObj : rawMsgObj?.text?.message || rawMsgObj?.text || rawMsgObj?.message?.conversation || rawMsgObj?.message?.extendedTextMessage?.text || rawMsgObj?.caption || "") as string;
+      const rawText = typeof rawMsgObj === "string" ? rawMsgObj : rawMsgObj?.text?.message || rawMsgObj?.text || rawMsgObj?.message?.conversation || rawMsgObj?.message?.extendedTextMessage?.text || rawMsgObj?.caption || "";
+      const bodyText = typeof rawText === "string" ? rawText : "";
 
       let detectedMediaType: string | undefined = undefined;
       if (rawEvent.type === "image" || rawMsgObj?.image) detectedMediaType = "image";
@@ -803,29 +816,14 @@ export async function processMessageEvent(
       else if (rawEvent.type === "document" || rawMsgObj?.document) detectedMediaType = "document";
       else if (rawEvent.type === "location" || rawMsgObj?.location) detectedMediaType = "location";
 
-      // Resolve the actual CRM conversation ID (messageId is a message identifier,
-      // not a valid deep-link target for /chat).
-      let conversationId: string | undefined;
-      if (instance.company_id && context.senderPhone) {
-        const { data: conversation } = await supabase
-          .from("chat_conversations")
-          .select("id")
-          .eq("company_id", instance.company_id)
-          .eq("instance_id", instance.id)
-          .eq("contact_phone", context.senderPhone)
-          .order("updated_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        conversationId = conversation?.id;
-      }
-
       await dispatchWebPushNotification(supabase, {
         companyId: instance.company_id || "",
-        userIds: [instance.user_id],
+        userIds: [conversation.operator_id || instance.user_id],
         title: senderTitle,
-        body: bodyText,
-        conversationId,
-        mediaType: detectedMediaType,
+        body: (message.body || bodyText).slice(0, 180),
+        conversationId: conversation.id,
+        messageId: message.id,
+        mediaType: detectedMediaType || message.message_type,
       });
     } catch (pushErr) {
       console.error("[MessageController] Error dispatching push notification:", pushErr);

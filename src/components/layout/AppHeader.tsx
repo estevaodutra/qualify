@@ -1,5 +1,4 @@
-import { Wallet as WalletIcon, Menu, PanelLeft, BellRing, BellOff } from "lucide-react";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { Wallet as WalletIcon, BellRing, BellOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useWallet } from "@/hooks/useWallet";
@@ -30,9 +29,6 @@ export function AppHeader() {
       <div className="flex h-[60px] items-center justify-between px-6 gap-4">
         {/* Left */}
         <div className="flex items-center gap-3 flex-1">
-          <SidebarTrigger className="h-9 w-9 shrink-0 rounded-xl text-muted-foreground hover:bg-accent hover:text-foreground transition-colors md:hidden">
-            <Menu className="h-5 w-5" />
-          </SidebarTrigger>
           <div className="flex items-center gap-2 md:hidden">
             <img src="/logo-sidebar-light.png" alt="Qualify Logo" className="h-6 w-auto" />
             <span className="font-extrabold text-sm tracking-widest text-foreground uppercase">QUALIFY</span>

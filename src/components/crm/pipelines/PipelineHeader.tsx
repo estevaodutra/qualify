@@ -31,7 +31,7 @@ export function PipelineHeader({
   const isArchived = pipeline.status === "archived";
 
   return (
-    <div className="flex-none flex items-center justify-between p-4 border-b bg-background h-16">
+    <div className="flex-none flex flex-wrap items-center justify-between gap-2 p-3 sm:p-4 border-b bg-background min-h-16">
       <div className="flex items-center gap-2 sm:gap-3 min-w-0">
         {onToggleSidebar && (
           <Button
@@ -71,7 +71,7 @@ export function PipelineHeader({
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input 
             placeholder="Buscar negócios..." 
-            className="pl-9 w-64 h-9 bg-muted/50 border-transparent focus-visible:border-primary"
+            className="pl-9 w-[min(55vw,16rem)] h-9 bg-muted/50 border-transparent focus-visible:border-primary"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />

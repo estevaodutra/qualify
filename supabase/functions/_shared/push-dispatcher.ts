@@ -6,48 +6,46 @@ export interface PushNotificationPayload {
   userIds: string[];
   title: string;
   body: string;
+  messageId: string;
   conversationId?: string;
   mediaType?: string;
 }
 
 export async function dispatchWebPushNotification(
   supabase: SupabaseClient,
-  payload: PushNotificationPayload
+  payload: PushNotificationPayload,
 ) {
-  if (!payload.userIds || payload.userIds.length === 0) return;
+  if (!payload.companyId || !payload.messageId || !payload.userIds?.length) return;
 
   try {
     const publicKey = Deno.env.get("VAPID_PUBLIC_KEY");
     const privateKey = Deno.env.get("VAPID_PRIVATE_KEY");
-    const subject = Deno.env.get("VAPID_SUBJECT") || "mailto:suporte@qualifys.app";
     if (!publicKey || !privateKey) {
-      console.warn("[push-dispatcher] VAPID keys not configured; push delivery skipped.");
+      console.warn("[push-dispatcher] VAPID keys not configured; delivery skipped.");
       return;
     }
-    webpush.setVapidDetails(subject, publicKey, privateKey);
-    // 1. Fetch active push subscriptions for targeted user IDs
+    webpush.setVapidDetails(Deno.env.get("VAPID_SUBJECT") || "mailto:suporte@qualifys.app", publicKey, privateKey);
+
+    const { data: members, error: memberError } = await supabase
+      .from("company_members").select("user_id").eq("company_id", payload.companyId)
+      .eq("is_active", true).in("user_id", [...new Set(payload.userIds)]);
+    if (memberError) throw memberError;
+    const permittedIds = (members || []).map((member) => member.user_id);
+    if (!permittedIds.length) return;
+
     const { data: subscriptions, error } = await supabase
-      .from("push_subscriptions")
-      .select("id, user_id, endpoint, p256dh, auth")
-      .in("user_id", payload.userIds)
-      .eq("company_id", payload.companyId)
-      .is("revoked_at", null);
+      .from("push_subscriptions").select("id, endpoint, p256dh, auth")
+      .eq("company_id", payload.companyId).in("user_id", permittedIds).is("revoked_at", null);
+    if (error) throw error;
+    if (!subscriptions?.length) return;
 
-    if (error || !subscriptions || subscriptions.length === 0) {
-      console.log(`[push-dispatcher] No active push subscriptions found for target users.`);
-      return;
-    }
-
-    // Format media previews if present
     let displayBody = payload.body;
-    if (payload.mediaType) {
-      switch (payload.mediaType) {
-        case "image": displayBody = displayBody ? `📷 ${displayBody}` : "📷 Enviou uma imagem"; break;
-        case "audio": displayBody = "🎤 Enviou um áudio"; break;
-        case "video": displayBody = displayBody ? `🎥 ${displayBody}` : "🎥 Enviou um vídeo"; break;
-        case "document": displayBody = displayBody ? `📎 ${displayBody}` : "📎 Enviou um documento"; break;
-        case "location": displayBody = "📍 Enviou uma localização"; break;
-      }
+    switch (payload.mediaType) {
+      case "image": displayBody = displayBody ? `📷 ${displayBody}` : "📷 Enviou uma imagem"; break;
+      case "audio": displayBody = "🎤 Enviou um áudio"; break;
+      case "video": displayBody = displayBody ? `🎥 ${displayBody}` : "🎥 Enviou um vídeo"; break;
+      case "document": displayBody = displayBody ? `📎 ${displayBody}` : "📎 Enviou um documento"; break;
+      case "location": displayBody = "📍 Enviou uma localização"; break;
     }
 
     const pushData = {
@@ -57,35 +55,38 @@ export async function dispatchWebPushNotification(
       badge: "/logo-dark.png",
       conversationId: payload.conversationId,
       companyId: payload.companyId,
-      url: payload.conversationId ? `/chat?conversationId=${payload.conversationId}` : "/chat",
-      tag: payload.conversationId ? `conversation:${payload.conversationId}` : undefined,
+      tag: `message:${payload.messageId}`,
     };
 
-    console.log(`[push-dispatcher] Dispatching push to ${subscriptions.length} subscription endpoints...`);
-
     const results = await Promise.allSettled(subscriptions.map(async (subscription) => {
+      const { error: claimError } = await supabase.from("push_deliveries").insert({
+        message_id: payload.messageId,
+        subscription_id: subscription.id,
+      });
+      if (claimError?.code === "23505") return;
+      if (claimError) throw claimError;
       try {
         await webpush.sendNotification({
           endpoint: subscription.endpoint,
           keys: { p256dh: subscription.p256dh, auth: subscription.auth },
         }, JSON.stringify(pushData), { TTL: 60 * 60 });
         await supabase.from("push_subscriptions")
-          .update({ last_used_at: new Date().toISOString() })
-          .eq("id", subscription.id);
-      } catch (error: any) {
-        const status = error?.statusCode;
+          .update({ last_used_at: new Date().toISOString() }).eq("id", subscription.id);
+      } catch (sendError) {
+        const status = (sendError as { statusCode?: number }).statusCode;
         if (status === 404 || status === 410) {
           await supabase.from("push_subscriptions")
-            .update({ revoked_at: new Date().toISOString() })
-            .eq("id", subscription.id);
+            .update({ revoked_at: new Date().toISOString() }).eq("id", subscription.id);
+        } else {
+          await supabase.from("push_deliveries").delete()
+            .eq("message_id", payload.messageId).eq("subscription_id", subscription.id);
         }
-        throw error;
+        throw sendError;
       }
     }));
-    const failed = results.filter((result) => result.status === "rejected");
-    if (failed.length) console.warn(`[push-dispatcher] Failed deliveries: ${failed.length}/${results.length}`);
-
-  } catch (err) {
-    console.error("[push-dispatcher] Error dispatching push notifications:", err);
+    const failures = results.filter((result) => result.status === "rejected");
+    if (failures.length) console.warn(`[push-dispatcher] Failed deliveries: ${failures.length}/${results.length}`);
+  } catch (error) {
+    console.error("[push-dispatcher] Error dispatching push notifications:", error);
   }
 }

@@ -38,6 +38,7 @@ import { ImageUpload } from "@/components/settings/ImageUpload";
 import { CompanyLogsTab } from "@/components/settings/CompanyLogsTab";
 import { useLocation, useNavigate } from "react-router-dom";
 import { CustomFieldsTab } from "@/components/settings/CustomFieldsTab";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { SettingsLayout } from "@/components/settings/SettingsLayout";
 import MembersPage from "@/pages/settings/MembersPage";
 import Instances from "@/pages/Instances";
@@ -58,6 +59,7 @@ interface ApiKey {
 }
 
 export default function Settings() {
+  const push = usePushNotifications();
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
   const { language, setLanguage, t } = useLanguage();
@@ -521,6 +523,15 @@ export default function Settings() {
         </TabsContent>
 
         <TabsContent value="notifications" className="space-y-8 outline-none animate-fade-in">
+          <Card className="rounded-2xl border-border/40">
+            <CardHeader><CardTitle className="text-lg">Notificações no dispositivo</CardTitle><CardDescription>Receba novas mensagens mesmo com o Qualify fechado. No iPhone, adicione o Qualify à Tela de Início antes de ativar.</CardDescription></CardHeader>
+            <CardContent className="flex flex-wrap items-center justify-between gap-3">
+              <span className="text-sm text-muted-foreground">{push.permission === "denied" ? "Permissão bloqueada nas configurações do navegador" : push.isSubscribed ? "Ativadas neste dispositivo" : "Desativadas neste dispositivo"}</span>
+              <Button type="button" disabled={push.isLoading || push.permission === "denied"} onClick={() => void (push.isSubscribed ? push.unsubscribe() : push.subscribe())}>
+                {push.isLoading ? "Aguarde..." : push.isSubscribed ? "Desativar" : "Ativar notificações"}
+              </Button>
+            </CardContent>
+          </Card>
           <Card className="border-white/40 bg-card/60 backdrop-blur-xl shadow-sm rounded-2xl overflow-hidden transition-colors hover:border-[#8A3CFF]/20">
           <CardHeader className="pb-4 border-b border-border/40">
             <div className="flex items-center gap-3">

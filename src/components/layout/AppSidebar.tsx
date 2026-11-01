@@ -137,7 +137,7 @@ export function AppSidebar() {
   return (
     <Sidebar
       collapsible="icon"
-      className="border-r border-slate-200/80 bg-[#FBFBFD] h-screen flex flex-col select-none text-slate-800"
+      className="border-r border-slate-200/80 bg-[#FBFBFD] h-[100dvh] md:h-screen flex flex-col select-none text-slate-800"
     >
       {/* 1. HEADER: Centered Logo + Top-Right Collapse Toggle Button */}
       <SidebarHeader className="p-0 shrink-0">

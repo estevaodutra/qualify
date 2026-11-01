@@ -133,7 +133,7 @@ export default function QuickRepliesSidebarPanel({
   }, [activeGroups, filteredReplies]);
 
   return (
-    <div className={cn("w-[340px] shrink-0 border-l border-border/40 bg-card/20 flex flex-col h-full overflow-hidden select-none", className)}>
+    <div className={cn("w-full lg:w-[340px] shrink-0 border-l border-border/40 bg-card/20 flex flex-col h-full overflow-hidden select-none", className)}>
       {/* Header */}
       <div className="p-4 border-b border-border/20 space-y-3 shrink-0 bg-background/30 backdrop-blur-md">
         <div className="flex items-center justify-between">

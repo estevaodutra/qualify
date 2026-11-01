@@ -291,7 +291,7 @@ export default function LeadContextPanel({ conversation, stages, onClose, classN
   });
 
   return (
-    <div className={cn("w-[340px] shrink-0 border-l border-border/40 bg-card/20 flex flex-col h-full overflow-hidden", className)}>
+    <div className={cn("w-full lg:w-[340px] shrink-0 border-l border-border/40 bg-card/20 flex flex-col h-full overflow-hidden", className)}>
       {/* Contact Profile Header */}
       <div className="flex flex-col items-center text-center p-4 space-y-2 border-b border-border/20 shrink-0 bg-background/30 backdrop-blur-md relative">
         {onClose && (

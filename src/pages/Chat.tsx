@@ -36,7 +36,7 @@ import { QuickReply } from "@/types/quickReplyTypes";
 import { AdvancedChatFilters, DEFAULT_ADVANCED_CHAT_FILTERS } from "@/types/chatFilterTypes";
 
 export default function Chat() {
-  const { activeCompanyId } = useCompany();
+  const { activeCompanyId, companies, setActiveCompany } = useCompany();
   const [searchParams] = useSearchParams();
   const { conversationId: routeConversationId } = useParams<{ conversationId?: string }>();
   const navigate = useNavigate();
@@ -45,8 +45,14 @@ export default function Chat() {
   const phoneParam = searchParams.get("phone");
   const leadIdParam = searchParams.get("leadId");
   const conversationIdParam = searchParams.get("conversationId");
+  const companyIdParam = searchParams.get("companyId");
   const copilotParam = searchParams.get("copilot");
   const [selectedConvId, setSelectedConvId] = useState<string | null>(copilotParam === "true" ? "copilot-ia" : (routeConversationId || conversationIdParam || null));
+  useEffect(() => {
+    if (companyIdParam && companyIdParam !== activeCompanyId && companies.some((company) => company.id === companyIdParam)) {
+      setActiveCompany(companyIdParam);
+    }
+  }, [companyIdParam, activeCompanyId, companies, setActiveCompany]);
   const isCopilotActive = selectedConvId === "copilot-ia" || copilotParam === "true";
   const [sidebarMode, setSidebarMode] = useState<ChatSidebarMode>("quick_replies");
   const [selectedQuickReply, setSelectedQuickReply] = useState<QuickReply | null>(null);
@@ -55,10 +61,12 @@ export default function Chat() {
   useEffect(() => {
     if (copilotParam === "true") {
       setSelectedConvId("copilot-ia");
-    } else if (routeConversationId && routeConversationId !== selectedConvId) {
-      setSelectedConvId(routeConversationId);
+    } else if (routeConversationId || conversationIdParam) {
+      setSelectedConvId(routeConversationId || conversationIdParam);
+    } else {
+      setSelectedConvId(null);
     }
-  }, [routeConversationId, copilotParam]);
+  }, [routeConversationId, conversationIdParam, copilotParam]);
 
   // Mobile Sheet states
   const [mobileQuickRepliesOpen, setMobileQuickRepliesOpen] = useState(false);

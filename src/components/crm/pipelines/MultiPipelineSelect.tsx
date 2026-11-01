@@ -225,7 +225,7 @@ export function MultiPipelineSelect({
           </Button>
         </PopoverTrigger>
 
-        <PopoverContent className="w-[340px] p-0 z-[10000] bg-white rounded-xl shadow-xl border border-slate-200" align="start">
+        <PopoverContent className="w-[min(340px,calc(100vw-1rem))] p-0 z-[10000] bg-white rounded-xl shadow-xl border border-slate-200" align="start">
           <div className="p-2 border-b border-slate-100 flex items-center gap-2">
             <Search className="h-3.5 w-3.5 text-slate-400 shrink-0 ml-1" />
             <Input

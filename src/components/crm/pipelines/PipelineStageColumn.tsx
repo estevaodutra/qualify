@@ -75,7 +75,7 @@ export function PipelineStageColumn({
       <div 
         ref={setNodeRef}
         style={style}
-        className="flex flex-col h-full w-[300px] shrink-0 bg-muted/50 rounded-xl border-2 border-dashed border-primary opacity-50"
+        className="flex flex-col h-full w-[min(300px,85vw)] shrink-0 bg-muted/50 rounded-xl border-2 border-dashed border-primary opacity-50"
       />
     );
   }
@@ -88,7 +88,7 @@ export function PipelineStageColumn({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       className={cn(
-        "flex flex-col h-full w-[300px] shrink-0 rounded-xl border transition-all duration-200",
+        "flex flex-col h-full w-[min(300px,85vw)] shrink-0 rounded-xl border transition-all duration-200",
         isDragOver
           ? "bg-primary/5 border-primary ring-2 ring-primary/40 shadow-lg"
           : "bg-muted/20 border-border/40"
