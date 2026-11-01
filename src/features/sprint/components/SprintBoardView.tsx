@@ -37,6 +37,7 @@ import {
   MoreHorizontal,
   Trash2,
   PanelLeft,
+  Paperclip,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,7 +80,10 @@ export const SprintBoardView: React.FC = () => {
     clearFilters,
     openCardModal,
     activeCardId,
+    boardAttachments,
   } = useSprintStore();
+
+  const [isBoardFilesOpen, setIsBoardFilesOpen] = useState(false);
 
   const [activeDragItem, setActiveDragItem] = useState<{
     type: "Column" | "Card";
@@ -394,6 +398,23 @@ export const SprintBoardView: React.FC = () => {
               </div>
             </PopoverContent>
           </Popover>
+
+          {/* Botão de Arquivos do Quadro */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsBoardFilesOpen(true)}
+            className="h-8 text-xs gap-1.5"
+            title="Ver todos os arquivos e anexos deste quadro"
+          >
+            <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
+            <span>Arquivos</span>
+            {(boardAttachments || []).length > 0 && (
+              <Badge variant="secondary" className="h-4 px-1 text-[10px] ml-0.5">
+                {(boardAttachments || []).length}
+              </Badge>
+            )}
+          </Button>
 
           {hasActiveFilters && (
             <Button
