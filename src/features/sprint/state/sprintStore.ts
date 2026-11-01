@@ -7,8 +7,10 @@ import {
   SprintChecklist,
   SprintChecklistItem,
   SprintComment,
+  SprintAttachment,
 } from "../types";
 import { sprintService } from "../services/sprintService";
+import { uploadSprintFile } from "../utils/sprintFileUtils";
 import { toast } from "sonner";
 
 interface SprintState {
@@ -19,6 +21,8 @@ interface SprintState {
   activeCardId: string | null;
   activeCard: SprintCard | null;
   cardComments: SprintComment[];
+  boardAttachments: SprintAttachment[];
+  cardAttachments: SprintAttachment[];
   isLoading: boolean;
   searchFilter: string;
   selectedLabelFilters: string[];
@@ -70,7 +74,30 @@ interface SprintState {
   openCardModal: (cardId: string) => Promise<void> | void;
   closeCardModal: () => void;
   loadCardComments: (cardId: string) => Promise<void>;
-  addComment: (params: { cardId: string; userId: string; content: string }) => Promise<void>;
+  loadBoardAttachments: (boardId: string) => Promise<void>;
+  loadCardAttachments: (cardId: string) => Promise<void>;
+  uploadChecklistItemAttachment: (params: {
+    checklistId: string;
+    itemId: string;
+    cardId: string;
+    boardId: string;
+    companyId: string;
+    file: File;
+    userId: string;
+  }) => Promise<void>;
+  removeChecklistItemAttachment: (params: {
+    checklistId: string;
+    itemId: string;
+    cardId: string;
+  }) => Promise<void>;
+  addComment: (params: {
+    cardId: string;
+    userId: string;
+    content: string;
+    boardId?: string;
+    companyId?: string;
+    file?: File | null;
+  }) => Promise<void>;
   deleteComment: (commentId: string) => Promise<void>;
 
   // Checklists
@@ -113,6 +140,8 @@ export const useSprintStore = create<SprintState>((set, get) => ({
   activeCardId: null,
   activeCard: null,
   cardComments: [],
+  boardAttachments: [],
+  cardAttachments: [],
   isLoading: false,
   searchFilter: "",
   selectedLabelFilters: [],
@@ -185,6 +214,7 @@ export const useSprintStore = create<SprintState>((set, get) => ({
       set({ isLoading: true });
       const { board, lists, labels } = await sprintService.getBoardDetails(boardId);
       set({ currentBoard: board, lists, labels });
+      get().loadBoardAttachments(boardId);
     } catch (err: any) {
       console.error("Error loading board details:", err);
       toast.error("Erro ao carregar detalhes do quadro");
@@ -364,6 +394,7 @@ export const useSprintStore = create<SprintState>((set, get) => ({
       if (card) {
         set({ activeCardId: cardId, activeCard: card });
         get().loadCardComments(cardId);
+        get().loadCardAttachments(cardId);
       }
     } catch (e) {
       console.warn("Failed to load card for modal", e);
@@ -371,7 +402,7 @@ export const useSprintStore = create<SprintState>((set, get) => ({
   },
 
   closeCardModal: () => {
-    set({ activeCardId: null, activeCard: null, cardComments: [] });
+    set({ activeCardId: null, activeCard: null, cardComments: [], cardAttachments: [] });
   },
 
   loadCardComments: async (cardId: string) => {
@@ -383,21 +414,224 @@ export const useSprintStore = create<SprintState>((set, get) => ({
     }
   },
 
-  addComment: async ({ cardId, userId, content }) => {
-    const newComment = await sprintService.addCardComment({ cardId, userId, content });
-    set((state) => ({
-      cardComments: [...state.cardComments, newComment],
-      lists: state.lists.map((l) => ({
-        ...l,
-        cards: l.cards.map((c) =>
-          c.id === cardId ? { ...c, comments_count: (c.comments_count || 0) + 1 } : c
+  loadBoardAttachments: async (boardId: string) => {
+    try {
+      const attachments = await sprintService.getBoardAttachments(boardId);
+      set({ boardAttachments: attachments });
+    } catch (e) {
+      console.warn("Failed to load board attachments", e);
+    }
+  },
+
+  loadCardAttachments: async (cardId: string) => {
+    try {
+      const attachments = await sprintService.getCardAttachments(cardId);
+      set({ cardAttachments: attachments });
+    } catch (e) {
+      console.warn("Failed to load card attachments", e);
+    }
+  },
+
+  uploadChecklistItemAttachment: async ({ checklistId, itemId, cardId, boardId, companyId, file, userId }) => {
+    try {
+      const uploaded = await uploadSprintFile(file, userId, boardId);
+      await sprintService.updateChecklistItemAttachment({
+        itemId,
+        cardId,
+        boardId,
+        companyId,
+        attachment: {
+          url: uploaded.url,
+          name: uploaded.fileName,
+          size: uploaded.fileSize,
+          type: uploaded.fileType,
+          storagePath: uploaded.storagePath,
+          userId,
+        },
+      });
+
+      const updateItemInCard = (c: SprintCard): SprintCard => ({
+        ...c,
+        checklists: (c.checklists || []).map((ch) =>
+          ch.id === checklistId
+            ? {
+                ...ch,
+                items: (ch.items || []).map((it) =>
+                  it.id === itemId
+                    ? {
+                        ...it,
+                        attachment_url: uploaded.url,
+                        attachment_name: uploaded.fileName,
+                        attachment_size: uploaded.fileSize,
+                        attachment_type: uploaded.fileType,
+                      }
+                    : it
+                ),
+              }
+            : ch
         ),
-      })),
-      activeCard:
-        state.activeCard?.id === cardId
-          ? { ...state.activeCard, comments_count: (state.activeCard.comments_count || 0) + 1 }
-          : state.activeCard,
-    }));
+      });
+
+      const newAttachment: SprintAttachment = {
+        id: `item-${itemId}`,
+        company_id: companyId,
+        board_id: boardId,
+        card_id: cardId,
+        checklist_item_id: itemId,
+        file_name: uploaded.fileName,
+        file_url: uploaded.url,
+        file_size: uploaded.fileSize,
+        file_type: uploaded.fileType,
+        storage_path: uploaded.storagePath,
+        uploaded_by: userId,
+        created_at: new Date().toISOString(),
+        card_title: get().activeCard?.title,
+      };
+
+      set((state) => ({
+        lists: state.lists.map((l) => ({
+          ...l,
+          cards: l.cards.map((c) =>
+            (c.checklists || []).some((ch) => ch.id === checklistId) ? updateItemInCard(c) : c
+          ),
+        })),
+        activeCard: state.activeCard ? updateItemInCard(state.activeCard) : null,
+        boardAttachments: [
+          newAttachment,
+          ...(state.boardAttachments || []).filter((a) => a.checklist_item_id !== itemId),
+        ],
+        cardAttachments: [
+          newAttachment,
+          ...(state.cardAttachments || []).filter((a) => a.checklist_item_id !== itemId),
+        ],
+      }));
+
+      toast.success("Arquivo anexado com sucesso!");
+    } catch (err: any) {
+      console.error("Erro no upload do anexo:", err);
+      toast.error(err.message || "Erro ao anexar arquivo");
+      throw err;
+    }
+  },
+
+  removeChecklistItemAttachment: async ({ checklistId, itemId, cardId }) => {
+    try {
+      await sprintService.updateChecklistItemAttachment({
+        itemId,
+        cardId,
+        boardId: "",
+        companyId: "",
+        attachment: null,
+      });
+
+      const updateItemInCard = (c: SprintCard): SprintCard => ({
+        ...c,
+        checklists: (c.checklists || []).map((ch) =>
+          ch.id === checklistId
+            ? {
+                ...ch,
+                items: (ch.items || []).map((it) =>
+                  it.id === itemId
+                    ? {
+                        ...it,
+                        attachment_url: null,
+                        attachment_name: null,
+                        attachment_size: null,
+                        attachment_type: null,
+                      }
+                    : it
+                ),
+              }
+            : ch
+        ),
+      });
+
+      set((state) => ({
+        lists: state.lists.map((l) => ({
+          ...l,
+          cards: l.cards.map((c) =>
+            (c.checklists || []).some((ch) => ch.id === checklistId) ? updateItemInCard(c) : c
+          ),
+        })),
+        activeCard: state.activeCard ? updateItemInCard(state.activeCard) : null,
+        boardAttachments: (state.boardAttachments || []).filter(
+          (a) => a.checklist_item_id !== itemId
+        ),
+        cardAttachments: (state.cardAttachments || []).filter(
+          (a) => a.checklist_item_id !== itemId
+        ),
+      }));
+
+      toast.success("Anexo removido");
+    } catch (err: any) {
+      toast.error("Erro ao remover anexo");
+    }
+  },
+
+  addComment: async ({ cardId, userId, content, boardId, companyId, file }) => {
+    let attachmentPayload: any = null;
+    if (file) {
+      const bId = boardId || get().currentBoard?.id;
+      if (bId) {
+        const uploaded = await uploadSprintFile(file, userId, bId);
+        attachmentPayload = {
+          url: uploaded.url,
+          name: uploaded.fileName,
+          size: uploaded.fileSize,
+          type: uploaded.fileType,
+          storagePath: uploaded.storagePath,
+        };
+      }
+    }
+
+    const newComment = await sprintService.addCardComment({
+      cardId,
+      userId,
+      content,
+      boardId: boardId || get().currentBoard?.id,
+      companyId: companyId || get().currentBoard?.company_id,
+      attachment: attachmentPayload,
+    });
+
+    set((state) => {
+      const newAttachment: SprintAttachment | null = attachmentPayload && newComment?.id
+        ? {
+            id: `comment-${newComment.id}`,
+            company_id: companyId || state.currentBoard?.company_id || "",
+            board_id: boardId || state.currentBoard?.id || "",
+            card_id: cardId,
+            comment_id: newComment.id,
+            file_name: attachmentPayload.name,
+            file_url: attachmentPayload.url,
+            file_size: attachmentPayload.size,
+            file_type: attachmentPayload.type,
+            storage_path: attachmentPayload.storagePath,
+            uploaded_by: userId,
+            created_at: newComment.created_at || new Date().toISOString(),
+            card_title: state.activeCard?.title,
+          }
+        : null;
+
+      return {
+        cardComments: [...state.cardComments, newComment],
+        lists: state.lists.map((l) => ({
+          ...l,
+          cards: l.cards.map((c) =>
+            c.id === cardId ? { ...c, comments_count: (c.comments_count || 0) + 1 } : c
+          ),
+        })),
+        activeCard:
+          state.activeCard?.id === cardId
+            ? { ...state.activeCard, comments_count: (state.activeCard.comments_count || 0) + 1 }
+            : state.activeCard,
+        boardAttachments: newAttachment
+          ? [newAttachment, ...(state.boardAttachments || [])]
+          : state.boardAttachments,
+        cardAttachments: newAttachment
+          ? [newAttachment, ...(state.cardAttachments || [])]
+          : state.cardAttachments,
+      };
+    });
   },
 
   deleteComment: async (commentId: string) => {

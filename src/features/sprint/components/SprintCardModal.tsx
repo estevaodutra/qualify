@@ -16,6 +16,8 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
 import { SprintCardTagPopover } from "./SprintCardTagPopover";
+import { SprintFilesDialog, getFileCategoryIcon } from "./SprintFilesDialog";
+import { formatBytes, downloadSprintFile } from "../utils/sprintFileUtils";
 import React, { useState, useEffect } from "react";
 import {
   Dialog,
@@ -40,6 +42,10 @@ import {
   AlignLeft,
   X,
   CheckCircle2,
+  Paperclip,
+  Download,
+  ExternalLink,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -149,13 +155,52 @@ const ChecklistItemRow: React.FC<{
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [notesText, setNotesText] = useState(item.notes || "");
+  const [isUploading, setIsUploading] = useState(false);
   const noteContainerRef = React.useRef<HTMLDivElement>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const isSavingNoteRef = React.useRef(false);
 
   const {
     updateChecklistItemNotes,
+    uploadChecklistItemAttachment,
+    removeChecklistItemAttachment,
     autoAssignMemberMention,
   } = useSprintStore();
+  const { user } = useAuth();
+  const activeCard = useSprintStore((s) => s.activeCard);
+  const currentBoard = useSprintStore((s) => s.currentBoard);
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    const boardId = activeCard?.board_id || currentBoard?.id;
+    const companyId = activeCard?.company_id || currentBoard?.company_id;
+    if (!boardId || !companyId) return;
+
+    try {
+      setIsUploading(true);
+      await uploadChecklistItemAttachment({
+        checklistId,
+        itemId: item.id,
+        cardId,
+        boardId,
+        companyId,
+        file,
+        userId: user.id,
+      });
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleRemoveAttachment = async () => {
+    await removeChecklistItemAttachment({
+      checklistId,
+      itemId: item.id,
+      cardId,
+    });
+  };
 
   useEffect(() => {
     setEditText(item.title);
@@ -278,12 +323,55 @@ const ChecklistItemRow: React.FC<{
                   <span>Nota</span>
                 </button>
               )}
+
+              {/* Indicador de Anexo na Atividade */}
+              {item.attachment_url && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    downloadSprintFile(item.attachment_url!, item.attachment_name || "anexo");
+                  }}
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium hover:bg-blue-500/20 transition-colors shrink-0 max-w-[130px] cursor-pointer"
+                  title={`Baixar anexo: ${item.attachment_name} (${formatBytes(item.attachment_size)})`}
+                >
+                  <Paperclip className="h-2.5 w-2.5 shrink-0" />
+                  <span className="truncate">{item.attachment_name || "Anexo"}</span>
+                </button>
+              )}
             </div>
           )}
         </div>
 
         {/* Botões de Ação na Atividade */}
         <div className="flex items-center gap-0.5">
+          {/* Botão de Anexo / Upload Único */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            className="hidden"
+            onChange={handleFileSelect}
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled={isUploading}
+            className={cn(
+              "h-6 w-6 transition-all",
+              item.attachment_url
+                ? "opacity-100 text-blue-600 bg-blue-500/10"
+                : "opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-blue-600 hover:bg-blue-500/10"
+            )}
+            onClick={() => fileInputRef.current?.click()}
+            title={item.attachment_url ? "Substituir anexo desta atividade" : "Anexar arquivo nesta atividade"}
+          >
+            {isUploading ? (
+              <Loader2 className="h-3 w-3 animate-spin text-blue-600" />
+            ) : (
+              <Paperclip className="h-3 w-3" />
+            )}
+          </Button>
+
           {/* Botão de Nota da Atividade */}
           <Button
             variant="ghost"
@@ -411,6 +499,74 @@ const ChecklistItemRow: React.FC<{
                 Nenhuma nota adicionada. Clique para acrescentar informações ou observações a esta atividade.
               </div>
             )}
+          </div>
+
+          {/* Seção: Anexo da Atividade (Upload Único) */}
+          <div className="space-y-1.5 pt-2 border-t border-border/40">
+            <div className="flex items-center justify-between text-xs font-semibold text-foreground">
+              <span className="flex items-center gap-1.5 text-muted-foreground text-[11px]">
+                <Paperclip className="h-3 w-3 text-blue-500" />
+                <span>Anexo da Atividade (Upload Único)</span>
+              </span>
+              {!item.attachment_url && (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                  className="text-[11px] text-blue-600 hover:underline font-normal cursor-pointer flex items-center gap-1"
+                >
+                  {isUploading ? "Enviando..." : "+ Anexar arquivo"}
+                </button>
+              )}
+            </div>
+
+            {item.attachment_url ? (
+              <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-background border border-border/80 text-xs shadow-2xs">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <div className="p-1.5 rounded-md bg-blue-500/10 text-blue-600 shrink-0">
+                    {getFileCategoryIcon(item.attachment_name || "arquivo", item.attachment_type)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-foreground truncate text-xs select-text" title={item.attachment_name || "Arquivo"}>
+                      {item.attachment_name || "Arquivo"}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {formatBytes(item.attachment_size)}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs px-2 gap-1 text-blue-600 hover:text-blue-700 hover:bg-blue-500/10 border-blue-500/30"
+                    onClick={() => downloadSprintFile(item.attachment_url!, item.attachment_name || "anexo")}
+                    title="Baixar anexo"
+                  >
+                    <Download className="h-3 w-3" />
+                    <span>Baixar</span>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                    onClick={() => fileInputRef.current?.click()}
+                    title="Substituir arquivo"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                    onClick={handleRemoveAttachment}
+                    title="Remover anexo"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       )}
@@ -571,6 +727,7 @@ export const SprintCardModal: React.FC = () => {
     updateCard,
     archiveCard,
     cardComments,
+    cardAttachments,
     addComment,
     deleteComment,
     addChecklist,
@@ -668,6 +825,10 @@ export const SprintCardModal: React.FC = () => {
   const [mentionedChecklistMembers, setMentionedChecklistMembers] = useState<Record<string, Array<{ user_id: string }>>>({});
   const [mentionedCommentMembers, setMentionedCommentMembers] = useState<Array<{ user_id: string }>>([]);
   const [mentionedDescMembers, setMentionedDescMembers] = useState<Array<{ user_id: string }>>([]);
+  const [isCardFilesOpen, setIsCardFilesOpen] = useState(false);
+  const [selectedCommentFile, setSelectedCommentFile] = useState<File | null>(null);
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const commentFileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Sincroniza o título e a descrição sempre que o cartão ativo mudar
   useEffect(() => {
@@ -755,42 +916,53 @@ export const SprintCardModal: React.FC = () => {
 
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newComment.trim() || !user || !activeCard) return;
+    if ((!newComment.trim() && !selectedCommentFile) || !user || !activeCard) return;
 
-    const commentText = newComment.trim();
-    const mentionedUserIds = extractMentionedUserIds(commentText, members, mentionedCommentMembers);
+    try {
+      setIsSubmittingComment(true);
+      const commentText = newComment.trim() || (selectedCommentFile ? `Anexo: ${selectedCommentFile.name}` : "");
+      const mentionedUserIds = extractMentionedUserIds(commentText, members, mentionedCommentMembers);
 
-    await addComment({
-      cardId: activeCard.id,
-      userId: user.id,
-      content: commentText,
-    });
-
-    if (mentionedUserIds.length > 0) {
-      const authorName = user.user_metadata?.full_name || user.email?.split("@")[0] || "Um membro";
-      await notifySprintCardMention({
-        companyId: activeCard.company_id,
-        boardId: activeCard.board_id,
+      await addComment({
         cardId: activeCard.id,
-        cardTitle: activeCard.title,
-        authorUserId: user.id,
-        authorName,
-        mentionedUserIds,
-        contextType: "comment",
-        contextText: commentText,
+        userId: user.id,
+        content: commentText,
+        boardId: activeCard.board_id,
+        companyId: activeCard.company_id,
+        file: selectedCommentFile,
       });
-    }
 
-    setNewComment("");
-    setMentionedCommentMembers([]);
+      if (mentionedUserIds.length > 0) {
+        const authorName = user.user_metadata?.full_name || user.email?.split("@")[0] || "Um membro";
+        await notifySprintCardMention({
+          companyId: activeCard.company_id,
+          boardId: activeCard.board_id,
+          cardId: activeCard.id,
+          cardTitle: activeCard.title,
+          authorUserId: user.id,
+          authorName,
+          mentionedUserIds,
+          contextType: "comment",
+          contextText: commentText,
+        });
+      }
+
+      setNewComment("");
+      setSelectedCommentFile(null);
+      if (commentFileInputRef.current) commentFileInputRef.current.value = "";
+      setMentionedCommentMembers([]);
+    } finally {
+      setIsSubmittingComment(false);
+    }
   };
 
   return (
-    <Dialog open={!!activeCardId} onOpenChange={(open) => !open && closeCardModal()}>
+    <>
+      <Dialog open={!!activeCardId} onOpenChange={(open) => !open && closeCardModal()}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-card border-border text-card-foreground p-6 rounded-2xl shadow-xl">
         <DialogHeader className="space-y-1">
           <DialogTitle asChild>
-            <div className="flex items-start justify-between gap-4 w-full">
+            <div className="flex items-center justify-between gap-3 w-full">
               <SprintMentionInput
                 value={title}
                 onChange={setTitle}
@@ -808,8 +980,25 @@ export const SprintCardModal: React.FC = () => {
                   });
                 }}
                 placeholder="Título do cartão... (use @ para citar)"
-                className="text-xl font-bold bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none w-full px-1 py-0.5 rounded transition-all text-foreground font-['Sora'] shadow-none"
+                className="text-xl font-bold bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none flex-1 px-1 py-0.5 rounded transition-all text-foreground font-['Sora'] shadow-none"
               />
+
+              {/* Botão de Arquivos do Cartão */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsCardFilesOpen(true)}
+                className="h-8 text-xs gap-1.5 shrink-0"
+                title="Ver todos os arquivos e anexos deste cartão"
+              >
+                <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
+                <span>Arquivos</span>
+                {cardAttachments.length > 0 && (
+                  <Badge variant="secondary" className="h-4 px-1 text-[10px] ml-0.5">
+                    {cardAttachments.length}
+                  </Badge>
+                )}
+              </Button>
             </div>
           </DialogTitle>
           <p className="text-xs text-muted-foreground">
@@ -1001,14 +1190,64 @@ export const SprintCardModal: React.FC = () => {
                     setMentionedCommentMembers((prev) => [...prev, { user_id: m.user_id }]);
                   }}
                 />
-                <Button
-                  type="submit"
-                  size="sm"
-                  disabled={!newComment.trim()}
-                  className="text-xs h-8 px-4"
-                >
-                  Comentar
-                </Button>
+
+                {/* Prévia de arquivo anexado ao comentário */}
+                {selectedCommentFile && (
+                  <div className="flex items-center gap-2 p-1.5 px-2.5 rounded-lg bg-muted/60 border border-border text-xs w-fit">
+                    <Paperclip className="h-3.5 w-3.5 text-blue-500" />
+                    <span className="font-medium max-w-[220px] truncate text-foreground">
+                      {selectedCommentFile.name}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      ({formatBytes(selectedCommentFile.size)})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedCommentFile(null);
+                        if (commentFileInputRef.current) commentFileInputRef.current.value = "";
+                      }}
+                      className="ml-1 text-muted-foreground hover:text-destructive cursor-pointer"
+                      title="Remover anexo"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="file"
+                      ref={commentFileInputRef}
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) setSelectedCommentFile(file);
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => commentFileInputRef.current?.click()}
+                      className="h-8 px-2.5 text-xs gap-1.5 text-muted-foreground hover:text-foreground"
+                      title="Anexar arquivo a este comentário"
+                    >
+                      <Paperclip className="h-3.5 w-3.5" />
+                      <span>Anexar arquivo</span>
+                    </Button>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={(!newComment.trim() && !selectedCommentFile) || isSubmittingComment}
+                    className="text-xs h-8 px-4"
+                  >
+                    {isSubmittingComment ? "Enviando..." : "Comentar"}
+                  </Button>
+                </div>
               </form>
 
               {/* Feed de Comentários */}
@@ -1031,6 +1270,44 @@ export const SprintCardModal: React.FC = () => {
                           </span>
                         </div>
                         <div className="text-foreground whitespace-pre-wrap"><SprintMentionRenderer text={c.content} /></div>
+                        {c.attachment_url && (
+                          <div className="mt-2.5 flex items-center justify-between gap-2 p-2 rounded-lg bg-background/80 border border-border/80 max-w-sm shadow-2xs">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <div className="p-1 rounded bg-blue-500/10 text-blue-600 shrink-0">
+                                {getFileCategoryIcon(c.attachment_name || "arquivo", c.attachment_type)}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-medium text-foreground truncate select-text" title={c.attachment_name || "Arquivo"}>
+                                  {c.attachment_name || "Arquivo"}
+                                </p>
+                                {c.attachment_size ? (
+                                  <p className="text-[10px] text-muted-foreground">{formatBytes(c.attachment_size)}</p>
+                                ) : null}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2 text-xs gap-1 text-blue-600 hover:text-blue-700 hover:bg-blue-500/10"
+                                onClick={() => downloadSprintFile(c.attachment_url!, c.attachment_name || "anexo")}
+                                title="Baixar anexo"
+                              >
+                                <Download className="h-3 w-3" />
+                                <span className="hidden sm:inline">Baixar</span>
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                                onClick={() => window.open(c.attachment_url!, "_blank", "noopener,noreferrer")}
+                                title="Visualizar em nova aba"
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                         {user?.id === c.user_id && (
                           <div className="mt-2 text-right">
                             <button
@@ -1112,6 +1389,23 @@ export const SprintCardModal: React.FC = () => {
                   </Button>
                 }
               />
+
+              {/* Arquivos do Cartão */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsCardFilesOpen(true)}
+                className="w-full justify-start gap-2 text-xs h-8"
+                title="Ver todos os arquivos e anexos deste cartão"
+              >
+                <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
+                <span>Arquivos</span>
+                {cardAttachments.length > 0 && (
+                  <Badge variant="secondary" className="h-4 px-1.5 text-[10px] ml-auto">
+                    {cardAttachments.length}
+                  </Badge>
+                )}
+              </Button>
 
               {/* Checklist */}
               {isAddingChecklist ? (
@@ -1195,5 +1489,17 @@ export const SprintCardModal: React.FC = () => {
         </div>
       </DialogContent>
     </Dialog>
+
+      {/* Modal de Arquivos do Cartão */}
+      {activeCard && (
+        <SprintFilesDialog
+          isOpen={isCardFilesOpen}
+          onClose={() => setIsCardFilesOpen(false)}
+          title="Arquivos do Cartão"
+          subtitle={activeCard.title}
+          attachments={cardAttachments}
+        />
+      )}
+    </>
   );
 };

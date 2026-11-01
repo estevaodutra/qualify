@@ -35,6 +35,27 @@ export interface SprintLabel {
   created_at: string;
 }
 
+export interface SprintAttachment {
+  id: string;
+  company_id: string;
+  board_id: string;
+  card_id: string;
+  checklist_item_id?: string | null;
+  comment_id?: string | null;
+  file_name: string;
+  file_url: string;
+  file_size?: number | null;
+  file_type?: string | null;
+  storage_path?: string | null;
+  uploaded_by?: string | null;
+  created_at: string;
+  // Enriched fields for display
+  card_title?: string;
+  checklist_item_title?: string;
+  uploader_name?: string;
+  uploader_avatar?: string;
+}
+
 export interface SprintChecklistItemComment {
   id: string;
   checklist_item_id: string;
@@ -55,6 +76,10 @@ export interface SprintChecklistItem {
   due_date: string | null;
   assigned_user_id: string | null;
   notes?: string | null;
+  attachment_url?: string | null;
+  attachment_name?: string | null;
+  attachment_size?: number | null;
+  attachment_type?: string | null;
   comments?: SprintChecklistItemComment[];
   comments_count?: number;
   created_at: string;
@@ -86,6 +111,10 @@ export interface SprintComment {
   user_name?: string;
   user_avatar?: string;
   user_email?: string;
+  attachment_url?: string | null;
+  attachment_name?: string | null;
+  attachment_size?: number | null;
+  attachment_type?: string | null;
 }
 
 export interface SprintCard {
@@ -107,6 +136,8 @@ export interface SprintCard {
   members?: SprintCardMember[];
   checklists?: SprintChecklist[];
   comments_count?: number;
+  attachments?: SprintAttachment[];
+  attachments_count?: number;
 }
 
 export interface SprintList {

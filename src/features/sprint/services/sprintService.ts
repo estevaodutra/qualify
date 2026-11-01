@@ -8,6 +8,7 @@ import {
   SprintChecklistItem,
   SprintComment,
   SprintActivity,
+  SprintAttachment,
 } from "../types";
 
 export const sprintService = {
@@ -709,6 +710,69 @@ export const sprintService = {
     if (error) throw error;
   },
 
+  async updateChecklistItemAttachment(params: {
+    itemId: string;
+    cardId: string;
+    boardId: string;
+    companyId: string;
+    attachment: {
+      url: string;
+      name: string;
+      size: number;
+      type: string;
+      storagePath?: string;
+      userId?: string;
+    } | null;
+  }): Promise<void> {
+    if (params.attachment) {
+      await (supabase as any)
+        .from("sprint_checklist_items")
+        .update({
+          attachment_url: params.attachment.url,
+          attachment_name: params.attachment.name,
+          attachment_size: params.attachment.size,
+          attachment_type: params.attachment.type,
+        })
+        .eq("id", params.itemId);
+
+      try {
+        await (supabase as any).from("sprint_attachments").insert({
+          checklist_item_id: params.itemId,
+          card_id: params.cardId,
+          board_id: params.boardId,
+          company_id: params.companyId,
+          file_name: params.attachment.name,
+          file_url: params.attachment.url,
+          file_size: params.attachment.size,
+          file_type: params.attachment.type,
+          storage_path: params.attachment.storagePath || null,
+          uploaded_by: params.attachment.userId || null,
+        });
+      } catch {
+        // Ignora se tabela sprint_attachments ainda não existir no banco
+      }
+    } else {
+      await (supabase as any)
+        .from("sprint_checklist_items")
+        .update({
+          attachment_url: null,
+          attachment_name: null,
+          attachment_size: null,
+          attachment_type: null,
+        })
+        .eq("id", params.itemId);
+
+      try {
+        await (supabase as any)
+          .from("sprint_attachments")
+          .delete()
+          .eq("checklist_item_id", params.itemId);
+      } catch {
+        // Ignora
+      }
+    }
+  },
+
   async getChecklistItemComments(itemId: string): Promise<SprintChecklistItemComment[]> {
     const { data, error } = await (supabase as any)
       .from("sprint_checklist_item_comments")
@@ -766,19 +830,249 @@ export const sprintService = {
     cardId: string;
     userId: string;
     content: string;
+    boardId?: string;
+    companyId?: string;
+    attachment?: {
+      url: string;
+      name: string;
+      size: number;
+      type: string;
+      storagePath?: string;
+    } | null;
   }): Promise<SprintComment> {
-    const { data, error } = await (supabase as any)
-      .from("sprint_card_comments")
-      .insert({
-        card_id: params.cardId,
-        user_id: params.userId,
-        content: params.content,
-      })
-      .select()
-      .single();
+    const payload: any = {
+      card_id: params.cardId,
+      user_id: params.userId,
+      content: params.content,
+    };
 
-    if (error) throw error;
+    if (params.attachment) {
+      payload.attachment_url = params.attachment.url;
+      payload.attachment_name = params.attachment.name;
+      payload.attachment_size = params.attachment.size;
+      payload.attachment_type = params.attachment.type;
+    }
+
+    let data: any;
+    try {
+      const res = await (supabase as any)
+        .from("sprint_card_comments")
+        .insert(payload)
+        .select()
+        .single();
+      if (res.error) throw res.error;
+      data = res.data;
+    } catch (err: any) {
+      if (payload.attachment_url) {
+        // Fallback caso colunas ainda não tenham sido migradas no banco
+        delete payload.attachment_url;
+        delete payload.attachment_name;
+        delete payload.attachment_size;
+        delete payload.attachment_type;
+        const res = await (supabase as any)
+          .from("sprint_card_comments")
+          .insert(payload)
+          .select()
+          .single();
+        if (res.error) throw res.error;
+        data = res.data;
+      } else {
+        throw err;
+      }
+    }
+
+    if (params.attachment && data?.id && params.boardId && params.companyId) {
+      try {
+        await (supabase as any).from("sprint_attachments").insert({
+          comment_id: data.id,
+          card_id: params.cardId,
+          board_id: params.boardId,
+          company_id: params.companyId,
+          file_name: params.attachment.name,
+          file_url: params.attachment.url,
+          file_size: params.attachment.size,
+          file_type: params.attachment.type,
+          storage_path: params.attachment.storagePath || null,
+          uploaded_by: params.userId,
+        });
+      } catch {
+        // Ignora se tabela sprint_attachments ainda não foi criada
+      }
+    }
+
     return data as SprintComment;
+  },
+
+  // --- ATTACHMENTS (ARQUIVOS DO QUADRO E DO CARTÃO) ---
+  async getBoardAttachments(boardId: string): Promise<SprintAttachment[]> {
+    try {
+      const { data, error } = await (supabase as any)
+        .from("sprint_attachments")
+        .select(`
+          *,
+          card:sprint_cards(title),
+          checklist_item:sprint_checklist_items(title)
+        `)
+        .eq("board_id", boardId)
+        .order("created_at", { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        return data.map((item: any) => ({
+          ...item,
+          card_title: item.card?.title || undefined,
+          checklist_item_title: item.checklist_item?.title || undefined,
+        }));
+      }
+    } catch {
+      // Continua para o fallback consolidado
+    }
+
+    // Fallback: carrega anexos direto de sprint_checklist_items e sprint_card_comments
+    const attachments: SprintAttachment[] = [];
+    try {
+      const { data: cards } = await (supabase as any)
+        .from("sprint_cards")
+        .select("id, title, company_id")
+        .eq("board_id", boardId);
+
+      const cardIds = (cards || []).map((c: any) => c.id);
+      const cardMap = new Map((cards || []).map((c: any) => [c.id, c]));
+
+      if (cardIds.length > 0) {
+        const [itemsRes, commentsRes] = await Promise.all([
+          (supabase as any)
+            .from("sprint_checklist_items")
+            .select("id, card_id, title, attachment_url, attachment_name, attachment_size, attachment_type, created_at")
+            .in("card_id", cardIds)
+            .not("attachment_url", "is", null),
+          (supabase as any)
+            .from("sprint_card_comments")
+            .select("id, card_id, user_id, attachment_url, attachment_name, attachment_size, attachment_type, created_at")
+            .in("card_id", cardIds)
+            .not("attachment_url", "is", null),
+        ]);
+
+        (itemsRes.data || []).forEach((it: any) => {
+          if (it.attachment_url) {
+            attachments.push({
+              id: `item-${it.id}`,
+              company_id: cardMap.get(it.card_id)?.company_id || "",
+              board_id: boardId,
+              card_id: it.card_id,
+              checklist_item_id: it.id,
+              file_name: it.attachment_name || "anexo",
+              file_url: it.attachment_url,
+              file_size: it.attachment_size,
+              file_type: it.attachment_type,
+              created_at: it.created_at,
+              card_title: cardMap.get(it.card_id)?.title,
+              checklist_item_title: it.title,
+            });
+          }
+        });
+
+        (commentsRes.data || []).forEach((cm: any) => {
+          if (cm.attachment_url) {
+            attachments.push({
+              id: `comment-${cm.id}`,
+              company_id: cardMap.get(cm.card_id)?.company_id || "",
+              board_id: boardId,
+              card_id: cm.card_id,
+              comment_id: cm.id,
+              file_name: cm.attachment_name || "anexo",
+              file_url: cm.attachment_url,
+              file_size: cm.attachment_size,
+              file_type: cm.attachment_type,
+              uploaded_by: cm.user_id,
+              created_at: cm.created_at,
+              card_title: cardMap.get(cm.card_id)?.title,
+            });
+          }
+        });
+      }
+    } catch {
+      // Ignora erro
+    }
+
+    return attachments.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  },
+
+  async getCardAttachments(cardId: string): Promise<SprintAttachment[]> {
+    try {
+      const { data, error } = await (supabase as any)
+        .from("sprint_attachments")
+        .select(`
+          *,
+          checklist_item:sprint_checklist_items(title)
+        `)
+        .eq("card_id", cardId)
+        .order("created_at", { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        return data.map((item: any) => ({
+          ...item,
+          checklist_item_title: item.checklist_item?.title || undefined,
+        }));
+      }
+    } catch {
+      // Continua para o fallback
+    }
+
+    const attachments: SprintAttachment[] = [];
+    try {
+      const [itemsRes, commentsRes] = await Promise.all([
+        (supabase as any)
+          .from("sprint_checklist_items")
+          .select("id, card_id, title, attachment_url, attachment_name, attachment_size, attachment_type, created_at")
+          .eq("card_id", cardId)
+          .not("attachment_url", "is", null),
+        (supabase as any)
+          .from("sprint_card_comments")
+          .select("id, card_id, user_id, attachment_url, attachment_name, attachment_size, attachment_type, created_at")
+          .eq("card_id", cardId)
+          .not("attachment_url", "is", null),
+      ]);
+
+      (itemsRes.data || []).forEach((it: any) => {
+        if (it.attachment_url) {
+          attachments.push({
+            id: `item-${it.id}`,
+            company_id: "",
+            board_id: "",
+            card_id: cardId,
+            checklist_item_id: it.id,
+            file_name: it.attachment_name || "anexo",
+            file_url: it.attachment_url,
+            file_size: it.attachment_size,
+            file_type: it.attachment_type,
+            created_at: it.created_at,
+            checklist_item_title: it.title,
+          });
+        }
+      });
+
+      (commentsRes.data || []).forEach((cm: any) => {
+        if (cm.attachment_url) {
+          attachments.push({
+            id: `comment-${cm.id}`,
+            company_id: "",
+            board_id: "",
+            card_id: cardId,
+            comment_id: cm.id,
+            file_name: cm.attachment_name || "anexo",
+            file_url: cm.attachment_url,
+            file_size: cm.attachment_size,
+            file_type: cm.attachment_type,
+            uploaded_by: cm.user_id,
+            created_at: cm.created_at,
+          });
+        }
+      });
+    } catch {
+      // Ignora erro
+    }
+
+    return attachments.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   },
 
   async deleteCardComment(commentId: string): Promise<void> {

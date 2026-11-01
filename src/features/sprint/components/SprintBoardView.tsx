@@ -500,6 +500,18 @@ export const SprintBoardView: React.FC = () => {
       </div>
 
       <SprintCardModal />
+
+      {/* Modal de Arquivos do Quadro */}
+      {currentBoard && (
+        <SprintFilesDialog
+          isOpen={isBoardFilesOpen}
+          onClose={() => setIsBoardFilesOpen(false)}
+          title="Arquivos do Quadro"
+          subtitle={currentBoard.title}
+          attachments={boardAttachments}
+          onOpenCard={(cardId) => openCardModal(cardId)}
+        />
+      )}
     </div>
   );
 };
