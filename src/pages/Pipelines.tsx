@@ -420,7 +420,7 @@ export default function Pipelines() {
               onToggleSidebar={toggleSidebar}
             />
             
-            <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 pb-8 bg-muted/10">
+            <div className="flex-1 overflow-x-auto overflow-y-auto p-3 md:p-6 pb-24 md:pb-8 bg-muted/10">
               <div className="flex h-full items-start gap-4" style={{ minWidth: "max-content" }}>
                 <DndContext
                   sensors={sensors}
