@@ -803,12 +803,28 @@ export async function processMessageEvent(
       else if (rawEvent.type === "document" || rawMsgObj?.document) detectedMediaType = "document";
       else if (rawEvent.type === "location" || rawMsgObj?.location) detectedMediaType = "location";
 
+      // Resolve the actual CRM conversation ID (messageId is a message identifier,
+      // not a valid deep-link target for /chat).
+      let conversationId: string | undefined;
+      if (instance.company_id && context.senderPhone) {
+        const { data: conversation } = await supabase
+          .from("chat_conversations")
+          .select("id")
+          .eq("company_id", instance.company_id)
+          .eq("instance_id", instance.id)
+          .eq("contact_phone", context.senderPhone)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        conversationId = conversation?.id;
+      }
+
       await dispatchWebPushNotification(supabase, {
         companyId: instance.company_id || "",
         userIds: [instance.user_id],
         title: senderTitle,
         body: bodyText,
-        conversationId: context.messageId,
+        conversationId,
         mediaType: detectedMediaType,
       });
     } catch (pushErr) {
