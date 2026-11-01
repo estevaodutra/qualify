@@ -21,6 +21,7 @@ import {
   Bot,
   AlertTriangle,
   BookOpen,
+  Compass,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,10 +29,12 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSuperadmin } from "@/hooks/useSuperadmin";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { criafyService } from "@/services/criafy/criafyService";
+import { QualifyAI } from "@/ai";
 import { AIExecutionService } from "@/services/ai/aiExecutionService";
 import {
   humanizeInstagramText,
@@ -52,10 +55,17 @@ interface CopilotMessage {
   timestamp: string;
   warningAlert?: string;
   tokensMeta?: {
-    input: number;
-    output: number;
+    input?: number;
+    output?: number;
     total: number;
     chargedAmount?: number;
+    latencyMs?: number;
+  };
+  agentPath?: {
+    inputEval: string;
+    routingDecision: string;
+    actionTaken: string;
+    ragChunks?: string[];
   };
   reelMeta?: {
     totalSeconds: number;
@@ -197,6 +207,7 @@ function parseInlineMarkdown(text: string): React.ReactNode[] {
 export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
   const { activeCompanyId, activeCompany } = useCompany();
   const { user } = useAuth();
+  const { isSuperadmin } = useSuperadmin();
   const navigate = useNavigate();
 
   const [inputText, setInputText] = useState("");
@@ -241,7 +252,7 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
     {
       id: "copilot-welcome",
       sender: "ai",
-      text: `Olá! Eu sou o **Copiloto IA** da **${activeCompany?.name || "sua empresa"}**.\n\nA Central de IA está no **Marco Zero**. Envie qualquer dúvida ou instrução para conversarmos:`,
+      text: `Olá! Eu sou o **Copiloto IA** da **${activeCompany?.name || "sua empresa"}**.\n\nComo posso ajudar você hoje com sua estratégia, roteiros ou ideias de conteúdo?`,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     },
   ]);
@@ -278,58 +289,16 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
 
     try {
       const lower = textToSend.toLowerCase();
-
-      // Checagem direta: Usuário perguntou pelo Manual da Marca
-      const isAskingManual = lower.includes("manual") || lower.includes("tese") || lower.includes("posicionamento") || lower.includes("icp") || lower.includes("quem somos");
-
-      if (isAskingManual && brandContext) {
-        const manualReply = `### 📘 Manual da Marca — ${brandContext.companyName}\n\n` +
-          `Aqui estão as diretrizes estratégicas ativas conectadas à sua conta:\n\n` +
-          `• **Tese Central:** ${brandContext.teseCentral}\n` +
-          `• **Mecanismo Hero:** ${brandContext.mecanismoHero}\n` +
-          `• **Brecha de Mercado:** ${brandContext.brechaMercado}\n` +
-          `• **Promessa Central:** ${brandContext.promessaCentral}\n` +
-          `• **Posicionamento:** ${brandContext.narrativaPosicionamento}\n` +
-          `• **Fundamento Operacional:** ${brandContext.projectDesc}\n\n` +
-          `Todas as 13 Skills do Instagram utilizam este manual como base para roteirizar Reels, posts e carrosséis sem desviar da sua identidade.`;
-
-        const aiMsg: CopilotMessage = {
-          id: "ai-" + Date.now(),
-          sender: "ai",
-          text: manualReply,
-          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          actions: [
-            {
-              label: "⚡ /reel: Criar Reel baseado nesta Tese",
-              actionType: "add_to_planner",
-              payload: {
-                theme: `Reel sobre Tese Central: ${brandContext.teseCentral}`,
-                format: "REEL",
-                script: `GANCHO: O fechamento ocorre pela clareza do processo, não por pressão comercial.\n\nPONTE: Quem tenta forçar venda no WhatsApp só atrai desgaste.\n\nCONTEÚDO: Implemente uma esteira de qualificação lógica.\n\nCTA: Comente 'MÉTODO' para ver como estruturar.`,
-              },
-            },
-          ],
-        };
-
-        setMessages((prev) => [...prev, aiMsg]);
-        return;
-      }
-
-      // Identificar intenção ou comando
-      let detectedAction = "strategy_plan";
-      if (lower.includes("/reel") || lower.includes("reel") || lower.includes("vídeo") || lower.includes("video")) {
-        detectedAction = "generate_reel";
-      } else if (lower.includes("/carrossel") || lower.includes("carrossel") || lower.includes("carousel") || lower.includes("slide")) {
-        detectedAction = "generate_carousel";
-      } else if (lower.includes("/legenda") || lower.includes("legenda") || lower.includes("caption")) {
-        detectedAction = "generate_caption";
-      } else if (lower.includes("/bio") || lower.includes("bio") || lower.includes("perfil") || lower.includes("/auditar")) {
-        detectedAction = "audit_profile";
-      } else if (lower.includes("/humanizar") || lower.includes("humanizar") || lower.includes("humanize")) {
-        detectedAction = "humanize_text";
-      } else if (lower.includes("/stories") || lower.includes("stories") || lower.includes("rotina")) {
-        detectedAction = "generate_stories";
-      }
+      const isGreeting =
+        lower === "oi" ||
+        lower === "olá" ||
+        lower === "ola" ||
+        lower === "opa" ||
+        lower === "e aí" ||
+        lower === "e ai" ||
+        lower.startsWith("bom dia") ||
+        lower.startsWith("boa tarde") ||
+        lower.startsWith("boa noite");
 
       let aiResponseText = "";
       let warningAlert: string | undefined = undefined;
@@ -338,178 +307,131 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
       let captionMeta: CopilotMessage["captionMeta"] = undefined;
       let humanizeMeta: CopilotMessage["humanizeMeta"] = undefined;
       let tokensMeta: CopilotMessage["tokensMeta"] = undefined;
-
-      // Montar contexto real enriquecido com a marca
-      const richBrandInstruction = brandContext
-        ? `INFORMAÇÕES DA MARCA ${brandContext.companyName}:
-- Tese Central: "${brandContext.teseCentral}"
-- Mecanismo Único: "${brandContext.mecanismoHero}"
-- Brecha de Mercado: "${brandContext.brechaMercado}"
-- Promessa: "${brandContext.promessaCentral}"
-- Contexto Operacional: "${brandContext.projectDesc}"`
-        : "";
+      let agentPath: CopilotMessage["agentPath"] = undefined;
 
       try {
-        const aiResult = await AIExecutionService.generate({
-          action: detectedAction,
-          companyId: activeCompanyId || undefined,
-          theme: textToSend,
-          customInstruction: `${richBrandInstruction}\n\nAtue como Copiloto Especialista em Instagram utilizando as 13 Instagram Agent Skills. Use EXCLUSIVAMENTE a tese e o mecanismo acima.`,
+        // Histórico recente para continuidade conversacional multi-turn
+        const historyForAi = messages
+          .filter((m) => m.id !== "copilot-welcome")
+          .map((m) => ({
+            role: (m.sender === "user" ? "user" : "assistant") as "user" | "assistant",
+            content: m.text,
+          }));
+
+        // Executar Orquestrador Qualify nativo com LangChain + Tools + RAG no Supabase
+        const result = await QualifyAI.runAgent({
+          agentSlug: "qualify-orchestrator",
+          prompt: textToSend,
+          context: {
+            company_id: activeCompanyId || "default",
+            user_id: user?.id,
+          },
+          chatHistory: historyForAi,
         });
 
-        // O AIExecutionService retorna structured_output ou result
-        if (aiResult?.tokens) {
+        const agentData = result.data;
+        const executed = agentData.executed_tools || [];
+        const ragTool = executed.find((t: any) =>
+          t.tool?.includes("search_brand_manual") || t.tool?.includes("company.search_brand_manual")
+        );
+
+        let inputEval = "Saudação simples ou interação direta detectada.";
+        let routingDecision = "Resposta direta sem necessidade de busca vetorial.";
+        let actionTaken = "Nenhuma tool acionada • 0 tokens extras de contexto.";
+        let ragChunks: string[] = [];
+
+        if (ragTool) {
+          inputEval = `Demanda de conteúdo/estratégia identificada (Foco: "${ragTool.input?.query || textToSend}").`;
+          routingDecision = "Acionamento do RAG Vetorial (Embeddings) no Manual da Marca.";
+          ragChunks = ragTool.output?.retrieved_topics || [];
+          actionTaken = `Recuperados ${ragChunks.length} chunks relevantes (${ragTool.output?.estimated_tokens || 180} tokens via text-embedding-3-small).`;
+        } else if (executed.length > 0) {
+          inputEval = "Demanda operacional identificada.";
+          routingDecision = `Roteamento para ferramenta especializada (${executed[0].tool}).`;
+          actionTaken = `Executada em ${executed[0].latency_ms}ms com sucesso.`;
+        } else if (textToSend.length > 30) {
+          inputEval = "Consulta analítica ou orientação estratégica.";
+          routingDecision = "Processamento com raciocínio executivo do Orquestrador.";
+          actionTaken = "Análise direta com base nas diretrizes gerais.";
+        }
+
+        aiResponseText = agentData.content || (isGreeting ? "Olá! Como posso ajudar você hoje?" : "Como posso te ajudar com a estratégia ou conteúdo hoje?");
+
+        if (agentData.metrics) {
           tokensMeta = {
-            input: aiResult.tokens.input,
-            output: aiResult.tokens.output,
-            total: aiResult.tokens.total,
-            chargedAmount: aiResult.billing?.charged_amount,
+            input: agentData.metrics.prompt_tokens,
+            output: agentData.metrics.completion_tokens,
+            total: agentData.metrics.tokens_total,
+            latencyMs: agentData.metrics.latency_ms,
           };
         }
-        const d = (aiResult as any)?.structured_output || (aiResult as any)?.result || (aiResult as any)?.data;
 
-        if (d) {
-          if (typeof d === "string") {
-            aiResponseText = d;
-          } else if (d.script || d.hook) {
-            aiResponseText = `### Roteiro de Reel Otimizado\n\n**🎯 Gancho:** ${d.hook || ""}\n\n**🎬 Roteiro:**\n${d.script || ""}\n\n**💬 CTA:** ${d.cta || ""}`;
-          } else if (d.strategic_summary) {
-            aiResponseText = `### Direção Estratégica (${brandContext?.companyName || "Marca"})\n\n${d.strategic_summary}\n\n**🎯 Objetivo:** ${d.objective || "Autoridade e Conversão"}`;
-          } else {
-            aiResponseText = JSON.stringify(d, null, 2);
-          }
-        }
-      } catch (err: any) {
-        const errorMsg = String(err?.message || "");
-
-        // Se o erro foi de créditos da OpenAI, sinalizar no alerta
-        if (errorMsg.includes("Saldo insuficiente") || errorMsg.includes("INSUFFICIENT_BALANCE")) {
-          warningAlert = "Saldo insuficiente na carteira para debitar tokens da IA. Adicione créditos no painel de carteiras para continuar.";
-        } else if (errorMsg.includes("credit_balance_exhausted") || errorMsg.includes("no credits") || errorMsg.includes("quota") || errorMsg.includes("Unauthorized")) {
-          warningAlert = "A conta OpenAI configurada na plataforma Criafy está sem créditos ativos (Saldo esgotado). Adicione créditos em platform.openai.com/billing. Gerando resposta com o motor de heurísticas locais conectadas ao seu Manual da Marca:";
-        }
-
-        // Geração com as Heurísticas das 13 Skills USANDO O MANUAL DA MARCA REAL (IPV / 7D)
-        const brand = brandContext || {
-          companyName: activeCompany?.name || "IPV",
-          teseCentral: "O fechamento ocorre pela clareza do processo, não por pressão comercial.",
-          mecanismoHero: "Esteira de qualificação rápida baseada em condução lógica.",
-          promessaCentral: "Transformação comercial previsível sem gargalos operacionais.",
+        agentPath = {
+          inputEval,
+          routingDecision,
+          actionTaken,
+          ragChunks,
         };
 
-        if (detectedAction === "generate_reel") {
-          const formula = INSTAGRAM_HOOK_FORMULAS[Math.floor(Math.random() * INSTAGRAM_HOOK_FORMULAS.length)];
-          
-          const scriptText = `**GANCHO (0-3s):** Pare de fazer reuniões comerciais de 1 hora com curiosos. Faça uma qualificação lógica de 15 minutos.\n\n` +
-            `**TEXTO NA TELA:** [REUNIÕES DE 1H -> 15 MIN]\n\n` +
-            `**PONTE (3-10s):** O maior erro que vejo em vendas é achar que fechar contrato depende de insistência ou pressão comercial.\n\n` +
-            `**CONTEÚDO (10-25s):** No método ${brand.companyName}, o fechamento acontece pela clareza do processo. Quando o lead entende a lógica da esteira, a venda é a única conclusão natural.\n\n` +
-            `**CTA:** Comente 'ESTEIRA' para receber o fluxograma de qualificação.`;
-
-          aiResponseText = `### Roteiro de Reel (Alinhado à Tese da ${brand.companyName})\n\n` + scriptText;
-
-          const beats = analyzeReelBeats(scriptText);
-          reelMeta = {
-            totalSeconds: beats.totalSeconds,
-            formattedDuration: beats.formattedDuration,
-            hookValid: beats.hookValid,
-            onScreenHook: "REUNIÕES DE 1H -> 15 MIN",
-            beatsCount: beats.beats.length,
-          };
-
+        // Identificar se a resposta contém roteiro ou gancho para acoplar ações úteis
+        const contentLower = aiResponseText.toLowerCase();
+        if (contentLower.includes("gancho:") || contentLower.includes("gancho (") || contentLower.includes("roteiro:")) {
           actions = [
             {
               label: "📅 Adicionar ao Planner",
               actionType: "add_to_planner",
               payload: {
-                theme: `Reel: ${brand.teseCentral.slice(0, 45)}...`,
+                theme: textToSend.slice(0, 50),
                 format: "REEL",
-                pillar: "Posicionamento 7D",
-                hook: "Pare de fazer reuniões comerciais de 1 hora com curiosos.",
-                script: scriptText,
+                script: aiResponseText,
               },
             },
             {
               label: "📋 Criar Demanda de Gravação",
               actionType: "create_demands",
               payload: {
-                title: `Gravar Reel: ${brand.companyName} Esteira Lógica`,
+                title: `Gravar Reel: ${textToSend.slice(0, 30)}`,
                 type: "gravar_video",
-                description: scriptText,
+                description: aiResponseText,
               },
             },
           ];
-        } else if (detectedAction === "generate_carousel") {
-          aiResponseText = `### Estrutura de Carrossel (7 Slides — ${brand.companyName})\n\n` +
-            `• **Slide 1 (Capa):** Por que você atrai leads todos os dias mas suas vendas não aumentam?\n` +
-            `• **Slide 2 (O Erro Comum):** A maioria dos fundadores acha que o problema é tráfego ou falta de esforço do vendedor.\n` +
-            `• **Slide 3 (A Tese):** ${brand.teseCentral}\n` +
-            `• **Slide 4 (O Mecanismo):** Apresentamos a ${brand.mecanismoHero}: filtrar curiosos antes da conversa.\n` +
-            `• **Slide 5 (O Contraste):** De 2 horas de negociação confusa para fechamentos rápidos e objetivos.\n` +
-            `• **Slide 6 (O Resultado):** ${brand.promessaCentral}\n` +
-            `• **Slide 7 (CTA):** Salve este post e comente '7D' para agendar seu diagnóstico.`;
 
-          actions = [
-            {
-              label: "📅 Adicionar Carrossel ao Planner",
-              actionType: "add_to_planner",
-              payload: {
-                theme: `Carrossel: ${brand.teseCentral.slice(0, 45)}`,
-                format: "CAROUSEL",
-                pillar: "Método",
-                script: aiResponseText,
-              },
-            },
-          ];
-        } else if (detectedAction === "generate_caption") {
-          const capText = `Você não precisa de 100k seguidores para fechar contratos de alto valor toda semana.\n\n` +
-            `O que você precisa é entender uma verdade simples: ${brand.teseCentral.toLowerCase()}\n\n` +
-            `Quando sua empresa implementa a ${brand.mecanismoHero.toLowerCase()}, o tempo gasto em reuniões improdutivas zera e sua conversão sobe.\n\n` +
-            `Comente 'PROCESSO' abaixo para receber o passo a passo.\n\n` +
-            `#vendas #b2b #gestao #estrategia #qualify`;
-
-          const lint = lintInstagramCaption(capText);
-          captionMeta = {
-            visibleWindow: lint.visibleWindow,
-            isTruncated: lint.isTruncated,
-            hashtagCount: lint.hashtagCount,
-          };
-
-          aiResponseText = `### Legenda de Conversão (${brand.companyName})\n\n` +
-            capText +
-            `\n\n> **Janela Visível no Feed (antes do "... mais"):**\n> "${lint.visibleWindow}..."\n\n` +
-            `**Diretrizes Validadas:**\n` +
-            lint.passes.map((p) => `• ✅ ${p}`).join("\n");
-
-          actions = [
-            {
-              label: "📅 Adicionar ao Planner",
-              actionType: "add_to_planner",
-              payload: {
-                theme: "Legenda: Clareza de Processo",
-                format: "POST",
-                script: capText,
-              },
-            },
-          ];
-        } else {
-          aiResponseText = `### Análise & Direção Estratégica (${brand.companyName})\n\n` +
-            `Analisei a sua solicitação: "${textToSend}".\n\n` +
-            `Com base no seu posicionamento registrado (**${brand.teseCentral}**), recomendo priorizarmos a demonstração do seu mecanismo único (**${brand.mecanismoHero}**) através de 1 Reel de quebra de objeção ou 1 Carrossel educativo de 7 slides.\n\n` +
-            `Selecione uma das ações abaixo para gerarmos a peça completa:`;
-
-          actions = [
-            {
-              label: "⚡ Gerar Reel focado nesta pauta",
-              actionType: "add_to_planner",
-              payload: {
-                theme: textToSend,
-                format: "REEL",
-                script: `Roteiro criado com base na tese: ${brand.teseCentral}`,
-              },
-            },
-          ];
+          const beats = analyzeReelBeats(aiResponseText);
+          if (beats.totalSeconds > 0) {
+            reelMeta = {
+              totalSeconds: beats.totalSeconds,
+              formattedDuration: beats.formattedDuration,
+              hookValid: beats.hookValid,
+              beatsCount: beats.beats.length,
+            };
+          }
         }
+      } catch (err: any) {
+        console.error("[Copilot Orchestrator Error]:", err);
+        const errorMsg = String(err?.message || "");
+
+        if (errorMsg.includes("Saldo insuficiente") || errorMsg.includes("INSUFFICIENT_BALANCE")) {
+          warningAlert = "Saldo insuficiente na carteira para debitar tokens da IA.";
+        } else if (
+          errorMsg.includes("credit_balance_exhausted") ||
+          errorMsg.includes("no credits") ||
+          errorMsg.includes("quota")
+        ) {
+          warningAlert = "A conta OpenAI configurada na plataforma está sem créditos ativos. Configure sua chave em IA > Playground ou platform.openai.com.";
+        }
+
+        if (isGreeting) {
+          aiResponseText = "Olá! Como posso ajudar você hoje com sua estratégia, roteiros ou ideias de conteúdo?";
+        } else {
+          aiResponseText = `Não foi possível consultar o modelo de linguagem no momento (${err?.message || "falha de conexão"}). Verifique sua chave da OpenAI no painel administrativo.`;
+        }
+
+        agentPath = {
+          inputEval: isGreeting ? "Saudação simples detectada." : "Demanda de usuário.",
+          routingDecision: "Fallback de comunicação segura.",
+          actionTaken: "Resposta direta entregue ao usuário.",
+        };
       }
 
       const aiMsg: CopilotMessage = {
@@ -523,6 +445,7 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
         humanizeMeta,
         actions,
         tokensMeta,
+        agentPath,
       };
 
       setMessages((prev) => [...prev, aiMsg]);
@@ -680,6 +603,56 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
                   </div>
                 )}
 
+                {/* Fluxo Agêntico Percorrido (VISÍVEL APENAS PARA SUPERADMIN) */}
+                {isSuperadmin && !isUser && msg.agentPath && (
+                  <div className="mb-3 p-3 rounded-xl border border-primary/20 bg-primary/5 space-y-2 text-[11px] animate-in fade-in duration-150">
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 border-b border-primary/15">
+                      <div className="font-semibold text-primary flex items-center gap-1.5 text-xs">
+                        <Compass className="h-3.5 w-3.5" />
+                        <span>Fluxo Agêntico Percorrido (Superadmin)</span>
+                      </div>
+                      {msg.tokensMeta && (
+                        <div className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
+                          {msg.tokensMeta.latencyMs !== undefined && (
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3 text-blue-500" /> {msg.tokensMeta.latencyMs}ms
+                            </span>
+                          )}
+                          {msg.tokensMeta.total !== undefined && (
+                            <span className="flex items-center gap-1">
+                              <Zap className="h-3 w-3 text-amber-500" /> {msg.tokensMeta.total} tokens
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-1 pl-1 font-mono text-[10px]">
+                      <div className="flex items-start gap-1.5">
+                        <span className="font-bold text-foreground shrink-0">1. Avaliação do Input:</span>
+                        <span className="text-muted-foreground">{msg.agentPath.inputEval}</span>
+                      </div>
+                      <div className="flex items-start gap-1.5">
+                        <span className="font-bold text-foreground shrink-0">2. Decisão de Roteamento:</span>
+                        <span className="text-muted-foreground">{msg.agentPath.routingDecision}</span>
+                      </div>
+                      <div className="flex items-start gap-1.5">
+                        <span className="font-bold text-foreground shrink-0">3. Ação & RAG:</span>
+                        <span className="text-muted-foreground">{msg.agentPath.actionTaken}</span>
+                      </div>
+                    </div>
+                    {msg.agentPath.ragChunks && msg.agentPath.ragChunks.length > 0 && (
+                      <div className="pt-1 flex flex-wrap items-center gap-1">
+                        <span className="text-[10px] text-muted-foreground font-semibold">Chunks do Manual:</span>
+                        {msg.agentPath.ragChunks.map((ch, i) => (
+                          <Badge key={i} variant="secondary" className="text-[9px] py-0 h-4 bg-muted text-foreground">
+                            {ch}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Conteúdo formatado em Markdown */}
                 {isUser ? (
                   <div className="whitespace-pre-wrap break-words leading-relaxed text-[13px]">
@@ -712,7 +685,7 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
                 )}
 
                 {/* Consumo de Tokens de IA */}
-                {msg.tokensMeta && (
+                {msg.tokensMeta && (isSuperadmin || msg.tokensMeta.chargedAmount !== undefined) && (
                   <div className="mt-2.5 p-2 rounded-xl bg-purple-500/10 border border-purple-500/20 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono">
                     <span className="flex items-center gap-1 font-semibold text-purple-700 dark:text-purple-300">
                       <Zap className="w-3.5 h-3.5" />
