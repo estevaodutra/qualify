@@ -7,6 +7,8 @@ export * from "./tools/toolRegistry";
 export * from "./tools/ai/scoreHookTool";
 export * from "./tools/ai/beatSheetTool";
 export * from "./tools/company/brandManualTool";
+export * from "./tools/company/brandManualSearchTool";
+export * from "@/services/ai/brandManualEmbeddingService";
 export * from "./tools/criafy/criafyTools";
 export * from "./tools/crm/crmTools";
 export * from "./skills/skillRegistry";

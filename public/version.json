@@ -1,6 +1,6 @@
 {
-  "commit": "17a89d423ee5023e4e0982f3a861a53692f7f099",
-  "shortCommit": "17a89d4",
-  "message": "chore(copilot): remover atalhos e comandos estaticos do copiloto no chat acompanhando o marco zero",
-  "builtAt": "2026-11-01T20:37:04.715Z"
+  "commit": "4d01e8323d366ef5759472c70e33c9080df27305",
+  "shortCommit": "4d01e83",
+  "message": "feat(ai): implement Qualify Orchestrator Agent, Brand Manual context provider and conversational Playground chat",
+  "builtAt": "2026-11-01T21:04:08.637Z"
 }

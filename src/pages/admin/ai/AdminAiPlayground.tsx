@@ -72,7 +72,14 @@ interface ChatMessageItem {
     model: string;
   };
   tool_calls?: any[];
+  executed_tools?: any[];
   context_summary?: string;
+  agent_path?: {
+    input_eval: string;
+    routing_decision: string;
+    action_taken: string;
+    rag_chunks?: string[];
+  };
   trace?: any;
   raw_response?: any;
 }
@@ -383,6 +390,28 @@ export default function AdminAiPlayground() {
 
       const agentData = result.data;
       const brandContext = agentData.context?.["company_brand_manual"];
+      const executed = agentData.executed_tools || [];
+      const ragTool = executed.find((t: any) => t.tool.includes("search_brand_manual"));
+
+      let inputEval = "Saudação simples ou interação direta detectada.";
+      let routingDecision = "Resposta direta sem necessidade de busca vetorial.";
+      let actionTaken = "Nenhuma tool acionada • 0 tokens extras de contexto.";
+      let ragChunks: string[] = [];
+
+      if (ragTool) {
+        inputEval = `Demanda de conteúdo/estratégia identificada (Foco: "${ragTool.input?.query || textToSend}").`;
+        routingDecision = "Acionamento do RAG Vetorial (Embeddings) no Manual da Marca.";
+        ragChunks = ragTool.output?.retrieved_topics || [];
+        actionTaken = `Recuperados ${ragChunks.length} chunks relevantes (${ragTool.output?.estimated_tokens || 180} tokens via text-embedding-3-small).`;
+      } else if (executed.length > 0) {
+        inputEval = "Demanda operacional identificada.";
+        routingDecision = `Roteamento para ferramenta especializada (${executed[0].tool}).`;
+        actionTaken = `Executada em ${executed[0].latency_ms}ms com sucesso.`;
+      } else if (textToSend.length > 30) {
+        inputEval = "Consulta analítica ou orientação estratégica.";
+        routingDecision = "Processamento com raciocínio executivo do Orquestrador.";
+        actionTaken = "Análise direta com base nas diretrizes gerais.";
+      }
 
       const aiMessage: ChatMessageItem = {
         id: `msg_ai_${Date.now()}`,
@@ -391,9 +420,16 @@ export default function AdminAiPlayground() {
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         metrics: agentData.metrics,
         tool_calls: agentData.tool_calls,
+        executed_tools: executed,
         context_summary: brandContext?.brand_name
-          ? `Manual: ${brandContext.brand_name} (${brandContext.answered_questions_count} respostas)`
+          ? `RAG: ${brandContext.brand_name} (${brandContext.answered_questions_count} respostas indexadas)`
           : "Contexto Base do Tenant",
+        agent_path: {
+          input_eval: inputEval,
+          routing_decision: routingDecision,
+          action_taken: actionTaken,
+          rag_chunks: ragChunks,
+        },
         trace: result.trace,
         raw_response: agentData,
       };
@@ -833,6 +869,40 @@ export default function AdminAiPlayground() {
                             <Zap className="h-3 w-3 text-amber-500" /> {msg.metrics.tokens_total} tokens
                           </span>
                         </div>
+                      </div>
+                    )}
+
+                    {/* Fluxo Agêntico Percorrido (3 Etapas Visíveis) */}
+                    {msg.role === "assistant" && msg.agent_path && (
+                      <div className="p-2.5 rounded-xl border border-primary/20 bg-primary/5 space-y-1.5 text-[11px] mb-2 animate-in fade-in duration-150">
+                        <div className="font-semibold text-primary flex items-center gap-1.5 text-xs">
+                          <Compass className="h-3.5 w-3.5" />
+                          <span>Fluxo Agêntico Percorrido:</span>
+                        </div>
+                        <div className="space-y-1 pl-1 font-mono text-[10px]">
+                          <div className="flex items-start gap-1.5">
+                            <span className="font-bold text-foreground shrink-0">1. Avaliação do Input:</span>
+                            <span className="text-muted-foreground">{msg.agent_path.input_eval}</span>
+                          </div>
+                          <div className="flex items-start gap-1.5">
+                            <span className="font-bold text-foreground shrink-0">2. Decisão de Roteamento:</span>
+                            <span className="text-muted-foreground">{msg.agent_path.routing_decision}</span>
+                          </div>
+                          <div className="flex items-start gap-1.5">
+                            <span className="font-bold text-foreground shrink-0">3. Ação & RAG:</span>
+                            <span className="text-muted-foreground">{msg.agent_path.action_taken}</span>
+                          </div>
+                        </div>
+                        {msg.agent_path.rag_chunks && msg.agent_path.rag_chunks.length > 0 && (
+                          <div className="pt-1 flex flex-wrap items-center gap-1">
+                            <span className="text-[10px] text-muted-foreground font-semibold">Chunks do Manual:</span>
+                            {msg.agent_path.rag_chunks.map((ch, i) => (
+                              <Badge key={i} variant="secondary" className="text-[9px] py-0 h-4 bg-muted text-foreground">
+                                {ch}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
 

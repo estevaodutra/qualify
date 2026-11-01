@@ -2,12 +2,14 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { ToolDefinition, ToolExecutionContext, AgentDefinition } from "../schemas";
 import { RBACEngine } from "../permissions/rbacEngine";
 import { brandManualTool } from "./company/brandManualTool";
+import { brandManualSearchTool } from "./company/brandManualSearchTool";
 import { scoreHookTool } from "./ai/scoreHookTool";
 
 /**
  * Catálogo de Ferramentas (Tools) da Central de IA.
  */
 export const ALL_TOOLS: ToolDefinition[] = [
+  brandManualSearchTool,
   brandManualTool,
   scoreHookTool,
 ];
