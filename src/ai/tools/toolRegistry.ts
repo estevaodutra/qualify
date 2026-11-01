@@ -32,6 +32,11 @@ export function getTool(name: string): ToolDefinition | undefined {
   return ToolRegistry[name];
 }
 
+export function findToolByNameOrSanitized(name: string): ToolDefinition | undefined {
+  if (ToolRegistry[name]) return ToolRegistry[name];
+  return ALL_TOOLS.find((t) => t.name.replace(/\./g, "_") === name || t.name === name);
+}
+
 export function listTools(): ToolDefinition[] {
   return Object.values(ToolRegistry);
 }

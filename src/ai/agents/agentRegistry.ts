@@ -1,5 +1,5 @@
 import { AgentDefinition, ToolExecutionContext, ModelProfileCode } from "../schemas";
-import { createLangChainToolsForAgent, executeTool } from "../tools/toolRegistry";
+import { createLangChainToolsForAgent, executeTool, findToolByNameOrSanitized } from "../tools/toolRegistry";
 import { createLangChainChatModel } from "../models/modelFactory";
 import { resolveContextForAgent } from "../contexts/contextRegistry";
 import { getSkill } from "../skills/skillRegistry";
@@ -173,18 +173,23 @@ ${lightweightContext}
 
     for (const tc of toolCalls) {
       const toolStart = Date.now();
-      const rawToolName = tc.name.replace(/_/g, ".");
+      const toolDef = findToolByNameOrSanitized(tc.name);
+      const actualToolName = toolDef ? toolDef.name : tc.name.replace(/_/g, ".");
       let toolOutput: any = null;
 
       try {
-        toolOutput = await executeTool(rawToolName, tc.args, context, agent);
+        if (!toolDef) {
+          throw new Error(`Ferramenta '${tc.name}' (${actualToolName}) não encontrada no registro.`);
+        }
+        toolOutput = await executeTool(actualToolName, tc.args, context, agent);
       } catch (err: any) {
-        toolOutput = { error: err?.message || `Erro ao executar ${rawToolName}` };
+        console.error(`[AgentRuntime] Erro ao executar ${actualToolName}:`, err);
+        toolOutput = { error: err?.message || `Erro ao executar ${actualToolName}` };
       }
 
       const toolDuration = Date.now() - toolStart;
       executedTools.push({
-        tool: rawToolName,
+        tool: actualToolName,
         input: tc.args,
         output: toolOutput,
         latency_ms: toolDuration,
@@ -198,8 +203,8 @@ ${lightweightContext}
       );
     }
 
-    // Segunda passada: o modelo sintetiza a resposta final munido do contexto das ferramentas
-    const finalResponse = await modelWithTools.invoke(messages);
+    // Segunda passada: o modelo sintetiza a resposta final em texto munido do contexto das ferramentas
+    const finalResponse = await model.invoke(messages);
     const finalTokens = extractTokens(finalResponse);
     totalPromptTokens += finalTokens.pt;
     totalCompletionTokens += finalTokens.ct;
@@ -209,7 +214,28 @@ ${lightweightContext}
   const latencyMs = Date.now() - startTime;
   const totalTokens = totalPromptTokens + totalCompletionTokens;
   const estimatedCost = Number(((totalPromptTokens * 0.15 + totalCompletionTokens * 0.6) / 1000000).toFixed(6));
-  const content = typeof response.content === "string" ? response.content : JSON.stringify(response.content);
+
+  // Extrair texto da mensagem
+  let rawContent = response.content;
+  let content = "";
+  if (typeof rawContent === "string") {
+    content = rawContent;
+  } else if (Array.isArray(rawContent)) {
+    content = rawContent
+      .map((part) => (typeof part === "string" ? part : part?.text || JSON.stringify(part)))
+      .filter(Boolean)
+      .join("\n");
+  } else if (rawContent && typeof rawContent === "object") {
+    content = (rawContent as any).text || JSON.stringify(rawContent);
+  }
+
+  // Fallback caso o modelo tenha retornado texto vazio mas ferramentas tenham sido executadas
+  if (!content.trim() && executedTools.length > 0) {
+    const ragTool = executedTools.find((t) => t.tool.includes("search_brand_manual"));
+    if (ragTool?.output?.context_text) {
+      content = `### Informações do Manual da Marca Recuperadas:\n\n${ragTool.output.context_text}`;
+    }
+  }
 
   return {
     agent: agent.slug,

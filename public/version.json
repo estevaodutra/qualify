@@ -1,6 +1,6 @@
 {
-  "commit": "785064a534a0e8597fee1cd0efdea4f4e881a190",
-  "shortCommit": "785064a",
-  "message": "feat(ai): implement Workspace RAG with OpenAI Embeddings, selective semantic search tool, and agentic ReAct loop",
-  "builtAt": "2026-11-01T21:10:08.185Z"
+  "commit": "b2dbeb163973fa80c9a91fb3efcc12bcd030dbf9",
+  "shortCommit": "b2dbeb1",
+  "message": "feat(ai): add persistent vector storage, explicit indexing trigger and RAG status card in Playground",
+  "builtAt": "2026-11-01T21:23:08.549Z"
 }
