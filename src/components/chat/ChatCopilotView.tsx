@@ -241,22 +241,8 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
     {
       id: "copilot-welcome",
       sender: "ai",
-      text: `Olá! Eu sou o **Copiloto & Diretor de Conteúdo IA** da **${activeCompany?.name || "sua empresa"}**.\n\nEstou conectado ao seu **Manual da Marca** e equipado com as **13 Skills do Instagram** (26 fórmulas de ganchos para Reels, roteiros de alta retenção, corte de 125 chars em legendas, auditoria de perfil e filtro humanizador anti-IA).\n\nUse os **comandos rápidos** abaixo ou me pergunte qualquer coisa sobre sua estratégia e conteúdo:`,
+      text: `Olá! Eu sou o **Copiloto IA** da **${activeCompany?.name || "sua empresa"}**.\n\nA Central de IA está no **Marco Zero**. Envie qualquer dúvida ou instrução para conversarmos:`,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      actions: [
-        {
-          label: "⚡ /reel: Criar Roteiro com Gancho Forte",
-          actionType: "add_to_planner",
-          payload: {
-            theme: "O erro que afasta clientes prontos",
-            format: "REEL",
-            pillar: "Posicionamento 7D",
-            objective: "identificacao",
-            hook: "Ninguém te conta que o seu processo comercial está afastando seus melhores compradores.",
-            script: "GANCHO (0-3s): Ninguém te conta que o seu processo comercial está afastando seus melhores compradores.\n\nPONTE (3-12s): Você atrai pessoas qualificadas, mas perde horas com reuniões infinitas que não fecham.\n\nCONTEÚDO (12-30s): Fechamento acontece pela clareza do processo, não por pressão comercial. Uma esteira de condução lógica resolve isso em 15 minutos.\n\nCTA: Comente 'PROCESSO' para conhecer nossa esteira 7D.",
-          },
-        },
-      ],
     },
   ]);
 
@@ -273,14 +259,7 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
     }
   }, [inputText]);
 
-  const quickSkills = [
-    { cmd: "/reel", label: "⚡ /reel", title: "Roteiro de Reel com 26 Hooks", icon: Film, prompt: "Crie um roteiro de Reel alinhado ao posicionamento e tese do nosso Manual da Marca." },
-    { cmd: "/manual", label: "📘 /manual", title: "Ver Manual da Marca", icon: BookOpen, prompt: "Qual é o meu Manual da Marca e qual tese central estamos trabalhando?" },
-    { cmd: "/carrossel", label: "📑 /carrossel", title: "Carrossel Slide a Slide", icon: Layers, prompt: "Monte a estrutura de um carrossel educativo quebrando a objeção de tempo com base no nosso método." },
-    { cmd: "/legenda", label: "📝 /legenda", title: "Legenda Otimizada (125 chars)", icon: FileText, prompt: "Escreva uma legenda magnética de conversão com base na promessa da nossa marca." },
-    { cmd: "/bio", label: "🔍 /bio", title: "Auditoria de Perfil (0-100)", icon: UserCheck, prompt: "Audite o perfil do Instagram da nossa marca de 0 a 100 com base no método de 12 itens." },
-    { cmd: "/humanizar", label: "✨ /humanizar", title: "Higienizar Tom de IA", icon: Wand2, prompt: "Humanize o nosso último roteiro removendo clichês e tornando a fala 100% natural." },
-  ];
+  const quickSkills: Array<{ cmd: string; label: string; title: string; icon: any; prompt: string }> = [];
 
   const handleSendPrompt = async (prompt: string) => {
     const textToSend = prompt.trim();
@@ -637,12 +616,12 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
               <h3 className="font-bold text-sm text-card-foreground leading-snug truncate">
                 Copiloto IA — {brandContext?.companyName || "Criafy"}
               </h3>
-              <Badge variant="outline" className="bg-purple-500/10 text-purple-600 border-purple-500/20 text-[10px] font-extrabold h-4 px-1.5 shrink-0">
-                13 SKILLS INSTAGRAM
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-medium h-4 px-1.5 shrink-0">
+                Copiloto
               </Badge>
             </div>
             <p className="text-[11px] text-muted-foreground truncate">
-              Manual da Marca Conectado • Tese Central: {brandContext?.teseCentral ? `"${brandContext.teseCentral.slice(0, 60)}..."` : "Sincronizado"}
+              {brandContext?.companyName ? `Assistente da ${brandContext.companyName}` : "Assistente Virtual"}
             </p>
           </div>
         </div>
@@ -811,7 +790,7 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
         {isThinking && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground p-2 rounded-xl bg-card/40 w-fit border border-border/40 animate-pulse">
             <Sparkles className="w-4 h-4 text-purple-600 animate-spin" />
-            <span>Copiloto consultando o Manual da Marca ({brandContext?.companyName || "IPV"}) e aplicando Skills...</span>
+            <span>Copiloto processando sua mensagem...</span>
           </div>
         )}
 
@@ -821,6 +800,7 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
       {/* 3. Rodapé com Comandos Rápidos + Compositor idêntico ao ChatComposer */}
       <div className="p-3 border-t border-border/40 bg-card/10 shrink-0 space-y-2">
         {/* Barra de Comandos Específicos logo acima do Input */}
+        {quickSkills.length > 0 && (
         <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
           <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider shrink-0 mr-1 flex items-center gap-1">
             <Zap className="w-3 h-3 text-amber-500" />
@@ -842,6 +822,7 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
             );
           })}
         </div>
+        )}
 
         {/* Textarea Composer idêntico ao ChatComposer */}
         <div className="flex items-end gap-2 bg-background border border-border/60 rounded-2xl p-2 shadow-sm focus-within:border-primary/40 focus-within:shadow-md transition-all">
@@ -851,7 +832,7 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={`Converse com o Copiloto IA da ${brandContext?.companyName || "marca"} ou digite /reel, /manual, /carrossel...`}
+            placeholder={`Converse com o Copiloto IA da ${brandContext?.companyName || "sua empresa"}...`}
             className="w-full bg-transparent px-2 py-2 text-sm outline-none resize-none transition-all duration-200 min-h-[38px] max-h-[140px] scrollbar-thin leading-relaxed text-foreground placeholder:text-muted-foreground"
           />
 

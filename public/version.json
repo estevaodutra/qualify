@@ -1,6 +1,6 @@
 {
-  "commit": "9a267199f5627245870ab953b4ae9288d2f586b2",
-  "shortCommit": "9a26719",
-  "message": "fix(sprint): importar Badge em SprintCardModal",
-  "builtAt": "2026-11-01T20:01:59.851Z"
+  "commit": "63c852157d8022611b4f0dc9d4377f9fa142e13a",
+  "shortCommit": "63c8521",
+  "message": "fix(sprint): sincronizar e exibir anexos de checklist e comentarios nos modais de arquivos do cartao e quadro",
+  "builtAt": "2026-11-01T20:13:54.725Z"
 }

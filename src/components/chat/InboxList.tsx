@@ -521,16 +521,16 @@ export default function InboxList({
                   <span className="font-bold text-xs text-foreground truncate">
                     Copiloto IA
                   </span>
-                  <Badge className="bg-purple-600 text-white text-[9px] px-1 py-0 h-3.5 font-extrabold shrink-0">
-                    13 SKILLS
+                  <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[9px] px-1 py-0 h-3.5 font-medium shrink-0">
+                    IA
                   </Badge>
                 </div>
-                <span className="text-[10px] text-purple-600 font-bold shrink-0">
+                <span className="text-[10px] text-primary font-medium shrink-0">
                   Online
                 </span>
               </div>
               <p className="text-[11px] text-muted-foreground truncate mt-0.5">
-                Roteiros de Reels, Carrosséis e Criafy
+                Assistente de Estratégia e Conteúdo
               </p>
             </div>
           </div>
