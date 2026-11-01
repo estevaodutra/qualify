@@ -242,10 +242,31 @@ Deno.serve(async (req) => {
     const isChainedTrigger = !!payload.skipDedupe || !!(payload.triggerContext as any)?.parentWorkflowId;
     if (!isChainedTrigger) {
       try {
-        const dedupeWindow = new Date(Date.now() - 15000).toISOString();
+        const dedupeWindow = new Date(Date.now() - 30000).toISOString();
         const rawTargetPhone = (payload.phone as string) || (payload.senderPhone as string) || (payload.from_phone as string) || (payload.triggerContext as any)?.respondentPhone;
         const cleanTargetPhone = rawTargetPhone ? String(rawTargetPhone).replace(/\D/g, "") : null;
 
+        // 1. Verificar deduplicação em workflow_executions
+        let wfDedupeQuery = supabase
+          .from("workflow_executions")
+          .select("id, created_at")
+          .eq("sequence_id", typedSequence.id)
+          .gte("created_at", dedupeWindow);
+
+        if (cleanTargetPhone) {
+          wfDedupeQuery = wfDedupeQuery.or(`trigger_payload->>respondentPhone.ilike.%${cleanTargetPhone}%,trigger_payload->>phone.ilike.%${cleanTargetPhone}%,trigger_payload->>senderPhone.ilike.%${cleanTargetPhone}%`);
+        }
+
+        const { data: recentWfExec } = await wfDedupeQuery.limit(1).maybeSingle();
+        if (recentWfExec) {
+          console.log(`[TriggerSequence] Deduplicated (workflow_executions) — sequence ${sequenceId} already triggered at ${recentWfExec.created_at} for phone ${cleanTargetPhone || 'all'}`);
+          return new Response(
+            JSON.stringify({ success: true, deduplicated: true, message: "Sequence already triggered recently" }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // 2. Verificar deduplicação em sequence_executions
         let dedupeQuery = supabase
           .from("sequence_executions")
           .select("id, created_at")

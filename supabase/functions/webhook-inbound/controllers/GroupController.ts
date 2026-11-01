@@ -305,16 +305,41 @@ function formatPhoneNumber(phone: string): string {
       const phoneToUse = context.senderPhone || context.senderLid;
 
       if (phoneToUse) {
-        // 1. Dispatch sequences (legacy/standalone automations)
-        const { data: genericSequences } = await supabase
+        const instanceCompanyId = instance?.company_id || null;
+        const instanceUserId = instance?.user_id || null;
+
+        const checkInstanceMatches = (triggerCfg: any): boolean => {
+          if (!triggerCfg || !instance?.id) return true;
+          const cfgInstId = triggerCfg.instanceId || triggerCfg.instance_id;
+          const cfgInstIds = Array.isArray(triggerCfg.instanceIds) ? triggerCfg.instanceIds : [];
+          if (cfgInstId && cfgInstId !== instance.id) {
+            return false;
+          }
+          if (cfgInstIds.length > 0 && !cfgInstIds.includes(instance.id)) {
+            return false;
+          }
+          return true;
+        };
+
+        // 1. Dispatch sequences (legacy/standalone automations) - ISOLADO POR EMPRESA/USUÁRIO
+        let dispatchQuery = supabase
           .from("dispatch_sequences")
-          .select("id, campaign_id, trigger_config")
+          .select("id, campaign_id, trigger_config, company_id, user_id")
           .eq("trigger_type", targetTriggerType)
           .eq("is_active", true);
+
+        if (instanceCompanyId) {
+          dispatchQuery = dispatchQuery.eq("company_id", instanceCompanyId);
+        } else if (instanceUserId) {
+          dispatchQuery = dispatchQuery.eq("user_id", instanceUserId);
+        }
+
+        const { data: genericSequences } = await dispatchQuery;
 
         if (genericSequences && genericSequences.length > 0) {
           for (const seq of genericSequences) {
             const config = seq.trigger_config as any;
+            if (!checkInstanceMatches(config)) continue;
             const groups = ((config && config.selectedGroupJids) || []).map(normalizeJid);
             if (groups.length === 0 || groups.includes(normChatJid)) {
               try {
@@ -339,18 +364,28 @@ function formatPhoneNumber(phone: string): string {
           }
         }
 
-        // 2. Message sequences (new Workflows engine)
-        const { data: activeMessageSequences } = await supabase
+        // 2. Message sequences (Workflows engine) - ISOLADO POR EMPRESA/USUÁRIO
+        let msgSeqQuery = supabase
           .from("message_sequences")
-          .select("id, trigger_type, trigger_config")
+          .select("id, name, trigger_type, trigger_config, company_id, user_id")
           .eq("active", true);
 
-        const { data: triggerNodes } = await supabase
-          .from("sequence_nodes")
-          .select("id, sequence_id, config")
-          .eq("node_type", "trigger");
+        if (instanceCompanyId) {
+          msgSeqQuery = msgSeqQuery.eq("company_id", instanceCompanyId);
+        } else if (instanceUserId) {
+          msgSeqQuery = msgSeqQuery.eq("user_id", instanceUserId);
+        }
+
+        const { data: activeMessageSequences } = await msgSeqQuery;
 
         if (activeMessageSequences && activeMessageSequences.length > 0) {
+          const activeSeqIds = activeMessageSequences.map(s => s.id);
+          const { data: triggerNodes } = await supabase
+            .from("sequence_nodes")
+            .select("id, sequence_id, config")
+            .eq("node_type", "trigger")
+            .in("sequence_id", activeSeqIds);
+
           for (const seq of activeMessageSequences) {
             const nodes = (triggerNodes || []).filter(n => n.sequence_id === seq.id);
             let isMatch = false;
@@ -359,9 +394,11 @@ function formatPhoneNumber(phone: string): string {
             // Direct check on message_sequences table
             if (seq.trigger_type === targetTriggerType) {
               const config = (seq.trigger_config as any) || {};
-              const groups = ((config && config.selectedGroupJids) || []).map(normalizeJid);
-              if (groups.length === 0 || groups.includes(normChatJid)) {
-                isMatch = true;
+              if (checkInstanceMatches(config)) {
+                const groups = ((config && config.selectedGroupJids) || []).map(normalizeJid);
+                if (groups.length === 0 || groups.includes(normChatJid)) {
+                  isMatch = true;
+                }
               }
             }
 
@@ -370,7 +407,12 @@ function formatPhoneNumber(phone: string): string {
               const triggers = ((node.config as any) && (node.config as any).triggers) || [];
               for (const t of triggers) {
                 if (t.type === targetTriggerType) {
-                  const groups = ((t.config && t.config.selectedGroupJids) || []).map(normalizeJid);
+                  const tCfg = t.config || {};
+                  // Valida se a instância configurada no gatilho ou no nó confere com a instância atual
+                  if (!checkInstanceMatches(tCfg) || !checkInstanceMatches(node.config)) {
+                    continue;
+                  }
+                  const groups = ((tCfg && tCfg.selectedGroupJids) || []).map(normalizeJid);
                   if (groups.length === 0 || groups.includes(normChatJid)) {
                     isMatch = true;
                     matchedTriggerId = t.id;
@@ -382,6 +424,29 @@ function formatPhoneNumber(phone: string): string {
             }
 
             if (isMatch) {
+              // Deduplicação: Evita disparos duplicados para o mesmo membro e fluxo na janela de 30 segundos
+              try {
+                const cleanPhone = phoneToUse.replace(/\D/g, "");
+                const dedupeWindow = new Date(Date.now() - 30000).toISOString();
+                let dedupeQuery = supabase
+                  .from("workflow_executions")
+                  .select("id, created_at")
+                  .eq("sequence_id", seq.id)
+                  .gte("created_at", dedupeWindow);
+
+                if (cleanPhone) {
+                  dedupeQuery = dedupeQuery.or(`trigger_payload->>respondentPhone.ilike.%${cleanPhone}%,trigger_payload->>phone.ilike.%${cleanPhone}%,trigger_payload->>senderPhone.ilike.%${cleanPhone}%`);
+                }
+
+                const { data: recentExec } = await dedupeQuery.limit(1).maybeSingle();
+                if (recentExec) {
+                  console.log(`[GroupController] Deduplicação ativa: fluxo "${seq.name}" (${seq.id}) já foi iniciado em ${recentExec.created_at} para ${phoneToUse}. Ignorando instância ${instance?.id}.`);
+                  continue;
+                }
+              } catch (dedupeErr) {
+                console.warn("[GroupController] Deduplication check failed (non-fatal):", dedupeErr);
+              }
+
               try {
                 console.log(`[GroupController] Triggering workflow sequence ${seq.id} (triggerId=${matchedTriggerId}) for member ${phoneToUse} via instance ${instance?.id}`);
                 const triggerResp = await fetch(`${supabaseUrl}/functions/v1/trigger-sequence`, {

@@ -2308,15 +2308,15 @@ Deno.serve(async (req) => {
       if (effectiveSequenceId && (effectiveLeadId || cleanTriggerPhone)) {
         try {
           let existingExecQuery = supabase
-            .from("sequence_executions")
+            .from("workflow_executions")
             .select("id, status, created_at")
             .eq("sequence_id", effectiveSequenceId)
             .in("status", ["running", "paused", "waiting"]);
 
           if (effectiveLeadId) {
-            existingExecQuery = existingExecQuery.or(`trigger_context->>leadId.eq.${effectiveLeadId},trigger_context->>contactId.eq.${effectiveLeadId}`);
+            existingExecQuery = existingExecQuery.or(`trigger_payload->>leadId.eq.${effectiveLeadId},trigger_payload->>contactId.eq.${effectiveLeadId}`);
           } else if (cleanTriggerPhone) {
-            existingExecQuery = existingExecQuery.or(`trigger_context->>respondentPhone.ilike.%${cleanTriggerPhone}%,trigger_context->>contactPhone.ilike.%${cleanTriggerPhone}%`);
+            existingExecQuery = existingExecQuery.or(`trigger_payload->>respondentPhone.ilike.%${cleanTriggerPhone}%,trigger_payload->>contactPhone.ilike.%${cleanTriggerPhone}%,trigger_payload->>phone.ilike.%${cleanTriggerPhone}%`);
           }
 
           const { data: activeList } = await existingExecQuery;
@@ -2340,8 +2340,26 @@ Deno.serve(async (req) => {
               }
             } else {
               // Nova execução do mesmo fluxo para o mesmo lead:
-              // Regra: "o mesmo fluxo não pode executar ao mesmo tempo dentro do mesmo lead, não importa a fase"
-              // Cancelar a execução anterior para que apenas a nova permaneça ativa
+              // DEDUPLICAÇÃO DE DISPAROS CONCORRENTES:
+              // Se já existe uma execução iniciada nos últimos 30 segundos para o mesmo lead/telefone, é um disparo concorrente duplicado (ex: múltiplos webhooks simultâneos).
+              // Devemos abortar este disparo concorrente imediatamente com 200 OK para que apenas a primeira execução execute e envie mensagens!
+              const recentThreshold = new Date(Date.now() - 30000).toISOString();
+              const concurrentExec = activeList.find(e => e.created_at && e.created_at >= recentThreshold);
+              if (concurrentExec) {
+                console.log(`[ExecuteMessage] ⚠️ Execução concorrente duplicada detectada: sequência ${effectiveSequenceId} já iniciada em ${concurrentExec.created_at} (id: ${concurrentExec.id}) para o lead ${effectiveLeadId || cleanTriggerPhone}. Abortando execução duplicada.`);
+                return new Response(JSON.stringify({ 
+                  success: true, 
+                  deduplicated: true, 
+                  message: "Execução concorrente duplicada suprimida com sucesso",
+                  existingExecutionId: concurrentExec.id 
+                }), {
+                  status: 200,
+                  headers: { ...corsHeaders, "Content-Type": "application/json" }
+                });
+              }
+
+              // Se a execução ativa é antiga (>30s atrás) e ficou em espera ou travada,
+              // e houve um novo evento real, cancela as anteriores para que apenas a nova permaneça ativa
               console.log(`[ExecuteMessage] Substituindo ${activeList.length} execução(ões) anterior(es) da sequência ${effectiveSequenceId} no lead ${effectiveLeadId || cleanTriggerPhone}`);
               const oldIds = activeList.map(e => e.id);
               await Promise.all([

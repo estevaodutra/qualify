@@ -502,6 +502,16 @@ export async function processMessageEvent(
             const trigType = trigger.type;
             const trigCfg = trigger.config || {};
 
+            // Filtro de Instância: Se o gatilho especificou uma instância, só dispara se veio dessa instância
+            const trigInstId = trigCfg.instanceId || trigCfg.instance_id;
+            const trigInstIds = Array.isArray(trigCfg.instanceIds) ? trigCfg.instanceIds : [];
+            if (trigInstId && instance?.id && trigInstId !== instance.id) {
+              continue;
+            }
+            if (trigInstIds.length > 0 && instance?.id && !trigInstIds.includes(instance.id)) {
+              continue;
+            }
+
             // 1) KEYWORD TRIGGER
             if (trigType === "keyword") {
               const kw = (trigCfg.keyword || trigCfg.palavraChave || rootCfg.keyword || "") as string;
@@ -548,11 +558,11 @@ export async function processMessageEvent(
             // Check if sequence is already executing for this phone
             if (cleanPhone) {
               const { data: runningExec } = await supabase
-                .from("sequence_executions")
+                .from("workflow_executions")
                 .select("id, status")
                 .eq("sequence_id", seq.id)
-                .or(`trigger_context->>respondentPhone.ilike.%${cleanPhone}%,trigger_context->>senderPhone.ilike.%${cleanPhone}%`)
-                .in("status", ["running", "processing", "waiting", "waiting_user_input"])
+                .or(`trigger_payload->>respondentPhone.ilike.%${cleanPhone}%,trigger_payload->>phone.ilike.%${cleanPhone}%,trigger_payload->>senderPhone.ilike.%${cleanPhone}%`)
+                .in("status", ["running", "waiting"])
                 .limit(1)
                 .maybeSingle();
 
