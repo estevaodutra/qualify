@@ -143,9 +143,10 @@ describe("CriafySeedContentService — Marco Zero da Conta", () => {
     expect(prereqs.missingReasons.length).toBe(0);
   });
 
-  it("2. checkPrerequisites deve recusar se a conta não tiver conta selecionada ou estratégia", async () => {
-    const prereqs = await CriafySeedContentService.checkPrerequisites(companyId, "all");
+  it("2. checkPrerequisites deve recusar se a empresa não tiver Manual da Marca preenchido", async () => {
+    const prereqs = await CriafySeedContentService.checkPrerequisites("company-sem-manual", null);
     expect(prereqs.canStart).toBe(false);
+    expect(prereqs.hasBrandManual).toBe(false);
     expect(prereqs.missingReasons.length).toBeGreaterThan(0);
   });
 
