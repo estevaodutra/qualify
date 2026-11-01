@@ -67,9 +67,14 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const isCollapsed = state === "collapsed" && !isMobile;
-  const { companies, activeCompany, setActiveCompany } = useCompany();
+  const { companies, activeCompany, switchWorkspace } = useCompany();
   const { unreadCount } = useAlerts();
   const { user, signOut } = useAuth();
+
+  const handleWorkspaceChange = (companyId: string) => {
+    if (companyId === activeCompany?.id) return;
+    switchWorkspace(companyId);
+  };
 
   // Helper to handle link click on mobile
   const handleNavClick = () => {
@@ -190,7 +195,7 @@ export function AppSidebar() {
                         {companies.map((company) => (
                           <DropdownMenuItem
                             key={company.id}
-                            onClick={() => setActiveCompany(company.id)}
+                            onClick={() => handleWorkspaceChange(company.id)}
                             className="flex items-center justify-between rounded-xl px-3 py-2 text-slate-700 hover:bg-[#EEF0FD] hover:text-[#5856d6] focus:bg-[#EEF0FD] focus:text-[#5856d6] cursor-pointer"
                           >
                             <span className="truncate text-xs font-semibold">{company.name}</span>
@@ -234,7 +239,7 @@ export function AppSidebar() {
                 {companies.map((company) => (
                   <DropdownMenuItem
                     key={company.id}
-                    onClick={() => setActiveCompany(company.id)}
+                    onClick={() => handleWorkspaceChange(company.id)}
                     className="flex items-center justify-between rounded-xl px-3 py-2 text-slate-700 hover:bg-[#EEF0FD] hover:text-[#5856d6] focus:bg-[#EEF0FD] focus:text-[#5856d6] cursor-pointer"
                   >
                     <span className="truncate text-xs font-semibold">{company.name}</span>

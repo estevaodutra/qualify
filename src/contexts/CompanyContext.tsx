@@ -14,7 +14,8 @@ interface CompanyContextType {
   companies: Company[];
   activeCompanyId: string | null;
   activeCompany: Company | null;
-  setActiveCompany: (id: string) => void;
+  setActiveCompany: (id: string, options?: { redirect?: boolean }) => void;
+  switchWorkspace: (id: string) => void;
   isLoading: boolean;
   isAdmin: boolean;
   refetch: () => void;
@@ -189,14 +190,21 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     ensureMembership();
   }, [user, isSuperadmin, impersonatedCompanyId, fetchCompanies]);
 
-  const setActiveCompany = useCallback((id: string) => {
+  const setActiveCompany = useCallback((id: string, options?: { redirect?: boolean }) => {
     setActiveCompanyId(id);
     localStorage.setItem(STORAGE_KEY, id);
     if (impersonatedCompanyId) {
       setImpersonatedCompanyId(null);
       localStorage.removeItem("dispatch_impersonated_company");
     }
+    if (options?.redirect) {
+      window.location.href = "/";
+    }
   }, [impersonatedCompanyId]);
+
+  const switchWorkspace = useCallback((id: string) => {
+    setActiveCompany(id, { redirect: true });
+  }, [setActiveCompany]);
 
   const impersonateCompany = useCallback((id: string | null) => {
     if (!isSuperadmin && id !== null) return;
@@ -226,6 +234,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         activeCompanyId: effectiveCompanyId,
         activeCompany,
         setActiveCompany,
+        switchWorkspace,
         isLoading,
         isAdmin,
         refetch: fetchCompanies,
