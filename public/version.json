@@ -1,6 +1,6 @@
 {
-  "commit": "425abbeea71d89fa5450b845ea02b68f84756b9a",
-  "shortCommit": "425abbe",
-  "message": "fix(workspace): redirecionar para dashboard com reload completo ao trocar de workspace",
-  "builtAt": "2026-11-01T17:24:47.955Z"
+  "commit": "a0cf677dc004fff0c37cd549eaccda58797b2977",
+  "shortCommit": "a0cf677",
+  "message": "fix(playground): corrigir deteccao do manual da marca pelo campo response e busca em todos workspaces",
+  "builtAt": "2026-11-01T17:39:38.590Z"
 }

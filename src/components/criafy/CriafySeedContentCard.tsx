@@ -52,18 +52,18 @@ export const CriafySeedContentCard: React.FC<CriafySeedContentCardProps> = ({
   const [progress, setProgress] = useState<CriafySeedProgress | null>(null);
   const [prereqs, setPrereqs] = useState<CriafySeedPrerequisites | null>(null);
 
-  // Resolver conta ativa
+  // Resolver conta ativa (opcional)
   const targetAccountId =
     selectedAccountId && selectedAccountId !== "all"
       ? selectedAccountId
       : accounts.length > 0
       ? accounts[0].id
-      : "";
+      : null;
 
   const activeAccount = accounts.find((a) => a.id === targetAccountId);
 
   useEffect(() => {
-    if (!companyId || !targetAccountId) {
+    if (!companyId) {
       setLoading(false);
       return;
     }
@@ -89,8 +89,8 @@ export const CriafySeedContentCard: React.FC<CriafySeedContentCardProps> = ({
   };
 
   const handleStartSeedContent = async () => {
-    if (!companyId || !targetAccountId) {
-      toast.error("Selecione uma conta do Instagram para iniciar.");
+    if (!companyId) {
+      toast.error("Empresa não selecionada.");
       return;
     }
 
@@ -130,11 +130,6 @@ export const CriafySeedContentCard: React.FC<CriafySeedContentCardProps> = ({
     );
   }
 
-  // Sem contas conectadas
-  if (accounts.length === 0) {
-    return null;
-  }
-
   const status: CriafySeedStatus = progress?.status || "not_started";
   const completedCount = progress?.completed || 0;
   const totalCount = progress?.total || 5;
@@ -157,7 +152,7 @@ export const CriafySeedContentCard: React.FC<CriafySeedContentCardProps> = ({
               </Badge>
             </div>
             <p className="text-muted-foreground text-[11px] mt-0.5">
-              O posicionamento inicial da conta @{activeAccount?.username || ""} foi estabelecido com sucesso.
+              O posicionamento inicial {activeAccount?.username ? `da conta @${activeAccount.username}` : "da sua marca"} foi estabelecido com sucesso.
             </p>
           </div>
         </div>
@@ -197,9 +192,11 @@ export const CriafySeedContentCard: React.FC<CriafySeedContentCardProps> = ({
                 <Badge variant="outline" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300 text-[11px] font-medium">
                   {status === "in_production" ? "Em Produção" : "Gerado"}
                 </Badge>
-                <span className="text-xs font-mono text-muted-foreground">
-                  @{activeAccount?.username || ""}
-                </span>
+                {activeAccount?.username && (
+                  <span className="text-xs font-mono text-muted-foreground">
+                    @{activeAccount.username}
+                  </span>
+                )}
               </div>
               <h3 className="text-lg font-bold tracking-tight text-foreground mt-1">
                 Conteúdo Semente em Andamento
@@ -357,12 +354,20 @@ export const CriafySeedContentCard: React.FC<CriafySeedContentCardProps> = ({
             </p>
           </div>
 
-          <div className="shrink-0 flex items-center gap-2">
-            <span className="text-xs font-mono text-muted-foreground">Conta ativa:</span>
-            <Badge variant="secondary" className="font-mono text-xs">
-              @{activeAccount?.username || "conta"}
-            </Badge>
-          </div>
+          {activeAccount?.username ? (
+            <div className="shrink-0 flex items-center gap-2">
+              <span className="text-xs font-mono text-muted-foreground">Conta ativa:</span>
+              <Badge variant="secondary" className="font-mono text-xs">
+                @{activeAccount.username}
+              </Badge>
+            </div>
+          ) : (
+            <div className="shrink-0 flex items-center gap-2">
+              <Badge variant="outline" className="text-xs">
+                Geral da Empresa
+              </Badge>
+            </div>
+          )}
         </div>
 
         {/* O Pacote Conteúdo Semente (5 Peças) */}

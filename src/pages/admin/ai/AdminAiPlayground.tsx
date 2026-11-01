@@ -382,14 +382,9 @@ export default function AdminAiPlayground() {
       return;
     }
 
-    let targetAccountId = selectedAccountId;
-    if ((!targetAccountId || targetAccountId === "none") && companyAccounts.length > 0) {
+    let targetAccountId: string | null = (selectedAccountId && selectedAccountId !== "none") ? selectedAccountId : null;
+    if (!targetAccountId && companyAccounts.length > 0) {
       targetAccountId = companyAccounts[0].id;
-    }
-
-    if (!targetAccountId || targetAccountId === "none") {
-      toast.error("Selecione ou vincule uma conta de Instagram para receber o pacote de Conteúdo Semente.");
-      return;
     }
 
     try {

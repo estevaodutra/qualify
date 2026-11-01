@@ -165,6 +165,19 @@ export interface InstagramMediaChild {
   thumbnail_url?: string;
 }
 
+export interface InstagramPostMetrics {
+  likes: number;
+  comments: number;
+  shares: number;
+  saved: number;
+  views: number;
+  reach: number;
+  avgWatchTimeSeconds?: number;
+  newFollowers: number;
+  engagementRate: number;
+  totalInteractions: number;
+}
+
 export interface InstagramPost {
   id: string;
   caption?: string;
@@ -176,6 +189,7 @@ export interface InstagramPost {
   username?: string;
   like_count?: number;
   comments_count?: number;
+  metrics?: InstagramPostMetrics;
   children?: {
     data: InstagramMediaChild[];
   };
@@ -402,7 +416,7 @@ export type CriafySeedStatus =
 export interface CriafyAccountActivation {
   id: string;
   company_id: string;
-  account_id: string;
+  account_id?: string | null;
   seed_status: CriafySeedStatus;
   seed_started_at?: string | null;
   seed_generated_at?: string | null;

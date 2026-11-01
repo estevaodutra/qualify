@@ -37,17 +37,22 @@ export function isBrandManualPopulated(bm: any): boolean {
 
 export const CriafySeedContentService = {
   /**
-   * 1. Consulta o estado de ativação da conta.
+   * 1. Consulta o estado de ativação da conta ou da empresa.
    */
-  async getActivation(accountId: string): Promise<CriafyAccountActivation | null> {
-    if (!accountId || accountId === "all") return null;
+  async getActivation(accountId?: string | null, companyId?: string): Promise<CriafyAccountActivation | null> {
+    const normAccountId = accountId && accountId !== "all" && accountId !== "none" ? accountId : null;
+    if (!normAccountId && !companyId) return null;
 
     try {
-      const { data, error } = await (supabase as any)
-        .from("criafy_account_activations")
-        .select("*")
-        .eq("account_id", accountId)
-        .maybeSingle();
+      let query = (supabase as any).from("criafy_account_activations").select("*");
+
+      if (normAccountId) {
+        query = query.eq("account_id", normAccountId);
+      } else if (companyId) {
+        query = query.eq("company_id", companyId);
+      }
+
+      const { data, error } = await query.order("created_at", { ascending: false }).limit(1).maybeSingle();
 
       if (error && error.code !== "PGRST116") {
         console.warn("[SeedService] Aviso ao buscar ativação:", error.message);
@@ -62,39 +67,13 @@ export const CriafySeedContentService = {
 
   /**
    * 2. Valida pré-requisitos estratégicos antes de permitir o início.
-   * - Conta selecionada
-   * - Manual da Marca / Briefing preenchido
+   * REGRA DE NEGÓCIO: O Manual da Marca é o ÚNICO requisito obrigatório!
+   * A conta do Instagram é opcional nesta fase de geração.
    */
-  async checkPrerequisites(companyId: string, accountId: string): Promise<CriafySeedPrerequisites> {
+  async checkPrerequisites(companyId: string, accountId?: string | null): Promise<CriafySeedPrerequisites> {
     const missingReasons: string[] = [];
-
-    if (!accountId || accountId === "all") {
-      missingReasons.push("Nenhuma conta do Instagram selecionada.");
-      return {
-        hasAccount: false,
-        hasBrandManual: false,
-        hasStrategy: false,
-        canStart: false,
-        missingReasons,
-      };
-    }
-
-    // Verificar se a conta existe
-    let hasAccount = false;
-    try {
-      const { data: acc } = await (supabase as any)
-        .from("criafy_instagram_accounts")
-        .select("id, name, username")
-        .eq("id", accountId)
-        .maybeSingle();
-      hasAccount = Boolean(acc);
-    } catch {
-      hasAccount = false;
-    }
-
-    if (!hasAccount) {
-      missingReasons.push("Conta do Instagram não encontrada.");
-    }
+    const normAccountId = accountId && accountId !== "all" && accountId !== "none" ? accountId : null;
+    const hasAccount = Boolean(normAccountId);
 
     // Verificar Manual da Marca (Sprint OS Workspace ou Briefing Permanente)
     let hasBrandManual = false;
@@ -135,16 +114,18 @@ export const CriafySeedContentService = {
         } catch {}
       }
 
-      // 2. Verificar Briefing da Conta
-      const { data: briefing } = await (supabase as any)
-        .from("criafy_account_briefings")
-        .select("id, brand_name, objective, brand_positioning, tone_of_voice")
-        .eq("account_id", accountId)
-        .maybeSingle();
+      // 2. Verificar Briefing da Conta se houver conta informada
+      if (normAccountId) {
+        const { data: briefing } = await (supabase as any)
+          .from("criafy_account_briefings")
+          .select("id, brand_name, objective, brand_positioning, tone_of_voice")
+          .eq("account_id", normAccountId)
+          .maybeSingle();
 
-      if (briefing && (briefing.brand_name || briefing.brand_positioning || briefing.tone_of_voice)) {
-        hasStrategy = true;
-        hasBrandManual = true;
+        if (briefing && (briefing.brand_name || briefing.brand_positioning || briefing.tone_of_voice)) {
+          hasStrategy = true;
+          hasBrandManual = true;
+        }
       }
     } catch (err) {
       console.warn("[SeedService] Erro ao checar manual de marca:", err);
@@ -156,7 +137,8 @@ export const CriafySeedContentService = {
       );
     }
 
-    const canStart = hasAccount && (hasBrandManual || hasStrategy);
+    // Regra de Negócio: Apenas o Manual da Marca é pré-requisito obrigatório
+    const canStart = Boolean(hasBrandManual || hasStrategy);
 
     return {
       hasAccount,
@@ -168,19 +150,24 @@ export const CriafySeedContentService = {
   },
 
   /**
-   * 3. Busca itens existentes do Planner vinculados ao Conteúdo Semente da conta.
+   * 3. Busca itens existentes do Planner vinculados ao Conteúdo Semente da empresa/conta.
    */
-  async getSeedPlannerItems(companyId: string, accountId: string): Promise<CriafyPlannerItem[]> {
-    if (!accountId || accountId === "all") return [];
+  async getSeedPlannerItems(companyId: string, accountId?: string | null): Promise<CriafyPlannerItem[]> {
+    if (!companyId) return [];
 
     try {
-      const { data, error } = await (supabase as any)
+      let query = (supabase as any)
         .from("criafy_planner_items")
         .select("*")
         .eq("company_id", companyId)
-        .eq("account_id", accountId)
-        .eq("campaign", SEED_CAMPAIGN_NAME)
-        .order("created_at", { ascending: true });
+        .eq("campaign", SEED_CAMPAIGN_NAME);
+
+      const normAccountId = accountId && accountId !== "all" && accountId !== "none" ? accountId : null;
+      if (normAccountId) {
+        query = query.eq("account_id", normAccountId);
+      }
+
+      const { data, error } = await query.order("created_at", { ascending: true });
 
       if (error) {
         console.warn("[SeedService] Erro ao listar itens semente:", error.message);
@@ -196,97 +183,126 @@ export const CriafySeedContentService = {
   /**
    * 4. Inicia o Conteúdo Semente com IDEMPOTÊNCIA rigorosa.
    * Cria registro de ativação, os 5 Planner Items e as Demandas vinculadas.
+   * NÃO exige conta de Instagram vinculada; basta o Manual da Marca estar preenchido!
    */
   async startSeedContent(
     companyId: string,
-    accountId: string,
+    accountId?: string | null,
     userId?: string
   ): Promise<{
     activation: CriafyAccountActivation;
     items: CriafyPlannerItem[];
     demands: CriafyDemand[];
   }> {
-    if (!companyId || !accountId || accountId === "all") {
-      throw new Error("company_id e account_id são obrigatórios para iniciar o Conteúdo Semente.");
+    if (!companyId) {
+      throw new Error("company_id é obrigatório para iniciar o Conteúdo Semente.");
     }
 
+    const normAccountId = accountId && accountId !== "all" && accountId !== "none" ? accountId : null;
+
     // A. Verificar itens existentes da campanha (Idempotência - Regra #16)
-    const existingItems = await this.getSeedPlannerItems(companyId, accountId);
+    const existingItems = await this.getSeedPlannerItems(companyId, normAccountId);
 
     // B. Buscar ou criar registro de ativação
-    let activation = await this.getActivation(accountId);
+    let activation = await this.getActivation(normAccountId, companyId);
     const nowIso = new Date().toISOString();
 
     if (!activation) {
-      const { data: newAct, error: actError } = await (supabase as any)
-        .from("criafy_account_activations")
-        .insert({
+      try {
+        const insertPayload: any = {
           company_id: companyId,
-          account_id: accountId,
           seed_status: existingItems.length >= 5 ? "generated" : "started",
           seed_started_at: nowIso,
           created_by: userId || null,
-        })
-        .select("*")
-        .single();
+        };
+        if (normAccountId) {
+          insertPayload.account_id = normAccountId;
+        }
 
-      if (actError) {
-        // Se der conflito unique, recupera o existente
-        activation = await this.getActivation(accountId);
-      } else {
-        activation = newAct;
+        const { data: newAct, error: actError } = await (supabase as any)
+          .from("criafy_account_activations")
+          .insert(insertPayload)
+          .select("*")
+          .single();
+
+        if (actError) {
+          activation = await this.getActivation(normAccountId, companyId);
+        } else {
+          activation = newAct;
+        }
+      } catch {
+        // Fallback em caso de constraint de banco
       }
     } else if (activation.seed_status === "not_started") {
-      const { data: updAct } = await (supabase as any)
-        .from("criafy_account_activations")
-        .update({
-          seed_status: existingItems.length >= 5 ? "generated" : "started",
-          seed_started_at: nowIso,
-          updated_at: nowIso,
-        })
-        .eq("id", activation.id)
-        .select("*")
-        .single();
+      try {
+        const { data: updAct } = await (supabase as any)
+          .from("criafy_account_activations")
+          .update({
+            seed_status: existingItems.length >= 5 ? "generated" : "started",
+            seed_started_at: nowIso,
+            updated_at: nowIso,
+          })
+          .eq("id", activation.id)
+          .select("*")
+          .single();
 
-      if (updAct) activation = updAct;
+        if (updAct) activation = updAct;
+      } catch {}
+    }
+
+    // Se a tabela criafy_account_activations não tiver aceitado por constraint de account_id, manter objeto em memória
+    if (!activation) {
+      activation = {
+        id: `act_${Date.now()}`,
+        company_id: companyId,
+        account_id: normAccountId || "",
+        seed_status: existingItems.length >= 5 ? "generated" : "started",
+        seed_started_at: nowIso,
+        created_at: nowIso,
+        updated_at: nowIso,
+      } as CriafyAccountActivation;
     }
 
     // C. Se os 5 itens já existem, não duplicar (Regra #16)
     if (existingItems.length >= 5) {
-      const existingDemands = await this.getSeedDemands(companyId, accountId);
-      await this.syncActivationStatus(companyId, accountId);
-      const updatedAct = (await this.getActivation(accountId)) || activation!;
+      const existingDemands = await this.getSeedDemands(companyId, normAccountId);
+      await this.syncActivationStatus(companyId, normAccountId);
       return {
-        activation: updatedAct,
+        activation: (await this.getActivation(normAccountId, companyId)) || activation,
         items: existingItems,
         demands: existingDemands,
       };
     }
 
     // D. Criar exatamente os 5 itens no Planner (Regra #6)
-    const createdItems = await this.createSeedPlannerItems(companyId, accountId, userId);
+    const createdItems = await this.createSeedPlannerItems(companyId, normAccountId, userId);
 
     // E. Criar as demandas necessárias vinculadas a planner_item_id (Regra #7)
-    const createdDemands = await this.createSeedDemands(companyId, accountId, createdItems, userId);
+    const createdDemands = await this.createSeedDemands(companyId, normAccountId, createdItems, userId);
 
     // F. Atualizar status para 'generated'
-    if (activation) {
-      const { data: updAct } = await (supabase as any)
-        .from("criafy_account_activations")
-        .update({
-          seed_status: "generated",
-          seed_generated_at: nowIso,
-          updated_at: nowIso,
-        })
-        .eq("id", activation.id)
-        .select("*")
-        .single();
+    if (activation && activation.id && !activation.id.startsWith("act_")) {
+      try {
+        const { data: updAct } = await (supabase as any)
+          .from("criafy_account_activations")
+          .update({
+            seed_status: "generated",
+            seed_generated_at: nowIso,
+            updated_at: nowIso,
+          })
+          .eq("id", activation.id)
+          .select("*")
+          .single();
 
-      if (updAct) activation = updAct;
+        if (updAct) activation = updAct;
+      } catch {}
+    } else {
+      activation.seed_status = "generated";
+      activation.seed_generated_at = nowIso;
     }
 
     return {
-      activation: activation!,
+      activation,
       items: createdItems,
       demands: createdDemands,
     };
@@ -297,14 +313,14 @@ export const CriafySeedContentService = {
    */
   async createSeedPlannerItems(
     companyId: string,
-    accountId: string,
+    accountId?: string | null,
     userId?: string
   ): Promise<CriafyPlannerItem[]> {
     const seedTemplates = [
       // 1. Reel
       {
         company_id: companyId,
-        account_id: accountId,
+        account_id: accountId || null,
         format: "REEL" as const,
         theme: "Reel Semente — Método",
         objective: "autoridade",
@@ -318,7 +334,7 @@ export const CriafySeedContentService = {
       // 2. Destaque (Story)
       {
         company_id: companyId,
-        account_id: accountId,
+        account_id: accountId || null,
         format: "STORY" as const,
         theme: "Destaque Semente — Posicionamento e Método",
         objective: "autoridade",
@@ -332,7 +348,7 @@ export const CriafySeedContentService = {
       // 3. Post 01
       {
         company_id: companyId,
-        account_id: accountId,
+        account_id: accountId || null,
         format: "POST" as const,
         theme: "Post Semente 01 — Posicionamento",
         objective: "autoridade",
@@ -346,7 +362,7 @@ export const CriafySeedContentService = {
       // 4. Post 02
       {
         company_id: companyId,
-        account_id: accountId,
+        account_id: accountId || null,
         format: "POST" as const,
         theme: "Post Semente 02 — Problema / Visão",
         objective: "identificacao",
@@ -360,7 +376,7 @@ export const CriafySeedContentService = {
       // 5. Post 03
       {
         company_id: companyId,
-        account_id: accountId,
+        account_id: accountId || null,
         format: "POST" as const,
         theme: "Post Semente 03 — Método / Solução",
         objective: "educacao",
@@ -390,7 +406,7 @@ export const CriafySeedContentService = {
    */
   async createSeedDemands(
     companyId: string,
-    accountId: string,
+    accountId: string | null | undefined,
     plannerItems: CriafyPlannerItem[],
     userId?: string
   ): Promise<CriafyDemand[]> {
@@ -411,7 +427,7 @@ export const CriafySeedContentService = {
 
       return {
         company_id: companyId,
-        account_id: accountId,
+        account_id: accountId || null,
         planner_item_id: item.id,
         title,
         description,
@@ -439,9 +455,7 @@ export const CriafySeedContentService = {
   /**
    * 7. Consulta demandas vinculadas ao Conteúdo Semente.
    */
-  async getSeedDemands(companyId: string, accountId: string): Promise<CriafyDemand[]> {
-    if (!accountId || accountId === "all") return [];
-
+  async getSeedDemands(companyId: string, accountId?: string | null): Promise<CriafyDemand[]> {
     try {
       const items = await this.getSeedPlannerItems(companyId, accountId);
       if (items.length === 0) return [];
@@ -462,8 +476,8 @@ export const CriafySeedContentService = {
    * 8. Calcula o progresso real (0/5 até 5/5) e estado atual (Regra #9 & #10).
    * Itens finalizados: status em 'pronto', 'agendado' ou 'publicado'.
    */
-  async calculateProgress(companyId: string, accountId: string): Promise<CriafySeedProgress> {
-    const activation = await this.getActivation(accountId);
+  async calculateProgress(companyId: string, accountId?: string | null): Promise<CriafySeedProgress> {
+    const activation = await this.getActivation(accountId, companyId);
     const items = await this.getSeedPlannerItems(companyId, accountId);
 
     const total = 5;
@@ -502,7 +516,7 @@ export const CriafySeedContentService = {
   /**
    * 9. Verifica se o Conteúdo Semente está 100% completo (Regra #9).
    */
-  async isSeedContentComplete(companyId: string, accountId: string): Promise<boolean> {
+  async isSeedContentComplete(companyId: string, accountId?: string | null): Promise<boolean> {
     const progress = await this.calculateProgress(companyId, accountId);
     return progress.completed === progress.total;
   },
@@ -510,9 +524,9 @@ export const CriafySeedContentService = {
   /**
    * 10. Sincroniza o estado de ativação no banco com base no progresso dos itens.
    */
-  async syncActivationStatus(companyId: string, accountId: string): Promise<CriafySeedStatus> {
+  async syncActivationStatus(companyId: string, accountId?: string | null): Promise<CriafySeedStatus> {
     const progress = await this.calculateProgress(companyId, accountId);
-    const activation = await this.getActivation(accountId);
+    const activation = await this.getActivation(accountId, companyId);
     const nowIso = new Date().toISOString();
 
     if (!activation) return progress.status;
