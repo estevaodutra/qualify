@@ -34,6 +34,8 @@ import { useSprintOSStore } from "@/features/sprint-os/state/sprintOsStore";
 
 interface CriafyOverviewViewProps {
   accounts: CriafyInstagramAccount[];
+  selectedAccountId?: string;
+  onSelectAccountFilter?: (accId: string) => void;
   onNavigateTab: (tabId: string, subId?: string) => void;
   onOpenAddAccount?: () => void;
   onOpenScheduleModal?: () => void;
@@ -41,6 +43,8 @@ interface CriafyOverviewViewProps {
 
 export const CriafyOverviewView: React.FC<CriafyOverviewViewProps> = ({
   accounts,
+  selectedAccountId = "all",
+  onSelectAccountFilter,
   onNavigateTab,
   onOpenAddAccount,
   onOpenScheduleModal,
@@ -118,6 +122,17 @@ export const CriafyOverviewView: React.FC<CriafyOverviewViewProps> = ({
 
   return (
     <div className="space-y-6 animate-in fade-in-50 duration-200">
+      {/* 0. MARCO ZERO: CONTEÚDO SEMENTE */}
+      {activeCompanyId && (
+        <CriafySeedContentCard
+          companyId={activeCompanyId}
+          selectedAccountId={selectedAccountId}
+          accounts={accounts}
+          onNavigateTab={onNavigateTab}
+          onOpenAddAccount={onOpenAddAccount}
+          onRefreshData={loadDashboardData}
+        />
+      )}
       {/* Banner de Boas-vindas e Status Operacional */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-card via-card to-primary/5 border border-border/80 p-5 sm:p-6 shadow-sm">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">

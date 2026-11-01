@@ -1,6 +1,6 @@
 {
-  "commit": "a671405959baf462606ce5100f40119ff802b8f9",
-  "shortCommit": "a671405",
-  "message": "feat(billing): implementar cobranca por token de IA, gestao de carteiras no super admin e integracao Asaas",
-  "builtAt": "2026-10-31T22:30:53.940Z"
+  "commit": "91a2df0c325fe5d4ff5bb82f77bcf9d5a9a4f2d9",
+  "shortCommit": "91a2df0",
+  "message": "fix(migrations): clean up comments and add drop policy statements",
+  "builtAt": "2026-11-01T16:17:50.204Z"
 }

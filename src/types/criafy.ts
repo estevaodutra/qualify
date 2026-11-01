@@ -388,3 +388,44 @@ export interface CriafyPlannerItem {
   created_at: string;
   updated_at: string;
 }
+
+// ==========================================
+// CONTEÚDO SEMENTE & ATIVAÇÃO DA CONTA
+// ==========================================
+export type CriafySeedStatus =
+  | "not_started"
+  | "started"
+  | "generated"
+  | "in_production"
+  | "completed";
+
+export interface CriafyAccountActivation {
+  id: string;
+  company_id: string;
+  account_id: string;
+  seed_status: CriafySeedStatus;
+  seed_started_at?: string | null;
+  seed_generated_at?: string | null;
+  seed_completed_at?: string | null;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CriafySeedProgress {
+  total: number;
+  completed: number;
+  in_production: number;
+  pauta: number;
+  percentage: number;
+  status: CriafySeedStatus;
+  items: CriafyPlannerItem[];
+}
+
+export interface CriafySeedPrerequisites {
+  hasAccount: boolean;
+  hasBrandManual: boolean;
+  hasStrategy: boolean;
+  canStart: boolean;
+  missingReasons: string[];
+}

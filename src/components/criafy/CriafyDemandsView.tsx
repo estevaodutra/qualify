@@ -10,6 +10,7 @@ import {
   Mic,
   Plus,
   RefreshCw,
+  Rocket,
   Search,
   Sparkles,
   Trash2,
@@ -279,6 +280,7 @@ export const CriafyDemandsView: React.FC<CriafyDemandsViewProps> = ({
   const counts = useMemo(() => {
     return {
       todas: demands.filter((d) => d.status !== "cancelled").length,
+      semente: demands.filter((d) => d.status !== "cancelled" && (d.title.includes("Semente") || d.description?.includes("Conteúdo Semente"))).length,
       minhas: demands.filter(
         (d) =>
           d.status !== "cancelled" &&
@@ -616,6 +618,12 @@ export const CriafyDemandsView: React.FC<CriafyDemandsViewProps> = ({
                                 )}
                               >
                                 {demand.priority}
+                              </Badge>
+                            )}
+
+                            {(demand.title.includes("Semente") || demand.description?.includes("Conteúdo Semente")) && (
+                              <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-300 text-[9px] px-1.5 py-0 font-medium">
+                                🌱 Conteúdo Semente
                               </Badge>
                             )}
 

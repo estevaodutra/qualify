@@ -283,6 +283,7 @@ export const CriafyPlannerView: React.FC<CriafyPlannerViewProps> = ({
       prontos: plannerItems.filter((i) => i.status === "pronto").length,
       reels: plannerItems.filter((i) => i.format === "REEL").length,
       carrosseis: plannerItems.filter((i) => i.format === "CAROUSEL").length,
+      semente: plannerItems.filter((i) => i.campaign === "Conteúdo Semente").length,
     };
   }, [plannerItems]);
 
@@ -291,6 +292,7 @@ export const CriafyPlannerView: React.FC<CriafyPlannerViewProps> = ({
       title: "Visões do Plano",
       items: [
         { id: "todos", label: "Todos os Conteúdos", icon: Layers, count: counts.todos },
+        { id: "semente", label: "Conteúdo Semente", icon: Rocket, count: counts.semente },
         { id: "ideias", label: "Ideias & Pautas", icon: Sparkles, count: counts.ideias },
         { id: "roteirizados", label: "Roteirizados", icon: FileText, count: counts.roteirizados },
         {
@@ -315,6 +317,7 @@ export const CriafyPlannerView: React.FC<CriafyPlannerViewProps> = ({
   // Filtro
   const filteredItems = useMemo(() => {
     return plannerItems.filter((item) => {
+      if (activeSubTab === "semente" && item.campaign !== "Conteúdo Semente") return false;
       if (activeSubTab === "ideias" && item.status !== "ideia") return false;
       if (activeSubTab === "roteirizados" && item.status !== "roteirizado") return false;
       if (activeSubTab === "gravacao" && item.status !== "aguardando_gravacao") return false;
@@ -519,8 +522,8 @@ export const CriafyPlannerView: React.FC<CriafyPlannerViewProps> = ({
                             </Badge>
                           )}
                           {item.campaign && (
-                            <Badge className="bg-primary/10 text-primary border-primary/20 text-[9px] px-1.5 py-0">
-                              {item.campaign}
+                            <Badge className={item.campaign === "Conteúdo Semente" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-300 text-[9px] px-1.5 py-0 font-medium" : "bg-primary/10 text-primary border-primary/20 text-[9px] px-1.5 py-0"}>
+                              {item.campaign === "Conteúdo Semente" ? "🌱 Conteúdo Semente" : item.campaign}
                             </Badge>
                           )}
                         </div>

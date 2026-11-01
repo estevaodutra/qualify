@@ -837,6 +837,8 @@ export default function CriafyHub() {
           {activeModuleTab === "visao-geral" && (
             <CriafyOverviewView
               accounts={accounts}
+              selectedAccountId={selectedAccountId}
+              onSelectAccountFilter={setSelectedAccountId}
               onNavigateTab={(tab) => handleTabChange(tab as CriafyTabId)}
               onOpenAddAccount={() => setAddAccountOpen(true)}
             />
