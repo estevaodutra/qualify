@@ -30,6 +30,7 @@ import {
   CriafyDemand,
   CriafyPlannerItem,
 } from "@/types/criafy";
+import { CriafySeedContentCard } from "./CriafySeedContentCard";
 import { useSprintOSStore } from "@/features/sprint-os/state/sprintOsStore";
 
 interface CriafyOverviewViewProps {
