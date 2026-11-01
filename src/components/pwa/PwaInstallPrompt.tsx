@@ -18,7 +18,7 @@ export function PwaInstallPrompt() {
     <>
       {/* Contextual non-blocking banner/card */}
       {canShowPrompt && (
-        <div className="fixed bottom-4 right-4 left-4 sm:left-auto sm:max-w-md z-[9990] animate-in slide-in-from-bottom-5 fade-in duration-300">
+        <div className="fixed bottom-[calc(72px+env(safe-area-inset-bottom))] md:bottom-4 right-4 left-4 sm:left-auto sm:max-w-md z-[9990] animate-in slide-in-from-bottom-5 fade-in duration-300">
           <div className="bg-[#0B0E14]/95 backdrop-blur-2xl border border-primary/30 p-4 rounded-2xl shadow-2xl text-white space-y-3">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
