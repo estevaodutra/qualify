@@ -1,6 +1,6 @@
 {
-  "commit": "b5411a0bb007bc27f70940609ff4ea50fa08a36f",
-  "shortCommit": "b5411a0",
-  "message": "feat(criafy): marco zero de ativacao com conteudo semente e progresso",
-  "builtAt": "2026-11-01T16:24:37.916Z"
+  "commit": "3d5719340dae54cb4f16299bbda998d33284b303",
+  "shortCommit": "3d57193",
+  "message": "fix(criafy): adicionar importacao de CriafySeedContentCard no CriafyOverviewView",
+  "builtAt": "2026-11-01T16:41:23.984Z"
 }

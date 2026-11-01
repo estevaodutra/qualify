@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,9 +9,19 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Instagram, Youtube, Music, Sparkles, Loader2, CheckCircle2 } from "lucide-react";
+import {
+  Instagram,
+  Youtube,
+  Music,
+  Sparkles,
+  Loader2,
+  Copy,
+  Check,
+  ShieldCheck,
+  Link2,
+  ExternalLink,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { criafyService } from "@/services/criafy/criafyService";
@@ -27,58 +37,80 @@ type SocialPlatform = "instagram" | "tiktok" | "youtube";
 export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountModalProps) {
   const { activeCompanyId } = useCompany();
   const [selectedPlatform, setSelectedPlatform] = useState<SocialPlatform>("instagram");
-  const [username, setUsername] = useState("");
-  const [name, setName] = useState("");
-  const [instagramAccountId, setInstagramAccountId] = useState("");
-  const [accessToken, setAccessToken] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeCompanyId) {
-      toast.error("Nenhuma empresa selecionada na plataforma Qualify.");
-      return;
+  // Estados de conexão OAuth e compartilhamento de link
+  const [connectionUrl, setConnectionUrl] = useState<string | null>(null);
+  const [loadingUrl, setLoadingUrl] = useState(false);
+  const [loadingConnect, setLoadingConnect] = useState(false);
+  const [copyingLink, setCopyingLink] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const popupMessageListenerRef = useRef<((event: MessageEvent) => void) | null>(null);
+
+  // Limpeza de listener ao desmontar ou fechar
+  useEffect(() => {
+    return () => {
+      if (popupMessageListenerRef.current) {
+        window.removeEventListener("message", popupMessageListenerRef.current);
+        popupMessageListenerRef.current = null;
+      }
+    };
+  }, []);
+
+  // Pré-carrega a URL de autorização da Meta quando o modal é aberto
+  useEffect(() => {
+    let isMounted = true;
+    if (open && activeCompanyId && selectedPlatform === "instagram") {
+      const redirectUri = `${window.location.origin}/criafy`;
+      setLoadingUrl(true);
+      criafyService
+        .getOAuthUrl(activeCompanyId, redirectUri)
+        .then((url) => {
+          if (isMounted) {
+            setConnectionUrl(url);
+          }
+        })
+        .catch((err) => {
+          console.warn("[AddAccountModal] Falha ao pré-carregar link OAuth:", err);
+        })
+        .finally(() => {
+          if (isMounted) setLoadingUrl(false);
+        });
     }
 
-    if (!username.trim()) {
-      toast.error("Informe o @username da conta.");
-      return;
+    if (!open) {
+      setCopied(false);
+      setLoadingConnect(false);
+      if (popupMessageListenerRef.current) {
+        window.removeEventListener("message", popupMessageListenerRef.current);
+        popupMessageListenerRef.current = null;
+      }
     }
 
-    setLoading(true);
-    try {
-      const cleanUsername = username.replace("@", "").trim();
-      await criafyService.addAccount({
-        company_id: activeCompanyId,
-        username: cleanUsername,
-        name: name.trim() || cleanUsername,
-        instagram_account_id: instagramAccountId.trim() || undefined,
-        access_token: accessToken.trim() || undefined,
-        connection_status: "CONNECTED",
-      });
+    return () => {
+      isMounted = false;
+    };
+  }, [open, activeCompanyId, selectedPlatform]);
 
-      toast.success(`Conta @${cleanUsername} conectada ao Criafy com sucesso!`);
-      setUsername("");
-      setName("");
-      setInstagramAccountId("");
-      setAccessToken("");
-      onSuccess();
-      onOpenChange(false);
-    } catch (err: any) {
-      toast.error(`Erro ao conectar conta: ${err.message || "Erro desconhecido"}`);
-    } finally {
-      setLoading(false);
-    }
+  const getOrFetchAuthUrl = async (): Promise<string> => {
+    if (connectionUrl) return connectionUrl;
+    if (!activeCompanyId) throw new Error("Nenhuma empresa selecionada.");
+    const redirectUri = `${window.location.origin}/criafy`;
+    const url = await criafyService.getOAuthUrl(activeCompanyId, redirectUri);
+    setConnectionUrl(url);
+    return url;
   };
 
+  // Conexão direta na máquina atual (Popup Meta)
   const handleOAuthConnect = async () => {
     if (!activeCompanyId) {
       toast.error("Nenhuma empresa selecionada na plataforma Qualify.");
       return;
     }
+
+    setLoadingConnect(true);
     try {
-      const redirectUri = `${window.location.origin}/criafy`;
-      const authUrl = await criafyService.getOAuthUrl(activeCompanyId, redirectUri);
+      const authUrl = await getOrFetchAuthUrl();
 
       const width = 600;
       const height = 750;
@@ -100,13 +132,20 @@ export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountMod
       toast.info("Janela de autorização da Meta aberta. Conclua o acesso nela.", { id: "oauth-popup" });
       popup.focus();
 
+      // Remove listener anterior se houver
+      if (popupMessageListenerRef.current) {
+        window.removeEventListener("message", popupMessageListenerRef.current);
+      }
+
       const handlePopupMessage = async (event: MessageEvent) => {
         if (event.data?.type === "CRIAFY_OAUTH_CALLBACK") {
           window.removeEventListener("message", handlePopupMessage);
+          popupMessageListenerRef.current = null;
           const { code, state, error } = event.data;
 
           if (error) {
             toast.error(`Autorização do Instagram cancelada ou recusada: ${error}`, { id: "oauth-popup" });
+            setLoadingConnect(false);
             return;
           }
 
@@ -126,22 +165,48 @@ export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountMod
                 id: "oauth-process",
                 duration: 12000,
               });
+            } finally {
+              setLoadingConnect(false);
             }
           }
         }
       };
+
+      popupMessageListenerRef.current = handlePopupMessage;
       window.addEventListener("message", handlePopupMessage);
     } catch (err: any) {
       toast.error(`Erro ao iniciar OAuth Meta: ${err.message}`);
+      setLoadingConnect(false);
+    }
+  };
+
+  // Copia o link de conexão para enviar ao cliente
+  const handleCopyLink = async () => {
+    if (!activeCompanyId) {
+      toast.error("Nenhuma empresa selecionada na plataforma Qualify.");
+      return;
+    }
+
+    setCopyingLink(true);
+    try {
+      const url = await getOrFetchAuthUrl();
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      toast.success("Link de conexão copiado! Envie para o responsável autorizar a conta no navegador dele.");
+      setTimeout(() => setCopied(false), 3000);
+    } catch (err: any) {
+      toast.error(`Erro ao obter link de conexão: ${err.message || err}`);
+    } finally {
+      setCopyingLink(false);
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] rounded-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[520px] rounded-2xl max-h-[90vh] overflow-y-auto p-6 space-y-4">
         <DialogHeader>
-          <div className="flex items-center gap-2.5">
-            <div className="p-2.5 rounded-2xl bg-gradient-to-tr from-purple-600 via-pink-600 to-amber-500 text-white shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-2xl bg-gradient-to-tr from-purple-600 via-pink-600 to-amber-500 text-white shadow-xs shrink-0">
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
@@ -153,18 +218,18 @@ export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountMod
           </div>
         </DialogHeader>
 
-        {/* 1. SELETOR DE PLATAFORMA (INSTAGRAM ATIVO, TIKTOK E YOUTUBE PREPARADOS) */}
-        <div className="space-y-2 pt-2">
-          <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">
+        {/* 1. SELETOR DE PLATAFORMA */}
+        <div className="space-y-2">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
             Selecione a Plataforma
-          </Label>
+          </span>
 
           <div className="grid grid-cols-3 gap-2.5">
             {/* Instagram (Ativo / Oficial) */}
             <button
               type="button"
               onClick={() => setSelectedPlatform("instagram")}
-              className={`p-3 rounded-2xl border transition-all text-left flex flex-col justify-between space-y-2 relative ${
+              className={`p-3 rounded-2xl border transition-all text-left flex flex-col justify-between space-y-2 relative cursor-pointer ${
                 selectedPlatform === "instagram"
                   ? "border-pink-500/60 bg-pink-500/10 ring-2 ring-pink-500/30"
                   : "border-border/70 hover:border-border bg-card"
@@ -188,7 +253,7 @@ export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountMod
             <button
               type="button"
               onClick={() => setSelectedPlatform("tiktok")}
-              className={`p-3 rounded-2xl border transition-all text-left flex flex-col justify-between space-y-2 relative opacity-75 hover:opacity-100 ${
+              className={`p-3 rounded-2xl border transition-all text-left flex flex-col justify-between space-y-2 relative opacity-75 hover:opacity-100 cursor-pointer ${
                 selectedPlatform === "tiktok"
                   ? "border-cyan-500/60 bg-cyan-500/10 ring-2 ring-cyan-500/30"
                   : "border-border/70 bg-card"
@@ -212,7 +277,7 @@ export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountMod
             <button
               type="button"
               onClick={() => setSelectedPlatform("youtube")}
-              className={`p-3 rounded-2xl border transition-all text-left flex flex-col justify-between space-y-2 relative opacity-75 hover:opacity-100 ${
+              className={`p-3 rounded-2xl border transition-all text-left flex flex-col justify-between space-y-2 relative opacity-75 hover:opacity-100 cursor-pointer ${
                 selectedPlatform === "youtube"
                   ? "border-red-500/60 bg-red-500/10 ring-2 ring-red-500/30"
                   : "border-border/70 bg-card"
@@ -234,99 +299,118 @@ export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountMod
           </div>
         </div>
 
-        {/* 2. PRÓXIMOS PASSOS: QUANDO INSTAGRAM ESTIVER SELECIONADO */}
+        {/* 2. ÁREA DE CONEXÃO DO INSTAGRAM */}
         {selectedPlatform === "instagram" ? (
-          <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-            <div className="space-y-2">
+          <div className="space-y-4 pt-1">
+            {/* Opção 1: Conectar diretamente */}
+            <div className="p-4 rounded-2xl bg-card border border-border/80 shadow-xs space-y-2.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
+                Conectar neste dispositivo
+              </span>
               <Button
                 type="button"
-                variant="outline"
                 onClick={handleOAuthConnect}
-                className="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-pink-600 text-white font-medium hover:opacity-95 transition-all border-0 shadow-sm flex items-center justify-center gap-2 py-5 rounded-xl cursor-pointer"
+                disabled={loadingConnect}
+                className="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-pink-600 hover:from-blue-700 hover:via-indigo-700 hover:to-pink-700 text-white font-bold text-xs py-5 rounded-xl shadow-xs gap-2 cursor-pointer transition-all"
               >
-                <Instagram className="w-5 h-5" />
-                Conectar via Meta (Facebook & Business Manager)
+                {loadingConnect ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Instagram className="w-4 h-4" />
+                )}
+                <span>Conectar via Meta (Facebook & Business Manager)</span>
               </Button>
-              <p className="text-[11px] text-muted-foreground text-center">
-                Permite selecionar sua BM, Página do Facebook e Conta do Instagram profissional vinculada.
+              <p className="text-[11px] text-muted-foreground text-center leading-relaxed">
+                Abre a tela segura da Meta para vincular sua Business Manager, Página do Facebook e Conta do Instagram profissional.
               </p>
             </div>
 
-            <div className="relative my-3">
+            {/* Separador */}
+            <div className="relative my-2">
               <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-muted" />
+                <span className="w-full border-t border-border/70" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground font-medium text-[10px]">
-                  Ou cadastro manual de credenciais
+                <span className="bg-background px-3 text-muted-foreground font-bold text-[10px] tracking-wider">
+                  Ou compartilhar link de conexão
                 </span>
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="username" className="text-xs font-medium">
-                Username do Instagram *
-              </Label>
-              <Input
-                id="username"
-                placeholder="@sua_conta"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                className="rounded-xl text-xs"
-              />
-            </div>
+            {/* Opção 2: Copiar Link de Conexão para o Cliente */}
+            <div className="p-4 rounded-2xl bg-muted/40 border border-border/80 space-y-3">
+              <div className="flex items-start gap-2.5">
+                <div className="p-2 rounded-xl bg-primary/10 text-primary shrink-0 mt-0.5">
+                  <Link2 className="w-4 h-4" />
+                </div>
+                <div className="space-y-0.5 min-w-0 flex-1">
+                  <h4 className="text-xs font-bold text-foreground">
+                    Enviar link direto para o cliente
+                  </h4>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Copie o link abaixo e envie para a pessoa responsável autorizar a conta no navegador dela, sem precisar acessar sua conta Qualify.
+                  </p>
+                </div>
+              </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="name" className="text-xs font-medium">
-                Nome de Exibição / Marca
-              </Label>
-              <Input
-                id="name"
-                placeholder="Ex: Qualify Oficial"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="rounded-xl text-xs"
-              />
-            </div>
+              {/* Campo do link + Botão de Copiar */}
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    readOnly
+                    value={
+                      connectionUrl ||
+                      (loadingUrl ? "Gerando link de autorização seguro..." : "Clique em 'Copiar Link' para gerar")
+                    }
+                    className="pr-8 font-mono text-[11px] bg-background text-muted-foreground select-all rounded-xl h-10 truncate border-border/80 cursor-pointer"
+                    onClick={(e) => (e.target as HTMLInputElement).select()}
+                  />
+                  {loadingUrl && (
+                    <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="ig_id" className="text-xs font-medium">
-                ID da Conta Meta Business (opcional)
-              </Label>
-              <Input
-                id="ig_id"
-                placeholder="17841400000000000"
-                value={instagramAccountId}
-                onChange={(e) => setInstagramAccountId(e.target.value)}
-                className="rounded-xl text-xs font-mono"
-              />
-            </div>
+                <Button
+                  type="button"
+                  onClick={handleCopyLink}
+                  disabled={copyingLink}
+                  variant={copied ? "default" : "secondary"}
+                  className={`gap-1.5 font-bold text-xs rounded-xl h-10 px-4 shrink-0 cursor-pointer transition-all ${
+                    copied
+                      ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                      : "border border-border/80 hover:bg-muted font-semibold"
+                  }`}
+                >
+                  {copied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Copiado!</span>
+                    </>
+                  ) : copyingLink ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Gerando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copiar Link</span>
+                    </>
+                  )}
+                </Button>
+              </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="token" className="text-xs font-medium">
-                Access Token (opcional)
-              </Label>
-              <Input
-                id="token"
-                type="password"
-                placeholder="EAA..."
-                value={accessToken}
-                onChange={(e) => setAccessToken(e.target.value)}
-                className="rounded-xl text-xs font-mono"
-              />
+              {/* Selo de Segurança */}
+              <div className="flex items-center gap-2 pt-0.5 text-[11px] text-muted-foreground">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span>
+                  Login 100% oficial pela Meta. Nenhuma senha pessoal é compartilhada.
+                </span>
+              </div>
             </div>
-
-            <DialogFooter className="pt-2">
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="rounded-xl text-xs">
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={loading} className="rounded-xl text-xs font-semibold gap-1.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white">
-                {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Salvar e Conectar
-              </Button>
-            </DialogFooter>
-          </form>
+          </div>
         ) : (
           /* PLATAFORMA EM BREVE (TIKTOK OU YOUTUBE) */
           <div className="p-8 text-center space-y-3 rounded-2xl border border-dashed border-border/80 bg-muted/20 my-2">
@@ -349,12 +433,23 @@ export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountMod
               type="button"
               size="sm"
               onClick={() => setSelectedPlatform("instagram")}
-              className="text-xs font-semibold gap-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white"
+              className="text-xs font-semibold gap-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white cursor-pointer"
             >
               <Instagram className="w-3.5 h-3.5" /> Conectar Instagram Agora
             </Button>
           </div>
         )}
+
+        <DialogFooter className="pt-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            className="rounded-xl text-xs font-medium w-full sm:w-auto cursor-pointer"
+          >
+            Fechar
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
