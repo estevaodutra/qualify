@@ -35,7 +35,7 @@ export function AccountInsightsModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[92vh] overflow-y-auto p-3 sm:p-6 bg-background/95 backdrop-blur-md border border-border shadow-2xl rounded-2xl">
+      <DialogContent className="max-w-6xl max-h-[96vh] overflow-y-auto sm:overflow-hidden p-3.5 sm:p-4 bg-background/95 backdrop-blur-md border border-border shadow-2xl rounded-2xl">
         <DialogHeader className="sr-only">
           <DialogTitle>Insights da Conta @{account.username}</DialogTitle>
         </DialogHeader>
