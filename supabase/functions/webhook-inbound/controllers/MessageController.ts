@@ -792,18 +792,22 @@ export async function processMessageEvent(
   // ==========================================
   if (isInbound && context.chatType !== "group" && instance?.user_id && instance?.company_id && context.messageId) {
     try {
-      const phone = (context.senderPhone || "").replace(/\D/g, "");
-      if (!phone) return;
-      const { data: conversations } = await supabase.from("chat_conversations")
-        .select("id, operator_id, contact_name, contact_phone")
-        .eq("company_id", instance.company_id).eq("instance_id", instance.id)
-        .eq("contact_phone", phone).order("updated_at", { ascending: false }).limit(1);
-      const conversation = conversations?.[0];
-      if (!conversation) return;
       const { data: message } = await supabase.from("chat_messages")
-        .select("id, body, message_type").eq("conversation_id", conversation.id)
-        .eq("message_id", context.messageId).eq("sender_type", "lead").maybeSingle();
+        .select("id, conversation_id, body, message_type")
+        .eq("company_id", instance.company_id)
+        .eq("message_id", context.messageId)
+        .eq("sender_type", "lead")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
       if (!message) return;
+      const { data: conversation } = await supabase.from("chat_conversations")
+        .select("id, operator_id, contact_name")
+        .eq("id", message.conversation_id)
+        .eq("company_id", instance.company_id)
+        .eq("instance_id", instance.id)
+        .maybeSingle();
+      if (!conversation) return;
       const senderTitle = conversation.contact_name || context.senderName || context.senderPhone || "Nova mensagem";
       const rawMsgObj = rawEvent.body || rawEvent.payload || rawEvent;
       const rawText = typeof rawMsgObj === "string" ? rawMsgObj : rawMsgObj?.text?.message || rawMsgObj?.text || rawMsgObj?.message?.conversation || rawMsgObj?.message?.extendedTextMessage?.text || rawMsgObj?.caption || "";

@@ -4,8 +4,23 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
 
-// Default VAPID Public Key for Web Push (overridable by VITE_VAPID_PUBLIC_KEY)
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
+let publicKeyRequest: Promise<string> | undefined;
+
+function getPublicKey(): Promise<string> {
+  if (VAPID_PUBLIC_KEY) return Promise.resolve(VAPID_PUBLIC_KEY);
+  publicKeyRequest ??= supabase.functions.invoke<{ publicKey: string }>("push-config")
+    .then(({ data, error }) => {
+      if (error) throw error;
+      if (!data?.publicKey) throw new Error("A chave pública de notificações não está disponível.");
+      return data.publicKey;
+    })
+    .catch((error) => {
+      publicKeyRequest = undefined;
+      throw error;
+    });
+  return publicKeyRequest;
+}
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -16,6 +31,23 @@ function urlBase64ToUint8Array(base64String: string) {
     outputArray[i] = rawData.charCodeAt(i);
   }
   return outputArray;
+}
+
+async function saveSubscription(userId: string, companyId: string, subscription: PushSubscription) {
+  const keys = subscription.toJSON().keys;
+  if (!keys?.p256dh || !keys?.auth) throw new Error("Assinatura Push sem chaves do dispositivo.");
+  const { error } = await supabase.from("push_subscriptions").upsert({
+    user_id: userId,
+    company_id: companyId,
+    endpoint: subscription.endpoint,
+    p256dh: keys.p256dh,
+    auth: keys.auth,
+    user_agent: navigator.userAgent,
+    device_name: /mobile/i.test(navigator.userAgent) ? "Mobile Device" : "Desktop Device",
+    updated_at: new Date().toISOString(),
+    revoked_at: null,
+  }, { onConflict: "user_id,endpoint" });
+  if (error) throw error;
 }
 
 export function usePushNotifications() {
@@ -29,21 +61,25 @@ export function usePushNotifications() {
 
   // Sync current subscription status
   useEffect(() => {
+    let cancelled = false;
     setIsSubscribed(false);
-    if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window) || !user || !activeCompanyId || Notification.permission !== "granted") {
       return;
     }
 
     navigator.serviceWorker.getRegistration().then(async (registration) => {
       if (!registration) return;
       const subscription = await registration.pushManager.getSubscription();
-      setIsSubscribed(Boolean(subscription));
+      if (!subscription) return;
+      await saveSubscription(user.id, activeCompanyId, subscription);
+      if (!cancelled) setIsSubscribed(true);
     }).catch(console.error);
+    return () => { cancelled = true; };
   }, [user, activeCompanyId]);
 
   // Request permission and subscribe to Web Push
   const subscribe = async () => {
-    if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
       toast.error("Notificações Push não são suportadas neste navegador.");
       return false;
     }
@@ -53,10 +89,6 @@ export function usePushNotifications() {
       return false;
     }
 
-    if (!VAPID_PUBLIC_KEY) {
-      toast.error("A chave pública de notificações ainda não foi configurada.");
-      return false;
-    }
     setIsLoading(true);
     try {
       // 1. Request permission if default
@@ -78,36 +110,14 @@ export function usePushNotifications() {
       await navigator.serviceWorker.ready;
 
       // 3. Subscribe via PushManager
-      const convertedVapidKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+      const convertedVapidKey = urlBase64ToUint8Array(await getPublicKey());
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: convertedVapidKey,
       });
 
-      const subscriptionJson = subscription.toJSON();
-      const endpoint = subscription.endpoint;
-      const p256dh = subscriptionJson.keys?.p256dh || "";
-      const auth = subscriptionJson.keys?.auth || "";
-
-      // 4. Store/Upsert in Supabase push_subscriptions table
-      const { error } = await supabase
-        .from("push_subscriptions")
-        .upsert(
-          {
-            user_id: user.id,
-            company_id: activeCompanyId,
-            endpoint,
-            p256dh,
-            auth,
-            user_agent: navigator.userAgent,
-            device_name: /mobile/i.test(navigator.userAgent) ? "Mobile Device" : "Desktop Device",
-            updated_at: new Date().toISOString(),
-            revoked_at: null,
-          },
-          { onConflict: "user_id,endpoint" }
-        );
-
-      if (error) throw error;
+      // Keep the browser subscription and the server record in sync.
+      await saveSubscription(user.id, activeCompanyId, subscription);
 
       setIsSubscribed(true);
       toast.success("Notificações de novas mensagens ativadas com sucesso!");
