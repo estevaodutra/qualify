@@ -23,6 +23,7 @@ import { SprintListColumn } from "./SprintListColumn";
 import { SprintCardItem } from "./SprintCardItem";
 import { SprintSidebar } from "./SprintSidebar";
 import { SprintCardModal } from "./SprintCardModal";
+import { SprintFilesDialog } from "./SprintFilesDialog";
 import { SprintCard, SprintList } from "../types";
 import {
   ArrowLeft,
