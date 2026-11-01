@@ -1,6 +1,6 @@
 {
-  "commit": "741285a32a9f9af0f14669557dd6b1a8e71a9197",
-  "shortCommit": "741285a",
-  "message": "refactor(criafy): streamline AddAccountModal to direct Meta login and add copy connection link action",
-  "builtAt": "2026-11-01T16:45:42.835Z"
+  "commit": "59e800010ef523c86df520b848ead077373613e9",
+  "shortCommit": "59e8000",
+  "message": "feat(ai): conectar chamadas reais a OpenAI com LangChain no workflow e playground",
+  "builtAt": "2026-11-01T16:56:51.981Z"
 }

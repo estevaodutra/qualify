@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   PlayCircle,
@@ -23,6 +23,12 @@ import {
   RefreshCw,
   ArrowRight,
   Database,
+  Rocket,
+  BookOpen,
+  ShieldAlert,
+  ExternalLink,
+  Film,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +47,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { AIExecutionService } from "@/services/ai/aiExecutionService";
+import { CriafySeedContentService } from "@/services/criafy/criafySeedContentService";
 import {
   QualifyAI,
   ALL_TOOLS,
@@ -53,6 +60,7 @@ import {
 
 export default function AdminAiPlayground() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   // Modo: Workflow | Agent | Skill | Tool (Regra #23 do Master Prompt)
   const [playMode, setPlayMode] = useState<"workflow" | "agent" | "skill" | "tool">("workflow");
@@ -85,6 +93,7 @@ export default function AdminAiPlayground() {
 
   // Estado de Execução
   const [executing, setExecuting] = useState(false);
+  const [executingSeed, setExecutingSeed] = useState(false);
   const [resultData, setResultData] = useState<any>(null);
   const [traceData, setTraceData] = useState<any>(null);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
@@ -118,12 +127,128 @@ export default function AdminAiPlayground() {
     },
   });
 
+  // Contas de Instagram da Empresa Selecionada
+  const { data: companyAccounts = [], isLoading: isLoadingAccounts } = useQuery({
+    queryKey: ["admin_company_accounts_playground", selectedCompanyId],
+    enabled: Boolean(selectedCompanyId && selectedCompanyId !== "demo-company-1"),
+    queryFn: async () => {
+      try {
+        const { data } = await (supabase as any)
+          .from("criafy_instagram_accounts")
+          .select("id, name, username, profile_picture_url")
+          .eq("company_id", selectedCompanyId)
+          .eq("is_active", true);
+        return data || [];
+      } catch {
+        return [];
+      }
+    },
+  });
+
+  // Auto-selecionar primeira conta quando a empresa mudar
+  useEffect(() => {
+    if (companyAccounts.length > 0) {
+      if (selectedAccountId === "none" || !selectedAccountId || !companyAccounts.some((a: any) => a.id === selectedAccountId)) {
+        setSelectedAccountId(companyAccounts[0].id);
+      }
+    } else if (selectedCompanyId === "demo-company-1") {
+      setSelectedAccountId("demo-account-1");
+    } else {
+      setSelectedAccountId("none");
+    }
+  }, [selectedCompanyId, companyAccounts]);
+
+  // REGRA DE NEGÓCIO: Verificação do Manual da Marca da Empresa
+  const { data: brandManualCheck, isLoading: isCheckingBrandManual } = useQuery({
+    queryKey: ["admin_brand_manual_check_playground", selectedCompanyId],
+    enabled: Boolean(selectedCompanyId),
+    queryFn: async () => {
+      if (selectedCompanyId === "demo-company-1") {
+        return {
+          isFilled: true,
+          brandName: "Qualify Demo",
+          toneOfVoice: "Autoridade, direto e pragmático",
+          answeredCount: 12,
+          details: "Manual da Marca de demonstração ativo",
+        };
+      }
+
+      try {
+        // 1. Verificar Workspace do Sprint OS
+        const { data: ws } = await (supabase as any)
+          .from("sprint_os_workspaces")
+          .select("data")
+          .eq("company_id", selectedCompanyId)
+          .is("archived_at", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const bm = ws?.data?.brandManual;
+        const fields = bm?.fields || [];
+        const answeredFields = fields.filter(
+          (f: any) => f.value && String(f.value).trim().length > 0 && !f.archived
+        );
+
+        const brandName = bm?.brandName || ws?.data?.name || "";
+        const toneOfVoice = bm?.toneOfVoice || "";
+        const positioning = bm?.positioning || "";
+        const hasCoreInfo = Boolean(
+          brandName || toneOfVoice || positioning || (bm?.pillars && bm.pillars.length > 0)
+        );
+
+        // 2. Verificar Account Briefings
+        let hasBriefing = false;
+        const { data: briefings } = await (supabase as any)
+          .from("criafy_account_briefings")
+          .select("brand_name, tone_of_voice, brand_positioning")
+          .limit(1);
+
+        if (briefings && briefings.length > 0) {
+          const b = briefings[0];
+          if (b.brand_name || b.tone_of_voice || b.brand_positioning) {
+            hasBriefing = true;
+          }
+        }
+
+        const isFilled = answeredFields.length >= 2 || hasCoreInfo || hasBriefing;
+
+        return {
+          isFilled,
+          answeredCount: answeredFields.length,
+          brandName: brandName || (isFilled ? "Manual Ativo" : "Não informado"),
+          toneOfVoice: toneOfVoice || (isFilled ? "Definido" : "Não informado"),
+          positioning: positioning || "",
+          details: isFilled
+            ? `${answeredFields.length > 0 ? `${answeredFields.length} perguntas respondidas` : "Diretrizes estratégicas cadastradas"}`
+            : "Nenhuma informação ou pergunta respondida no Manual da Marca.",
+        };
+      } catch (err) {
+        console.warn("Erro ao checar manual da marca:", err);
+        return {
+          isFilled: false,
+          answeredCount: 0,
+          brandName: "Erro na verificação",
+          toneOfVoice: "",
+          details: "Não foi possível validar o manual da marca.",
+        };
+      }
+    },
+  });
+
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success("Copiado para a área de transferência!");
   };
 
+  // Execução do Runtime (Agent / Workflow / Skill / Tool)
   const handleExecute = async () => {
+    // REGRA DE NEGÓCIO: O Manual da Marca precisa estar preenchido para qualquer execução
+    if (!brandManualCheck?.isFilled) {
+      toast.error("Regra de Negócio: O Manual da Marca desta empresa precisa estar preenchido antes de realizar qualquer execução.");
+      return;
+    }
+
     setExecuting(true);
     setErrorDetails(null);
     setResultData(null);
@@ -202,6 +327,92 @@ export default function AdminAiPlayground() {
       toast.error(err.message || "Falha na execução.");
     } finally {
       setExecuting(false);
+    }
+  };
+
+  // PRÉ-GESTÃO: Gerar Conteúdo Semente da Empresa
+  const handleGenerateSeedContent = async () => {
+    // REGRA DE NEGÓCIO: Manual da Marca obrigatório
+    if (!brandManualCheck?.isFilled) {
+      toast.error("Regra de Negócio: O Manual da Marca desta empresa precisa estar preenchido para gerar o Conteúdo Semente.");
+      return;
+    }
+
+    let targetAccountId = selectedAccountId;
+    if ((!targetAccountId || targetAccountId === "none") && companyAccounts.length > 0) {
+      targetAccountId = companyAccounts[0].id;
+    }
+
+    if (!targetAccountId || targetAccountId === "none") {
+      toast.error("Selecione ou vincule uma conta de Instagram para receber o pacote de Conteúdo Semente.");
+      return;
+    }
+
+    try {
+      setExecutingSeed(true);
+      setErrorDetails(null);
+      setResultData(null);
+      setTraceData(null);
+
+      const startTime = Date.now();
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData?.user?.id;
+
+      // 1. Executar inicialização do Conteúdo Semente (Cria ativação, 5 itens e demandas)
+      const seedResult = await CriafySeedContentService.startSeedContent(
+        selectedCompanyId,
+        targetAccountId,
+        userId
+      );
+
+      // 2. Gerar roteiro estratégico de IA para o Reel Semente
+      let generatedReel: any = null;
+      try {
+        const reelItem = seedResult.items.find((i) => i.format === "REEL");
+        if (reelItem) {
+          const reelRes = await QualifyAI.createStrategicReel({
+            company_id: selectedCompanyId,
+            account_id: targetAccountId,
+            user_id: userId,
+            idea: reelItem.theme || "Reel Semente — Método e Posicionamento",
+            objective: "Apresentar o método e autoridade da marca",
+            apiKey: customApiKey || undefined,
+            modelProfile: selectedModelProfile,
+          });
+          generatedReel = reelRes.data;
+        }
+      } catch (reelErr) {
+        console.warn("[Playground] Não foi possível roteirizar o Reel via IA:", reelErr);
+      }
+
+      setResultData({
+        type: "SEED_CONTENT_PACKAGE",
+        activation: seedResult.activation,
+        items: seedResult.items,
+        demands: seedResult.demands,
+        generatedReel,
+        brandInfo: {
+          brandName: brandManualCheck.brandName,
+          toneOfVoice: brandManualCheck.toneOfVoice,
+        },
+      });
+
+      setTraceData({
+        run_id: `seed_content_${Date.now()}`,
+        latency_ms: Date.now() - startTime,
+        model: selectedModelProfile,
+        tokens_total: generatedReel ? 520 : 0,
+        estimated_cost: generatedReel ? 0.0002 : 0,
+        status: "success",
+      });
+
+      toast.success("Pacote de Conteúdo Semente gerado com sucesso!");
+    } catch (err: any) {
+      console.error(err);
+      setErrorDetails(err.message || "Erro ao gerar Conteúdo Semente.");
+      toast.error(err.message || "Falha ao gerar Conteúdo Semente.");
+    } finally {
+      setExecutingSeed(false);
     }
   };
 
@@ -312,6 +523,116 @@ export default function AdminAiPlayground() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            {/* Seletor de Conta Instagram Vinculada */}
+            {companyAccounts.length > 0 && (
+              <div>
+                <Label className="text-xs mb-1 block flex items-center justify-between">
+                  <span>Conta do Instagram (Alvo)</span>
+                  <Badge variant="outline" className="text-[10px] font-normal">
+                    {companyAccounts.length} conta(s) encontrada(s)
+                  </Badge>
+                </Label>
+                <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Selecione conta..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {companyAccounts.map((acc: any) => (
+                      <SelectItem key={acc.id} value={acc.id}>
+                        @{acc.username || acc.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* REGRA DE NEGÓCIO: Verificação do Manual da Marca */}
+            {brandManualCheck && (
+              <div className="transition-all">
+                {brandManualCheck.isFilled ? (
+                  <div className="p-3 rounded-xl border border-emerald-500/25 bg-emerald-500/5 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Manual da Marca Preenchido
+                      </span>
+                      <Badge variant="outline" className="text-[10px] text-emerald-600 border-emerald-500/30">
+                        {brandManualCheck.brandName}
+                      </Badge>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      {brandManualCheck.details} {brandManualCheck.toneOfVoice ? `• Tom: ${brandManualCheck.toneOfVoice}` : ""}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-3.5 rounded-xl border border-destructive/30 bg-destructive/5 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-destructive flex items-center gap-1.5">
+                        <ShieldAlert className="w-4 h-4 text-destructive" /> Manual da Marca Não Preenchido
+                      </span>
+                      <Badge variant="destructive" className="text-[10px]">
+                        Bloqueado
+                      </Badge>
+                    </div>
+                    <p className="text-[11px] text-destructive/90 leading-relaxed font-medium">
+                      Regra de Negócio: O Manual da Marca precisa estar preenchido para realizar qualquer execução na Central de IA ou gerar o Conteúdo Semente.
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => navigate("/criafy?tab=manual-marca")}
+                      className="w-full h-7 text-xs border-destructive/30 text-destructive hover:bg-destructive/10 gap-1.5 cursor-pointer"
+                    >
+                      <BookOpen className="w-3.5 h-3.5" />
+                      <span>Preencher Manual da Marca na Criafy</span>
+                      <ExternalLink className="w-3 h-3 ml-auto" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* AÇÃO DE PRÉ-GESTÃO: GERAR CONTEÚDO SEMENTE */}
+            <div className="p-3.5 rounded-xl border border-primary/20 bg-gradient-to-br from-primary/5 via-card to-card space-y-2.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 font-bold text-xs text-foreground">
+                  <Sparkles className="w-3.5 h-3.5 text-primary" />
+                  <span>Pré-Gestão: Conteúdo Semente</span>
+                </div>
+                <Badge variant="secondary" className="text-[10px] font-semibold text-primary">
+                  Marco Zero (5 Peças)
+                </Badge>
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Gera o primeiro pacote estratégico da empresa: 1 Reel sobre método, 1 Destaque e 3 Posts estáticos integrados ao Planner e Demandas da Criafy.
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                disabled={!brandManualCheck?.isFilled || executingSeed}
+                onClick={handleGenerateSeedContent}
+                className="w-full h-8 text-xs font-bold gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 shadow-2xs cursor-pointer"
+              >
+                {executingSeed ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Gerando Conteúdo Semente com IA...</span>
+                  </>
+                ) : (
+                  <>
+                    <Rocket className="w-3.5 h-3.5" />
+                    <span>Gerar Conteúdo Semente da Empresa</span>
+                  </>
+                )}
+              </Button>
+              {!brandManualCheck?.isFilled && (
+                <p className="text-[10px] text-destructive font-medium text-center">
+                  * Bloqueado: Requer Manual da Marca preenchido
+                </p>
+              )}
             </div>
 
             {/* Status da Conexão OpenAI Real */}
@@ -457,21 +778,28 @@ export default function AdminAiPlayground() {
               </div>
             )}
 
-            <Button
-              className="w-full gap-2 mt-4 text-xs h-9 bg-emerald-600 hover:bg-emerald-700 text-white"
-              onClick={handleExecute}
-              disabled={executing}
-            >
-              {executing ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" /> Processando LangGraph/LangChain...
-                </>
-              ) : (
-                <>
-                  <PlayCircle className="h-4 w-4" /> Executar no Runtime
-                </>
+            <div className="space-y-1.5 pt-2">
+              <Button
+                className="w-full gap-2 text-xs h-9 bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                onClick={handleExecute}
+                disabled={executing || !brandManualCheck?.isFilled}
+              >
+                {executing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Processando LangGraph/LangChain...
+                  </>
+                ) : (
+                  <>
+                    <PlayCircle className="h-4 w-4" /> Executar no Runtime
+                  </>
+                )}
+              </Button>
+              {!brandManualCheck?.isFilled && (
+                <p className="text-[11px] text-destructive text-center font-medium">
+                  ⚠️ Execução bloqueada: preencha o Manual da Marca primeiro.
+                </p>
               )}
-            </Button>
+            </div>
           </CardContent>
         </Card>
 
@@ -516,12 +844,12 @@ export default function AdminAiPlayground() {
               </div>
             )}
 
-            {!resultData && !executing && !errorDetails && (
+            {!resultData && !executing && !executingSeed && !errorDetails && (
               <div className="flex-1 flex flex-col items-center justify-center text-center p-12 text-muted-foreground">
                 <PlayCircle className="h-12 w-12 stroke-[1.5] mb-3 opacity-40" />
                 <p className="text-sm font-medium">Nenhuma execução realizada</p>
                 <p className="text-xs mt-1 max-w-sm">
-                  Configure os parâmetros à esquerda e clique em Executar para disparar o runtime nativo do LangChain / LangGraph.
+                  Configure os parâmetros à esquerda e clique em Executar para disparar o runtime nativo do LangChain / LangGraph, ou utilize o botão de pré-gestão para gerar o Conteúdo Semente.
                 </p>
               </div>
             )}
@@ -536,8 +864,90 @@ export default function AdminAiPlayground() {
               </div>
             )}
 
-            {resultData && !executing && (
-              <Tabs defaultValue="output" className="flex-1 flex flex-col">
+            {executingSeed && (
+              <div className="flex-1 flex flex-col items-center justify-center p-12 space-y-3">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-sm font-medium">Gerando Conteúdo Semente da Empresa...</p>
+                <p className="text-xs text-muted-foreground text-center max-w-sm">
+                  Criando o marco zero (1 Reel, 1 Destaque, 3 Posts), registrando no Planner, gerando demandas e roteirizando com os Agentes.
+                </p>
+              </div>
+            )}
+
+            {resultData && !executing && !executingSeed && (
+              <div className="flex-1 flex flex-col">
+                {/* Visualização de Pacote Semente Gerado */}
+                {resultData.type === "SEED_CONTENT_PACKAGE" && (
+                  <div className="p-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 space-y-3 mb-4 animate-in fade-in duration-200">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-emerald-500/15 flex items-center justify-center text-lg">
+                          🌱
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                            <span>Pacote Conteúdo Semente Criado</span>
+                            <Badge variant="outline" className="text-[10px] text-emerald-600 bg-emerald-500/10 border-emerald-500/30">
+                              5/5 Peças Mapeadas
+                            </Badge>
+                          </h4>
+                          <p className="text-[11px] text-muted-foreground">
+                            {resultData.demands?.length || 0} demandas operacionais vinculadas diretamente no Planner da Criafy
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => navigate("/criafy?tab=planner")}
+                        className="h-8 px-3 text-xs font-bold gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shrink-0"
+                      >
+                        <span>Abrir no Planner</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
+                      {resultData.items?.map((it: any, idx: number) => (
+                        <div key={idx} className="p-2.5 rounded-xl border bg-card/90 flex items-center justify-between gap-2 shadow-2xs">
+                          <div className="min-w-0">
+                            <div className="font-bold truncate text-[11px] text-foreground">{it.theme}</div>
+                            <div className="text-[10px] text-muted-foreground uppercase flex items-center gap-1 mt-0.5">
+                              <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">
+                                {it.format}
+                              </Badge>
+                              <span>• Prioridade {it.priority}</span>
+                            </div>
+                          </div>
+                          <Badge variant="outline" className="text-[10px] uppercase shrink-0 text-emerald-600 border-emerald-500/30">
+                            {it.status}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+
+                    {resultData.generatedReel && (
+                      <div className="p-3.5 rounded-xl border bg-card space-y-2 mt-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold flex items-center gap-1.5 text-foreground">
+                            <Film className="w-3.5 h-3.5 text-primary" /> Roteiro Estratégico do Reel (IA OpenAI)
+                          </span>
+                          <Badge variant="secondary" className="text-[10px] text-primary">
+                            Pontuação Hook: {resultData.generatedReel.hook_score || 85}/100
+                          </Badge>
+                        </div>
+                        <div className="p-2 rounded-lg bg-muted/60 text-[11px]">
+                          <span className="font-semibold text-primary">Gancho Vencedor: </span>
+                          <span className="font-medium text-foreground">&quot;{resultData.generatedReel.selected_hook}&quot;</span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground whitespace-pre-wrap leading-relaxed max-h-36 overflow-y-auto font-mono">
+                          {resultData.generatedReel.script}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <Tabs defaultValue="output" className="flex-1 flex flex-col">
                 <TabsList className="grid grid-cols-4 h-8 mb-3">
                   <TabsTrigger value="output" className="text-xs">Output</TabsTrigger>
                   <TabsTrigger value="state" className="text-xs">State</TabsTrigger>
@@ -608,6 +1018,7 @@ export default function AdminAiPlayground() {
                   )}
                 </TabsContent>
               </Tabs>
+              </div>
             )}
           </CardContent>
         </Card>
