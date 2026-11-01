@@ -128,6 +128,13 @@ export default function AdminAiPlayground() {
     },
   });
 
+  const isKeyConfigured = Boolean(
+    openAiConfig?.configured ||
+    openAiConfig?.status === "active" ||
+    openAiConfig?.status === "configured" ||
+    (customApiKey && customApiKey.trim().length > 8)
+  );
+
   // Carregar Empresas do Sistema
   const { data: companies = [] } = useQuery({
     queryKey: ["admin_companies_list_playground"],
@@ -315,6 +322,7 @@ export default function AdminAiPlayground() {
       });
       toast.success("Chave OpenAI salva como padrão global no sistema!");
       queryClient.invalidateQueries({ queryKey: ["admin_ai_config_playground"] });
+      queryClient.invalidateQueries({ queryKey: ["admin_ai_config"] });
     } catch (err: any) {
       toast.error(err.message || "Erro ao salvar chave.");
     } finally {
@@ -330,9 +338,8 @@ export default function AdminAiPlayground() {
       return;
     }
 
-    const effectiveKey = customApiKey.trim() || (openAiConfig?.status === "active" ? "system_configured" : "");
-    if (!effectiveKey) {
-      toast.error("Chave da OpenAI não informada. Insira sua chave (sk-proj-...) no campo 'Conexão OpenAI' para que a chamada real seja executada na OpenAI.");
+    if (!isKeyConfigured) {
+      toast.error("Chave da OpenAI não configurada. Insira sua chave (sk-proj-...) no campo 'Conexão OpenAI' ou salve-a no sistema.");
       return;
     }
 
@@ -425,8 +432,7 @@ export default function AdminAiPlayground() {
       return;
     }
 
-    const effectiveKey = customApiKey.trim() || (openAiConfig?.status === "active" ? "system_configured" : "");
-    if (!effectiveKey) {
+    if (!isKeyConfigured) {
       toast.error("Chave da OpenAI não configurada. Por favor, insira sua chave (sk-proj-...) no campo 'Conexão OpenAI' abaixo para que a IA gere os ganchos e o roteiro em tempo real.");
       return;
     }
@@ -731,9 +737,14 @@ export default function AdminAiPlayground() {
                 <span className="font-semibold text-foreground flex items-center gap-1.5">
                   <Zap className="w-3.5 h-3.5 text-primary" /> Conexão OpenAI
                 </span>
-                {openAiConfig?.status === "active" ? (
+                {isKeyConfigured ? (
                   <Badge variant="outline" className="text-[10px] text-emerald-600 bg-emerald-500/10 border-emerald-500/30 gap-1 font-mono">
-                    <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Chave Ativa ({openAiConfig.maskedKey})
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    {openAiConfig?.maskedKey
+                      ? `Chave Ativa (${openAiConfig.maskedKey})`
+                      : customApiKey
+                      ? `Chave Informada (${customApiKey.slice(0, 7)}...${customApiKey.slice(-4)})`
+                      : "Chave Ativa"}
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="text-[10px] text-amber-600 bg-amber-500/10 border-amber-500/30 gap-1 font-mono">
@@ -758,8 +769,8 @@ export default function AdminAiPlayground() {
                 <Input
                   type="password"
                   placeholder={
-                    openAiConfig?.status === "active"
-                      ? "Chave global ativa. Cole aqui caso queira usar outra chave..."
+                    isKeyConfigured
+                      ? (openAiConfig?.maskedKey ? `Usando chave salva (${openAiConfig.maskedKey}) — digite para substituir` : "Usando chave salva no sistema")
                       : "Insira sua chave sk-proj-... para chamadas reais"
                   }
                   value={customApiKey}

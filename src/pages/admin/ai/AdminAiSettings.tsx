@@ -63,6 +63,7 @@ export default function AdminAiSettings() {
       setApiKey(""); // Limpa o input de chave para segurança
       toast.success("Configuração da OpenAI salva com sucesso!");
       queryClient.invalidateQueries({ queryKey: ["admin_ai_config"] });
+      queryClient.invalidateQueries({ queryKey: ["admin_ai_config_playground"] });
     } catch (err: any) {
       toast.error(err.message || "Erro ao salvar configuração.");
     } finally {
@@ -77,6 +78,7 @@ export default function AdminAiSettings() {
       const res = await AIExecutionService.validateOpenAiConnection();
       toast.success(`Conexão com OpenAI validada! ${res.modelsCount} modelos disponíveis.`);
       queryClient.invalidateQueries({ queryKey: ["admin_ai_config"] });
+      queryClient.invalidateQueries({ queryKey: ["admin_ai_config_playground"] });
     } catch (err: any) {
       toast.error(err.message || "Falha na validação com a OpenAI.");
     } finally {

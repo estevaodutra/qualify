@@ -37,7 +37,17 @@ export async function resolveOpenAiApiKey(providedKey?: string): Promise<string>
     console.warn("[resolveOpenAiApiKey] Não foi possível ler de platform_settings:", err);
   }
 
-  // 2. Tentar variáveis de ambiente do frontend/backend
+  // 2. Tentar ler do localStorage no browser
+  if (typeof localStorage !== "undefined") {
+    try {
+      const localKey = localStorage.getItem("qualify_openai_test_key");
+      if (localKey && localKey.trim().length > 10) {
+        return localKey.trim();
+      }
+    } catch {}
+  }
+
+  // 3. Tentar variáveis de ambiente do frontend/backend
   if (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_OPENAI_API_KEY) {
     return (import.meta as any).env.VITE_OPENAI_API_KEY;
   }
@@ -51,11 +61,24 @@ export async function resolveOpenAiApiKey(providedKey?: string): Promise<string>
 export function createLangChainChatModel(options: ModelFactoryOptions = {}): ChatOpenAI {
   const profile: ModelProfile = getModelProfile(options.profileCode || "CONTENT_STANDARD");
 
-  const apiKey =
-    options.apiKey ||
-    (typeof process !== "undefined" && process.env?.OPENAI_API_KEY) ||
-    (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_OPENAI_API_KEY) ||
-    "dummy-api-key-for-initialization";
+  let apiKey = options.apiKey;
+  if (!apiKey && typeof localStorage !== "undefined") {
+    try {
+      const localKey = localStorage.getItem("qualify_openai_test_key");
+      if (localKey && localKey.trim().length > 10) {
+        apiKey = localKey.trim();
+      }
+    } catch {}
+  }
+  if (!apiKey && typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_OPENAI_API_KEY) {
+    apiKey = (import.meta as any).env.VITE_OPENAI_API_KEY;
+  }
+  if (!apiKey && typeof process !== "undefined" && process.env?.OPENAI_API_KEY) {
+    apiKey = process.env.OPENAI_API_KEY;
+  }
+  if (!apiKey) {
+    apiKey = "dummy-api-key-for-initialization";
+  }
 
   const client = new ChatOpenAI({
     model: profile.model,

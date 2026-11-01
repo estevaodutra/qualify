@@ -710,21 +710,34 @@ ${skillData.main_instructions || ""}`;
       .maybeSingle();
 
     const val = data?.value || {};
-    const key = val.api_key || "";
+    let key = val.api_key || "";
+
+    // Se não encontrou no banco ou estiver sem chave, checar fallback no localStorage
+    if ((!key || key.length < 8) && typeof localStorage !== "undefined") {
+      try {
+        const localKey = localStorage.getItem("qualify_openai_test_key");
+        if (localKey && localKey.length > 8) {
+          key = localKey;
+        }
+      } catch {}
+    }
+
     let maskedKey = "";
     if (key.length > 8) {
       maskedKey = `${key.slice(0, 7)}...${key.slice(-4)}`;
     }
 
+    const isConfigured = Boolean(key && key.length > 10);
+
     return {
-      configured: !!key,
+      configured: isConfigured,
       maskedKey,
       projectId: val.project_id || "",
       orgId: val.organization_id || "",
       defaultModel: val.default_model || "gpt-4o-mini",
       monthlySpendLimit: val.monthly_spend_limit || 500,
       lastValidatedAt: val.last_validated_at || "",
-      status: val.status || (key ? "configured" : "not_configured"),
+      status: isConfigured ? "active" : "not_configured",
     };
   },
 
@@ -735,34 +748,46 @@ ${skillData.main_instructions || ""}`;
     defaultModel?: string;
     monthlySpendLimit?: number;
   }): Promise<void> {
-    const { data: current } = await (supabase as any)
-      .from("platform_settings")
-      .select("value")
-      .eq("key", "openai_config")
-      .maybeSingle();
+    const cleanKey = config.apiKey?.trim();
 
-    const existing = current?.value || {};
-    const newConfig = {
-      ...existing,
-      api_key: config.apiKey?.trim() ? config.apiKey.trim() : existing.api_key,
-      project_id: config.projectId ?? existing.project_id ?? "",
-      organization_id: config.organizationId ?? existing.organization_id ?? "",
-      default_model: config.defaultModel ?? existing.default_model ?? "gpt-4o-mini",
-      monthly_spend_limit: config.monthlySpendLimit ?? existing.monthly_spend_limit ?? 500,
-      status: "configured",
-    };
+    // 1. Sempre salvar no localStorage para disponibilidade imediata no browser
+    if (typeof localStorage !== "undefined" && cleanKey) {
+      try {
+        localStorage.setItem("qualify_openai_test_key", cleanKey);
+      } catch {}
+    }
 
-    const { error } = await (supabase as any).from("platform_settings").upsert(
-      {
-        key: "openai_config",
-        value: newConfig,
-        description: "Configuração global da OpenAI exclusiva para o motor de IA e Skills da Criafy",
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "key" }
-    );
+    // 2. Persistir nas configurações globais do banco (platform_settings)
+    try {
+      const { data: current } = await (supabase as any)
+        .from("platform_settings")
+        .select("value")
+        .eq("key", "openai_config")
+        .maybeSingle();
 
-    if (error) throw error;
+      const existing = current?.value || {};
+      const newConfig = {
+        ...existing,
+        api_key: cleanKey ? cleanKey : existing.api_key,
+        project_id: config.projectId ?? existing.project_id ?? "",
+        organization_id: config.organizationId ?? existing.organization_id ?? "",
+        default_model: config.defaultModel ?? existing.default_model ?? "gpt-4o-mini",
+        monthly_spend_limit: config.monthlySpendLimit ?? existing.monthly_spend_limit ?? 500,
+        status: "active",
+      };
+
+      await (supabase as any).from("platform_settings").upsert(
+        {
+          key: "openai_config",
+          value: newConfig,
+          description: "Configuração global da OpenAI exclusiva para o motor de IA e Skills da Criafy",
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "key" }
+      );
+    } catch (err) {
+      console.warn("[saveOpenAiConfig] Aviso ao salvar em platform_settings:", err);
+    }
   },
 
   async validateOpenAiConnection(): Promise<{ success: boolean; modelsCount: number }> {

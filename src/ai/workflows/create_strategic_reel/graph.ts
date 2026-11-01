@@ -18,10 +18,18 @@ export function buildStrategicReelGraph(options?: {
   const instagramAgent = getAgent("InstagramAgent");
 
   // Instancia modelo LangChain ChatOpenAI se houver API Key disponível
-  const chatModel = options?.apiKey
+  let chatApiKey = options?.apiKey;
+  if (!chatApiKey && typeof localStorage !== "undefined") {
+    try {
+      const local = localStorage.getItem("qualify_openai_test_key");
+      if (local && local.trim().length > 10) chatApiKey = local.trim();
+    } catch {}
+  }
+
+  const chatModel = chatApiKey
     ? createLangChainChatModel({
-        profileCode: options.modelProfile || instagramAgent?.model_profile || "CONTENT_STANDARD",
-        apiKey: options.apiKey,
+        profileCode: options?.modelProfile || instagramAgent?.model_profile || "CONTENT_STANDARD",
+        apiKey: chatApiKey,
       })
     : null;
 
