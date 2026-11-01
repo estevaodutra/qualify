@@ -1,6 +1,6 @@
 {
-  "commit": "5cba102924d78d41e4dd00d875c557304c1467fa",
-  "shortCommit": "5cba102",
-  "message": "test(criafy): atualizar testes para permitir inicio do conteudo semente apenas com manual da marca preenchido",
-  "builtAt": "2026-11-01T18:14:10.294Z"
+  "commit": "9a267199f5627245870ab953b4ae9288d2f586b2",
+  "shortCommit": "9a26719",
+  "message": "fix(sprint): importar Badge em SprintCardModal",
+  "builtAt": "2026-11-01T20:01:59.851Z"
 }

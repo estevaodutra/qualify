@@ -74,69 +74,83 @@ export default function AdminAiTools() {
       </div>
 
       {/* Grid de Tools */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredTools.map((tool) => (
-          <Card key={tool.name} className="flex flex-col justify-between hover:shadow-md transition-all">
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2.5">
-                  <div className="h-9 w-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold">
-                    <Wrench className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-base font-mono">{tool.name}</CardTitle>
-                    <div className="mt-1">{getTypeBadge(tool.type)}</div>
+      {filteredTools.length === 0 ? (
+        <Card className="p-12 text-center border-dashed">
+          <div className="flex flex-col items-center justify-center max-w-md mx-auto space-y-3">
+            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+              <Wrench className="h-6 w-6" />
+            </div>
+            <h3 className="text-lg font-semibold text-foreground">Nenhuma ferramenta cadastrada</h3>
+            <p className="text-sm text-muted-foreground text-center">
+              O catálogo de tools está limpo e pronto para receber as ferramentas dedicadas aos novos agentes.
+            </p>
+          </div>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredTools.map((tool) => (
+            <Card key={tool.name} className="flex flex-col justify-between hover:shadow-md transition-all">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-9 w-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold">
+                      <Wrench className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-base font-mono">{tool.name}</CardTitle>
+                      <div className="mt-1">{getTypeBadge(tool.type)}</div>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <CardDescription className="text-xs mt-2 line-clamp-2">
-                {tool.description}
-              </CardDescription>
-            </CardHeader>
+                <CardDescription className="text-xs mt-2 line-clamp-2">
+                  {tool.description}
+                </CardDescription>
+              </CardHeader>
 
-            <CardContent className="space-y-3 pt-0 text-xs">
-              {/* Permissão RBAC */}
-              <div className="flex items-center justify-between py-1 border-t text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <Shield className="h-3.5 w-3.5 text-emerald-600" /> Permissão RBAC
-                </span>
-                <Badge variant="outline" className="font-mono text-[10px]">
-                  {tool.permission}
-                </Badge>
-              </div>
+              <CardContent className="space-y-3 pt-0 text-xs">
+                {/* Permissão RBAC */}
+                <div className="flex items-center justify-between py-1 border-t text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Shield className="h-3.5 w-3.5 text-emerald-600" /> Permissão RBAC
+                  </span>
+                  <Badge variant="outline" className="font-mono text-[10px]">
+                    {tool.permission}
+                  </Badge>
+                </div>
 
-              {/* Timeout */}
-              <div className="flex items-center justify-between py-1 border-t text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5 text-blue-500" /> Timeout
-                </span>
-                <span className="font-medium text-foreground">{tool.timeout || 30}s</span>
-              </div>
+                {/* Timeout */}
+                <div className="flex items-center justify-between py-1 border-t text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5 text-blue-500" /> Timeout
+                  </span>
+                  <span className="font-medium text-foreground">{tool.timeout || 30}s</span>
+                </div>
 
-              {/* Retry Policy */}
-              <div className="flex items-center justify-between py-1 border-t text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <RotateCw className="h-3.5 w-3.5 text-amber-500" /> Retries
-                </span>
-                <span className="font-medium text-foreground">
-                  {tool.retry_policy?.max_retries || 2} tentativas ({tool.retry_policy?.backoff || "linear"})
-                </span>
-              </div>
+                {/* Retry Policy */}
+                <div className="flex items-center justify-between py-1 border-t text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <RotateCw className="h-3.5 w-3.5 text-amber-500" /> Retries
+                  </span>
+                  <span className="font-medium text-foreground">
+                    {tool.retry_policy?.max_retries || 2} tentativas ({tool.retry_policy?.backoff || "linear"})
+                  </span>
+                </div>
 
-              <div className="pt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full text-xs gap-1.5"
-                  onClick={() => setSelectedTool(tool)}
-                >
-                  <Eye className="h-3.5 w-3.5" /> Ver Schemas & Detalhes
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                <div className="pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-xs gap-1.5"
+                    onClick={() => setSelectedTool(tool)}
+                  >
+                    <Eye className="h-3.5 w-3.5" /> Ver Schemas & Detalhes
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Modal de Detalhes da Tool */}
       <Dialog open={Boolean(selectedTool)} onOpenChange={() => setSelectedTool(null)}>

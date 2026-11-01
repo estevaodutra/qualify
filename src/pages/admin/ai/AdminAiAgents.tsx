@@ -43,113 +43,127 @@ export default function AdminAiAgents() {
       </div>
 
       {/* Grid de Agentes */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {PREPARED_AGENTS.map((agent) => {
-          const isActive = agent.status === "active";
-          return (
-            <Card
-              key={agent.slug}
-              className={`flex flex-col justify-between transition-all hover:shadow-md ${
-                isActive ? "border-emerald-500/30 bg-card" : "opacity-85 border-dashed"
-              }`}
-            >
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      className={`h-9 w-9 rounded-lg flex items-center justify-center font-bold ${
+      {PREPARED_AGENTS.length === 0 ? (
+        <Card className="p-12 text-center border-dashed">
+          <div className="flex flex-col items-center justify-center max-w-md mx-auto space-y-3">
+            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+              <Bot className="h-6 w-6" />
+            </div>
+            <h3 className="text-lg font-semibold text-foreground">Nenhum agente cadastrado</h3>
+            <p className="text-sm text-muted-foreground text-center">
+              A Central de IA foi reinicializada ao Marco Zero. O catálogo está limpo para a criação e importação estruturada de cada agente individualmente.
+            </p>
+          </div>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {PREPARED_AGENTS.map((agent) => {
+            const isActive = agent.status === "active";
+            return (
+              <Card
+                key={agent.slug}
+                className={`flex flex-col justify-between transition-all hover:shadow-md ${
+                  isActive ? "border-emerald-500/30 bg-card" : "opacity-85 border-dashed"
+                }`}
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className={`h-9 w-9 rounded-lg flex items-center justify-center font-bold ${
+                          isActive
+                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        <Bot className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-base">{agent.name}</CardTitle>
+                        <p className="text-xs font-mono text-muted-foreground">{agent.slug}</p>
+                      </div>
+                    </div>
+                    <Badge
+                      variant={isActive ? "default" : "secondary"}
+                      className={
                         isActive
-                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                          : "bg-muted text-muted-foreground"
-                      }`}
+                          ? "bg-emerald-600 text-white text-[10px]"
+                          : "text-[10px]"
+                      }
                     >
-                      <Bot className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-base">{agent.name}</CardTitle>
-                      <p className="text-xs font-mono text-muted-foreground">{agent.slug}</p>
-                    </div>
+                      {isActive ? (
+                        <span className="flex items-center gap-1">
+                          <CheckCircle2 className="h-3 w-3" /> Ativo
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" /> Em Breve
+                        </span>
+                      )}
+                    </Badge>
                   </div>
-                  <Badge
-                    variant={isActive ? "default" : "secondary"}
-                    className={
-                      isActive
-                        ? "bg-emerald-600 text-white text-[10px]"
-                        : "text-[10px]"
-                    }
-                  >
-                    {isActive ? (
-                      <span className="flex items-center gap-1">
-                        <CheckCircle2 className="h-3 w-3" /> Ativo
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" /> Em Breve
-                      </span>
-                    )}
-                  </Badge>
-                </div>
-                <CardDescription className="text-xs mt-2 line-clamp-2">
-                  {agent.description}
-                </CardDescription>
-              </CardHeader>
+                  <CardDescription className="text-xs mt-2 line-clamp-2">
+                    {agent.description}
+                  </CardDescription>
+                </CardHeader>
 
-              <CardContent className="space-y-3 pt-0 text-xs">
-                {/* Perfil de Modelo & Versão */}
-                <div className="flex items-center justify-between py-1 border-t text-muted-foreground">
-                  <span className="flex items-center gap-1.5">
-                    <Sparkles className="h-3.5 w-3.5 text-primary" /> Perfil Modelo
-                  </span>
-                  <Badge variant="outline" className="font-mono text-[10px]">
-                    {agent.model_profile}
-                  </Badge>
-                </div>
+                <CardContent className="space-y-3 pt-0 text-xs">
+                  {/* Perfil de Modelo & Versão */}
+                  <div className="flex items-center justify-between py-1 border-t text-muted-foreground">
+                    <span className="flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5 text-primary" /> Perfil Modelo
+                    </span>
+                    <Badge variant="outline" className="font-mono text-[10px]">
+                      {agent.model_profile}
+                    </Badge>
+                  </div>
 
-                {/* Skills */}
-                <div className="flex items-center justify-between py-1 border-t text-muted-foreground">
-                  <span className="flex items-center gap-1.5">
-                    <Layers className="h-3.5 w-3.5 text-blue-500" /> Skills Vinculadas
-                  </span>
-                  <span className="font-medium text-foreground">
-                    {agent.skills.length > 0 ? agent.skills.join(", ") : "Nenhuma"}
-                  </span>
-                </div>
+                  {/* Skills */}
+                  <div className="flex items-center justify-between py-1 border-t text-muted-foreground">
+                    <span className="flex items-center gap-1.5">
+                      <Layers className="h-3.5 w-3.5 text-blue-500" /> Skills Vinculadas
+                    </span>
+                    <span className="font-medium text-foreground">
+                      {agent.skills.length > 0 ? agent.skills.join(", ") : "Nenhuma"}
+                    </span>
+                  </div>
 
-                {/* Tools */}
-                <div className="flex items-center justify-between py-1 border-t text-muted-foreground">
-                  <span className="flex items-center gap-1.5">
-                    <Wrench className="h-3.5 w-3.5 text-amber-500" /> Ferramentas (Tools)
-                  </span>
-                  <Badge variant="secondary" className="font-mono text-[10px]">
-                    {agent.tools.length} autorizadas
-                  </Badge>
-                </div>
+                  {/* Tools */}
+                  <div className="flex items-center justify-between py-1 border-t text-muted-foreground">
+                    <span className="flex items-center gap-1.5">
+                      <Wrench className="h-3.5 w-3.5 text-amber-500" /> Ferramentas (Tools)
+                    </span>
+                    <Badge variant="secondary" className="font-mono text-[10px]">
+                      {agent.tools.length} autorizadas
+                    </Badge>
+                  </div>
 
-                {/* Context Providers */}
-                <div className="flex items-center justify-between py-1 border-t text-muted-foreground">
-                  <span className="flex items-center gap-1.5">
-                    <Database className="h-3.5 w-3.5 text-purple-500" /> Fontes de Contexto
-                  </span>
-                  <span className="font-medium text-foreground">
-                    {agent.context_providers.length} fontes
-                  </span>
-                </div>
+                  {/* Context Providers */}
+                  <div className="flex items-center justify-between py-1 border-t text-muted-foreground">
+                    <span className="flex items-center gap-1.5">
+                      <Database className="h-3.5 w-3.5 text-purple-500" /> Fontes de Contexto
+                    </span>
+                    <span className="font-medium text-foreground">
+                      {agent.context_providers.length} fontes
+                    </span>
+                  </div>
 
-                <div className="pt-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full text-xs gap-1.5"
-                    onClick={() => setSelectedAgent(agent)}
-                  >
-                    <Eye className="h-3.5 w-3.5" /> Ver Configuração & Prompt
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+                  <div className="pt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-xs gap-1.5"
+                      onClick={() => setSelectedAgent(agent)}
+                    >
+                      <Eye className="h-3.5 w-3.5" /> Ver Configuração & Prompt
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {/* Modal de Detalhes do Agente */}
       <Dialog open={Boolean(selectedAgent)} onOpenChange={() => setSelectedAgent(null)}>

@@ -792,7 +792,7 @@ export default function AdminAiPlayground() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.values(WorkflowRegistry).map((wf) => (
+                    {Object.values(WorkflowRegistry).length === 0 ? <SelectItem value="none" disabled>Nenhum workflow registrado</SelectItem> : Object.values(WorkflowRegistry).map((wf) => (
                       <SelectItem key={wf.slug} value={wf.slug}>
                         {wf.name} ({wf.slug})
                       </SelectItem>
@@ -810,7 +810,7 @@ export default function AdminAiPlayground() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {PREPARED_AGENTS.map((a) => (
+                    {PREPARED_AGENTS.length === 0 ? <SelectItem value="none" disabled>Nenhum agente cadastrado</SelectItem> : PREPARED_AGENTS.map((a) => (
                       <SelectItem key={a.slug} value={a.slug}>
                         {a.name} ({a.slug})
                       </SelectItem>
@@ -828,7 +828,7 @@ export default function AdminAiPlayground() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {PREPARED_SKILLS.map((s) => (
+                    {PREPARED_SKILLS.length === 0 ? <SelectItem value="none" disabled>Nenhuma skill cadastrada</SelectItem> : PREPARED_SKILLS.map((s) => (
                       <SelectItem key={s.slug} value={s.slug}>
                         {s.name} ({s.slug})
                       </SelectItem>
@@ -846,7 +846,7 @@ export default function AdminAiPlayground() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {ALL_TOOLS.map((t) => (
+                    {ALL_TOOLS.length === 0 ? <SelectItem value="none" disabled>Nenhuma tool cadastrada</SelectItem> : ALL_TOOLS.map((t) => (
                       <SelectItem key={t.name} value={t.name}>
                         {t.name} [{t.type}]
                       </SelectItem>

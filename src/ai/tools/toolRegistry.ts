@@ -1,23 +1,12 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { ToolDefinition, ToolExecutionContext, AgentDefinition } from "../schemas";
 import { RBACEngine } from "../permissions/rbacEngine";
-import { scoreHookTool } from "./ai/scoreHookTool";
-import { beatSheetTool } from "./ai/beatSheetTool";
-import { brandManualTool } from "./company/brandManualTool";
-import { saveContentTool, createDemandTool, getInstagramMetricsTool } from "./criafy/criafyTools";
-import { crmGetLeadTool, crmMoveLeadTool, crmCreateNoteTool } from "./crm/crmTools";
 
-export const ALL_TOOLS: ToolDefinition[] = [
-  scoreHookTool,
-  beatSheetTool,
-  brandManualTool,
-  saveContentTool,
-  createDemandTool,
-  getInstagramMetricsTool,
-  crmGetLeadTool,
-  crmMoveLeadTool,
-  crmCreateNoteTool,
-];
+/**
+ * Catálogo de Ferramentas (Tools) da Central de IA.
+ * Zerado para reconstrução individual e modular.
+ */
+export const ALL_TOOLS: ToolDefinition[] = [];
 
 export const ToolRegistry: Record<string, ToolDefinition> = {};
 
