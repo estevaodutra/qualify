@@ -1,7 +1,7 @@
--- ========================================================
--- MIGRATION: CENTRAL AGÊNTICA DA QUALIFY (OpenAI + LangChain + LangGraph)
--- Infraestrutura Agêntica Reutilizável Multi-Tenant
--- ========================================================
+/* ========================================================
+   MIGRATION: CENTRAL AGÊNTICA DA QUALIFY
+   OpenAI + LangChain + LangGraph
+======================================================== */
 
 -- 1. MODEL PROFILES: Garantir FAST_CLASSIFIER e outros perfis
 INSERT INTO public.ai_model_profiles (code, name, description, provider, model, reasoning_effort, max_output_tokens, temperature, timeout_seconds, is_active)
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS public.ai_agents (
   slug TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   description TEXT,
-  status TEXT NOT NULL DEFAULT 'active', -- 'active', 'inactive', 'draft'
+  status TEXT NOT NULL DEFAULT 'active',
   model_profile TEXT NOT NULL DEFAULT 'CONTENT_STANDARD' REFERENCES public.ai_model_profiles(code) ON UPDATE CASCADE,
   system_prompt TEXT NOT NULL,
   skills TEXT[] NOT NULL DEFAULT '{}',
@@ -35,9 +35,9 @@ CREATE TABLE IF NOT EXISTS public.ai_agents (
 -- 3. TABELA: AI_TOOLS (Registro de Tools)
 CREATE TABLE IF NOT EXISTS public.ai_tools (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL UNIQUE, -- ex: 'ai.score_hook', 'crm.get_lead'
+  name TEXT NOT NULL UNIQUE,
   description TEXT NOT NULL,
-  type TEXT NOT NULL DEFAULT 'read_only', -- 'read_only', 'write_internal', 'write_external', 'critical'
+  type TEXT NOT NULL DEFAULT 'read_only',
   permission TEXT NOT NULL DEFAULT 'ai.use_tools',
   handler TEXT NOT NULL,
   input_schema JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -53,11 +53,11 @@ CREATE TABLE IF NOT EXISTS public.ai_tools (
 -- 4. TABELA: AI_WORKFLOWS (Registro de Workflows LangGraph)
 CREATE TABLE IF NOT EXISTS public.ai_workflows (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  slug TEXT NOT NULL UNIQUE, -- ex: 'create_strategic_reel'
+  slug TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   description TEXT,
   version INTEGER NOT NULL DEFAULT 1,
-  status TEXT NOT NULL DEFAULT 'active', -- 'active', 'inactive', 'draft'
+  status TEXT NOT NULL DEFAULT 'active',
   graph_definition JSONB NOT NULL DEFAULT '{}'::jsonb,
   entry_point TEXT NOT NULL DEFAULT 'Load Context',
   loop_guards JSONB NOT NULL DEFAULT '{"max_agent_steps": 10, "max_tool_calls": 20, "max_retries": 3, "max_execution_time": 120, "max_cost": 5.0}'::jsonb,
@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS public.ai_workflows (
 -- 5. TABELA: AI_CONTEXT_PROVIDERS (Registro de Provedores de Contexto)
 CREATE TABLE IF NOT EXISTS public.ai_context_providers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  slug TEXT NOT NULL UNIQUE, -- ex: 'brand_manual', 'account_strategy'
+  slug TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   description TEXT,
   handler TEXT NOT NULL,
@@ -79,13 +79,13 @@ CREATE TABLE IF NOT EXISTS public.ai_context_providers (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 6. ATUALIZAR TABELA AI_SKILLS COM CAMPOS EXTRAS CASO NÃO EXISTAM
+-- 6. ATUALIZAR TABELA AI_SKILLS COM CAMPOS EXTRAS
 ALTER TABLE public.ai_skills 
   ADD COLUMN IF NOT EXISTS required_tools TEXT[] DEFAULT '{}',
   ADD COLUMN IF NOT EXISTS "references" JSONB DEFAULT '[]'::jsonb,
   ADD COLUMN IF NOT EXISTS version INTEGER DEFAULT 1;
 
--- 7. ATUALIZAR TABELA AI_EXECUTIONS COM CAMPOS DE RASTREABILIDADE LANGGRAPH / LANGCHAIN
+-- 7. ATUALIZAR TABELA AI_EXECUTIONS COM CAMPOS DE RASTREABILIDADE
 ALTER TABLE public.ai_executions
   ADD COLUMN IF NOT EXISTS agent_slug TEXT,
   ADD COLUMN IF NOT EXISTS agent_version INTEGER,
@@ -98,30 +98,38 @@ ALTER TABLE public.ai_executions
   ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ DEFAULT now(),
   ADD COLUMN IF NOT EXISTS finished_at TIMESTAMPTZ DEFAULT now();
 
--- HABILITAR RLS NAS NOVAS TABELAS
+-- 8. HABILITAR RLS
 ALTER TABLE public.ai_agents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_tools ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_workflows ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_context_providers ENABLE ROW LEVEL SECURITY;
 
--- POLICIES DE LEITURA (AUTHENTICATED) E ESCRITA (SUPERADMIN)
+-- 9. POLICIES (DROP SE JÁ EXISTIREM PARA EVITAR CONFLITO E RECRIAR)
+DROP POLICY IF EXISTS "ai_agents_select_auth" ON public.ai_agents;
 CREATE POLICY "ai_agents_select_auth" ON public.ai_agents FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "ai_agents_all_superadmin" ON public.ai_agents;
 CREATE POLICY "ai_agents_all_superadmin" ON public.ai_agents FOR ALL TO authenticated USING (public.is_superadmin(auth.uid())) WITH CHECK (public.is_superadmin(auth.uid()));
 
+DROP POLICY IF EXISTS "ai_tools_select_auth" ON public.ai_tools;
 CREATE POLICY "ai_tools_select_auth" ON public.ai_tools FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "ai_tools_all_superadmin" ON public.ai_tools;
 CREATE POLICY "ai_tools_all_superadmin" ON public.ai_tools FOR ALL TO authenticated USING (public.is_superadmin(auth.uid())) WITH CHECK (public.is_superadmin(auth.uid()));
 
+DROP POLICY IF EXISTS "ai_workflows_select_auth" ON public.ai_workflows;
 CREATE POLICY "ai_workflows_select_auth" ON public.ai_workflows FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "ai_workflows_all_superadmin" ON public.ai_workflows;
 CREATE POLICY "ai_workflows_all_superadmin" ON public.ai_workflows FOR ALL TO authenticated USING (public.is_superadmin(auth.uid())) WITH CHECK (public.is_superadmin(auth.uid()));
 
+DROP POLICY IF EXISTS "ai_context_providers_select_auth" ON public.ai_context_providers;
 CREATE POLICY "ai_context_providers_select_auth" ON public.ai_context_providers FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "ai_context_providers_all_superadmin" ON public.ai_context_providers;
 CREATE POLICY "ai_context_providers_all_superadmin" ON public.ai_context_providers FOR ALL TO authenticated USING (public.is_superadmin(auth.uid())) WITH CHECK (public.is_superadmin(auth.uid()));
 
--- ========================================================
--- SEED DOS COMPONENTES AGÊNTICOS INICIAIS
--- ========================================================
-
--- Tools Iniciais
+-- 10. SEED: TOOLS INICIAIS
 INSERT INTO public.ai_tools (name, description, type, permission, handler, input_schema, output_schema)
 VALUES
   ('ai.score_hook', 'Avalia ganchos de vídeo com base em fórmulas de retenção, contagem de palavras e impacto nos primeiros 3s.', 'read_only', 'ai.use_tools', 'score_hook', '{"type": "object", "properties": {"hooks": {"type": "array", "items": {"type": "string"}}}}'::jsonb, '{"type": "object"}'::jsonb),
@@ -139,7 +147,7 @@ ON CONFLICT (name) DO UPDATE SET
   permission = EXCLUDED.permission,
   handler = EXCLUDED.handler;
 
--- Context Providers Iniciais
+-- 11. SEED: CONTEXT PROVIDERS
 INSERT INTO public.ai_context_providers (slug, name, description, handler)
 VALUES
   ('company', 'Dados da Empresa', 'Informações cadastrais, segmento e plano.', 'company'),
@@ -155,7 +163,7 @@ ON CONFLICT (slug) DO UPDATE SET
   name = EXCLUDED.name,
   description = EXCLUDED.description;
 
--- Skill Inicial: ig-reel
+-- 12. SEED: SKILL IG-REEL
 INSERT INTO public.ai_skills (slug, name, description, category, when_to_use, target_objective, main_instructions, output_format, default_model_profile, status, required_tools, version)
 VALUES
   ('ig-reel', 'Roteiro Estratégico de Reel (ig-reel)', 'Criação de roteiros curtos de alta retenção com 3 opções de ganchos validados, beat sheet estruturado e CTA estratégico.', 'CONTEÚDO', 'Quando for gravar Reels informativos, diretos ou narrativos de até 60 segundos.', 'Máxima retenção nos primeiros 3 segundos e taxa de conclusão elevada.', 'Aplique as fórmulas validadas de ganchos comprovados. Nunca crie introduções lentas. Conecte o hook com a resolução em até 10 segundos. Desenvolva beat sheet calculando ritmo a 165 palavras por minuto. Finalize com chamada de ação concisa e loop de retorno.', 'json', 'CONTENT_STANDARD', 'published', ARRAY['ai.score_hook', 'ai.generate_beat_sheet', 'company.get_brand_manual', 'criafy.save_content'], 1)
@@ -164,7 +172,7 @@ ON CONFLICT (slug) DO UPDATE SET
   description = EXCLUDED.description,
   required_tools = EXCLUDED.required_tools;
 
--- Agent Inicial: InstagramAgent
+-- 13. SEED: AGENT INSTAGRAMAGENT
 INSERT INTO public.ai_agents (slug, name, description, status, model_profile, system_prompt, skills, tools, context_providers, permissions, version)
 VALUES
   ('InstagramAgent', 'Instagram Agent', 'Especialista em estratégia, copywriting e roteirização para crescimento e autoridade no Instagram.', 'active', 'CONTENT_STANDARD', 'Você é o InstagramAgent da Qualify, um estrategista sênior de redes sociais focado em retenção, posicionamento de autoridade e conversão qualificada. Você produz roteiros de Reels, planeja carrosséis e analisa a performance editorial sem clichês ou promessas vazias.', ARRAY['ig-reel'], ARRAY['ai.score_hook', 'ai.generate_beat_sheet', 'company.get_brand_manual', 'criafy.save_content', 'criafy.create_demand', 'instagram.get_metrics'], ARRAY['brand_manual', 'account_strategy', 'content_history'], ARRAY['criafy.read', 'criafy.write', 'ai.use_tools'], 1)
@@ -176,7 +184,7 @@ ON CONFLICT (slug) DO UPDATE SET
   tools = EXCLUDED.tools,
   context_providers = EXCLUDED.context_providers;
 
--- Workflow Inicial: create_strategic_reel (LangGraph)
+-- 14. SEED: WORKFLOW CREATE_STRATEGIC_REEL (LANGGRAPH)
 INSERT INTO public.ai_workflows (slug, name, description, version, status, entry_point, loop_guards, graph_definition)
 VALUES
   ('create_strategic_reel', 'Criar Reel Estratégico', 'Orquestração LangGraph completa: Coleta de contexto -> Geração de 3 Hooks -> Pontuação com score_hook -> Seleção do Campeão -> Roteirização -> Beat Sheet -> Validação com ciclo de reescrita -> Salvamento.', 1, 'active', 'Load Context', '{"max_agent_steps": 10, "max_tool_calls": 20, "max_retries": 3, "max_execution_time": 120, "max_cost": 2.0}'::jsonb, '{"nodes": ["Load Context", "Generate Hooks", "Score Hooks", "Select Hook", "Write Script", "Generate Beat Sheet", "Validate", "Rewrite", "Save Content"], "conditional_edges": [{"source": "Validate", "condition": "is_valid", "targets": {"true": "Save Content", "false": "Rewrite"}}]}'::jsonb)
