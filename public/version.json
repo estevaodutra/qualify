@@ -1,6 +1,6 @@
 {
-  "commit": "63c852157d8022611b4f0dc9d4377f9fa142e13a",
-  "shortCommit": "63c8521",
-  "message": "fix(sprint): sincronizar e exibir anexos de checklist e comentarios nos modais de arquivos do cartao e quadro",
-  "builtAt": "2026-11-01T20:13:54.725Z"
+  "commit": "17a89d423ee5023e4e0982f3a861a53692f7f099",
+  "shortCommit": "17a89d4",
+  "message": "chore(copilot): remover atalhos e comandos estaticos do copiloto no chat acompanhando o marco zero",
+  "builtAt": "2026-11-01T20:37:04.715Z"
 }

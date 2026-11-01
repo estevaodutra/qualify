@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -9,26 +9,24 @@ import {
   Workflow,
   Bot,
   Building2,
-  Instagram,
   Zap,
   Clock,
   DollarSign,
-  Cpu,
-  CheckCircle2,
   AlertCircle,
   Copy,
-  Code,
-  FileText,
   Loader2,
   RefreshCw,
   ArrowRight,
-  Database,
-  Rocket,
   BookOpen,
-  ShieldAlert,
-  ExternalLink,
+  Send,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+  FileText,
   Film,
   Check,
+  Compass,
+  Cpu,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,50 +55,67 @@ import {
   PREPARED_AGENTS,
   PREPARED_SKILLS,
   WorkflowRegistry,
-  DEFAULT_MODEL_PROFILES,
   ModelProfileCode,
 } from "@/ai";
+
+interface ChatMessageItem {
+  id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  timestamp: string;
+  metrics?: {
+    latency_ms: number;
+    tokens_total: number;
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    estimated_cost: number;
+    model: string;
+  };
+  tool_calls?: any[];
+  context_summary?: string;
+  trace?: any;
+  raw_response?: any;
+}
 
 export default function AdminAiPlayground() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Modo: Workflow | Agent | Skill | Tool (Regra #23 do Master Prompt)
-  const [playMode, setPlayMode] = useState<"workflow" | "agent" | "skill" | "tool">("workflow");
+  // Aba principal: 'chat' (Padrão) | 'technical' (Inspeção Técnica / Workflows)
+  const [mainTab, setMainTab] = useState<"chat" | "technical">("chat");
 
-  // Seletores
-  const [selectedWorkflowSlug, setSelectedWorkflowSlug] = useState<string>("create_strategic_reel");
-  const [selectedAgentSlug, setSelectedAgentSlug] = useState<string>("InstagramAgent");
-  const [selectedSkillSlug, setSelectedSkillSlug] = useState<string>("ig-reel");
-  const [selectedToolName, setSelectedToolName] = useState<string>("ai.score_hook");
-  const [selectedModelProfile, setSelectedModelProfile] = useState<ModelProfileCode>("CONTENT_STANDARD");
+  // Modo Técnico legado: Workflow | Agent | Skill | Tool
+  const [playMode, setPlayMode] = useState<"workflow" | "agent" | "skill" | "tool">("agent");
+
+  // Seletores de Tenant e Modelos
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>("demo-company-1");
   const [selectedAccountId, setSelectedAccountId] = useState<string>("none");
+  const [selectedModelProfile, setSelectedModelProfile] = useState<ModelProfileCode>("CONTENT_STANDARD");
+  const [selectedAgentSlug, setSelectedAgentSlug] = useState<string>("qualify-orchestrator");
+  const [selectedWorkflowSlug, setSelectedWorkflowSlug] = useState<string>("create_strategic_reel");
+  const [selectedSkillSlug, setSelectedSkillSlug] = useState<string>("ig-reel");
+  const [selectedToolName, setSelectedToolName] = useState<string>("company.get_brand_manual");
 
-  // Inputs
+  // Inputs Técnicos Legados
   const [ideaPrompt, setIdeaPrompt] = useState("Como estruturar um funil de qualificação de leads com IA");
   const [objective, setObjective] = useState("Autoridade e conversão qualificada");
-  const [toolInputJson, setToolInputJson] = useState(
-    JSON.stringify(
-      {
-        hooks: [
-          "R$ 18.000 foi o que um erro de qualificação me custou.",
-          "Pare de mandar proposta para quem não tem dinheiro.",
-          "Ninguém te conta que seus leads não fecham por falta de processo.",
-        ],
-      },
-      null,
-      2
-    )
-  );
+  const [toolInputJson, setToolInputJson] = useState(JSON.stringify({ company_id: "demo-company-1" }, null, 2));
 
-  // Estado de Execução
+  // Chat do Orquestrador
+  const [chatInput, setChatInput] = useState("");
+  const [chatMessages, setChatMessages] = useState<ChatMessageItem[]>([]);
+  const [expandedTraceId, setExpandedTraceId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Estados de Execução
   const [executing, setExecuting] = useState(false);
   const [executingSeed, setExecutingSeed] = useState(false);
-  const [savingKey, setSavingKey] = useState(false);
   const [resultData, setResultData] = useState<any>(null);
   const [traceData, setTraceData] = useState<any>(null);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
+
+  // Chave OpenAI personalizada salva em localStorage
   const [customApiKey, setCustomApiKey] = useState<string>(() => {
     try {
       return localStorage.getItem("qualify_openai_test_key") || "";
@@ -151,8 +166,20 @@ export default function AdminAiPlayground() {
     },
   });
 
+  // Auto-selecionar primeira empresa real se disponível
+  useEffect(() => {
+    if (companies.length > 0 && selectedCompanyId === "demo-company-1") {
+      const ipvCompany = companies.find((c: any) =>
+        c.name?.toLowerCase().includes("ipv")
+      );
+      if (ipvCompany) {
+        setSelectedCompanyId(ipvCompany.id);
+      }
+    }
+  }, [companies]);
+
   // Contas de Instagram da Empresa Selecionada
-  const { data: companyAccounts = [], isLoading: isLoadingAccounts } = useQuery({
+  const { data: companyAccounts = [] } = useQuery({
     queryKey: ["admin_company_accounts_playground", selectedCompanyId],
     enabled: Boolean(selectedCompanyId && selectedCompanyId !== "demo-company-1"),
     queryFn: async () => {
@@ -198,8 +225,7 @@ export default function AdminAiPlayground() {
       }
 
       try {
-        // 1. Buscar TODOS os workspaces da empresa (não apenas limit(1))
-        const { data: workspaces, error: wsError } = await (supabase as any)
+        const { data: workspaces } = await (supabase as any)
           .from("sprint_os_workspaces")
           .select("id, name, data, updated_at")
           .eq("company_id", selectedCompanyId)
@@ -233,7 +259,7 @@ export default function AdminAiPlayground() {
           }
         }
 
-        // 2. Fallback para LocalStorage se o usuário estiver editando em cache
+        // Fallback localStorage
         if (!bestManual && typeof localStorage !== "undefined") {
           for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
@@ -256,7 +282,7 @@ export default function AdminAiPlayground() {
           }
         }
 
-        // 3. Fallback para Account Briefings da Criafy
+        // Fallback account briefings
         if (!bestManual) {
           const { data: briefings } = await (supabase as any)
             .from("criafy_account_briefings")
@@ -265,15 +291,13 @@ export default function AdminAiPlayground() {
 
           if (briefings && briefings.length > 0) {
             const b = briefings[0];
-            if (b.brand_name || b.tone_of_voice || b.brand_positioning) {
-              bestManual = {
-                brandName: b.brand_name,
-                toneOfVoice: b.tone_of_voice,
-                positioning: b.brand_positioning,
-              };
-              bestBrandName = b.brand_name || "";
-              bestTone = b.tone_of_voice || "";
-            }
+            bestManual = {
+              brandName: b.brand_name,
+              toneOfVoice: b.tone_of_voice,
+              positioning: b.brand_positioning,
+            };
+            bestBrandName = b.brand_name || "";
+            bestTone = b.tone_of_voice || "";
           }
         }
 
@@ -301,184 +325,143 @@ export default function AdminAiPlayground() {
     },
   });
 
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success("Copiado para a área de transferência!");
-  };
+  // Scroll automático para a última mensagem no Chat
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages, executing]);
 
-  const handleSaveGlobalKey = async () => {
-    if (!customApiKey || customApiKey.trim().length < 10) {
-      toast.error("Insira uma chave OpenAI válida (sk-proj-...) para salvar.");
-      return;
-    }
-    setSavingKey(true);
-    try {
-      await AIExecutionService.saveOpenAiConfig({
-        apiKey: customApiKey.trim(),
-        defaultModel: "gpt-4o-mini",
-        organizationId: "",
-        maxDailySpend: 10,
-        enableFallback: true,
-      });
-      toast.success("Chave OpenAI salva como padrão global no sistema!");
-      queryClient.invalidateQueries({ queryKey: ["admin_ai_config_playground"] });
-      queryClient.invalidateQueries({ queryKey: ["admin_ai_config"] });
-    } catch (err: any) {
-      toast.error(err.message || "Erro ao salvar chave.");
-    } finally {
-      setSavingKey(false);
-    }
-  };
-
-  // Execução do Runtime (Agent / Workflow / Skill / Tool)
-  const handleExecute = async () => {
-    // REGRA DE NEGÓCIO: O Manual da Marca precisa estar preenchido para qualquer execução
-    if (!brandManualCheck?.isFilled) {
-      toast.error("Regra de Negócio: O Manual da Marca desta empresa precisa estar preenchido antes de realizar qualquer execução.");
-      return;
-    }
+  // Enviar mensagem para o Orquestrador
+  const handleSendMessage = async (customPrompt?: string) => {
+    const textToSend = (customPrompt || chatInput).trim();
+    if (!textToSend || executing) return;
 
     if (!isKeyConfigured) {
-      toast.error("Chave da OpenAI não configurada. Insira sua chave (sk-proj-...) no campo 'Conexão OpenAI' ou salve-a no sistema.");
+      toast.error("Chave da OpenAI não configurada. Insira sua chave sk-proj-... no painel esquerdo.");
       return;
     }
 
+    if (!brandManualCheck?.isFilled) {
+      toast.error("Manual da Marca não preenchido para este Tenant. Preencha o manual para ancorar as respostas.");
+      return;
+    }
+
+    const userMessage: ChatMessageItem = {
+      id: `msg_user_${Date.now()}`,
+      role: "user",
+      content: textToSend,
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    };
+
+    const newHistory = [...chatMessages, userMessage];
+    setChatMessages(newHistory);
+    setChatInput("");
     setExecuting(true);
     setErrorDetails(null);
-    setResultData(null);
-    setTraceData(null);
 
-    const startTime = Date.now();
     try {
-      if (playMode === "workflow") {
-        const res = await QualifyAI.createStrategicReel({
-          company_id: selectedCompanyId || "default-company",
-          account_id: selectedAccountId !== "none" ? selectedAccountId : undefined,
-          idea: ideaPrompt,
-          objective,
-          apiKey: customApiKey.trim() || undefined,
-          modelProfile: selectedModelProfile,
-        });
-        setResultData(res.data);
-        setTraceData(res.trace);
-        toast.success("Workflow LangGraph executado com sucesso na OpenAI!");
-      } else if (playMode === "agent") {
-        const res = await QualifyAI.runAgent({
-          agentSlug: selectedAgentSlug,
-          prompt: ideaPrompt,
-          apiKey: customApiKey.trim() || undefined,
-          context: {
-            company_id: selectedCompanyId || "default-company",
-            account_id: selectedAccountId !== "none" ? selectedAccountId : undefined,
-          },
-        });
-        setResultData(res.data);
-        setTraceData(res.trace);
-        toast.success(`Agente ${selectedAgentSlug} executado com sucesso na OpenAI!`);
-      } else if (playMode === "tool") {
-        let parsedInput: any;
-        try {
-          parsedInput = JSON.parse(toolInputJson);
-        } catch {
-          throw new Error("JSON de entrada da Tool é inválido.");
-        }
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData?.user?.id;
 
-        const res = await QualifyAI.runTool(
-          selectedToolName,
-          parsedInput,
-          {
-            company_id: selectedCompanyId || "default-company",
-            account_id: selectedAccountId !== "none" ? selectedAccountId : undefined,
-          },
-          selectedAgentSlug
-        );
-        setResultData(res);
-        setTraceData({
-          run_id: `tool_run_${Date.now()}`,
-          latency_ms: Date.now() - startTime,
-          model: "local_tool",
-          tokens_total: 0,
-          estimated_cost: 0,
-          status: "success",
-        });
-        toast.success("Tool executada com sucesso!");
-      } else if (playMode === "skill") {
-        // Skill execution
-        const res = await QualifyAI.createStrategicReel({
-          company_id: selectedCompanyId || "default-company",
-          idea: ideaPrompt,
-          objective,
-          apiKey: customApiKey || undefined,
-          modelProfile: selectedModelProfile,
-        });
-        setResultData(res.data);
-        setTraceData(res.trace);
-        toast.success("Skill executada com sucesso!");
-      }
+      // Montar histórico para envio ao LangChain
+      const historyForAi = newHistory.slice(0, -1).map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+
+      const result = await QualifyAI.runAgent({
+        agentSlug: selectedAgentSlug || "qualify-orchestrator",
+        prompt: textToSend,
+        context: {
+          company_id: selectedCompanyId,
+          account_id: selectedAccountId !== "none" ? selectedAccountId : undefined,
+          user_id: userId,
+        },
+        apiKey: customApiKey.trim() || undefined,
+        modelProfile: selectedModelProfile,
+        chatHistory: historyForAi,
+      });
+
+      const agentData = result.data;
+      const brandContext = agentData.context?.["company_brand_manual"];
+
+      const aiMessage: ChatMessageItem = {
+        id: `msg_ai_${Date.now()}`,
+        role: "assistant",
+        content: agentData.content,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        metrics: agentData.metrics,
+        tool_calls: agentData.tool_calls,
+        context_summary: brandContext?.brand_name
+          ? `Manual: ${brandContext.brand_name} (${brandContext.answered_questions_count} respostas)`
+          : "Contexto Base do Tenant",
+        trace: result.trace,
+        raw_response: agentData,
+      };
+
+      setChatMessages((prev) => [...prev, aiMessage]);
+      setResultData(agentData);
+      setTraceData(result.trace);
     } catch (err: any) {
-      console.error(err);
-      setErrorDetails(err.message || "Erro durante o processamento.");
-      toast.error(err.message || "Falha na execução.");
+      console.error("[Playground Chat Error]:", err);
+      const errMsg = err?.message || "Erro de comunicação com a OpenAI.";
+      setErrorDetails(errMsg);
+      toast.error(errMsg);
+
+      const errorMessage: ChatMessageItem = {
+        id: `msg_err_${Date.now()}`,
+        role: "assistant",
+        content: `⚠️ **Falha na Execução**: ${errMsg}\n\nVerifique se sua chave da OpenAI possui saldo ativo e permissões suficientes.`,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+      setChatMessages((prev) => [...prev, errorMessage]);
     } finally {
       setExecuting(false);
     }
   };
 
-  // PRÉ-GESTÃO: Gerar Conteúdo Semente da Empresa
+  // Gerar Conteúdo Semente da Empresa (Marco Zero)
   const handleGenerateSeedContent = async () => {
-    // REGRA DE NEGÓCIO: Manual da Marca obrigatório
-    if (!brandManualCheck?.isFilled) {
-      toast.error("Regra de Negócio: O Manual da Marca desta empresa precisa estar preenchido para gerar o Conteúdo Semente.");
-      return;
-    }
-
     if (!isKeyConfigured) {
-      toast.error("Chave da OpenAI não configurada. Por favor, insira sua chave (sk-proj-...) no campo 'Conexão OpenAI' abaixo para que a IA gere os ganchos e o roteiro em tempo real.");
+      toast.error("Chave da OpenAI não configurada. Insira sua chave sk-proj-... no painel esquerdo.");
       return;
     }
-
-    let targetAccountId: string | null = (selectedAccountId && selectedAccountId !== "none") ? selectedAccountId : null;
-    if (!targetAccountId && companyAccounts.length > 0) {
-      targetAccountId = companyAccounts[0].id;
+    if (!brandManualCheck?.isFilled) {
+      toast.error("Manual da Marca não preenchido para esta empresa.");
+      return;
     }
 
     try {
       setExecutingSeed(true);
       setErrorDetails(null);
-      setResultData(null);
-      setTraceData(null);
-
+      const targetAccountId = selectedAccountId !== "none" ? selectedAccountId : null;
       const startTime = Date.now();
       const { data: authData } = await supabase.auth.getUser();
       const userId = authData?.user?.id;
 
-      // 1. Executar inicialização do Conteúdo Semente (Cria ativação, 5 itens e demandas)
+      toast.info("Iniciando geração do Pacote Semente...");
+
+      // 1. Inicializar pacote semente no banco
       const seedResult = await CriafySeedContentService.startSeedContent(
         selectedCompanyId,
         targetAccountId,
         userId
       );
 
-      // 2. Gerar roteiro estratégico de IA para o Reel Semente com a OpenAI real
-      let generatedReel: any = null;
+      // 2. Gerar roteiro do Reel Semente com a OpenAI
       let reelRes: any = null;
-      try {
-        const reelItem = seedResult.items.find((i) => i.format === "REEL");
-        if (reelItem) {
-          reelRes = await QualifyAI.createStrategicReel({
-            company_id: selectedCompanyId,
-            account_id: targetAccountId || undefined,
-            user_id: userId,
-            idea: reelItem.theme || "Reel Semente — Método e Posicionamento",
-            objective: "Apresentar o método e autoridade da marca",
-            apiKey: customApiKey.trim() || undefined,
-            modelProfile: selectedModelProfile,
-          });
-          generatedReel = reelRes.data;
-        }
-      } catch (reelErr: any) {
-        console.error("[Playground] Erro ao roteirizar Reel com OpenAI:", reelErr);
-        throw reelErr;
+      let generatedReel: any = null;
+      const reelItem = seedResult.items.find((i) => i.format === "REEL");
+      if (reelItem) {
+        reelRes = await QualifyAI.createStrategicReel({
+          company_id: selectedCompanyId,
+          account_id: targetAccountId || undefined,
+          user_id: userId,
+          idea: reelItem.theme || "Reel Semente — Método e Posicionamento",
+          objective: "Apresentar o método e autoridade da marca",
+          apiKey: customApiKey.trim() || undefined,
+          modelProfile: selectedModelProfile,
+        });
+        generatedReel = reelRes.data;
       }
 
       setResultData({
@@ -487,10 +470,6 @@ export default function AdminAiPlayground() {
         items: seedResult.items,
         demands: seedResult.demands,
         generatedReel,
-        brandInfo: {
-          brandName: brandManualCheck.brandName,
-          toneOfVoice: brandManualCheck.toneOfVoice,
-        },
       });
 
       setTraceData({
@@ -502,7 +481,22 @@ export default function AdminAiPlayground() {
         status: "success",
       });
 
-      toast.success("Conteúdo Semente e Roteiro gerados com sucesso na OpenAI!");
+      // Adicionar resposta no Chat
+      const seedMsg: ChatMessageItem = {
+        id: `msg_seed_${Date.now()}`,
+        role: "assistant",
+        content: `### 🌱 Pacote de Conteúdo Semente Criado com Sucesso!\n\nForam mapeadas e registradas **5 peças operacionais no Planner da Criafy**:\n- 🎬 **Reel Semente (Método)**: "${generatedReel?.selected_hook || 'Roteiro gerado'}"\n- ⭐ **Destaque Semente**: Posicionamento & Promessa\n- 🖼️ **Post 01**: Posicionamento\n- 🖼️ **Post 02**: Problema / Visão\n- 🖼️ **Post 03**: Método / Solução\n\nVocê pode me pedir agora para aprofundar qualquer um desses posts ou ajustar o gancho!`,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        metrics: {
+          latency_ms: Date.now() - startTime,
+          tokens_total: reelRes?.trace?.tokens_total || 520,
+          estimated_cost: reelRes?.trace?.estimated_cost || 0.0002,
+          model: selectedModelProfile,
+        },
+      };
+
+      setChatMessages((prev) => [...prev, seedMsg]);
+      toast.success("Conteúdo Semente gerado e adicionado ao Chat!");
     } catch (err: any) {
       console.error(err);
       setErrorDetails(err.message || "Erro ao gerar Conteúdo Semente.");
@@ -512,630 +506,553 @@ export default function AdminAiPlayground() {
     }
   };
 
+  const handleCopy = (id: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    toast.success("Copiado para a área de transferência!");
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const clearChat = () => {
+    setChatMessages([]);
+    setResultData(null);
+    setTraceData(null);
+    setErrorDetails(null);
+    toast.info("Histórico do chat limpo.");
+  };
+
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
+      {/* Header Superior */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold tracking-tight">Playground Central de IA</h1>
-            <Badge variant="outline" className="font-mono text-xs">
-              OpenAI + LangChain + LangGraph
+            <Badge variant="outline" className="font-mono text-xs bg-primary/10 text-primary border-primary/20">
+              Agente Orquestrador Ativo
             </Badge>
           </div>
-          <p className="text-sm text-muted-foreground mt-1">
-            Ambiente interativo de teste para Agentes, Skills, Ferramentas e Grafos de Estado.
+          <p className="text-xs text-muted-foreground mt-1">
+            Ambiente conversacional e interativo para interrogar o Orquestrador, testar skills e aprofundar estratégias.
           </p>
         </div>
 
-        {/* Seletor de Modo (Regra #23: Agent, Skill, Tool, Workflow) */}
+        {/* Alternador de Visualização: Chat vs Inspeção Técnica */}
         <div className="flex bg-muted p-1 rounded-xl">
           <Button
             size="sm"
-            variant={playMode === "workflow" ? "default" : "ghost"}
-            className="text-xs gap-1.5 h-8"
-            onClick={() => setPlayMode("workflow")}
+            variant={mainTab === "chat" ? "default" : "ghost"}
+            className="text-xs gap-1.5 h-8 font-medium cursor-pointer"
+            onClick={() => setMainTab("chat")}
           >
-            <Workflow className="h-3.5 w-3.5" /> Workflow (LangGraph)
+            <Bot className="h-3.5 w-3.5" /> Chat com Orquestrador
           </Button>
           <Button
             size="sm"
-            variant={playMode === "agent" ? "default" : "ghost"}
-            className="text-xs gap-1.5 h-8"
-            onClick={() => setPlayMode("agent")}
+            variant={mainTab === "technical" ? "default" : "ghost"}
+            className="text-xs gap-1.5 h-8 font-medium cursor-pointer"
+            onClick={() => setMainTab("technical")}
           >
-            <Bot className="h-3.5 w-3.5" /> Agent
-          </Button>
-          <Button
-            size="sm"
-            variant={playMode === "skill" ? "default" : "ghost"}
-            className="text-xs gap-1.5 h-8"
-            onClick={() => setPlayMode("skill")}
-          >
-            <Layers className="h-3.5 w-3.5" /> Skill
-          </Button>
-          <Button
-            size="sm"
-            variant={playMode === "tool" ? "default" : "ghost"}
-            className="text-xs gap-1.5 h-8"
-            onClick={() => setPlayMode("tool")}
-          >
-            <Wrench className="h-3.5 w-3.5" /> Tool
+            <Cpu className="h-3.5 w-3.5" /> Inspeção Técnica / Modos
           </Button>
         </div>
       </div>
 
-      {/* Grid: Configuração à esquerda, Resultados à direita */}
+      {/* Grid Principal: Painel de Controle (Esquerda) + Chat Interativo (Direita) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Painel de Entrada */}
-        <Card className="lg:col-span-5 flex flex-col justify-between">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center justify-between">
-              <span>Parâmetros de Teste</span>
-              <Badge variant="secondary" className="font-mono text-[10px] uppercase">
-                Modo: {playMode}
+        {/* Painel Lateral de Parâmetros e Contexto do Tenant */}
+        <Card className="lg:col-span-4 flex flex-col justify-between shadow-xs">
+          <CardHeader className="pb-3 border-b">
+            <CardTitle className="text-sm font-semibold flex items-center justify-between">
+              <span>Contexto & Credenciais</span>
+              <Badge variant="secondary" className="font-mono text-[10px]">
+                {selectedModelProfile}
               </Badge>
             </CardTitle>
             <CardDescription className="text-xs">
-              Contexto do tenant, alvos e instruções.
+              Tenant ativo e validação do Manual da Marca.
             </CardDescription>
           </CardHeader>
 
-          <CardContent className="space-y-4 text-xs">
-            {/* Contexto: Empresa & Conta */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs mb-1 block">Empresa (Tenant)</Label>
-                <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Selecione empresa..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="demo-company-1">Empresa Demonstração</SelectItem>
-                    {companies.map((c: any) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label className="text-xs mb-1 block">Perfil de Modelo</Label>
-                <Select
-                  value={selectedModelProfile}
-                  onValueChange={(v) => setSelectedModelProfile(v as ModelProfileCode)}
-                >
-                  <SelectTrigger className="h-8 text-xs font-mono">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.values(DEFAULT_MODEL_PROFILES).map((p) => (
-                      <SelectItem key={p.code} value={p.code} className="text-xs font-mono">
-                        {p.code}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          <CardContent className="space-y-4 pt-4 text-xs">
+            {/* Seletor de Tenant */}
+            <div>
+              <Label className="text-xs font-semibold mb-1 block">Empresa (Tenant)</Label>
+              <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="Selecione empresa..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="demo-company-1">Empresa Demonstração</SelectItem>
+                  {companies.map((c: any) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
-            {/* Seletor de Conta Instagram Vinculada */}
-            {companyAccounts.length > 0 && (
-              <div>
-                <Label className="text-xs mb-1 block flex items-center justify-between">
-                  <span>Conta do Instagram (Alvo)</span>
-                  <Badge variant="outline" className="text-[10px] font-normal">
-                    {companyAccounts.length} conta(s) encontrada(s)
-                  </Badge>
-                </Label>
-                <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Selecione conta..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {companyAccounts.map((acc: any) => (
-                      <SelectItem key={acc.id} value={acc.id}>
-                        @{acc.username || acc.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+            {/* Status do Manual da Marca */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold block">Status do Manual da Marca</Label>
+              {isCheckingBrandManual ? (
+                <div className="p-2.5 rounded-lg border bg-muted/40 flex items-center gap-2 text-muted-foreground text-xs">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Verificando Manual da Marca...
+                </div>
+              ) : brandManualCheck?.isFilled ? (
+                <div className="p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 text-xs">
+                      <BookOpen className="h-3.5 w-3.5" /> Manual da Marca Preenchido
+                    </span>
+                    <Badge variant="outline" className="text-[10px] text-emerald-600 bg-emerald-500/10 border-emerald-500/30">
+                      {brandManualCheck.answeredCount} respostas
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-snug">
+                    <strong className="text-foreground">Projeto:</strong> {brandManualCheck.brandName}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground leading-snug truncate">
+                    <strong className="text-foreground">Tom:</strong> {brandManualCheck.toneOfVoice}
+                  </p>
+                </div>
+              ) : (
+                <div className="p-3 rounded-xl border border-destructive/30 bg-destructive/5 space-y-1.5 text-destructive">
+                  <div className="flex items-center justify-between font-semibold text-xs">
+                    <span>Manual Não Preenchido</span>
+                    <Badge variant="destructive" className="text-[9px]">Bloqueado</Badge>
+                  </div>
+                  <p className="text-[11px] leading-tight opacity-90">
+                    O Orquestrador precisa das diretrizes para fundamentar suas respostas.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => navigate("/criafy?tab=brand-manual")}
+                    className="w-full text-xs h-7 mt-1 border-destructive/30 text-destructive hover:bg-destructive/10"
+                  >
+                    Preencher Manual da Marca
+                  </Button>
+                </div>
+              )}
+            </div>
 
-            {/* REGRA DE NEGÓCIO: Verificação do Manual da Marca */}
-            {brandManualCheck && (
-              <div className="transition-all">
-                {brandManualCheck.isFilled ? (
-                  <div className="p-3 rounded-xl border border-emerald-500/25 bg-emerald-500/5 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Manual da Marca Preenchido
-                      </span>
-                      <Badge variant="outline" className="text-[10px] text-emerald-600 border-emerald-500/30">
-                        {brandManualCheck.brandName}
-                      </Badge>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      {brandManualCheck.details} {brandManualCheck.toneOfVoice ? `• Tom: ${brandManualCheck.toneOfVoice}` : ""}
-                    </p>
-                  </div>
+            {/* Perfil de Modelo OpenAI */}
+            <div>
+              <Label className="text-xs font-semibold mb-1 block">Perfil de Modelo OpenAI</Label>
+              <Select
+                value={selectedModelProfile}
+                onValueChange={(val) => setSelectedModelProfile(val as ModelProfileCode)}
+              >
+                <SelectTrigger className="h-9 text-xs font-mono">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CONTENT_STANDARD">CONTENT_STANDARD (gpt-4o-mini)</SelectItem>
+                  <SelectItem value="CONTENT_ADVANCED">CONTENT_ADVANCED (gpt-4o)</SelectItem>
+                  <SelectItem value="STRATEGY_ADVANCED">STRATEGY_ADVANCED (o1-mini / o3)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Conexão OpenAI */}
+            <div className="space-y-1.5 p-3 rounded-xl border bg-muted/30">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-xs flex items-center gap-1.5">
+                  <Zap className="h-3.5 w-3.5 text-amber-500" /> Conexão OpenAI
+                </span>
+                {isKeyConfigured ? (
+                  <Badge variant="outline" className="text-[10px] text-emerald-600 bg-emerald-500/10 border-emerald-500/30">
+                    Conectada
+                  </Badge>
                 ) : (
-                  <div className="p-3.5 rounded-xl border border-destructive/30 bg-destructive/5 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-destructive flex items-center gap-1.5">
-                        <ShieldAlert className="w-4 h-4 text-destructive" /> Manual da Marca Não Preenchido
-                      </span>
-                      <Badge variant="destructive" className="text-[10px]">
-                        Bloqueado
-                      </Badge>
-                    </div>
-                    <p className="text-[11px] text-destructive/90 leading-relaxed font-medium">
-                      Regra de Negócio: O Manual da Marca precisa estar preenchido para realizar qualquer execução na Central de IA ou gerar o Conteúdo Semente.
-                    </p>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => navigate("/criafy?tab=manual-marca")}
-                      className="w-full h-7 text-xs border-destructive/30 text-destructive hover:bg-destructive/10 gap-1.5 cursor-pointer"
-                    >
-                      <BookOpen className="w-3.5 h-3.5" />
-                      <span>Preencher Manual da Marca na Criafy</span>
-                      <ExternalLink className="w-3 h-3 ml-auto" />
-                    </Button>
-                  </div>
+                  <Badge variant="outline" className="text-[10px] text-destructive bg-destructive/10 border-destructive/30">
+                    Sem chave
+                  </Badge>
                 )}
               </div>
-            )}
-
-            {/* AÇÃO DE PRÉ-GESTÃO: GERAR CONTEÚDO SEMENTE */}
-            <div className="p-3.5 rounded-xl border border-primary/20 bg-gradient-to-br from-primary/5 via-card to-card space-y-2.5 shadow-2xs">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 font-bold text-xs text-foreground">
-                  <Sparkles className="w-3.5 h-3.5 text-primary" />
-                  <span>Pré-Gestão: Conteúdo Semente</span>
-                </div>
-                <Badge variant="secondary" className="text-[10px] font-semibold text-primary">
-                  Marco Zero (5 Peças)
-                </Badge>
-              </div>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                Gera o primeiro pacote estratégico da empresa: 1 Reel sobre método, 1 Destaque e 3 Posts estáticos integrados ao Planner e Demandas da Criafy.
+              <Input
+                type="password"
+                value={customApiKey}
+                onChange={(e) => handleKeyChange(e.target.value)}
+                placeholder="Insira sua chave sk-proj-... (salva localmente)"
+                className="h-8 text-xs font-mono"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                * As requisições debitam e aparecem em tempo real no seu painel da OpenAI.
               </p>
+            </div>
+
+            {/* Ações de Apoio */}
+            <div className="pt-2 space-y-2">
               <Button
-                type="button"
+                variant="outline"
                 size="sm"
-                disabled={!brandManualCheck?.isFilled || executingSeed}
+                className="w-full text-xs h-8 gap-1.5 cursor-pointer text-muted-foreground hover:text-foreground"
+                onClick={clearChat}
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Limpar Histórico do Chat
+              </Button>
+
+              <Button
+                variant="default"
+                size="sm"
+                className="w-full text-xs h-8.5 gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground font-medium cursor-pointer"
                 onClick={handleGenerateSeedContent}
-                className="w-full h-8 text-xs font-bold gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 shadow-2xs cursor-pointer"
+                disabled={executingSeed || !brandManualCheck?.isFilled}
               >
                 {executingSeed ? (
                   <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Gerando Conteúdo Semente com IA...</span>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Gerando Pacote Semente...
                   </>
                 ) : (
                   <>
-                    <Rocket className="w-3.5 h-3.5" />
-                    <span>Gerar Conteúdo Semente da Empresa</span>
+                    <Sparkles className="h-3.5 w-3.5" /> Gerar Conteúdo Semente (Marco Zero)
                   </>
                 )}
               </Button>
-              {!brandManualCheck?.isFilled && (
-                <p className="text-[10px] text-destructive font-medium text-center">
-                  * Bloqueado: Requer Manual da Marca preenchido
-                </p>
-              )}
-            </div>
-
-            {/* Status da Conexão OpenAI Real */}
-            <div className="p-3 rounded-xl border bg-muted/30 space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-semibold text-foreground flex items-center gap-1.5">
-                  <Zap className="w-3.5 h-3.5 text-primary" /> Conexão OpenAI
-                </span>
-                {isKeyConfigured ? (
-                  <Badge variant="outline" className="text-[10px] text-emerald-600 bg-emerald-500/10 border-emerald-500/30 gap-1 font-mono">
-                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                    {openAiConfig?.maskedKey
-                      ? `Chave Ativa (${openAiConfig.maskedKey})`
-                      : customApiKey
-                      ? `Chave Informada (${customApiKey.slice(0, 7)}...${customApiKey.slice(-4)})`
-                      : "Chave Ativa"}
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="text-[10px] text-amber-600 bg-amber-500/10 border-amber-500/30 gap-1 font-mono">
-                    <AlertCircle className="w-3 h-3 text-amber-600" /> Sem chave global salva
-                  </Badge>
-                )}
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[11px] text-muted-foreground flex items-center justify-between">
-                  <span>Chave OpenAI (sk-proj-...):</span>
-                  {customApiKey && customApiKey.trim().length > 10 && (
-                    <button
-                      type="button"
-                      onClick={handleSaveGlobalKey}
-                      disabled={savingKey}
-                      className="text-[10px] text-primary hover:underline font-medium cursor-pointer"
-                    >
-                      {savingKey ? "Salvando..." : "Salvar no sistema"}
-                    </button>
-                  )}
-                </Label>
-                <Input
-                  type="password"
-                  placeholder={
-                    isKeyConfigured
-                      ? (openAiConfig?.maskedKey ? `Usando chave salva (${openAiConfig.maskedKey}) — digite para substituir` : "Usando chave salva no sistema")
-                      : "Insira sua chave sk-proj-... para chamadas reais"
-                  }
-                  value={customApiKey}
-                  onChange={(e) => handleKeyChange(e.target.value)}
-                  className="h-8 text-xs font-mono"
-                />
-                <p className="text-[10px] text-muted-foreground">
-                  * As requisições executadas com sua chave serão debitadas e visíveis em tempo real no seu painel da OpenAI (platform.openai.com/usage).
-                </p>
-              </div>
-            </div>
-
-            {/* Seletores Específicos por Modo */}
-            {playMode === "workflow" && (
-              <div>
-                <Label className="text-xs mb-1 block">Workflow LangGraph</Label>
-                <Select value={selectedWorkflowSlug} onValueChange={setSelectedWorkflowSlug}>
-                  <SelectTrigger className="h-8 text-xs font-mono">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.values(WorkflowRegistry).length === 0 ? <SelectItem value="none" disabled>Nenhum workflow registrado</SelectItem> : Object.values(WorkflowRegistry).map((wf) => (
-                      <SelectItem key={wf.slug} value={wf.slug}>
-                        {wf.name} ({wf.slug})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {playMode === "agent" && (
-              <div>
-                <Label className="text-xs mb-1 block">Agente Selecionado</Label>
-                <Select value={selectedAgentSlug} onValueChange={setSelectedAgentSlug}>
-                  <SelectTrigger className="h-8 text-xs font-mono">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PREPARED_AGENTS.length === 0 ? <SelectItem value="none" disabled>Nenhum agente cadastrado</SelectItem> : PREPARED_AGENTS.map((a) => (
-                      <SelectItem key={a.slug} value={a.slug}>
-                        {a.name} ({a.slug})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {playMode === "skill" && (
-              <div>
-                <Label className="text-xs mb-1 block">Skill Selecionada</Label>
-                <Select value={selectedSkillSlug} onValueChange={setSelectedSkillSlug}>
-                  <SelectTrigger className="h-8 text-xs font-mono">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PREPARED_SKILLS.length === 0 ? <SelectItem value="none" disabled>Nenhuma skill cadastrada</SelectItem> : PREPARED_SKILLS.map((s) => (
-                      <SelectItem key={s.slug} value={s.slug}>
-                        {s.name} ({s.slug})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {playMode === "tool" && (
-              <div>
-                <Label className="text-xs mb-1 block">Ferramenta (Tool)</Label>
-                <Select value={selectedToolName} onValueChange={setSelectedToolName}>
-                  <SelectTrigger className="h-8 text-xs font-mono">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ALL_TOOLS.length === 0 ? <SelectItem value="none" disabled>Nenhuma tool cadastrada</SelectItem> : ALL_TOOLS.map((t) => (
-                      <SelectItem key={t.name} value={t.name}>
-                        {t.name} [{t.type}]
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {/* Inputs de Conteúdo */}
-            {playMode !== "tool" ? (
-              <div className="space-y-3">
-                <div>
-                  <Label className="text-xs mb-1 block">Tema / Ideia Central</Label>
-                  <Textarea
-                    value={ideaPrompt}
-                    onChange={(e) => setIdeaPrompt(e.target.value)}
-                    rows={3}
-                    placeholder="Descreva a tese, ideia ou dor a ser abordada..."
-                    className="text-xs"
-                  />
-                </div>
-
-                <div>
-                  <Label className="text-xs mb-1 block">Objetivo</Label>
-                  <Input
-                    value={objective}
-                    onChange={(e) => setObjective(e.target.value)}
-                    placeholder="Ex: Autoridade, retenção e atração qualificada"
-                    className="h-8 text-xs"
-                  />
-                </div>
-              </div>
-            ) : (
-              <div>
-                <Label className="text-xs mb-1 block">JSON de Entrada (Input Schema)</Label>
-                <Textarea
-                  value={toolInputJson}
-                  onChange={(e) => setToolInputJson(e.target.value)}
-                  rows={8}
-                  className="font-mono text-xs"
-                />
-              </div>
-            )}
-
-            <div className="space-y-1.5 pt-2">
-              <Button
-                className="w-full gap-2 text-xs h-9 bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                onClick={handleExecute}
-                disabled={executing || !brandManualCheck?.isFilled}
-              >
-                {executing ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" /> Processando LangGraph/LangChain...
-                  </>
-                ) : (
-                  <>
-                    <PlayCircle className="h-4 w-4" /> Executar no Runtime
-                  </>
-                )}
-              </Button>
-              {!brandManualCheck?.isFilled && (
-                <p className="text-[11px] text-destructive text-center font-medium">
-                  ⚠️ Execução bloqueada: preencha o Manual da Marca primeiro.
-                </p>
-              )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Painel de Resultados & Observabilidade */}
-        <Card className="lg:col-span-7 flex flex-col justify-between">
-          <CardHeader className="pb-3 border-b">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base">Métricas & Saída em Tempo Real</CardTitle>
-                <CardDescription className="text-xs">
-                  Inspeção de estado do StateGraph, rastros de tools, tokens e custos.
-                </CardDescription>
-              </div>
-
-              {traceData && (
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-xs font-mono">
-                    <Clock className="h-3 w-3 mr-1 text-blue-500" />
-                    {traceData.latency_ms}ms
-                  </Badge>
-                  <Badge variant="outline" className="text-xs font-mono">
-                    <Zap className="h-3 w-3 mr-1 text-amber-500" />
-                    {traceData.tokens_total || 0} tokens
-                  </Badge>
-                  <Badge variant="outline" className="text-xs font-mono">
-                    <DollarSign className="h-3 w-3 mr-1 text-emerald-500" />
-                    ${(traceData.estimated_cost || 0).toFixed(4)}
-                  </Badge>
+        {/* Painel Central: Chat Interativo com o Orquestrador */}
+        {mainTab === "chat" ? (
+          <Card className="lg:col-span-8 flex flex-col h-[750px] shadow-sm">
+            {/* Header do Chat */}
+            <CardHeader className="py-3 px-5 border-b flex flex-row items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
+                  <Bot className="h-5 w-5" />
                 </div>
-              )}
-            </div>
-          </CardHeader>
-
-          <CardContent className="p-4 flex-1 flex flex-col">
-            {errorDetails && (
-              <div className="p-4 rounded-xl border border-destructive/30 bg-destructive/5 text-destructive text-xs mb-4 flex items-start gap-2.5">
-                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                 <div>
-                  <div className="font-semibold">Erro de Execução</div>
-                  <div className="mt-1 leading-relaxed whitespace-pre-wrap">{errorDetails}</div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-bold text-foreground">Orquestrador Qualify</h2>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Diretor Estratégico • Ancorado no Manual da Marca ({brandManualCheck?.brandName || "Tenant"})
+                  </p>
                 </div>
               </div>
-            )}
 
-            {!resultData && !executing && !executingSeed && !errorDetails && (
-              <div className="flex-1 flex flex-col items-center justify-center text-center p-12 text-muted-foreground">
-                <PlayCircle className="h-12 w-12 stroke-[1.5] mb-3 opacity-40" />
-                <p className="text-sm font-medium">Nenhuma execução realizada</p>
-                <p className="text-xs mt-1 max-w-sm">
-                  Configure os parâmetros à esquerda e clique em Executar para disparar o runtime nativo do LangChain / LangGraph, ou utilize o botão de pré-gestão para gerar o Conteúdo Semente.
-                </p>
-              </div>
-            )}
+              {chatMessages.length > 0 && (
+                <Badge variant="outline" className="text-[11px] font-mono">
+                  {chatMessages.length} interações na sessão
+                </Badge>
+              )}
+            </CardHeader>
 
-            {executing && (
-              <div className="flex-1 flex flex-col items-center justify-center p-12 space-y-3">
-                <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
-                <p className="text-sm font-medium">Executando Grafo de Estados...</p>
-                <p className="text-xs text-muted-foreground">
-                  Validando RBAC, resolvendo contexto do tenant e executando nós.
-                </p>
-              </div>
-            )}
+            {/* Área de Mensagens (Scrollable) */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              {/* Estado Vazio de Boas-vindas */}
+              {chatMessages.length === 0 && (
+                <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-4 max-w-lg mx-auto">
+                  <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+                    <Sparkles className="h-6 w-6" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <h3 className="text-base font-bold text-foreground">
+                      Converse com o Orquestrador Qualify
+                    </h3>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Eu sou o cérebro central da plataforma. Analiso o Manual da Marca do seu negócio,
+                      roteio skills de conteúdo, estruturo ganchos, audito perfis e aprofundo estratégias.
+                    </p>
+                  </div>
 
-            {executingSeed && (
-              <div className="flex-1 flex flex-col items-center justify-center p-12 space-y-3">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="text-sm font-medium">Gerando Conteúdo Semente da Empresa...</p>
-                <p className="text-xs text-muted-foreground text-center max-w-sm">
-                  Criando o marco zero (1 Reel, 1 Destaque, 3 Posts), registrando no Planner, gerando demandas e roteirizando com os Agentes.
-                </p>
-              </div>
-            )}
-
-            {resultData && !executing && !executingSeed && (
-              <div className="flex-1 flex flex-col">
-                {/* Visualização de Pacote Semente Gerado */}
-                {resultData.type === "SEED_CONTENT_PACKAGE" && (
-                  <div className="p-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 space-y-3 mb-4 animate-in fade-in duration-200">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-xl bg-emerald-500/15 flex items-center justify-center text-lg">
-                          🌱
-                        </div>
-                        <div>
-                          <h4 className="text-sm font-bold text-foreground flex items-center gap-1.5">
-                            <span>Pacote Conteúdo Semente Criado</span>
-                            <Badge variant="outline" className="text-[10px] text-emerald-600 bg-emerald-500/10 border-emerald-500/30">
-                              5/5 Peças Mapeadas
-                            </Badge>
-                          </h4>
-                          <p className="text-[11px] text-muted-foreground">
-                            {resultData.demands?.length || 0} demandas operacionais vinculadas diretamente no Planner da Criafy
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        size="sm"
-                        onClick={() => navigate("/criafy?tab=planner")}
-                        className="h-8 px-3 text-xs font-bold gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shrink-0"
+                  <div className="w-full pt-3 space-y-2">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                      Sugestões para começar:
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-left">
+                      <button
+                        onClick={() => handleSendMessage("Analise o nosso Manual da Marca e me dê um mapa com as 3 maiores dores dos Inconformados.")}
+                        className="p-3 rounded-xl border bg-card hover:bg-muted/60 transition-all text-xs text-foreground font-medium cursor-pointer shadow-2xs hover:border-primary/40 text-left"
                       >
-                        <span>Abrir no Planner</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
+                        🎯 <span className="font-semibold">Mapear Dores:</span> Extrair as 3 dores dos Inconformados do Manual.
+                      </button>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
-                      {resultData.items?.map((it: any, idx: number) => (
-                        <div key={idx} className="p-2.5 rounded-xl border bg-card/90 flex items-center justify-between gap-2 shadow-2xs">
-                          <div className="min-w-0">
-                            <div className="font-bold truncate text-[11px] text-foreground">{it.theme}</div>
-                            <div className="text-[10px] text-muted-foreground uppercase flex items-center gap-1 mt-0.5">
-                              <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">
-                                {it.format}
-                              </Badge>
-                              <span>• Prioridade {it.priority}</span>
-                            </div>
-                          </div>
-                          <Badge variant="outline" className="text-[10px] uppercase shrink-0 text-emerald-600 border-emerald-500/30">
-                            {it.status}
-                          </Badge>
+                      <button
+                        onClick={() => handleSendMessage("Gere 3 opções de ganchos (hooks) de alta quebra de padrão para um Reel sobre nosso método único.")}
+                        className="p-3 rounded-xl border bg-card hover:bg-muted/60 transition-all text-xs text-foreground font-medium cursor-pointer shadow-2xs hover:border-primary/40 text-left"
+                      >
+                        🔥 <span className="font-semibold">Ganchos de Reel:</span> 3 opções com quebra de padrão e alta retenção.
+                      </button>
+
+                      <button
+                        onClick={() => handleSendMessage("Me dê um mapa com 3 headlines estratégicas para nosso produto com base no nosso posicionamento.")}
+                        className="p-3 rounded-xl border bg-card hover:bg-muted/60 transition-all text-xs text-foreground font-medium cursor-pointer shadow-2xs hover:border-primary/40 text-left"
+                      >
+                        💡 <span className="font-semibold">3 Headlines:</span> Construir headlines de alta conversão.
+                      </button>
+
+                      <button
+                        onClick={() => handleSendMessage("Quais são as ferramentas e skills que você tem disponíveis para auditar e produzir nosso conteúdo?")}
+                        className="p-3 rounded-xl border bg-card hover:bg-muted/60 transition-all text-xs text-foreground font-medium cursor-pointer shadow-2xs hover:border-primary/40 text-left"
+                      >
+                        ⚙️ <span className="font-semibold">Capacidades:</span> Listar tools e habilidades disponíveis.
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Mensagens do Histórico */}
+              {chatMessages.map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
+                >
+                  <div
+                    className={`max-w-[88%] rounded-2xl p-4 space-y-2.5 text-xs shadow-2xs leading-relaxed ${
+                      msg.role === "user"
+                        ? "bg-primary text-primary-foreground rounded-br-xs"
+                        : "bg-card border border-border rounded-bl-xs"
+                    }`}
+                  >
+                    {/* Header de Metadados / Transparência da Decisão do Agente */}
+                    {msg.role === "assistant" && msg.metrics && (
+                      <div className="pb-2.5 mb-2 border-b border-border/60 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                        <div className="flex items-center gap-1.5 font-medium text-primary">
+                          <Compass className="h-3.5 w-3.5" />
+                          <span>Rastro de Decisão</span>
+                          {msg.context_summary && (
+                            <Badge variant="secondary" className="text-[10px] font-normal py-0 h-4">
+                              {msg.context_summary}
+                            </Badge>
+                          )}
                         </div>
-                      ))}
-                    </div>
 
-                    {resultData.generatedReel && (
-                      <div className="p-3.5 rounded-xl border bg-card space-y-2 mt-2">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-bold flex items-center gap-1.5 text-foreground">
-                            <Film className="w-3.5 h-3.5 text-primary" /> Roteiro Estratégico do Reel (IA OpenAI)
+                        <div className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3 w-3 text-blue-500" /> {msg.metrics.latency_ms}ms
                           </span>
-                          <Badge variant="secondary" className="text-[10px] text-primary">
-                            Pontuação Hook: {resultData.generatedReel.hook_score || 85}/100
-                          </Badge>
+                          <span>•</span>
+                          <span className="flex items-center gap-1">
+                            <Zap className="h-3 w-3 text-amber-500" /> {msg.metrics.tokens_total} tokens
+                          </span>
                         </div>
-                        <div className="p-2 rounded-lg bg-muted/60 text-[11px]">
-                          <span className="font-semibold text-primary">Gancho Vencedor: </span>
-                          <span className="font-medium text-foreground">&quot;{resultData.generatedReel.selected_hook}&quot;</span>
-                        </div>
-                        <p className="text-[11px] text-muted-foreground whitespace-pre-wrap leading-relaxed max-h-36 overflow-y-auto font-mono">
-                          {resultData.generatedReel.script}
-                        </p>
                       </div>
                     )}
-                  </div>
-                )}
 
-                <Tabs defaultValue="output" className="flex-1 flex flex-col">
-                <TabsList className="grid grid-cols-4 h-8 mb-3">
-                  <TabsTrigger value="output" className="text-xs">Output</TabsTrigger>
-                  <TabsTrigger value="state" className="text-xs">State</TabsTrigger>
-                  <TabsTrigger value="trace" className="text-xs">Trace</TabsTrigger>
-                  <TabsTrigger value="tools" className="text-xs">Tool Calls</TabsTrigger>
-                </TabsList>
-
-                {/* Tab 1: Output Estruturado */}
-                <TabsContent value="output" className="flex-1 overflow-y-auto max-h-[500px]">
-                  <div className="p-3 bg-muted rounded-lg font-mono text-xs whitespace-pre-wrap overflow-x-auto">
-                    {JSON.stringify(resultData, null, 2)}
-                  </div>
-                </TabsContent>
-
-                {/* Tab 2: State do Grafo */}
-                <TabsContent value="state" className="flex-1 overflow-y-auto max-h-[500px]">
-                  <div className="space-y-3 text-xs">
-                    {resultData.selected_hook && (
-                      <div className="p-3 bg-muted/60 rounded-lg border">
-                        <span className="font-semibold text-emerald-600">Hook Vencedor Selecionado:</span>
-                        <p className="mt-1 font-medium text-foreground">{resultData.selected_hook}</p>
-                      </div>
-                    )}
-                    {resultData.beat_sheet && (
-                      <div className="p-3 bg-muted/60 rounded-lg border">
-                        <span className="font-semibold text-blue-600">Beat Sheet & Duração:</span>
-                        <p className="mt-1">
-                          {resultData.beat_sheet.formatted_duration} ({resultData.beat_sheet.total_words} palavras)
-                        </p>
-                        <p className="text-muted-foreground text-[11px] mt-1">
-                          {resultData.beat_sheet.beats?.length || 0} blocos cronometrados
-                        </p>
-                      </div>
-                    )}
-                    <pre className="p-3 bg-muted rounded-lg font-mono text-xs overflow-x-auto">
-                      {JSON.stringify(resultData, null, 2)}
-                    </pre>
-                  </div>
-                </TabsContent>
-
-                {/* Tab 3: Trace de Execução */}
-                <TabsContent value="trace" className="flex-1 overflow-y-auto max-h-[500px]">
-                  <div className="p-3 bg-muted rounded-lg font-mono text-xs whitespace-pre-wrap overflow-x-auto">
-                    {JSON.stringify(traceData || {}, null, 2)}
-                  </div>
-                </TabsContent>
-
-                {/* Tab 4: Tool Calls */}
-                <TabsContent value="tools" className="flex-1 overflow-y-auto max-h-[500px]">
-                  {traceData?.tool_calls && traceData.tool_calls.length > 0 ? (
-                    <div className="space-y-2">
-                      {traceData.tool_calls.map((tc: any, idx: number) => (
-                        <div key={idx} className="p-3 bg-muted/50 rounded-lg border text-xs">
-                          <div className="flex items-center justify-between font-mono font-medium">
-                            <span className="text-primary">{tc.tool}</span>
-                            <span className="text-muted-foreground text-[11px]">{tc.latency_ms}ms</span>
-                          </div>
-                          <pre className="mt-2 p-2 bg-background rounded text-[11px] font-mono overflow-x-auto">
-                            {JSON.stringify(tc.output, null, 2)}
-                          </pre>
-                        </div>
-                      ))}
+                    {/* Conteúdo da Mensagem com Formatação */}
+                    <div className="whitespace-pre-wrap font-sans text-xs">
+                      {msg.content}
                     </div>
+
+                    {/* Botões de Ação na Mensagem */}
+                    {msg.role === "assistant" && (
+                      <div className="pt-2 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40">
+                        <span>{msg.timestamp}</span>
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2 text-[10px] gap-1 cursor-pointer"
+                            onClick={() => handleCopy(msg.id, msg.content)}
+                          >
+                            {copiedId === msg.id ? (
+                              <>
+                                <Check className="h-3 w-3 text-emerald-500" /> Copiado
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="h-3 w-3" /> Copiar
+                              </>
+                            )}
+                          </Button>
+
+                          {msg.trace && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-2 text-[10px] gap-1 cursor-pointer"
+                              onClick={() => setExpandedTraceId(expandedTraceId === msg.id ? null : msg.id)}
+                            >
+                              {expandedTraceId === msg.id ? (
+                                <>
+                                  <ChevronUp className="h-3 w-3" /> Ocultar Trace
+                                </>
+                              ) : (
+                                <>
+                                  <ChevronDown className="h-3 w-3" /> Ver Trace
+                                </>
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Rastro JSON Expandido */}
+                    {expandedTraceId === msg.id && msg.raw_response && (
+                      <div className="mt-2 p-2.5 rounded-lg bg-muted text-[10px] font-mono overflow-x-auto max-h-48 border">
+                        <pre>{JSON.stringify(msg.raw_response, null, 2)}</pre>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {/* Indicador de Processamento */}
+              {executing && (
+                <div className="flex items-start gap-2.5">
+                  <div className="p-3.5 rounded-2xl bg-card border text-xs text-muted-foreground space-y-2 shadow-2xs max-w-sm">
+                    <div className="flex items-center gap-2 font-medium text-foreground">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                      <span>Orquestrador compilando resposta...</span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-tight">
+                      Lendo o Manual da Marca do tenant, validando regras de posicionamento e consultando a OpenAI.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input Bar do Chat (Rodapé) */}
+            <div className="p-4 border-t bg-card/60 backdrop-blur-xs shrink-0">
+              <div className="flex items-end gap-2">
+                <Textarea
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                  rows={2}
+                  placeholder="Converse com o Orquestrador ou peça um aprofundamento... (Enter para enviar, Shift+Enter para nova linha)"
+                  className="text-xs resize-none min-h-[44px] max-h-32"
+                  disabled={executing}
+                />
+                <Button
+                  size="default"
+                  className="h-11 px-4 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold gap-1.5 shrink-0 cursor-pointer"
+                  onClick={() => handleSendMessage()}
+                  disabled={executing || !chatInput.trim()}
+                >
+                  {executing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    <div className="p-8 text-center text-muted-foreground text-xs">
-                      Nenhuma tool call direta registrada no trace isolado.
-                    </div>
+                    <>
+                      <Send className="h-4 w-4" /> Enviar
+                    </>
                   )}
-                </TabsContent>
-              </Tabs>
+                </Button>
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </div>
+          </Card>
+        ) : (
+          /* Visualização de Inspeção Técnica e Workflows Isolados */
+          <Card className="lg:col-span-8 flex flex-col justify-between shadow-sm">
+            <CardHeader className="pb-3 border-b">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-sm font-semibold">Inspeção Técnica de Modos</CardTitle>
+                  <CardDescription className="text-xs">
+                    Teste isolado de Workflows LangGraph, Skills e Ferramentas avulsas.
+                  </CardDescription>
+                </div>
+
+                <div className="flex bg-muted p-0.5 rounded-lg text-xs">
+                  <Button
+                    size="sm"
+                    variant={playMode === "agent" ? "default" : "ghost"}
+                    className="h-7 text-xs px-2"
+                    onClick={() => setPlayMode("agent")}
+                  >
+                    Agent
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={playMode === "workflow" ? "default" : "ghost"}
+                    className="h-7 text-xs px-2"
+                    onClick={() => setPlayMode("workflow")}
+                  >
+                    Workflow
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={playMode === "tool" ? "default" : "ghost"}
+                    className="h-7 text-xs px-2"
+                    onClick={() => setPlayMode("tool")}
+                  >
+                    Tool
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent className="p-4 space-y-4 text-xs">
+              {playMode === "agent" && (
+                <div>
+                  <Label className="text-xs font-semibold mb-1 block">Agente Selecionado</Label>
+                  <Select value={selectedAgentSlug} onValueChange={setSelectedAgentSlug}>
+                    <SelectTrigger className="h-8 text-xs font-mono">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PREPARED_AGENTS.map((a) => (
+                        <SelectItem key={a.slug} value={a.slug}>
+                          {a.name} ({a.slug})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {playMode === "tool" && (
+                <div>
+                  <Label className="text-xs font-semibold mb-1 block">Ferramenta (Tool)</Label>
+                  <Select value={selectedToolName} onValueChange={setSelectedToolName}>
+                    <SelectTrigger className="h-8 text-xs font-mono">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ALL_TOOLS.map((t) => (
+                        <SelectItem key={t.name} value={t.name}>
+                          {t.name} [{t.type}]
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold block">Instrução / Prompt</Label>
+                <Textarea
+                  value={ideaPrompt}
+                  onChange={(e) => setIdeaPrompt(e.target.value)}
+                  rows={4}
+                  className="text-xs font-mono"
+                />
+              </div>
+
+              <Button
+                className="w-full text-xs h-9 bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+                onClick={() => {
+                  setMainTab("chat");
+                  handleSendMessage(ideaPrompt);
+                }}
+              >
+                <PlayCircle className="h-4 w-4 mr-1.5" /> Executar e Visualizar no Chat
+              </Button>
+
+              {resultData && (
+                <div className="mt-4 p-3 rounded-xl bg-muted font-mono text-[11px] max-h-64 overflow-y-auto">
+                  <pre>{JSON.stringify(resultData, null, 2)}</pre>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

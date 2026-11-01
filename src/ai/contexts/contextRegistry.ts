@@ -1,10 +1,12 @@
 import { ContextProviderDefinition } from "../schemas";
+import { companyBrandManualContextProvider } from "./brandManualContext";
 
 /**
  * Registro Central de Provedores de Contexto.
- * Zerado para reconstrução individual e modular.
  */
-export const ContextProviderRegistry: Record<string, ContextProviderDefinition> = {};
+export const ContextProviderRegistry: Record<string, ContextProviderDefinition> = {
+  [companyBrandManualContextProvider.slug]: companyBrandManualContextProvider,
+};
 
 export function registerContextProvider(provider: ContextProviderDefinition): void {
   ContextProviderRegistry[provider.slug] = provider;
@@ -46,3 +48,5 @@ export async function resolveContextForAgent(
 
   return result;
 }
+
+export { companyBrandManualContextProvider };

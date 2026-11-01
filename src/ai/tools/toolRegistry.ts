@@ -1,12 +1,16 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { ToolDefinition, ToolExecutionContext, AgentDefinition } from "../schemas";
 import { RBACEngine } from "../permissions/rbacEngine";
+import { brandManualTool } from "./company/brandManualTool";
+import { scoreHookTool } from "./ai/scoreHookTool";
 
 /**
  * Catálogo de Ferramentas (Tools) da Central de IA.
- * Zerado para reconstrução individual e modular.
  */
-export const ALL_TOOLS: ToolDefinition[] = [];
+export const ALL_TOOLS: ToolDefinition[] = [
+  brandManualTool,
+  scoreHookTool,
+];
 
 export const ToolRegistry: Record<string, ToolDefinition> = {};
 
@@ -17,6 +21,9 @@ ALL_TOOLS.forEach((t) => {
 
 export function registerTool(tool: ToolDefinition): void {
   ToolRegistry[tool.name] = tool;
+  if (!ALL_TOOLS.some((t) => t.name === tool.name)) {
+    ALL_TOOLS.push(tool);
+  }
 }
 
 export function getTool(name: string): ToolDefinition | undefined {
@@ -61,31 +68,31 @@ export async function executeTool<TInput = any, TOutput = any>(
 }
 
 /**
- * Converte as Tools da Qualify para instâncias nativas do LangChain DynamicStructuredTool,
- * injetando o contexto do tenant e RBAC de forma transparente no LangChain/LangGraph.
+ * Cria instâncias de DynamicStructuredTools do LangChain para um agente com RBAC.
  */
 export function createLangChainToolsForAgent(
   agent: AgentDefinition,
   context: ToolExecutionContext
 ): DynamicStructuredTool[] {
-  const allowedTools: DynamicStructuredTool[] = [];
+  const allowedTools = agent.tools
+    .map((toolName) => getTool(toolName))
+    .filter((t): t is ToolDefinition => Boolean(t));
 
-  for (const toolName of agent.tools) {
-    const toolDef = getTool(toolName);
-    if (!toolDef) continue;
-
-    const lcTool = new DynamicStructuredTool({
-      name: toolDef.name.replace(/\./g, "_"), // LangChain prefere underscore em identificadores de tools
-      description: toolDef.description,
-      schema: toolDef.input_schema,
+  return allowedTools.map((tool) => {
+    return new DynamicStructuredTool({
+      name: tool.name.replace(/\./g, "_"),
+      description: tool.description,
+      schema: tool.input_schema as any,
       func: async (input: any) => {
-        const result = await executeTool(toolDef.name, input, context, agent);
-        return typeof result === "string" ? result : JSON.stringify(result);
+        try {
+          return await executeTool(tool.name, input, context, agent);
+        } catch (err: any) {
+          return {
+            is_error: true,
+            message: err?.message || `Erro ao executar ferramenta ${tool.name}`,
+          };
+        }
       },
     });
-
-    allowedTools.push(lcTool);
-  }
-
-  return allowedTools;
+  });
 }

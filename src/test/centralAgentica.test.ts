@@ -78,12 +78,12 @@ describe("Central Agêntica da Qualify (OpenAI + LangChain + LangGraph)", () => 
     });
   });
 
-  // 4. MARCO ZERO DA CENTRAL DE IA (Catálogo Limpo)
-  describe("Marco Zero da Central de IA (Ambiente Limpo)", () => {
-    it("deve iniciar com o catálogo pré-configurado zerado para reconstrução individual", () => {
-      expect(PREPARED_AGENTS.length).toBe(0);
+  // 4. ARQUITETURA AGÊNTICA FUNDACIONAL (Agente Orquestrador)
+  describe("Arquitetura Agêntica Fundacional (Agente Orquestrador)", () => {
+    it("deve iniciar com o Agente Orquestrador cadastrado como fundação da Central", () => {
+      expect(PREPARED_AGENTS.some((a) => a.slug === "qualify-orchestrator")).toBe(true);
       expect(PREPARED_SKILLS.length).toBe(0);
-      expect(ALL_TOOLS.length).toBe(0);
+      expect(ALL_TOOLS.some((t) => t.name === "company.get_brand_manual")).toBe(true);
       expect(Object.keys(WorkflowRegistry).length).toBe(0);
     });
 

@@ -10,7 +10,7 @@ if (typeof AbortSignal !== "undefined" && !(AbortSignal.prototype as any).throwI
 }
 
 import { getWorkflow } from "../workflows/workflowRegistry";
-import { getAgent, executeAgentWithLangChain } from "../agents/agentRegistry";
+import { getAgent, executeAgentWithLangChain, AgentChatMessage } from "../agents/agentRegistry";
 import { executeTool } from "../tools/toolRegistry";
 import { ExecutionTracker } from "../observability/executionTracker";
 import { RBACEngine, SecurityError } from "../permissions/rbacEngine";
@@ -43,6 +43,8 @@ export interface RunAgentRequest {
   context: ToolExecutionContext;
   overrideSkill?: string;
   apiKey?: string;
+  modelProfile?: string;
+  chatHistory?: AgentChatMessage[];
 }
 
 export const QualifyAI = {
@@ -137,7 +139,7 @@ export const QualifyAI = {
    * Executa um Agente via LangChain, vinculando tools com validação de permissões RBAC.
    */
   async runAgent(req: RunAgentRequest): Promise<QualifyAIResponse<any>> {
-    const { agentSlug, prompt, context, overrideSkill, apiKey } = req;
+    const { agentSlug, prompt, context, overrideSkill, apiKey, modelProfile, chatHistory } = req;
 
     RBACEngine.validateTenantIsolation(context.company_id);
 
@@ -151,7 +153,7 @@ export const QualifyAI = {
       user_id: context.user_id,
       agent: agentDef.slug,
       agent_version: agentDef.version,
-      model: agentDef.model_profile,
+      model: modelProfile || agentDef.model_profile,
     });
 
     try {
@@ -159,13 +161,17 @@ export const QualifyAI = {
       const agentResult = await executeAgentWithLangChain(agentSlug, prompt, context, {
         overrideSkill,
         apiKey: resolvedApiKey,
+        modelProfile: (modelProfile as any) || agentDef.model_profile,
+        chatHistory,
       });
 
-      const usage = (agentResult.response as any)?.usage_metadata;
-      if (usage?.total_tokens > 0) {
-        tracker.addTokens(usage.input_tokens || 0, usage.output_tokens || 0);
+      if (agentResult.metrics?.tokens_total && agentResult.metrics.tokens_total > 0) {
+        tracker.addTokens(agentResult.metrics.prompt_tokens, agentResult.metrics.completion_tokens);
       } else {
-        tracker.addTokens(200, 300);
+        const usage = (agentResult.response as any)?.usage_metadata;
+        if (usage?.total_tokens > 0) {
+          tracker.addTokens(usage.input_tokens || 0, usage.output_tokens || 0);
+        }
       }
       tracker.finish("success");
       await tracker.persistToDatabase(agentResult);
