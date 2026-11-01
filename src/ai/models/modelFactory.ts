@@ -85,8 +85,10 @@ export function createLangChainChatModel(options: ModelFactoryOptions = {}): Cha
     temperature: options.temperature ?? profile.temperature,
     maxTokens: options.maxTokens ?? profile.max_output_tokens,
     timeout: options.timeoutMs ?? profile.timeout_seconds * 1000,
+    apiKey: apiKey,
     openAIApiKey: apiKey,
     configuration: {
+      apiKey: apiKey,
       dangerouslyAllowBrowser: true,
     },
   });
