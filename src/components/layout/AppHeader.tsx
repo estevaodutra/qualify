@@ -1,8 +1,9 @@
-import { Wallet as WalletIcon, Menu, PanelLeft } from "lucide-react";
+import { Wallet as WalletIcon, Menu, PanelLeft, BellRing, BellOff } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useWallet } from "@/hooks/useWallet";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 function SystemClock() {
   const [time, setTime] = useState(new Date());
@@ -22,6 +23,7 @@ function SystemClock() {
 export function AppHeader() {
   const navigate = useNavigate();
   const { data: wallet } = useWallet();
+  const { isSubscribed, isLoading, subscribe, unsubscribe } = usePushNotifications();
 
   return (
     <header className="sticky top-0 z-20 w-full border-b border-border/50 bg-background/80 backdrop-blur-xl">
@@ -47,6 +49,16 @@ export function AppHeader() {
 
           <SystemClock />
 
+          <button
+            type="button"
+            onClick={() => void (isSubscribed ? unsubscribe() : subscribe())}
+            disabled={isLoading}
+            aria-label={isSubscribed ? "Desativar notificações push" : "Ativar notificações push"}
+            title={isSubscribed ? "Desativar notificações push" : "Ativar notificações push"}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border/50 bg-muted/30 text-muted-foreground hover:text-[#5856D6] disabled:opacity-50"
+          >
+            {isSubscribed ? <BellRing className="h-4 w-4 text-[#5856D6]" /> : <BellOff className="h-4 w-4" />}
+          </button>
           {/* Wallet Balance Pill */}
           {wallet !== undefined && (
             <button
