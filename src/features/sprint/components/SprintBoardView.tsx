@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   DndContext,
@@ -84,6 +84,50 @@ export const SprintBoardView: React.FC = () => {
   } = useSprintStore();
 
   const [isBoardFilesOpen, setIsBoardFilesOpen] = useState(false);
+
+  const allBoardAttachments = useMemo(() => {
+    const list: any[] = [];
+    const seen = new Set<string>();
+
+    (boardAttachments || []).forEach((a) => {
+      const key = a.checklist_item_id ? `item-${a.checklist_item_id}` : a.comment_id ? `comment-${a.comment_id}` : a.file_url;
+      if (!seen.has(key)) {
+        seen.add(key);
+        list.push(a);
+      }
+    });
+
+    lists.forEach((l) => {
+      l.cards.forEach((c) => {
+        (c.checklists || []).forEach((chk) => {
+          (chk.items || []).forEach((it) => {
+            if (it.attachment_url) {
+              const key = `item-${it.id}`;
+              if (!seen.has(key)) {
+                seen.add(key);
+                list.push({
+                  id: `item-${it.id}`,
+                  company_id: c.company_id,
+                  board_id: c.board_id,
+                  card_id: c.id,
+                  checklist_item_id: it.id,
+                  file_name: it.attachment_name || "Anexo",
+                  file_url: it.attachment_url,
+                  file_size: it.attachment_size,
+                  file_type: it.attachment_type,
+                  created_at: it.created_at,
+                  card_title: c.title,
+                  checklist_item_title: it.title,
+                });
+              }
+            }
+          });
+        });
+      });
+    });
+
+    return list.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+  }, [boardAttachments, lists]);
 
   const [activeDragItem, setActiveDragItem] = useState<{
     type: "Column" | "Card";
@@ -409,9 +453,9 @@ export const SprintBoardView: React.FC = () => {
           >
             <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
             <span>Arquivos</span>
-            {(boardAttachments || []).length > 0 && (
+            {allBoardAttachments.length > 0 && (
               <Badge variant="secondary" className="h-4 px-1 text-[10px] ml-0.5">
-                {(boardAttachments || []).length}
+                {allBoardAttachments.length}
               </Badge>
             )}
           </Button>
@@ -530,7 +574,7 @@ export const SprintBoardView: React.FC = () => {
           onClose={() => setIsBoardFilesOpen(false)}
           title="Arquivos do Quadro"
           subtitle={currentBoard.title}
-          attachments={boardAttachments}
+          attachments={allBoardAttachments}
           onOpenCard={(cardId) => openCardModal(cardId)}
         />
       )}

@@ -18,7 +18,7 @@ import { GripVertical } from "lucide-react";
 import { SprintCardTagPopover } from "./SprintCardTagPopover";
 import { SprintFilesDialog, getFileCategoryIcon } from "./SprintFilesDialog";
 import { formatBytes, downloadSprintFile } from "../utils/sprintFileUtils";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -831,6 +831,68 @@ export const SprintCardModal: React.FC = () => {
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const commentFileInputRef = React.useRef<HTMLInputElement>(null);
 
+  const allCardAttachments = useMemo(() => {
+    const list: any[] = [];
+    const seen = new Set<string>();
+
+    (cardAttachments || []).forEach((a) => {
+      const key = a.checklist_item_id ? `item-${a.checklist_item_id}` : a.comment_id ? `comment-${a.comment_id}` : a.file_url;
+      if (!seen.has(key)) {
+        seen.add(key);
+        list.push(a);
+      }
+    });
+
+    (activeCard?.checklists || []).forEach((chk) => {
+      (chk.items || []).forEach((it) => {
+        if (it.attachment_url) {
+          const key = `item-${it.id}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            list.push({
+              id: `item-${it.id}`,
+              company_id: activeCard?.company_id || "",
+              board_id: activeCard?.board_id || "",
+              card_id: activeCard?.id || "",
+              checklist_item_id: it.id,
+              file_name: it.attachment_name || "Anexo",
+              file_url: it.attachment_url,
+              file_size: it.attachment_size,
+              file_type: it.attachment_type,
+              created_at: it.created_at,
+              card_title: activeCard?.title,
+              checklist_item_title: it.title,
+            });
+          }
+        }
+      });
+    });
+
+    (cardComments || []).forEach((c) => {
+      if (c.attachment_url) {
+        const key = `comment-${c.id}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          list.push({
+            id: `comment-${c.id}`,
+            company_id: activeCard?.company_id || "",
+            board_id: activeCard?.board_id || "",
+            card_id: activeCard?.id || "",
+            comment_id: c.id,
+            file_name: c.attachment_name || "Anexo",
+            file_url: c.attachment_url,
+            file_size: c.attachment_size,
+            file_type: c.attachment_type,
+            created_at: c.created_at,
+            card_title: activeCard?.title,
+          });
+        }
+      }
+    });
+
+    return list.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+  }, [cardAttachments, activeCard?.checklists, cardComments, activeCard?.id, activeCard?.title, activeCard?.board_id, activeCard?.company_id]);
+
   // Sincroniza o título e a descrição sempre que o cartão ativo mudar
   useEffect(() => {
     if (activeCard) {
@@ -994,9 +1056,9 @@ export const SprintCardModal: React.FC = () => {
               >
                 <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
                 <span>Arquivos</span>
-                {cardAttachments.length > 0 && (
+                {allCardAttachments.length > 0 && (
                   <Badge variant="secondary" className="h-4 px-1 text-[10px] ml-0.5">
-                    {cardAttachments.length}
+                    {allCardAttachments.length}
                   </Badge>
                 )}
               </Button>
@@ -1401,9 +1463,9 @@ export const SprintCardModal: React.FC = () => {
               >
                 <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
                 <span>Arquivos</span>
-                {cardAttachments.length > 0 && (
+                {allCardAttachments.length > 0 && (
                   <Badge variant="secondary" className="h-4 px-1.5 text-[10px] ml-auto">
-                    {cardAttachments.length}
+                    {allCardAttachments.length}
                   </Badge>
                 )}
               </Button>
@@ -1498,7 +1560,7 @@ export const SprintCardModal: React.FC = () => {
           onClose={() => setIsCardFilesOpen(false)}
           title="Arquivos do Cartão"
           subtitle={activeCard.title}
-          attachments={cardAttachments}
+          attachments={allCardAttachments}
         />
       )}
     </>

@@ -385,6 +385,7 @@ export const useSprintStore = create<SprintState>((set, get) => ({
       if (found) {
         set({ activeCardId: cardId, activeCard: found });
         get().loadCardComments(cardId);
+        get().loadCardAttachments(cardId);
         return;
       }
     }
