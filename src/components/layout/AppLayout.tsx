@@ -28,11 +28,11 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <SidebarProvider defaultOpen>
-      <div className="flex min-h-[100dvh] w-full bg-background relative overflow-hidden">
+      <div className="flex min-h-[100dvh] w-full max-w-full bg-background relative overflow-x-hidden overflow-y-hidden">
         {/* System Sidebar */}
         <AppSidebar />
 
-        <div className={`flex flex-1 flex-col relative z-10 min-w-0 h-[100dvh] overflow-hidden ${isQuizEditor ? "" : "pb-[calc(64px+env(safe-area-inset-bottom))] md:pb-0"}`}>
+        <div className={`flex flex-1 flex-col relative z-10 min-w-0 h-[100dvh] overflow-hidden ${isQuizEditor ? "" : "pt-[max(env(safe-area-inset-top),32px)] pb-[calc(64px+env(safe-area-inset-bottom))] md:pt-0 md:pb-0"}`}>
           <ImpersonationBanner />
           {!isQuizEditor && <AppHeader />}
           {!isQuizEditor && <InstanceStatusBanner />}
@@ -44,7 +44,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               ? "flex-1 overflow-hidden p-0 min-h-0"
               : isChat
               ? "flex-1 overflow-hidden p-0 md:p-4 min-h-0"
-              : "flex-1 overflow-auto p-3.5 md:p-8 scrollbar-thin min-h-0"
+              : "flex-1 overflow-x-hidden overflow-y-auto p-3.5 md:p-8 scrollbar-thin min-h-0"
           }>
             {children || <Outlet />}
           </main>

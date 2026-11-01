@@ -107,7 +107,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="relative min-h-screen space-y-10 pb-10">
+    <div className="relative min-h-full md:min-h-screen min-w-0 max-w-full max-md:overflow-x-clip space-y-10 pb-10">
       {/* Decorative Blobs */}
       <div className="absolute -top-24 -left-24 w-96 h-96 bg-primary/20 blur-[120px] rounded-full animate-pulse" />
       <div className="absolute top-1/2 -right-24 w-80 h-80 bg-purple-500/10 blur-[100px] rounded-full animate-float" />

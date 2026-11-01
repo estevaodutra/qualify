@@ -26,17 +26,16 @@ export function AppHeader() {
 
   return (
     <header className="sticky top-0 z-20 w-full border-b border-border/50 bg-background/80 backdrop-blur-xl">
-      <div className="flex h-[60px] items-center justify-between px-6 gap-4">
+      <div className="flex h-[60px] min-w-0 items-center justify-between px-4 md:px-6 gap-3 md:gap-4">
         {/* Left */}
-        <div className="flex items-center gap-3 flex-1">
-          <div className="flex items-center gap-2 md:hidden">
-            <img src="/logo-sidebar-light.png" alt="Qualify Logo" className="h-6 w-auto" />
-            <span className="font-extrabold text-sm tracking-widest text-foreground uppercase">QUALIFY</span>
+        <div className="flex min-w-0 items-center gap-3 flex-1">
+          <div className="flex min-w-0 items-center md:hidden">
+            <img src="/logo-sidebar-light.png" alt="Qualify" className="h-7 w-auto max-w-full object-contain" />
           </div>
         </div>
 
         {/* Right */}
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-2 md:gap-3">
           {/* Status pill */}
           <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/8 border border-emerald-500/15 text-emerald-600 dark:text-emerald-400">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_6px_rgba(16,185,129,0.6)]" />
