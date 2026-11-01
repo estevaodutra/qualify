@@ -5,7 +5,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
 
 // Default VAPID Public Key for Web Push (overridable by VITE_VAPID_PUBLIC_KEY)
-const DEFAULT_VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-Skv69yViEuiBIa-Ib9-Skv69yViEuiBIa";
+const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -29,7 +29,7 @@ export function usePushNotifications() {
 
   // Sync current subscription status
   useEffect(() => {
-    if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
       return;
     }
 
@@ -51,6 +51,10 @@ export function usePushNotifications() {
       return false;
     }
 
+    if (!VAPID_PUBLIC_KEY) {
+      toast.error("A chave pública de notificações ainda não foi configurada.");
+      return false;
+    }
     setIsLoading(true);
     try {
       // 1. Request permission if default
@@ -72,7 +76,7 @@ export function usePushNotifications() {
       await navigator.serviceWorker.ready;
 
       // 3. Subscribe via PushManager
-      const convertedVapidKey = urlBase64ToUint8Array(DEFAULT_VAPID_PUBLIC_KEY);
+      const convertedVapidKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: convertedVapidKey,
@@ -117,7 +121,7 @@ export function usePushNotifications() {
 
   // Unsubscribe from Web Push
   const unsubscribe = async () => {
-    if (!("serviceWorker" in navigator)) return;
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
 
     setIsLoading(true);
     try {
