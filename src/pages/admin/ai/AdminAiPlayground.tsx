@@ -57,6 +57,11 @@ import {
   WorkflowRegistry,
   ModelProfileCode,
 } from "@/ai";
+import {
+  indexBrandManual,
+  getBrandManualEmbeddingStatus,
+  EmbeddingIndexStatus,
+} from "@/services/ai/brandManualEmbeddingService";
 
 interface ChatMessageItem {
   id: string;
@@ -118,6 +123,10 @@ export default function AdminAiPlayground() {
   // Estados de Execução
   const [executing, setExecuting] = useState(false);
   const [executingSeed, setExecutingSeed] = useState(false);
+  const [isIndexingRag, setIsIndexingRag] = useState(false);
+  const [ragStatus, setRagStatus] = useState<EmbeddingIndexStatus>(() =>
+    getBrandManualEmbeddingStatus(selectedCompanyId)
+  );
   const [resultData, setResultData] = useState<any>(null);
   const [traceData, setTraceData] = useState<any>(null);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
@@ -184,6 +193,35 @@ export default function AdminAiPlayground() {
       }
     }
   }, [companies]);
+
+  // Atualizar status de Embeddings quando o tenant mudar
+  useEffect(() => {
+    setRagStatus(getBrandManualEmbeddingStatus(selectedCompanyId));
+  }, [selectedCompanyId]);
+
+  const handleIndexManual = async () => {
+    if (!isKeyConfigured) {
+      toast.error("Chave da OpenAI não configurada. Insira sua chave sk-proj-... no painel esquerdo.");
+      return;
+    }
+    if (!brandManualCheck?.isFilled) {
+      toast.error("Manual da Marca não preenchido para esta empresa.");
+      return;
+    }
+
+    try {
+      setIsIndexingRag(true);
+      toast.info("Gerando embeddings do Manual da Marca com OpenAI (text-embedding-3-small)...");
+      const res = await indexBrandManual(selectedCompanyId, customApiKey.trim() || undefined);
+      setRagStatus(getBrandManualEmbeddingStatus(selectedCompanyId));
+      toast.success(`Embeddings gerados! ${res.total_chunks} chunks vetoriais prontos para o Orquestrador.`);
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.message || "Erro ao gerar embeddings do Manual.");
+    } finally {
+      setIsIndexingRag(false);
+    }
+  };
 
   // Contas de Instagram da Empresa Selecionada
   const { data: companyAccounts = [] } = useQuery({
@@ -652,6 +690,39 @@ export default function AdminAiPlayground() {
                   <p className="text-[11px] text-muted-foreground leading-snug truncate">
                     <strong className="text-foreground">Tom:</strong> {brandManualCheck.toneOfVoice}
                   </p>
+
+                  {/* Status do RAG & Embeddings */}
+                  <div className="pt-2 mt-1 border-t border-emerald-500/20 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles className="h-3 w-3 text-primary" />
+                      <span className="text-[10px] font-medium text-foreground">
+                        {ragStatus.isIndexed
+                          ? `RAG: ${ragStatus.totalChunks} chunks indexados`
+                          : "Embeddings pendentes"}
+                      </span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={isIndexingRag}
+                      onClick={handleIndexManual}
+                      className="h-5 px-1.5 text-[9px] gap-1 cursor-pointer text-primary hover:bg-primary/10"
+                    >
+                      {isIndexingRag ? (
+                        <>
+                          <Loader2 className="h-2.5 w-2.5 animate-spin" /> Indexando...
+                        </>
+                      ) : ragStatus.isIndexed ? (
+                        <>
+                          <RefreshCw className="h-2.5 w-2.5" /> Re-indexar
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-2.5 w-2.5" /> Indexar Agora
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <div className="p-3 rounded-xl border border-destructive/30 bg-destructive/5 space-y-1.5 text-destructive">

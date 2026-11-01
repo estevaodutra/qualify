@@ -1,6 +1,6 @@
 {
-  "commit": "4d01e8323d366ef5759472c70e33c9080df27305",
-  "shortCommit": "4d01e83",
-  "message": "feat(ai): implement Qualify Orchestrator Agent, Brand Manual context provider and conversational Playground chat",
-  "builtAt": "2026-11-01T21:04:08.637Z"
+  "commit": "785064a534a0e8597fee1cd0efdea4f4e881a190",
+  "shortCommit": "785064a",
+  "message": "feat(ai): implement Workspace RAG with OpenAI Embeddings, selective semantic search tool, and agentic ReAct loop",
+  "builtAt": "2026-11-01T21:10:08.185Z"
 }

@@ -15,8 +15,19 @@ export interface SearchResultChunk {
   score: number;
 }
 
-// Cache em memória de vetores por empresa para evitar re-chamadas desnecessárias da API
+export interface EmbeddingIndexStatus {
+  isIndexed: boolean;
+  totalChunks: number;
+  lastUpdated?: string;
+  chunks: BrandManualChunk[];
+}
+
+// Cache em memória de vetores por empresa
 const vectorCache: Record<string, { chunks: BrandManualChunk[]; vectors: number[][]; timestamp: number }> = {};
+
+function getStorageKey(companyId: string) {
+  return `qualify_rag_embeddings_${companyId}`;
+}
 
 function cosineSimilarity(vecA: number[], vecB: number[]): number {
   let dotProduct = 0;
@@ -54,7 +65,6 @@ export async function chunkBrandManual(companyId: string): Promise<BrandManualCh
   for (const section of manual.sections) {
     if (section.items.length === 0) continue;
 
-    // Se a seção tiver poucos itens, agrupa em um chunk coeso
     if (section.items.length <= 4) {
       const text = section.items.map((it) => `[${it.question}]\n${it.answer}`).join("\n\n");
       chunks.push({
@@ -65,7 +75,6 @@ export async function chunkBrandManual(companyId: string): Promise<BrandManualCh
         wordCount: text.split(/\s+/).length,
       });
     } else {
-      // Para seções longas com muitas perguntas, quebra em micro-chunks
       for (let i = 0; i < section.items.length; i += 3) {
         const slice = section.items.slice(i, i + 3);
         const text = slice.map((it) => `[${it.question}]\n${it.answer}`).join("\n\n");
@@ -80,7 +89,6 @@ export async function chunkBrandManual(companyId: string): Promise<BrandManualCh
     }
   }
 
-  // Fallback caso não haja seções
   if (chunks.length === 0) {
     chunks.push({
       id: "fallback_empty",
@@ -95,8 +103,110 @@ export async function chunkBrandManual(companyId: string): Promise<BrandManualCh
 }
 
 /**
+ * Verifica o status de indexação dos embeddings do Manual da Marca.
+ */
+export function getBrandManualEmbeddingStatus(companyId: string): EmbeddingIndexStatus {
+  if (vectorCache[companyId] && vectorCache[companyId].vectors.length > 0) {
+    return {
+      isIndexed: true,
+      totalChunks: vectorCache[companyId].chunks.length,
+      lastUpdated: new Date(vectorCache[companyId].timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      chunks: vectorCache[companyId].chunks,
+    };
+  }
+
+  // Verificar localStorage
+  if (typeof localStorage !== "undefined") {
+    try {
+      const saved = localStorage.getItem(getStorageKey(companyId));
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.vectors && parsed.vectors.length > 0) {
+          vectorCache[companyId] = {
+            chunks: parsed.chunks,
+            vectors: parsed.vectors,
+            timestamp: parsed.timestamp || Date.now(),
+          };
+          return {
+            isIndexed: true,
+            totalChunks: parsed.chunks.length,
+            lastUpdated: new Date(parsed.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            chunks: parsed.chunks,
+          };
+        }
+      }
+    } catch {}
+  }
+
+  return {
+    isIndexed: false,
+    totalChunks: 0,
+    chunks: [],
+  };
+}
+
+/**
+ * Gera e persiste os Embeddings de todo o Manual da Marca com a OpenAI.
+ */
+export async function indexBrandManual(companyId: string, apiKey?: string): Promise<{
+  success: boolean;
+  total_chunks: number;
+  chunks: BrandManualChunk[];
+  cost_estimated: number;
+}> {
+  const resolvedApiKey = await resolveOpenAiApiKey(apiKey);
+  const chunks = await chunkBrandManual(companyId);
+
+  const embeddingsClient = new OpenAIEmbeddings({
+    model: "text-embedding-3-small",
+    apiKey: resolvedApiKey,
+    configuration: {
+      apiKey: resolvedApiKey,
+      dangerouslyAllowBrowser: true,
+    },
+  });
+
+  const textsToEmbed = chunks.map((c) => c.content);
+  const vectors = await embeddingsClient.embedDocuments(textsToEmbed);
+
+  const now = Date.now();
+  vectorCache[companyId] = {
+    chunks,
+    vectors,
+    timestamp: now,
+  };
+
+  // Salvar no localStorage para persistência entre recarregamentos
+  if (typeof localStorage !== "undefined") {
+    try {
+      localStorage.setItem(
+        getStorageKey(companyId),
+        JSON.stringify({
+          companyId,
+          chunks,
+          vectors,
+          timestamp: now,
+        })
+      );
+    } catch (e) {
+      console.warn("[RAG] Não foi possível persistir vetores no localStorage:", e);
+    }
+  }
+
+  const totalWords = chunks.reduce((acc, c) => acc + c.wordCount, 0);
+  const tokensEst = Math.round(totalWords * 1.3);
+  const cost = Number(((tokensEst * 0.02) / 1000000).toFixed(6));
+
+  return {
+    success: true,
+    total_chunks: chunks.length,
+    chunks,
+    cost_estimated: cost,
+  };
+}
+
+/**
  * Busca semântica (RAG) no Manual da Marca da Empresa.
- * Gera embeddings sob demanda com text-embedding-3-small e calcula similaridade.
  */
 export async function searchBrandManualWithRAG(
   companyId: string,
@@ -110,14 +220,24 @@ export async function searchBrandManualWithRAG(
   tokens_estimated: number;
 }> {
   const resolvedApiKey = await resolveOpenAiApiKey(apiKey);
-  const chunks = await chunkBrandManual(companyId);
 
-  let vectors: number[][] = [];
+  // Garantir que os embeddings estejam carregados/gerados
+  let status = getBrandManualEmbeddingStatus(companyId);
+  if (!status.isIndexed) {
+    try {
+      await indexBrandManual(companyId, resolvedApiKey);
+      status = getBrandManualEmbeddingStatus(companyId);
+    } catch (err) {
+      console.warn("[RAG] Erro ao indexar sob demanda:", err);
+    }
+  }
 
-  // Verificar se já temos os vetores em cache
-  if (vectorCache[companyId] && vectorCache[companyId].chunks.length === chunks.length) {
-    vectors = vectorCache[companyId].vectors;
-  } else {
+  const cached = vectorCache[companyId];
+  const chunks = cached?.chunks || (await chunkBrandManual(companyId));
+  const vectors = cached?.vectors || [];
+
+  let queryVector: number[] = [];
+  if (vectors.length > 0) {
     try {
       const embeddingsClient = new OpenAIEmbeddings({
         model: "text-embedding-3-small",
@@ -127,71 +247,37 @@ export async function searchBrandManualWithRAG(
           dangerouslyAllowBrowser: true,
         },
       });
-
-      vectors = await embeddingsClient.embedDocuments(chunks.map((c) => c.content));
-      vectorCache[companyId] = {
-        chunks,
-        vectors,
-        timestamp: Date.now(),
-      };
-    } catch (embErr) {
-      console.warn("[RAG] Falha ao gerar vetores na OpenAI, usando busca por palavras-chave:", embErr);
-      // Fallback por palavra-chave se não conseguir gerar embeddings
-      const qLower = query.toLowerCase();
-      const scored = chunks.map((c) => {
-        let score = 0;
-        const cLower = (c.title + " " + c.content).toLowerCase();
-        for (const word of qLower.split(/\s+/)) {
-          if (word.length > 2 && cLower.includes(word)) score += 0.2;
-        }
-        return { chunk: c, score: Math.min(score, 0.99) };
-      });
-      scored.sort((a, b) => b.score - a.score);
-      const topResults = scored.slice(0, topK);
-      const summary = topResults.map((r) => `### ${r.chunk.title}\n${r.chunk.content}`).join("\n\n---\n\n");
-      return {
-        query,
-        results: topResults,
-        summary,
-        tokens_estimated: Math.round(summary.length / 4),
-      };
+      queryVector = await embeddingsClient.embedQuery(query);
+    } catch (err) {
+      console.warn("[RAG] Erro ao embedar query:", err);
     }
   }
 
-  // Gerar vetor da query
-  let queryVector: number[] = [];
-  try {
-    const embeddingsClient = new OpenAIEmbeddings({
-      model: "text-embedding-3-small",
-      apiKey: resolvedApiKey,
-      configuration: {
-        apiKey: resolvedApiKey,
-        dangerouslyAllowBrowser: true,
-      },
-    });
-    queryVector = await embeddingsClient.embedQuery(query);
-  } catch (err) {
-    console.warn("[RAG] Erro ao embedar query:", err);
-  }
-
-  // Calcular Similaridade de Cosseno
+  // Similaridade de Cosseno com fallback léxico
   const scoredResults: SearchResultChunk[] = chunks.map((chunk, idx) => {
     let score = 0;
     if (queryVector.length > 0 && vectors[idx]) {
       score = cosineSimilarity(queryVector, vectors[idx]);
+    } else {
+      // Fallback por palavra-chave se não houver vetor
+      const qLower = query.toLowerCase();
+      const cLower = (chunk.title + " " + chunk.content).toLowerCase();
+      for (const word of qLower.split(/\s+/)) {
+        if (word.length > 2 && cLower.includes(word)) score += 0.25;
+      }
     }
-    // Bônus para match de título
+
     if (chunk.title.toLowerCase().includes(query.toLowerCase())) {
-      score = Math.max(score, 0.85);
+      score = Math.max(score, 0.88);
     }
-    return { chunk, score };
+    return { chunk, score: Math.min(score, 0.99) };
   });
 
   scoredResults.sort((a, b) => b.score - a.score);
   const topResults = scoredResults.slice(0, topK);
 
   const summary = topResults
-    .map((r) => `### [CHUNK RECUPERADO VIA RAG: ${r.chunk.title} (Relevância: ${(r.score * 100).toFixed(0)}%)]\n${r.chunk.content}`)
+    .map((r) => `### [CHUNK RECUPERADO VIA RAG: ${r.chunk.title} (Similaridade: ${(r.score * 100).toFixed(0)}%)]\n${r.chunk.content}`)
     .join("\n\n---\n\n");
 
   const tokensEstimated = Math.round(summary.length / 4);
