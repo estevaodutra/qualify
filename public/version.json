@@ -1,6 +1,6 @@
 {
-  "commit": "b2dbeb163973fa80c9a91fb3efcc12bcd030dbf9",
-  "shortCommit": "b2dbeb1",
-  "message": "feat(ai): add persistent vector storage, explicit indexing trigger and RAG status card in Playground",
-  "builtAt": "2026-11-01T21:23:08.549Z"
+  "commit": "97e495c25760cef453df8133bffee8deded2cc74",
+  "shortCommit": "97e495c",
+  "message": "fix(ai): fix tool name resolution underscore/dot mapping in LangChain agentic loop and ensure final synthesis text",
+  "builtAt": "2026-11-01T21:34:29.077Z"
 }

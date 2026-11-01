@@ -27,7 +27,16 @@ import {
   Check,
   Compass,
   Cpu,
+  Database,
+  Eye,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -60,6 +69,7 @@ import {
 import {
   indexBrandManual,
   getBrandManualEmbeddingStatus,
+  fetchSupabaseRagChunks,
   EmbeddingIndexStatus,
 } from "@/services/ai/brandManualEmbeddingService";
 
@@ -124,9 +134,15 @@ export default function AdminAiPlayground() {
   const [executing, setExecuting] = useState(false);
   const [executingSeed, setExecutingSeed] = useState(false);
   const [isIndexingRag, setIsIndexingRag] = useState(false);
-  const [ragStatus, setRagStatus] = useState<EmbeddingIndexStatus>(() =>
-    getBrandManualEmbeddingStatus(selectedCompanyId)
-  );
+  const [ragStatus, setRagStatus] = useState<EmbeddingIndexStatus>({
+    isIndexed: false,
+    totalChunks: 0,
+    storage: "supabase",
+    chunks: [],
+  });
+  const [inspectRagOpen, setInspectRagOpen] = useState(false);
+  const [inspectedChunks, setInspectedChunks] = useState<any[]>([]);
+  const [loadingInspection, setLoadingInspection] = useState(false);
   const [resultData, setResultData] = useState<any>(null);
   const [traceData, setTraceData] = useState<any>(null);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
@@ -196,7 +212,13 @@ export default function AdminAiPlayground() {
 
   // Atualizar status de Embeddings quando o tenant mudar
   useEffect(() => {
-    setRagStatus(getBrandManualEmbeddingStatus(selectedCompanyId));
+    let isMounted = true;
+    getBrandManualEmbeddingStatus(selectedCompanyId).then((status) => {
+      if (isMounted) setRagStatus(status);
+    });
+    return () => {
+      isMounted = false;
+    };
   }, [selectedCompanyId]);
 
   const handleIndexManual = async () => {
@@ -211,15 +233,31 @@ export default function AdminAiPlayground() {
 
     try {
       setIsIndexingRag(true);
-      toast.info("Gerando embeddings do Manual da Marca com OpenAI (text-embedding-3-small)...");
+      toast.info("Gerando embeddings (text-embedding-3-small) e gravando no Supabase...");
       const res = await indexBrandManual(selectedCompanyId, customApiKey.trim() || undefined);
-      setRagStatus(getBrandManualEmbeddingStatus(selectedCompanyId));
-      toast.success(`Embeddings gerados! ${res.total_chunks} chunks vetoriais prontos para o Orquestrador.`);
+      const updated = await getBrandManualEmbeddingStatus(selectedCompanyId);
+      setRagStatus(updated);
+      toast.success(
+        `Embeddings gravados com sucesso! ${res.total_chunks} chunks salvos no Supabase (ai_rag_chunks).`
+      );
     } catch (err: any) {
       console.error(err);
       toast.error(err?.message || "Erro ao gerar embeddings do Manual.");
     } finally {
       setIsIndexingRag(false);
+    }
+  };
+
+  const handleOpenInspection = async () => {
+    setLoadingInspection(true);
+    setInspectRagOpen(true);
+    try {
+      const chunks = await fetchSupabaseRagChunks(selectedCompanyId);
+      setInspectedChunks(chunks);
+    } catch (e) {
+      console.warn(e);
+    } finally {
+      setLoadingInspection(false);
     }
   };
 
@@ -691,37 +729,51 @@ export default function AdminAiPlayground() {
                     <strong className="text-foreground">Tom:</strong> {brandManualCheck.toneOfVoice}
                   </p>
 
-                  {/* Status do RAG & Embeddings */}
-                  <div className="pt-2 mt-1 border-t border-emerald-500/20 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <Sparkles className="h-3 w-3 text-primary" />
-                      <span className="text-[10px] font-medium text-foreground">
-                        {ragStatus.isIndexed
-                          ? `RAG: ${ragStatus.totalChunks} chunks indexados`
-                          : "Embeddings pendentes"}
-                      </span>
+                  {/* Status do RAG & Embeddings no Supabase */}
+                  <div className="pt-2 mt-1 border-t border-emerald-500/20 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <Database className="h-3 w-3 text-primary" />
+                        <span className="text-[10px] font-medium text-foreground">
+                          {ragStatus.isIndexed
+                            ? `Supabase RAG: ${ragStatus.totalChunks} chunks`
+                            : "Embeddings pendentes"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {ragStatus.isIndexed && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={handleOpenInspection}
+                            className="h-5 px-1.5 text-[9px] gap-1 cursor-pointer text-muted-foreground hover:text-foreground"
+                          >
+                            <Eye className="h-2.5 w-2.5" /> Ver Chunks
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={isIndexingRag}
+                          onClick={handleIndexManual}
+                          className="h-5 px-1.5 text-[9px] gap-1 cursor-pointer text-primary hover:bg-primary/10"
+                        >
+                          {isIndexingRag ? (
+                            <>
+                              <Loader2 className="h-2.5 w-2.5 animate-spin" /> Indexando...
+                            </>
+                          ) : ragStatus.isIndexed ? (
+                            <>
+                              <RefreshCw className="h-2.5 w-2.5" /> Re-indexar
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="h-2.5 w-2.5" /> Indexar no Supabase
+                            </>
+                          )}
+                        </Button>
+                      </div>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={isIndexingRag}
-                      onClick={handleIndexManual}
-                      className="h-5 px-1.5 text-[9px] gap-1 cursor-pointer text-primary hover:bg-primary/10"
-                    >
-                      {isIndexingRag ? (
-                        <>
-                          <Loader2 className="h-2.5 w-2.5 animate-spin" /> Indexando...
-                        </>
-                      ) : ragStatus.isIndexed ? (
-                        <>
-                          <RefreshCw className="h-2.5 w-2.5" /> Re-indexar
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="h-2.5 w-2.5" /> Indexar Agora
-                        </>
-                      )}
-                    </Button>
                   </div>
                 </div>
               ) : (
@@ -1195,6 +1247,59 @@ export default function AdminAiPlayground() {
           </Card>
         )}
       </div>
+
+      {/* Modal de Inspeção: Chunks e Vetores Gravados no Supabase */}
+      <Dialog open={inspectRagOpen} onOpenChange={setInspectRagOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Database className="h-5 w-5 text-primary" />
+              <span>Base de Conhecimento RAG (Supabase: ai_rag_chunks)</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Registros físicos gravados no banco de dados com vetores de 1536 dimensões (OpenAI text-embedding-3-small).
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto space-y-3 p-1">
+            {loadingInspection ? (
+              <div className="p-8 flex flex-col items-center justify-center space-y-2 text-muted-foreground text-xs">
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                <span>Consultando tabela ai_rag_chunks no Supabase...</span>
+              </div>
+            ) : inspectedChunks.length > 0 ? (
+              <div className="space-y-3">
+                {inspectedChunks.map((chunk, idx) => (
+                  <div key={chunk.id || idx} className="p-3.5 rounded-xl border bg-card space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-[10px] font-mono">
+                          Chunk #{idx + 1}
+                        </Badge>
+                        <span className="font-bold text-foreground">{chunk.title}</span>
+                      </div>
+                      <Badge variant="secondary" className="text-[10px]">
+                        {chunk.category || "Geral"}
+                      </Badge>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-muted/60 text-[11px] font-mono whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto border">
+                      {chunk.content}
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1">
+                      <span>ID: {chunk.id || "N/A"}</span>
+                      <span>Vetor: 1536 dimensões (pgvector)</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-8 text-center text-muted-foreground text-xs">
+                Nenhum chunk gravado no Supabase para este tenant. Clique em &quot;Indexar no Supabase&quot; no painel esquerdo para gerar os vetores.
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
