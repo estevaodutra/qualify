@@ -29,17 +29,29 @@ export const brandManualTool: ToolDefinition<GetBrandManualInput, Record<string,
     }
 
     try {
-      const { data: sprintWs } = await (supabase as any)
+      const { data: workspaces } = await (supabase as any)
         .from("sprint_os_workspaces")
-        .select("data")
+        .select("id, name, data, updated_at")
         .eq("company_id", targetCompanyId)
         .is("archived_at", null)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .order("updated_at", { ascending: false });
 
-      if (sprintWs?.data?.brandManual) {
-        return sprintWs.data.brandManual;
+      if (Array.isArray(workspaces)) {
+        for (const ws of workspaces) {
+          const bm = ws?.data?.brandManual;
+          if (bm) {
+            const hasAnswers = (bm.fields || []).some((f: any) => {
+              const resp = f?.response || f?.value || "";
+              return typeof resp === "string" && resp.trim().length > 0;
+            });
+            if (hasAnswers || bm.overallStatus === "completed" || bm.masterPrompt) {
+              return bm;
+            }
+          }
+        }
+        if (workspaces[0]?.data?.brandManual) {
+          return workspaces[0].data.brandManual;
+        }
       }
     } catch {
       // Fallback

@@ -1,6 +1,6 @@
 {
-  "commit": "2979bbd431610649257bad7a2abaa6f4d81a78de",
-  "shortCommit": "2979bbd",
-  "message": "feat(playground): pre-gestao de conteudo semente e regra de negocio com manual da marca obrigatorio",
-  "builtAt": "2026-11-01T17:05:38.823Z"
+  "commit": "425abbeea71d89fa5450b845ea02b68f84756b9a",
+  "shortCommit": "425abbe",
+  "message": "fix(workspace): redirecionar para dashboard com reload completo ao trocar de workspace",
+  "builtAt": "2026-11-01T17:24:47.955Z"
 }

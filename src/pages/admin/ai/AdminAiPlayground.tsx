@@ -47,7 +47,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { AIExecutionService } from "@/services/ai/aiExecutionService";
-import { CriafySeedContentService } from "@/services/criafy/criafySeedContentService";
+import {
+  CriafySeedContentService,
+  isBrandManualPopulated,
+} from "@/services/criafy/criafySeedContentService";
 import {
   QualifyAI,
   ALL_TOOLS,
@@ -174,53 +177,94 @@ export default function AdminAiPlayground() {
       }
 
       try {
-        // 1. Verificar Workspace do Sprint OS
-        const { data: ws } = await (supabase as any)
+        // 1. Buscar TODOS os workspaces da empresa (não apenas limit(1))
+        const { data: workspaces, error: wsError } = await (supabase as any)
           .from("sprint_os_workspaces")
-          .select("data")
+          .select("id, name, data, updated_at")
           .eq("company_id", selectedCompanyId)
           .is("archived_at", null)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .order("updated_at", { ascending: false });
 
-        const bm = ws?.data?.brandManual;
-        const fields = bm?.fields || [];
-        const answeredFields = fields.filter(
-          (f: any) => f.value && String(f.value).trim().length > 0 && !f.archived
-        );
+        let bestManual: any = null;
+        let bestAnsweredCount = 0;
+        let bestBrandName = "";
+        let bestTone = "";
 
-        const brandName = bm?.brandName || ws?.data?.name || "";
-        const toneOfVoice = bm?.toneOfVoice || "";
-        const positioning = bm?.positioning || "";
-        const hasCoreInfo = Boolean(
-          brandName || toneOfVoice || positioning || (bm?.pillars && bm.pillars.length > 0)
-        );
+        if (Array.isArray(workspaces)) {
+          for (const ws of workspaces) {
+            const bm = ws?.data?.brandManual;
+            if (bm) {
+              const fields = Array.isArray(bm.fields) ? bm.fields : [];
+              const answered = fields.filter((f: any) => {
+                const resp = f?.response || f?.value || f?.answer || f?.transcription || "";
+                return typeof resp === "string" && resp.trim().length > 0 && !f.archived;
+              });
 
-        // 2. Verificar Account Briefings
-        let hasBriefing = false;
-        const { data: briefings } = await (supabase as any)
-          .from("criafy_account_briefings")
-          .select("brand_name, tone_of_voice, brand_positioning")
-          .limit(1);
-
-        if (briefings && briefings.length > 0) {
-          const b = briefings[0];
-          if (b.brand_name || b.tone_of_voice || b.brand_positioning) {
-            hasBriefing = true;
+              if (answered.length > bestAnsweredCount) {
+                bestAnsweredCount = answered.length;
+                bestManual = bm;
+                bestBrandName = ws?.name || ws?.data?.name || ws?.data?.project?.name || "";
+              } else if (!bestManual && isBrandManualPopulated(bm)) {
+                bestManual = bm;
+                bestBrandName = ws?.name || ws?.data?.name || ws?.data?.project?.name || "";
+              }
+            }
           }
         }
 
-        const isFilled = answeredFields.length >= 2 || hasCoreInfo || hasBriefing;
+        // 2. Fallback para LocalStorage se o usuário estiver editando em cache
+        if (!bestManual && typeof localStorage !== "undefined") {
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && (key.startsWith(`sprint_os_ws_${selectedCompanyId}`) || key.startsWith("sprint_os_ws_"))) {
+              try {
+                const item = JSON.parse(localStorage.getItem(key) || "{}");
+                const bm = item?.brandManual;
+                if (isBrandManualPopulated(bm)) {
+                  bestManual = bm;
+                  const fields = Array.isArray(bm.fields) ? bm.fields : [];
+                  bestAnsweredCount = fields.filter((f: any) => {
+                    const resp = f?.response || f?.value || f?.answer || "";
+                    return typeof resp === "string" && resp.trim().length > 0;
+                  }).length;
+                  bestBrandName = item?.project?.name || item?.name || "Local";
+                  break;
+                }
+              } catch {}
+            }
+          }
+        }
+
+        // 3. Fallback para Account Briefings da Criafy
+        if (!bestManual) {
+          const { data: briefings } = await (supabase as any)
+            .from("criafy_account_briefings")
+            .select("brand_name, tone_of_voice, brand_positioning")
+            .limit(1);
+
+          if (briefings && briefings.length > 0) {
+            const b = briefings[0];
+            if (b.brand_name || b.tone_of_voice || b.brand_positioning) {
+              bestManual = {
+                brandName: b.brand_name,
+                toneOfVoice: b.tone_of_voice,
+                positioning: b.brand_positioning,
+              };
+              bestBrandName = b.brand_name || "";
+              bestTone = b.tone_of_voice || "";
+            }
+          }
+        }
+
+        const isFilled = isBrandManualPopulated(bestManual);
 
         return {
           isFilled,
-          answeredCount: answeredFields.length,
-          brandName: brandName || (isFilled ? "Manual Ativo" : "Não informado"),
-          toneOfVoice: toneOfVoice || (isFilled ? "Definido" : "Não informado"),
-          positioning: positioning || "",
+          answeredCount: bestAnsweredCount,
+          brandName: bestBrandName || (isFilled ? "Manual Ativo" : "Não informado"),
+          toneOfVoice: bestTone || bestManual?.toneOfVoice || (isFilled ? "Definido" : "Não informado"),
           details: isFilled
-            ? `${answeredFields.length > 0 ? `${answeredFields.length} perguntas respondidas` : "Diretrizes estratégicas cadastradas"}`
+            ? `${bestAnsweredCount > 0 ? `${bestAnsweredCount} perguntas respondidas` : "Manual da Marca concluído"}`
             : "Nenhuma informação ou pergunta respondida no Manual da Marca.",
         };
       } catch (err) {

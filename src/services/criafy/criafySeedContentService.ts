@@ -10,6 +10,31 @@ import {
 
 export const SEED_CAMPAIGN_NAME = "Conteúdo Semente";
 
+/**
+ * Determina se uma estrutura de Brand Manual possui respostas preenchidas.
+ * Suporta a estrutura real do Sprint OS (fields com f.response, overallStatus, etc.).
+ */
+export function isBrandManualPopulated(bm: any): boolean {
+  if (!bm) return false;
+  if (bm.overallStatus === "completed" || bm.overallStatus === "approved") return true;
+  if (typeof bm.masterPrompt === "string" && bm.masterPrompt.trim().length > 20) return true;
+  if (Array.isArray(bm.copyAds) && bm.copyAds.length > 0) return true;
+
+  if (Array.isArray(bm.fields)) {
+    const answered = bm.fields.filter((f: any) => {
+      const resp = f?.response || f?.value || f?.answer || f?.transcription || "";
+      return typeof resp === "string" && resp.trim().length > 0;
+    });
+    if (answered.length > 0) return true;
+  }
+
+  if (bm.brandName || bm.positioning || bm.toneOfVoice || (Array.isArray(bm.pillars) && bm.pillars.length > 0)) {
+    return true;
+  }
+
+  return false;
+}
+
 export const CriafySeedContentService = {
   /**
    * 1. Consulta o estado de ativação da conta.
@@ -76,19 +101,38 @@ export const CriafySeedContentService = {
     let hasStrategy = false;
 
     try {
-      // 1. Verificar Workspace do Sprint OS
-      const { data: sprintWs } = await (supabase as any)
+      // 1. Verificar Workspaces do Sprint OS (procura em todos os workspaces da empresa)
+      const { data: workspaces } = await (supabase as any)
         .from("sprint_os_workspaces")
-        .select("data")
+        .select("id, name, data, updated_at")
         .eq("company_id", companyId)
         .is("archived_at", null)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .order("updated_at", { ascending: false });
 
-      const bm = sprintWs?.data?.brandManual;
-      if (bm && (bm.brandName || bm.positioning || bm.toneOfVoice || bm.pillars?.length > 0)) {
-        hasBrandManual = true;
+      if (Array.isArray(workspaces)) {
+        for (const ws of workspaces) {
+          const bm = ws?.data?.brandManual;
+          if (isBrandManualPopulated(bm)) {
+            hasBrandManual = true;
+            break;
+          }
+        }
+      }
+
+      // Fallback para cache local no browser
+      if (!hasBrandManual && typeof localStorage !== "undefined") {
+        try {
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && (key.startsWith(`sprint_os_ws_${companyId}`) || key.startsWith("sprint_os_ws_"))) {
+              const item = JSON.parse(localStorage.getItem(key) || "{}");
+              if (isBrandManualPopulated(item?.brandManual)) {
+                hasBrandManual = true;
+                break;
+              }
+            }
+          }
+        } catch {}
       }
 
       // 2. Verificar Briefing da Conta
