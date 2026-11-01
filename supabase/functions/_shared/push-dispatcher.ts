@@ -30,8 +30,22 @@ export async function dispatchWebPushNotification(
       .from("company_members").select("user_id").eq("company_id", payload.companyId)
       .eq("is_active", true).in("user_id", [...new Set(payload.userIds)]);
     if (memberError) throw memberError;
-    const permittedIds = (members || []).map((member) => member.user_id);
+    let permittedIds = (members || []).map((member) => member.user_id);
     if (!permittedIds.length) return;
+
+    if (payload.conversationId) {
+      const { data: muted, error: preferenceError } = await supabase
+        .from("chat_notification_preferences")
+        .select("user_id")
+        .eq("company_id", payload.companyId)
+        .eq("conversation_id", payload.conversationId)
+        .eq("is_muted", true)
+        .in("user_id", permittedIds);
+      if (preferenceError) throw preferenceError;
+      const mutedIds = new Set((muted || []).map((preference) => preference.user_id));
+      permittedIds = permittedIds.filter((userId) => !mutedIds.has(userId));
+      if (!permittedIds.length) return;
+    }
 
     const { data: subscriptions, error } = await supabase
       .from("push_subscriptions").select("id, endpoint, p256dh, auth")
@@ -49,8 +63,8 @@ export async function dispatchWebPushNotification(
     }
 
     const pushData = {
-      title: payload.title || "Nova mensagem",
-      body: displayBody || "Você recebeu uma nova mensagem.",
+      title: "Nova mensagem",
+      body: `${payload.title || "Contato"}: ${displayBody || "Você recebeu uma nova mensagem."}`,
       icon: "/logo-dark.png",
       badge: "/logo-dark.png",
       conversationId: payload.conversationId,

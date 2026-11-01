@@ -58,7 +58,27 @@ export function useConversationActions() {
     queryClient.invalidateQueries({ queryKey: ["chat-conversations"] });
     queryClient.invalidateQueries({ queryKey: ["chat-archived-count"] });
     queryClient.invalidateQueries({ queryKey: ["chat-pins"] });
+    queryClient.invalidateQueries({ queryKey: ["chat-muted-conversations"] });
   };
+
+  const muteMutation = useMutation({
+    mutationFn: async ({ conversationId, isMuted }: { conversationId: string; isMuted: boolean }) => {
+      if (!activeCompanyId || !user) throw new Error("Usuário ou empresa não selecionada");
+      const { error } = await supabase.from("chat_notification_preferences" as any).upsert({
+        company_id: activeCompanyId,
+        conversation_id: conversationId,
+        user_id: user.id,
+        is_muted: isMuted,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "conversation_id,user_id" });
+      if (error) throw error;
+    },
+    onSuccess: (_, { isMuted }) => {
+      toast.success(isMuted ? "Notificações da conversa silenciadas." : "Notificações da conversa ativadas.");
+      invalidateChatQueries();
+    },
+    onError: (error: Error) => toast.error(`Erro ao alterar notificações: ${error.message}`),
+  });
 
   // 1. Pin Conversation
   const pinMutation = useMutation({
@@ -169,24 +189,27 @@ export function useConversationActions() {
       saveLocalArchived(activeCompanyId, conversationId);
 
       // Tier 1: Try updating with all columns
-      let res = await supabase
+      const res = await supabase
         .from("chat_conversations")
         .update({
           is_archived: true,
           archived_at: new Date().toISOString(),
           archived_by: user.id,
         } as any)
-        .eq("id", conversationId);
+        .eq("id", conversationId)
+        .select("id");
 
-      if (res.error) {
+      if (res.error || !res.data?.length) {
         // Tier 2: Try minimal update (is_archived only)
         const res2 = await supabase
           .from("chat_conversations")
           .update({ is_archived: true } as any)
-          .eq("id", conversationId);
+          .eq("id", conversationId)
+          .select("id");
 
-        if (res2.error) {
-          console.warn("DB archive column error, fallback to local storage state:", res2.error);
+        if (res2.error || !res2.data?.length) {
+          removeLocalArchived(activeCompanyId, conversationId);
+          throw res2.error || new Error("Conversa não encontrada ou sem permissão para arquivar.");
         }
       }
     },
@@ -208,24 +231,27 @@ export function useConversationActions() {
       removeLocalArchived(activeCompanyId, conversationId);
 
       // Tier 1: Try full update
-      let res = await supabase
+      const res = await supabase
         .from("chat_conversations")
         .update({
           is_archived: false,
           archived_at: null,
           archived_by: null,
         } as any)
-        .eq("id", conversationId);
+        .eq("id", conversationId)
+        .select("id");
 
-      if (res.error) {
+      if (res.error || !res.data?.length) {
         // Tier 2: Try minimal update
         const res2 = await supabase
           .from("chat_conversations")
           .update({ is_archived: false } as any)
-          .eq("id", conversationId);
+          .eq("id", conversationId)
+          .select("id");
 
-        if (res2.error) {
-          console.warn("DB unarchive column error, fallback to local storage state:", res2.error);
+        if (res2.error || !res2.data?.length) {
+          saveLocalArchived(activeCompanyId, conversationId);
+          throw res2.error || new Error("Conversa não encontrada ou sem permissão para desarquivar.");
         }
       }
     },
@@ -393,6 +419,7 @@ export function useConversationActions() {
     markConversationRead: markReadMutation.mutateAsync,
     archiveConversation: archiveMutation.mutateAsync,
     unarchiveConversation: unarchiveMutation.mutateAsync,
+    setConversationMuted: muteMutation.mutateAsync,
     createLeadFromConversation: createLeadMutation.mutateAsync,
     deleteConversation: deleteMutation.mutateAsync,
     isDeleting: deleteMutation.isPending,
@@ -404,6 +431,7 @@ export function useConversationActions() {
       markReadMutation.isPending ||
       archiveMutation.isPending ||
       unarchiveMutation.isPending ||
+      muteMutation.isPending ||
       createLeadMutation.isPending ||
       deleteMutation.isPending,
   };

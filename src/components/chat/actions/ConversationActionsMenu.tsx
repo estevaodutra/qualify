@@ -15,7 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Pin, PinOff, Mail, CheckCircle2, Archive, ArchiveRestore, MoreVertical, Loader2, Trash2 } from "lucide-react";
+import { Pin, PinOff, Mail, CheckCircle2, Archive, ArchiveRestore, Bell, BellOff, MoreVertical, Loader2, Trash2 } from "lucide-react";
 import { ChatConversation } from "@/hooks/useChat";
 import { useConversationActions } from "@/hooks/useConversationActions";
 
@@ -42,6 +42,7 @@ export default function ConversationActionsMenu({
     markConversationRead,
     archiveConversation,
     unarchiveConversation,
+    setConversationMuted,
     deleteConversation,
     isDeleting,
     isPending,
@@ -56,7 +57,7 @@ export default function ConversationActionsMenu({
         await pinConversation(conversation.id);
       }
       onActionComplete?.();
-    } catch (err) {}
+    } catch (err) { return; }
   };
 
   const handleReadToggle = async (e: React.MouseEvent) => {
@@ -68,7 +69,7 @@ export default function ConversationActionsMenu({
         await markConversationUnread(conversation.id);
       }
       onActionComplete?.();
-    } catch (err) {}
+    } catch (err) { return; }
   };
 
   const handleArchiveToggle = async (e: React.MouseEvent) => {
@@ -80,7 +81,15 @@ export default function ConversationActionsMenu({
         await archiveConversation(conversation.id);
       }
       onActionComplete?.();
-    } catch (err) {}
+    } catch (err) { return; }
+  };
+
+  const handleMuteToggle = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await setConversationMuted({ conversationId: conversation.id, isMuted: !conversation.is_muted });
+      onActionComplete?.();
+    } catch (err) { return; }
   };
 
   const handleConfirmDelete = async () => {
@@ -88,7 +97,7 @@ export default function ConversationActionsMenu({
       await deleteConversation(conversation.id);
       setConfirmDeleteOpen(false);
       onActionComplete?.();
-    } catch (err) {}
+    } catch (err) { return; }
   };
 
   const contactLabel = conversation.lead?.name?.trim() || conversation.contact_name?.trim() || conversation.lead?.phone || conversation.contact_phone || "esta conversa";
@@ -162,6 +171,16 @@ export default function ConversationActionsMenu({
                 <span>Arquivar conversa</span>
               </>
             )}
+          </DropdownMenuItem>
+
+          <DropdownMenuSeparator className="my-1 border-border/40" />
+
+          <DropdownMenuItem
+            onClick={handleMuteToggle}
+            className="text-xs font-semibold py-2 rounded-lg cursor-pointer flex items-center gap-2.5"
+          >
+            {conversation.is_muted ? <Bell className="h-4 w-4 text-purple-500 shrink-0" /> : <BellOff className="h-4 w-4 text-purple-500 shrink-0" />}
+            <span>{conversation.is_muted ? "Ativar notificações" : "Silenciar notificações"}</span>
           </DropdownMenuItem>
 
           <DropdownMenuSeparator className="my-1 border-border/40" />

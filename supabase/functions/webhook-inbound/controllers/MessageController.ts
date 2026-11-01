@@ -790,24 +790,77 @@ export async function processMessageEvent(
   // 4. ==========================================
   // WEB PUSH NOTIFICATION DISPATCHER (INBOUND REAL MESSAGES)
   // ==========================================
-  if (isInbound && context.chatType !== "group" && instance?.user_id && instance?.company_id && context.messageId) {
+  if (isInbound && !context.isFromMe && instance?.user_id && instance?.company_id && context.messageId) {
     try {
-      const { data: message } = await supabase.from("chat_messages")
-        .select("id, conversation_id, body, message_type")
+      const { data: message, error: messageError } = await supabase.from("chat_messages")
+        .select("id, conversation_id, body, message_type, is_internal")
         .eq("company_id", instance.company_id)
         .eq("message_id", context.messageId)
         .eq("sender_type", "lead")
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (!message) return;
-      const { data: conversation } = await supabase.from("chat_conversations")
-        .select("id, operator_id, contact_name")
+      if (messageError) throw messageError;
+      if (!message || message.is_internal) return;
+      const { data: conversation, error: conversationError } = await supabase.from("chat_conversations")
+        .select("id, operator_id, contact_name, contact_phone, lead_id, is_archived, status")
         .eq("id", message.conversation_id)
         .eq("company_id", instance.company_id)
         .eq("instance_id", instance.id)
         .maybeSingle();
+      if (conversationError) throw conversationError;
       if (!conversation) return;
+      if (conversation.is_archived || conversation.status === "archived" || conversation.status === "blocked") return;
+
+      let leadIsGroup = false;
+      if (conversation.lead_id) {
+        const { data: lead, error: leadError } = await supabase.from("leads")
+          .select("status, custom_fields")
+          .eq("id", conversation.lead_id)
+          .eq("company_id", instance.company_id)
+          .maybeSingle();
+        if (leadError) throw leadError;
+        if (lead?.status === "blocked") return;
+        leadIsGroup = lead?.custom_fields?.is_group === true;
+      }
+
+      const looksLikeGroup = (value: string) => {
+        const normalized = value.trim().toLowerCase();
+        const digits = normalized.replace(/\D/g, "");
+        return normalized.includes("@g.us") || normalized.endsWith("-group") || digits.startsWith("1203") || digits.length > 15;
+      };
+      const groupDigits = (value: string) => value.replace(/\D/g, "");
+      const chatJid = context.chatJid || "";
+      const conversationPhone = conversation.contact_phone || "";
+      const groupJid = chatJid.toLowerCase().includes("@g.us") || chatJid.toLowerCase().endsWith("-group") || groupDigits(chatJid).startsWith("1203");
+      const isGroup = context.chatType === "group" || groupJid || looksLikeGroup(conversationPhone) || leadIsGroup;
+      if (isGroup) {
+        const jidDigits = groupDigits(chatJid);
+        const conversationDigits = groupDigits(conversationPhone);
+        if (jidDigits && conversationDigits && jidDigits !== conversationDigits) return;
+        const targetDigits = conversationDigits || jidDigits;
+        if (!targetDigits) return;
+        const { data: groups, error: groupsError } = await supabase.from("group_campaigns")
+          .select("id, group_jid, config")
+          .eq("company_id", instance.company_id)
+          .not("group_jid", "is", null);
+        if (groupsError) throw groupsError;
+        const matchingGroups = (groups || []).filter((group) => groupDigits(group.group_jid || "") === targetDigits);
+        if (!matchingGroups.length) return;
+        const { data: assignments, error: assignmentsError } = await supabase.from("group_folder_assignments")
+          .select("group_id")
+          .eq("company_id", instance.company_id)
+          .in("group_id", matchingGroups.map((group) => group.id));
+        if (assignmentsError) throw assignmentsError;
+        const folderGroupIds = new Set((assignments || []).map((assignment) => assignment.group_id));
+        const visible = matchingGroups.some((group) => {
+          const config = group.config || {};
+          return (config.is_crm_group === true || config.registered_in_crm === true || folderGroupIds.has(group.id))
+            && config.show_in_chat !== false;
+        });
+        if (!visible) return;
+      }
+
       const senderTitle = conversation.contact_name || context.senderName || context.senderPhone || "Nova mensagem";
       const rawMsgObj = rawEvent.body || rawEvent.payload || rawEvent;
       const rawText = typeof rawMsgObj === "string" ? rawMsgObj : rawMsgObj?.text?.message || rawMsgObj?.text || rawMsgObj?.message?.conversation || rawMsgObj?.message?.extendedTextMessage?.text || rawMsgObj?.caption || "";

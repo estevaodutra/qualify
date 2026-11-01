@@ -21,6 +21,7 @@ export interface ChatConversation {
   waiting_since: string | null;
   tags: string[];
   is_archived?: boolean;
+  is_muted?: boolean;
   archived_at?: string | null;
   archived_by?: string | null;
   is_pinned?: boolean;
@@ -443,6 +444,21 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
     enabled: !!activeCompanyId && !!user,
   });
 
+  const { data: mutedConversationIds = [] } = useQuery({
+    queryKey: ["chat-muted-conversations", activeCompanyId, user?.id],
+    queryFn: async () => {
+      if (!activeCompanyId || !user) return [];
+      const { data, error } = await supabase.from("chat_notification_preferences" as any)
+        .select("conversation_id")
+        .eq("company_id", activeCompanyId)
+        .eq("user_id", user.id)
+        .eq("is_muted", true);
+      if (error) throw error;
+      return (data || []).map((preference: { conversation_id: string }) => preference.conversation_id);
+    },
+    enabled: !!activeCompanyId && !!user,
+  });
+
   // Fetch Count of Archived Conversations (combines DB count + local storage count)
   const { data: archivedCount = 0 } = useQuery({
     queryKey: ["chat-archived-count", activeCompanyId],
@@ -556,6 +572,7 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
 
   const rawConversations = useMemo(() => conversationsData?.pages.flat() || [], [conversationsData]);
   const pinnedSet = useMemo(() => new Set(userPins), [userPins]);
+  const mutedSet = useMemo(() => new Set(mutedConversationIds), [mutedConversationIds]);
 
   const conversations = useMemo(() => {
     const localArchivedSet = activeCompanyId ? new Set(getLocalArchived(activeCompanyId)) : new Set<string>();
@@ -563,6 +580,7 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
     const mapped = rawConversations.map((c) => ({
       ...c,
       is_archived: c.is_archived || localArchivedSet.has(c.id),
+      is_muted: mutedSet.has(c.id),
       is_pinned: pinnedSet.has(c.id),
     }));
 
@@ -634,7 +652,7 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
       if (!a.is_pinned && b.is_pinned) return 1;
       return 0;
     });
-  }, [rawConversations, pinnedSet, activeCompanyId, filters, allowedCrmGroupJids, folderGroupJidsMap]);
+  }, [rawConversations, pinnedSet, mutedSet, activeCompanyId, filters, allowedCrmGroupJids, folderGroupJidsMap]);
 
   // Auto-sync CRM groups into chat_conversations
   useQuery({
@@ -659,7 +677,7 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
 
         const { data: existingConvs } = await supabase
           .from("chat_conversations")
-          .select("id, contact_name, contact_phone, lead_id, instance_id, is_archived")
+          .select("id, contact_name, contact_phone, lead_id, instance_id, is_archived, archived_by")
           .eq("company_id", activeCompanyId);
 
         const convPhoneMap = new Map<string, any>();
@@ -756,7 +774,7 @@ export function useChat(filters?: AdvancedChatFilters | ChatFilters, activeConve
             if (existingConv.contact_name === "Grupo" || !existingConv.contact_name) {
               updates.contact_name = groupName;
             }
-            if (existingConv.is_archived) {
+            if (existingConv.is_archived && !existingConv.archived_by) {
               updates.is_archived = false;
             }
             if (!existingConv.instance_id && targetInstanceId) {
