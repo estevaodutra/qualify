@@ -345,31 +345,33 @@ export default function AdminAiAgents() {
               {/* Tronco vertical continuando */}
               <div className="h-6 w-0.5 bg-primary/40" />
 
-              {/* Barra horizontal que distribui para a esquerda e direita */}
-              <div className="w-[80%] h-0.5 bg-primary/40 relative">
-                {/* Linha vertical descendo para a esquerda (Criafy) */}
-                <div className="absolute left-0 top-0 h-6 w-0.5 bg-primary/40" />
-                {/* Linha vertical descendo para a direita (CRM) */}
-                <div className="absolute right-0 top-0 h-6 w-0.5 bg-primary/40" />
-              </div>
+              {/* Barra horizontal que distribui quando há múltiplos especialistas */}
+              {specialists.length > 1 ? (
+                <div className="w-[80%] h-0.5 bg-primary/40 relative">
+                  <div className="absolute left-0 top-0 h-6 w-0.5 bg-primary/40" />
+                  <div className="absolute right-0 top-0 h-6 w-0.5 bg-primary/40" />
+                </div>
+              ) : (
+                <div className="h-6 w-0.5 bg-primary/40" />
+              )}
             </div>
           </div>
 
           {/* ============================================================ */}
-          {/* NÍVEL 2: AGENTES ESPECIALISTAS DEPARTAMENTAIS (PARES LATERAIS) */}
+          {/* NÍVEL 2: AGENTES ESPECIALISTAS DEPARTAMENTAIS */}
           {/* ============================================================ */}
           <div className="space-y-4">
             <div className="text-center space-y-1">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
                 <Layers className="w-3.5 h-3.5" />
-                Nível 2: Especialistas Departamentais (Pares Laterais)
+                Nível 2: Especialista Departamental (Execução Operacional)
               </span>
               <p className="text-xs text-muted-foreground max-w-2xl mx-auto">
-                Estes agentes operam no mesmo nível hierárquico — nenhum é superior ao outro. Cada um domina um domínio específico do negócio e responde diretamente ao Orquestrador.
+                Responsável pelo domínio tático de criação e copywriting (Criafy), recebendo direcionamento estratégico do Orquestrador.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-6xl mx-auto pt-2">
+            <div className={specialists.length > 1 ? "grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-6xl mx-auto pt-2" : "max-w-2xl mx-auto pt-2"}>
               {specialists.map((agent) => {
                 const isCriafy = agent.slug.includes("criafy") || agent.slug.includes("instagram");
                 const badgeColor = isCriafy
