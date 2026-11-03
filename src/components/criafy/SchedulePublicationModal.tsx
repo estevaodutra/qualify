@@ -48,6 +48,7 @@ import {
   FileText,
   Edit3,
   Check,
+  FlaskConical,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -56,6 +57,7 @@ import {
   CriafyInstagramAccount,
   CriafyContent,
   CriafyPublicationType,
+  TrialGraduationStrategy,
 } from "@/types/criafy";
 import { extractAndValidateMedia } from "@/utils/criafyMediaValidator";
 
@@ -252,6 +254,9 @@ export function SchedulePublicationModal({
   >(["REEL", "STORY_VIDEO"]);
   const [caption, setCaption] = useState<string>("");
   const [generatingAi, setGeneratingAi] = useState(false);
+  const [isTrialReel, setIsTrialReel] = useState<boolean>(false);
+  const [trialGraduationStrategy, setTrialGraduationStrategy] =
+    useState<TrialGraduationStrategy>("SS_PERFORMANCE");
 
   // Story Sequence fields
   const [sequenceContentIds, setSequenceContentIds] = useState<string[]>([]);
@@ -322,6 +327,14 @@ export function SchedulePublicationModal({
   const [generatingBulkAiIdx, setGeneratingBulkAiIdx] = useState<number | null>(
     null
   );
+
+  // Bulk Trial Reels (Postar Reels em formato de teste para não-seguidores)
+  const [bulkIsTrialReel, setBulkIsTrialReel] = useState<boolean>(false);
+  const [bulkTrialGraduationStrategy, setBulkTrialGraduationStrategy] =
+    useState<TrialGraduationStrategy>("SS_PERFORMANCE");
+  const [slotTrialOverrides, setSlotTrialOverrides] = useState<
+    Record<string, boolean>
+  >({});
 
   const handleAddCaptionVariation = () => {
     setBulkCaptionVariations((prev) => [...prev, ""]);
@@ -1271,6 +1284,12 @@ export function SchedulePublicationModal({
               reelCounter++;
             }
 
+            const isItemTrial =
+              pubType === "REEL" &&
+              (slotTrialOverrides[slot.item.key] !== undefined
+                ? slotTrialOverrides[slot.item.key]
+                : bulkIsTrialReel);
+
             pubPayloads.push({
               company_id: activeCompanyId,
               account_id: targetAccountId,
@@ -1280,6 +1299,10 @@ export function SchedulePublicationModal({
               scheduled_at: scheduledDate.toISOString(),
               status: "SCHEDULED" as const,
               is_auto_queued: true,
+              is_trial: isItemTrial,
+              trial_graduation_strategy: isItemTrial
+                ? bulkTrialGraduationStrategy
+                : undefined,
             });
           });
         });
@@ -1372,6 +1395,7 @@ export function SchedulePublicationModal({
             baseScheduledDate.getTime() + i * 60000
           );
           const isStory = fmt === "STORY_VIDEO" || fmt === "STORY_IMAGE";
+          const isItemTrial = fmt === "REEL" && isTrialReel;
 
           const pub = await criafyService.createPublication({
             company_id: activeCompanyId,
@@ -1381,6 +1405,10 @@ export function SchedulePublicationModal({
             caption: isStory ? undefined : caption.trim() || undefined,
             scheduled_at: itemScheduled.toISOString(),
             status: pubStatus,
+            is_trial: isItemTrial,
+            trial_graduation_strategy: isItemTrial
+              ? trialGraduationStrategy
+              : undefined,
           });
           createdPubs.push(pub);
         }
@@ -1739,6 +1767,106 @@ export function SchedulePublicationModal({
                 </div>
               </div>
 
+              {/* Opção Oficial: Postar Reel em formato de Teste (Trial Reels) */}
+              {hasSingleReel && (
+                <div
+                  className={`p-3 rounded-xl border transition-all ${
+                    isTrialReel
+                      ? "bg-amber-500/10 border-amber-500/40 shadow-xs"
+                      : "bg-muted/25 border-border/60 hover:bg-muted/35"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-start gap-2.5">
+                      <div
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+                          isTrialReel
+                            ? "bg-amber-500 text-white shadow-xs"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        <FlaskConical className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs font-bold text-foreground">
+                            Postar Reel em formato de "Teste" (Trial Reel)
+                          </span>
+                          <Badge
+                            variant="outline"
+                            className="text-[9px] bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 font-semibold px-1 py-0"
+                          >
+                            Meta API
+                          </Badge>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">
+                          O Reel será distribuído inicialmente{" "}
+                          <strong className="text-foreground">apenas para não-seguidores</strong>.
+                          Valide gancho e retenção sem poluir a grade dos seus seguidores atuais.
+                        </p>
+                      </div>
+                    </div>
+
+                    <Switch
+                      checked={isTrialReel}
+                      onCheckedChange={setIsTrialReel}
+                    />
+                  </div>
+
+                  {isTrialReel && (
+                    <div className="mt-3 pt-2.5 border-t border-amber-500/20 space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <Label className="text-[11px] font-semibold text-foreground">
+                          Como você quer que o Reel vá para os seus seguidores?
+                        </Label>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div
+                          onClick={() => setTrialGraduationStrategy("SS_PERFORMANCE")}
+                          className={`p-2 rounded-lg border cursor-pointer transition-all ${
+                            trialGraduationStrategy === "SS_PERFORMANCE"
+                              ? "bg-amber-500/20 border-amber-500 text-amber-950 dark:text-amber-100 font-semibold shadow-2xs"
+                              : "bg-background border-border/60 hover:border-muted-foreground/30 text-muted-foreground"
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 text-xs font-bold">
+                            <Sparkles className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                            Auto por Performance
+                            {trialGraduationStrategy === "SS_PERFORMANCE" && (
+                              <CheckCircle2 className="w-3 h-3 text-amber-600 ml-auto" />
+                            )}
+                          </div>
+                          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
+                            O Instagram compartilha automaticamente com os seguidores se o Reel tiver boa tração.
+                          </p>
+                        </div>
+
+                        <div
+                          onClick={() => setTrialGraduationStrategy("MANUAL")}
+                          className={`p-2 rounded-lg border cursor-pointer transition-all ${
+                            trialGraduationStrategy === "MANUAL"
+                              ? "bg-amber-500/20 border-amber-500 text-amber-950 dark:text-amber-100 font-semibold shadow-2xs"
+                              : "bg-background border-border/60 hover:border-muted-foreground/30 text-muted-foreground"
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 text-xs font-bold">
+                            <Check className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                            Graduação Manual no App
+                            {trialGraduationStrategy === "MANUAL" && (
+                              <CheckCircle2 className="w-3 h-3 text-amber-600 ml-auto" />
+                            )}
+                          </div>
+                          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
+                            Você avalia as métricas e clica em compartilhar com seguidores pelo app do Instagram.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Single Media Selector */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
@@ -2076,6 +2204,76 @@ export function SchedulePublicationModal({
                         📖 Apenas Stories (≤ 60s)
                       </button>
                     </div>
+
+                    {bulkPostReelsFeed && (
+                      <div
+                        className={`mt-2.5 p-2.5 rounded-lg border transition-all ${
+                          bulkIsTrialReel
+                            ? "bg-amber-500/10 border-amber-500/40 text-foreground"
+                            : "bg-muted/20 border-border/60 text-muted-foreground"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <FlaskConical
+                              className={`w-4 h-4 shrink-0 ${
+                                bulkIsTrialReel ? "text-amber-500" : "text-muted-foreground"
+                              }`}
+                            />
+                            <div>
+                              <span className="text-xs font-bold flex items-center gap-1">
+                                Postar Reels em Formato de "Teste" (Trial Reels)
+                                <Badge
+                                  variant="outline"
+                                  className="text-[9px] bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 font-semibold px-1 py-0"
+                                >
+                                  Meta
+                                </Badge>
+                              </span>
+                              <p className="text-[10px] text-muted-foreground leading-tight">
+                                Exibidos exclusivamente para não-seguidores na fase de teste inicial.
+                              </p>
+                            </div>
+                          </div>
+                          <Switch
+                            checked={bulkIsTrialReel}
+                            onCheckedChange={setBulkIsTrialReel}
+                          />
+                        </div>
+
+                        {bulkIsTrialReel && (
+                          <div className="mt-2 pt-2 border-t border-amber-500/20 flex flex-wrap items-center justify-between gap-2 text-xs">
+                            <span className="text-[10px] font-semibold text-muted-foreground">
+                              Graduação para seguidores:
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setBulkTrialGraduationStrategy("SS_PERFORMANCE")}
+                                className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all cursor-pointer ${
+                                  bulkTrialGraduationStrategy === "SS_PERFORMANCE"
+                                    ? "bg-amber-500 text-white border-amber-500 shadow-xs"
+                                    : "bg-background border-muted text-muted-foreground hover:text-foreground"
+                                }`}
+                              >
+                                Auto por Performance
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setBulkTrialGraduationStrategy("MANUAL")}
+                                className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all cursor-pointer ${
+                                  bulkTrialGraduationStrategy === "MANUAL"
+                                    ? "bg-amber-500 text-white border-amber-500 shadow-xs"
+                                    : "bg-background border-muted text-muted-foreground hover:text-foreground"
+                                }`}
+                              >
+                                Manual no App
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -2722,6 +2920,40 @@ export function SchedulePublicationModal({
                                                 {durLabel
                                                   ? ` (${durLabel})`
                                                   : ""}
+                                              </span>
+                                            </button>
+                                          )}
+
+                                          {/* Toggle se este Reel específico é Teste (Trial) */}
+                                          {slot.publicationTypes.includes("REEL") && (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                const current =
+                                                  slotTrialOverrides[slot.item.key] !== undefined
+                                                    ? slotTrialOverrides[slot.item.key]
+                                                    : bulkIsTrialReel;
+                                                setSlotTrialOverrides((prev) => ({
+                                                  ...prev,
+                                                  [slot.item.key]: !current,
+                                                }));
+                                              }}
+                                              title="Alternar se este Reel específico será postado no formato de Teste (Trial) ou Normal"
+                                              className={`inline-flex items-center gap-1 rounded text-[9px] px-1.5 py-0.5 font-bold border transition-all cursor-pointer ${
+                                                (slotTrialOverrides[slot.item.key] !== undefined
+                                                  ? slotTrialOverrides[slot.item.key]
+                                                  : bulkIsTrialReel)
+                                                  ? "bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/50 shadow-2xs"
+                                                  : "bg-muted/40 text-muted-foreground border-border/50 hover:bg-muted"
+                                              }`}
+                                            >
+                                              <FlaskConical className="w-2.5 h-2.5 text-amber-500" />
+                                              <span>
+                                                {(slotTrialOverrides[slot.item.key] !== undefined
+                                                  ? slotTrialOverrides[slot.item.key]
+                                                  : bulkIsTrialReel)
+                                                  ? "Reel Teste"
+                                                  : "Reel Normal"}
                                               </span>
                                             </button>
                                           )}

@@ -1,6 +1,6 @@
 {
-  "commit": "1b3c081649ab6ecc9d1f5815fee454ab516d4d00",
-  "shortCommit": "1b3c081",
-  "message": "refactor(ai-agents): remove crm agent and prepare criafy agent hierarchy",
-  "builtAt": "2026-11-03T17:29:37.694Z"
+  "commit": "9c9a0483ab09bf25fb1783220b6c5f0da9b20367",
+  "shortCommit": "9c9a048",
+  "message": "feat(ai-criafy): ingest 13 Instagram skills and native tools into Criafy agent",
+  "builtAt": "2026-11-03T17:44:13.910Z"
 }

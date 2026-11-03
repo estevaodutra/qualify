@@ -38,6 +38,7 @@ import {
   Plus,
   FileText,
   Check,
+  FlaskConical,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -47,6 +48,7 @@ import {
   CriafyContent,
   CriafyPublication,
   CriafyPublicationType,
+  TrialGraduationStrategy,
 } from "@/types/criafy";
 import { extractAndValidateMedia } from "@/utils/criafyMediaValidator";
 
@@ -210,6 +212,14 @@ export function BulkScheduleModal({
   const [generatingBulkAiIdx, setGeneratingBulkAiIdx] = useState<number | null>(
     null
   );
+
+  // Bulk Trial Reels (Postar Reels em formato de teste para não-seguidores)
+  const [bulkIsTrialReel, setBulkIsTrialReel] = useState<boolean>(false);
+  const [bulkTrialGraduationStrategy, setBulkTrialGraduationStrategy] =
+    useState<TrialGraduationStrategy>("SS_PERFORMANCE");
+  const [slotTrialOverrides, setSlotTrialOverrides] = useState<
+    Record<string, boolean>
+  >({});
 
   const handleAddCaptionVariation = () => {
     setBulkCaptionVariations((prev) => [...prev, ""]);
@@ -766,6 +776,12 @@ export function BulkScheduleModal({
             reelCounter++;
           }
 
+          const isItemTrial =
+            pubType === "REEL" &&
+            (slotTrialOverrides[slot.item.key] !== undefined
+              ? slotTrialOverrides[slot.item.key]
+              : bulkIsTrialReel);
+
           pubPayloads.push({
             company_id: activeCompanyId,
             account_id: targetAccountId,
@@ -775,6 +791,10 @@ export function BulkScheduleModal({
             scheduled_at: scheduledTime.toISOString(),
             status: "SCHEDULED" as const,
             is_auto_queued: true,
+            is_trial: isItemTrial,
+            trial_graduation_strategy: isItemTrial
+              ? bulkTrialGraduationStrategy
+              : undefined,
           });
         });
       }
@@ -1058,6 +1078,76 @@ export function BulkScheduleModal({
                     </p>
                   </button>
                 </div>
+
+                {bulkPostReelsFeed && (
+                  <div
+                    className={`mt-2.5 p-2.5 rounded-lg border transition-all ${
+                      bulkIsTrialReel
+                        ? "bg-amber-500/10 border-amber-500/40 text-foreground"
+                        : "bg-muted/20 border-border/60 text-muted-foreground"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <FlaskConical
+                          className={`w-4 h-4 shrink-0 ${
+                            bulkIsTrialReel ? "text-amber-500" : "text-muted-foreground"
+                          }`}
+                        />
+                        <div>
+                          <span className="text-xs font-bold flex items-center gap-1">
+                            Postar Reels em Formato de "Teste" (Trial Reels)
+                            <Badge
+                              variant="outline"
+                              className="text-[9px] bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 font-semibold px-1 py-0"
+                            >
+                              Meta
+                            </Badge>
+                          </span>
+                          <p className="text-[10px] text-muted-foreground leading-tight">
+                            Exibidos exclusivamente para não-seguidores na fase de teste inicial.
+                          </p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={bulkIsTrialReel}
+                        onCheckedChange={setBulkIsTrialReel}
+                      />
+                    </div>
+
+                    {bulkIsTrialReel && (
+                      <div className="mt-2 pt-2 border-t border-amber-500/20 flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <span className="text-[10px] font-semibold text-muted-foreground">
+                          Graduação para seguidores:
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setBulkTrialGraduationStrategy("SS_PERFORMANCE")}
+                            className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all cursor-pointer ${
+                              bulkTrialGraduationStrategy === "SS_PERFORMANCE"
+                                ? "bg-amber-500 text-white border-amber-500 shadow-xs"
+                                : "bg-background border-muted text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            Auto por Performance
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setBulkTrialGraduationStrategy("MANUAL")}
+                            className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all cursor-pointer ${
+                              bulkTrialGraduationStrategy === "MANUAL"
+                                ? "bg-amber-500 text-white border-amber-500 shadow-xs"
+                                : "bg-background border-muted text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            Manual no App
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1470,7 +1560,7 @@ export function BulkScheduleModal({
                                     <div className="font-semibold text-[11px] truncate max-w-[140px]">
                                       {slot.item.title}
                                     </div>
-                                    <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+                                    <div className="text-[10px] text-muted-foreground flex items-center gap-1.5 flex-wrap">
                                       <span
                                         className={
                                           hasBoth
@@ -1480,6 +1570,39 @@ export function BulkScheduleModal({
                                       >
                                         {formatLabel}
                                       </span>
+
+                                      {slot.publicationTypes.includes("REEL") && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const current =
+                                              slotTrialOverrides[slot.item.key] !== undefined
+                                                ? slotTrialOverrides[slot.item.key]
+                                                : bulkIsTrialReel;
+                                            setSlotTrialOverrides((prev) => ({
+                                              ...prev,
+                                              [slot.item.key]: !current,
+                                            }));
+                                          }}
+                                          title="Alternar se este Reel específico será postado no formato de Teste (Trial) ou Normal"
+                                          className={`inline-flex items-center gap-1 rounded text-[9px] px-1 py-0 font-bold border transition-all cursor-pointer ${
+                                            (slotTrialOverrides[slot.item.key] !== undefined
+                                              ? slotTrialOverrides[slot.item.key]
+                                              : bulkIsTrialReel)
+                                              ? "bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/50 shadow-2xs"
+                                              : "bg-muted/40 text-muted-foreground border-border/50 hover:bg-muted"
+                                          }`}
+                                        >
+                                          <FlaskConical className="w-2.5 h-2.5 text-amber-500" />
+                                          <span>
+                                            {(slotTrialOverrides[slot.item.key] !== undefined
+                                              ? slotTrialOverrides[slot.item.key]
+                                              : bulkIsTrialReel)
+                                              ? "Teste"
+                                              : "Normal"}
+                                          </span>
+                                        </button>
+                                      )}
                                     </div>
 
                                     {/* Botão de Legenda Específica para este Reel / Variação Atribuída */}

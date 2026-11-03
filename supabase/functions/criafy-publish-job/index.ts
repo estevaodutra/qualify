@@ -113,6 +113,8 @@ Deno.serve(async (req) => {
       caption: pub.caption,
       media_url: content.media_url,
       media_type: content.media_type,
+      is_trial: pub.is_trial || false,
+      trial_graduation_strategy: pub.trial_graduation_strategy || null,
       account_username: account.username,
       instagram_account_id: igUserId,
       width: content.width,
@@ -136,19 +138,30 @@ Deno.serve(async (req) => {
     // 2. Criar Container na Meta Graph API conforme o tipo de publicação
     if (pub.publication_type === "REEL") {
       const containerUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/${igUserId}/media`;
+      const isTrial = Boolean(pub.is_trial);
       const params = new URLSearchParams({
         media_type: "REELS",
         video_url: mediaUrl,
         caption,
-        share_to_feed: "true",
+        // No modo teste, não compartilha para o feed principal de seguidores
+        share_to_feed: isTrial ? "false" : "true",
         access_token: accessToken,
       });
+
+      if (isTrial) {
+        const strategy = pub.trial_graduation_strategy === "MANUAL" ? "MANUAL" : "SS_PERFORMANCE";
+        params.set("trial_params", JSON.stringify({ graduation_strategy: strategy }));
+      }
 
       const res = await fetch(`${containerUrl}?${params.toString()}`, { method: "POST" });
       const data = await res.json();
       if (data.error) {
         const sub = data.error.error_subcode ? ` [Subcode: ${data.error.error_subcode}]` : "";
-        throw new Error(`Meta Reels Container Error: ${data.error.message}${sub}`);
+        let extraHint = "";
+        if (isTrial) {
+          extraHint = " — Dica: Se o erro for sobre Trial Reels, certifique-se de que a conta profissional cumpre as regras de elegibilidade da Meta (ex: histórico de engajamento ativo).";
+        }
+        throw new Error(`Meta Reels Container Error: ${data.error.message}${sub}${extraHint}`);
       }
       containerId = data.id;
 

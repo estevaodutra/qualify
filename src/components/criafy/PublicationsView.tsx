@@ -32,6 +32,7 @@ import {
   ExternalLink,
   Repeat,
   Layers,
+  FlaskConical,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CriafySubsidebar, CriafySubsidebarGroup } from "./CriafySubsidebar";
@@ -296,6 +297,7 @@ export function PublicationsView({
 
   const scheduledCount = publications.filter((p) => p.status === "SCHEDULED").length;
   const publishedCount = publications.filter((p) => p.status === "PUBLISHED").length;
+  const trialCount = publications.filter((p) => Boolean(p.is_trial)).length;
 
   const pubSubsidebarGroups: CriafySubsidebarGroup[] = [
     {
@@ -303,6 +305,7 @@ export function PublicationsView({
       items: [
         { id: "agendadas", label: "Agendadas", icon: Clock, count: scheduledCount },
         { id: "publicadas", label: "Publicadas", icon: CheckCircle2, count: publishedCount },
+        { id: "testes", label: "Reels de Teste (Trial)", icon: FlaskConical, count: trialCount },
         { id: "historico", label: "Histórico Completo", icon: Send, count: publications.length },
       ],
     },
@@ -318,6 +321,7 @@ export function PublicationsView({
   const displayedPublications = publications.filter((p) => {
     if (activeSubTab === "agendadas") return p.status === "SCHEDULED" || p.status === "PUBLISHING";
     if (activeSubTab === "publicadas") return p.status === "PUBLISHED";
+    if (activeSubTab === "testes") return Boolean(p.is_trial);
     return true; // historico
   });
 
@@ -440,6 +444,20 @@ export function PublicationsView({
                     <Badge variant="outline" className="text-[10px] uppercase font-semibold">
                       {pub.publication_type}
                     </Badge>
+                    {pub.is_trial && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 font-bold flex items-center gap-1"
+                        title={`Reel de Teste (Exclusivo para Não-Seguidores). Graduação: ${
+                          pub.trial_graduation_strategy === "MANUAL"
+                            ? "Manual pelo App"
+                            : "Automática por Performance"
+                        }`}
+                      >
+                        <FlaskConical className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
+                        Reel Teste ({pub.trial_graduation_strategy === "MANUAL" ? "Manual" : "Auto"})
+                      </Badge>
+                    )}
                     {pub.story_sequence_id && (
                       <Badge
                         variant="outline"

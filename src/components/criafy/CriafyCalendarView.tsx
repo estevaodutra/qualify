@@ -33,6 +33,7 @@ import {
   Layers,
   Sparkles,
   Zap,
+  FlaskConical,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -489,7 +490,9 @@ export function CriafyCalendarView({
                                     pub.sequence_total || 1
                                   }`
                                 : pub.publication_type === "REEL"
-                                ? "Reel"
+                                ? pub.is_trial
+                                  ? "Reel 🧪"
+                                  : "Reel"
                                 : pub.publication_type === "FEED"
                                 ? "Feed"
                                 : "Story"}
@@ -807,6 +810,24 @@ export function CriafyCalendarView({
                   >
                     Story {selectedPub.sequence_order || 1} de{" "}
                     {selectedPub.sequence_total || 1}
+                  </Badge>
+                </div>
+              )}
+
+              {/* Trial Reel Info Banner if applicable */}
+              {selectedPub.is_trial && (
+                <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-between text-xs text-amber-700 dark:text-amber-300">
+                  <span className="flex items-center gap-1.5 font-bold">
+                    <FlaskConical className="w-4 h-4 text-amber-500" />
+                    Reel em Formato de "Teste" (Trial Reel)
+                  </span>
+                  <Badge
+                    variant="outline"
+                    className="border-amber-500/40 text-[10px] bg-amber-500/10 text-amber-800 dark:text-amber-200"
+                  >
+                    {selectedPub.trial_graduation_strategy === "MANUAL"
+                      ? "Graduação Manual pelo App"
+                      : "Graduação Auto por Performance"}
                   </Badge>
                 </div>
               )}

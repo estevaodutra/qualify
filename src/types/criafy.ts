@@ -100,6 +100,8 @@ export interface CriafyQueueRule {
   updated_at: string;
 }
 
+export type TrialGraduationStrategy = "SS_PERFORMANCE" | "MANUAL";
+
 export interface CriafyPublication {
   id: string;
   company_id: string;
@@ -116,6 +118,8 @@ export interface CriafyPublication {
   story_sequence_id?: string | null;
   sequence_order?: number | null;
   sequence_total?: number | null;
+  is_trial?: boolean;
+  trial_graduation_strategy?: TrialGraduationStrategy | null;
   created_by?: string;
   created_at: string;
   updated_at: string;
