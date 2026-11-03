@@ -1,6 +1,6 @@
 {
-  "commit": "07068960bda269197879f5085517b1285c380ca5",
-  "shortCommit": "0706896",
-  "message": "feat(criafy): adicionar suporte a postagem de Reels em formato de teste (Trial Reels da Meta)",
-  "builtAt": "2026-11-03T17:53:56.389Z"
+  "commit": "ad4f834bcd99dec5cdcee4927057b8c0fa3521fb",
+  "shortCommit": "ad4f834",
+  "message": "fix(copilot-ai): route instagram queries to Criafy agent and link get_metrics to Supabase accounts",
+  "builtAt": "2026-11-03T20:26:45.473Z"
 }

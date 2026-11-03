@@ -9,6 +9,7 @@ import { ThemeProvider } from "next-themes";
 import { LanguageProvider } from "@/i18n";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { CompanyProvider } from "@/contexts/CompanyContext";
+import { WebphoneProvider } from "@/contexts/WebphoneContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { AppLayout } from "./components/layout/AppLayout";
 
@@ -149,6 +150,7 @@ const App = () => {
         <LanguageProvider>
           <AuthProvider>
             <CompanyProvider>
+            <WebphoneProvider>
               <TooltipProvider>
                 <Toaster />
                 <Sonner position="top-right" expand={true} richColors />
@@ -398,6 +400,7 @@ const App = () => {
                   </Routes>
                 </BrowserRouter>
               </TooltipProvider>
+            </WebphoneProvider>
             </CompanyProvider>
           </AuthProvider>
         </LanguageProvider>
