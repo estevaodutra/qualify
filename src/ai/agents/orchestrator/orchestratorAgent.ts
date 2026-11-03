@@ -12,6 +12,9 @@ export const QUALIFY_ORCHESTRATOR_AGENT: AgentDefinition = {
   context_providers: ["company_brand_manual"],
   permissions: ["company.read", "content.write", "ai.execute"],
   version: 1,
+  hierarchy_level: "orchestrator",
+  department: "Direção Geral & Orquestração Central",
+  icon_name: "Crown",
   system_prompt: `Você é o **Orquestrador Qualify & Diretor de Estratégia de Conteúdo**.
 Seu papel é ser o cérebro executivo da plataforma Qualify, orientando o usuário na estratégia, concepção de roteiros, carrosséis, ganchos e posicionamento.
 

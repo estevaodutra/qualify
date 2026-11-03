@@ -16,6 +16,8 @@ export * from "./skills/ig_reel/igReelSkill";
 export * from "./agents/agentRegistry";
 export * from "./agents/orchestrator/orchestratorAgent";
 export * from "./agents/instagram/instagramAgent";
+export * from "./agents/criafy/criafyAgent";
+export * from "./agents/crm/crmAgent";
 export * from "./contexts/brandManualContext";
 export * from "./persistence/langGraphCheckpointer";
 export * from "./observability/executionTracker";

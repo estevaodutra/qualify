@@ -4,14 +4,25 @@ import { RBACEngine } from "../permissions/rbacEngine";
 import { brandManualTool } from "./company/brandManualTool";
 import { brandManualSearchTool } from "./company/brandManualSearchTool";
 import { scoreHookTool } from "./ai/scoreHookTool";
+import { beatSheetTool } from "./ai/beatSheetTool";
+import { saveContentTool, createDemandTool, getInstagramMetricsTool } from "./criafy/criafyTools";
+import { crmGetLeadTool, crmMoveLeadTool, crmCreateNoteTool } from "./crm/crmTools";
 
 /**
- * Catálogo de Ferramentas (Tools) da Central de IA.
+ * Catálogo Consolidado de Ferramentas (Tools) da Central de IA.
+ * Cada ferramenta possui escopo RBAC estrito, schema Zod e documentação funcional.
  */
 export const ALL_TOOLS: ToolDefinition[] = [
   brandManualSearchTool,
   brandManualTool,
   scoreHookTool,
+  beatSheetTool,
+  saveContentTool,
+  createDemandTool,
+  getInstagramMetricsTool,
+  crmGetLeadTool,
+  crmMoveLeadTool,
+  crmCreateNoteTool,
 ];
 
 export const ToolRegistry: Record<string, ToolDefinition> = {};

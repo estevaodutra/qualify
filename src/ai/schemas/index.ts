@@ -104,6 +104,11 @@ export interface AgentDefinition {
   context_providers: string[]; // slugs of context providers
   permissions: string[]; // permissions granted to the agent
   version: number;
+  hierarchy_level?: "orchestrator" | "specialist"; // Nível na cadeia: "orchestrator" (Liderança central) ou "specialist" (Departamental)
+  parent_agent?: string; // Slug do agente pai/superior (ex: "qualify-orchestrator")
+  department?: string; // Departamento funcional (ex: "Direção Estratégica", "Conteúdo & Redes", "Atendimento & CRM")
+  reports_to?: string; // Nome legível de quem ele reporta (ex: "Orquestrador Qualify")
+  icon_name?: string; // Nome do ícone representativo
 }
 
 // ============================================================

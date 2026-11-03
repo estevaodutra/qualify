@@ -5,13 +5,18 @@ import { resolveContextForAgent } from "../contexts/contextRegistry";
 import { getSkill } from "../skills/skillRegistry";
 import { SystemMessage, HumanMessage, AIMessage, ToolMessage, BaseMessage } from "@langchain/core/messages";
 import { QUALIFY_ORCHESTRATOR_AGENT } from "./orchestrator/orchestratorAgent";
+import { criafyContentAgentDefinition } from "./criafy/criafyAgent";
+import { crmSupportAgentDefinition } from "./crm/crmAgent";
 
 /**
  * Catálogo de Agentes Pré-configurados no Sistema.
- * O Orquestrador Qualify é o agente central fundacional.
+ * O Orquestrador Qualify é o agente central fundacional (Liderança / Chefão),
+ * e abaixo dele operam os agentes especialistas departamentais como Criafy e Atendimento.
  */
 export const PREPARED_AGENTS: AgentDefinition[] = [
   QUALIFY_ORCHESTRATOR_AGENT,
+  criafyContentAgentDefinition,
+  crmSupportAgentDefinition,
 ];
 
 export const AgentRegistry: Record<string, AgentDefinition> = {};
