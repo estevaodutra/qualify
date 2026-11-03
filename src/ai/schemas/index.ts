@@ -180,6 +180,173 @@ export type GenerateBeatSheetInput = z.infer<typeof GenerateBeatSheetInputSchema
 export type GenerateBeatSheetOutput = z.infer<typeof GenerateBeatSheetOutputSchema>;
 
 // ============================================================
+// 7.1 SLOP DETECTION & HUMANIZATION SCHEMAS (ig-human)
+// ============================================================
+export const DetectSlopInputSchema = z.object({
+  text: z.string().min(3, "Texto obrigatório para detecção de IA."),
+});
+
+export const DetectSlopOutputSchema = z.object({
+  human_score: z.number(), // 0 a 100
+  is_human: z.boolean(),
+  verdict: z.enum(["HUMAN", "POSSIBLY_AI", "HIGHLY_ARTIFICIAL"]),
+  breakdown: z.object({
+    burstiness_score: z.number(),
+    burstiness_detail: z.string(),
+    specificity_score: z.number(),
+    specificity_detail: z.string(),
+    slop_score: z.number(),
+    slop_detail: z.string(),
+    fingerprint_score: z.number(),
+    fingerprint_detail: z.string(),
+  }),
+  detected_slop_tokens: z.array(z.string()),
+});
+
+export const HumanizeTextInputSchema = z.object({
+  text: z.string().min(3, "Texto obrigatório para humanização."),
+  clean_invisible: z.boolean().optional().default(true),
+  clean_typographic: z.boolean().optional().default(true),
+  replace_lexical: z.boolean().optional().default(true),
+});
+
+export const HumanizeTextOutputSchema = z.object({
+  cleaned_text: z.string(),
+  invisible_hits_count: z.number(),
+  typographic_hits_count: z.number(),
+  lexical_hits_count: z.number(),
+  original_length: z.number(),
+  cleaned_length: z.number(),
+});
+
+export type DetectSlopInput = z.infer<typeof DetectSlopInputSchema>;
+export type DetectSlopOutput = z.infer<typeof DetectSlopOutputSchema>;
+export type HumanizeTextInput = z.infer<typeof HumanizeTextInputSchema>;
+export type HumanizeTextOutput = z.infer<typeof HumanizeTextOutputSchema>;
+
+// ============================================================
+// 7.2 CAPTION LINTER SCHEMAS (ig-caption)
+// ============================================================
+export const LintCaptionInputSchema = z.object({
+  caption: z.string().min(1, "Legenda necessária para análise."),
+  truncate_at: z.number().optional().default(125),
+  keywords: z.array(z.string()).optional().default([]),
+});
+
+export const LintCaptionOutputSchema = z.object({
+  characters: z.number(),
+  limit: z.number(),
+  visible_window: z.string(),
+  truncated: z.boolean(),
+  first_line_chars: z.number(),
+  hashtags: z.array(z.string()),
+  mentions: z.array(z.string()),
+  links: z.array(z.string()),
+  emoji_count: z.number(),
+  emoji_density: z.number(),
+  asks: z.array(z.string()),
+  checks: z.array(
+    z.object({
+      check: z.string(),
+      status: z.enum(["PASS", "WARN", "FAIL"]),
+      detail: z.string(),
+    })
+  ),
+  verdict: z.enum(["READY", "REVIEW", "FIX"]),
+});
+
+export type LintCaptionInput = z.infer<typeof LintCaptionInputSchema>;
+export type LintCaptionOutput = z.infer<typeof LintCaptionOutputSchema>;
+
+// ============================================================
+// 7.3 PROFILE RUBRIC AUDIT SCHEMAS (ig-profile)
+// ============================================================
+export const AuditProfileInputSchema = z.object({
+  name_field: z.string().optional(),
+  handle: z.string().optional(),
+  bio_first_line: z.string().optional(),
+  bio_body: z.string().optional(),
+  pinned_posts_count: z.number().optional().default(0),
+  has_specific_pinned_strategy: z.boolean().optional().default(false),
+  link_count: z.number().optional().default(1),
+  has_direct_landing_link: z.boolean().optional().default(true),
+  highlights_count: z.number().optional().default(0),
+  grid_has_legible_covers: z.boolean().optional().default(true),
+  photo_quality_close_up: z.boolean().optional().default(true),
+  has_professional_category_and_contact: z.boolean().optional().default(true),
+  posted_in_last_7_days: z.boolean().optional().default(true),
+  replied_to_comments_in_first_hour: z.boolean().optional().default(true),
+  has_active_stories_today: z.boolean().optional().default(true),
+});
+
+export const AuditProfileOutputSchema = z.object({
+  total_score: z.number(),
+  max_score: z.number(),
+  percentage: z.number(),
+  grade: z.enum(["ELITE", "PRO", "AVERAGE", "NEEDS_OPTIMIZATION"]),
+  items: z.array(
+    z.object({
+      id: z.string(),
+      title: z.string(),
+      points_earned: z.number(),
+      max_points: z.number(),
+      status: z.enum(["PASS", "PARTIAL", "FAIL"]),
+      feedback: z.string(),
+    })
+  ),
+  priority_actions: z.array(z.string()),
+});
+
+export type AuditProfileInput = z.infer<typeof AuditProfileInputSchema>;
+export type AuditProfileOutput = z.infer<typeof AuditProfileOutputSchema>;
+
+// ============================================================
+// 7.4 VIRAL SWIPE ANALYZER SCHEMAS (ig-viral)
+// ============================================================
+export const AnalyzeSwipesInputSchema = z.object({
+  items: z.array(
+    z.object({
+      account: z.string(),
+      followers: z.number().optional().nullable(),
+      median: z.number().optional().nullable(),
+      views: z.number(),
+      hook: z.string(),
+      on_screen: z.string().optional(),
+      length_seconds: z.number().optional(),
+      cta: z.string().optional(),
+    })
+  ).min(1, "Forneça pelo menos 1 vídeo para análise."),
+});
+
+export const AnalyzeSwipesOutputSchema = z.object({
+  total_analyzed: z.number(),
+  strong_outliers_count: z.number(),
+  top_formulas: z.array(
+    z.object({
+      formula_name: z.string(),
+      count: z.number(),
+      avg_multiple: z.number(),
+    })
+  ),
+  items: z.array(
+    z.object({
+      account: z.string(),
+      views: z.number(),
+      baseline: z.number(),
+      outlier_multiple: z.number(),
+      formula_id: z.number().nullable(),
+      formula_name: z.string(),
+      signal_grade: z.enum(["MEGA_VIRAL", "STRONG_OUTLIER", "AVERAGE_PERFORMANCE", "BELOW_BASELINE"]),
+      hook: z.string(),
+    })
+  ),
+  actionable_insights: z.array(z.string()),
+});
+
+export type AnalyzeSwipesInput = z.infer<typeof AnalyzeSwipesInputSchema>;
+export type AnalyzeSwipesOutput = z.infer<typeof AnalyzeSwipesOutputSchema>;
+
+// ============================================================
 // 8. STRUCTURED OUTPUT FOR REEL
 // ============================================================
 export const StrategicReelOutputSchema = z.object({

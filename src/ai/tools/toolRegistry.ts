@@ -5,6 +5,11 @@ import { brandManualTool } from "./company/brandManualTool";
 import { brandManualSearchTool } from "./company/brandManualSearchTool";
 import { scoreHookTool } from "./ai/scoreHookTool";
 import { beatSheetTool } from "./ai/beatSheetTool";
+import { detectSlopTool } from "./ai/detectSlopTool";
+import { humanizeTextTool } from "./ai/humanizeTextTool";
+import { lintCaptionTool } from "./instagram/lintCaptionTool";
+import { auditProfileTool } from "./instagram/auditProfileTool";
+import { analyzeSwipesTool } from "./instagram/analyzeSwipesTool";
 import { saveContentTool, createDemandTool, getInstagramMetricsTool } from "./criafy/criafyTools";
 import { crmGetLeadTool, crmMoveLeadTool, crmCreateNoteTool } from "./crm/crmTools";
 
@@ -17,6 +22,11 @@ export const ALL_TOOLS: ToolDefinition[] = [
   brandManualTool,
   scoreHookTool,
   beatSheetTool,
+  detectSlopTool,
+  humanizeTextTool,
+  lintCaptionTool,
+  auditProfileTool,
+  analyzeSwipesTool,
   saveContentTool,
   createDemandTool,
   getInstagramMetricsTool,

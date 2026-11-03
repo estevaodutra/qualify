@@ -3,3 +3,7 @@ export * from "./humanizer";
 export * from "./captionLinter";
 export * from "./reelBeats";
 export * from "./profileRubric";
+export * from "./aiHumanizer";
+export * from "./instagramCaptionLinter";
+export * from "./swipeAnalyzer";
+export * from "./slopLexicon";
