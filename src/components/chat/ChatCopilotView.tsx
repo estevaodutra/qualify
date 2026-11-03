@@ -5,6 +5,7 @@ import {
   CheckCheck,
   ChevronLeft,
   Copy,
+  Crown,
   Film,
   FileText,
   Flame,
@@ -212,8 +213,18 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
 
   const [inputText, setInputText] = useState("");
   const [isThinking, setIsThinking] = useState(false);
+  const [activeAgentSlug, setActiveAgentSlug] = useState<"auto" | "criafy-content-agent" | "qualify-orchestrator">("auto");
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Buscar contas do Instagram conectadas da empresa
+  const { data: instagramAccounts } = useQuery({
+    queryKey: ["criafy-accounts-copilot", activeCompanyId],
+    queryFn: () => (activeCompanyId ? criafyService.getAccounts(activeCompanyId) : Promise.resolve([])),
+    enabled: !!activeCompanyId,
+  });
+
+  const activeIgAccount = instagramAccounts && instagramAccounts.length > 0 ? instagramAccounts[0] : null;
 
   // 1. Carregar Manual da Marca Real do Workspace (Sprint OS / Arquitetura 7D)
   const { data: brandContext } = useQuery({
@@ -270,7 +281,43 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
     }
   }, [inputText]);
 
-  const quickSkills: Array<{ cmd: string; label: string; title: string; icon: any; prompt: string }> = [];
+  const quickSkills: Array<{ cmd: string; label: string; title: string; icon: any; prompt: string }> = [
+    {
+      cmd: "/ig-audit",
+      label: "📊 Visão do Instagram",
+      title: "Auditar métricas e presença atual do Instagram",
+      icon: Sparkles,
+      prompt: "Me dá uma visão detalhada do meu Instagram atualmente: métricas, público e oportunidades de conteúdo.",
+    },
+    {
+      cmd: "/ig-reel",
+      label: "🎬 Roteiro de Reel (60s)",
+      title: "Gerar roteiro com gancho afiado e beat sheet",
+      icon: Film,
+      prompt: "Crie um roteiro de Reel de 60s com gancho magnético nos 3s, ritmo a 165 WPM e CTA em loop.",
+    },
+    {
+      cmd: "/ig-carousel",
+      label: "📑 Carrossel 7 Lâminas",
+      title: "Estruturar carrossel educativo de alta retenção",
+      icon: Layers,
+      prompt: "Estruture um carrossel educativo em 7 lâminas com gancho de capa forte e quebra de objeção.",
+    },
+    {
+      cmd: "/ig-profile",
+      label: "🔍 Auditar Bio (100 Pts)",
+      title: "Avaliar bio e perfil na matriz ponderada",
+      icon: UserCheck,
+      prompt: "Audite a bio e estrutura do meu perfil do Instagram com base na matriz de 100 pontos.",
+    },
+    {
+      cmd: "/ig-viral",
+      label: "⚡ Ganchos Virais",
+      title: "Gerar 3 ganchos testados em fórmulas oficiais",
+      icon: Flame,
+      prompt: "Gere 3 opções de ganchos magnéticos para testar no meu próximo vídeo com foco em retenção de 3s.",
+    },
+  ];
 
   const handleSendPrompt = async (prompt: string) => {
     const textToSend = prompt.trim();
@@ -318,13 +365,40 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
             content: m.text,
           }));
 
-        // Executar Orquestrador Qualify nativo com LangChain + Tools + RAG no Supabase
+        // Decisão de Roteamento Agêntico: Criafy Content Agent vs Qualify Orchestrator
+        const isContentOrIgQuery =
+          lower.includes("instagram") ||
+          lower.includes("reel") ||
+          lower.includes("carrossel") ||
+          lower.includes("story") ||
+          lower.includes("stories") ||
+          lower.includes("legenda") ||
+          lower.includes("gancho") ||
+          lower.includes("hook") ||
+          lower.includes("bio") ||
+          lower.includes("perfil") ||
+          lower.includes("engajamento") ||
+          lower.includes("post") ||
+          lower.includes("conteúdo") ||
+          lower.includes("conteudo") ||
+          lower.includes("seguidores") ||
+          lower.includes("criafy");
+
+        const agentSlugToRun =
+          activeAgentSlug === "auto"
+            ? isContentOrIgQuery
+              ? "criafy-content-agent"
+              : "qualify-orchestrator"
+            : activeAgentSlug;
+
+        // Executar Agente nativo com LangChain + Tools + RAG no Supabase
         const result = await QualifyAI.runAgent({
-          agentSlug: "qualify-orchestrator",
+          agentSlug: agentSlugToRun,
           prompt: textToSend,
           context: {
             company_id: activeCompanyId || "default",
             user_id: user?.id,
+            account_id: activeIgAccount?.id,
           },
           chatHistory: historyForAi,
         });
@@ -334,13 +408,25 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
         const ragTool = executed.find((t: any) =>
           t.tool?.includes("search_brand_manual") || t.tool?.includes("company.search_brand_manual")
         );
+        const igMetricsTool = executed.find((t: any) => t.tool?.includes("instagram.get_metrics") || t.tool?.includes("get_metrics"));
+        const igAuditTool = executed.find((t: any) => t.tool?.includes("audit_profile"));
 
         let inputEval = "Saudação simples ou interação direta detectada.";
-        let routingDecision = "Resposta direta sem necessidade de busca vetorial.";
-        let actionTaken = "Nenhuma tool acionada • 0 tokens extras de contexto.";
+        let routingDecision = `Processamento com o ${agentSlugToRun === "criafy-content-agent" ? "Agente Criafy (Conteúdo & Redes)" : "Orquestrador Qualify"}.`;
+        let actionTaken = "Nenhuma tool acionada • Resposta executiva direta.";
         let ragChunks: string[] = [];
 
-        if (ragTool) {
+        if (igMetricsTool) {
+          inputEval = "Consulta analítica sobre a presença e métricas do Instagram.";
+          routingDecision = "Acionamento da ferramenta 'instagram.get_metrics' no Criafy Hub.";
+          actionTaken = igMetricsTool.output?.connected
+            ? `Conta @${igMetricsTool.output?.primary_account?.username || "instagram"} sincronizada (${igMetricsTool.output?.primary_account?.followers || 0} seguidores).`
+            : "Verificação de conectividade no Criafy Hub concluída.";
+        } else if (igAuditTool) {
+          inputEval = "Solicitação de auditoria de bio e perfil do Instagram.";
+          routingDecision = "Acionamento da matriz 'instagram.audit_profile' (100 pontos).";
+          actionTaken = `Perfil auditado com nota ${igAuditTool.output?.total_score || 0}/100.`;
+        } else if (ragTool) {
           inputEval = `Demanda de conteúdo/estratégia identificada (Foco: "${ragTool.input?.query || textToSend}").`;
           routingDecision = "Acionamento do RAG Vetorial (Embeddings) no Manual da Marca.";
           ragChunks = ragTool.output?.retrieved_topics || [];
@@ -349,10 +435,10 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
           inputEval = "Demanda operacional identificada.";
           routingDecision = `Roteamento para ferramenta especializada (${executed[0].tool}).`;
           actionTaken = `Executada em ${executed[0].latency_ms}ms com sucesso.`;
-        } else if (textToSend.length > 30) {
-          inputEval = "Consulta analítica ou orientação estratégica.";
-          routingDecision = "Processamento com raciocínio executivo do Orquestrador.";
-          actionTaken = "Análise direta com base nas diretrizes gerais.";
+        } else if (textToSend.length > 20) {
+          inputEval = isContentOrIgQuery ? "Estratégia de conteúdo e redes sociais." : "Consulta analítica ou orientação estratégica.";
+          routingDecision = `Processamento especializado pelo ${agentSlugToRun === "criafy-content-agent" ? "Agente Criafy" : "Orquestrador"}.`;
+          actionTaken = "Diretrizes aplicadas com base nas 13 skills do ecossistema.";
         }
 
         aiResponseText = agentData.content || (isGreeting ? "Olá! Como posso ajudar você hoje?" : "Como posso te ajudar com a estratégia ou conteúdo hoje?");
@@ -537,19 +623,88 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
           <div className="space-y-0.5 min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <h3 className="font-bold text-sm text-card-foreground leading-snug truncate">
-                Copiloto IA — {brandContext?.companyName || "Criafy"}
+                {activeAgentSlug === "criafy-content-agent"
+                  ? "Agente Criafy — Conteúdo & Redes"
+                  : activeAgentSlug === "qualify-orchestrator"
+                  ? "Orquestrador Qualify"
+                  : `Copiloto IA — ${brandContext?.companyName || "Criafy"}`}
               </h3>
-              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-medium h-4 px-1.5 shrink-0">
-                Copiloto
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-[10px] font-medium h-4 px-1.5 shrink-0",
+                  activeAgentSlug === "criafy-content-agent"
+                    ? "bg-purple-500/10 text-purple-600 border-purple-500/30"
+                    : activeAgentSlug === "qualify-orchestrator"
+                    ? "bg-primary/10 text-primary border-primary/20"
+                    : "bg-blue-500/10 text-blue-600 border-blue-500/30"
+                )}
+              >
+                {activeAgentSlug === "criafy-content-agent"
+                  ? "Criafy AI (13 Skills)"
+                  : activeAgentSlug === "qualify-orchestrator"
+                  ? "Diretor Geral"
+                  : "Roteamento Auto"}
               </Badge>
             </div>
             <p className="text-[11px] text-muted-foreground truncate">
-              {brandContext?.companyName ? `Assistente da ${brandContext.companyName}` : "Assistente Virtual"}
+              {activeAgentSlug === "criafy-content-agent"
+                ? "Roteirista, Carrosséis e Estratégia de Instagram"
+                : activeAgentSlug === "qualify-orchestrator"
+                ? "Estratégia Corporativa & RAG do Brand Manual"
+                : activeIgAccount?.username
+                ? `Instagram: @${activeIgAccount.username.replace(/^@/, "")} • Roteamento Agêntico`
+                : `Assistente da ${brandContext?.companyName || "sua empresa"}`}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Seletor Rápido de Agente Ativo */}
+          <div className="hidden sm:flex items-center gap-1 bg-muted/40 p-0.5 rounded-xl border border-border/60">
+            <button
+              type="button"
+              onClick={() => setActiveAgentSlug("auto")}
+              className={cn(
+                "px-2 py-1 text-[11px] font-medium rounded-lg transition-all",
+                activeAgentSlug === "auto"
+                  ? "bg-background text-foreground shadow-2xs font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+              title="Roteamento automático inteligente conforme a intenção da mensagem"
+            >
+              Auto
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveAgentSlug("criafy-content-agent")}
+              className={cn(
+                "px-2 py-1 text-[11px] font-medium rounded-lg flex items-center gap-1 transition-all",
+                activeAgentSlug === "criafy-content-agent"
+                  ? "bg-purple-600 text-white shadow-2xs font-semibold"
+                  : "text-muted-foreground hover:text-purple-600"
+              )}
+              title="Agente Criafy: Especialista em Conteúdo & 13 Skills do Instagram"
+            >
+              <Sparkles className="w-3 h-3" />
+              Criafy
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveAgentSlug("qualify-orchestrator")}
+              className={cn(
+                "px-2 py-1 text-[11px] font-medium rounded-lg flex items-center gap-1 transition-all",
+                activeAgentSlug === "qualify-orchestrator"
+                  ? "bg-primary text-primary-foreground shadow-2xs font-semibold"
+                  : "text-muted-foreground hover:text-primary"
+              )}
+              title="Orquestrador Qualify: Direção Geral, RAG e Estratégia"
+            >
+              <Crown className="w-3 h-3" />
+              Orquestrador
+            </button>
+          </div>
+
           <Button
             size="sm"
             variant="outline"
@@ -805,7 +960,13 @@ export const ChatCopilotView: React.FC<ChatCopilotViewProps> = ({ onBack }) => {
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={`Converse com o Copiloto IA da ${brandContext?.companyName || "sua empresa"}...`}
+            placeholder={
+              activeAgentSlug === "criafy-content-agent"
+                ? "Pergunte ao Agente Criafy sobre Reels, Carrosséis, Stories, Ganchos ou Métricas do Instagram..."
+                : activeAgentSlug === "qualify-orchestrator"
+                ? `Converse com o Orquestrador Qualify sobre posicionamento da ${brandContext?.companyName || "sua empresa"}...`
+                : `Converse com o Copiloto IA da ${brandContext?.companyName || "sua empresa"}...`
+            }
             className="w-full bg-transparent px-2 py-2 text-sm outline-none resize-none transition-all duration-200 min-h-[38px] max-h-[140px] scrollbar-thin leading-relaxed text-foreground placeholder:text-muted-foreground"
           />
 
