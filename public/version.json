@@ -1,6 +1,6 @@
 {
-  "commit": "ad4f834bcd99dec5cdcee4927057b8c0fa3521fb",
-  "shortCommit": "ad4f834",
-  "message": "fix(copilot-ai): route instagram queries to Criafy agent and link get_metrics to Supabase accounts",
-  "builtAt": "2026-11-03T20:26:45.473Z"
+  "commit": "4092f29bb77c362460a04a3726ab17be79fbf714",
+  "shortCommit": "4092f29",
+  "message": "feat(webphone): implement native API4COM SIP webphone and edge functions",
+  "builtAt": "2026-11-04T00:47:59.318Z"
 }

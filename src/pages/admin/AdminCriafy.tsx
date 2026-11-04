@@ -20,7 +20,16 @@ import {
   Lock,
   Save,
   Loader2,
-  AlertTriangle
+  AlertTriangle,
+  RefreshCw,
+  Search,
+  Trash2,
+  Users,
+  XCircle,
+  Calendar,
+  Building2,
+  HelpCircle,
+  Activity,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,9 +37,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { CriafyLogo } from "@/components/criafy/CriafyBrandIcons";
+import { criafyService } from "@/services/criafy/criafyService";
+import { CriafyInstagramAccount } from "@/types/criafy";
 
 interface MetaUrlItem {
   id: string;
@@ -146,9 +158,90 @@ export default function AdminCriafy() {
     appId: "1601939487668355",
   });
 
+  // Estados para Gestão de Contas Vinculadas
+  const [accounts, setAccounts] = useState<CriafyInstagramAccount[]>([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(true);
+  const [searchAccountQuery, setSearchAccountQuery] = useState("");
+  const [testingTokenId, setTestingTokenId] = useState<string | null>(null);
+  const [tokenResults, setTokenResults] = useState<Record<string, { valid: boolean; status: string; error?: string }>>({});
+  const [syncingAccountId, setSyncingAccountId] = useState<string | null>(null);
+  const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
+
   useEffect(() => {
     loadSecretStatus();
+    loadAccounts();
   }, []);
+
+  const loadAccounts = async () => {
+    setLoadingAccounts(true);
+    try {
+      const data = await criafyService.getAllAccountsSuperadmin();
+      setAccounts(data);
+    } catch (err: any) {
+      console.warn("Falha ao carregar contas do Instagram:", err);
+      toast.error(`Erro ao carregar contas vinculadas: ${err.message}`);
+    } finally {
+      setLoadingAccounts(false);
+    }
+  };
+
+  const handleTestToken = async (account: CriafyInstagramAccount) => {
+    setTestingTokenId(account.id);
+    try {
+      const res = await criafyService.checkTokenHealth(account.id);
+      setTokenResults((prev) => ({ ...prev, [account.id]: res }));
+      if (res.valid) {
+        toast.success(`Token de @${account.username} verificado com sucesso na Meta! Conexão ativa.`);
+      } else {
+        toast.error(`Token de @${account.username} inválido ou expirado: ${res.error || res.status}`);
+      }
+      await loadAccounts();
+    } catch (err: any) {
+      toast.error(`Falha ao testar token: ${err.message}`);
+    } finally {
+      setTestingTokenId(null);
+    }
+  };
+
+  const handleSyncAccount = async (account: CriafyInstagramAccount) => {
+    setSyncingAccountId(account.id);
+    try {
+      await criafyService.syncAccountProfile(account.id);
+      toast.success(`Perfil de @${account.username} sincronizado com a Meta com sucesso!`);
+      await loadAccounts();
+    } catch (err: any) {
+      toast.error(`Falha ao sincronizar perfil: ${err.message}`);
+    } finally {
+      setSyncingAccountId(null);
+    }
+  };
+
+  const handleDisconnect = async (account: CriafyInstagramAccount) => {
+    if (!window.confirm(`Deseja realmente desconectar o token da conta @${account.username}? As publicações e métricas ficarão pausadas até a reconexão.`)) {
+      return;
+    }
+
+    setDisconnectingId(account.id);
+    try {
+      await criafyService.disconnectAccount(account.id);
+      toast.success(`Conta @${account.username} desconectada com sucesso.`);
+      await loadAccounts();
+    } catch (err: any) {
+      toast.error(`Falha ao desconectar conta: ${err.message}`);
+    } finally {
+      setDisconnectingId(null);
+    }
+  };
+
+  const filteredAccounts = accounts.filter((acc) => {
+    if (!searchAccountQuery.trim()) return true;
+    const q = searchAccountQuery.toLowerCase();
+    const username = (acc.username || "").toLowerCase();
+    const name = (acc.name || "").toLowerCase();
+    const igId = (acc.instagram_account_id || "").toLowerCase();
+    const companyName = ((acc as any).company?.name || "").toLowerCase();
+    return username.includes(q) || name.includes(q) || igId.includes(q) || companyName.includes(q);
+  });
 
   const loadSecretStatus = async () => {
     try {
@@ -322,14 +415,36 @@ export default function AdminCriafy() {
         <Card className="border-border/60 shadow-sm">
           <CardHeader className="pb-2">
             <CardDescription className="text-xs uppercase font-semibold text-muted-foreground flex items-center justify-between">
-              Conta de Teste Autorizada
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              Contas no Aplicativo
+              <Users className="h-4 w-4 text-pink-500" />
             </CardDescription>
-            <CardTitle className="text-lg font-mono font-bold text-pink-600">@fornecedor.dutra</CardTitle>
+            <div className="flex items-center justify-between pt-1">
+              <CardTitle className="text-lg font-bold">
+                {loadingAccounts ? (
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                ) : (
+                  `${accounts.length} ${accounts.length === 1 ? "Conta" : "Contas"}`
+                )}
+              </CardTitle>
+              <Badge
+                variant="secondary"
+                className={
+                  accounts.some((a) => a.connection_status === "CONNECTED")
+                    ? "text-[10px] bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 font-semibold"
+                    : "text-[10px] bg-muted text-muted-foreground"
+                }
+              >
+                {accounts.filter((a) => a.connection_status === "CONNECTED").length} Ativa(s)
+              </Badge>
+            </div>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground flex items-center justify-between">
-            <span>ID: <code className="font-mono">17841440622064746</code></span>
-            <Badge variant="secondary" className="text-[10px] bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400">Ativa</Badge>
+            <span className="truncate max-w-[170px] font-mono font-medium">
+              {accounts.length > 0 ? `@${accounts[0].username}` : "Nenhuma conta"}
+            </span>
+            {accounts.length > 1 && (
+              <span className="text-[10px] font-mono text-muted-foreground">+{accounts.length - 1} mais</span>
+            )}
           </CardContent>
         </Card>
 
@@ -348,6 +463,315 @@ export default function AdminCriafy() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ========================================================
+          LISTAGEM COMPLETA DE CONTAS VINCULADAS AO APLICATIVO META
+          ======================================================== */}
+      <Card className="border-border/60 shadow-sm overflow-hidden">
+        <CardHeader className="border-b bg-muted/20 pb-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-lg bg-pink-500/10 text-pink-600 flex items-center justify-center shrink-0">
+                  <Instagram className="h-4 w-4" />
+                </div>
+                <div>
+                  <CardTitle className="text-base font-bold flex items-center gap-2">
+                    Contas do Instagram Vinculadas ao Aplicativo
+                    <Badge variant="outline" className="font-mono text-[10px] bg-pink-500/10 text-pink-700 dark:text-pink-300 border-pink-500/30">
+                      {accounts.length} {accounts.length === 1 ? "Conta" : "Contas"}
+                    </Badge>
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Todas as contas profissionais do Instagram conectadas via Meta Graph API em todas as empresas do sistema.
+                  </CardDescription>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="relative w-full sm:w-64">
+                <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por @handle, marca ou empresa..."
+                  value={searchAccountQuery}
+                  onChange={(e) => setSearchAccountQuery(e.target.value)}
+                  className="pl-8 h-8 text-xs bg-background"
+                />
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={loadAccounts}
+                disabled={loadingAccounts}
+                className="h-8 text-xs gap-1.5 shrink-0"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${loadingAccounts ? "animate-spin text-pink-500" : ""}`} />
+                Recarregar
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="p-0">
+          {loadingAccounts ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-2 text-muted-foreground">
+              <Loader2 className="h-6 w-6 animate-spin text-pink-500" />
+              <p className="text-xs">Carregando contas conectadas ao Meta App...</p>
+            </div>
+          ) : filteredAccounts.length === 0 ? (
+            <div className="text-center py-12 px-4 space-y-3">
+              <div className="w-12 h-12 rounded-full bg-muted/60 flex items-center justify-center mx-auto text-muted-foreground">
+                <Instagram className="w-6 h-6 opacity-40" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-semibold">
+                  {accounts.length === 0
+                    ? "Nenhuma conta do Instagram vinculada ainda no sistema."
+                    : "Nenhuma conta corresponde à busca."}
+                </p>
+                <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                  {accounts.length === 0
+                    ? "Quando uma empresa vincular uma conta através do botão 'Conectar Conta' no Criafy, ela será listada automaticamente aqui com detalhes de token, empresa e status."
+                    : "Tente buscar por outro termo ou limpe o campo de busca."}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-muted/40 text-[11px] uppercase">
+                  <TableRow>
+                    <TableHead className="w-[260px]">Conta & Perfil</TableHead>
+                    <TableHead>Instagram ID (Meta)</TableHead>
+                    <TableHead>Empresa (Qualify)</TableHead>
+                    <TableHead>Página do Facebook</TableHead>
+                    <TableHead>Status da Conexão</TableHead>
+                    <TableHead>Audiência & Posts</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className="text-xs">
+                  {filteredAccounts.map((account) => {
+                    const isTesting = testingTokenId === account.id;
+                    const isSyncing = syncingAccountId === account.id;
+                    const isDisconnecting = disconnectingId === account.id;
+                    const tokenResult = tokenResults[account.id];
+                    const followersCount = (account.metadata as any)?.followers_count ?? "—";
+                    const mediaCount = (account.metadata as any)?.media_count ?? "—";
+                    const pageName = (account.metadata as any)?.page_name || "—";
+                    const pageId = (account.metadata as any)?.facebook_page_id;
+                    const companyName = (account as any).company?.name || "Qualify";
+
+                    return (
+                      <TableRow key={account.id} className="hover:bg-muted/30 transition-colors">
+                        {/* Perfil & Identificação */}
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-10 w-10 border border-border/80 shadow-2xs shrink-0">
+                              <AvatarImage src={account.profile_picture_url || undefined} alt={account.username} />
+                              <AvatarFallback className="bg-gradient-to-tr from-pink-500 to-amber-400 text-white font-bold text-xs">
+                                {(account.username || "IG").slice(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <a
+                                  href={`https://instagram.com/${account.username}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="font-bold text-foreground hover:text-pink-600 transition-colors flex items-center gap-1 truncate"
+                                >
+                                  @{account.username}
+                                  <ExternalLink className="h-3 w-3 opacity-60 shrink-0" />
+                                </a>
+                              </div>
+                              <p className="text-[11px] text-muted-foreground truncate max-w-[190px]">
+                                {account.name || "Conta Instagram"}
+                              </p>
+                            </div>
+                          </div>
+                        </TableCell>
+
+                        {/* Instagram Account ID (Meta) */}
+                        <TableCell>
+                          <div className="flex items-center gap-1.5">
+                            <code className="font-mono text-[11px] bg-muted/60 px-2 py-0.5 rounded border border-border/60">
+                              {account.instagram_account_id}
+                            </code>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                              onClick={() => copyToClipboard(account.instagram_account_id, account.id, "Instagram ID")}
+                              title="Copiar Instagram ID"
+                            >
+                              {copiedId === account.id ? (
+                                <Check className="h-3 w-3 text-emerald-500" />
+                              ) : (
+                                <Copy className="h-3 w-3" />
+                              )}
+                            </Button>
+                          </div>
+                        </TableCell>
+
+                        {/* Empresa no Qualify */}
+                        <TableCell>
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-1.5 font-semibold text-foreground">
+                              <Building2 className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                              <span className="truncate max-w-[140px]">{companyName}</span>
+                            </div>
+                            <span className="text-[10px] font-mono text-muted-foreground block truncate max-w-[140px]">
+                              {account.company_id}
+                            </span>
+                          </div>
+                        </TableCell>
+
+                        {/* Página do Facebook Vinculada */}
+                        <TableCell>
+                          <div className="space-y-0.5">
+                            <p className="font-medium text-foreground truncate max-w-[150px]">
+                              {pageName}
+                            </p>
+                            {pageId && (
+                              <span className="text-[10px] font-mono text-muted-foreground block truncate max-w-[150px]">
+                                ID: {pageId}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+
+                        {/* Status da Conexão & Token */}
+                        <TableCell>
+                          <div className="space-y-1">
+                            {account.connection_status === "CONNECTED" ? (
+                              <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20 text-[10px] font-semibold gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse" />
+                                Conectada / Ativa
+                              </Badge>
+                            ) : account.connection_status === "EXPIRED" ? (
+                              <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20 text-[10px] font-semibold gap-1">
+                                <AlertTriangle className="w-3 h-3 text-amber-500" />
+                                Token Expirado
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-muted-foreground text-[10px]">
+                                Desconectada
+                              </Badge>
+                            )}
+
+                            {tokenResult && (
+                              <p className={`text-[10px] font-semibold ${tokenResult.valid ? "text-emerald-600" : "text-rose-600"}`}>
+                                {tokenResult.valid ? "✓ Testado: Token Válido" : `✗ Erro: ${tokenResult.error || "Inválido"}`}
+                              </p>
+                            )}
+                          </div>
+                        </TableCell>
+
+                        {/* Audiência & Posts */}
+                        <TableCell>
+                          <div className="space-y-0.5 text-[11px]">
+                            <p className="font-semibold text-foreground">
+                              {typeof followersCount === "number" ? followersCount.toLocaleString("pt-BR") : followersCount} seg.
+                            </p>
+                            <p className="text-muted-foreground text-[10px]">
+                              {typeof mediaCount === "number" ? mediaCount.toLocaleString("pt-BR") : mediaCount} posts
+                            </p>
+                          </div>
+                        </TableCell>
+
+                        {/* Ações */}
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleTestToken(account)}
+                              disabled={isTesting}
+                              className="h-7 px-2 text-[11px] gap-1 hover:border-emerald-500/50 hover:text-emerald-600"
+                              title="Testa a validade do Token na Meta Graph API"
+                            >
+                              {isTesting ? (
+                                <Loader2 className="h-3 w-3 animate-spin text-emerald-500" />
+                              ) : (
+                                <Activity className="h-3 w-3 text-emerald-500" />
+                              )}
+                              Testar Token
+                            </Button>
+
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleSyncAccount(account)}
+                              disabled={isSyncing}
+                              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                              title="Sincronizar dados do perfil com a Meta"
+                            >
+                              <RefreshCw className={`h-3 w-3 ${isSyncing ? "animate-spin text-pink-500" : ""}`} />
+                            </Button>
+
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDisconnect(account)}
+                              disabled={isDisconnecting}
+                              className="h-7 w-7 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
+                              title="Desconectar token da conta"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+
+        {/* Guia Diagnóstico: Por que uma nova conta pode não vincular? */}
+        <div className="p-4 bg-muted/30 border-t border-border/60 text-xs space-y-2">
+          <div className="flex items-center gap-1.5 font-bold text-foreground">
+            <HelpCircle className="w-4 h-4 text-amber-500" />
+            Diagnóstico de Vinculação: Por que a autorização pediu tudo e a conta não vinculou?
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1 text-[11px] text-muted-foreground">
+            <div className="p-2.5 rounded-lg bg-background/80 border border-border/60 space-y-1">
+              <p className="font-semibold text-foreground flex items-center gap-1">
+                <span className="w-4 h-4 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold flex items-center justify-center text-[10px]">1</span>
+                Modo de Desenvolvimento
+              </p>
+              <p className="leading-tight">
+                Se o App no <strong>Meta Developers</strong> estiver em modo <span className="font-mono text-foreground font-semibold">Desenvolvimento</span>, apenas usuários adicionados em <em>Funções do Aplicativo &gt; Funções &gt; Testadores</em> conseguem vincular contas.
+              </p>
+            </div>
+
+            <div className="p-2.5 rounded-lg bg-background/80 border border-border/60 space-y-1">
+              <p className="font-semibold text-foreground flex items-center gap-1">
+                <span className="w-4 h-4 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold flex items-center justify-center text-[10px]">2</span>
+                Conta Profissional Obrigatória
+              </p>
+              <p className="leading-tight">
+                A conta do Instagram <strong>não pode ser perfil pessoal</strong>. Ela deve ser alterada para <em>Criador de Conteúdo</em> ou <em>Comercial</em> nas configurações do aplicativo do Instagram.
+              </p>
+            </div>
+
+            <div className="p-2.5 rounded-lg bg-background/80 border border-border/60 space-y-1">
+              <p className="font-semibold text-foreground flex items-center gap-1">
+                <span className="w-4 h-4 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold flex items-center justify-center text-[10px]">3</span>
+                Página do Facebook Vinculada
+              </p>
+              <p className="leading-tight">
+                No <em>Meta Business Suite</em>, a conta do Instagram deve estar conectada a uma Página do Facebook. Na tela de consentimento da Meta, selecione <strong>tanto a Página quanto a Conta do Instagram</strong>.
+              </p>
+            </div>
+          </div>
+        </div>
+      </Card>
 
       {/* Card de Configuração de Credenciais Meta */}
       <Card className="border-border/60 shadow-sm bg-gradient-to-br from-card to-muted/20">

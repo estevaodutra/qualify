@@ -63,6 +63,75 @@ export const criafyService = {
     return data || [];
   },
 
+  /**
+   * Consulta todas as contas vinculadas em todas as empresas para o painel Superadmin.
+   */
+  async getAllAccountsSuperadmin(): Promise<CriafyInstagramAccount[]> {
+    try {
+      // 1. Tenta buscar direto pelo supabase com dados da empresa
+      const { data, error } = await (supabase as any)
+        .from("criafy_instagram_accounts")
+        .select("*, company:companies(id, name)")
+        .order("created_at", { ascending: false });
+
+      if (!error && Array.isArray(data) && data.length > 0) {
+        return data;
+      }
+
+      // 2. Se RLS restringir, invoca via edge function service role
+      const { data: edgeData, error: edgeErr } = await (supabase as any).functions.invoke(
+        "criafy-instagram-oauth",
+        {
+          body: { action: "list-all-accounts" },
+        }
+      );
+
+      if (!edgeErr && edgeData?.accounts && Array.isArray(edgeData.accounts)) {
+        return edgeData.accounts;
+      }
+
+      return data || [];
+    } catch (err) {
+      console.warn("[criafyService] Erro ao buscar todas as contas superadmin:", err);
+      try {
+        const { data: edgeData } = await (supabase as any).functions.invoke(
+          "criafy-instagram-oauth",
+          {
+            body: { action: "list-all-accounts" },
+          }
+        );
+        if (edgeData?.accounts) return edgeData.accounts;
+      } catch (_) {}
+      return [];
+    }
+  },
+
+  /**
+   * Valida a saúde do token de acesso diretamente na Meta Graph API.
+   */
+  async checkTokenHealth(accountId: string): Promise<{ valid: boolean; status: string; error?: string }> {
+    const { data, error } = await (supabase as any).functions.invoke("criafy-instagram-oauth", {
+      body: { action: "check-token-status", accountId },
+    });
+    if (error) throw error;
+    return {
+      valid: Boolean(data?.valid),
+      status: data?.status || "UNKNOWN",
+      error: data?.error,
+    };
+  },
+
+  /**
+   * Desconecta o token de uma conta.
+   */
+  async disconnectAccount(accountId: string): Promise<boolean> {
+    const { data, error } = await (supabase as any).functions.invoke("criafy-instagram-oauth", {
+      body: { action: "disconnect-account", accountId },
+    });
+    if (error) throw error;
+    return Boolean(data?.success);
+  },
+
   async syncAccountProfile(accountId: string): Promise<CriafyInstagramAccount> {
     const { data: account, error: getErr } = await (supabase as any)
       .from("criafy_instagram_accounts")

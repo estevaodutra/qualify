@@ -1,5 +1,18 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { getTool, getAgent, QUALIFY_ORCHESTRATOR_AGENT, criafyContentAgentDefinition } from "@/ai";
+
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: {
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          order: () => Promise.resolve({ data: [], error: null }),
+        }),
+        order: () => Promise.resolve({ data: [], error: null }),
+      }),
+    }),
+  },
+}));
 
 describe("Copiloto IA & Roteamento Agêntico do Instagram", () => {
   it("deve conter a tool instagram.get_metrics registrada e executável", async () => {

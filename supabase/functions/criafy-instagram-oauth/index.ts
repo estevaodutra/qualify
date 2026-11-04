@@ -280,8 +280,9 @@ Deno.serve(async (req) => {
             } catch (_) {}
           }
 
-          if (igAcc) {
+            if (igAcc) {
             const accountToken = page.access_token || userAccessToken;
+            const resolvedUsername = igAcc.username || igAcc.name || "instagram_account";
             const { data: inserted, error: insertErr } = await adminClient
               .from("criafy_instagram_accounts")
               .upsert(
@@ -289,8 +290,8 @@ Deno.serve(async (req) => {
                   company_id: companyId,
                   instagram_account_id: String(igAcc.id),
                   instagram_user_id: String(igAcc.id),
-                  username: igAcc.username || "fornecedor.dutra",
-                  name: igAcc.name || page.name,
+                  username: resolvedUsername,
+                  name: igAcc.name || page.name || resolvedUsername,
                   profile_picture_url: igAcc.profile_picture_url || null,
                   account_type: "INSTAGRAM_BUSINESS",
                   access_token: accountToken,
@@ -327,6 +328,7 @@ Deno.serve(async (req) => {
             for (const bm of bmData.data) {
               const accounts = bm.owned_instagram_business_accounts?.data || bm.instagram_business_accounts?.data || [];
               for (const ig of accounts) {
+                const resolvedBmUsername = ig.username || ig.name || "instagram_business";
                 const { data: inserted } = await adminClient
                   .from("criafy_instagram_accounts")
                   .upsert(
@@ -334,7 +336,7 @@ Deno.serve(async (req) => {
                       company_id: companyId,
                       instagram_account_id: String(ig.id),
                       instagram_user_id: String(ig.id),
-                      username: ig.username || "fornecedor.dutra",
+                      username: resolvedBmUsername,
                       name: ig.name || ig.username || "Instagram Business",
                       profile_picture_url: ig.profile_picture_url || null,
                       account_type: "INSTAGRAM_BUSINESS",
@@ -360,9 +362,9 @@ Deno.serve(async (req) => {
       }
 
       if (connectedAccounts.length === 0) {
-        const diagStr = debugLogs.join(" | ");
+        const pageNames = foundPages.length > 0 ? foundPages.join(", ") : "Nenhuma página retornada";
         throw new Error(
-          `Página(s) encontrada(s): [${foundPages.join(", ")}]. Diagnóstico Meta: ${diagStr}`
+          `Nenhuma conta profissional do Instagram vinculada foi retornada pela Meta. Página(s) autorizada(s): [${pageNames}]. Certifique-se de que: 1) A conta do Instagram é Profissional (Criador ou Comercial); 2) Ela está vinculada a uma Página do Facebook no Meta Business Suite; 3) Se o app Criafy estiver em Modo de Desenvolvimento na Meta, adicione o perfil de teste em 'Funções do Aplicativo > Testadores' no portal developers.facebook.com.`
         );
       }
 
@@ -370,6 +372,24 @@ Deno.serve(async (req) => {
         success: true,
         count: connectedAccounts.length,
         accounts: connectedAccounts,
+      });
+    }
+
+    // ==========================================
+    // ACTION: Listar Todas as Contas do Sistema (Superadmin)
+    // ==========================================
+    if (action === "list-all-accounts") {
+      const { data: accounts, error: accError } = await adminClient
+        .from("criafy_instagram_accounts")
+        .select("*, company:companies(id, name)")
+        .order("created_at", { ascending: false });
+
+      if (accError) throw new Error(`Falha ao listar contas: ${accError.message}`);
+
+      return jsonResponse({
+        success: true,
+        count: accounts?.length || 0,
+        accounts: accounts || [],
       });
     }
 
