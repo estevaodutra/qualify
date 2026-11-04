@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Calendar,
   CheckCircle2,
@@ -17,6 +18,9 @@ import {
   Eye,
   Instagram,
   FileText,
+  Kanban,
+  Film,
+  Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -50,6 +54,7 @@ export const CriafyOverviewView: React.FC<CriafyOverviewViewProps> = ({
   onOpenAddAccount,
   onOpenScheduleModal,
 }) => {
+  const navigate = useNavigate();
   const { activeCompanyId, activeCompany } = useCompany();
   const { workspace } = useSprintOSStore();
 
@@ -163,31 +168,32 @@ export const CriafyOverviewView: React.FC<CriafyOverviewViewProps> = ({
           <div className="flex flex-wrap items-center gap-2 self-start lg:self-center shrink-0">
             <Button
               size="sm"
-              onClick={() => onNavigateTab("demandas")}
+              onClick={() => onNavigateTab("calendario")}
               className="h-9 px-3.5 rounded-xl text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-2xs gap-1.5 cursor-pointer"
             >
-              <ListTodo className="w-3.5 h-3.5" />
-              <span>Ver Minhas Demandas</span>
-            </Button>
-
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onNavigateTab("planner")}
-              className="h-9 px-3.5 rounded-xl text-xs font-semibold border-border hover:bg-muted gap-1.5 cursor-pointer"
-            >
-              <Layers className="w-3.5 h-3.5 text-primary" />
-              <span>Abrir Planner</span>
-            </Button>
-
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onNavigateTab("calendario")}
-              className="h-9 px-3.5 rounded-xl text-xs font-semibold border-border hover:bg-muted gap-1.5 cursor-pointer"
-            >
-              <Calendar className="w-3.5 h-3.5 text-primary" />
+              <Calendar className="w-3.5 h-3.5" />
               <span>Ver Calendário</span>
+            </Button>
+
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onNavigateTab("conteudos")}
+              className="h-9 px-3.5 rounded-xl text-xs font-semibold border-border hover:bg-muted gap-1.5 cursor-pointer"
+            >
+              <Film className="w-3.5 h-3.5 text-primary" />
+              <span>Biblioteca de Mídias</span>
+            </Button>
+
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => navigate("/sprint")}
+              className="h-9 px-3.5 rounded-xl text-xs font-semibold border-primary/30 text-primary hover:bg-primary/10 gap-1.5 cursor-pointer"
+              title="Acessar o quadro Kanban de Demandas e Gravações no Sprint"
+            >
+              <Kanban className="w-3.5 h-3.5" />
+              <span>Abrir Sprint (Demandas)</span>
             </Button>
           </div>
         </div>
@@ -195,87 +201,87 @@ export const CriafyOverviewView: React.FC<CriafyOverviewViewProps> = ({
 
       {/* Grid de 4 Indicadores Rápidos */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Bloco 1: Hoje */}
+        {/* Bloco 1: Publicações Agendadas */}
         <Card className="rounded-2xl border border-border/70 shadow-2xs hover:shadow-sm transition-all bg-card">
           <CardContent className="p-4 space-y-2">
             <div className="flex items-center justify-between text-muted-foreground">
-              <span className="text-xs font-bold uppercase tracking-wider">Hoje</span>
-              <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                <Clock className="w-4 h-4" />
+              <span className="text-xs font-bold uppercase tracking-wider">Agendadas</span>
+              <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                <Calendar className="w-4 h-4" />
               </div>
             </div>
             <div>
               <div className="text-2xl font-black text-foreground">
-                {pendingDemands.length}
+                {scheduledPublications.length}
               </div>
               <p className="text-[11px] text-muted-foreground mt-0.5">
-                {pendingDemands.length === 1
-                  ? "Demanda pendente de execução"
-                  : "Demandas pendentes de execução"}
+                {scheduledPublications.length === 1
+                  ? "Publicação pronta na agenda"
+                  : "Publicações prontas na agenda"}
               </p>
             </div>
             <button
               type="button"
-              onClick={() => onNavigateTab("demandas")}
+              onClick={() => onNavigateTab("calendario")}
               className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1 pt-1 cursor-pointer"
             >
-              <span>Resolver demandas</span>
+              <span>Ver cronograma</span>
               <ArrowRight className="w-3 h-3" />
             </button>
           </CardContent>
         </Card>
 
-        {/* Bloco 2: Esta semana */}
+        {/* Bloco 2: Estoque de Conteúdos */}
         <Card className="rounded-2xl border border-border/70 shadow-2xs hover:shadow-sm transition-all bg-card">
           <CardContent className="p-4 space-y-2">
             <div className="flex items-center justify-between text-muted-foreground">
-              <span className="text-xs font-bold uppercase tracking-wider">No Planner</span>
+              <span className="text-xs font-bold uppercase tracking-wider">Mídias em Estoque</span>
               <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
-                <Layers className="w-4 h-4" />
+                <Film className="w-4 h-4" />
               </div>
             </div>
             <div>
               <div className="text-2xl font-black text-foreground">
-                {plannerItems.length}
+                {publications.length}
               </div>
               <p className="text-[11px] text-muted-foreground mt-0.5">
-                Conteúdos mapeados na produção
+                Criativos e peças registradas
               </p>
             </div>
             <button
               type="button"
-              onClick={() => onNavigateTab("planner")}
+              onClick={() => onNavigateTab("conteudos")}
               className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1 pt-1 cursor-pointer"
             >
-              <span>Ver plano editorial</span>
+              <span>Explorar biblioteca</span>
               <ArrowRight className="w-3 h-3" />
             </button>
           </CardContent>
         </Card>
 
-        {/* Bloco 3: Aguardando Você */}
+        {/* Bloco 3: Gestão no Sprint */}
         <Card className="rounded-2xl border border-border/70 shadow-2xs hover:shadow-sm transition-all bg-card">
           <CardContent className="p-4 space-y-2">
             <div className="flex items-center justify-between text-muted-foreground">
-              <span className="text-xs font-bold uppercase tracking-wider">Aguardando Você</span>
-              <div className="p-1.5 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400">
-                <Mic className="w-4 h-4" />
+              <span className="text-xs font-bold uppercase tracking-wider">Sprint OS</span>
+              <div className="p-1.5 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                <Kanban className="w-4 h-4" />
               </div>
             </div>
             <div>
-              <div className="text-2xl font-black text-foreground">
-                {waitingUserDemands.length}
+              <div className="text-base font-black text-foreground truncate">
+                Quadro de Demandas
               </div>
               <p className="text-[11px] text-muted-foreground mt-0.5">
-                Gravações, Stories Lite e aprovações
+                Gravações, áudios e tarefas
               </p>
             </div>
             <button
               type="button"
-              onClick={() => onNavigateTab("demandas")}
-              className="text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 pt-1 cursor-pointer"
+              onClick={() => navigate("/sprint")}
+              className="text-[11px] font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 pt-1 cursor-pointer"
             >
-              <span>Gravar ou aprovar</span>
+              <span>Acessar quadro</span>
               <ArrowRight className="w-3 h-3" />
             </button>
           </CardContent>
@@ -333,95 +339,132 @@ export const CriafyOverviewView: React.FC<CriafyOverviewViewProps> = ({
 
       {/* Seção Central Dividida: Demandas Prioritárias + Próximos Passos Estratégicos */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Coluna Esquerda (2 cols): Demandas que exigem atenção */}
+        {/* Coluna Esquerda (2 cols): Próximas Publicações & Integração Sprint */}
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold text-foreground">Demandas Prioritárias</h3>
+              <h3 className="text-sm font-bold text-foreground">Próximas Publicações</h3>
               <Badge variant="outline" className="text-[10px] font-semibold">
-                {pendingDemands.length}
+                {scheduledPublications.length}
               </Badge>
             </div>
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => onNavigateTab("demandas")}
+              onClick={() => onNavigateTab("calendario")}
               className="text-xs text-primary font-bold hover:bg-primary/10 rounded-xl h-8"
             >
-              Ver todas <ArrowRight className="w-3 h-3 ml-1" />
+              Ver calendário <ArrowRight className="w-3 h-3 ml-1" />
             </Button>
           </div>
 
-          {pendingDemands.length === 0 ? (
+          {scheduledPublications.length === 0 ? (
             <div className="p-8 text-center rounded-2xl border border-dashed border-border/80 bg-card/40 space-y-3">
-              <div className="mx-auto w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
-                <CheckCircle2 className="w-5 h-5" />
+              <div className="mx-auto w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                <Calendar className="w-5 h-5" />
               </div>
               <div className="space-y-1">
                 <p className="text-xs font-bold text-foreground">
-                  Tudo em dia por aqui!
+                  Nenhuma publicação agendada no momento
                 </p>
                 <p className="text-[11px] text-muted-foreground max-w-sm mx-auto">
-                  Nenhuma demanda pendente no momento. Utilize o Estrategista IA ou o Planner para gerar novas pautas e tarefas.
+                  Agende novas postagens no Calendário ou gere ideias e pautas com o Estrategista IA.
                 </p>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => onNavigateTab("estrategista")}
-                className="text-xs font-bold rounded-xl h-8 gap-1.5"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-primary" />
-                <span>Consultar Estrategista IA</span>
-              </Button>
+              <div className="flex justify-center gap-2 pt-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onNavigateTab("calendario")}
+                  className="text-xs font-bold rounded-xl h-8 gap-1.5"
+                >
+                  <Calendar className="w-3.5 h-3.5 text-primary" />
+                  <span>Abrir Calendário</span>
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onNavigateTab("estrategista")}
+                  className="text-xs font-bold rounded-xl h-8 gap-1.5"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-primary" />
+                  <span>Estrategista IA</span>
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="space-y-2">
-              {pendingDemands.slice(0, 5).map((demand) => (
+              {scheduledPublications.slice(0, 5).map((pub) => (
                 <div
-                  key={demand.id}
-                  onClick={() => onNavigateTab("demandas")}
+                  key={pub.id}
+                  onClick={() => onNavigateTab("calendario")}
                   className="flex items-center justify-between gap-3 p-3.5 rounded-2xl bg-card border border-border/70 hover:border-primary/40 transition-all cursor-pointer shadow-2xs group"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="p-2 rounded-xl bg-muted text-muted-foreground group-hover:text-primary transition-colors shrink-0">
-                      {demand.type === "gravar_video" && <Video className="w-4 h-4" />}
-                      {demand.type === "gravar_audio" && <Mic className="w-4 h-4" />}
-                      {demand.type === "stories_lite" && <Flame className="w-4 h-4 text-amber-500" />}
-                      {demand.type !== "gravar_video" &&
-                        demand.type !== "gravar_audio" &&
-                        demand.type !== "stories_lite" && <ListTodo className="w-4 h-4" />}
+                      {pub.publication_type === "REELS" ? (
+                        <Film className="w-4 h-4" />
+                      ) : pub.publication_type === "CAROUSEL" ? (
+                        <Layers className="w-4 h-4" />
+                      ) : (
+                        <Send className="w-4 h-4" />
+                      )}
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-foreground truncate">
-                          {demand.title}
+                          {pub.title || "Publicação do Instagram"}
                         </span>
-                        {demand.type === "stories_lite" && (
-                          <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 text-[9px] px-1.5 py-0">
-                            Stories Lite
-                          </Badge>
-                        )}
+                        <Badge className="bg-primary/10 text-primary border-primary/20 text-[9px] px-1.5 py-0">
+                          {pub.publication_type}
+                        </Badge>
                       </div>
                       <p className="text-[11px] text-muted-foreground truncate">
-                        {demand.description || "Demanda sem descrição adicional"}
+                        {pub.scheduled_at
+                          ? `Agendado para ${new Date(pub.scheduled_at).toLocaleDateString("pt-BR", {
+                              day: "2-digit",
+                              month: "short",
+                            })} às ${new Date(pub.scheduled_at).toLocaleTimeString("pt-BR", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}`
+                          : "Na fila de publicação"}
                       </p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    <Badge
-                      variant="outline"
-                      className="text-[9px] font-bold uppercase tracking-wider"
-                    >
-                      {demand.priority}
-                    </Badge>
                     <ArrowRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
                   </div>
                 </div>
               ))}
             </div>
           )}
+
+          {/* Banner de Integração com o Sprint */}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-pink-500/10 border border-purple-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-purple-600 text-white shrink-0 shadow-xs">
+                <Kanban className="w-4 h-4" />
+              </div>
+              <div className="space-y-0.5">
+                <h4 className="text-xs font-bold text-foreground">
+                  Demandas e Execuções no Sprint
+                </h4>
+                <p className="text-[11px] text-muted-foreground">
+                  Suas tarefas de gravação, áudios e aprovações estão organizadas no quadro Kanban.
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => navigate("/sprint")}
+              className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl h-8 shrink-0 gap-1.5"
+            >
+              <span>Abrir Sprint</span>
+              <ArrowRight className="w-3 h-3" />
+            </Button>
+          </div>
         </div>
 
         {/* Coluna Direita (1 col): Inteligência e Contas */}

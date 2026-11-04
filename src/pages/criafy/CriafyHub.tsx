@@ -40,8 +40,6 @@ import { CriafyInstagramAccount } from "@/types/criafy";
 
 // Sub-views
 import { CriafyOverviewView } from "@/components/criafy/CriafyOverviewView";
-import { CriafyDemandsView } from "@/components/criafy/CriafyDemandsView";
-import { CriafyPlannerView } from "@/components/criafy/CriafyPlannerView";
 import { CriafyStrategistView } from "@/components/criafy/CriafyStrategistView";
 import { CriafyInsightsView } from "@/components/criafy/CriafyInsightsView";
 import { MediaLibraryView } from "@/components/criafy/MediaLibraryView";
@@ -60,8 +58,6 @@ import { CriafySidebarIcon, CriafyLogo } from "@/components/criafy/CriafyBrandIc
 
 type CriafyTabId =
   | "visao-geral"
-  | "demandas"
-  | "planner"
   | "calendario"
   | "conteudos"
   | "publicacoes"
@@ -120,12 +116,13 @@ export default function CriafyHub() {
     if (tabParam === "fila") {
       return "publicacoes";
     }
+    if (tabParam === "demandas" || tabParam === "planner") {
+      return "calendario";
+    }
     if (
       tabParam &&
       [
         "visao-geral",
-        "demandas",
-        "planner",
         "calendario",
         "conteudos",
         "publicacoes",
@@ -151,12 +148,12 @@ export default function CriafyHub() {
       setActiveModuleTab("manual-marca");
     } else if (tabParam === "fila") {
       setActiveModuleTab("publicacoes");
+    } else if (tabParam === "demandas" || tabParam === "planner") {
+      setActiveModuleTab("calendario");
     } else if (
       tabParam &&
       [
         "visao-geral",
-        "demandas",
-        "planner",
         "calendario",
         "conteudos",
         "publicacoes",
@@ -480,21 +477,7 @@ export default function CriafyHub() {
           label: "Visão Geral",
           icon: LayoutDashboard,
           description:
-            "Cockpit operacional: demandas do dia, conteúdos no planner e próximas publicações.",
-        },
-        {
-          id: "demandas" as CriafyTabId,
-          label: "Minhas Demandas",
-          icon: ListTodo,
-          description:
-            "Central de demandas e execuções: gravações, aprovações, revisões e Stories Lite.",
-        },
-        {
-          id: "planner" as CriafyTabId,
-          label: "Planner",
-          icon: Layers,
-          description:
-            "O que vamos produzir? Planejamento editorial, roteiros e campanhas.",
+            "Cockpit operacional: métricas, conteúdos e próximas publicações.",
         },
         {
           id: "calendario" as CriafyTabId,
@@ -891,25 +874,6 @@ export default function CriafyHub() {
             />
           )}
 
-          {/* 0.1 ABA: MINHAS DEMANDAS */}
-          {activeModuleTab === "demandas" && (
-            <CriafyDemandsView
-              accounts={accounts}
-              selectedAccountId={selectedAccountId}
-              onNavigateToPlanner={() => handleTabChange("planner")}
-            />
-          )}
-
-          {/* 0.2 ABA: PLANNER EDITORIAL */}
-          {activeModuleTab === "planner" && (
-            <CriafyPlannerView
-              accounts={accounts}
-              selectedAccountId={selectedAccountId}
-              onNavigateToCalendar={() => handleTabChange("calendario")}
-              onNavigateToDemands={() => handleTabChange("demandas")}
-            />
-          )}
-
           {/* 1. ABA: CONTAS CONECTADAS */}
           {activeModuleTab === "contas" && (
             <div className="space-y-4">
@@ -1087,8 +1051,8 @@ export default function CriafyHub() {
             <CriafyStrategistView
               accounts={accounts}
               selectedAccountId={selectedAccountId}
-              onNavigateToPlanner={() => handleTabChange("planner")}
-              onNavigateToDemands={() => handleTabChange("demandas")}
+              onNavigateToPlanner={() => handleTabChange("calendario")}
+              onNavigateToDemands={() => handleTabChange("publicacoes")}
             />
           )}
 
