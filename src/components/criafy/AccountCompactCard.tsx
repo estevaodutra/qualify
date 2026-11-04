@@ -186,13 +186,20 @@ export function AccountCompactCard({
 
           {/* Status Badge & Dropdown */}
           <div className="shrink-0 flex items-center gap-1.5">
-            <Badge
-              variant="outline"
-              className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[11px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1.5 shadow-none"
+            <button
+              type="button"
+              onClick={() => onCheckHealth && onCheckHealth(account.id)}
+              className="cursor-pointer group focus:outline-none"
+              title="Clique para validar status e testar token na Meta API"
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Conectado
-            </Badge>
+              <Badge
+                variant="outline"
+                className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[11px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1.5 shadow-none group-hover:bg-emerald-500/20 group-hover:border-emerald-500/40 transition-all cursor-pointer"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Conectado
+              </Badge>
+            </button>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -216,10 +223,10 @@ export function AccountCompactCard({
                 {onCheckHealth && (
                   <DropdownMenuItem
                     onClick={() => onCheckHealth(account.id)}
-                    className="gap-2 cursor-pointer"
+                    className="gap-2 cursor-pointer text-emerald-600 dark:text-emerald-400 font-medium"
                   >
-                    <Activity className="w-3.5 h-3.5 text-emerald-500" />
-                    Verificar saúde da API
+                    <Activity className="w-3.5 h-3.5" />
+                    Validar Conexão Meta
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />

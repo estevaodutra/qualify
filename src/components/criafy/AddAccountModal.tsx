@@ -29,7 +29,7 @@ import { criafyService } from "@/services/criafy/criafyService";
 interface AddAccountModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess: () => void;
+  onSuccess: (account?: any) => void;
 }
 
 type SocialPlatform = "instagram" | "tiktok" | "youtube";
@@ -47,12 +47,18 @@ export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountMod
 
   const popupMessageListenerRef = useRef<((event: MessageEvent) => void) | null>(null);
 
+  const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
+
   // Limpeza de listener ao desmontar ou fechar
   useEffect(() => {
     return () => {
       if (popupMessageListenerRef.current) {
         window.removeEventListener("message", popupMessageListenerRef.current);
         popupMessageListenerRef.current = null;
+      }
+      if (broadcastChannelRef.current) {
+        broadcastChannelRef.current.close();
+        broadcastChannelRef.current = null;
       }
     };
   }, []);
@@ -85,6 +91,10 @@ export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountMod
         window.removeEventListener("message", popupMessageListenerRef.current);
         popupMessageListenerRef.current = null;
       }
+      if (broadcastChannelRef.current) {
+        broadcastChannelRef.current.close();
+        broadcastChannelRef.current = null;
+      }
     }
 
     return () => {
@@ -101,8 +111,26 @@ export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountMod
     return url;
   };
 
-  // Conexão direta na máquina atual (Popup Meta)
-  const handleOAuthConnect = async () => {
+  // Conexão direta na mesma aba (100% à prova de bloqueio de pop-up e isolamento de janelas)
+  const handleDirectConnect = async () => {
+    if (!activeCompanyId) {
+      toast.error("Nenhuma empresa selecionada na plataforma Qualify.");
+      return;
+    }
+
+    setLoadingConnect(true);
+    try {
+      const authUrl = await getOrFetchAuthUrl();
+      toast.info("Redirecionando para a autorização oficial da Meta...");
+      window.location.href = authUrl;
+    } catch (err: any) {
+      toast.error(`Erro ao iniciar conexão: ${err.message || err}`);
+      setLoadingConnect(false);
+    }
+  };
+
+  // Conexão via Janela Pop-up (alternativa para quem deseja continuar na mesma tela)
+  const handlePopupConnect = async () => {
     if (!activeCompanyId) {
       toast.error("Nenhuma empresa selecionada na plataforma Qualify.");
       return;
@@ -124,54 +152,74 @@ export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountMod
       );
 
       if (!popup || popup.closed || typeof popup.closed === "undefined") {
-        toast.info("Redirecionando para o OAuth oficial da Meta Instagram API...");
+        toast.info("Pop-up bloqueado pelo navegador. Redirecionando diretamente...");
         window.location.href = authUrl;
         return;
       }
 
-      toast.info("Janela de autorização da Meta aberta. Conclua o acesso nela.", { id: "oauth-popup" });
+      toast.info("Janela da Meta aberta. Conclua o acesso nela.", { id: "oauth-popup" });
       popup.focus();
 
-      // Remove listener anterior se houver
-      if (popupMessageListenerRef.current) {
-        window.removeEventListener("message", popupMessageListenerRef.current);
-      }
-
-      const handlePopupMessage = async (event: MessageEvent) => {
-        if (event.data?.type === "CRIAFY_OAUTH_CALLBACK") {
-          window.removeEventListener("message", handlePopupMessage);
+      const handleReceivedOAuth = async (data: { code?: string | null; state?: string | null; error?: string | null }) => {
+        if (popupMessageListenerRef.current) {
+          window.removeEventListener("message", popupMessageListenerRef.current);
           popupMessageListenerRef.current = null;
-          const { code, state, error } = event.data;
+        }
+        if (broadcastChannelRef.current) {
+          broadcastChannelRef.current.close();
+          broadcastChannelRef.current = null;
+        }
 
-          if (error) {
-            toast.error(`Autorização do Instagram cancelada ou recusada: ${error}`, { id: "oauth-popup" });
+        const { code, state, error } = data;
+        if (error) {
+          toast.error(`Autorização do Instagram cancelada ou recusada: ${error}`, { id: "oauth-popup" });
+          setLoadingConnect(false);
+          return;
+        }
+
+        if (code && state) {
+          toast.loading("Processando autorização da Meta e validando conta...", { id: "oauth-process" });
+          try {
+            const redirectUri = `${window.location.origin}/criafy`;
+            const res = await criafyService.exchangeOAuthCode(activeCompanyId, code, redirectUri, state);
+            const count = res.count || (res.accounts ? res.accounts.length : 1);
+            toast.success(`Sucesso! ${count} conta(s) do Instagram conectada(s).`, {
+              id: "oauth-process",
+            });
+            onSuccess(res.accounts?.[0]);
+            onOpenChange(false);
+          } catch (err: any) {
+            toast.error(`Falha ao conectar conta via Meta OAuth: ${err.message}`, {
+              id: "oauth-process",
+              duration: 12000,
+            });
+          } finally {
             setLoadingConnect(false);
-            return;
-          }
-
-          if (code && state) {
-            toast.loading("Processando autorização da Meta e conectando conta...", { id: "oauth-process" });
-            try {
-              const redirectUri = `${window.location.origin}/criafy`;
-              const res = await criafyService.exchangeOAuthCode(activeCompanyId, code, redirectUri, state);
-              const count = res.count || (res.accounts ? res.accounts.length : 1);
-              toast.success(`Sucesso! ${count} conta(s) do Instagram conectada(s).`, {
-                id: "oauth-process",
-              });
-              onSuccess();
-              onOpenChange(false);
-            } catch (err: any) {
-              toast.error(`Falha ao conectar conta via Meta OAuth: ${err.message}`, {
-                id: "oauth-process",
-                duration: 12000,
-              });
-            } finally {
-              setLoadingConnect(false);
-            }
           }
         }
       };
 
+      // Listener 1: BroadcastChannel (funciona entre abas/popups da mesma origem mesmo com opener nulo)
+      if (typeof BroadcastChannel !== "undefined") {
+        if (broadcastChannelRef.current) broadcastChannelRef.current.close();
+        const bc = new BroadcastChannel("criafy_oauth_channel");
+        broadcastChannelRef.current = bc;
+        bc.onmessage = (event) => {
+          if (event.data?.type === "CRIAFY_OAUTH_CALLBACK") {
+            handleReceivedOAuth(event.data);
+          }
+        };
+      }
+
+      // Listener 2: postMessage clássico
+      if (popupMessageListenerRef.current) {
+        window.removeEventListener("message", popupMessageListenerRef.current);
+      }
+      const handlePopupMessage = (event: MessageEvent) => {
+        if (event.data?.type === "CRIAFY_OAUTH_CALLBACK") {
+          handleReceivedOAuth(event.data);
+        }
+      };
       popupMessageListenerRef.current = handlePopupMessage;
       window.addEventListener("message", handlePopupMessage);
     } catch (err: any) {
@@ -303,13 +351,20 @@ export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountMod
         {selectedPlatform === "instagram" ? (
           <div className="space-y-4 pt-1">
             {/* Opção 1: Conectar diretamente */}
-            <div className="p-4 rounded-2xl bg-card border border-border/80 shadow-xs space-y-2.5">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
-                Conectar neste dispositivo
-              </span>
+            <div className="p-4 rounded-2xl bg-card border border-border/80 shadow-xs space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
+                  Conectar neste dispositivo
+                </span>
+                <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800">
+                  Recomendado
+                </Badge>
+              </div>
+
+              {/* Botão Principal: Navegação Direta */}
               <Button
                 type="button"
-                onClick={handleOAuthConnect}
+                onClick={handleDirectConnect}
                 disabled={loadingConnect}
                 className="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-pink-600 hover:from-blue-700 hover:via-indigo-700 hover:to-pink-700 text-white font-bold text-xs py-5 rounded-xl shadow-xs gap-2 cursor-pointer transition-all"
               >
@@ -318,10 +373,23 @@ export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountMod
                 ) : (
                   <Instagram className="w-4 h-4" />
                 )}
-                <span>Conectar via Meta (Facebook & Business Manager)</span>
+                <span>Conectar via Meta (Recomendado)</span>
               </Button>
+
+              {/* Botão Secundário: Pop-up Lateral */}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handlePopupConnect}
+                disabled={loadingConnect}
+                className="w-full text-xs h-9 rounded-xl border-border/80 hover:bg-muted text-muted-foreground hover:text-foreground gap-2 cursor-pointer"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Abrir em Janela Pop-up</span>
+              </Button>
+
               <p className="text-[11px] text-muted-foreground text-center leading-relaxed">
-                Abre a tela segura da Meta para vincular sua Business Manager, Página do Facebook e Conta do Instagram profissional.
+                Abre a tela oficial da Meta para autorizar sua Página do Facebook e Conta Profissional do Instagram com validação automática.
               </p>
             </div>
 

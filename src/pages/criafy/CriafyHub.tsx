@@ -31,6 +31,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -53,6 +54,7 @@ import { AccountBriefingModal } from "@/components/criafy/AccountBriefingModal";
 import { InstagramFeedModal } from "@/components/criafy/InstagramFeedModal";
 import { AccountCompactCard } from "@/components/criafy/AccountCompactCard";
 import { AccountInsightsModal } from "@/components/criafy/AccountInsightsModal";
+import { ConnectionValidationModal } from "@/components/criafy/ConnectionValidationModal";
 import { useCriafyAutoScheduler } from "@/hooks/useCriafyAutoScheduler";
 import { CriafySidebarIcon, CriafyLogo } from "@/components/criafy/CriafyBrandIcons";
 
@@ -230,29 +232,60 @@ export default function CriafyHub() {
     }
   }
 
+  // Validation Modal state (Tela de validação e confirmação da conexão oficial Meta)
+  const [validationModalOpen, setValidationModalOpen] = useState(false);
+  const [validationLoading, setValidationLoading] = useState(false);
+  const [validatedAccount, setValidatedAccount] = useState<CriafyInstagramAccount | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  const handleOpenValidation = (account?: CriafyInstagramAccount | null) => {
+    const acc = account || primaryAccount || accounts[0] || null;
+    setValidatedAccount(acc);
+    setValidationLoading(false);
+    setValidationError(null);
+    setValidationModalOpen(true);
+  };
+
   useEffect(() => {
+    const handleReceivedSuccess = (data: any) => {
+      const count = data.count || 1;
+      toast.success(`Sucesso! ${count} conta(s) do Instagram conectada(s).`, {
+        id: "oauth-process",
+      });
+      if (data.accounts && Array.isArray(data.accounts) && data.accounts.length > 0) {
+        setAccounts((prev) => {
+          const map = new Map();
+          [...data.accounts, ...prev].forEach((acc) => map.set(acc.id, acc));
+          return Array.from(map.values());
+        });
+        setValidatedAccount(data.accounts[0]);
+        setValidationModalOpen(true);
+      }
+      loadAccounts();
+    };
+
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === "CRIAFY_OAUTH_SUCCESS") {
-        const count = event.data.count || 1;
-        toast.success(`Sucesso! ${count} conta(s) do Instagram conectada(s).`, {
-          id: "oauth-process",
-        });
-        if (
-          event.data.accounts &&
-          Array.isArray(event.data.accounts) &&
-          event.data.accounts.length > 0
-        ) {
-          setAccounts((prev) => {
-            const map = new Map();
-            [...event.data.accounts, ...prev].forEach((acc) => map.set(acc.id, acc));
-            return Array.from(map.values());
-          });
-        }
-        loadAccounts();
+        handleReceivedSuccess(event.data);
       }
     };
     window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
+
+    // Canal BroadcastChannel para receber eventos mesmo se opener for nulo
+    let bc: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== "undefined") {
+      bc = new BroadcastChannel("criafy_oauth_channel");
+      bc.onmessage = (event) => {
+        if (event.data?.type === "CRIAFY_OAUTH_SUCCESS") {
+          handleReceivedSuccess(event.data);
+        }
+      };
+    }
+
+    return () => {
+      window.removeEventListener("message", handleMessage);
+      if (bc) bc.close();
+    };
   }, [activeCompanyId]);
 
   useEffect(() => {
@@ -287,15 +320,18 @@ export default function CriafyHub() {
         try {
           const cleanCode = rawCode ? rawCode.replace(/#_.*$/, "").replace(/#.*$/, "").trim() : null;
           const cleanState = rawState ? rawState.replace(/#_.*$/, "").replace(/#.*$/, "").trim() : "";
-          window.opener.postMessage(
-            {
-              type: "CRIAFY_OAUTH_CALLBACK",
-              code: cleanCode,
-              state: cleanState,
-              error: oauthError,
-            },
-            "*"
-          );
+          const payload = {
+            type: "CRIAFY_OAUTH_CALLBACK",
+            code: cleanCode,
+            state: cleanState,
+            error: oauthError,
+          };
+          window.opener.postMessage(payload, "*");
+          if (typeof BroadcastChannel !== "undefined") {
+            const bc = new BroadcastChannel("criafy_oauth_channel");
+            bc.postMessage(payload);
+            bc.close();
+          }
         } catch (e) {
           console.error("Erro ao enviar mensagem via window.opener:", e);
         }
@@ -317,6 +353,9 @@ export default function CriafyHub() {
         `Autorização do Instagram cancelada ou recusada: ${oauthError}`,
         { duration: 8000 }
       );
+      setValidationError(oauthError);
+      setValidationLoading(false);
+      setValidationModalOpen(true);
       clearOAuthParams();
       await loadAccounts();
       return;
@@ -332,7 +371,12 @@ export default function CriafyHub() {
       if (processedOAuthCallbackRef.current === callbackKey) return;
       processedOAuthCallbackRef.current = callbackKey;
 
-      toast.loading("Processando autorização da Meta e conectando conta...", {
+      setValidationModalOpen(true);
+      setValidationLoading(true);
+      setValidationError(null);
+      setValidatedAccount(null);
+
+      toast.loading("Processando autorização da Meta e validando conta...", {
         id: "oauth-process",
       });
       try {
@@ -360,10 +404,14 @@ export default function CriafyHub() {
             [...res.accounts, ...prev].forEach((acc) => map.set(acc.id, acc));
             return Array.from(map.values());
           });
+          setValidatedAccount(res.accounts[0]);
         }
+        setValidationLoading(false);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Erro desconhecido";
         console.error("[CriafyHub] Erro no OAuth callback:", err);
+        setValidationError(message);
+        setValidationLoading(false);
         toast.error(`Falha ao conectar conta via Meta OAuth: ${message}`, {
           id: "oauth-process",
           duration: 10000,
@@ -392,23 +440,8 @@ export default function CriafyHub() {
   };
 
   const handleCheckHealth = async (accountId: string) => {
-    toast.loading("Verificando saúde do token Meta API...", { id: "health-check" });
-    try {
-      const res = await criafyService.checkAccountTokenHealth(accountId);
-      if (res.valid) {
-        toast.success("Token ativo e válido com a Meta Graph API!", {
-          id: "health-check",
-        });
-      } else {
-        toast.error(
-          `Token expirado ou inválido: ${res.error || "Reconecte a conta"}`,
-          { id: "health-check" }
-        );
-      }
-      loadAccounts();
-    } catch (err: any) {
-      toast.error(`Erro ao verificar token: ${err.message}`, { id: "health-check" });
-    }
+    const acc = accounts.find((a) => a.id === accountId) || null;
+    handleOpenValidation(acc);
   };
 
   const handleSyncProfile = async (accountId: string) => {
@@ -687,7 +720,7 @@ export default function CriafyHub() {
                       alt={primaryAccount.username}
                     />
                     <AvatarFallback className="bg-purple-100 text-purple-700 text-xs font-bold">
-                      {primaryAccount.username.slice(0, 2).toUpperCase()}
+                      {primaryAccount.username ? primaryAccount.username.slice(0, 2).toUpperCase() : "IG"}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
@@ -828,6 +861,17 @@ export default function CriafyHub() {
               </Button>
 
               <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleOpenValidation(primaryAccount || accounts[0])}
+                className="gap-1.5 text-xs h-9 rounded-xl cursor-pointer border-emerald-300/80 text-emerald-700 dark:border-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                title="Validar status e integridade da conexão oficial com a Meta API"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                Validar Conexão Meta
+              </Button>
+
+              <Button
                 onClick={() => setAddAccountOpen(true)}
                 className="gap-1.5 text-xs h-9 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:opacity-90 transition-all border-0 shadow-sm cursor-pointer"
               >
@@ -934,13 +978,23 @@ export default function CriafyHub() {
                       Sua empresa ({activeCompany?.name}) ainda não possui contas do
                       Instagram conectadas ao Criafy.
                     </p>
-                    <Button
-                      size="sm"
-                      onClick={() => setAddAccountOpen(true)}
-                      className="gap-1.5 text-xs"
-                    >
-                      <Plus className="w-4 h-4" /> Conectar Primeira Conta
-                    </Button>
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => setAddAccountOpen(true)}
+                        className="gap-1.5 text-xs bg-gradient-to-r from-purple-600 to-pink-600 text-white"
+                      >
+                        <Plus className="w-4 h-4" /> Conectar Primeira Conta
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleOpenValidation(null)}
+                        className="gap-1.5 text-xs border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Validar Status de Conexão
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               ) : (() => {
@@ -1053,7 +1107,32 @@ export default function CriafyHub() {
       <AddAccountModal
         open={addAccountOpen}
         onOpenChange={setAddAccountOpen}
-        onSuccess={loadAccounts}
+        onSuccess={(acc) => {
+          loadAccounts();
+          if (acc) {
+            handleOpenValidation(acc);
+          }
+        }}
+      />
+
+      <ConnectionValidationModal
+        open={validationModalOpen}
+        onOpenChange={setValidationModalOpen}
+        loading={validationLoading}
+        account={validatedAccount}
+        error={validationError}
+        onRetry={() => {
+          setValidationModalOpen(false);
+          setAddAccountOpen(true);
+        }}
+        onSuccessClose={() => {
+          setValidationModalOpen(false);
+          handleTabChange("contas");
+        }}
+        onConnectNew={() => {
+          setValidationModalOpen(false);
+          setAddAccountOpen(true);
+        }}
       />
 
       <AccountBriefingModal

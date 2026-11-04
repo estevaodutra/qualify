@@ -33,6 +33,7 @@ interface ConnectionValidationModalProps {
   error: string | null;
   onRetry?: () => void;
   onSuccessClose?: () => void;
+  onConnectNew?: () => void;
 }
 
 export function ConnectionValidationModal({
@@ -43,6 +44,7 @@ export function ConnectionValidationModal({
   error,
   onRetry,
   onSuccessClose,
+  onConnectNew,
 }: ConnectionValidationModalProps) {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{
@@ -96,9 +98,13 @@ export function ConnectionValidationModal({
             <div className="w-16 h-16 mx-auto mb-3 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shadow-inner">
               <CheckCircle2 className="w-9 h-9 text-emerald-300 drop-shadow" />
             </div>
-          ) : (
+          ) : error ? (
             <div className="w-16 h-16 mx-auto mb-3 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shadow-inner">
               <XCircle className="w-9 h-9 text-rose-300 drop-shadow" />
+            </div>
+          ) : (
+            <div className="w-16 h-16 mx-auto mb-3 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shadow-inner">
+              <ShieldCheck className="w-9 h-9 text-emerald-300 drop-shadow" />
             </div>
           )}
 
@@ -107,14 +113,18 @@ export function ConnectionValidationModal({
               ? "Processando Conexão com a Meta..."
               : account
               ? "Instagram Conectado com Sucesso!"
-              : "Falha na Conexão com o Instagram"}
+              : error
+              ? "Falha na Conexão com o Instagram"
+              : "Validação da Conexão Meta"}
           </DialogTitle>
           <DialogDescription className="text-white/85 text-xs mt-1">
             {loading
               ? "Aguarde enquanto registramos os tokens de acesso e ativos homologados."
               : account
               ? "Sua conta oficial da Meta foi validada e vinculada à sua empresa."
-              : "Não foi possível concluir o registro da conta na Meta Graph API."}
+              : error
+              ? "Não foi possível concluir o registro da conta na Meta Graph API."
+              : "Consulte o status e a integridade da comunicação oficial com a Meta API."}
           </DialogDescription>
         </div>
 
@@ -170,7 +180,7 @@ export function ConnectionValidationModal({
                 <Avatar className="w-14 h-14 border-2 border-pink-500 shadow-sm shrink-0">
                   <AvatarImage src={account.profile_picture_url || ""} />
                   <AvatarFallback className="bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 text-white font-bold text-lg">
-                    {account.username.slice(0, 2).toUpperCase()}
+                    {account.username ? account.username.slice(0, 2).toUpperCase() : "IG"}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
@@ -269,6 +279,41 @@ export function ConnectionValidationModal({
                   Concluir e Acessar Minhas Demandas & Planner
                   <ArrowRight className="w-4 h-4 ml-1" />
                 </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Cenário 4: Nenhuma conta conectada */}
+          {!loading && !error && !account && (
+            <div className="space-y-4 py-4 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto">
+                <Instagram className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="font-bold text-sm text-foreground">
+                  Nenhuma conta do Instagram associada
+                </h4>
+                <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                  Para validar os recursos e tokens da Meta, conecte primeiro o perfil oficial do Instagram da empresa.
+                </p>
+              </div>
+              <div className="flex justify-center gap-2 pt-2">
+                <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+                  Fechar
+                </Button>
+                {onConnectNew && (
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      onOpenChange(false);
+                      onConnectNew();
+                    }}
+                    className="bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-600 text-white font-medium gap-1.5"
+                  >
+                    <Instagram className="w-3.5 h-3.5" />
+                    Conectar Conta Agora
+                  </Button>
+                )}
               </div>
             </div>
           )}
