@@ -270,12 +270,6 @@ export default function CriafyHub() {
     const oauthError =
       searchParams.get("error_description") || searchParams.get("error");
 
-    const targetCompanyId = activeCompanyId || extractCompanyIdFromState(rawState);
-    if (!targetCompanyId && !oauthError) {
-      if (!activeCompanyId) setLoading(false);
-      return;
-    }
-
     const clearOAuthParams = () => {
       const nextParams = new URLSearchParams(searchParams);
       ["code", "state", "error", "error_reason", "error_description"].forEach(
@@ -287,33 +281,18 @@ export default function CriafyHub() {
       window.history.replaceState(null, "", window.location.pathname);
     };
 
-    if (oauthError) {
-      toast.error(
-        `Autorização do Instagram cancelada ou recusada: ${oauthError}`,
-        { duration: 8000 }
-      );
-      clearOAuthParams();
-      if (window.opener && window.opener !== window) {
-        setTimeout(() => window.close(), 1500);
-      } else {
-        await loadAccounts();
-      }
-      return;
-    }
-
-    if (rawCode) {
-      const cleanCode = rawCode.replace(/#_.*$/, "").replace(/#.*$/, "").trim();
-      const cleanState = rawState
-        ? rawState.replace(/#_.*$/, "").replace(/#.*$/, "").trim()
-        : "";
-
-      if (window.opener && window.opener !== window) {
+    // 1. Se estivermos dentro de um popup de autenticação, despacha imediatamente para a janela pai
+    if (window.opener && window.opener !== window) {
+      if (rawCode || oauthError) {
         try {
+          const cleanCode = rawCode ? rawCode.replace(/#_.*$/, "").replace(/#.*$/, "").trim() : null;
+          const cleanState = rawState ? rawState.replace(/#_.*$/, "").replace(/#.*$/, "").trim() : "";
           window.opener.postMessage(
             {
               type: "CRIAFY_OAUTH_CALLBACK",
               code: cleanCode,
               state: cleanState,
+              error: oauthError,
             },
             "*"
           );
@@ -324,6 +303,30 @@ export default function CriafyHub() {
         window.close();
         return;
       }
+    }
+
+    // 2. Fluxo na mesma janela (quando não é popup)
+    const targetCompanyId = activeCompanyId || extractCompanyIdFromState(rawState);
+    if (!targetCompanyId && !oauthError) {
+      if (!activeCompanyId) setLoading(false);
+      return;
+    }
+
+    if (oauthError) {
+      toast.error(
+        `Autorização do Instagram cancelada ou recusada: ${oauthError}`,
+        { duration: 8000 }
+      );
+      clearOAuthParams();
+      await loadAccounts();
+      return;
+    }
+
+    if (rawCode) {
+      const cleanCode = rawCode.replace(/#_.*$/, "").replace(/#.*$/, "").trim();
+      const cleanState = rawState
+        ? rawState.replace(/#_.*$/, "").replace(/#.*$/, "").trim()
+        : "";
 
       const callbackKey = `${targetCompanyId}:${cleanCode}`;
       if (processedOAuthCallbackRef.current === callbackKey) return;

@@ -1,6 +1,6 @@
 {
-  "commit": "4092f29bb77c362460a04a3726ab17be79fbf714",
-  "shortCommit": "4092f29",
-  "message": "feat(webphone): implement native API4COM SIP webphone and edge functions",
-  "builtAt": "2026-11-04T00:47:59.318Z"
+  "commit": "bb77c672de55b9dbe478a5532af44c92c57f8064",
+  "shortCommit": "bb77c67",
+  "message": "fix(criafy): initialize userClient before getUser in oauth edge function",
+  "builtAt": "2026-11-04T12:37:45.186Z"
 }
