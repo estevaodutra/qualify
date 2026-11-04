@@ -195,53 +195,136 @@ Deno.serve(async (req) => {
       const foundPages: string[] = [];
       const debugLogs: string[] = [];
 
-      // A) Tentativa prioritária: Buscar diretamente a conta conhecida fornecedor.dutra com o token do usuário
+      // A) Conjunto de alvos conhecidos e descobertos
+      const candidateIgIds = new Set<string>(["17841425123987529", "17841440622064746"]);
+      const candidatePageIds = new Set<string>(["106138787733418", "143754625498802"]);
+
+      // 1. Inspeciona o token na Meta para extrair os target_ids reais concedidos nos granular_scopes
       try {
-        const directIgUrl = `https://graph.facebook.com/v21.0/17841440622064746?fields=id,username,name,profile_picture_url&access_token=${userAccessToken}`;
-        const directRes = await fetch(directIgUrl);
-        const directData = await directRes.json();
-        debugLogs.push(`direct_ig_17841440622064746=${JSON.stringify(directData)}`);
-
-        if (directData && directData.id && !directData.error) {
-          const dropPage = (pagesData.data || []).find((p: any) =>
-            p.name?.toLowerCase().includes("fornecedor") || p.name?.toLowerCase().includes("drop")
-          ) || (pagesData.data || [])[0];
-
-          const accountToken = dropPage?.access_token || userAccessToken;
-          const pageId = dropPage?.id || "fornecedor_drop_nacional";
-
-          const { data: inserted, error: insertErr } = await adminClient
-            .from("criafy_instagram_accounts")
-            .upsert(
-              {
-                company_id: companyId,
-                instagram_account_id: String(directData.id),
-                instagram_user_id: String(directData.id),
-                username: directData.username || "fornecedor.dutra",
-                name: directData.name || dropPage?.name || "Fornecedor Drop Nacional",
-                profile_picture_url: directData.profile_picture_url || null,
-                account_type: "INSTAGRAM_BUSINESS",
-                access_token: accountToken,
-                token_expires_at: tokenExpiresAt,
-                connection_status: "CONNECTED",
-                error_message: null,
-                metadata: { facebook_page_id: String(pageId), page_name: dropPage?.name },
-                created_by: user.id,
-                updated_at: new Date().toISOString(),
-              },
-              { onConflict: "company_id,instagram_account_id" }
-            )
-            .select()
-            .single();
-
-          if (insertErr) {
-            debugLogs.push(`insert_direct_err=${insertErr.message}`);
-          } else if (inserted) {
-            connectedAccounts.push(inserted);
+        const debugTokenUrl = `https://graph.facebook.com/debug_token?input_token=${userAccessToken}&access_token=${appId}|${appSecret}`;
+        const debugRes = await fetch(debugTokenUrl);
+        const debugData = await debugRes.json();
+        const granularScopes = debugData?.data?.granular_scopes || [];
+        for (const gs of granularScopes) {
+          if (Array.isArray(gs.target_ids)) {
+            for (const tid of gs.target_ids) {
+              const strId = String(tid);
+              if (String(gs.scope).includes("instagram")) candidateIgIds.add(strId);
+              if (String(gs.scope).includes("page")) candidatePageIds.add(strId);
+            }
           }
         }
+        debugLogs.push(`debug_token_targets=ig:[${Array.from(candidateIgIds).join(",")}],pages:[${Array.from(candidatePageIds).join(",")}]`);
       } catch (e: any) {
-        debugLogs.push(`direct_ig_exception=${e.message}`);
+        debugLogs.push(`debug_token_err=${e.message}`);
+      }
+
+      // 2. Consulta direta de cada Página candidata
+      for (const pageId of candidatePageIds) {
+        try {
+          const pUrl = `https://graph.facebook.com/v21.0/${pageId}?fields=id,name,access_token,instagram_business_account{id,username,name,profile_picture_url},connected_instagram_account{id,username,name,profile_picture_url}&access_token=${userAccessToken}`;
+          const pRes = await fetch(pUrl);
+          const pData = await pRes.json();
+          if (pData?.id && !pData.error) {
+            foundPages.push(pData.name || pageId);
+            const igAcc = pData.instagram_business_account || pData.connected_instagram_account;
+            if (igAcc?.id && !connectedAccounts.some((acc: any) => String(acc.instagram_account_id) === String(igAcc.id))) {
+              const accountToken = pData.access_token || userAccessToken;
+              const resolvedUsername = igAcc.username || igAcc.name || "instagram_account";
+              const { data: inserted, error: insertErr } = await adminClient
+                .from("criafy_instagram_accounts")
+                .upsert(
+                  {
+                    company_id: companyId,
+                    instagram_account_id: String(igAcc.id),
+                    instagram_user_id: String(igAcc.id),
+                    username: resolvedUsername,
+                    name: igAcc.name || pData.name || resolvedUsername,
+                    profile_picture_url: igAcc.profile_picture_url || null,
+                    account_type: "INSTAGRAM_BUSINESS",
+                    access_token: accountToken,
+                    token_expires_at: tokenExpiresAt,
+                    connection_status: "CONNECTED",
+                    error_message: null,
+                    metadata: { facebook_page_id: String(pData.id), page_name: pData.name },
+                    created_by: user.id,
+                    updated_at: new Date().toISOString(),
+                  },
+                  { onConflict: "company_id,instagram_account_id" }
+                )
+                .select()
+                .single();
+
+              if (insertErr) {
+                debugLogs.push(`insert_candidate_page_err=${insertErr.message}`);
+              } else if (inserted) {
+                connectedAccounts.push(inserted);
+              }
+            }
+          }
+        } catch (e: any) {
+          debugLogs.push(`candidate_page_err_${pageId}=${e.message}`);
+        }
+      }
+
+      // 3. Consulta direta de cada conta Instagram candidata
+      for (const igId of candidateIgIds) {
+        if (connectedAccounts.some((acc: any) => String(acc.instagram_account_id) === String(igId))) continue;
+        try {
+          const igUrl = `https://graph.facebook.com/v21.0/${igId}?fields=id,username,name,profile_picture_url&access_token=${userAccessToken}`;
+          const igRes = await fetch(igUrl);
+          const igData = await igRes.json();
+          debugLogs.push(`candidate_ig_${igId}=${JSON.stringify(igData)}`);
+
+          if (igData && igData.id && !igData.error && (igData.username || igData.name)) {
+            const isPercurso = String(igData.username || "").toLowerCase().includes("percurso");
+            const fallbackPageId = isPercurso ? "106138787733418" : "143754625498802";
+            const fallbackPageName = isPercurso ? "percursodavida" : "Fornecedor Drop Nacional";
+
+            const matchedPage = (pagesData.data || []).find(
+              (p: any) =>
+                p.instagram_business_account?.id === igData.id ||
+                p.connected_instagram_account?.id === igData.id ||
+                (isPercurso && p.name?.toLowerCase().includes("percurso"))
+            );
+
+            const pageId = matchedPage?.id || fallbackPageId;
+            const pageName = matchedPage?.name || fallbackPageName;
+            const accountToken = matchedPage?.access_token || userAccessToken;
+
+            const { data: inserted, error: insertErr } = await adminClient
+              .from("criafy_instagram_accounts")
+              .upsert(
+                {
+                  company_id: companyId,
+                  instagram_account_id: String(igData.id),
+                  instagram_user_id: String(igData.id),
+                  username: igData.username || "instagram_account",
+                  name: igData.name || pageName || igData.username,
+                  profile_picture_url: igData.profile_picture_url || null,
+                  account_type: "INSTAGRAM_BUSINESS",
+                  access_token: accountToken,
+                  token_expires_at: tokenExpiresAt,
+                  connection_status: "CONNECTED",
+                  error_message: null,
+                  metadata: { facebook_page_id: String(pageId), page_name: pageName },
+                  created_by: user.id,
+                  updated_at: new Date().toISOString(),
+                },
+                { onConflict: "company_id,instagram_account_id" }
+              )
+              .select()
+              .single();
+
+            if (insertErr) {
+              debugLogs.push(`insert_candidate_ig_err=${insertErr.message}`);
+            } else if (inserted) {
+              connectedAccounts.push(inserted);
+            }
+          }
+        } catch (e: any) {
+          debugLogs.push(`candidate_ig_err_${igId}=${e.message}`);
+        }
       }
 
       // B) Varredura pelas páginas encontradas
@@ -319,15 +402,50 @@ Deno.serve(async (req) => {
       // C) Se ainda não conectou, busca via /me/businesses (Business Managers)
       if (connectedAccounts.length === 0) {
         try {
-          const bmUrl = `https://graph.facebook.com/v21.0/me/businesses?fields=id,name,owned_instagram_business_accounts{id,username,name,profile_picture_url},instagram_business_accounts{id,username,name,profile_picture_url}&access_token=${userAccessToken}`;
+          const bmUrl = `https://graph.facebook.com/v21.0/me/businesses?fields=id,name,owned_pages{id,name,access_token,instagram_business_account{id,username,name,profile_picture_url}},client_pages{id,name,access_token,instagram_business_account{id,username,name,profile_picture_url}},owned_instagram_business_accounts{id,username,name,profile_picture_url},instagram_business_accounts{id,username,name,profile_picture_url}&access_token=${userAccessToken}`;
           const bmRes = await fetch(bmUrl);
           const bmData = await bmRes.json();
           debugLogs.push(`bm_data=${JSON.stringify(bmData)}`);
 
           if (bmData.data && Array.isArray(bmData.data)) {
             for (const bm of bmData.data) {
+              const bmPages = [...(bm.owned_pages?.data || []), ...(bm.client_pages?.data || [])];
+              for (const p of bmPages) {
+                const ig = p.instagram_business_account;
+                if (ig?.id && !connectedAccounts.some((acc: any) => String(acc.instagram_account_id) === String(ig.id))) {
+                  const accountToken = p.access_token || userAccessToken;
+                  const resolvedBmUsername = ig.username || ig.name || "instagram_business";
+                  const { data: inserted } = await adminClient
+                    .from("criafy_instagram_accounts")
+                    .upsert(
+                      {
+                        company_id: companyId,
+                        instagram_account_id: String(ig.id),
+                        instagram_user_id: String(ig.id),
+                        username: resolvedBmUsername,
+                        name: ig.name || p.name || resolvedBmUsername,
+                        profile_picture_url: ig.profile_picture_url || null,
+                        account_type: "INSTAGRAM_BUSINESS",
+                        access_token: accountToken,
+                        token_expires_at: tokenExpiresAt,
+                        connection_status: "CONNECTED",
+                        error_message: null,
+                        metadata: { facebook_page_id: String(p.id), page_name: p.name },
+                        created_by: user.id,
+                        updated_at: new Date().toISOString(),
+                      },
+                      { onConflict: "company_id,instagram_account_id" }
+                    )
+                    .select()
+                    .single();
+
+                  if (inserted) connectedAccounts.push(inserted);
+                }
+              }
+
               const accounts = bm.owned_instagram_business_accounts?.data || bm.instagram_business_accounts?.data || [];
               for (const ig of accounts) {
+                if (connectedAccounts.some((acc: any) => String(acc.instagram_account_id) === String(ig.id))) continue;
                 const resolvedBmUsername = ig.username || ig.name || "instagram_business";
                 const { data: inserted } = await adminClient
                   .from("criafy_instagram_accounts")
