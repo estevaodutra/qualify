@@ -1,6 +1,6 @@
 {
-  "commit": "bb77c672de55b9dbe478a5532af44c92c57f8064",
-  "shortCommit": "bb77c67",
-  "message": "fix(criafy): initialize userClient before getUser in oauth edge function",
-  "builtAt": "2026-11-04T12:37:45.186Z"
+  "commit": "91d55f6350ae1b5245de1f2ebec5fc8709bf9c0c",
+  "shortCommit": "91d55f6",
+  "message": "fix(criafy): handle oauth popup callback immediately before company context load",
+  "builtAt": "2026-11-04T13:23:58.616Z"
 }

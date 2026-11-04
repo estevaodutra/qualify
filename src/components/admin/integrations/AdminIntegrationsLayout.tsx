@@ -1,6 +1,6 @@
 import { Outlet } from "react-router-dom";
 import { AdminSubSidebar, SubSidebarItem } from "@/components/admin/AdminSubSidebar";
-import { Sparkles, Workflow, Radio, Zap, Plug, Compass } from "lucide-react";
+import { Sparkles, Workflow, Radio, Zap, Plug, Compass, PhoneCall } from "lucide-react";
 
 const integrationItems: SubSidebarItem[] = [
   {

@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import {
+  PhoneCall, useState, useEffect } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -108,6 +109,7 @@ const sections: NavSection[] = [
     items: [
       { title: "OpenAI", url: "/admin/integracoes/openai", icon: Sparkles },
       { title: "Meta / Instagram", url: "/admin/integracoes/meta", icon: Workflow },
+      { title: "API4COM (Telefonia)", url: "/admin/integracoes/api4com", icon: PhoneCall },
       { title: "WhatsApp", url: "/admin/integracoes/whatsapp", icon: Radio },
       { title: "Webhooks", url: "/admin/integracoes/webhooks", icon: Zap },
       { title: "Apify (Google Maps)", url: "/admin/integracoes/apify", icon: Compass },

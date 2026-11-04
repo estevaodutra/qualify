@@ -108,6 +108,7 @@ import AdminAiContextProviders from "./pages/admin/ai/AdminAiContextProviders";
 import { AdminIntegrationsLayout } from "./components/admin/integrations/AdminIntegrationsLayout";
 import AdminOpenAiIntegration from "./pages/admin/integrations/AdminOpenAiIntegration";
 import AdminMetaIntegration from "./pages/admin/integrations/AdminMetaIntegration";
+import AdminApi4comIntegration from "./pages/admin/integrations/AdminApi4comIntegration";
 import AdminWhatsAppIntegration from "./pages/admin/integrations/AdminWhatsAppIntegration";
 import AdminWebhooksIntegration from "./pages/admin/integrations/AdminWebhooksIntegration";
 import AdminOtherIntegrations from "./pages/admin/integrations/AdminOtherIntegrations";
@@ -351,6 +352,7 @@ const App = () => {
                         <Route index element={<Navigate to="/admin/integracoes/openai" replace />} />
                         <Route path="openai" element={<AdminOpenAiIntegration />} />
                         <Route path="meta" element={<AdminMetaIntegration />} />
+                        <Route path="api4com" element={<AdminApi4comIntegration />} />
                         <Route path="whatsapp" element={<AdminWhatsAppIntegration />} />
                         <Route path="webhooks" element={<AdminWebhooksIntegration />} />
                         <Route path="apify" element={<AdminApifyIntegration />} />
@@ -387,6 +389,7 @@ const App = () => {
                       <Route path="configuracoes" element={<Navigate to="/admin/sistema/configuracoes" replace />} />
                       <Route path="notificacoes" element={<Navigate to="/admin/integracoes/webhooks" replace />} />
                       <Route path="uras" element={<Navigate to="/admin/integracoes/outras" replace />} />
+                      <Route path="api4com" element={<Navigate to="/admin/integracoes/api4com" replace />} />
                       <Route path="financeiro/transacoes" element={<AdminTransactions />} />
                       <Route path="financeiro/recargas" element={<Navigate to="/admin/planos" replace />} />
                       <Route path="financeiro/consumo" element={<Navigate to="/admin/uso" replace />} />
