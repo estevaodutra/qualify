@@ -3,8 +3,6 @@ import { Workflow, Plus, Search, Folder, FolderPlus, ChevronRight, ArrowLeft } f
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { useWorkflowFolders } from "@/hooks/useWorkflowFolders";
 import { useWorkflowDefinitions, type WorkflowStatus } from "@/hooks/useWorkflowDefinitions";
@@ -25,7 +23,6 @@ const STATUS_TABS: { value: WorkflowStatus | "all"; label: string }[] = [
 
 export default function WorkflowLibrary() {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null | undefined>(undefined);
-  const [includeSubfolders, setIncludeSubfolders] = useState(true);
   const [statusTab, setStatusTab] = useState<WorkflowStatus | "all">("all");
   const [search, setSearch] = useState("");
   const [showNewDialog, setShowNewDialog] = useState(false);
@@ -105,18 +102,13 @@ export default function WorkflowLibrary() {
     return allDefinitions.filter((def) => {
       if (selectedFolderId === null && def.folderId) return false;
       if (typeof selectedFolderId === "string") {
-        if (includeSubfolders) {
-          const folderIds = getFolderAndDescendantIds(selectedFolderId, folders);
-          if (!def.folderId || !folderIds.includes(def.folderId)) return false;
-        } else {
-          if (def.folderId !== selectedFolderId) return false;
-        }
+        if (def.folderId !== selectedFolderId) return false;
       }
       if (statusTab !== "all" && def.status !== statusTab) return false;
       if (search && !def.name.toLowerCase().includes(search.toLowerCase()) && !(def.description || "").toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [allDefinitions, selectedFolderId, folders, includeSubfolders, statusTab, search]);
+  }, [allDefinitions, selectedFolderId, statusTab, search]);
 
   const folderPendingDeleteObj = folders.find((f) => f.id === folderPendingDelete);
 
@@ -222,19 +214,6 @@ export default function WorkflowLibrary() {
               />
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              {typeof selectedFolderId === "string" && currentSubfolders.length > 0 && (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/40 rounded-xl border border-border/40">
-                  <Switch
-                    id="include-subfolders-toggle"
-                    checked={includeSubfolders}
-                    onCheckedChange={setIncludeSubfolders}
-                    className="scale-75"
-                  />
-                  <Label htmlFor="include-subfolders-toggle" className="text-xs text-muted-foreground cursor-pointer select-none font-medium">
-                    Incluir subpastas
-                  </Label>
-                </div>
-              )}
               <div className="flex items-center gap-1 bg-muted/40 rounded-xl p-1">
                 {STATUS_TABS.map((tab) => (
                   <button
@@ -327,16 +306,6 @@ export default function WorkflowLibrary() {
                 <p className="text-xs text-muted-foreground">
                   As automações estão organizadas nas {currentSubfolders.length} {currentSubfolders.length === 1 ? "subpasta" : "subpastas"} listadas acima.
                 </p>
-                {!includeSubfolders && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIncludeSubfolders(true)}
-                    className="text-xs rounded-xl mt-2 font-medium"
-                  >
-                    Ver automações das subpastas
-                  </Button>
-                )}
               </div>
             ) : (
               <div className="rounded-3xl border-2 border-dashed border-border/40 bg-muted/10 p-16 text-center">
@@ -354,8 +323,7 @@ export default function WorkflowLibrary() {
               onDragOver={(e) => e.preventDefault()}
             >
               {visibleDefinitions.map((def) => {
-                const isFromSubfolder = typeof selectedFolderId === "string" && def.folderId && def.folderId !== selectedFolderId;
-                const subfolderName = isFromSubfolder ? folderMap.get(def.folderId!)?.name : undefined;
+                const currentFolderName = def.folderId ? folderMap.get(def.folderId)?.name : undefined;
                 return (
                   <div
                     key={def.id}
@@ -364,7 +332,7 @@ export default function WorkflowLibrary() {
                     <WorkflowCard
                       workflow={def}
                       folders={folders}
-                      folderName={subfolderName}
+                      folderName={currentFolderName}
                       onMoveToFolder={(folderId) => moveToFolder({ id: def.id, folderId })}
                       onDelete={() => setWorkflowPendingDelete(def)}
                       onDuplicate={() => duplicateWorkflowDefinition(def.id)}
