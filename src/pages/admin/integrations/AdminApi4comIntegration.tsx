@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { Link } from "react-router-dom";
 import {
   PhoneCall,
   Phone,
@@ -102,6 +103,13 @@ export default function AdminApi4comIntegration() {
   // Áudio player modal
   const [playingAudioUrl, setPlayingAudioUrl] = useState<string | null>(null);
 
+  // Usuários da plataforma e Master Token
+  const [platformUsersCount, setPlatformUsersCount] = useState(0);
+  const [platformConfiguredCount, setPlatformConfiguredCount] = useState(0);
+  const [masterToken, setMasterToken] = useState("");
+  const [isSavingMaster, setIsSavingMaster] = useState(false);
+  const [isLoadingMaster, setIsLoadingMaster] = useState(false);
+
   // Carregar dados de operadores e chamadas
   const loadData = async () => {
     setIsLoading(true);
@@ -164,6 +172,15 @@ export default function AdminApi4comIntegration() {
         }));
         setCallLogs(formattedCalls);
       }
+
+      // 3. Usuários da plataforma
+      const { data: profData } = await supabase
+        .from("profiles")
+        .select("id, api4com_token");
+      if (profData) {
+        setPlatformUsersCount(profData.length);
+        setPlatformConfiguredCount(profData.filter((p: any) => p.api4com_token).length);
+      }
     } catch (err: any) {
       console.error("[AdminApi4comIntegration] Erro ao carregar dados:", err);
       toast.error("Erro ao carregar dados da API4COM: " + err.message);
@@ -172,8 +189,43 @@ export default function AdminApi4comIntegration() {
     }
   };
 
+  const loadMasterConfig = async () => {
+    setIsLoadingMaster(true);
+    try {
+      const { data } = await supabase.functions.invoke("api4com-manage-user", {
+        body: { action: "get-master-config" },
+      });
+      if (data?.config?.admin_token) {
+        setMasterToken(data.config.admin_token);
+      }
+    } catch (e) {
+      console.warn("Aviso ao carregar config master:", e);
+    } finally {
+      setIsLoadingMaster(false);
+    }
+  };
+
+  const handleSaveMaster = async () => {
+    setIsSavingMaster(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("api4com-manage-user", {
+        body: {
+          action: "save-master-config",
+          admin_token: masterToken.trim(),
+        },
+      });
+      if (error || !data?.success) throw new Error(data?.error || "Falha ao salvar");
+      toast.success("Token Mestre da API4COM salvo com sucesso!");
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao salvar token mestre");
+    } finally {
+      setIsSavingMaster(false);
+    }
+  };
+
   useEffect(() => {
     loadData();
+    loadMasterConfig();
   }, []);
 
   const copyToClipboard = (text: string, id: string) => {
@@ -374,7 +426,7 @@ export default function AdminApi4comIntegration() {
         <TabsList className="bg-muted/60 p-1">
           <TabsTrigger value="operators" className="gap-2 text-xs">
             <Users className="h-4 w-4" />
-            <span>Operadores & Ramais SIP ({operators.length})</span>
+            <span>Visão Geral & Usuários</span>
           </TabsTrigger>
           <TabsTrigger value="calls" className="gap-2 text-xs">
             <Activity className="h-4 w-4" />
@@ -390,137 +442,79 @@ export default function AdminApi4comIntegration() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Tab 1: Operadores & Ramais */}
+        {/* Tab 1: Visão Geral & Usuários */}
         <TabsContent value="operators" className="space-y-4 mt-6">
+          {/* Banner Redirecionamento para Usuários */}
+          <div className="rounded-xl border border-purple-500/30 bg-purple-500/5 dark:bg-purple-950/20 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <h3 className="text-sm font-bold flex items-center gap-2 text-foreground">
+                <Users className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                Gerenciamento Centralizado de Usuários & Tokens API4COM
+              </h3>
+              <p className="text-xs text-muted-foreground max-w-2xl">
+                O gerenciamento de usuários, atribuição de ramais SIP e geração de Tokens API4COM agora são centralizados diretamente na página de <strong>Usuários da Plataforma</strong>. Ao cadastrar um novo usuário ou acessar o menu de ações de qualquer usuário, você pode gerar ou configurar o token com um clique.
+              </p>
+            </div>
+            <Link to="/admin/usuarios">
+              <Button className="bg-purple-600 hover:bg-purple-700 text-white text-xs h-9 gap-1.5 shrink-0">
+                <Users className="h-3.5 w-3.5" />
+                Ir para Usuários da Plataforma
+                <ExternalLink className="h-3 w-3 ml-1" />
+              </Button>
+            </Link>
+          </div>
+
+          {/* Configuração Mestra da API4COM */}
           <Card className="border-border/60">
             <CardHeader className="p-4 md:p-6 pb-2">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <div>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Users className="h-4 w-4 text-purple-600" />
-                    Operadores e Ramais SIP Configurados
-                  </CardTitle>
-                  <CardDescription className="text-xs">
-                    Cada operador com plano na API4COM possui um ramal próprio e token individual.
-                  </CardDescription>
-                </div>
-                <div className="w-full md:w-72">
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Buscar operador, ramal ou empresa..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-9 h-9 text-xs"
-                    />
-                  </div>
-                </div>
-              </div>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Key className="h-4 w-4 text-purple-600" />
+                Credencial Mestra API4COM (Provisionamento Automático)
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Informe o Token de Administrador da sua conta API4COM. Com este token configurado, a criação de novos usuários no Qualify criará e vinculará as contas na API4COM automaticamente.
+              </CardDescription>
             </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-xs">Operador</TableHead>
-                    <TableHead className="text-xs">Empresa</TableHead>
-                    <TableHead className="text-xs">Ramal SIP</TableHead>
-                    <TableHead className="text-xs">Domínio SIP</TableHead>
-                    <TableHead className="text-xs">Status do Ramal</TableHead>
-                    <TableHead className="text-xs">Webhook</TableHead>
-                    <TableHead className="text-xs text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredOperators.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-xs">
-                        Nenhum operador encontrado com os critérios de busca.
-                      </TableCell>
-                    </TableRow>
+            <CardContent className="p-4 md:p-6 pt-2 space-y-3">
+              <div className="flex flex-col sm:flex-row items-end gap-3">
+                <div className="flex-1 space-y-1 w-full">
+                  <Label htmlFor="master-token" className="text-xs font-medium">
+                    Token Mestre / Admin da API4COM
+                  </Label>
+                  <Input
+                    id="master-token"
+                    type="password"
+                    placeholder="Token mestre com privilégios de criar usuários na API4COM"
+                    value={masterToken}
+                    onChange={(e) => setMasterToken(e.target.value)}
+                    className="font-mono text-xs h-9"
+                    disabled={isSavingMaster}
+                  />
+                </div>
+                <Button
+                  onClick={handleSaveMaster}
+                  disabled={isSavingMaster || !masterToken.trim()}
+                  className="h-9 text-xs gap-1.5 bg-primary shrink-0"
+                >
+                  {isSavingMaster ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Salvando...
+                    </>
                   ) : (
-                    filteredOperators.map((op) => (
-                      <TableRow key={op.id}>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span className="font-semibold text-xs text-foreground">{op.operator_name}</span>
-                            <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[140px]">
-                              {op.id}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-[11px] gap-1 bg-muted/30">
-                            <Building2 className="h-3 w-3 text-muted-foreground" />
-                            {op.company_name}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {op.extension ? (
-                            <span className="font-mono font-bold text-xs bg-muted px-2 py-0.5 rounded text-foreground">
-                              {op.extension}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-muted-foreground italic">Não vinculado</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-xs font-mono text-muted-foreground">
-                            {op.sip_domain || "—"}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          {op.api4com_token ? (
-                            <Badge
-                              variant="outline"
-                              className={
-                                op.status === "available" || op.status === "on_call"
-                                  ? "border-emerald-500/40 text-emerald-600 bg-emerald-500/10 text-[11px]"
-                                  : "border-blue-500/40 text-blue-600 bg-blue-500/10 text-[11px]"
-                              }
-                            >
-                              <span className="h-1.5 w-1.5 rounded-full bg-current mr-1.5" />
-                              {op.status === "on_call" ? "Em Chamada" : op.status === "available" ? "Online" : "Configurado"}
-                            </Badge>
-                          ) : (
-                            <Badge variant="secondary" className="text-[11px] text-muted-foreground">
-                              Sem Token
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {op.sip_integration_id ? (
-                            <span className="text-[11px] text-emerald-600 font-medium flex items-center gap-1">
-                              <CheckCircle2 className="h-3.5 w-3.5" /> Ativo
-                            </span>
-                          ) : (
-                            <span className="text-[11px] text-amber-500 font-medium flex items-center gap-1">
-                              <AlertCircle className="h-3.5 w-3.5" /> Pendente
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 text-xs gap-1.5"
-                            onClick={() => {
-                              setSelectedOperator(op);
-                              setTokenInput(op.api4com_token || "");
-                            }}
-                          >
-                            <Key className="h-3.5 w-3.5 text-primary" />
-                            {op.api4com_token ? "Atualizar Token" : "Vincular Token"}
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
+                    <>
+                      <Check className="h-3.5 w-3.5" />
+                      Salvar Token Mestre
+                    </>
                   )}
-                </TableBody>
-              </Table>
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Localização na API4COM: <strong>Portal API4COM &gt; Minha Conta &gt; Configurações da Conta &gt; Tokens de Acesso</strong>.
+              </p>
             </CardContent>
           </Card>
-
-          {/* Testador Rápido de Discagem */}
+        {/* Testador Rápido de Discagem */}
           <Card className="border-border/60 bg-muted/20">
             <CardHeader className="p-4 pb-2">
               <CardTitle className="text-sm flex items-center gap-2">

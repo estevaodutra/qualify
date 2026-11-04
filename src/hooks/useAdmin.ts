@@ -12,6 +12,10 @@ export interface AdminCompany {
   is_active: boolean;
   created_at: string;
   is_deleted?: boolean;
+  api4com_token?: string | null;
+  api4com_extension?: string | null;
+  api4com_domain?: string | null;
+  api4com_synced_at?: string | null;
   status?: string;
   // joined
   balance?: number;
@@ -273,6 +277,10 @@ export interface AdminUser {
   is_superadmin: boolean;
   company_count: number;
   is_deleted?: boolean;
+  api4com_token?: string | null;
+  api4com_extension?: string | null;
+  api4com_domain?: string | null;
+  api4com_synced_at?: string | null;
 }
 
 export function useAdminUsers(showDeleted: boolean = false) {
@@ -281,7 +289,7 @@ export function useAdminUsers(showDeleted: boolean = false) {
     queryFn: async () => {
       const sb = supabase as any;
       const [profilesRes, rolesRes, membersRes] = await Promise.all([
-        sb.from("profiles").select("id, email, full_name, created_at, is_deleted").order("created_at", { ascending: false }),
+        sb.from("profiles").select("id, email, full_name, created_at, is_deleted, api4com_token, api4com_extension, api4com_domain, api4com_synced_at").order("created_at", { ascending: false }),
         sb.from("user_roles").select("user_id, role"),
         sb.from("company_members").select("user_id").eq("is_active", true),
       ]);
@@ -429,6 +437,127 @@ export function useGenerateUserInviteLink() {
       if (res.data?.error) throw new Error(res.data.error);
 
       return res.data;
+    },
+  });
+}
+
+export function useSaveUserApi4comToken() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      user_id,
+      api4com_token,
+    }: {
+      user_id: string;
+      api4com_token: string;
+    }) => {
+      const { data, error } = await supabase.functions.invoke("api4com-manage-user", {
+        body: {
+          action: "sync-token",
+          user_id,
+          api4com_token: api4com_token.trim(),
+        },
+      });
+
+      if (error || !data?.success) {
+        throw new Error(data?.error || error?.message || "Falha ao validar token API4COM");
+      }
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "users"] });
+      qc.invalidateQueries({ queryKey: ["call_operators"] });
+      toast({ title: "Token API4COM salvo e ramal sincronizado com sucesso!" });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Erro ao salvar token",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+}
+
+export function useGenerateUserApi4comToken() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      user_id,
+      email,
+      name,
+      password,
+      phone,
+    }: {
+      user_id: string;
+      email: string;
+      name?: string;
+      password?: string;
+      phone?: string;
+    }) => {
+      const { data, error } = await supabase.functions.invoke("api4com-manage-user", {
+        body: {
+          action: "generate-token",
+          user_id,
+          email: email.trim().toLowerCase(),
+          name,
+          password,
+          phone,
+        },
+      });
+
+      if (error || !data?.success) {
+        throw new Error(data?.error || error?.message || "Falha ao gerar conta/token na API4COM");
+      }
+      return data;
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["admin", "users"] });
+      qc.invalidateQueries({ queryKey: ["call_operators"] });
+      toast({
+        title: "Token API4COM gerado!",
+        description: data.extension
+          ? `Ramal ${data.extension} (${data.domain}) vinculado com sucesso!`
+          : "Token gerado com sucesso.",
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Erro na geração do token",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+}
+
+export function useRemoveUserApi4comToken() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ user_id }: { user_id: string }) => {
+      const { data, error } = await supabase.functions.invoke("api4com-manage-user", {
+        body: {
+          action: "remove-token",
+          user_id,
+        },
+      });
+
+      if (error || !data?.success) {
+        throw new Error(data?.error || error?.message || "Falha ao remover token");
+      }
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "users"] });
+      qc.invalidateQueries({ queryKey: ["call_operators"] });
+      toast({ title: "Token API4COM removido com sucesso." });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Erro ao remover token",
+        description: err.message,
+        variant: "destructive",
+      });
     },
   });
 }

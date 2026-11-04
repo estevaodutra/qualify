@@ -13,7 +13,19 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useCreateAdminUser, useGenerateUserInviteLink, type AdminUser } from "@/hooks/useAdmin";
 import { toast } from "@/hooks/use-toast";
-import { CheckCircle2, Copy, Check, MessageSquare, ExternalLink, Loader2, Sparkles } from "lucide-react";
+import {
+  CheckCircle2,
+  Copy,
+  Check,
+  MessageSquare,
+  ExternalLink,
+  Loader2,
+  Sparkles,
+  PhoneCall,
+  Phone,
+} from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { supabase } from "@/integrations/supabase/client";
 
 interface CreateUserDialogProps {
   open: boolean;
@@ -24,14 +36,22 @@ interface CreateUserDialogProps {
 export function CreateUserDialog({ open, onClose, existingUser }: CreateUserDialogProps) {
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
+  const [createApi4com, setCreateApi4com] = useState(true);
+  const [api4comToken, setApi4comToken] = useState("");
   const [createdData, setCreatedData] = useState<{
     email: string;
     fullName: string;
     inviteLink: string;
+    api4com?: {
+      token?: string;
+      extension?: string;
+      domain?: string;
+    } | null;
   } | null>(null);
 
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedMessage, setCopiedMessage] = useState(false);
+  const [copiedToken, setCopiedToken] = useState(false);
 
   const createUserMutation = useCreateAdminUser();
   const generateLinkMutation = useGenerateUserInviteLink();
@@ -42,14 +62,16 @@ export function CreateUserDialog({ open, onClose, existingUser }: CreateUserDial
       if (existingUser) {
         setEmail(existingUser.email);
         setFullName(existingUser.full_name || "");
-        // If already passed an existing user, trigger link generation immediately or fill form
       } else {
         setEmail("");
         setFullName("");
+        setCreateApi4com(true);
+        setApi4comToken("");
         setCreatedData(null);
       }
       setCopiedLink(false);
       setCopiedMessage(false);
+      setCopiedToken(false);
     }
   }, [open, existingUser]);
 
@@ -57,8 +79,11 @@ export function CreateUserDialog({ open, onClose, existingUser }: CreateUserDial
     setCreatedData(null);
     setEmail("");
     setFullName("");
+    setCreateApi4com(true);
+    setApi4comToken("");
     setCopiedLink(false);
     setCopiedMessage(false);
+    setCopiedToken(false);
     onClose();
   };
 
@@ -76,6 +101,7 @@ export function CreateUserDialog({ open, onClose, existingUser }: CreateUserDial
           email: email.trim().toLowerCase(),
           fullName: fullName.trim(),
           inviteLink: result.inviteLink,
+          api4com: null,
         });
         toast({
           title: "Link gerado com sucesso!",
@@ -88,10 +114,36 @@ export function CreateUserDialog({ open, onClose, existingUser }: CreateUserDial
           fullName: fullName.trim(),
         });
 
+        // Provisionar na API4COM se solicitado
+        let api4comInfo: { token?: string; extension?: string; domain?: string } | null = null;
+        if (createApi4com && result?.user?.id) {
+          try {
+            const apiRes = await supabase.functions.invoke("api4com-manage-user", {
+              body: {
+                action: api4comToken.trim() ? "sync-token" : "generate-token",
+                user_id: result.user.id,
+                email: result.user.email,
+                name: result.user.full_name || fullName.trim(),
+                api4com_token: api4comToken.trim() || undefined,
+              },
+            });
+            if (apiRes.data?.success) {
+              api4comInfo = {
+                token: apiRes.data.token,
+                extension: apiRes.data.extension,
+                domain: apiRes.data.domain,
+              };
+            }
+          } catch (apiErr) {
+            console.warn("Aviso ao integrar com API4COM:", apiErr);
+          }
+        }
+
         setCreatedData({
           email: result.user.email,
           fullName: result.user.full_name || fullName.trim(),
           inviteLink: result.inviteLink,
+          api4com: api4comInfo,
         });
 
         toast({
@@ -111,20 +163,29 @@ export function CreateUserDialog({ open, onClose, existingUser }: CreateUserDial
   const buildReadyMessage = () => {
     if (!createdData) return "";
     const name = createdData.fullName?.split(" ")[0] || "Olá";
-    return `Olá, ${name}! 👋\n\nSeu acesso à plataforma Qualify foi criado com sucesso.\n\nPara definir sua senha e começar a usar, acesse o link abaixo:\n${createdData.inviteLink}\n\nQualquer dúvida, estamos à disposição!`;
+    let msg = `Olá, ${name}! 👋\n\nSeu acesso à plataforma Qualify foi criado com sucesso.\n\nPara definir sua senha e começar a usar, acesse o link abaixo:\n${createdData.inviteLink}`;
+    if (createdData.api4com?.extension) {
+      msg += `\n\n📞 Seu ramal de telefonia API4COM é: ${createdData.api4com.extension}`;
+    }
+    msg += `\n\nQualquer dúvida, estamos à disposição!`;
+    return msg;
   };
 
-  const copyToClipboard = async (text: string, type: "link" | "message") => {
+  const copyToClipboard = async (text: string, type: "link" | "message" | "token") => {
     try {
       await navigator.clipboard.writeText(text);
       if (type === "link") {
         setCopiedLink(true);
         setTimeout(() => setCopiedLink(false), 2000);
         toast({ title: "Link copiado para a área de transferência!" });
-      } else {
+      } else if (type === "message") {
         setCopiedMessage(true);
         setTimeout(() => setCopiedMessage(false), 2000);
         toast({ title: "Mensagem copiada para a área de transferência!" });
+      } else {
+        setCopiedToken(true);
+        setTimeout(() => setCopiedToken(false), 2000);
+        toast({ title: "Token API4COM copiado!" });
       }
     } catch (err) {
       toast({ title: "Erro ao copiar", description: "Copie manualmente.", variant: "destructive" });
@@ -190,6 +251,46 @@ export function CreateUserDialog({ open, onClose, existingUser }: CreateUserDial
                 </p>
               </div>
 
+              {!existingUser && (
+                <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 dark:bg-purple-950/20 p-3 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <PhoneCall className="h-4 w-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                      <div>
+                        <Label htmlFor="api4com-switch" className="text-xs font-semibold cursor-pointer">
+                          Telefonia API4COM & Webphone
+                        </Label>
+                        <p className="text-[11px] text-muted-foreground">
+                          Cria usuário e gera o Token perpétuo na API4COM
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      id="api4com-switch"
+                      checked={createApi4com}
+                      onCheckedChange={setCreateApi4com}
+                      disabled={isPending}
+                    />
+                  </div>
+
+                  {createApi4com && (
+                    <div className="pt-1 space-y-1">
+                      <Label htmlFor="api4com-token-input" className="text-[11px] text-muted-foreground font-normal">
+                        Token API4COM pré-existente (opcional — deixe em branco para gerar novo)
+                      </Label>
+                      <Input
+                        id="api4com-token-input"
+                        placeholder="Deixe em branco para gerar automaticamente"
+                        value={api4comToken}
+                        onChange={(e) => setApi4comToken(e.target.value)}
+                        className="h-8 text-xs font-mono bg-background"
+                        disabled={isPending}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
               <DialogFooter className="pt-4 gap-2">
                 <Button type="button" variant="outline" onClick={handleClose} disabled={isPending}>
                   Cancelar
@@ -254,6 +355,56 @@ export function CreateUserDialog({ open, onClose, existingUser }: CreateUserDial
                 onClick={(e) => (e.target as HTMLInputElement).select()}
               />
             </div>
+
+            {/* Box Telefonia API4COM Configurada (se houver) */}
+            {createdData.api4com?.token && (
+              <div className="space-y-2 rounded-lg border border-purple-500/30 bg-purple-500/5 dark:bg-purple-950/20 p-3.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <PhoneCall className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-purple-700 dark:text-purple-300">
+                      Telefonia API4COM Configurada
+                    </Label>
+                  </div>
+                  {createdData.api4com.extension && (
+                    <span className="text-[11px] font-mono bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded font-semibold">
+                      Ramal: {createdData.api4com.extension}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[11px] text-muted-foreground">Token API4COM Gerado:</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      if (createdData.api4com?.token) {
+                        copyToClipboard(createdData.api4com.token, "token");
+                      }
+                    }}
+                    className="h-6 px-2 text-xs font-medium text-purple-600 hover:text-purple-700"
+                  >
+                    {copiedToken ? (
+                      <>
+                        <Check className="mr-1 h-3 w-3 text-emerald-600" /> Copiado!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="mr-1 h-3 w-3" /> Copiar Token
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <Input
+                  readOnly
+                  value={createdData.api4com.token}
+                  className="h-8 text-xs bg-background font-mono select-all text-muted-foreground"
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                />
+              </div>
+            )}
 
             {/* Box Mensagem Pronta */}
             <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3.5">

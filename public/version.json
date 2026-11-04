@@ -1,6 +1,6 @@
 {
-  "commit": "d6a6fc4218e0412dec11127783ee2a28b48585f0",
-  "shortCommit": "d6a6fc4",
-  "message": "fix(superadmin): fix PhoneCall import from lucide-react in AdminSidebar",
-  "builtAt": "2026-11-04T13:53:13.747Z"
+  "commit": "e47b42ed34b457e56545e3c82a96d55fe78660a6",
+  "shortCommit": "e47b42e",
+  "message": "feat(criafy): add connection validation modal and direct meta oauth connect",
+  "builtAt": "2026-11-04T14:20:01.308Z"
 }

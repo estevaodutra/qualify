@@ -31,11 +31,13 @@ import {
   CheckCircle2,
   XCircle,
   Building2,
+  PhoneCall,
 } from "lucide-react";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CreateUserDialog } from "@/components/admin/CreateUserDialog";
 import { DeleteUserDialog } from "@/components/admin/DeleteUserDialog";
+import { UserApi4comModal } from "@/components/admin/UserApi4comModal";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useSuperadmin } from "@/hooks/useSuperadmin";
@@ -59,6 +61,7 @@ export default function AdminUsers() {
   const [isCreating, setIsCreating] = useState(false);
   const [selectedUserForLink, setSelectedUserForLink] = useState<AdminUser | null>(null);
   const [deletingUser, setDeletingUser] = useState<AdminUser | null>(null);
+  const [api4comUser, setApi4comUser] = useState<AdminUser | null>(null);
 
   const filteredUsers = useMemo(() => {
     return (users || []).filter((u) => {
@@ -170,6 +173,7 @@ export default function AdminUsers() {
                   <TableHead className="font-semibold">Email</TableHead>
                   <TableHead className="font-semibold text-center">Privilégio</TableHead>
                   <TableHead className="font-semibold text-center">Empresas Vinculadas</TableHead>
+                  <TableHead className="font-semibold text-center">API4COM / Ramal</TableHead>
                   <TableHead className="font-semibold text-center">Criado em</TableHead>
                   <TableHead className="font-semibold text-right">Ações</TableHead>
                 </TableRow>
@@ -213,6 +217,31 @@ export default function AdminUsers() {
                       </Badge>
                     </TableCell>
 
+                    {/* API4COM / Ramal */}
+                    <TableCell className="text-center">
+                      {u.api4com_token ? (
+                        <button
+                          type="button"
+                          onClick={() => setApi4comUser(u)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-colors text-[11px] font-medium border border-emerald-500/20"
+                          title="Clique para gerenciar o token e ramal API4COM"
+                        >
+                          <CheckCircle2 className="h-3 w-3" />
+                          <span>{u.api4com_extension ? `Ramal ${u.api4com_extension}` : "Token Ativo"}</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setApi4comUser(u)}
+                          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-muted/60 text-muted-foreground hover:bg-muted transition-colors text-[10px] border border-border"
+                          title="Clique para configurar ou gerar token da API4COM"
+                        >
+                          <PhoneCall className="h-2.5 w-2.5 text-purple-600" />
+                          <span>Sem Token</span>
+                        </button>
+                      )}
+                    </TableCell>
+
                     {/* Criado em */}
                     <TableCell className="text-center text-muted-foreground">
                       {u.created_at ? format(new Date(u.created_at), "dd/MM/yyyy") : "—"}
@@ -229,6 +258,10 @@ export default function AdminUsers() {
                         <DropdownMenuContent align="end" className="w-48 text-xs">
                           <DropdownMenuItem onClick={() => handleGenerateLink(u)}>
                             <KeyRound className="mr-2 h-3.5 w-3.5 text-primary" /> Link de Acesso / Senha
+                          </DropdownMenuItem>
+
+                          <DropdownMenuItem onClick={() => setApi4comUser(u)}>
+                            <PhoneCall className="mr-2 h-3.5 w-3.5 text-purple-600" /> Token API4COM / Telefonia
                           </DropdownMenuItem>
 
                           <DropdownMenuItem
@@ -284,6 +317,14 @@ export default function AdminUsers() {
           user={deletingUser}
           open={!!deletingUser}
           onClose={() => setDeletingUser(null)}
+        />
+      )}
+
+      {api4comUser && (
+        <UserApi4comModal
+          user={api4comUser}
+          open={!!api4comUser}
+          onClose={() => setApi4comUser(null)}
         />
       )}
     </div>
