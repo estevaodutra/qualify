@@ -77,26 +77,41 @@ Deno.serve(async (req) => {
     const supabaseUrl = requiredEnv("SUPABASE_URL");
     const supabaseAnonKey = requiredEnv("SUPABASE_ANON_KEY");
     const supabaseServiceKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user }, error: userError } = await userClient.auth.getUser();
-    if (userError || !user) throw new Error("Unauthorized");
+    let user: any = null;
+    const cleanToken = authHeader.replace(/^Bearer\s+/i, "");
+    if (cleanToken === supabaseServiceKey) {
+      user = { id: "00000000-0000-0000-0000-000000000000", isServiceRole: true };
+    } else {
+      const { data: { user: authUser }, error: userError } = await userClient.auth.getUser();
+      if (!userError && authUser) {
+        user = authUser;
+      }
+    }
+    if (!user) throw new Error("Unauthorized");
 
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
     const body = await req.json();
     const { action, companyId, accountId, code, state, redirectUri } = body;
 
-    if (companyId) {
-      const { data: member, error: memberError } = await adminClient
+    if (companyId && !user.isServiceRole) {
+      const { data: member } = await adminClient
         .from("company_members")
         .select("id")
         .eq("company_id", companyId)
         .eq("user_id", user.id)
         .eq("is_active", true)
         .maybeSingle();
-      if (memberError) throw new Error(`Unable to verify company membership: ${memberError.message}`);
-      if (!member) throw new Error("Forbidden: User is not an active member of this company");
+
+      if (!member) {
+        const { data: profile } = await adminClient
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
+        if (profile?.role !== "admin" && profile?.role !== "superadmin") {
+          throw new Error("Forbidden: User is not an active member of this company");
+        }
+      }
     }
 
     // ==========================================
@@ -127,11 +142,12 @@ Deno.serve(async (req) => {
         "business_management",
       ].join(",");
 
-      // Força a Meta a exibir a seleção de BM, Páginas e Instagram
+      // Força a Meta a exibir a seleção de BM, Páginas e Instagram e usa a Configuração do App Criafy
       const extras = JSON.stringify({ setup: { channel: "IG_API_ONBOARDING" } });
+      const configId = "1664969248374748";
       const authUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(
         cleanRedirectUri
-      )}&response_type=code&scope=${scopes}&state=${encodeURIComponent(signedState)}&auth_type=rerequest&extras=${encodeURIComponent(extras)}`;
+      )}&response_type=code&config_id=${configId}&scope=${scopes}&state=${encodeURIComponent(signedState)}&auth_type=rerequest&extras=${encodeURIComponent(extras)}`;
 
       return jsonResponse({ success: true, authUrl, provider: "FACEBOOK_BUSINESS" });
     }
@@ -479,6 +495,23 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Salva log de execução em platform_settings para diagnóstico em tempo real
+      try {
+        await adminClient.from("platform_settings").upsert({
+          key: "criafy_last_oauth_log",
+          value: JSON.stringify({
+            timestamp: new Date().toISOString(),
+            companyId,
+            userId: user.id,
+            foundPages,
+            connectedAccounts: connectedAccounts.map(a => ({ id: a.id, username: a.username })),
+            debugLogs
+          }),
+          description: "Log da última tentativa de OAuth do Instagram",
+          updated_at: new Date().toISOString()
+        }, { onConflict: "key" });
+      } catch (_) {}
+
       if (connectedAccounts.length === 0) {
         const pageNames = foundPages.length > 0 ? foundPages.join(", ") : "Nenhuma página retornada";
         throw new Error(
@@ -623,6 +656,21 @@ Deno.serve(async (req) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected OAuth error";
     console.error("[Criafy OAuth]", message);
+    try {
+      const supabaseUrl = requiredEnv("SUPABASE_URL");
+      const supabaseServiceKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
+      const adminClient = createClient(supabaseUrl, supabaseServiceKey);
+      await adminClient.from("platform_settings").upsert({
+        key: "criafy_last_oauth_log",
+        value: JSON.stringify({
+          timestamp: new Date().toISOString(),
+          status: "failed",
+          error: message,
+        }),
+        description: "Log da última tentativa de OAuth do Instagram",
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "key" });
+    } catch (_) {}
     return jsonResponse({ success: false, error: message }, 400);
   }
 });
